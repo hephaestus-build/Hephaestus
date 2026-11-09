@@ -211,12 +211,13 @@
 			"description": "Platform updates keep chart, image, and installer pins consistent under human review",
 			"matchFileNames": [
 				"deploy/platform/k3s-platform.yaml",
-				"deploy/platform/k3s-agent-sandbox.yaml"
+				"deploy/platform/k3s-agent-sandbox.yaml",
+				"deploy/platform/k3s-containerd.toml.tmpl"
 			],
 			"dependencyDashboardApproval": true,
 			"groupName": "one-host platform",
 			"prBodyNotes": [
-				"Review chart and image versions together. For a k3s update, independently verify and update the installer SHA-256 on the pin line. Run the Platform pins check and the platform tests on the update branch. Review the rescan before merge. For an agent-sandbox update, replace the manifest as docs/contributor/release-management.mdx § Platform pins describes."
+				"Review chart and image versions together. For a k3s update, independently verify and update the installer SHA-256 on the pin line. Run the Platform pins check and the platform tests on the update branch. Review the rescan before merge. For an agent-sandbox or gVisor update, follow docs/contributor/release-management.mdx § Platform pins."
 			]
 		}
 	],
@@ -365,6 +366,16 @@
 			"depNameTemplate": "kubernetes-sigs/agent-sandbox",
 			"datasourceTemplate": "github-releases",
 			"extractVersionTemplate": "^v(?<version>.*)$"
+		},
+		{
+			"description": "Track the gVisor release of the one-host platform",
+			"customType": "regex",
+			"managerFilePatterns": ["/^deploy/platform/k3s-containerd\\.toml\\.tmpl$/"],
+			"matchStrings": ["# pin: gvisor (?<currentValue>[0-9]{8}\\.[0-9]+) "],
+			"depNameTemplate": "google/gvisor",
+			"datasourceTemplate": "github-releases",
+			"extractVersionTemplate": "^release-(?<version>.*)$",
+			"versioningTemplate": "loose"
 		}
 	],
 	"vulnerabilityAlerts": {

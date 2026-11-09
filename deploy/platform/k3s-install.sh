@@ -209,7 +209,7 @@ if [ "$VERIFY" = false ]; then
 fi
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-for file in hephaestus-keys.sh k3s-wait-condition.sh k3s-platform.yaml k3s-agent-sandbox.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
+for file in hephaestus-keys.sh k3s-wait-condition.sh k3s-platform.yaml k3s-agent-sandbox.yaml k3s-containerd.toml.tmpl k3s-runtimeclass.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
 	[ -f "$HERE/$file" ] || die "$file is not beside this script: download, verify and unpack the k3s bundle of the release first"
 done
 # Existing values can enable wildcard routing. Require an explicit certificate choice on reruns
@@ -386,7 +386,7 @@ if [ "$VERIFY" = true ]; then
 	verify_kubelet
 	exit 0
 fi
-for tool in curl jq openssl cosign helm sha256sum getent ss sudo; do
+for tool in curl jq openssl cosign helm sha256sum sha512sum bzip2 getent ss sudo; do
 	command -v "$tool" >/dev/null 2>&1 || die "$tool is not on PATH: install it first"
 done
 case $(helm version --template '{{.Version}}' 2>/dev/null) in
@@ -518,6 +518,40 @@ K3S_INSTALL_SHA256=${5:-}
 matches "$K3S_VERSION" 'v[0-9]+\.[0-9]+\.[0-9]+\+k3s[0-9]+' || die "k3s-platform.yaml has no k3s pin"
 matches "$K3S_INSTALL_SHA256" '[a-f0-9]{64}' || die "k3s-platform.yaml has no SHA-256 for the k3s installer"
 
+# gVisor from the pinned release archive, for this host's architecture. A host whose runsc reports
+# the pinned release, beside its required sidecars, keeps it. runsc goes last, so an interrupted
+# install leaves no runsc of the new release.
+install_gvisor() {
+	# shellcheck disable=SC2046 # The pin line splits into its words on purpose.
+	set -- $(grep '^# pin: gvisor ' "$HERE/k3s-containerd.toml.tmpl")
+	gvisor_release=${4:-}
+	case $(uname -m) in
+	x86_64) gvisor_arch=x86_64 gvisor_sha512=${5:-} ;;
+	aarch64 | arm64) gvisor_arch=aarch64 gvisor_sha512=${6:-} ;;
+	*) die "gVisor has no release for $(uname -m)" ;;
+	esac
+	matches "$gvisor_release" '[0-9]{8}\.[0-9]+' || die "k3s-containerd.toml.tmpl has no gVisor pin"
+	matches "$gvisor_sha512" '[a-f0-9]{128}' || die "k3s-containerd.toml.tmpl has no SHA-512 for gVisor on $gvisor_arch"
+	# runsc starts no sandbox without these two sidecars of gvisor-bin: the Sentry it boots and the
+	# /proc unmounter its gofer runs. A host that lost either installs the release again.
+	if /usr/local/bin/runsc --version 2>/dev/null | head -n 1 | grep -qF "release-$gvisor_release" &&
+		[ -x /usr/local/bin/gvisor-bin/gvisor_sentry ] && [ -x /usr/local/bin/gvisor-bin/gvisor-proc-umounter ]; then
+		return
+	fi
+	say "Installing gVisor $gvisor_release"
+	curl -fsSL --proto '=https' --retry 5 -o "$TEMP/gvisor.tar.bz2" \
+		"https://storage.googleapis.com/gvisor/releases/release/$gvisor_release/$gvisor_arch/gvisor.tar.bz2"
+	printf '%s  %s\n' "$gvisor_sha512" "$TEMP/gvisor.tar.bz2" | sha512sum -c - >/dev/null ||
+		die "the gVisor archive does not match the pinned SHA-512"
+	mkdir "$TEMP/gvisor"
+	tar -xjf "$TEMP/gvisor.tar.bz2" -C "$TEMP/gvisor"
+	sudo rm -rf /usr/local/bin/gvisor-bin
+	sudo install -d -m 0755 /usr/local/bin/gvisor-bin
+	sudo install -m 0755 "$TEMP/gvisor/gvisor-bin/"* /usr/local/bin/gvisor-bin/
+	sudo install -m 0755 "$TEMP/gvisor/containerd-shim-runsc-v1" /usr/local/bin/
+	sudo install -m 0755 "$TEMP/gvisor/runsc" /usr/local/bin/
+}
+
 say "Placing the host and platform files"
 sudo install -D -m 0644 "$HERE/k3s-logind.conf" /etc/systemd/logind.conf.d/zz-hephaestus.conf
 sudo systemctl kill --signal=SIGHUP systemd-logind
@@ -531,6 +565,11 @@ sudo cmp -s "$HERE/k3s-config.yaml" /etc/rancher/k3s/config.yaml || K3S_CONFIG_C
 sudo cmp -s "$HERE/k3s-kubelet.yaml" /etc/rancher/k3s/kubelet.yaml || K3S_CONFIG_CHANGED=true
 sudo install -D -m 0600 "$HERE/k3s-config.yaml" /etc/rancher/k3s/config.yaml
 sudo install -D -m 0600 "$HERE/k3s-kubelet.yaml" /etc/rancher/k3s/kubelet.yaml
+install_gvisor
+CONTAINERD_TEMPLATE=/var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl
+sudo cmp -s "$HERE/k3s-containerd.toml.tmpl" "$CONTAINERD_TEMPLATE" || K3S_CONFIG_CHANGED=true
+sudo install -D -m 0644 "$HERE/k3s-containerd.toml.tmpl" "$CONTAINERD_TEMPLATE"
+sudo install -D -m 0600 "$HERE/k3s-runtimeclass.yaml" "$MANIFESTS/k3s-runtimeclass.yaml"
 sudo install -D -m 0600 "$HERE/k3s-platform.yaml" "$MANIFESTS/k3s-platform.yaml"
 sudo install -D -m 0600 "$HERE/k3s-agent-sandbox.yaml" "$MANIFESTS/k3s-agent-sandbox.yaml"
 render_certificates >"$TEMP/certificates.yaml"

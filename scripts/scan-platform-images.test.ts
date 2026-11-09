@@ -12,6 +12,7 @@ import {
 	renderedSubjects,
 	sarifForCategory,
 	verifyAgentSandbox,
+	verifyGvisorSums,
 	verifyIndexDigest,
 	verifyInstaller,
 } from "./scan-platform-images.ts";
@@ -169,4 +170,14 @@ void test("the controller digest must be the index that the release tag names", 
 		/not the index of its release tag/u,
 	);
 	assert.throws(() => verifyIndexDigest({ layers: [] }, pinned, pinned), /no multi-platform/u);
+});
+
+const gvisorTemplate = (x64: string, arm64: string) => `# pin: gvisor 20261102.0 ${x64} ${arm64}\n`;
+
+void test("the gVisor pin must name the checksums that its release publishes", () => {
+	const [a, b] = ["a".repeat(128), "b".repeat(128)];
+	const sums = `${a}  gvisor-x86_64.tar.bz2\n${b}  gvisor-aarch64.tar.bz2\n`;
+	verifyGvisorSums(sums, gvisorTemplate(a, b));
+	assert.throws(() => verifyGvisorSums(sums, gvisorTemplate(b, a)), /not those of its release/u);
+	assert.throws(() => verifyGvisorSums(sums, "no pin"), /no gVisor pin/u);
 });

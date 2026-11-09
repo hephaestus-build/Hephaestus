@@ -269,6 +269,10 @@ void test("every custom manager reads every file it claims to read", async () =>
 		["Track platform image tags and digests", ["deploy/platform/k3s-platform.yaml"]],
 		["Track the one-host k3s release", ["deploy/platform/k3s-platform.yaml"]],
 		["Track the agent-sandbox controller release", ["deploy/platform/k3s-agent-sandbox.yaml"]],
+		[
+			"Track the gVisor release of the one-host platform",
+			["deploy/platform/k3s-containerd.toml.tmpl"],
+		],
 		["Track Dockerfile ARG version pins", ["docker/agents/pi/Dockerfile", "webapp/Dockerfile"]],
 		[
 			"Track the GitHub release versions of pinned CI tools",
@@ -347,10 +351,12 @@ void test("every custom manager reads every file it claims to read", async () =>
 			}
 		}
 		if ([...datasources].some((datasource) => RELEASE_TAG_DATASOURCES.has(datasource))) {
+			// Most projects tag `v1.2.3`; gVisor tags `release-20261102.0`.
 			assert.ok(
-				manager.extractVersionTemplate === "^v(?<version>.*)$" ||
+				(typeof manager.extractVersionTemplate === "string" &&
+					/^\^(?:v|release-)\(\?<version>\.\*\)\$$/u.test(manager.extractVersionTemplate)) ||
 					manager.matchStrings.some((pattern) => pattern.includes("(?<extractVersion>")),
-				`${description} reads release tags without stripping their v prefix`,
+				`${description} reads release tags without stripping their prefix`,
 			);
 		}
 	}

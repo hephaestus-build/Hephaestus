@@ -1,0 +1,14 @@
+# The containerd configuration of k3s with gVisor as a second runtime, `runsc`: docs/admin/kubernetes.mdx
+# § The platform files. k3s-install.sh puts this file at
+# /var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl and restarts k3s when it changes. The
+# RuntimeClass `gvisor` of k3s-runtimeclass.yaml names the handler.
+#
+# The pin line: the gVisor release, then the SHA-512 of its x86_64 and its aarch64 `gvisor.tar.bz2`.
+# k3s-install.sh installs `runsc`, its containerd shim and the `gvisor-bin` directory that `runsc` needs
+# beside it, from that archive.
+#
+# pin: gvisor 20261102.0 2e6671bb2d033b871c5811ab57e16ac570988b0e0054c525f911cfaf191bab3ca4efb08e0a98daa4b9e7d248f9e5776ef2ef2f8a6b82d829646a42924c98bb05 574b5775b4417618f63c8506e6bb237e370df85722832a5d0c3831382155e55e59d4cfa993a1e9bbe1b1cf04346ffd48b20aaa879c6ed9a52c680f762fd19980
+{{ template "base" . }}
+
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runsc]
+  runtime_type = "io.containerd.runsc.v1"

@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { parse, parseAllDocuments } from "yaml";
 
+import { gvisorPin } from "./lib/gvisor-pin.ts";
 import {
 	isImageIndex,
 	manifestDigest,
@@ -69,6 +70,24 @@ export function platformPins(source: string) {
 		reference: `${repository}:${pin.version.replace("+", "-")}`,
 	});
 	return { version: pin.version, installerSha256: pin.checksum, subjects };
+}
+
+/** Both pinned archive checksums are the ones in the release's own `SHA512SUMS`. */
+export function verifyGvisorSums(sums: string, template: string): void {
+	const { sha512 } = gvisorPin(template);
+	const published = new Map(
+		sums
+			.split("\n")
+			.map((line) => line.trim().split(/\s+/u))
+			.filter((fields) => fields.length === 2)
+			.map(([sum, file]) => [file, sum]),
+	);
+	if (
+		published.get("gvisor-x86_64.tar.bz2") !== sha512.x64 ||
+		published.get("gvisor-aarch64.tar.bz2") !== sha512.arm64
+	) {
+		throw new Error("The pinned gVisor checksums are not those of its release");
+	}
 }
 
 /** The agent-sandbox release that k3s-agent-sandbox.yaml carries, and its controller image. */
@@ -251,7 +270,17 @@ export function renderedSubjects(source: string): string[] {
 }
 
 /** Network proof used only for platform-pin pull requests and scheduled rescans. */
-export async function checkPlatformPins(source: string, agentSandbox: string): Promise<void> {
+export async function checkPlatformPins(
+	source: string,
+	agentSandbox: string,
+	containerd: string,
+): Promise<void> {
+	verifyGvisorSums(
+		await releaseText(
+			`https://github.com/google/gvisor/releases/download/release-${gvisorPin(containerd).release}/SHA512SUMS`,
+		),
+		containerd,
+	);
 	const { version, subject: controller } = agentSandboxPin(agentSandbox);
 	const tagged = `${controller.repository}:${version}`;
 	const signal = AbortSignal.timeout(120_000);
@@ -330,7 +359,8 @@ if (import.meta.main) {
 	}
 	const source = await readFile("deploy/platform/k3s-platform.yaml", "utf8");
 	const agentSandbox = await readFile("deploy/platform/k3s-agent-sandbox.yaml", "utf8");
-	await checkPlatformPins(source, agentSandbox);
+	const containerd = await readFile("deploy/platform/k3s-containerd.toml.tmpl", "utf8");
+	await checkPlatformPins(source, agentSandbox, containerd);
 	if (mode === "--check-pins") {
 		process.exit(0);
 	}

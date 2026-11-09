@@ -207,6 +207,15 @@ To upgrade the controller:
    It downloads the release manifest and checks its SHA-256, and it refuses any other change to it.
    It also checks that the digest is the image index of the release tag.
 
+`deploy/platform/k3s-containerd.toml.tmpl` holds the pin of gVisor: the release and the SHA-512 of the `x86_64` and `aarch64` archives.
+To upgrade gVisor, download `gvisor.tar.bz2` of the new release for both architectures.
+Compute their SHA-512 yourself, and compare them with the `SHA512SUMS` asset of the GitHub release.
+Then write the release and both values on the `pin: gvisor` line.
+
+`scan-platform-images.ts --check-pins` compares the pin with that `SHA512SUMS` too.
+A change to the file restarts k3s on each one-host installation at its next installer run.
+The k3d leg of the latest minor on `amd64` runs the sandbox templates on that gVisor, and the release smoke runs them on k3s.
+
 The upgrade issues of agent-sandbox 1.0 ([#2122](https://github.com/kubernetes-sigs/agent-sandbox/issues/2122), [#2123](https://github.com/kubernetes-sigs/agent-sandbox/issues/2123)) apply only to an upgrade from a `v0.x` release.
 Hephaestus started at `v1.0.10`, so no installation has `v1alpha1` objects or a conversion webhook to remove.
 
