@@ -67,7 +67,8 @@ public final class ProjectedKeys {
 
     /**
      * {@link #replaceAll(Set)}, but keeps a key outside {@code keys} that was written after {@code keepWrittenAfter}.
-     * The broker stamps each write, so every server that rebuilds the set sees the same writes as recent.
+     * The broker stamps each write, so every server that rebuilds the set sees the same writes as recent. A key that
+     * is written again counts from its latest write. A bucket that NATS lost and this call recreates holds no such key.
      */
     public void replaceAll(Set<String> keys, @Nullable Instant keepWrittenAfter) {
         for (int attempt = 1; ; attempt++) {

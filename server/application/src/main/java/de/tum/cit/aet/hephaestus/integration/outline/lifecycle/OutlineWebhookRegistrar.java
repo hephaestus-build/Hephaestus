@@ -167,14 +167,16 @@ public class OutlineWebhookRegistrar {
      * the loser's subscription upstream. A call that cannot take the lock leaves the workspace to the next heal.
      */
     public void ensureSubscription(long workspaceId) {
-        boolean ran;
+        String skipped;
         try {
-            ran = locks.run("outline-subscription:" + workspaceId, REGISTRATION_WAIT, () -> ensure(workspaceId));
+            skipped = locks.run("outline-subscription:" + workspaceId, REGISTRATION_WAIT, () -> ensure(workspaceId))
+                    ? null
+                    : "lockBusy";
         } catch (ClusterLock.UnavailableException e) {
-            ran = false;
+            skipped = e.reason();
         }
-        if (!ran) {
-            log.warn("outline.webhook: subscription check skipped for workspaceId={}: reason=lockBusy", workspaceId);
+        if (skipped != null) {
+            log.warn("outline.webhook: subscription check skipped for workspaceId={}: reason={}", workspaceId, skipped);
         }
     }
 

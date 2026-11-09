@@ -76,6 +76,8 @@ A route is in the set before its subscription is registered, so the first delive
 A rebuild keeps a route that was allowed in the last 5 minutes, until its connection stores it.
 The grace is the age of the key: a rebuild keeps a key that the broker stamped in the last 5 minutes.
 Thus, any server process may allow a route, and any server process may rebuild the set.
+A bucket that NATS lost and a rebuild creates again has no recent keys.
+A route that was allowed just before that loss gets `410` until its connection stores it.
 The full sync, and a heal at start and every 5 minutes, replace a subscription that is not on a current route: one without a route, on another URL, or on a retired routing key.
 An upgrade or a key rotation therefore needs no operator step.
 This is the same model as the GitLab route credential, and like Svix every subscription has its own secret.

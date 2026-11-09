@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -21,8 +22,12 @@ import org.springframework.stereotype.Component;
  * <p>The lock is a PostgreSQL session lock on a connection of its own, without a transaction. PostgreSQL drops it with
  * the connection, so a process that dies leaves no lock behind. A waiting caller polls rather than blocks in
  * {@code pg_advisory_lock}: a statement that waits there holds a transaction open, and a migration's
- * {@code CREATE INDEX CONCURRENTLY} waits for every open transaction. Names hash to 32 bits, so two names can share a
- * lock: that costs only a wait, never a missed one.
+ * {@code CREATE INDEX CONCURRENTLY} waits for every open transaction. Each attempt borrows a pooled connection and
+ * returns it at once when the lock is taken elsewhere, so waiters cannot hold the connections that the holder's work
+ * needs. Names hash to 32 bits, so two names can share a lock: that costs only a wait, never a missed one.
+ *
+ * <p>Not re-entrant: each call takes its own connection, so work that calls again for the same name waits for itself
+ * until its wait ends.
  */
 @Component
 public class ClusterLock {
@@ -47,18 +52,20 @@ public class ClusterLock {
      * @param wait how long to wait while another process holds the lock; zero tries once
      * @return the work's result, or empty without running the work when another process held the lock for all of
      *     {@code wait}
-     * @throws UnavailableException when the database cannot take or report the lock
+     * @throws UnavailableException when the database cannot take or report the lock, or the wait is interrupted
      */
     public <T> Optional<T> call(String name, Duration wait, Supplier<T> work) {
-        try (Connection connection = dataSource.getConnection()) {
-            if (!take(connection, name, wait)) return Optional.empty();
-            try {
-                return Optional.of(work.get());
-            } finally {
-                release(connection, name);
-            }
+        Connection connection;
+        try {
+            connection = take(name, wait);
         } catch (SQLException failure) {
-            throw new UnavailableException(failure);
+            throw new UnavailableException("databaseUnavailable", failure);
+        }
+        if (connection == null) return Optional.empty();
+        try {
+            return Optional.of(work.get());
+        } finally {
+            release(connection, name);
         }
     }
 
@@ -71,34 +78,49 @@ public class ClusterLock {
                 .isPresent();
     }
 
-    private static boolean take(Connection connection, String name, Duration wait) throws SQLException {
+    /** The connection that holds the lock, or null when another process held it for all of {@code wait}. */
+    private @Nullable Connection take(String name, Duration wait) throws SQLException {
         long deadline = System.nanoTime() + wait.toNanos();
-        while (!query(connection, LOCK, name)) {
-            if (System.nanoTime() >= deadline) return false;
+        while (true) {
+            Connection connection = dataSource.getConnection();
+            boolean held;
+            try {
+                held = query(connection, LOCK, name);
+            } catch (SQLException | RuntimeException failure) {
+                connection.close();
+                throw failure;
+            }
+            if (held) return connection;
+            connection.close();
+            if (System.nanoTime() >= deadline) return null;
             try {
                 TimeUnit.MILLISECONDS.sleep(RETRY.toMillis());
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                return false;
+                throw new UnavailableException("interrupted", interrupted);
             }
         }
-        return true;
     }
 
-    /** A pooled connection that may still hold the lock must not return to the pool, so a failed unlock aborts it. */
+    /**
+     * Unlocks and returns the connection to the pool. A pooled connection that may still hold the lock must not return
+     * to the pool, so a failed unlock aborts it instead. Neither fails the work, whose result is already decided.
+     */
     private static void release(Connection connection, String name) {
+        boolean unlocked = false;
         try {
-            if (query(connection, UNLOCK, name)) return;
+            unlocked = query(connection, UNLOCK, name);
         } catch (SQLException failure) {
             log.warn(
                     "Cluster lock release failed: error.type={}",
                     failure.getClass().getName());
         }
         try {
-            connection.abort(Runnable::run);
+            if (unlocked) connection.close();
+            else connection.abort(Runnable::run);
         } catch (SQLException failure) {
             log.warn(
-                    "Cluster lock connection abort failed: error.type={}",
+                    "Cluster lock connection return failed: error.type={}",
                     failure.getClass().getName());
         }
     }
@@ -112,14 +134,22 @@ public class ClusterLock {
         }
     }
 
-    /** The database could not take or report the lock; the caller answers as if the work could not run now. */
+    /** The lock could not be taken or reported; the caller answers as if the work could not run now. */
     public static final class UnavailableException extends RuntimeException {
 
         @Serial
         private static final long serialVersionUID = 1L;
 
-        UnavailableException(Throwable cause) {
-            super("The cluster lock is unavailable", cause);
+        private final String reason;
+
+        UnavailableException(String reason, Throwable cause) {
+            super("The cluster lock is unavailable: " + reason, cause);
+            this.reason = reason;
+        }
+
+        /** {@code databaseUnavailable} or {@code interrupted}, for a log line. */
+        public String reason() {
+            return reason;
         }
     }
 }

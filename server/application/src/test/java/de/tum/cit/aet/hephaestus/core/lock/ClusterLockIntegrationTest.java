@@ -67,14 +67,14 @@ class ClusterLockIntegrationTest extends BaseIntegrationTest {
     void shouldFreeTheLockWhenItsSessionEnds() throws Exception {
         String name = "test:" + UUID.randomUUID();
         // A server that dies mid-work: its session ends without an unlock.
-        try (Connection dying = dataSource.getConnection();
-                PreparedStatement lock = dying.prepareStatement(
-                        "SELECT pg_advisory_lock(hashtext('hephaestus-cluster-lock'), hashtext(?))")) {
+        Connection dying = dataSource.getConnection();
+        try (PreparedStatement lock =
+                dying.prepareStatement("SELECT pg_advisory_lock(hashtext('hephaestus-cluster-lock'), hashtext(?))")) {
             lock.setString(1, name);
             lock.execute();
-            assertThat(locks.call(name, Duration.ZERO, () -> "ran")).isEmpty();
-            dying.abort(Runnable::run);
         }
+        assertThat(locks.call(name, Duration.ZERO, () -> "ran")).isEmpty();
+        dying.abort(Runnable::run);
         assertThat(locks.call(name, Duration.ofSeconds(5), () -> "ran")).contains("ran");
     }
 

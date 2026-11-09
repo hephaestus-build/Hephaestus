@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -75,8 +76,9 @@ public class SlackChannelConsentProjection {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onConsentChanged(SlackChannelConsentChangedEvent event) {
-        if (!serialized(() -> update(event))) {
-            log.warn("Slack consent projection update skipped; the next rebuild repairs it: reason=lockBusy");
+        String skipped = serialized(() -> update(event));
+        if (skipped != null) {
+            log.warn("Slack consent projection update skipped; the next rebuild repairs it: reason={}", skipped);
         }
     }
 
@@ -108,8 +110,9 @@ public class SlackChannelConsentProjection {
     @SchedulerLock(name = "slack-channel-consent-projection", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
     @WorkspaceAgnostic("Projects the ACTIVE Slack channels of every workspace; each key carries its Slack team")
     public void rebuild() {
-        if (!serialized(this::replaceAll)) {
-            log.warn("Slack consent projection rebuild skipped: reason=lockBusy");
+        String skipped = serialized(this::replaceAll);
+        if (skipped != null) {
+            log.warn("Slack consent projection rebuild skipped: reason={}", skipped);
         }
     }
 
@@ -128,12 +131,12 @@ public class SlackChannelConsentProjection {
         }
     }
 
-    /** False when the work did not run; a database that cannot lock counts the same, and the next rebuild repairs. */
-    private boolean serialized(Runnable work) {
+    /** Why the work did not run, or null when it ran; the next rebuild repairs what it skipped. */
+    private @Nullable String serialized(Runnable work) {
         try {
-            return locks.run(LOCK, LOCK_WAIT, work);
+            return locks.run(LOCK, LOCK_WAIT, work) ? null : "lockBusy";
         } catch (ClusterLock.UnavailableException e) {
-            return false;
+            return e.reason();
         }
     }
 
