@@ -21,11 +21,21 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectA
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.reactive.function.client.ClientRequest;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 /**
  * The dependency sync iterates the repository's issues and, for each, calls
@@ -67,6 +77,8 @@ class GitLabIssueDependencySyncServiceTest extends BaseUnitTest {
 
     private GitLabIssueDependencySyncService service;
 
+    private final Repository repository = repositoryWithNativeId();
+
     @BeforeEach
     void setUp() {
         when(webClientBuilder.build()).thenReturn(webClient);
@@ -79,9 +91,14 @@ class GitLabIssueDependencySyncServiceTest extends BaseUnitTest {
                 projectAdmission);
     }
 
+    private static Repository repositoryWithNativeId() {
+        Repository repository = TestEntities.repository(REPO_ID, "acme/widgets");
+        repository.setNativeId(4242L);
+        return repository;
+    }
+
     @Test
     void shouldNotFetchIssueLinksForACollidingMergeRequest() {
-        Repository repository = TestEntities.repository(REPO_ID, "acme/widgets");
         GitLabAdmissionTestFixtures.permit(projectAdmission, SCOPE_ID, repository, 7L);
 
         // The project's only artifact is a merge request; the type-scoped read returns no issues.
@@ -89,7 +106,7 @@ class GitLabIssueDependencySyncServiceTest extends BaseUnitTest {
         assertThat(mergeRequest).isInstanceOf(Issue.class); // shares the issue table; must be excluded
         when(issueRepository.findAllIssuesByRepositoryId(REPO_ID)).thenReturn(List.of());
 
-        SyncResult result = service.syncDependenciesForRepository(SCOPE_ID, repository, null);
+        SyncResult result = service.syncDependenciesForRepository(SCOPE_ID, repository);
 
         assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED);
         assertThat(result.count()).isZero();
@@ -98,5 +115,70 @@ class GitLabIssueDependencySyncServiceTest extends BaseUnitTest {
         verify(tokenService, never()).getAccessToken(anyLong());
         verifyNoInteractions(rateLimitTracker);
         verifyNoInteractions(webClient);
+    }
+
+    @Test
+    void shouldReadEveryIssueWhenAProjectHasMoreIssuesThanOneRunUsedToRead() {
+        List<Issue> issues = issues(250);
+        AtomicInteger reads = new AtomicInteger();
+        GitLabIssueDependencySyncService reading = serviceAnswering(issues, request -> {
+            reads.incrementAndGet();
+            return links("[]");
+        });
+
+        SyncResult result = reading.syncDependenciesForRepository(SCOPE_ID, repository);
+
+        assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED);
+        assertThat(reads).hasValue(250);
+    }
+
+    @Test
+    void shouldReportWarningsWhenSomeIssueLinksCannotBeRead() {
+        List<Issue> issues = issues(3);
+        GitLabIssueDependencySyncService reading = serviceAnswering(
+                issues,
+                request -> request.url().getPath().endsWith("/issues/2/links")
+                        ? ClientResponse.create(HttpStatus.INTERNAL_SERVER_ERROR)
+                                .build()
+                        : links("[]"));
+
+        SyncResult result = reading.syncDependenciesForRepository(SCOPE_ID, repository);
+
+        assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED_WITH_WARNINGS);
+    }
+
+    private List<Issue> issues(int count) {
+        return IntStream.rangeClosed(1, count)
+                .mapToObj(number -> {
+                    Issue issue = new Issue();
+                    issue.setId(1000L + number);
+                    issue.setNumber(number);
+                    issue.setRepository(repository);
+                    return issue;
+                })
+                .toList();
+    }
+
+    private GitLabIssueDependencySyncService serviceAnswering(
+            List<Issue> issues, Function<ClientRequest, ClientResponse> answer) {
+        GitLabAdmissionTestFixtures.permit(projectAdmission, SCOPE_ID, repository, 7L);
+        when(issueRepository.findAllIssuesByRepositoryId(REPO_ID)).thenReturn(issues);
+        when(issueRepository.findByIdWithBlockedBy(anyLong())).thenReturn(Optional.empty());
+        when(tokenService.resolveServerUrl(SCOPE_ID)).thenReturn("https://gitlab.example");
+        when(tokenService.getAccessToken(SCOPE_ID)).thenReturn("token");
+        return new GitLabIssueDependencySyncService(
+                issueRepository,
+                repositoryRepository,
+                tokenService,
+                rateLimitTracker,
+                () -> WebClient.builder().exchangeFunction(request -> Mono.just(answer.apply(request))),
+                projectAdmission);
+    }
+
+    private static ClientResponse links(String body) {
+        return ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .body(body)
+                .build();
     }
 }
