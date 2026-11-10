@@ -91,9 +91,9 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0014](0014-per-row-aes-gcm-aad-binding.md) | Per-row AES-GCM AAD binds ciphertext to record identity | Accepted |
 | [0015](0015-unified-integration-framework.md) | Unified integration framework — package layout and SPI surface | Accepted |
 | [0016](0016-unified-identity-keycloak-as-truth.md) | Unified identity — SCM `User` is the authoritative person row, Keycloak `sub` is the persisted join key | Superseded by [0017](0017-replace-keycloak-with-spring-native-auth.md) |
-| [0017](0017-replace-keycloak-with-spring-native-auth.md) | Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs) | Accepted |
+| [0017](0017-replace-keycloak-with-spring-native-auth.md) | Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs) | Superseded by [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) |
 | [0018](0018-pg-partman-for-auth-event-partitioning.md) | pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions) | Accepted |
-| [0019](0019-workspace-membership-keyed-on-account.md) | Workspace membership is keyed on `Account`, not the SCM `User` | Accepted |
+| [0019](0019-workspace-membership-keyed-on-account.md) | Workspace membership is keyed on `Account`, not the SCM `User` | Superseded by [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) |
 | [0020](0020-context-fabric-everything-is-an-integration.md) | Context Fabric — everything is an integration, only practice review and mentor are native | Accepted |
 | [0021](0021-observations-feedback-synthesis-seam.md) | Separate observations from feedback | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
 | [0022](0022-observation-presence-assessment-and-schema-cleanup.md) | Observation = presence × assessment (drop `Practice.kind`); reaction anchors on feedback; ruthless column cleanup | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
@@ -161,5 +161,6 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) | Every statement on workspace data binds its workspace, and a shared mirror binds it through the monitored scope | Accepted |
 | [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) | An observation has one of four outcomes, holds one current claim while its sources stay unchanged, and standing reads the newest decision | Accepted |
 | [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) | A practice review stages, seals, then composes, and each stage records why it stops | Accepted |
+| [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) | A person signs in through an instance login provider and is one account in every workspace | Accepted |
 
 Template: [0000-template.md](0000-template.md).
