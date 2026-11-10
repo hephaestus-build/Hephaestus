@@ -207,6 +207,8 @@ provider cleanup. A workspace purge erases it too. Reconnecting does not restore
   It stops the answers that still run.
 - Outline: mirrored documents, collection registrations, and document events.
 
+For each integration, the disconnect also erases the practice results and the feedback that Hephaestus derived from that work.
+
 The upstream repositories, messages, and documents remain.
 Materialized diagnostic output, worker-input copies, and broker messages expire within their documented bounded retention windows.
 If local erasure fails, the connection remains unchanged, and you can retry the disconnect.
