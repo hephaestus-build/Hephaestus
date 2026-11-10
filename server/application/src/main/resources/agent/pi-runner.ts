@@ -72,8 +72,10 @@ import { ProblemDrafts } from "./pi-problem-drafts.ts";
 import {
 	loadProviderConfig,
 	reasoningSetting,
+	parseProxyClaim,
 	registerHephaestusProvider,
 	submissionExtension,
+	withClaim,
 } from "./pi-provider.ts";
 import {
 	CONVERSATION_THREAD,
@@ -159,7 +161,11 @@ import {
 import type { JobFiles } from "./work/practice-scripts/lib/core/ipc.ts";
 import { jsonArray, isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
 import { renderReviewInput, resolveLeads } from "./work/practice-scripts/lib/core/leads.ts";
-import { hostModels, ModelBudget } from "./work/practice-scripts/lib/core/models-host.ts";
+import {
+	hostModels,
+	ModelBudget,
+	waitingWhileCallsInFlight,
+} from "./work/practice-scripts/lib/core/models-host.ts";
 import {
 	UnratedError,
 	type UnratedReason,
@@ -731,8 +737,11 @@ export async function runReviewJob(): Promise<void> {
 	const AGENT_DIR = requiredEnv("PI_CODING_AGENT_DIR");
 	const LLM_PROXY_URL = requiredEnv("LLM_PROXY_URL");
 	const LLM_PROXY_TOKEN = requiredEnv("LLM_PROXY_TOKEN");
+	// The claim of the run that a sandbox's driver started this runner for; empty otherwise.
+	const LLM_PROXY_CLAIM = parseProxyClaim(process.env.LLM_PROXY_CLAIM);
 	// The runner passes its credential where it is used. No process that it starts inherits it.
 	delete process.env.LLM_PROXY_TOKEN;
+	delete process.env.LLM_PROXY_CLAIM;
 	const DIRECT_MODEL_TOKENS = positiveIntegerEnv("PI_DIRECT_MODEL_TOKENS");
 	// Refusal exhaustion leaves the practice NOT_REACHED.
 	const MAX_REFUSALS_PER_PRACTICE = 8;
@@ -949,6 +958,7 @@ export async function runReviewJob(): Promise<void> {
 						signal,
 						headers: {
 							authorization: `Bearer ${LLM_PROXY_TOKEN}`,
+							...LLM_PROXY_CLAIM,
 							"content-type": "application/json",
 							...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
 						},
@@ -2426,6 +2436,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				providerConfig,
 				{ ...process.env, LLM_PROXY_TOKEN },
 				LLM_PROXY_TOKEN,
+				LLM_PROXY_CLAIM,
 			)
 		) {
 			throw new Error(
@@ -2871,6 +2882,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						signal,
 						headers: {
 							authorization: `Bearer ${LLM_PROXY_TOKEN}`,
+							...LLM_PROXY_CLAIM,
 							"content-type": "application/json",
 							...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
 						},
@@ -3235,7 +3247,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					},
 					{
 						reader: new EvidenceReader(sources, programReads),
-						models: hostModels(boundModels, LLM_PROXY_URL, LLM_PROXY_TOKEN, slug),
+						models: hostModels(
+							boundModels,
+							LLM_PROXY_URL,
+							LLM_PROXY_TOKEN,
+							slug,
+							waitingWhileCallsInFlight(withClaim(fetch, LLM_PROXY_CLAIM)),
+						),
 						budget: directBudget,
 						awaitModel: () => modelWait.call(),
 						start: (start) => {
@@ -3522,6 +3540,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					signal,
 					headers: {
 						authorization: `Bearer ${LLM_PROXY_TOKEN}`,
+						...LLM_PROXY_CLAIM,
 						"content-type": "application/json",
 						...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
 					},
