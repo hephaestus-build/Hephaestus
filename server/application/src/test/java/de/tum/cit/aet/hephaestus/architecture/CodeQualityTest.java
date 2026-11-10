@@ -170,8 +170,6 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                                     .filter(m -> !m.getName().startsWith("$"))
                                     .filter(m -> !m.getName().equals("<init>"))
                                     .filter(m -> !m.getName().startsWith("lambda$"))
-                                    // @Recover methods must match the protected method's signature (Spring Retry)
-                                    .filter(m -> !m.isAnnotatedWith("org.springframework.retry.annotation.Recover"))
                                     // Exclude static factory methods (common pattern for parameter objects)
                                     .filter(m -> !(m.getModifiers().contains(JavaModifier.STATIC)
                                             && (m.getName().equals("simple")

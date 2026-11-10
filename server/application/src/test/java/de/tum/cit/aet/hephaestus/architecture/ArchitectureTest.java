@@ -62,14 +62,10 @@ class ArchitectureTest extends HephaestusArchitectureTest {
          *       rows are workspace-owned and the GitHub/GitLab workspace bridges mutate
          *       {@code Workspace}/{@code RepositoryToMonitor}. Splitting them means relocating
          *       the Workspace aggregate — wrong and out of scope.</li>
-         *   <li><b>activity</b> — folded by a structural tension between two rules, NOT entity
-         *       sharing. {@code ExternalVendorImportAllowlistTest} forces vendor code (the GitHub
-         *       Projects-v2 activity listener) to live inside {@code integration}; that bridge
-         *       code legitimately writes through the activity SPI, giving {@code integration →
-         *       activity}. With the normal {@code feature → integration} direction this is a cycle
-         *       no relocation removes — the listener can neither leave integration (allowlist)
-         *       nor stop recording activity (its job). The only escapes are a neutral
-         *       cross-module event bus or per-sub-package slicing.</li>
+         *   <li><b>activity</b> — sync adapters request activity repair through
+         *       {@code ActivityLedgerRepair} ({@code integration → activity}).
+         *       {@code ActivityEvent} maps SCM entities and {@code ActivityEventListener}
+         *       consumes {@code ScmDomainEvent} ({@code activity → integration}).</li>
          * </ul>
          *
          * <p>No frozen baseline — the rule passes cleanly and still fails on any NEW cycle that
