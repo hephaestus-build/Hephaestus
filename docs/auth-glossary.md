@@ -35,8 +35,8 @@ The implementation column gives exact code names for those separate concepts.
 explicitly. Cookie-session JWTs are a separate path and do not use it.
 
 Login lookup never queries by email — the identity repository deliberately has no `findByEmail`, the
-nOAuth defence. `UserRepository.findByEmail` exists and is reachable, but it resolves a *commit
-author* to a mirrored git-provider account; it is not an authentication lookup.
+nOAuth defence. `UserRepository.findAllByEmailAndProviderId` resolves a *commit author* to a
+mirrored git-provider account; it is not an authentication lookup.
 
 ## JWT claim shape
 

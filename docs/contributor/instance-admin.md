@@ -139,7 +139,7 @@ Thus, a refused confirmation leaves no successful `USER_VIEW` record.
 
 Before the handler runs, it requires the `X-User-View-Reason` header, encoded as percent-encoded UTF-8.
 `UserViewAccessService` accepts 1–500 decoded characters, excluding control and format characters.
-It resolves the viewed member through `ViewedUserService` and commits the row.
+It resolves the viewed member through `IdentityRepository` and commits the row.
 If the row does not commit, it answers 503.
 `OpenAPIConfiguration.userViewReasonHeader` declares the header on every such operation, so the generated client requires it.
 
