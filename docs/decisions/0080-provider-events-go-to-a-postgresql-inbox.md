@@ -41,6 +41,11 @@ NATS cannot erase the content of one Slack channel or Outline document before th
 - Erasure deletes the rows of an account, a channel or a workspace in its own transaction. A `DONE` row goes after the replay window (default 3 days).
 - NATS, its chart templates, its credential, its certificate, the `HostnameVerifiedNatsDataPort` and the webhook role go.
 
+### The runtime that follows
+
+- **The webhook role folds into the server.** With the inbox, a separate receiver keeps nothing alive that the server replicas do not. In 1.0, one JAR has one runtime role, the server, plus the migrate run mode.
+- **The webapp keeps its nginx image.** It is stateless, it owns the security headers and the SPA fallback, and it has no open defect. To serve it from the JAR would make the Gradle build depend on the pnpm build and move the headers into Spring. That saves one Deployment, and the cost is not worth it for 1.0.
+
 ### Timing
 
 The change lands before the 1.0 tag, in the cutover of [ADR 0070](0070-1-0-is-a-cutover-release.md).
@@ -65,5 +70,6 @@ The change lands before the 1.0 tag, in the cutover of [ADR 0070](0070-1-0-is-a-
 
 ## Revisit trigger
 
+- The chart is otherwise final and one Deployment fewer matters to operators. Then serve the webapp from the server.
 - Event volume makes the inbox a measurable share of database load.
 - An operator needs reception during planned database maintenance that the sync cannot repair.
