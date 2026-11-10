@@ -429,7 +429,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         running.getId(),
                         running.getAttempt(),
                         UUID.randomUUID(),
-                        JsonNodeFactory.instance.objectNode()))
+                        MentorPartialUpdates.whole(JsonNodeFactory.instance.objectNode())))
                 .isInstanceOf(MentorLeaseLostException.class);
         assertThatThrownBy(() -> turns.end(
                         running.getWorkspaceId(),
@@ -456,7 +456,8 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 .isInstanceOf(MentorLeaseLostException.class);
         assertThatThrownBy(() -> turns.admit(workspaceId, turnId, attempt, leaseId, partial))
                 .isInstanceOf(MentorLeaseLostException.class);
-        assertThatThrownBy(() -> turns.updatePartial(workspaceId, turnId, attempt, leaseId, partial))
+        assertThatThrownBy(() ->
+                        turns.updatePartial(workspaceId, turnId, attempt, leaseId, MentorPartialUpdates.whole(partial)))
                 .isInstanceOf(MentorLeaseLostException.class);
         assertThatThrownBy(() -> turns.end(
                         workspaceId,
@@ -488,7 +489,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         running.getId(),
                         running.getAttempt(),
                         leaseId,
-                        JsonNodeFactory.instance.objectNode()))
+                        MentorPartialUpdates.whole(JsonNodeFactory.instance.objectNode())))
                 .isInstanceOf(MentorLeaseLostException.class);
     }
 
@@ -656,7 +657,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 running.getId(),
                 running.getAttempt(),
                 Objects.requireNonNull(running.getLeaseId()),
-                snapshot);
+                MentorPartialUpdates.whole(snapshot));
 
         assertThat(rowVersion(running)).as("a partial answer writes no row").isEqualTo(version);
         assertThat(published.stream(MentorLedgerEvents.ProgressChanged.class))
@@ -667,7 +668,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         running.getId(),
                         running.getAttempt(),
                         Objects.requireNonNull(running.getLeaseId()),
-                        snapshot))
+                        MentorPartialUpdates.whole(snapshot)))
                 .isInstanceOf(MentorLeaseLostException.class);
     }
 
@@ -731,7 +732,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 first.getId(),
                 first.getAttempt(),
                 Objects.requireNonNull(first.getLeaseId()),
-                JsonNodeFactory.instance.objectNode().put("activity", "writing"));
+                MentorPartialUpdates.whole(JsonNodeFactory.instance.objectNode().put("activity", "writing")));
 
         turns.renewLease(
                 first.getWorkspaceId(),

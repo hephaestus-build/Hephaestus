@@ -44,6 +44,8 @@ import {
 	asAssignment,
 	type PartialMessage,
 	type PartialSnapshot,
+	type PartialUpdate,
+	MAX_PARTIAL_CHARS,
 	type SandboxExecAnswer,
 	type SandboxExecRequest,
 	type SandboxLoadAnswer,
@@ -200,7 +202,7 @@ export interface TurnApi {
 	/** Asks the worker to admit one id for a tool that shows feedback (`LINK_TOOLS`). */
 	link: (tool: LinkToolName, id: string, signal: AbortSignal) => Promise<LinkAnswer>;
 	search: (query: Record<string, unknown>, signal: AbortSignal) => Promise<unknown>;
-	partial: (snapshot: PartialSnapshot) => Promise<void>;
+	partial: (update: PartialUpdate) => Promise<void>;
 	/** Renews the attempt's lease; a stop that it learns of goes to the api's `onStop`. */
 	lease: () => Promise<void>;
 	end: (end: TurnEnd) => Promise<void>;
@@ -516,10 +518,10 @@ export function httpTurnApi(
 		async search(query, signal) {
 			return json(await call("POST", "search", query, signal), "search_conversation");
 		},
-		async partial(snapshot) {
+		async partial(update) {
 			// The first partial answer times the attempt's first token on the worker.
 			const path = sentPartial ? "partial" : "partial?first=true";
-			await ok(await call("PUT", path, snapshot), "reporting the partial answer");
+			await ok(await call("PUT", path, update), "reporting the partial answer");
 			sentPartial = true;
 		},
 		async lease() {
@@ -1309,6 +1311,82 @@ interface PartialStream {
  */
 const PARTIAL_RESEND_MS = 10_000;
 
+/** How long a reader that missed a frame waits at most for the next whole snapshot. */
+const PARTIAL_WHOLE_EVERY_MS = 2000;
+
+/**
+ * The changes of one attempt's partial answers: each changes only what differs from the one before, and a whole
+ * snapshot follows at least every `PARTIAL_WHOLE_EVERY_MS`, so a reader that missed a frame catches up. A change whose
+ * write failed still advances the base, so readers skip changes until the next whole snapshot.
+ */
+export function partialUpdates(wholeEveryMs = PARTIAL_WHOLE_EVERY_MS) {
+	let sequence = 0;
+	let text: string | null = null;
+	let wholeAt: number | null = null;
+	return (next: string, now: number): PartialUpdate => {
+		// Sequences grow with time, so an attempt's later loop never names the base of an earlier one by chance.
+		const nextSequence = Math.max(sequence + 1, now);
+		let update: PartialUpdate;
+		if (text === null || wholeAt === null || now >= wholeAt + wholeEveryMs) {
+			update = { sequence: nextSequence, baseSequence: 0, prefix: 0, suffix: 0, text: next };
+			wholeAt = now;
+		} else {
+			const prefix = commonPrefix(text, next);
+			const suffix = commonSuffix(text, next, prefix);
+			update = {
+				sequence: nextSequence,
+				baseSequence: sequence,
+				prefix,
+				suffix,
+				text: next.slice(prefix, next.length - suffix),
+			};
+		}
+		sequence = nextSequence;
+		text = next;
+		return update;
+	};
+}
+
+// The indices are UTF-16 code units, as Java's `String` counts them in `MentorTurnProgress`.
+/* oxlint-disable unicorn/prefer-code-point -- a code unit, not a code point, is what both sides index */
+function commonPrefix(a: string, b: string): number {
+	const max = Math.min(a.length, b.length);
+	let prefix = 0;
+	while (prefix < max && a.charCodeAt(prefix) === b.charCodeAt(prefix)) {
+		prefix += 1;
+	}
+	// Never between the two halves of a surrogate pair: the server sends the changed text as UTF-8.
+	if (prefix > 0 && isHighSurrogate(a.charCodeAt(prefix - 1))) {
+		prefix -= 1;
+	}
+	return prefix;
+}
+
+/** The common suffix that does not overlap the common `prefix` in either text, nor split a surrogate pair. */
+function commonSuffix(a: string, b: string, prefix: number): number {
+	const max = Math.min(a.length, b.length) - prefix;
+	let suffix = 0;
+	while (
+		suffix < max &&
+		a.charCodeAt(a.length - 1 - suffix) === b.charCodeAt(b.length - 1 - suffix)
+	) {
+		suffix += 1;
+	}
+	if (suffix > 0 && isLowSurrogate(b.charCodeAt(b.length - suffix))) {
+		suffix -= 1;
+	}
+	return suffix;
+}
+/* oxlint-enable unicorn/prefer-code-point */
+
+function isHighSurrogate(unit: number): boolean {
+	return unit >= 0xd8_00 && unit <= 0xdb_ff;
+}
+
+function isLowSurrogate(unit: number): boolean {
+	return unit >= 0xdc_00 && unit <= 0xdf_ff;
+}
+
 export function partialStream(
 	api: TurnApi,
 	intervalMs: number,
@@ -1329,9 +1407,16 @@ export function partialStream(
 	let lastWrite = Number.NEGATIVE_INFINITY;
 	let closed = false;
 
+	const encode = partialUpdates();
+
 	async function report(snapshot: PartialSnapshot) {
+		const text = JSON.stringify(snapshot);
+		if (text.length > MAX_PARTIAL_CHARS) {
+			// No reader keeps it, so it is not sent; the answer itself is stored at the end.
+			return;
+		}
 		try {
-			await api.partial(snapshot);
+			await api.partial(encode(text, Date.now()));
 		} catch (error) {
 			// A lost partial answer is replaced by the next one; a lost lease surfaces at the end.
 			log("partial answer not reported:", error);

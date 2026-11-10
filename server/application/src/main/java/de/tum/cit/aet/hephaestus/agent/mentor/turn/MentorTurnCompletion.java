@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
@@ -73,8 +74,13 @@ public class MentorTurnCompletion {
      *     {@code null} for every later one
      */
     public boolean progress(
-            long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial, @Nullable Instant startedAt) {
-        boolean sent = turns.updatePartial(workspaceId, turnId, attempt, leaseId, partial);
+            long workspaceId,
+            UUID turnId,
+            int attempt,
+            UUID leaseId,
+            MentorTurnProgress.Update update,
+            @Nullable Instant startedAt) {
+        boolean sent = turns.updatePartial(workspaceId, turnId, attempt, leaseId, update);
         if (sent && startedAt != null) {
             firstToken(meters).record(Duration.between(startedAt, clock.instant()));
         }

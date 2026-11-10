@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -196,19 +197,20 @@ public class HephTurnController {
     public ResponseEntity<Void> partial(
             @PathVariable UUID turnId,
             @RequestParam(defaultValue = "false") boolean first,
-            @RequestBody JsonNode partial,
+            @Valid @RequestBody MentorTurnProgress.Update update,
             Authentication authentication) {
         AttemptJwt token = token(turnId, authentication);
         TurnAttempt turn = turns.held(token, false);
-        if (!partial.isObject()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A partial answer is a JSON object");
+        if (!MentorTurnProgress.wellFormed(update)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "A partial answer is a change of the one before it");
         }
         completion.progress(
                 turn.workspaceId(),
                 turn.turnId(),
                 turn.attempt(),
                 turn.leaseId(),
-                partial,
+                update,
                 first ? token.issuedAt() : null);
         return ResponseEntity.noContent().build();
     }

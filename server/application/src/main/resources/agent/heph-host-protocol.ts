@@ -198,7 +198,7 @@ export interface PartialMessage {
 	)[];
 }
 
-/** `PUT turn/<id>/partial`: the whole answer in progress, replaced by every snapshot. */
+/** The whole answer in progress, which every partial answer replaces. */
 export interface PartialSnapshot {
 	activity: "thinking" | "writing" | "tool";
 	/** The tool running, while `activity` is `tool`. */
@@ -208,6 +208,23 @@ export interface PartialSnapshot {
 	/** Every assistant message of the turn so far; the last one may still be written. */
 	messages: PartialMessage[];
 }
+
+/**
+ * `PUT turn/<id>/partial`: one change of the partial answer's JSON text, as `MentorTurnProgress.Update` reads it. A
+ * change puts `text` between the first `prefix` and the last `suffix` UTF-16 code units of the snapshot whose sequence
+ * is `baseSequence`; a `baseSequence` of 0 makes `text` the whole snapshot. The loop is the attempt's one writer, so it
+ * makes each change, and any worker forwards it.
+ */
+export interface PartialUpdate {
+	sequence: number;
+	baseSequence: number;
+	prefix: number;
+	suffix: number;
+	text: string;
+}
+
+/** The longest partial answer, in UTF-16 code units of its JSON text, that readers keep (`MentorTurnProgress`). */
+export const MAX_PARTIAL_CHARS = 256 * 1024;
 
 /**
  * What kind of failure ended a failed attempt, for the operator. The set is closed, so an end never carries the words

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
@@ -8,6 +9,7 @@ import {
 	isRecord,
 	type LinkToolName,
 	type PartialSnapshot,
+	type PartialUpdate,
 	type SandboxExecAnswer,
 	type SandboxExecRequest,
 	type SandboxLoadAnswer,
@@ -47,6 +49,52 @@ export interface FakeWorker {
 	ledger: () => unknown[];
 }
 
+/** The snapshot text that `update` makes of `kept`, or null when it was made from another snapshot. */
+export function applied(
+	kept: { sequence: number; text: string } | null,
+	update: PartialUpdate,
+): string | null {
+	if (update.baseSequence === 0) {
+		return update.prefix === 0 && update.suffix === 0 ? update.text : null;
+	}
+	if (kept === null || kept.sequence !== update.baseSequence) {
+		return null;
+	}
+	if (update.prefix + update.suffix > kept.text.length) {
+		return null;
+	}
+	return (
+		kept.text.slice(0, update.prefix) +
+		update.text +
+		kept.text.slice(kept.text.length - update.suffix)
+	);
+}
+
+function isPartialSnapshot(value: unknown): value is PartialSnapshot {
+	return (
+		isRecord(value) &&
+		typeof value.activity === "string" &&
+		typeof value.stage === "string" &&
+		Array.isArray(value.messages)
+	);
+}
+
+/** Rebuilds each partial answer from its update, as a reader does: every update must apply to the one before it. */
+export function partialReader(): (update: PartialUpdate) => PartialSnapshot {
+	let kept: { sequence: number; text: string } | null = null;
+	return (update) => {
+		const text = applied(kept, update);
+		assert.ok(
+			text !== null,
+			`a partial update applies to the one before it: ${JSON.stringify(update)}`,
+		);
+		kept = { sequence: update.sequence, text };
+		const snapshot: unknown = JSON.parse(text);
+		assert.ok(isPartialSnapshot(snapshot), `a partial answer is a snapshot: ${text}`);
+		return snapshot;
+	};
+}
+
 export function isSessionEntry(value: unknown): value is SessionEntry {
 	return isRecord(value) && typeof value.type === "string" && typeof value.id === "string";
 }
@@ -76,6 +124,7 @@ export function fakeWorker(
 ): FakeWorker {
 	const appended: SessionEntry[] = [];
 	const partials: PartialSnapshot[] = [];
+	const decode = partialReader();
 	const reads: SandboxReadRequest[] = [];
 	const execs: SandboxExecRequest[] = [];
 	const loads: SandboxLoadRequest[] = [];
@@ -119,9 +168,10 @@ export function fakeWorker(
 				searched.push(query);
 				return { hits: [] };
 			},
-			partial: async (snapshot) => {
+			partial: async (update) => {
 				check();
-				partials.push(structuredClone(snapshot));
+				const snapshot = decode(update);
+				partials.push(snapshot);
 				onPartial?.(snapshot);
 			},
 			lease: async () => undefined,

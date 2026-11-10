@@ -1,22 +1,7 @@
 {
-  "activity": "writing",
-  "tool": null,
-  "stage": "Thinking…",
-  "messages": [
-    {
-      "content": [
-        { "type": "text", "text": "Let me look at the workspace." },
-        {
-          "type": "toolCall",
-          "id": "call-show",
-          "name": "show_feedback",
-          "arguments": {
-            "feedbackId": "c3e8a5b2-71d4-4f9a-8e60-2d5b9f1c4a87",
-            "text": "Your pull request names the decision but not why."
-          }
-        }
-      ]
-    },
-    { "content": [{ "type": "text", "text": "Pin it by" }] }
-  ]
+  "sequence": 1731150000000,
+  "baseSequence": 0,
+  "prefix": 0,
+  "suffix": 0,
+  "text": "{\"activity\":\"writing\",\"tool\":null,\"stage\":\"Thinking…\",\"messages\":[{\"content\":[{\"type\":\"text\",\"text\":\"Let me look at the workspace.\"},{\"type\":\"toolCall\",\"id\":\"call-show\",\"name\":\"show_feedback\",\"arguments\":{\"feedbackId\":\"c3e8a5b2-71d4-4f9a-8e60-2d5b9f1c4a87\",\"text\":\"Your pull request names the decision but not why.\"}}]},{\"content\":[{\"type\":\"text\",\"text\":\"Pin it by\"}]}]}"
 }
