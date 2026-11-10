@@ -63,6 +63,10 @@ function GitHubInstallationSetupRoute() {
 		state = { status: "invalid" };
 	} else if (claim.data?.outcome === "AWAITING_APPROVAL") {
 		state = { status: "awaiting-approval", canApprove: isAppAdmin };
+	} else if (claim.data?.outcome === "DECLINED") {
+		state = { status: "declined", canApprove: isAppAdmin };
+	} else if (claim.data?.outcome === "READY" && claim.data.workspaceSlug === undefined) {
+		state = { status: "ready-elsewhere" };
 	} else if (claim.data?.outcome === "SETTING_UP") {
 		state = { status: "setting-up" };
 	} else {

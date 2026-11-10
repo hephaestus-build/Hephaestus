@@ -18,10 +18,11 @@ class WorkspaceOwnerChangeRecentSignIn implements WorkspaceOwnerChangeAssurance 
     }
 
     @Override
-    public void requireRecentSignIn() {
+    public void requireRecentSignIn(long workspaceId) {
         policy.require(
                 SecurityContextHolder.getContext().getAuthentication(),
                 AuthEvent.EventType.WORKSPACE_OWNER_CHANGE,
-                SecurityUtils.getCurrentAccountId().orElse(null));
+                SecurityUtils.getCurrentAccountId().orElse(null),
+                workspaceId);
     }
 }

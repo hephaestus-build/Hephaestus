@@ -1402,7 +1402,7 @@ export const zGeneratedPathReview = z.object({
  * What happens next with the GitHub App installation that the signed-in person set up
  */
 export const zGitHubInstallationClaim = z.object({
-	outcome: z.enum(["READY", "AWAITING_APPROVAL", "SETTING_UP"]),
+	outcome: z.enum(["READY", "AWAITING_APPROVAL", "DECLINED", "SETTING_UP"]),
 	workspaceSlug: z.string().optional(),
 });
 
@@ -1415,7 +1415,7 @@ export const zGitHubInstallationClaimRequest = z.object({
  */
 export const zGitHubInstallationRequest = z.object({
 	accountKind: z.enum(["USER", "ORGANIZATION"]),
-	accountLogin: z.string(),
+	accountLogin: z.string().optional(),
 	decidedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	installationId: z.int(),
 	receivedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),

@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppUserAuthorizationClient;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubUserAuthorizationException;
+import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
@@ -36,6 +38,7 @@ public class GitHubInstallationClaimService {
     private final GitHubInstallationReader github;
     private final GitHubInstallationRequests gate;
     private final WorkspaceRepository workspaces;
+    private final MembershipRepository memberships;
     private final WorkspaceScopeFilter scopeFilter;
     private final TransactionTemplate transactions;
 
@@ -46,6 +49,7 @@ public class GitHubInstallationClaimService {
             GitHubInstallationReader github,
             GitHubInstallationRequests gate,
             WorkspaceRepository workspaces,
+            MembershipRepository memberships,
             WorkspaceScopeFilter scopeFilter,
             PlatformTransactionManager transactionManager) {
         this.userAuthorization = userAuthorization;
@@ -54,6 +58,7 @@ public class GitHubInstallationClaimService {
         this.github = github;
         this.gate = gate;
         this.workspaces = workspaces;
+        this.memberships = memberships;
         this.scopeFilter = scopeFilter;
         this.transactions = new TransactionTemplate(transactionManager);
     }
@@ -100,11 +105,17 @@ public class GitHubInstallationClaimService {
                     .findByInstallationId(installationId)
                     .filter(w -> w.getStatus() != Workspace.WorkspaceStatus.PURGED);
             if (workspace.isPresent()) {
+                // Access to the installation is not membership: only a member or an instance admin learns where it is.
+                Workspace ready = workspace.get();
+                boolean member =
+                        memberships.existsByWorkspace_IdAndId_AccountIdAndLeftAtIsNull(ready.getId(), callerAccountId);
                 return new GitHubInstallationClaimDTO(
                         GitHubInstallationClaimDTO.Outcome.READY,
-                        workspace.get().getWorkspaceSlug());
+                        member || SecurityUtils.isSuperAdmin() ? ready.getWorkspaceSlug() : null);
             }
-            if (gate.isAdopted(installationId)) {
+            var decided = gate.status(installationId);
+            if (decided.filter(s -> s == GitHubInstallationRequestStatus.ADOPTED)
+                    .isPresent()) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
                         "The workspace of this installation was deleted. Uninstall the app on GitHub, then install it again.");
@@ -116,6 +127,10 @@ public class GitHubInstallationClaimService {
                             HttpStatus.CONFLICT, "This instance does not sync the GitHub account " + login + ".");
                 }
                 return new GitHubInstallationClaimDTO(GitHubInstallationClaimDTO.Outcome.SETTING_UP, null);
+            }
+            if (decided.filter(s -> s == GitHubInstallationRequestStatus.DECLINED)
+                    .isPresent()) {
+                return new GitHubInstallationClaimDTO(GitHubInstallationClaimDTO.Outcome.DECLINED, null);
             }
             if (!gate.recordPending(
                     installationId, live.account().id(), login, live.account().kind())) {

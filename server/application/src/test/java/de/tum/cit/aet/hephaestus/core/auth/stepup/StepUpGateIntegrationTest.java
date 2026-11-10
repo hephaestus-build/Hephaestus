@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 // Bearer clients must pass the same recent-sign-in gate as the SPA.
@@ -147,6 +148,9 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                     assertThat(event.getResult()).isEqualTo(AuthEvent.Result.SUCCESS);
                 });
     }
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void aStaleAdminIsAskedToConfirmAccessAndTheRoleIsUnchanged() {
@@ -320,6 +324,7 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .satisfies(event -> {
                     assertThat(event.getResult()).isEqualTo(AuthEvent.Result.FAILURE);
                     assertThat(event.getFailureReason()).isEqualTo(StepUpRequiredException.CODE);
+                    assertThat(event.getWorkspaceId()).isEqualTo(workspace.getId());
                 });
     }
 
@@ -467,6 +472,35 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .singleElement()
                 .extracting(AuthEvent::getResult)
                 .isEqualTo(AuthEvent.Result.FAILURE);
+    }
+
+    /** Adopting an installation creates a workspace with the admin as owner, so a stale session cannot. */
+    @Test
+    void aStaleAdminCannotAdoptAGitHubInstallation() {
+        Account admin = persistAdmin("Stale Adopter Ada");
+        long installationId = 7_700_001L;
+        jdbc.update(
+                "INSERT INTO github_installation_request (installation_id, account_id, account_login, account_kind,"
+                        + " status, received_at) VALUES (?, 7700002, 'stale-adoption', 'ORGANIZATION', 'PENDING', now())",
+                installationId);
+
+        webTestClient
+                .post()
+                .uri("/admin/github-installations/{id}/adopt", installationId)
+                .headers(h -> h.setBearerAuth(tokenFor(admin, staleSignIn())))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString());
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT status FROM github_installation_request WHERE installation_id = ?",
+                        String.class,
+                        installationId))
+                .isEqualTo("PENDING");
+        assertThat(workspaceRepository.findByInstallationId(installationId)).isEmpty();
     }
 
     private Workspace workspace(String slug) {

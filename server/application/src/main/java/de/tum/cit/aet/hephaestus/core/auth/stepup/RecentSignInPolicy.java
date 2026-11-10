@@ -91,6 +91,18 @@ public class RecentSignInPolicy {
      */
     public void require(
             @Nullable Authentication authentication, AuthEvent.EventType auditType, @Nullable Long actingAccountId) {
+        require(authentication, auditType, actingAccountId, null);
+    }
+
+    /**
+     * As {@link #require(Authentication, AuthEvent.EventType, Long)}, for an action that a workspace already
+     * authorized: the refusal also names that workspace.
+     */
+    public void require(
+            @Nullable Authentication authentication,
+            AuthEvent.EventType auditType,
+            @Nullable Long actingAccountId,
+            @Nullable Long workspaceId) {
         if ((!assuranceEnforced
                         && authentication != null
                         && authentication.isAuthenticated()
@@ -99,12 +111,14 @@ public class RecentSignInPolicy {
             return;
         }
         log.info("auth.step-up: refused {} for actingAccountId={} (max-age={})", auditType, actingAccountId, maxAge);
-        // The refusal happens before the action's own arguments are validated, so the row names only the
-        // session that was refused; claiming a target this request never reached would be a wrong claim.
+        // An interceptor refuses before the action's own arguments are validated, so its row names only the
+        // session that was refused; claiming a target this request never reached would be a wrong claim. A
+        // workspace that already authorized the action passes its own id.
         authEventLogger
                 .event(auditType, AuthEvent.Result.FAILURE)
                 .account(actingAccountId)
                 .actingAccount(actingAccountId)
+                .workspace(workspaceId)
                 .failureReason(StepUpRequiredException.CODE)
                 .record();
         metrics.recordStepUpDenied(auditType.name().toLowerCase(Locale.ROOT));

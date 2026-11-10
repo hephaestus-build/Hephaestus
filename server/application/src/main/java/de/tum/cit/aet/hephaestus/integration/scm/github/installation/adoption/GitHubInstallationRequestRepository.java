@@ -62,8 +62,17 @@ public interface GitHubInstallationRequestRepository extends JpaRepository<GitHu
             """)
     Optional<GitHubInstallationRequestDTO> findView(@Param("installationId") long installationId);
 
-    /** The workspace purge keeps the workspace row, so its foreign key alone would never clear the pointer. */
+    /**
+     * The workspace purge keeps the workspace row, so its foreign key alone would never clear the pointer. The record
+     * still stops a replayed event; for that it needs only its id and status, so a personal account's login and id go.
+     */
     @Modifying
-    @Query("UPDATE GitHubInstallationRequest r SET r.workspaceId = NULL WHERE r.workspaceId = :workspaceId")
+    @Query(value = """
+            UPDATE github_installation_request
+            SET workspace_id = NULL,
+                account_login = CASE WHEN account_kind = 'USER' THEN NULL ELSE account_login END,
+                account_id = CASE WHEN account_kind = 'USER' THEN NULL ELSE account_id END
+            WHERE workspace_id = :workspaceId
+            """, nativeQuery = true)
     int clearWorkspace(@Param("workspaceId") long workspaceId);
 }

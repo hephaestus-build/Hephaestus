@@ -1987,9 +1987,9 @@ export type GeneratedPathReview = {
  * What happens next with the GitHub App installation that the signed-in person set up
  */
 export type GitHubInstallationClaim = {
-	outcome: "READY" | "AWAITING_APPROVAL" | "SETTING_UP";
+	outcome: "READY" | "AWAITING_APPROVAL" | "DECLINED" | "SETTING_UP";
 	/**
-	 * The installation's workspace, when it has one
+	 * The installation's workspace, given only to its members and to instance admins
 	 */
 	workspaceSlug?: string;
 };
@@ -2006,7 +2006,10 @@ export type GitHubInstallationClaimRequest = {
  */
 export type GitHubInstallationRequest = {
 	accountKind: "USER" | "ORGANIZATION";
-	accountLogin: string;
+	/**
+	 * Absent for a personal account whose adopted workspace was deleted, or whose person was erased
+	 */
+	accountLogin?: string;
 	decidedAt?: Date;
 	installationId: number;
 	receivedAt: Date;

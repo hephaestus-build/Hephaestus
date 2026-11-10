@@ -21,6 +21,10 @@ export type GitHubInstallationSetupState =
 	| { status: "error"; message: string }
 	/** Under the admin-only creation policy, an instance admin adopts each installation. */
 	| { status: "awaiting-approval"; canApprove: boolean }
+	/** An instance admin declined the installation; one can still adopt it. */
+	| { status: "declined"; canApprove: boolean }
+	/** The installation has a workspace that the reader is not a member of. */
+	| { status: "ready-elsewhere" }
 	/** The installation creates its own workspace, and that has not happened yet. */
 	| { status: "setting-up" }
 	| { status: "signed-out"; requiresApproval: boolean; onSignIn: () => void }
@@ -46,6 +50,20 @@ function copyOf(state: GitHubInstallationSetupState): { title: string; descripti
 		}
 		case "awaiting-approval": {
 			return { title: "Waiting for approval", description: APPROVAL_NOTICE };
+		}
+		case "declined": {
+			return {
+				title: "Installation declined",
+				description:
+					"An instance administrator declined this installation, so Hephaestus does not use it. Ask an instance administrator if you need it.",
+			};
+		}
+		case "ready-elsewhere": {
+			return {
+				title: "This installation already has a workspace",
+				description:
+					"To join it, ask the person who installed the app on GitHub, or an instance administrator.",
+			};
 		}
 		case "setting-up": {
 			return {
@@ -103,11 +121,12 @@ export function GitHubInstallationSetupPage({ state }: { state: GitHubInstallati
 							Checking…
 						</Button>
 					)}
-					{state.status === "awaiting-approval" && state.canApprove && (
-						<Link to="/admin/github-installations" className={buttonVariants()}>
-							Review installations
-						</Link>
-					)}
+					{(state.status === "awaiting-approval" || state.status === "declined") &&
+						state.canApprove && (
+							<Link to="/admin/github-installations" className={buttonVariants()}>
+								Review installations
+							</Link>
+						)}
 					{state.status === "signed-out" && <Button onClick={state.onSignIn}>Sign in</Button>}
 					{state.status !== "confirm" &&
 						state.status !== "pending" &&

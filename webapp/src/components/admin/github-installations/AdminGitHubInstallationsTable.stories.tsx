@@ -35,6 +35,15 @@ const adopted: GitHubInstallationRequest = {
 	workspaceSlug: "design-lab",
 };
 
+/** A personal account's adopted installation whose workspace was deleted: its login is removed. */
+const removedPersonalAccount: GitHubInstallationRequest = {
+	installationId: 105,
+	accountKind: "USER",
+	status: "ADOPTED",
+	receivedAt: at,
+	decidedAt: at,
+};
+
 const adoptedWorkspaceDeleted: GitHubInstallationRequest = {
 	installationId: 104,
 	accountLogin: "old-course",
@@ -49,7 +58,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		installations: [pending, declined, adopted, adoptedWorkspaceDeleted],
+		installations: [pending, declined, adopted, adoptedWorkspaceDeleted, removedPersonalAccount],
 		isLoading: false,
 		deciding: new Set<number>(),
 		onAdopt: fn(),
@@ -88,9 +97,11 @@ export const Default: Story = {
 		await expect(within(deletedRow).getByText("Workspace deleted")).toBeVisible();
 		await expect(within(deletedRow).queryByRole("button")).toBeNull();
 
+		const removedRow = canvas.getByRole("row", { name: /Removed personal account/u });
+		await expect(within(removedRow).getByText("Workspace deleted")).toBeVisible();
 		// Statuses and account types in words, never the constants the wire carries.
 		canvas.getByText("Waiting for approval");
-		canvas.getByText("Personal account");
+		within(declinedRow).getByText("Personal account");
 		await expect(
 			canvas.queryByText(/^(?:PENDING|DECLINED|ADOPTED|USER|ORGANIZATION)$/u),
 		).toBeNull();

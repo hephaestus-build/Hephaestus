@@ -36,6 +36,29 @@ describe("GitHub App setup page", () => {
 		expect(bodies).toStrictEqual([{ installationId: "4242", body: { code: "one-time" } }]);
 	});
 
+	it("tells the installer when an instance admin declined the installation", async () => {
+		serveClaim({ outcome: "DECLINED" });
+		renderRouteAt("/github/installations/4242/setup?code=one-time");
+
+		await userEvent
+			.setup()
+			.click(await screen.findByRole("button", { name: "Continue" }, ROUTE_RENDER_WAIT));
+
+		await screen.findByText("Installation declined");
+		expect(screen.queryByText(APPROVAL_NOTICE)).toBeNull();
+	});
+
+	it("says that the installation has a workspace without naming it to a non-member", async () => {
+		serveClaim({ outcome: "READY" });
+		renderRouteAt("/github/installations/4242/setup?code=one-time");
+
+		await userEvent
+			.setup()
+			.click(await screen.findByRole("button", { name: "Continue" }, ROUTE_RENDER_WAIT));
+
+		await screen.findByText("This installation already has a workspace");
+	});
+
 	it("shows the approval notice to a signed-out person and sends nothing", async () => {
 		const bodies = serveClaim({ outcome: "AWAITING_APPROVAL" });
 		server.use(

@@ -115,6 +115,8 @@ These conditions also apply:
   The person must have access to the installation.
   Their GitHub account must be the account that is linked to the signed-in Hephaestus account.
   The setup page never creates a workspace.
+  It names an existing workspace only to its members and to instance admins.
+  It also tells the person when an instance admin declined the installation.
   [Who creates the workspace of an installation](#who-creates-the-workspace-of-an-installation) gives the next step.
   A return after an update of an installation goes to the home page.
 - **Installation requests.** A member without permission to install the App sends a request to the account's owners instead.
@@ -145,6 +147,7 @@ Instance admins decide in **Instance administration → GitHub installations**:
   An instance admin can adopt a declined installation later.
 - To undo an adoption, delete the workspace.
   The installation stays adopted, and a later installation event does not create a new workspace for it.
+  For a personal account, Hephaestus then removes the account's login and id from the record.
   To use the account again, uninstall the App on GitHub and install it again.
 
 Adopt and decline require a recent sign-in.

@@ -35,8 +35,9 @@ public class GitHubInstallationRequest {
     @Column(name = "account_id")
     private @Nullable Long accountId;
 
-    @Column(name = "account_login", nullable = false)
-    private String accountLogin;
+    /** A personal account's login is cleared when its adopted workspace is purged or the person is erased. */
+    @Column(name = "account_login")
+    private @Nullable String accountLogin;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "account_kind", nullable = false, length = 16)

@@ -73,6 +73,31 @@ export const AwaitingApprovalForAnAdmin: Story = {
 	},
 };
 
+/** A declined installation says so, instead of telling the installer it still waits. */
+export const Declined: Story = {
+	args: { state: { status: "declined", canApprove: false } },
+	play: async ({ canvas }) => {
+		canvas.getByText("Installation declined");
+		await expect(canvas.queryByText(/must approve this installation/u)).toBeNull();
+	},
+};
+
+/** The installation's workspace is not named to someone who is not its member. */
+export const DeclinedForAnAdmin: Story = {
+	args: { state: { status: "declined", canApprove: true } },
+};
+
+export const ReadyElsewhere: Story = {
+	args: { state: { status: "ready-elsewhere" } },
+	play: async ({ canvas }) => {
+		canvas.getByText("This installation already has a workspace");
+		await expect(canvas.getByRole("link", { name: "Go to Hephaestus" })).toHaveAttribute(
+			"href",
+			"/",
+		);
+	},
+};
+
 export const SettingUp: Story = {
 	args: { state: { status: "setting-up" } },
 	play: async ({ canvas }) => {

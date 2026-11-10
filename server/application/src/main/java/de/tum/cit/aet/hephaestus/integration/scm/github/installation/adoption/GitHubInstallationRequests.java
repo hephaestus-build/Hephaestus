@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListen
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,6 +114,22 @@ public class GitHubInstallationRequests {
     static ResponseStatusException accountNotProcessed() {
         return new ResponseStatusException(
                 HttpStatus.CONFLICT, "Hephaestus no longer processes the personal data of this GitHub account.");
+    }
+
+    /**
+     * Locks the installation's record for an uninstall, before the uninstall looks for its workspace. An adoption holds
+     * the same lock while it creates the workspace, so an uninstall either finds that workspace or finds no record to
+     * adopt.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockForUninstall(long installationId) {
+        requests.findForUpdate(installationId);
+    }
+
+    /** The decision on an installation, if Hephaestus recorded it. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<GitHubInstallationRequestStatus> status(long installationId) {
+        return requests.findStatus(installationId);
     }
 
     /** An uninstalled installation that no admin adopted leaves nothing to decide. */
