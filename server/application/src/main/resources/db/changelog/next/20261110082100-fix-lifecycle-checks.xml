@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794275481336-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="workspace"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM workspace WHERE NOT (status IN ('ACTIVE', 'SUSPENDED', 'PURGED'))</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE workspace ADD CONSTRAINT ck_workspace_status CHECK (status IN ('ACTIVE', 'SUSPENDED', 'PURGED'))</sql>
+        <rollback><sql>ALTER TABLE workspace DROP CONSTRAINT ck_workspace_status</sql></rollback>
+    </changeSet>
+    <changeSet id="1794275481336-2" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="person_data_request"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM person_data_request WHERE NOT (state IN ('PREVIEW', 'ERASING', 'FAILED', 'COMPLETE', 'EXPIRED'))</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE person_data_request ADD CONSTRAINT ck_person_data_request_state CHECK (state IN ('PREVIEW', 'ERASING', 'FAILED', 'COMPLETE', 'EXPIRED'))</sql>
+        <rollback><sql>ALTER TABLE person_data_request DROP CONSTRAINT ck_person_data_request_state</sql></rollback>
+    </changeSet>
+    <changeSet id="1794275481336-3" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="person_evidence_copy"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM person_evidence_copy WHERE NOT (state IN ('CAPTURING', 'READY', 'ERASE_REQUESTED', 'PURGE_REQUESTED', 'ERASED'))</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE person_evidence_copy ADD CONSTRAINT ck_person_evidence_copy_state CHECK (state IN ('CAPTURING', 'READY', 'ERASE_REQUESTED', 'PURGE_REQUESTED', 'ERASED'))</sql>
+        <rollback><sql>ALTER TABLE person_evidence_copy DROP CONSTRAINT ck_person_evidence_copy_state</sql></rollback>
+    </changeSet>
+    <changeSet id="1794275481336-4" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="product_feedback_filing"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM product_feedback_filing WHERE NOT (state IN ('DRAFT_QUEUED', 'DRAFTING', 'ANSWERED', 'HELD', 'QUEUED', 'FILING', 'FILED', 'SAVED', 'STOPPED'))</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE product_feedback_filing ADD CONSTRAINT ck_product_feedback_filing_state CHECK (state IN ('DRAFT_QUEUED', 'DRAFTING', 'ANSWERED', 'HELD', 'QUEUED', 'FILING', 'FILED', 'SAVED', 'STOPPED'))</sql>
+        <rollback><sql>ALTER TABLE product_feedback_filing DROP CONSTRAINT ck_product_feedback_filing_state</sql></rollback>
+    </changeSet>
+    <changeSet id="1794275481336-5" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="issue"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM issue WHERE NOT (state IN ('OPEN', 'CLOSED', 'MERGED'))</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE issue ADD CONSTRAINT ck_issue_state CHECK (state IN ('OPEN', 'CLOSED', 'MERGED'))</sql>
+        <rollback><sql>ALTER TABLE issue DROP CONSTRAINT ck_issue_state</sql></rollback>
+    </changeSet>
+    <changeSet id="1794275481336-6" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="release_start"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM release_start WHERE NOT (channel IN ('RELEASE', 'COMMIT', 'DEVELOPMENT'))</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE release_start ADD CONSTRAINT ck_release_start_channel CHECK (channel IN ('RELEASE', 'COMMIT', 'DEVELOPMENT'))</sql>
+        <rollback><sql>ALTER TABLE release_start DROP CONSTRAINT ck_release_start_channel</sql></rollback>
+    </changeSet>
+    <changeSet id="1794275481336-7" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="llm_call_permit"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM llm_call_permit WHERE NOT (state IN ('WAITING', 'ACTIVE', 'CLOSED'))</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE llm_call_permit ADD CONSTRAINT ck_llm_call_permit_state CHECK (state IN ('WAITING', 'ACTIVE', 'CLOSED'))</sql>
+        <rollback><sql>ALTER TABLE llm_call_permit DROP CONSTRAINT ck_llm_call_permit_state</sql></rollback>
+    </changeSet>
+    <changeSet id="1794275481336-8" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="llm_call_permit"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM llm_call_permit WHERE NOT ((state = 'WAITING') = (granted_at IS NULL))</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE llm_call_permit ADD CONSTRAINT ck_llm_call_permit_granted CHECK ((state = 'WAITING') = (granted_at IS NULL))</sql>
+        <rollback><sql>ALTER TABLE llm_call_permit DROP CONSTRAINT ck_llm_call_permit_granted</sql></rollback>
+    </changeSet>
+    <changeSet id="1794275481336-9" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="llm_call_permit"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM llm_call_permit WHERE NOT ((state = 'CLOSED') = (closed_at IS NOT NULL))</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE llm_call_permit ADD CONSTRAINT ck_llm_call_permit_closed CHECK ((state = 'CLOSED') = (closed_at IS NOT NULL))</sql>
+        <rollback><sql>ALTER TABLE llm_call_permit DROP CONSTRAINT ck_llm_call_permit_closed</sql></rollback>
+    </changeSet>
+    <changeSet id="1794275481336-10" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="review_job"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM review_job WHERE NOT ((status IN ('QUEUED', 'RUNNING')) = (completed_at IS NULL))</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE review_job ADD CONSTRAINT ck_review_job_completed CHECK ((status IN ('QUEUED', 'RUNNING')) = (completed_at IS NULL))</sql>
+        <rollback><sql>ALTER TABLE review_job DROP CONSTRAINT ck_review_job_completed</sql></rollback>
+    </changeSet>
+    <changeSet id="1794275481336-11" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="review_job"/>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM review_job WHERE NOT (cancellation_reason IS NULL OR status = 'CANCELLED')</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE review_job ADD CONSTRAINT ck_review_job_cancelled CHECK (cancellation_reason IS NULL OR status = 'CANCELLED')</sql>
+        <rollback><sql>ALTER TABLE review_job DROP CONSTRAINT ck_review_job_cancelled</sql></rollback>
+    </changeSet>
+</databaseChangeLog>

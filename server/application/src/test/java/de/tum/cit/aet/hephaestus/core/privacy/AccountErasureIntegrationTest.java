@@ -1818,7 +1818,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             User owner)
             throws Exception {
         // The fixture ends the job; its evidence is captured by a run that is still executing.
-        RuntimeJobTestData.updateJobs(jdbc, "UPDATE review_job SET status='RUNNING' WHERE id=?", derived.jobId());
+        RuntimeJobTestData.updateJobs(
+                jdbc,
+                "UPDATE review_job SET status='RUNNING',completed_at=NULL,cancellation_reason=NULL WHERE id=?",
+                derived.jobId());
         var job = agentJobRepository.findById(derived.jobId()).orElseThrow();
         var files = new JobEvidenceFiles(
                 new FabricLayout(evidenceRoot.toString()), agentJobRepository, Clock.systemUTC(), worker);

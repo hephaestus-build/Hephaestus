@@ -117,9 +117,10 @@ class ReviewAttemptUsageDatabaseTest {
                 INSERT INTO agent_run(id,workspace_id,kind,band,concurrency_key,state,stop_reason,ended_at)
                 VALUES ('%s',978001,'REVIEW','BATCH','review:%s','ENDED','COMPLETED',now());
                 INSERT INTO review_job
-                    (id,review_id,workspace_id,submitted_at,status,processing_status,trace_id,input,config_snapshot,run_id)
+                    (id,review_id,workspace_id,submitted_at,status,processing_status,trace_id,input,config_snapshot,run_id,
+                     completed_at)
                 VALUES ('%s','00000000-0000-0000-0000-000000978011',978001,now(),
-                        'COMPLETED','DONE','00000000000000000000000000000001','{}','{}','%s')
+                        'COMPLETED','DONE','00000000000000000000000000000001','{}','{}','%s',now())
                 """.formatted(jobId, jobId, jobId, jobId));
     }
 

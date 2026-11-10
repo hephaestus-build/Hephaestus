@@ -259,6 +259,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
         transactionTemplate.executeWithoutResult(transaction -> {
             var completed = jobRepository.findById(completedId).orElseThrow();
             completed.setStatus(ReviewJobStatus.COMPLETED);
+            completed.setCompletedAt(Instant.now());
             jobRepository.saveAndFlush(completed);
             RuntimeJobTestData.persistRun(jdbc, completed);
         });

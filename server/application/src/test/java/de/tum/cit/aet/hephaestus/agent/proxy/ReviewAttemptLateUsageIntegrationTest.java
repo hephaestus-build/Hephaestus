@@ -304,7 +304,10 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
             attemptUsage.settleAttempt(job, Map.of(ModelKind.CHAT, INSTANCE_CHAT), null, null);
         });
         // The next claim: attempt 1 runs with another configuration.
-        RuntimeJobTestData.updateJobs(jdbc, "UPDATE review_job SET status = 'RUNNING' WHERE id = ?", job.getId());
+        RuntimeJobTestData.updateJobs(
+                jdbc,
+                "UPDATE review_job SET status = 'RUNNING',completed_at=NULL,cancellation_reason=NULL WHERE id = ?",
+                job.getId());
         register(job, 1, ModelKind.CHAT, WORKSPACE_CHAT);
 
         call(job, 0, 40, 4);
