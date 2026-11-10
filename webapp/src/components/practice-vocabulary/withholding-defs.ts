@@ -125,7 +125,7 @@ export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 		"Review settings changed after this review started, so its feedback was not sent.",
 	OUTSIDE_CURRENT_SCOPE:
 		"The developer, repository, or base branch is no longer in the review scope.",
-	PUBLIC_SUBJECT_INELIGIBLE: "Public feedback must address the author’s work.",
+	PUBLIC_SUBJECT_INELIGIBLE: "This destination gets only feedback about the author’s own work.",
 	APPROVAL_STALE: "The approved copies no longer match the content or destination being sent.",
 	APPROVAL_NO_LONGER_ELIGIBLE: "The practices behind this feedback no longer require approval.",
 	NO_AI: "The developer has not agreed to AI feedback.",

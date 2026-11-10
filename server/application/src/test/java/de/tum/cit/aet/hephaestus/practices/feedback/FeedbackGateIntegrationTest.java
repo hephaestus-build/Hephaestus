@@ -237,6 +237,78 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     }
 
     @Test
+    void shouldWithholdFeedbackOnMergedOrClosedWorkAndKeepPrivateDestinationsWhenTheWorkspaceDoesNotPostAfterMerge() {
+        var result = result();
+        supportOnWorkFeedback(result);
+        var onWork = Objects.requireNonNull(supportedFeedback);
+        var page = piece(FeedbackDestination.PRACTICE_PAGE, FeedbackState.READY, null);
+        bind(page, result);
+        var conversation = piece(FeedbackDestination.CONVERSATION, FeedbackState.READY, null);
+        bind(conversation, result);
+
+        workState(Map.of("state", "MERGED", "draftStatus", "NOT_DRAFT"));
+        assertThat(gate.evaluate(page, FeedbackCheckStage.EGRESS, false).allowed())
+                .isTrue();
+        assertThat(gate.evaluate(conversation, FeedbackCheckStage.EGRESS, false).allowed())
+                .isTrue();
+        prepare(onWork);
+        assertThat(deliveryOf(onWork)).isEqualTo("WITHHELD:ITEM_MERGED");
+        assertThat(sendsOf(onWork)).isEmpty();
+
+        var closed = onWork(result());
+        workState(Map.of("state", "CLOSED", "draftStatus", "NOT_DRAFT"));
+        prepare(closed);
+        assertThat(deliveryOf(closed)).isEqualTo("WITHHELD:ITEM_CLOSED");
+        assertThat(sendsOf(closed)).isEmpty();
+    }
+
+    @Test
+    void shouldPostFeedbackOnMergedWorkWhenTheWorkspacePostsAfterMerge() {
+        var result = result();
+        supportOnWorkFeedback(result);
+        var onWork = Objects.requireNonNull(supportedFeedback);
+        jdbc.update("UPDATE workspace SET practice_deliver_to_merged=true WHERE id=?", workspace.getId());
+
+        workState(Map.of("state", "MERGED", "draftStatus", "NOT_DRAFT"));
+        prepare(onWork);
+
+        assertThat(deliveryOf(onWork)).isEqualTo("READY:-");
+        assertThat(sendsOf(onWork)).containsExactly("POST:PENDING");
+    }
+
+    @Test
+    void shouldWithholdFeedbackOnADraftEvenWhenThePracticeAsksForNoStateAndPostItOnceTheWorkIsReady() {
+        var result = result();
+        supportOnWorkFeedback(result);
+        var draft = Objects.requireNonNull(supportedFeedback);
+        var page = piece(FeedbackDestination.PRACTICE_PAGE, FeedbackState.READY, null);
+        bind(page, result);
+
+        workState(Map.of("state", "OPEN", "draftStatus", "DRAFT"));
+        assertThat(gate.evaluate(page, FeedbackCheckStage.EGRESS, false).allowed())
+                .isTrue();
+        prepare(draft);
+        assertThat(deliveryOf(draft)).isEqualTo("WITHHELD:ITEM_STATE_INELIGIBLE");
+        assertThat(sendsOf(draft)).isEmpty();
+
+        // The ready event reviews every practice again; that review's feedback on the work posts.
+        var ready = onWork(result());
+        workState(Map.of("state", "OPEN", "draftStatus", "NOT_DRAFT"));
+        prepare(ready);
+        assertThat(deliveryOf(ready)).isEqualTo("READY:-");
+        assertThat(sendsOf(ready)).containsExactly("POST:PENDING");
+    }
+
+    private void workState(Map<String, String> state) {
+        when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, state, "v1")));
+        when(authorization.permitsForNewDelivery(
+                        eq(workspace.getId()), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
+                .thenAnswer(call -> call.<Collection<Result>>getArgument(1).stream()
+                        .map(Result::getId)
+                        .collect(Collectors.toSet()));
+    }
+
+    @Test
     void shouldDecideEveryPieceInOneReadExactlyAsItIsDecidedOnItsOwn() {
         supportOnWorkFeedback();
         var admitted = Objects.requireNonNull(supportedFeedback);
