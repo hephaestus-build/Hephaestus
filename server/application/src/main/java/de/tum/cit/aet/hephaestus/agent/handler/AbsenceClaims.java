@@ -54,7 +54,13 @@ final class AbsenceClaims {
                     + "tracker)\\b)[^.]{0,40}\\b(?:defines no|declares no|registers no|never)\\b",
             "\\b(?:nothing else|nothing in the (?:project|application|code ?base|repository|repo|"
                     + "checkout)|no (?:other )?(?:code|callers?)(?! path| (?:in|of)\\b)|none of (?:the|"
-                    + "its) callers)\\b[^.]{0,60}\\b(?:catch(?:es)?|handles?)\\b(?!\\()");
+                    + "its) callers)\\b[^.]{0,60}\\b(?:catch(?:es)?|handles?)\\b(?!\\()",
+            "\\b(?:the|its) only (?:unit |integration |end-to-end )?tests? (?:of|for|that "
+                    + "(?:covers?|exercises?|checks?))\\b(?![^.;]{0,60}\\b(?:in|of) (?:the|this) "
+                    + "(?:change|diff|commit|pull request)\\b)|\\bno other tests?\\b(?! (?:in|of) "
+                    + "(?:the|this) (?:change|diff|commit|pull request)\\b)[^.;]{0,30}\\b(?:covers?|"
+                    + "exercises?|tests?|checks?|asserts?|verif(?:y|ies)|reach(?:es)?)\\b|"
+                    + "\\b(?:covered|tested|exercised) by no other tests?\\b");
 
     static final String DISCLAIMER =
             "\\b(?:did|does|do|could|can|would)(?: not|n't) (?:\\w+ ){0,1}?(?:establish|inspect|"

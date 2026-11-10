@@ -497,5 +497,47 @@
 		],
 		"consulted": false,
 		"tied": true
+	},
+	{
+		"name": "the only test of a subject is a claim",
+		"patterns": [],
+		"subject": "tests of parseConfig",
+		"texts": [
+			"This is the only test of parseConfig."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "no other test is a claim",
+		"patterns": [],
+		"subject": "tests of the retry path",
+		"texts": [
+			"No other test covers the retry path."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "a search for the subject backs an only-test claim",
+		"patterns": [
+			"(?i)parseConfig"
+		],
+		"subject": "tests of parseConfig",
+		"texts": [
+			"This is the only test of parseConfig."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "the only test of the change is no claim",
+		"patterns": [],
+		"subject": "tests of parseConfig",
+		"texts": [
+			"It is the only test of parseConfig in this change."
+		],
+		"consulted": false,
+		"tied": true
 	}
 ]
