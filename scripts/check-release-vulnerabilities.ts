@@ -793,7 +793,14 @@ export function evaluate(
 		historical?: boolean;
 	} = {},
 ) {
-	if (!record(reportValue) || !Array.isArray(reportValue.Results)) {
+	// Trivy omits `Results` when an image holds no package it can analyze, as a static busybox or the
+	// pause image. That is a complete schema 2 report with nothing found, not a missing one.
+	const nothingToAnalyze =
+		record(reportValue) &&
+		reportValue.SchemaVersion === 2 &&
+		typeof reportValue.ArtifactName === "string" &&
+		reportValue.Results === undefined;
+	if (!record(reportValue) || (!Array.isArray(reportValue.Results) && !nothingToAnalyze)) {
 		throw new Error("malformed Trivy report");
 	}
 	const policy = readPolicy(policyValue, options.historical === true);
@@ -804,7 +811,9 @@ export function evaluate(
 		);
 	}
 	errors.push(...policyErrors(policy, now));
-	const { findings, goTargets } = parseFindings(reportValue.Results);
+	const { findings, goTargets } = parseFindings(
+		Array.isArray(reportValue.Results) ? reportValue.Results : [],
+	);
 	const highCritical = findings.filter(
 		(finding) => finding.Severity === "HIGH" || finding.Severity === "CRITICAL",
 	);

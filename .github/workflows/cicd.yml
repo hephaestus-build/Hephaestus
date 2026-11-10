@@ -669,6 +669,13 @@ jobs:
               - 'scripts/lib/image-scan.ts'
               - 'scripts/lib/json.ts'
               - 'scripts/lib/process.ts'
+              # The platform images that the one-host installer ships, and the scan that judges them.
+              - 'scripts/scan-platform-images.ts'
+              - 'scripts/lib/gvisor-pin.ts'
+              - 'deploy/platform/k3s-platform.yaml'
+              - 'deploy/platform/k3s-agent-sandbox.yaml'
+              - 'deploy/platform/k3s-containerd.toml.tmpl'
+              - 'deploy/platform/k3s-config.yaml'
               - '.github/workflows/cicd.yml'
             docker-config:
               - '.github/workflows/reusable-docker-build.yml'
@@ -886,13 +893,22 @@ jobs:
       - name: Enforce the release vulnerability policy on the pinned digests
         run: node scripts/scan-upstream-images.ts reports
 
+      - uses: ./.github/actions/setup-helm
+
+      # The installer ships these images too, so its policy judges each platform digest.
+      - name: Enforce the release vulnerability policy on the platform images
+        if: ${{ !cancelled() }}
+        run: node scripts/scan-platform-images.ts --policy
+
       # The gate's exit status alone cannot say which digest carries which finding.
       - name: Upload the vulnerability policy results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vulnerability-policy-upstream
-          path: reports
+          path: |
+            reports
+            tmp/platform-policy
           if-no-files-found: warn
           retention-days: 7
 

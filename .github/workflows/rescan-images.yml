@@ -177,7 +177,7 @@ jobs:
           max-age-hours: "48"
           java-db: "true"
       - uses: ./.github/actions/setup-helm
-      - name: Scan the dependency locks and pinned platform components
+      - name: Scan the dependency locks and pinned platform components, and judge the platform images
         run: node scripts/scan-platform-images.ts
       # Security alerts are access-controlled. Do not copy detailed findings into public artifacts or issues.
       - name: Publish restricted security alerts
@@ -197,7 +197,7 @@ jobs:
           retries: 2
           script: |
             const marker = '<!-- hephaestus:platform-rescan-unavailable -->';
-            const body = `${marker}\n@hephaestus-build/maintainer: a scheduled security scan is unavailable. Inspect [this run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`;
+            const body = `${marker}\n@hephaestus-build/maintainer: a scheduled security scan is unavailable, or a platform image no longer satisfies the vulnerability policy. Inspect [this run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               ...context.repo, creator: 'github-actions[bot]', state: 'open', per_page: 100,
             });
