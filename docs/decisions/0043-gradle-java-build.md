@@ -3,6 +3,8 @@
 **Status:** Accepted
 **Date:** 2026-09-08
 
+**Supersedes:** [ADR 0032](0032-generated-clients-build-boundary.md). It keeps the ownership boundary of ADR 0032 and replaces its Maven mechanism.
+
 ## Context
 
 The maintainers chose a complete Gradle cutover before 1.0. The existing Maven build separated

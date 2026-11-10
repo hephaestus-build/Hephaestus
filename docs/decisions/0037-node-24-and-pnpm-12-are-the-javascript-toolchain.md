@@ -1,6 +1,6 @@
 # ADR 0037: Node.js 24 and pnpm 12 are the JavaScript toolchain
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md)
 **Date:** 2026-08-30
 **Supersedes:** [ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md)
 **Builds on:** [ADR 0036](0036-agent-runtime-runs-on-node-24.md), which moved the sandbox runtime first

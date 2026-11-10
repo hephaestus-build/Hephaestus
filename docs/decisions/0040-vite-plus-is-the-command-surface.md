@@ -1,6 +1,6 @@
 # ADR 0040: Vite+ is the command surface; pnpm stays the package manager
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md)
 **Date:** 2026-09-03
 **Authors:** Felix T.J. Dietrich
 **Amends:** [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md)
