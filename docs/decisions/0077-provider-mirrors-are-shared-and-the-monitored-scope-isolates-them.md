@@ -1,6 +1,6 @@
 # ADR 0077: Provider mirrors are shared, and the monitored scope isolates them
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md)
 **Date:** 2026-11-04
 **Authors:** Felix T.J. Dietrich
 **Amends:** [ADR 0004](0004-sql-layer-tenancy-via-statement-inspector.md) (SQL-layer tenancy).
