@@ -1,17 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { HttpResponse, http } from "msw";
 import { expect, fn, within } from "storybook/test";
 
-import { ownMembership } from "@/mocks/fixtures/workspaces";
 import { withStandardPage } from "@/stories/decorators";
 
 import { WorkspaceSettingsPage, type WorkspaceSettingsPageProps } from "./WorkspaceSettingsPage";
-
-const membershipRead = [
-	http.get("*/workspaces/:workspaceSlug/members/me", () =>
-		HttpResponse.json(ownMembership("OWNER")),
-	),
-];
 
 const publicActivity = {
 	workspaceName: "AET",
@@ -41,10 +33,7 @@ const hiddenPeople = {
 const meta = {
 	component: WorkspaceSettingsPage,
 	parameters: {
-		// One MSW worker answers a whole Docs page, so each story gets its own frame until MSW goes.
-		docs: { story: { inline: false, height: "600px" } },
 		layout: "fullscreen",
-		msw: { handlers: membershipRead },
 		chromatic: { viewports: [320, 1440] },
 	},
 	decorators: [withStandardPage],
@@ -54,6 +43,11 @@ const meta = {
 		practicesEnabled: true,
 		publicActivity,
 		hiddenPeople,
+		dangerZone: {
+			ownerCheck: { status: "known", owner: true },
+			deleting: false,
+			onDelete: fn(async () => undefined),
+		},
 	},
 } satisfies Meta<typeof WorkspaceSettingsPage>;
 

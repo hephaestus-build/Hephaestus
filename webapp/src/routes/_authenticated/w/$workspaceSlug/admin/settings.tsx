@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
+import { useWorkspaceDangerZone } from "@/hooks/use-workspace-danger-zone";
 import { useWorkspacePublicActivity } from "@/hooks/use-workspace-public-activity";
 import { useWorkspaceSetup } from "@/hooks/use-workspace-setup";
 import { workspaceAdminHead } from "@/lib/page-title";
@@ -40,6 +41,7 @@ function AdminSettings() {
 	const workspace =
 		administrationWorkspaceSlug === undefined ? chromeWorkspace : administrationWorkspace;
 	const setup = useWorkspaceSetup(workspaceSlug ?? "", { enabled: hasText(workspaceSlug) });
+	const dangerZone = useWorkspaceDangerZone(workspaceSlug ?? "");
 	const { hiddenPeople, ...publicActivity } = useWorkspacePublicActivity({
 		workspaceSlug,
 		live:
@@ -80,6 +82,7 @@ function AdminSettings() {
 					...publicActivity,
 				}}
 				hiddenPeople={hiddenPeople}
+				dangerZone={dangerZone}
 			/>
 		);
 	}
