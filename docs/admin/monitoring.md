@@ -211,15 +211,6 @@ To adapt the rules, load your own copy of the file instead of the chart's values
 1. Adjust windows, thresholds, and routing to your traffic and recovery objectives.
 2. If you change `postgresql.backup.schedule`, change the age of `HephaestusBackupStale`.
 
-Counters created on their first event can be absent before that event.
-An `increase` rule needs at least two samples.
-It cannot recover an event that occurred before its first sample.
-Scraping does not replace warning and error logs.
-
-The poison counter counts the events that became dead letters.
-The dead letters themselves stay in the provider event inbox until you replay them or their retention ends.
-See [Webhook ingestion operations](./webhook-ingestion-operations.mdx#what-to-alert-on).
-
 3. Validate the config with:
 
    ```bash
@@ -235,7 +226,16 @@ See [Webhook ingestion operations](./webhook-ingestion-operations.mdx#what-to-al
 
    A changed threshold also needs a changed test.
 
-8. Before you rely on the rules, test the notification route.
+5. Before you rely on the rules, test the notification route.
+
+Counters created on their first event can be absent before that event.
+An `increase` rule needs at least two samples.
+It cannot recover an event that occurred before its first sample.
+Scraping does not replace warning and error logs.
+
+The poison counter counts the events that became dead letters.
+The dead letters themselves stay in the provider event inbox until you replay them or their retention ends.
+See [Webhook ingestion operations](./webhook-ingestion-operations.mdx#what-to-alert-on).
 
 Prometheus evaluates rules.
 Your Alertmanager or equivalent controls notification delivery, grouping, and silences.
