@@ -217,6 +217,7 @@
 	"docs/decisions/0071-every-user-visible-failure-is-observable.md",
 	"docs/decisions/0072-few-dependencies-owned-slivers-kept-foundations.md",
 	"docs/decisions/0079-one-agent-system.md",
+	"docs/decisions/0081-one-server-role-and-sandboxes-that-reach-only-the-server.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",

@@ -1,6 +1,6 @@
 # ADR 0006: LLM proxy stays on the coordinator (BYO trust model)
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md)
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 **Amended by:** [ADR 0041](0041-compose-1x-kubernetes-2.md), [ADR 0057](0057-one-heph-conversation-per-developer.md), [ADR 0079](0079-one-agent-system.md)
