@@ -49,7 +49,6 @@ class FilingLifecycleTest {
                     Event.STOPPED, FilingState.STOPPED),
             FilingState.FILING,
             Map.of(
-                    Event.FILING_CLAIMED, FilingState.FILING,
                     Event.FILING_REQUEUED, FilingState.QUEUED,
                     Event.FILED, FilingState.FILED,
                     Event.STOPPED, FilingState.STOPPED),

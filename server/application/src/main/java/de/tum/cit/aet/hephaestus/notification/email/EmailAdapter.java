@@ -130,6 +130,7 @@ public class EmailAdapter implements ActionAdapter {
             case ActionResult.Retry retry -> Outcome.UNAVAILABLE;
             case ActionResult.Defer defer -> Outcome.RATE_LIMITED;
             case ActionResult.Uncertain uncertain -> Outcome.UNCONFIRMED;
+            case ActionResult.Reread reread -> Outcome.UNCONFIRMED;
             case ActionResult.Cancelled cancelled ->
                 switch (cancelled.reason()) {
                     case EXPIRED -> Outcome.EXPIRED;

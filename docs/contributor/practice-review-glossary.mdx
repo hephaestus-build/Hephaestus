@@ -226,7 +226,7 @@ The same name is the source capture code that causes it.
 | **Sandbox**                    | The one agent-sandbox `Sandbox` of a subject: one container with the loop, the tools and the workspace. It is a cache. The server deletes it when no run needs it, and rebuilds its context from PostgreSQL. | planned: agent_sandbox |
 | **Sandbox token**              | The credential of one sandbox. It names the workspace, the subject and the sandbox, and it expires at the sandbox's shutdown time. Only the gateway accepts it. | planned |
 | **Gateway**                    | The server port that sandboxes can reach, and their only egress. It holds the LLM proxy, the call permits, the context and checkout, lease renewal and proposals. | planned: server port 8081 |
-| **Action**                     | One side effect that the server executes for a run or for a person, such as a feedback post, a Slack reply or an email. It has an idempotency key, and its adapter reads it back. | planned: agent_action |
+| **Action**                     | One side effect that the server executes for a run or for a person, such as an email or a product-feedback issue. It has an idempotency key. Its adapter reads it back, or sends it at most once. | agent_action |
 
 Stage and Seal are decided for 1.0 and not shipped yet ([ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md)).
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) decides the subject, run, lease epoch, band, sandbox, sandbox token, gateway and action for 1.0.

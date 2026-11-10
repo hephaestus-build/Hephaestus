@@ -58,12 +58,11 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
                     """, nativeQuery = true)
     Optional<UUID> claimableForAdmins(@Param("now") Instant now);
 
-    /** A routed report due for filing, a held one whose hold ended, or one whose filing lease expired. */
+    /** A routed report due for filing, or a held one whose hold ended. */
     @Query(value = """
                     SELECT feedback_id FROM product_feedback_filing
                     WHERE (state = 'QUEUED' AND next_attempt_at <= :now)
                        OR (state = 'HELD' AND filed_after <= :now AND next_attempt_at <= :now)
-                       OR (state = 'FILING' AND lease_until < :now)
                     ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED
                     """, nativeQuery = true)
     Optional<UUID> claimableFiling(@Param("now") Instant now);

@@ -12,7 +12,7 @@ enum FilingState {
     HELD,
     /** Routed and waiting for the server to file it. */
     QUEUED,
-    /** A server holds the lease and files it. */
+    /** Its {@code file_issue} action in the outbox writes it to GitHub, and the action's end moves it on. */
     FILING,
     /** On GitHub. */
     FILED,

@@ -12,4 +12,10 @@ public interface ActionAdapter {
     ActionKind kind();
 
     ActionResult execute(ActionAttempt attempt);
+
+    /**
+     * Ends the domain row of an action that ended, in the same transaction, whoever ended it: an attempt, expiry or
+     * the reaper. It writes to the database only, and never calls a provider.
+     */
+    default void ended(ActionEnded ended) {}
 }

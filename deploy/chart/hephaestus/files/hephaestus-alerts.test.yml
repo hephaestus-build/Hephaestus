@@ -124,6 +124,47 @@ tests:
               summary: Product feedback stopped filing to GitHub; the reports wait in Needs action
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: an outbox result that could not be recorded fires
+    interval: 1m
+    input_series:
+      - series: 'action_attempts_total{job="hephaestus",instance="server:9090",kind="EMAIL",result="Done",recorded="true"}'
+        values: "0 1 2 3 4"
+      - series: 'action_record_failed_total{job="hephaestus",instance="server:9090",step="end"}'
+        values: "0 0 0 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusOutboxRecordFailing
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HephaestusOutboxRecordFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The outbox could not record an action's result or end, so its email, issue or record did not move on
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: an outbox failure recorded before the first scrape fires
+    interval: 1m
+    input_series:
+      - series: 'action_record_failed_total{job="hephaestus",instance="server:9090",step="settle"}'
+        values: "_x5 1x30"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusOutboxRecordFailing
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HephaestusOutboxRecordFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The outbox could not record an action's result or end, so its email, issue or record did not move on
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 30m
+        alertname: HephaestusOutboxRecordFailing
+        exp_alerts: []
+
   - name: a refused product feedback move fires, other steps do not
     interval: 1m
     input_series:

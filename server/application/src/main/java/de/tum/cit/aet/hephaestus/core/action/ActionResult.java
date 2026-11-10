@@ -15,6 +15,13 @@ public sealed interface ActionResult {
      */
     record Retry(Duration after) implements ActionResult {}
 
+    /**
+     * The write may have reached the provider, and the provider can be read back. The action keeps its fence and is
+     * taken again after {@code after}; that attempt reads back by the action's marker before it writes again. At its
+     * last attempt the action ends {@link ActionState#UNCERTAIN}.
+     */
+    record Reread(Duration after) implements ActionResult {}
+
     /** Not now, and nothing was written: a pace or a rate limit. The attempt does not count. */
     record Defer(Duration after) implements ActionResult {}
 

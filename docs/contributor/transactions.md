@@ -90,6 +90,7 @@ This is the [transactional outbox](https://microservices.io/patterns/data/transa
 - A read-modify-write of a row that has more than one writer locks the row (`…ForUpdate`, `PESSIMISTIC_WRITE`).
   If a person edits the row over HTTP, use `@Version` and an ETag that answers 409 or 412.
 - Lock in one order: workspace, then connection, then item, then the item's children.
+  An outbox action locks before its domain row: its end moves that row in the same transaction ([The outbox](./outbox.md)).
   Sort advisory lock keys before you take them.
   PostgreSQL: "The best defense against deadlocks is generally to avoid them by being certain that all applications using a database acquire locks on multiple objects in a consistent order."
 - Use `pg_advisory_xact_lock`. It is "automatically released at the end of the transaction".

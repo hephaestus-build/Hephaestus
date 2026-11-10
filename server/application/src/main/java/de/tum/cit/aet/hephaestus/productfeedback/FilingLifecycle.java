@@ -33,7 +33,7 @@ final class FilingLifecycle {
         KEPT_PRIVATE,
         /** A check at dispatch sent a public report private. */
         REROUTED_PRIVATE,
-        /** Filing claimed the report, or took over one whose lease ended. */
+        /** Filing handed the report to the outbox, which writes it to GitHub. */
         FILING_CLAIMED,
         /** No earlier write reached GitHub, so the report takes the ordinary path again. */
         FILING_REQUEUED,
@@ -114,8 +114,10 @@ final class FilingLifecycle {
             allow(from, Event.REROUTED_PRIVATE, FilingState.QUEUED);
             allow(from, Event.SAVED, FilingState.SAVED);
         }
-        for (FilingState from : EnumSet.of(FilingState.HELD, FilingState.QUEUED, FilingState.FILING)) {
+        for (FilingState from : EnumSet.of(FilingState.HELD, FilingState.QUEUED)) {
             allow(from, Event.FILING_CLAIMED, FilingState.FILING);
+        }
+        for (FilingState from : EnumSet.of(FilingState.HELD, FilingState.QUEUED, FilingState.FILING)) {
             allow(from, Event.STOPPED, FilingState.STOPPED);
         }
         allow(FilingState.STOPPED, Event.RETRIED_RECONCILE, FilingState.FILING);

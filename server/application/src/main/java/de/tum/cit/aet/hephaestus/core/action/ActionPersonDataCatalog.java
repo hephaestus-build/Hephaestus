@@ -9,6 +9,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 @PersonDataStores({"agent_action"})
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class ActionPersonDataCatalog implements PersonDataCatalog, AccountErasureContributor {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -38,7 +41,8 @@ public class ActionPersonDataCatalog implements PersonDataCatalog, AccountErasur
                 "id,workspace_id,kind,state,payload,readback_ref,stop_reason,created_at,ended_at",
                 "id",
                 "",
-                400));
+                // Before the stores whose rows an action's end locks, such as a product-feedback filing.
+                398));
     }
 
     @Override

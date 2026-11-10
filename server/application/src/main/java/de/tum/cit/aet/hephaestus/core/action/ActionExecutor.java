@@ -36,7 +36,7 @@ public class ActionExecutor {
     private static final Logger log = LoggerFactory.getLogger(ActionExecutor.class);
 
     /** Longer than any provider call an adapter makes, with {@link #WRITE_MARGIN} to spare. */
-    static final Duration LEASE = Duration.ofMinutes(2);
+    public static final Duration LEASE = Duration.ofMinutes(2);
 
     /**
      * A write starts only while this much of the lease is left. An adapter's provider call must end within it, or a
@@ -67,10 +67,12 @@ public class ActionExecutor {
                 throw new IllegalStateException("Two adapters carry out " + adapter.kind());
         for (ActionKind kind : ActionKind.values())
             if (!this.adapters.containsKey(kind)) throw new IllegalStateException("No adapter carries out " + kind);
-        // An uncertain end is rare and alerted on. A counter that first appears at 1 shows no increase to Prometheus,
-        // so each of its series exists at 0 from the start.
+        // Alerts read an uncertain end and a failed record. A counter that first appears at 1 shows no increase to
+        // Prometheus, so each of these series exists at 0 from the start.
         for (ActionKind kind : ActionKind.values())
             for (ActionStopReason reason : ActionStopReason.values()) endCounter(kind, ActionState.UNCERTAIN, reason);
+        recordFailures("end");
+        recordFailures("settle");
     }
 
     /**
@@ -79,7 +81,20 @@ public class ActionExecutor {
      */
     @Scheduled(fixedDelayString = "PT1S", initialDelayString = "PT10S")
     public void runDue() {
-        store.endStale().forEach(this::recordEnd);
+        for (UUID id : store.findStale(SLOTS * 4)) {
+            try {
+                store.endStale(id, this::ended).ifPresent(this::recordEnd);
+            } catch (RuntimeException failed) {
+                // The action stays stale and is ended again on the next run; the others go on.
+                log.atWarn()
+                        .addKeyValue("event.name", "action.record.failed")
+                        .addKeyValue("action.id", id)
+                        .addKeyValue("action.step", "end")
+                        .addKeyValue("error.type", failed.getClass().getName())
+                        .log("Stale action could not end");
+                recordFailure("end");
+            }
+        }
         store.deleteEnded(RETENTION);
         var claims = store.claim(SLOTS, LEASE);
         if (!claims.isEmpty()) runBatch(claims, LEASE);
@@ -140,12 +155,23 @@ public class ActionExecutor {
                     .addKeyValue("action.attempt", claim.attempts())
                     .addKeyValue("error.type", failure.getClass().getName())
                     .log("Action attempt failed");
-            // An exception after the fence leaves the provider's state unknown.
-            result = fenced.get() || claim.writeStarted()
-                    ? new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED)
-                    : new ActionResult.Retry(backoff(claim.attempts()));
+            // An exception after the fence leaves the provider's state unknown: a kind that reads back looks again.
+            if (!fenced.get() && !claim.writeStarted()) result = new ActionResult.Retry(backoff(claim.attempts()));
+            else if (claim.kind().atMostOnce()) result = new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED);
+            else result = new ActionResult.Reread(backoff(claim.attempts()));
         }
-        var settled = store.settle(claim.id(), claim.epoch(), result);
+        Optional<ActionStore.Settled> settled;
+        try {
+            settled = store.settle(claim.id(), claim.epoch(), result, this::ended);
+        } catch (RuntimeException failed) {
+            // Nothing recorded: the lease runs out, and the next attempt reads back or ends the action.
+            event(log.atWarn(), "action.record.failed", claim.id(), claim.workspaceId(), claim.kind())
+                    .addKeyValue("action.step", "settle")
+                    .addKeyValue("error.type", failed.getClass().getName())
+                    .log("Action result could not be recorded");
+            recordFailure("settle");
+            settled = Optional.empty();
+        }
         if (settled.isEmpty() && !(result instanceof ActionResult.Abandoned))
             event(log.atInfo(), "action.result.late", claim.id(), claim.workspaceId(), claim.kind())
                     .addKeyValue("action.attempt", claim.attempts())
@@ -159,6 +185,23 @@ public class ActionExecutor {
                 .increment();
         settled.ifPresent(this::recordEnd);
         return result;
+    }
+
+    /** Hands an action that ended to its adapter, in the transaction that ended it. */
+    private void ended(ActionEnded ended) {
+        Objects.requireNonNull(adapters.get(ended.kind())).ended(ended);
+    }
+
+    /** A result or an end that the database refused, such as a domain row whose end failed. */
+    private void recordFailure(String step) {
+        recordFailures(step).increment();
+    }
+
+    private Counter recordFailures(String step) {
+        return Counter.builder(CoreMetrics.ACTION_RECORD_FAILED)
+                .description("Outbox results and ends that could not be recorded, by step")
+                .tag("step", step)
+                .register(meters);
     }
 
     private void recordEnd(ActionStore.Settled settled) {
