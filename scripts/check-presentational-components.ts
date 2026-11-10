@@ -50,7 +50,6 @@ const ALLOWLIST = {
 		"webapp/src/components/admin/integrations/outline/AddCollectionDialog.tsx",
 		"webapp/src/components/admin/integrations/slack-channels/ChannelHistorySheet.tsx",
 		"webapp/src/components/settings/DangerZoneSection.tsx",
-		"webapp/src/components/create-workspace/ConnectGitLabStep.tsx",
 	],
 	storyMocks: [
 		"webapp/src/components/admin/settings/WorkspaceSettingsPage.stories.tsx",

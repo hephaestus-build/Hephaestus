@@ -1,8 +1,7 @@
-import { useMutation } from "@tanstack/react-query";
 import { CircleCheckIcon, EyeIcon, EyeOffIcon, OctagonXIcon } from "lucide-react";
 import { useState } from "react";
 
-import { gitLabPreflightMutation } from "@/api/@tanstack/react-query.gen";
+import type { GitLabPreflightRequest } from "@/api/types.gen";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
@@ -17,22 +16,28 @@ import { Spinner } from "@/components/ui/spinner";
 import { firstNonBlank, hasText } from "@/lib/text";
 
 import { connectionSchema } from "./schemas";
-import { isForCurrentToken, useWizard } from "./wizard-context";
+import { useWizard } from "./wizard-context";
 
-export function ConnectGitLabStep() {
+export interface ConnectGitLabStepProps {
+	/** A check of the token is under way. */
+	validating?: boolean;
+	/** The last check of the current token got no answer from the GitLab instance. */
+	unreachable?: boolean;
+	/** Checks the token against the instance. The wizard state receives the answer. */
+	onValidate: (request: GitLabPreflightRequest) => void;
+}
+
+export function ConnectGitLabStep({
+	validating = false,
+	unreachable = false,
+	onValidate,
+}: ConnectGitLabStepProps) {
 	const { state, dispatch } = useWizard();
 	const [showToken, setShowToken] = useState(false);
 	const [tokenError, setTokenError] = useState<string>();
 
-	const preflight = useMutation({
-		...gitLabPreflightMutation(),
-		onSuccess: (data, { body }) => {
-			dispatch({ type: "SET_PREFLIGHT_RESULT", result: data, request: body });
-		},
-	});
-
 	const handleValidate = () => {
-		if (preflight.isPending) {
+		if (validating) {
 			return;
 		}
 		const result = connectionSchema.safeParse({
@@ -45,13 +50,9 @@ export function ConnectGitLabStep() {
 		setTokenError(undefined);
 		// Persist the trimmed token so downstream steps use normalized data
 		dispatch({ type: "SET_PAT", value: result.data.personalAccessToken });
-		// Reset any stale mutation state before firing the new request
-		preflight.reset();
-		preflight.mutate({
-			body: {
-				personalAccessToken: result.data.personalAccessToken,
-				serverUrl: state.serverUrl,
-			},
+		onValidate({
+			personalAccessToken: result.data.personalAccessToken,
+			serverUrl: state.serverUrl,
 		});
 	};
 
@@ -120,9 +121,9 @@ export function ConnectGitLabStep() {
 			<Button
 				type="button"
 				onClick={handleValidate}
-				disabled={!state.personalAccessToken.trim() || preflight.isPending}
+				disabled={!state.personalAccessToken.trim() || validating}
 			>
-				{preflight.isPending && <Spinner className="mr-2" />}
+				{validating && <Spinner className="mr-2" />}
 				Validate token
 			</Button>
 
@@ -147,7 +148,7 @@ export function ConnectGitLabStep() {
 				</Alert>
 			)}
 
-			{preflight.isError && isForCurrentToken(state, preflight.variables.body) && (
+			{unreachable && (
 				<Alert variant="destructive">
 					<OctagonXIcon aria-hidden="true" />
 					<AlertTitle>We could not reach GitLab</AlertTitle>
