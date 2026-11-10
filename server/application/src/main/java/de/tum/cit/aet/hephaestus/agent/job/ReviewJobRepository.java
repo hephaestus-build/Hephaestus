@@ -18,6 +18,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
 @Repository
@@ -115,6 +116,48 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     List<ReviewJob> findByStatus(ReviewJobStatus status);
 
     List<ReviewJob> findByStatusIn(Collection<ReviewJobStatus> statuses);
+
+    /**
+     * Takes the attempt's scan call lease when no live lease holds it: one model call of a scan attempt at a time, on
+     * any server replica ({@code ScanCallLeases}).
+     *
+     * @return the job, when this call took the lease
+     */
+    @Transactional
+    @Query(value = """
+            UPDATE review_job SET scan_call_lease = :lease, scan_call_until = now() + :ttlSeconds * interval '1 second'
+             WHERE id = :id AND workspace_id = :workspaceId
+               AND (scan_call_lease IS NULL OR scan_call_until < now())
+            RETURNING id
+            """, nativeQuery = true)
+    Optional<UUID> takeScanCallLease(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("lease") UUID lease,
+            @Param("ttlSeconds") long ttlSeconds);
+
+    /** Releases the lease, unless another call took it after it expired. */
+    @Transactional
+    @Query(value = """
+            UPDATE review_job SET scan_call_lease = NULL, scan_call_until = NULL
+             WHERE id = :id AND workspace_id = :workspaceId AND scan_call_lease = :lease
+            RETURNING id
+            """, nativeQuery = true)
+    Optional<UUID> releaseScanCallLease(
+            @Param("id") UUID id, @Param("workspaceId") long workspaceId, @Param("lease") UUID lease);
+
+    /** Extends the leases that one replica's calls hold, by their jobs and their random lease ids. */
+    @WorkspaceAgnostic("Renews only leases that this replica took; each random lease id names one job")
+    @Transactional
+    @Query(value = """
+            UPDATE review_job SET scan_call_until = now() + :ttlSeconds * interval '1 second'
+             WHERE id IN (:ids) AND scan_call_lease IN (:leases)
+            RETURNING id
+            """, nativeQuery = true)
+    List<UUID> renewScanCallLeases(
+            @Param("ids") Collection<UUID> ids,
+            @Param("leases") Collection<UUID> leases,
+            @Param("ttlSeconds") long ttlSeconds);
 
     /** The parent before the job, as the review service locks it before it changes the review; no parent state changes here. */
     @WorkspaceAgnostic("Run-based claim; parent join includes its workspace")

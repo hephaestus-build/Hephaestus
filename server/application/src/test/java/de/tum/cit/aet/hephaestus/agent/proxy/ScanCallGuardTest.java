@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -51,6 +52,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -65,6 +68,10 @@ class ScanCallGuardTest extends BaseUnitTest {
     private final AgentRuns runs = mock(AgentRuns.class);
     private final ReviewSnapshotQuery reviews = mock(ReviewSnapshotQuery.class);
     private final ScanBudget budget = mock(ScanBudget.class);
+    private final ScanCallLeases leases = mock(ScanCallLeases.class);
+    /** The lease row as the database holds it: one call at a time, whichever replica asks. */
+    private final AtomicReference<@Nullable UUID> leaseRow = new AtomicReference<>();
+
     private final JsonMapper mapper = new JsonMapper();
     private final ReviewJob job = RuntimeReviewTestData.job();
     private ReviewSnapshot scan;
@@ -77,7 +84,8 @@ class ScanCallGuardTest extends BaseUnitTest {
             budget,
             new SandboxGatewayProperties(8081, 10000, 120, 1000, 4096),
             mapper,
-            PRACTICE_REVIEW);
+            PRACTICE_REVIEW,
+            leases);
 
     private ProxyRouting route() {
         return route(Instant.now().plusSeconds(60));
@@ -104,7 +112,7 @@ class ScanCallGuardTest extends BaseUnitTest {
         var executor = Executors.newSingleThreadExecutor();
         try (var held = guard.acquire(route(), body).orElseThrow()) {
             assertThat(held).isNotNull();
-            // The lock is reentrant, so the waiting call runs on a thread of its own.
+            // The waiting call runs on a thread of its own, as a call that reached another replica would.
             Future<?> waiting =
                     executor.submit(() -> guard.acquire(route(Instant.now().plusSeconds(1)), body));
 
@@ -162,6 +170,17 @@ class ScanCallGuardTest extends BaseUnitTest {
 
     @BeforeEach
     void setup() {
+        lenient().when(leases.take(any(UUID.class), anyLong())).thenAnswer(call -> {
+            UUID lease = UUID.randomUUID();
+            return leaseRow.compareAndSet(null, lease) ? Optional.of(lease) : Optional.empty();
+        });
+        lenient()
+                .doAnswer(call -> {
+                    leaseRow.compareAndSet(call.getArgument(2), null);
+                    return null;
+                })
+                .when(leases)
+                .release(any(UUID.class), anyLong(), any(UUID.class));
         lenient().when(budget.callCap(ArgumentMatchers.anyInt())).thenReturn(36L);
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setRunId(LEASE);
