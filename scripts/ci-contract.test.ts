@@ -5786,7 +5786,7 @@ void test("a cluster leg is named for its distribution, minor and architecture, 
 	assert.match(name("k3d"), /^k3s \$\{\{ inputs\.minor \}\} \$\{\{ inputs\.arch \}\}$/u);
 	const minors = [
 		...new Set(
-			clusterMatrix(true)
+			clusterMatrix(true, true)
 				.include.filter((leg) => leg.leg === "k3d")
 				.map((leg) => leg.minor),
 		),
@@ -5815,10 +5815,10 @@ void test("a cluster leg is named for its distribution, minor and architecture, 
 	);
 });
 
-function clusterMatrix(queue: boolean) {
+function clusterMatrix(queue: boolean, arm64 = false) {
 	const workflow = parseDocument(readFileSync(".github/workflows/ci-kubernetes.yml", "utf8"));
 	const encoded = expandExpressions(workflow.getIn(["jobs", "schema", "outputs", "matrix"]), {
-		inputs: { queue },
+		inputs: { queue, arm64 },
 	});
 	const plan = asRecord(JSON.parse(encoded), "cluster plan");
 	return {
@@ -5831,6 +5831,11 @@ function clusterMatrix(queue: boolean) {
 			};
 		}),
 	};
+}
+
+/** Names each leg of the cluster matrix as its distribution, minor and architecture. */
+function clusterLegs(queued: boolean, arm64 = false) {
+	return clusterMatrix(queued, arm64).include.map((leg) => `${leg.leg} ${leg.minor} ${leg.arch}`);
 }
 
 /** Evaluates a `ci-kubernetes.yml` expression for one leg and one value of the `queue` input. */
@@ -5849,7 +5854,7 @@ function evaluateLeg(
 	return new Evaluator(parsed, context).evaluate().coerceString();
 }
 
-void test("a pull request runs the chart and the latest k3s on amd64; the queue adds the floor on both architectures and kind", async () => {
+void test("a pull request runs the chart and the latest k3s on amd64; the queue adds the floor and kind; only the nightly run adds arm64", async () => {
 	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
 	const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	const queue = String(cicd.getIn(["jobs", "Kubernetes-chart", "with", "queue"]));
@@ -5870,6 +5875,9 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 		"./.github/workflows/ci-kubernetes.yml",
 	);
 	assert.equal(nightly.getIn(["jobs", "Kubernetes-chart", "with", "queue"]), true);
+	assert.equal(nightly.getIn(["jobs", "Kubernetes-chart", "with", "arm64"]), true);
+	// arm64 runners are scarce, so the merge queue leaves the arm64 leg to the nightly run.
+	assert.equal(cicd.getIn(["jobs", "Kubernetes-chart", "with", "arm64"]), undefined);
 	assert.equal(
 		nightly.getIn(["jobs", "Kubernetes", "with", "ref"]),
 		nightly.getIn(["jobs", "Kubernetes", "with", "commit"]),
@@ -5915,17 +5923,17 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	);
 
 	const minors = ["1.35", "1.37"];
-	const legs = (tier: boolean) =>
-		clusterMatrix(tier)
-			.include.filter((leg) => leg.leg === "k3d")
-			.map((leg) => `${leg.minor} ${leg.arch}`);
-	assert.deepEqual(legs(false), ["1.37 amd64"]);
-	assert.deepEqual(legs(true), ["1.35 amd64", "1.35 arm64", "1.37 amd64"]);
-	assert.equal(
-		clusterMatrix(false).include.some((leg) => leg.leg === "calico"),
-		false,
-	);
-	assert.equal(clusterMatrix(true).include.filter((leg) => leg.leg === "calico").length, 1);
+	assert.deepEqual(clusterLegs(false), ["k3d 1.37 amd64"]);
+	assert.deepEqual(clusterLegs(false, true), ["k3d 1.37 amd64"]);
+	// The floor is the version of the cluster that the first operator runs (ADR 0060), so kind with
+	// Calico runs there.
+	assert.deepEqual(clusterLegs(true), ["k3d 1.35 amd64", "k3d 1.37 amd64", "calico 1.35 amd64"]);
+	assert.deepEqual(clusterLegs(true, true), [
+		"k3d 1.35 amd64",
+		"k3d 1.35 arm64",
+		"k3d 1.37 amd64",
+		"calico 1.35 amd64",
+	]);
 	for (const caller of [cicd, nightly]) {
 		assert.equal(
 			caller.getIn(["jobs", "Kubernetes", "strategy", "matrix"]),
@@ -6004,7 +6012,7 @@ void test("replacement-storage recovery runs nightly and on relevant pull reques
 	const enabled = nightly.getIn(["jobs", "Kubernetes", "with", "backup-drill"]);
 	assert.equal(enabled, true);
 	assert.deepEqual(
-		clusterMatrix(true)
+		clusterMatrix(true, true)
 			.include.filter((leg) => leg.leg === "k3d")
 			.filter(
 				(leg) => evaluateLeg(drill.get("if"), true, { ...leg, "backup-drill": enabled }) === "true",
