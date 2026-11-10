@@ -1,6 +1,6 @@
 # ADR 0065: Standing counts the newest observation of each item
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md)
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
