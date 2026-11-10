@@ -38,6 +38,7 @@ class ScheduledJobLockTest {
             Map.entry("ActionExecutor#runDue", "ROW"),
             Map.entry("WorkspaceConsumerReconciler#reconcile", "LOCAL"),
             Map.entry("WalArchiveMonitor#sample", "LOCAL"),
+            Map.entry("OverduePublicationMeter#measure", "LOCAL"),
             Map.entry("FeedbackDeliveryFreshness#sample", "LOCAL"),
             Map.entry("AgentRunReaper#reap", "ROW"),
             Map.entry("MentorTurnQueueSampler#sample", "LOCAL"),

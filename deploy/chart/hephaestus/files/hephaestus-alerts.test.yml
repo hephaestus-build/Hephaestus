@@ -83,6 +83,27 @@ tests:
               summary: A product feedback report has waited more than 30 minutes to reach GitHub or the admins
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: an overdue event publication fires after 15 minutes, a cleared one stays silent
+    interval: 1m
+    input_series:
+      - series: 'event_publications_overdue{job="hephaestus",instance="server:9090",listener="AccountSecurityEmailListener.on"}'
+        values: "1x30"
+      - series: 'event_publications_overdue{job="hephaestus",instance="server:9090",listener="ActivityFactDelivery.on"}'
+        values: "1x5 0x25"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusEventPublicationsOverdue
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HephaestusEventPublicationsOverdue
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              listener: AccountSecurityEmailListener.on
+            exp_annotations:
+              summary: Durable server work has stayed incomplete for more than an hour and keeps retrying
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a stopped product feedback filing fires, successful filings do not
     interval: 1m
     input_series:
