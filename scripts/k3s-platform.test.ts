@@ -1499,6 +1499,28 @@ const FIRST_INSTALL_ANSWERS: [string, string][] = [
 	["Your GitHub login", "octo"],
 ];
 
+await test("--render-site omits config when a rerun supplies no optional settings", () => {
+	const platform = platformWith({});
+	try {
+		writeFileSync(path.join(platform.directory, "site.yaml"), "host: heph.example.org\n");
+		const result = installerAt(
+			platform.directory,
+			"--host",
+			"heph.example.org",
+			"--email",
+			"ops@example.org",
+			"--render-site",
+		);
+		assert.equal(result.status, 0, result.stderr);
+		const [site] = result.resources;
+		assert.ok(isRecord(site));
+		assert.equal(site.host, "heph.example.org");
+		assert.equal(Object.hasOwn(site, "config"), false);
+	} finally {
+		platform.done();
+	}
+});
+
 await test("--render-site prints the site values of a scripted install, and asks nothing", () => {
 	const result = installerAt(
 		PLATFORM,
@@ -1518,6 +1540,7 @@ await test("--render-site prints the site values of a scripted install, and asks
 	assert.equal(site.host, "heph.example.org");
 	assert.deepEqual(site.config.github, { oauthClientId: "Iv1.client" });
 	assert.deepEqual(site.config.auth, { bootstrapAdmins: ["github:1234567", "gitlab:@example"] });
+	assert.equal(site.config.gitCheckoutEnabled, undefined);
 	assert.doesNotMatch(result.stderr, /Host name of this instance/u);
 	// Helm validates the site that the installer writes against the chart's schema. This run found
 	// no API endpoint on the fake host, and a real install writes the one that it finds.
@@ -1603,7 +1626,7 @@ await test("no install writes or keeps a site.yaml without a login provider", ()
 			return installerAt(platform.directory, ...args, "--standard-certificates");
 		};
 		for (const contents of [
-			"host: heph.example.org\nconfig:\n  gitCheckoutEnabled: true\n",
+			"host: heph.example.org\n",
 			// Outline links accounts; it is no sign-in.
 			"host: heph.example.org\nconfig:\n  outline:\n    oauthClientId: outline-client\n",
 			// A GitLab client that is not enabled signs nobody in.

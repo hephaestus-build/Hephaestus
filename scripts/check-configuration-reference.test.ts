@@ -171,7 +171,7 @@ const row = (variable: string, setting: string): Row => ({
 
 await test("each group of settings is its own part, so unrelated changes touch different files", () => {
 	assert.equal(helmGroup("config.auth.passkeys.rpId"), "config.auth");
-	assert.equal(helmGroup("config.consumerInactiveThreshold"), "config");
+	assert.equal(helmGroup("config.llmUsageRetention"), "config");
 	assert.equal(helmGroup("postgresql.backup.enabled"), "postgresql");
 	assert.equal(helmGroup("host"), "top-level");
 	assert.equal(environmentGroup(row("HEPHAESTUS_AUTH_X", "hephaestus.auth.x")), "hephaestus.auth");

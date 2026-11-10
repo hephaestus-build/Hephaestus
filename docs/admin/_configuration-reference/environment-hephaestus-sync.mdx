@@ -2,7 +2,6 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
-| `NATS_DURABLE_CONSUMER_NAME` | `hephaestus.sync.nats.durable-consumer-name` | `default: hephaestus; prod: hephaestus` | `server`, `webhook` | Durable consumer name for JetStream subscriptions (empty for ephemeral). |
 | `NATS_PASSWORD` | `hephaestus.sync.nats.password` | `default: (empty)` | `server`, `webhook` | Password that the NATS connection authenticates with. Set it together with the user name, or leave both empty. |
 | `NATS_SERVER` | `hephaestus.sync.nats.server` | `prod: (empty)` | `server`, `webhook` | NATS server URL (e.g., nats://localhost:4222). |
 | `NATS_USERNAME` | `hephaestus.sync.nats.username` | `default: (empty)` | `server`, `webhook` | User name that the NATS connection authenticates with. Set it together with the password, or leave both empty. |

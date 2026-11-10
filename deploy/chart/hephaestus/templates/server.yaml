@@ -84,8 +84,6 @@ spec:
               value: {{ include "hephaestus.gitCacheBytes" (dict "gitCache" .Values.server.gitCache "role" "server") | quote }}
             - name: NATS_SERVER
               value: {{ include "hephaestus.natsUrl" . | quote }}
-            - name: HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD
-              value: {{ $config.consumerInactiveThreshold | quote }}
             # The server submits practice review jobs only when a worker can run them.
             - name: AGENT_ENABLED
               value: {{ .Values.worker.enabled | quote }}

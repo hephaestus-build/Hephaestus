@@ -483,7 +483,7 @@ Only JetStream removes a durable consumer.
 A stack that is *deleted*, rather than shut down, never removes its consumers.
 On a shared broker, each former stack therefore leaves a generation of durables whose backlogs never drain.
 
-`HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD` (default `30d`) lets JetStream remove them.
+The server sets an inactive threshold of 30 days on each durable consumer, so JetStream removes them.
 It measures time with **nothing connected**, not time without traffic.
 A running deployment holds continuous requests against its consumers.
 Those requests continuously reset the clock, even with silent queues.

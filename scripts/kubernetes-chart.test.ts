@@ -317,7 +317,16 @@ await test("the values that the repository shows an operator fit the schema", ()
 
 await test("the schema refuses a value that it does not name, at every level", () => {
 	const valid = install(prepared, operator);
-	for (const change of [{ removed: true }, { config: { gitlab: { workspaceCreation: false } } }]) {
+	for (const change of [
+		{ removed: true },
+		{ config: { gitlab: { workspaceCreation: false } } },
+		{ config: { gitCheckoutEnabled: true } },
+		{ config: { gitCheckoutEnabled: false } },
+		{ config: { durableConsumerName: "hephaestus" } },
+		{ config: { durableConsumerName: "custom" } },
+		{ config: { consumerInactiveThreshold: "30d" } },
+		{ config: { consumerInactiveThreshold: "0s" } },
+	]) {
 		assert.equal(validate(merge(valid, change)), false, JSON.stringify(change));
 	}
 });

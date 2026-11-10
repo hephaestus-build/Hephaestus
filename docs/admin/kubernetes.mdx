@@ -635,7 +635,7 @@ These bounds count uncompressed bytes, so compression lowers the disk use but do
 
 The broker file budget is 8 GiB. A fresh bundled broker claims 10 GiB, including the 25 % storage allowance.
 
-It retains 30-day durable expiry through `config.consumerInactiveThreshold`.
+The server keeps an inactive durable consumer for 30 days.
 
 A byte bound can remove messages before seven days. Measure peak traffic before you select these bounds.
 
@@ -1260,7 +1260,7 @@ It generates each key as [Secret custody and rotation](./secret-custody#generati
 If the PostgreSQL volume exists and the Secret lacks the database login or an encryption key, the installer stops: restore the Secret from your backup.
 
 The installer writes `site.yaml` only when the file does not exist.
-It holds the host name, the Kubernetes API endpoint, the OAuth client ID, the admin list, and `config.gitCheckoutEnabled: true`.
+It holds the host name, the Kubernetes API endpoint, the OAuth client ID, and the admin list.
 Change the file to change these values, and run the installer again.
 Before a repeat run, pause deployment automation and wait for its active run to finish.
 
