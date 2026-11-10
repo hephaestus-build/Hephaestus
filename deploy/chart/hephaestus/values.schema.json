@@ -657,6 +657,16 @@
 						}
 					}
 				},
+				"dashboards": {
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"namespace": {
+							"description": "An existing namespace for the release dashboards of an external VictoriaMetrics. Empty renders them only with the bundled stack, in the release namespace.",
+							"$ref": "#/definitions/name"
+						}
+					}
+				},
 				"stack": {
 					"description": "A monitoring stack in the release's namespace: VictoriaMetrics, vmalert and Alertmanager.",
 					"type": "object",

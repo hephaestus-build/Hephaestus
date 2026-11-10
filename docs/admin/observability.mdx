@@ -210,6 +210,21 @@ kubectl --namespace <namespace> port-forward service/<release>-victoria-metrics 
 
 The files are in `files/dashboards/` of the chart.
 A panel's description names what it shows.
+For an external VictoriaMetrics, set `observability.dashboards.namespace` to its existing namespace.
+The chart then creates `<release>-victoria-metrics-dashboards` there on each upgrade, without the bundled stack.
+
+Mount that ConfigMap as a directory at the path of `-vmui.customDashboardsPath` in your VictoriaMetrics workload.
+Keep the mount in your deployment configuration. Do not copy the dashboard files by hand.
+Use a directory mount. A `subPath` mount does not receive ConfigMap updates.
+
+The chart owns the ConfigMap. The Helm identity needs permission to create, update and delete ConfigMaps in that namespace.
+If that name already exists without this release's ownership, Helm refuses the install.
+Before you remove the namespace value or the Helm release, change or remove the external workload's mount.
+Otherwise the workload cannot start on its next restart.
+
+With the bundled stack, leave the namespace empty, or use the release namespace.
+A different namespace with the bundled stack fails the render because its workload cannot mount a ConfigMap from another namespace.
+
 With your own Prometheus, use the queries in these files.
 
 ### Daily reads
