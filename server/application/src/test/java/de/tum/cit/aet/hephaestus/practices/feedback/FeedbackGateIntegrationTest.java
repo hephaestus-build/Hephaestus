@@ -247,10 +247,10 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
         bind(conversation, result);
 
         workState(Map.of("state", "MERGED", "draftStatus", "NOT_DRAFT"));
-        assertThat(gate.evaluate(page, FeedbackCheckStage.EGRESS, false).allowed())
-                .isTrue();
-        assertThat(gate.evaluate(conversation, FeedbackCheckStage.EGRESS, false).allowed())
-                .isTrue();
+        prepare(page);
+        prepare(conversation);
+        assertThat(deliveryOf(page)).isEqualTo("READY:-");
+        assertThat(deliveryOf(conversation)).isEqualTo("READY:-");
         prepare(onWork);
         assertThat(deliveryOf(onWork)).isEqualTo("WITHHELD:ITEM_MERGED");
         assertThat(sendsOf(onWork)).isEmpty();
@@ -277,7 +277,7 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     }
 
     @Test
-    void shouldWithholdFeedbackOnADraftEvenWhenThePracticeAsksForNoStateAndPostItOnceTheWorkIsReady() {
+    void shouldWithholdFeedbackOnADraftEvenWhenThePracticeAsksForNoStateAndPostFeedbackOnceItIsNoLongerADraft() {
         var result = result();
         supportOnWorkFeedback(result);
         var draft = Objects.requireNonNull(supportedFeedback);
@@ -285,13 +285,13 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
         bind(page, result);
 
         workState(Map.of("state", "OPEN", "draftStatus", "DRAFT"));
-        assertThat(gate.evaluate(page, FeedbackCheckStage.EGRESS, false).allowed())
-                .isTrue();
+        prepare(page);
+        assertThat(deliveryOf(page)).isEqualTo("READY:-");
         prepare(draft);
         assertThat(deliveryOf(draft)).isEqualTo("WITHHELD:ITEM_STATE_INELIGIBLE");
         assertThat(sendsOf(draft)).isEmpty();
 
-        // The ready event reviews every practice again; that review's feedback on the work posts.
+        // Feedback of a review that ends after the work left draft.
         var ready = onWork(result());
         workState(Map.of("state", "OPEN", "draftStatus", "NOT_DRAFT"));
         prepare(ready);
