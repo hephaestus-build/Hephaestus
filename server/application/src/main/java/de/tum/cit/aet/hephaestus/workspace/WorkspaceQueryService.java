@@ -32,7 +32,6 @@ public class WorkspaceQueryService {
 
     private final WorkspaceRepository workspaceRepository;
     private final MembershipRepository workspaceMembershipRepository;
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final ConnectionService connectionService;
     private final ConnectionMetadataQuery connectionMetadata;
     private final PublicActivityPolicy publicActivityPolicy;
@@ -46,7 +45,6 @@ public class WorkspaceQueryService {
     public WorkspaceQueryService(
             WorkspaceRepository workspaceRepository,
             MembershipRepository workspaceMembershipRepository,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
             ConnectionService connectionService,
             ConnectionMetadataQuery connectionMetadata,
             PublicActivityPolicy publicActivityPolicy,
@@ -56,7 +54,6 @@ public class WorkspaceQueryService {
             List<WorkspaceProviderAvailability> providerAvailabilityList) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.connectionService = connectionService;
         this.connectionMetadata = connectionMetadata;
         this.publicActivityPolicy = publicActivityPolicy;
@@ -145,16 +142,6 @@ public class WorkspaceQueryService {
     }
 
     /**
-     * Find a workspace by account login (case-insensitive).
-     *
-     * @param accountLogin the account login to search for
-     * @return the workspace if found
-     */
-    public Optional<Workspace> findByAccountLogin(String accountLogin) {
-        return workspaceRepository.findByAccountLoginIgnoreCase(accountLogin);
-    }
-
-    /**
      * List all active workspaces.
      *
      * @return list of workspaces that are active
@@ -168,14 +155,6 @@ public class WorkspaceQueryService {
     }
 
     /**
-     * Find a workspace by GitHub App installation ID. Joins through the GitHub Connection's {@code
-     * instance_key} (the durable identity).
-     */
-    public Optional<Workspace> findByGitHubInstallationId(Long installationId) {
-        return workspaceRepository.findByInstallationId(installationId);
-    }
-
-    /**
      * Find a workspace by its slug.
      *
      * @param slug the workspace slug
@@ -183,43 +162,5 @@ public class WorkspaceQueryService {
      */
     public Optional<Workspace> findBySlug(String slug) {
         return workspaceRepository.findByWorkspaceSlug(slug);
-    }
-
-    /**
-     * Resolve the workspace slug responsible for a given repository.
-     *
-     * <p>Priority:
-     *
-     * <ol>
-     *   <li>Explicit repository monitor (authoritative)
-     *   <li>Workspace account login matching repository owner (one-to-one enforced by business
-     *       model)
-     * </ol>
-     *
-     * @param nameWithOwner the repository, as owner/name, to resolve the workspace slug for
-     * @return the workspace slug if a unique mapping can be established, empty otherwise
-     */
-    public Optional<String> resolveWorkspaceSlug(String nameWithOwner) {
-        if (isBlank(nameWithOwner)) {
-            return Optional.empty();
-        }
-
-        var monitor = repositoryToMonitorRepository.findByNameWithOwner(nameWithOwner);
-        if (monitor.isPresent()) {
-            Workspace workspace = monitor.get().getWorkspace();
-            return workspace != null ? Optional.ofNullable(workspace.getWorkspaceSlug()) : Optional.empty();
-        }
-
-        // Fallback: org owner lookup (accountLogin is unique)
-        String owner = nameWithOwner.contains("/") ? nameWithOwner.substring(0, nameWithOwner.indexOf("/")) : null;
-        if (owner != null) {
-            return workspaceRepository.findByAccountLoginIgnoreCase(owner).map(Workspace::getWorkspaceSlug);
-        }
-
-        return Optional.empty();
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 }

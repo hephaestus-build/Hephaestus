@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.UnknownVocabulary;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationNames;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -17,7 +16,7 @@ import org.springframework.stereotype.Component;
  * {@link IntegrationManifest} beans; duplicate-kind declarations fail-fast.
  */
 @Component
-public class IntegrationManifestRegistry implements IntegrationNames {
+public class IntegrationManifestRegistry {
 
     private final Map<IntegrationKind, IntegrationManifest> byKind;
 
@@ -44,7 +43,6 @@ public class IntegrationManifestRegistry implements IntegrationNames {
         return manifestFor(kind).map(IntegrationManifest::declaredCapabilities).orElse(Set.of());
     }
 
-    @Override
     public String displayName(IntegrationKind kind) {
         return manifestFor(kind)
                 .map(IntegrationManifest::displayName)

@@ -105,12 +105,6 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
     @WorkspaceAgnostic("Resolves the workspace of a repository by its full name, before any workspace is known")
     Optional<RepositoryToMonitor> findByNameWithOwner(String nameWithOwner);
 
-    /** Every workspace monitoring this repository, with workspace data ready for callers. */
-    @WorkspaceAgnostic("A provider event fans out to every workspace that monitors the repository")
-    @Query("SELECT m FROM RepositoryToMonitor m JOIN FETCH m.workspace WHERE m.nameWithOwner ="
-            + " :nameWithOwner ORDER BY m.workspace.id")
-    List<RepositoryToMonitor> findAllWithWorkspaceByNameWithOwner(@Param("nameWithOwner") String nameWithOwner);
-
     /** Resolve monitors by provider-stable id across workspaces; a renamed path cannot serve as the lookup key. */
     @WorkspaceAgnostic(
             "A provider event fans out to every workspace that monitors the repository, by its provider-stable id")

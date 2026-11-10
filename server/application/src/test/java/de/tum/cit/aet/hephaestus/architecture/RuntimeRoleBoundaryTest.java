@@ -402,7 +402,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             "de.tum.cit.aet.hephaestus.core.auth.AccountIdentityQueryService",
             // Worker capture reads account choices and status through this neutral data-access port.
             "de.tum.cit.aet.hephaestus.core.auth.AccountDirectoryService",
-            "de.tum.cit.aet.hephaestus.core.auth.AccountRoleQueryService",
             "de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService");
 
     @Test

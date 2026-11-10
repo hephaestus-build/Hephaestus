@@ -40,8 +40,7 @@
  *   <li>Cross-module consumers reach {@code core.auth} only through the {@code core.auth.spi} named
  *       interface ({@code auth-spi}) — never {@code domain}. {@code workspace}, {@code
  *       notification}, and {@code integration.*} all depend on {@code spi} bean ports ({@code
- *       AccountRoleQuery}, {@code AccountIdentityQuery}, {@code AccountPreferencesQuery}, {@code
- *       AccountMembershipQuery}).
+ *       AccountIdentityQuery}, {@code AccountPreferencesQuery}, {@code AccountMembershipQuery}).
  *   <li>{@code core.auth} does <em>not</em> depend on {@code workspace} or {@code integration.*}
  *       directly. Login {@code ClientRegistration}s are built from the {@code core.auth.provider}
  *       store and exposed via the {@code IdentityProviderCatalog}/{@code GitProviderRegistry} SPI
