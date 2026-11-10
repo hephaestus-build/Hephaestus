@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -34,13 +33,6 @@ public class PracticeVersionService {
     @Transactional(readOnly = true)
     public PracticeVersion forReview(Practice practice) {
         return practice.getCurrentVersion();
-    }
-
-    @Transactional(readOnly = true)
-    public List<PracticeVersion> forReview(Long workspaceId, Collection<String> slugs) {
-        return practices.findByWorkspaceIdAndSlugIn(workspaceId, slugs).stream()
-                .map(Practice::getCurrentVersion)
-                .toList();
     }
 
     public PracticeDefinition definitionOf(PracticeVersion version) {

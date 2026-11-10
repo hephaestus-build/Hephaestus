@@ -208,12 +208,6 @@
       "sourceType": "de.tum.cit.aet.hephaestus.core.database.MigratedSchemaWait"
     },
     {
-      "name": "hephaestus.dev.seed-enabled",
-      "type": "java.lang.Boolean",
-      "description": "Exposes the development endpoint that local seed scripts use to read the practice versions that a review would pin. Use it only in local development, never in production.",
-      "sourceType": "de.tum.cit.aet.hephaestus.practices.DevPracticeVersionController"
-    },
-    {
       "name": "hephaestus.dev.trigger-enabled",
       "type": "java.lang.Boolean",
       "description": "Lets requests to paths under /api/dev/ pass the security filter without sign-in. Use it only in local development, never in production.",

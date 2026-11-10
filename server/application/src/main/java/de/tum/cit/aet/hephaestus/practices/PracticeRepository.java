@@ -34,9 +34,6 @@ public interface PracticeRepository extends JpaRepository<Practice, Long> {
     Optional<Practice> findByWorkspaceIdAndSlug(Long workspaceId, String slug);
 
     @EntityGraph(attributePaths = {"group", "currentVersion"})
-    List<Practice> findByWorkspaceIdAndSlugIn(Long workspaceId, Collection<String> slugs);
-
-    @EntityGraph(attributePaths = {"group", "currentVersion"})
     List<Practice> findByWorkspaceIdAndGroupIdOrderByPositionAsc(Long workspaceId, Long groupId);
 
     @EntityGraph(attributePaths = {"group", "currentVersion"})
