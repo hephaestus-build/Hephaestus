@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
+import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
@@ -36,14 +37,14 @@ import tools.jackson.databind.node.JsonNodeFactory;
 class CompositionControllerTest {
     private static final Instant RUN_ENDS = Instant.now().plus(Duration.ofMinutes(20));
 
-    private final ResultAdmissionService admission = mock(ResultAdmissionService.class);
+    private final ReviewComposeSandboxKind kind = mock(ReviewComposeSandboxKind.class);
     private final CompositionSessions sessions = mock(CompositionSessions.class);
-    private final CompositionController controller = new CompositionController(admission, sessions);
+    private final CompositionController controller = new CompositionController(kind, sessions);
     private final AgentRunFence fence = new AgentRunFence(UUID.randomUUID(), 7L, 2);
     private final SandboxRun run = new SandboxRun(
             new AgentSandboxes.LiveSandbox(UUID.randomUUID(), 7L, "review:1", AgentSandboxKind.REVIEW),
             fence,
-            AgentRunKind.REVIEW,
+            AgentRunKind.REVIEW_COMPOSE,
             1);
     private final ResultAdmissionService.Composing composing = new ResultAdmissionService.Composing(
             RuntimeReviewTestData.job(),
@@ -52,7 +53,7 @@ class CompositionControllerTest {
 
     @Test
     void shouldAnswerTheStaleClaimWhenTheRunNoLongerHoldsItsLease() {
-        when(admission.composing(fence)).thenThrow(new ResultAdmissionService.StaleAttemptException());
+        when(kind.prepare(run)).thenThrow(new StaleRunException(fence));
 
         assertThatThrownBy(() -> controller.next(run, new CompositionController.NextRequest(List.of())))
                 .isInstanceOf(StaleRunException.class);
@@ -60,8 +61,29 @@ class CompositionControllerTest {
     }
 
     @Test
+    void shouldAnswerTheStaleClaimWhenAWriteFindsTheAttemptMovedOn() {
+        when(kind.prepare(run)).thenReturn(composing);
+        when(sessions.tool(eq(composing.job()), eq(composing.identity()), any()))
+                .thenThrow(new ResultAdmissionService.StaleAttemptException());
+
+        assertThatThrownBy(() -> controller.tool(run, "publish_package", request(RUN_ENDS)))
+                .isInstanceOf(StaleRunException.class);
+    }
+
+    @Test
+    void shouldAnswerNotFoundWhenARunOfAnotherKindCallsTheComposer() {
+        var review = new SandboxRun(run.sandbox(), fence, AgentRunKind.REVIEW, 1);
+
+        assertThatThrownBy(() -> controller.next(review, new CompositionController.NextRequest(List.of())))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        refused -> assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        verifyNoInteractions(kind, sessions);
+    }
+
+    @Test
     void shouldAnswerGoneWithTheStopWhenTheInputsWereErased() {
-        when(admission.composing(fence)).thenReturn(composing);
+        when(kind.prepare(run)).thenReturn(composing);
         when(sessions.tool(eq(composing.job()), eq(composing.identity()), any()))
                 .thenThrow(new ReviewCompositionContinuation.InputsUnavailableException("erased", true));
 
@@ -74,7 +96,7 @@ class CompositionControllerTest {
 
     @Test
     void shouldNeverLetAToolWaitPastTheRunsDeadline() {
-        when(admission.composing(fence)).thenReturn(composing);
+        when(kind.prepare(run)).thenReturn(composing);
         var calls = ArgumentCaptor.forClass(CompositionSessions.ToolCall.class);
         when(sessions.tool(eq(composing.job()), eq(composing.identity()), calls.capture()))
                 .thenReturn(new CompositionSessions.ToolResult("ok", false, null, null));

@@ -2,12 +2,15 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
+import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -19,6 +22,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -43,14 +47,15 @@ import tools.jackson.databind.JsonNode;
 @RequestMapping("/internal/agent/runs/{runId}/composition")
 @PreAuthorize("isAuthenticated()")
 @ConditionalOnWorkerRole
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @Profile("!specs & !cds-training")
 @WorkspaceAgnostic("The sandbox token and the run's own row name the workspace, and the resolver checks both")
 public class CompositionController {
-    private final ResultAdmissionService admission;
+    private final ReviewComposeSandboxKind kind;
     private final CompositionSessions sessions;
 
-    public CompositionController(ResultAdmissionService admission, CompositionSessions sessions) {
-        this.admission = admission;
+    public CompositionController(ReviewComposeSandboxKind kind, CompositionSessions sessions) {
+        this.kind = kind;
         this.sessions = sessions;
     }
 
@@ -109,10 +114,11 @@ public class CompositionController {
     }
 
     private <T> T fenced(SandboxRun run, Function<ResultAdmissionService.Composing, T> operation) {
+        if (run.kind() != AgentRunKind.REVIEW_COMPOSE) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         try {
-            return operation.apply(admission.composing(run.fence()));
+            return operation.apply(kind.prepare(run));
         } catch (ResultAdmissionService.StaleAttemptException | AdmissionConflictException stale) {
-            throw new StaleRunException(run.fence());
+            throw new StaleRunException(run.fence(), stale);
         } catch (ReviewCompositionContinuation.InputsUnavailableException unavailable) {
             throw new ResponseStatusException(
                     HttpStatus.GONE, unavailable.erased() ? "INPUTS_ERASED" : "INPUTS_GONE", unavailable);
