@@ -578,8 +578,7 @@ public class ReviewServiceImpl implements ReviewService {
                         workspaceId,
                         reviewId,
                         List.of(ReviewItemState.WITHHELD, ReviewItemState.LISTED, ReviewItemState.STAGED));
-        boolean cancellationRequested =
-                review.getChecks().path("cancellationRequested").asBoolean();
+        boolean cancellationRequested = review.isCancelRequested();
         var status = cancellationRequested
                 ? ReviewStatus.CANCELLED
                 : completion.status() == ReviewStatus.COMPLETE && incomplete
@@ -610,16 +609,12 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional
-    public boolean cancel(long workspaceId, UUID reviewId, @Nullable String reason) {
+    public boolean cancel(long workspaceId, UUID reviewId) {
         var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
         if (review.getStatus().isTerminal()) return false;
-        if (review.getChecks().path("cancellationRequested").asBoolean()) return true;
-        var checks = (ObjectNode) review.getChecks().deepCopy();
-        checks.put("cancellationRequested", true);
-        checks.put("cancellationReason", reason == null ? "CANCELLED_BY_ADMIN" : reason);
-        review.setChecks(checks);
-        events.publishEvent(
-                new ReviewCancellationRequested(reviewId, workspaceId, reason == null ? "CANCELLED_BY_ADMIN" : reason));
+        if (review.isCancelRequested()) return true;
+        review.setCancelRequested(true);
+        events.publishEvent(new ReviewCancellationRequested(reviewId, workspaceId));
         if (!hasUnsettledInvocation(workspaceId, reviewId)) {
             review.setStatus(ReviewStatus.CANCELLED);
             review.setStopReason(ReviewStopReason.CANCELLED);

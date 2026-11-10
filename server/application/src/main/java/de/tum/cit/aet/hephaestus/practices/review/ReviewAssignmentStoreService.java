@@ -68,8 +68,7 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
         var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
         if (review.getStatus() != ReviewStatus.QUEUED && review.getStatus() != ReviewStatus.RUNNING)
             throw new IllegalStateException("The review is closed.");
-        if (review.getChecks().path("cancellationRequested").asBoolean())
-            throw new IllegalStateException("The review was cancelled.");
+        if (review.isCancelRequested()) throw new IllegalStateException("The review was cancelled.");
         if (assignments.isEmpty() || assignments.stream().distinct().count() != assignments.size())
             throw new IllegalArgumentException("Assignments must be nonempty and distinct.");
         for (var id : assignments.stream()
@@ -217,9 +216,7 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
             long workspaceId, ReviewAssignmentId id, String reason, String message, @Nullable UUID failedBy) {
         boolean terminalFailure = failedBy != null;
         var review = reviews.lockByIdAndWorkspaceId(id.reviewId(), workspaceId).orElseThrow();
-        if (review.getStatus().isTerminal()
-                || (!terminalFailure
-                        && review.getChecks().path("cancellationRequested").asBoolean()))
+        if (review.getStatus().isTerminal() || (!terminalFailure && review.isCancelRequested()))
             throw new IllegalStateException("This review no longer accepts withholding.");
         if (message.length() > 1000)
             throw new IllegalArgumentException("Use a withholding detail of at most 1000 characters.");

@@ -236,7 +236,7 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
         var publicAt = AT.plusSeconds(60);
         jdbc.update(
                 "UPDATE review SET"
-                        + " public_review_at=?,checks=jsonb_build_object('cancellationRequested',false)"
+                        + " public_review_at=?,checks=jsonb_build_object('retained',true)"
                         + " WHERE workspace_id=? AND id=?",
                 Timestamp.from(publicAt),
                 workspace.getId(),
@@ -244,8 +244,7 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
         var receipt = store.prepareAll(workspace.getId(), reviewId, List.of(draft(false)));
         var retained = reviews.findById(reviewId).orElseThrow();
         assertThat(retained.getPublicReviewAt()).isEqualTo(publicAt);
-        assertThat(retained.getChecks().path("cancellationRequested").asBoolean())
-                .isFalse();
+        assertThat(retained.getChecks().path("retained").asBoolean()).isTrue();
         assertThat(retained.getChecks()
                         .path("feedbackPreparationReceipts")
                         .path(receipt.packageDigest())

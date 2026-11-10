@@ -70,7 +70,7 @@ public class ReviewSummaryController {
     @ApiResponse(responseCode = "200", description = "Completed")
     @ApiResponse(responseCode = "202", description = "Accepted")
     public ResponseEntity<ReviewDTO> cancelReview(WorkspaceContext context, @PathVariable UUID reviewId) {
-        reviews.cancel(context.id(), reviewId, "CANCELLED_BY_ADMIN");
+        reviews.cancel(context.id(), reviewId);
         var review = queryService.view(context.id(), reviewId);
         return ResponseEntity.status(
                         review.status() == ReviewStatus.QUEUED || review.status() == ReviewStatus.RUNNING ? 202 : 200)

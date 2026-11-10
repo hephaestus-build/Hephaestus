@@ -343,7 +343,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     void cancellationFenceRejectsLaterAdmissionAndKeepsAlreadyAdmittedProof() {
         var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
         var saved = admit(pending, ResultOutcome.NOT_MET).resultIds().getFirst();
-        service.cancel(scenario.workspace().getId(), pending.review().getId(), "CANCELLED_BY_ADMIN");
+        service.cancel(scenario.workspace().getId(), pending.review().getId());
         assertThatThrownBy(() -> admit(pending, ResultOutcome.NOT_MET)).isInstanceOf(ResponseStatusException.class);
         assertThat(results.findById(saved)).isPresent();
         assertThat(reviews.findById(pending.review().getId()).orElseThrow().getStatus())
@@ -419,7 +419,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
 
         assertThatThrownBy(() -> service.complete(workspaceId, reviewId, completion))
                 .isInstanceOf(ReviewRequestRejected.class);
-        assertThat(service.cancel(workspaceId, reviewId, "CANCELLED_BY_ADMIN")).isTrue();
+        assertThat(service.cancel(workspaceId, reviewId)).isTrue();
         assertThat(reviews.findById(reviewId).orElseThrow().getCompletedAt()).isNull();
         assertThat(reviews.findById(reviewId).orElseThrow().getStatus()).isEqualTo(ReviewStatus.RUNNING);
 

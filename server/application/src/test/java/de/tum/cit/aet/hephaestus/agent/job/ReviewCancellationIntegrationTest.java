@@ -38,7 +38,7 @@ class ReviewCancellationIntegrationTest extends BaseIntegrationTest {
         job.prePersist();
         jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
 
-        assertThat(reviews.cancel(workspace.getId(), job.getReviewId(), null)).isTrue();
+        assertThat(reviews.cancel(workspace.getId(), job.getReviewId())).isTrue();
 
         assertThat(jdbc.queryForObject(
                         "SELECT status FROM review_job WHERE id=? AND workspace_id=?",

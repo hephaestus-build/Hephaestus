@@ -29,8 +29,7 @@ public class ReviewInvocationFence {
                 .orElseThrow(() -> conflict("The attempt belongs to another review."));
         if (review.getStatus() != ReviewStatus.RUNNING
                 || job.status() != ReviewJobStatus.RUNNING
-                || review.getChecks().path("cancellationRequested").asBoolean())
-            throw conflict("This attempt can no longer write product proof.");
+                || review.isCancelRequested()) throw conflict("This attempt can no longer write product proof.");
         return review;
     }
 

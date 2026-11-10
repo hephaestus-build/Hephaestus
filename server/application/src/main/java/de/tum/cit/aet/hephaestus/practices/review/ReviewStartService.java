@@ -45,8 +45,7 @@ public class ReviewStartService implements ReviewStart {
     }
 
     private boolean startLocked(Review review) {
-        if (review.getStatus().isTerminal()
-                || review.getChecks().path("cancellationRequested").asBoolean()) return false;
+        if (review.getStatus().isTerminal() || review.isCancelRequested()) return false;
         if (review.getStatus() == ReviewStatus.QUEUED) {
             review.setStatus(ReviewStatus.RUNNING);
             var checks = (ObjectNode) review.getChecks().deepCopy();
@@ -62,7 +61,7 @@ public class ReviewStartService implements ReviewStart {
         var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
         if (!review.getStatus().isTerminal()) return startLocked(review);
         return (review.getStatus() == ReviewStatus.COMPLETE || review.getStatus() == ReviewStatus.PARTIAL)
-                && !review.getChecks().path("cancellationRequested").asBoolean()
+                && !review.isCancelRequested()
                 && repairs.pending(workspaceId, reviewId);
     }
 
@@ -74,7 +73,7 @@ public class ReviewStartService implements ReviewStart {
         if (review.getStatus() != ReviewStatus.QUEUED
                 || review.getKind() != ReviewKind.ITEM
                 || review.getOrigin() != ReviewOrigin.EVENT
-                || review.getChecks().path("cancellationRequested").asBoolean()) return false;
+                || review.isCancelRequested()) return false;
         var kind = items.find(workspaceId, review.getItemId()).map(ItemRef::kind);
         if (kind.isEmpty()) return false;
         boolean moved = events.open(workspaceId, review.getItemId()).stream()

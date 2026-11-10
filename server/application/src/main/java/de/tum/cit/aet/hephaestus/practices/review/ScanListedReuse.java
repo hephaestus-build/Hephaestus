@@ -66,8 +66,6 @@ public class ScanListedReuse implements ReviewScanReuse {
     }
 
     private static boolean acceptsReuse(Review review) {
-        return review.getKind() == ReviewKind.SCAN
-                && !review.getStatus().isTerminal()
-                && !review.getChecks().path("cancellationRequested").asBoolean();
+        return review.getKind() == ReviewKind.SCAN && !review.getStatus().isTerminal() && !review.isCancelRequested();
     }
 }

@@ -140,7 +140,7 @@ public class ReviewBatchService {
                                         .filter(item -> item < review.getItemId())
                                         .max(Long::compareTo)
                                         .orElse(null));
-                    reviewService.cancel(context.id(), review.getId(), "BATCH_" + next.name());
+                    reviewService.cancel(context.id(), review.getId());
                 }
             }
         }
