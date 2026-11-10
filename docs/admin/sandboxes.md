@@ -144,7 +144,7 @@ The sandbox nodes need these items:
 1. A network plugin that enforces NetworkPolicy, for egress as well as ingress.
 2. The sandbox namespace with the label `pod-security.kubernetes.io/enforce=restricted`.
 3. Encrypted node storage, for example LUKS or the disk encryption of the cloud provider.
-   A sandbox Pod writes to the node's disk: the review workspace with the repository, `/tmp` and `~/.local`.
+   A sandbox Pod writes to the node's disk: the review workspace with the repository, `/tmp`, and the `~/.local` of a probe Pod.
    A tools Pod's workspace is in its `/tmp`.
    Only `/run` is in memory.
    Encryption protects a stolen disk and a backup of it without the key.
@@ -228,7 +228,10 @@ A template's Pod has one container, the agent image, and these settings:
   The template sets `networkPolicyManagement: Unmanaged`, because the controller's default policy allows the internet.
 - No DNS. A claim gives the sandbox the gateway's address and the sandbox's credential as environment variables.
 - No service account token, a non-root user, no capabilities, and `RuntimeDefault` or the configured seccomp profile.
-- No volumes and no init container, so that a sandbox starts fast. The workspace is in the container's writable layer, and the template's ephemeral-storage limit bounds it.
+- A read-only root filesystem. The sandbox writes only to two `emptyDir` volumes: `/workspace` and `/tmp`.
+  `HOME` is `/tmp/home`.
+  The size limit of each volume is the template's ephemeral-storage limit, and that limit also bounds the two volumes together.
+- No init container, so that a sandbox starts fast.
 - The RuntimeClass `worker.sandbox.templates.runtimeClassName`, or the cluster's default runtime.
   On the default runtime, or another class except `gvisor`, the Pod sets `hostUsers: false`.
   A `gvisor` Pod keeps host users, because gVisor does not support user namespaces yet ([google/gvisor#13303](https://github.com/google/gvisor/issues/13303)). Its own kernel separates the sandbox from the node kernel.

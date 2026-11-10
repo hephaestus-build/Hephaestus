@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
+import de.tum.cit.aet.hephaestus.agent.runtime.PiRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -379,7 +380,9 @@ final class LiveRunnerWorkspace {
         specEnvironment.forEach((name, value) -> moved.put(
                 name,
                 value.replace(SandboxLayout.WORKSPACE_ROOT, workspace.toString())
-                        .replace("/home/agent", workspace.resolve(".home").toString())));
+                        .replace(
+                                PiRunnerProfile.AGENT_HOME,
+                                workspace.resolve(".home").toString())));
         env.putAll(moved);
         env.put("PATH", path);
         env.put("LANG", "C.UTF-8");

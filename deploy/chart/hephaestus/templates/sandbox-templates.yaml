@@ -7,8 +7,10 @@ whose entrypoint is the agent loop. The kind is the loop's parameter.
 A claim adds the sandbox token and the gateway address as environment variables, so each sandbox
 starts cold. The warm pools hold no sandboxes.
 
-No volumes: a volume mount adds the kubelet's mount wait to every cold start. The loop writes its
-workspace in the container's own layer, which the ephemeral-storage limit bounds.
+The root filesystem is read-only, so no tool can change the image's files. The loop writes only to two
+emptyDir volumes: /workspace, and /tmp, which holds HOME. Each volume's size limit is the kind's
+ephemeral-storage limit, and that limit bounds the volumes and the logs together. The mounts add the
+kubelet's mount wait to each cold start. A read-only image is worth that wait.
 
 The namespace's policies apply: no ingress, and egress to the gateway port only, with no DNS. The claim
 passes the gateway's address. The controller manages no policy of its own (`Unmanaged`), because its
@@ -21,6 +23,7 @@ default policy allows the internet.
 {{- $class := $templates.runtimeClassName }}
 {{- range $kind, $tier := dict "review" "reviews" "conversation" "conversations" }}
 {{- $name := include "hephaestus.name" (dict "root" $ "component" (printf "sandbox-%s" $kind)) }}
+{{- $resources := (get $templates $kind).resources }}
 apiVersion: extensions.agents.x-k8s.io/v1beta1
 kind: SandboxTemplate
 metadata:
@@ -74,15 +77,27 @@ spec:
           env:
             - name: HEPHAESTUS_SANDBOX_KIND
               value: {{ $kind }}
+            # The image's home is read-only. A process that writes below HOME writes to /tmp.
+            - name: HOME
+              value: /tmp/home
+            - name: XDG_CONFIG_HOME
+              value: /tmp/home/.config
           resources:
-            {{- toYaml (get $templates $kind).resources | nindent 12 }}
+            {{- toYaml $resources | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
-            privileged: false
-            capabilities:
-              drop:
-                - ALL
+            {{- include "hephaestus.containerSecurityContext" $ | nindent 12 }}
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: workspace
+          emptyDir:
+            sizeLimit: {{ index $resources.limits "ephemeral-storage" | quote }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ index $resources.limits "ephemeral-storage" | quote }}
 ---
 apiVersion: extensions.agents.x-k8s.io/v1beta1
 kind: SandboxWarmPool

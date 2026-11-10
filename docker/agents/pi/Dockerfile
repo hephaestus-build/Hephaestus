@@ -223,9 +223,6 @@ await hello({ host: "127.0.0.1", port: 7100 }, { TOOLS_PORT: "7100", TOOLS_ROLE:
 });
 await hello({ path: "/tmp/tools-check/tools.sock" }, { TOOLS_SOCKET: "/tmp/tools-check/tools.sock" }, ["sh", "/opt/pi-sdk/tools-launch.sh"]);
 CHECK
-RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
-    chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
-    ln -s /opt/pi-sdk/node_modules /workspace/node_modules
 
 # A SandboxTemplate's container runs the image's entrypoint; every other user of the image names its own command.
 RUN node --input-type=module -e 'await import("/opt/pi-sdk/driver.js")'

@@ -4753,13 +4753,29 @@ await test("each sandbox kind has a cold-start template of one container, behind
 		});
 		assert.deepEqual(get(pod, "nodeSelector"), workerRuntime.nodeSelector);
 		assert.equal(get(pod, "initContainers"), undefined);
-		// No volume: each mount adds the kubelet's mount wait to a cold start.
-		assert.equal(get(pod, "volumes"), undefined);
 		const [agent, ...others] = list(get(pod, "containers"));
 		assert.equal(others.length, 0);
-		assert.equal(get(agent, "volumeMounts"), undefined);
 		assert.equal(get(agent, "securityContext", "allowPrivilegeEscalation"), false);
 		assert.deepEqual(get(agent, "securityContext", "capabilities", "drop"), ["ALL"]);
+		// The image is read-only: the sandbox writes only to /workspace and /tmp, each bounded by the kind's disk limit.
+		assert.equal(get(agent, "securityContext", "readOnlyRootFilesystem"), true);
+		const disk = get(agent, "resources", "limits", "ephemeral-storage");
+		assert.deepEqual(get(pod, "volumes"), [
+			{ name: "workspace", emptyDir: { sizeLimit: disk } },
+			{ name: "tmp", emptyDir: { sizeLimit: disk } },
+		]);
+		assert.deepEqual(get(agent, "volumeMounts"), [
+			{ name: "workspace", mountPath: "/workspace" },
+			{ name: "tmp", mountPath: "/tmp" },
+		]);
+		// HOME is writable: it is on /tmp.
+		const variable = (name: string) =>
+			get(
+				list(get(agent, "env")).find((entry) => get(entry, "name") === name),
+				"value",
+			);
+		assert.equal(variable("HOME"), "/tmp/home");
+		assert.equal(variable("XDG_CONFIG_HOME"), "/tmp/home/.config");
 		const tier = kind === "review" ? "reviews" : "conversations";
 		assert.equal(get(pod, "priorityClassName"), `hephaestus-heph-${tier}`);
 		const pool = pools.find((candidate) => nameOf(candidate) === nameOf(template));

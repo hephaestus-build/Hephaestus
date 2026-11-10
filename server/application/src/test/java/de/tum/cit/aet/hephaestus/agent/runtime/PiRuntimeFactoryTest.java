@@ -260,13 +260,14 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("HOME / TMPDIR on tmpfs; PI_CODING_AGENT_DIR points into the workspace")
+        @DisplayName("HOME and TMPDIR on the /tmp volume; PI_CODING_AGENT_DIR points into the workspace")
         void writableMounts() {
             var env = factory.build(spec("azure-openai-responses", "gpt-5.4-mini"))
                     .environment();
             assertThat(env)
-                    .containsEntry("HOME", "/home/agent")
-                    .containsEntry("TMPDIR", "/home/agent/.local/tmp")
+                    .containsEntry("HOME", "/tmp/home")
+                    .containsEntry("XDG_CONFIG_HOME", "/tmp/home/.config")
+                    .containsEntry("TMPDIR", "/tmp/home/.local/tmp")
                     .containsEntry("PI_CODING_AGENT_DIR", SandboxLayout.PI_AGENT_DIR);
         }
 

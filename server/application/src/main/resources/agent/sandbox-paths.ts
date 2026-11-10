@@ -2,9 +2,9 @@
 // importing the driver, which imports every kind.
 
 /**
- * Where a kind works: Pi's working directory and its agent directory. The image gives both to UID 1000, and they last
- * as long as the sandbox, so a conversation keeps its files from one turn to the next. The container's
- * ephemeral-storage limit bounds them.
+ * Where a kind works: Pi's working directory and its agent directory. Both are on the sandbox's /workspace volume, which
+ * lasts as long as the sandbox, so a conversation keeps its files from one turn to the next. The kind creates them; the
+ * volume's size limit bounds them.
  */
 export const WORKSPACE = "/workspace/work";
 export const AGENT_DIR = "/workspace/.pi";
