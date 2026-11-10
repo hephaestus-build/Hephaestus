@@ -663,14 +663,23 @@ await test(
 	{ skip: process.platform === "win32" },
 	() => {
 		const deployed = { status: "deployed", chart: "hephaestus-0.95.0", app_version: "0.95.0" };
+		const failed = { ...deployed, status: "failed" };
+		const attempt = (revision: number) => ({ ...failed, revision });
 		const cases = [
 			{ releases: [{ ...deployed, chart: "hephaestus-0.94.0", app_version: "0.94.0" }] },
 			{
-				releases: [{ ...deployed, status: "failed" }],
-				history: [{ status: "superseded" }, { status: "failed" }],
+				releases: [failed],
+				history: [{ ...deployed, revision: 1, status: "superseded" }, attempt(2)],
 			},
-			{ releases: [{ ...deployed, status: "failed" }], history: [], permitted: false },
-			{ releases: [{ ...deployed, status: "failed", chart: "hephaestus-0.94.0" }] },
+			{ releases: [failed], history: [], permitted: false },
+			// Another release ran its migration first.
+			{
+				releases: [failed],
+				history: [{ ...attempt(1), chart: "hephaestus-0.94.0", app_version: "0.94.0" }, attempt(2)],
+			},
+			// Helm trimmed the start of the history, which could hide another release.
+			{ releases: [failed], history: [attempt(11), attempt(12)] },
+			{ releases: [{ ...failed, chart: "hephaestus-0.94.0" }] },
 			{ releases: [{ ...deployed, status: "pending-upgrade" }] },
 			{ releases: [{ ...deployed, app_version: "0.94.0" }] },
 			{ releases: [{ ...deployed, chart: "hephaestus-0.94.0" }] },
@@ -680,12 +689,8 @@ await test(
 			{ releases: [], status: 1 },
 			{ releases: [deployed], permitted: true },
 			{ releases: [], permitted: true },
-			// A first install that failed was never deployed, so the same release may retry it.
-			{
-				releases: [{ ...deployed, status: "failed" }],
-				history: [{ status: "failed" }, { status: "failed" }],
-				permitted: true,
-			},
+			// A first install that failed, and a retry of it, ran only this release.
+			{ releases: [failed], history: [attempt(1), attempt(2)], permitted: true },
 		];
 		for (const scenario of cases) {
 			const fixture = installerProbe(`#!/bin/sh

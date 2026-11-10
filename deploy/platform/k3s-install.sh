@@ -505,8 +505,8 @@ sudo -v || die "this script needs sudo rights"
 # An immutable release can be reapplied, but a different release can run one-way migrations.
 # Stop, restore-point verification and migration are separate operator phases, not a rollout.
 # --platform-only leaves the release alone, so it needs no such guard.
-# A first install that failed was never deployed, so this run may retry the same release. It
-# keeps that install's Jobs and Pods for diagnosis instead of rolling it back.
+# A first install that failed, and every retry of it, ran only this release, so this run may retry
+# it. It keeps that install's Jobs and Pods for diagnosis instead of rolling it back.
 ROLLBACK=
 if [ "$RELEASE" = true ] && { command -v k3s >/dev/null 2>&1 || [ -f "$HERE/kubeconfig" ] || sudo test -f /etc/rancher/k3s/k3s.yaml; }; then
 	refuse="release changes and failed or pending releases require Stopped schema upgrades: https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades; keep roles stopped after a migration failure; restore the matching backup before returning to the old release"
@@ -525,8 +525,12 @@ if [ "$RELEASE" = true ] && { command -v k3s >/dev/null 2>&1 || [ -f "$HERE/kube
 		history=$(sudo "$(command -v helm)" --kubeconfig /etc/rancher/k3s/k3s.yaml \
 			history hephaestus --namespace "$NAMESPACE" --output json) ||
 			die "cannot read the installed release; restore cluster access before retrying; do not run an older release against a changed database"
-		printf '%s\n' "$history" | jq -e 'type == "array" and length > 0 and all(.[]; .status == "failed")' >/dev/null 2>&1 ||
-			die "$refuse"
+		# The whole history from revision 1: Helm keeps only the newest revisions, and a trimmed one
+		# could hide another release that ran its migration.
+		printf '%s\n' "$history" | jq -e --arg version "$VERSION" '
+			type == "array" and length > 0 and (map(.revision) | min) == 1 and
+			all(.[]; .status == "failed" and .chart == ("hephaestus-" + $version) and .app_version == $version)
+		' >/dev/null 2>&1 || die "$refuse"
 		;;
 	esac
 fi
