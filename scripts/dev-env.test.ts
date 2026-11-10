@@ -130,7 +130,8 @@ await describe("the Compose project of a checkout", async () => {
 			await mkdir(paths.dataDirectory);
 			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
 			assert.equal(await ensureComposeProject({ ...paths, environment: {} }), "server");
-			assert.equal((await readEnvFile(paths.envFile)).COMPOSE_PROJECT_NAME, "server");
+			const values = await readEnvFile(paths.envFile);
+			assert.equal(values.COMPOSE_PROJECT_NAME, "server");
 		});
 	});
 

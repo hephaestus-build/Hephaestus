@@ -85,8 +85,8 @@ export async function ensureComposeProject({
 	checkout: string;
 	environment?: NodeJS.ProcessEnv;
 }): Promise<string> {
-	const configured =
-		environment.COMPOSE_PROJECT_NAME ?? (await readEnvFile(envFile)).COMPOSE_PROJECT_NAME;
+	const values = await readEnvFile(envFile);
+	const configured = environment.COMPOSE_PROJECT_NAME ?? values.COMPOSE_PROJECT_NAME;
 	if (isSet(configured)) {
 		return configured;
 	}
