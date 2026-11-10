@@ -70,10 +70,9 @@ Each member chooses which models may handle their work: **In-house**, **Cloud**,
 [Signed releases with SBOM and provenance](https://docs.hephaestus.build/admin/release-image-lock)
 
 > [!IMPORTANT]
-> **Hephaestus is pre-1.0.** Releases are continuous.
-> Only the [latest release](https://github.com/hephaestus-build/Hephaestus/releases/latest) has support.
-> Every fix ships in the next release.
-> Until 1.0, a *minor* release can change configuration or the API in ways that need you to act.
+> **Hephaestus 1.x:** any 1.x release upgrades to any later 1.y release, and only a *major* release can need you to act.
+> The [latest 1.x release](https://github.com/hephaestus-build/Hephaestus/releases/latest) has support.
+> The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy) gives the public contract and the support window.
 > Read the release notes before every upgrade.
 >
 > Version 1.0 makes upgrades, configuration, the Helm chart, and the REST API predictable:

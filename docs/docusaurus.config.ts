@@ -415,12 +415,6 @@ const config: Config = {
 			],
 			copyright: `Developed at the <a href="https://www.tum.de/en/">Technical University of Munich</a>. There, Hephaestus is the research platform for a study of how AI-generated feedback can improve developers’ application of engineering practices. <a href="https://aet.cit.tum.de/">Applied Education Technologies</a> maintains Hephaestus under the MIT license. Source on <a href="${REPO_URL}">GitHub</a>.`,
 		},
-		announcementBar: {
-			id: "pre-1-0",
-			// Docusaurus does not base-URL-prefix a raw HTML href or check it via onBrokenLinks — write it absolute.
-			content: `Hephaestus is <strong>pre-1.0</strong>: only the latest release is supported, and a minor release can require action. <a href="${baseUrl}admin/compatibility-policy">Read the compatibility policy</a>.`,
-			isCloseable: true,
-		},
 		docs: {
 			sidebar: {
 				hideable: true,

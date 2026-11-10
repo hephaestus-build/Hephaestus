@@ -234,7 +234,7 @@ navigation on one surface shares a route. A guard written as `() => isDirty` wil
 that do **not** unmount the form, so "Discard changes" discards nothing.
 
 Delete a page that becomes a level instead of redirecting it.
-Before 1.0, an address that only the app links to is not a contract.
+An address that only the app links to is not a contract: [The public contract](../docs/admin/compatibility-policy.mdx#the-public-contract) lists the addresses that are.
 A redirect kept for a bookmark becomes a route that nobody can remove later.
 An address that people share outside the app, such as a member's profile, keeps a `beforeLoad` redirect into the stack.
 Links in the app open a level with `DetailStackLink`, or with `detailSearch(entry)` from another

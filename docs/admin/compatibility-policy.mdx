@@ -128,21 +128,7 @@ One-click unsubscribe requests send `List-Unsubscribe=One-Click` as form data.
 | **Minor** (x.`Y`.z) | New functionality. The upgrade needs no action. It can include new *optional* chart values.                                                                                                                                                                                                              |
 | **Patch** (x.y.`Z`) | Bug and security fixes. The upgrade needs no action.                                                                                                                                                                                                                                                           |
 
-:::caution[CAUTION: Pre-1.0]
-Below 1.0.0, the **Minor** row above does not apply.
-There are no major releases yet.
-Breaking changes occur in minor releases (`0.x.0` → `0.y.0`), per
-[SemVer item 4](https://semver.org/#spec-item-4).
-A pre-1.0 minor release can require action.
-The release notes state the required action.
-This exception ends with the 1.0.0 release.
-
-CI still fails on a 0.x API break until the change lists it as accepted.
-
-1. Read the release notes.
-2. Test the upgrade in staging first.
-
-:::
+Before each upgrade, read the release notes, and test the upgrade in staging first.
 
 ## Open enums
 
@@ -217,9 +203,8 @@ The chart values and signed joint release lock are part of the [public contract]
 
 ## Support statement
 
-**Before 1.0.0, we support the latest release only.** [Support for 1.x](#support-for-1x) gives the rules from 1.0.0. Fixes ship as new releases on top of the current version. There are
-no backport branches. If you hit a bug on an older version, upgrade to the latest release before reporting
-it. This mirrors comparable self-hosted products — for example, [Sentry](https://develop.sentry.dev/self-hosted/support/)
+**We support the latest 1.x release.** [Support for 1.x](#support-for-1x) gives the rules. Fixes ship as new releases on top of the current version.
+If you hit a bug on an older version, upgrade to the latest release before reporting it. This mirrors comparable self-hosted products — for example, [Sentry](https://develop.sentry.dev/self-hosted/support/)
 provides no dedicated self-hosted support and expects operators to upgrade regularly.
 
 ### Support for 1.x
