@@ -9,9 +9,12 @@ import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.X509EncodedKeySpec;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,10 +23,10 @@ import org.slf4j.LoggerFactory;
  * This worker's signing key, and every worker's public key. A token that one worker signed verifies on any worker, so
  * an attempt does not depend on the worker that started it.
  *
- * <p>Verification reads only memory: {@link #refresh()} loads the keys on a timer, and an unknown {@code kid} is refused
- * with no read, so a forged token costs the store nothing. A worker publishes its key and loads the others before its
- * gateway opens. If the store failed then, its first signature publishes the key, and for up to one refresh another
- * worker refuses that token as unknown. A caller that dials another worker must then ask again.
+ * <p>Verification reads memory: {@link #refresh()} loads the keys on a timer. A worker publishes its key and loads the
+ * others before its gateway opens, but the others load it only at their next refresh. A sandbox's call can reach any
+ * replica, so an unknown {@code kid} loads the keys again, at most once per {@link #UNKNOWN_KID_RELOAD}: a token of a
+ * replica that has just started verifies at once, and a flood of forged kids costs the store one read per interval.
  */
 public class AttemptKeyring {
 
@@ -34,15 +37,25 @@ public class AttemptKeyring {
             .plus(SandboxLayout.RESULT_UPLOAD_GRACE)
             .plus(Duration.ofMinutes(10));
 
+    /** The least time between two loads of the keys for an unknown {@code kid}. */
+    static final Duration UNKNOWN_KID_RELOAD = Duration.ofSeconds(1);
+
     private final AttemptSigningKey key;
     private final AttemptKeyStore store;
+    private final Clock clock;
     private final JWTVerifier ownVerifier;
+    private final AtomicReference<Instant> lastUnknownKidReload = new AtomicReference<>(Instant.MIN);
     private volatile Map<String, JWTVerifier> verifiers;
     private volatile boolean published;
 
     public AttemptKeyring(AttemptSigningKey key, AttemptKeyStore store) {
+        this(key, store, Clock.systemUTC());
+    }
+
+    AttemptKeyring(AttemptSigningKey key, AttemptKeyStore store, Clock clock) {
         this.key = key;
         this.store = store;
+        this.clock = clock;
         this.ownVerifier = verifier(key.publicKey());
         this.verifiers = Map.of(key.kid(), ownVerifier);
     }
@@ -56,7 +69,21 @@ public class AttemptKeyring {
     /** @return the verifier of this {@code kid}; {@code null} for a key that no live worker published */
     @Nullable
     JWTVerifier verifierFor(String kid) {
+        JWTVerifier known = verifiers.get(kid);
+        if (known != null || !mayReloadForUnknownKid()) return known;
+        try {
+            refresh();
+        } catch (RuntimeException failure) {
+            // The timer's refresh counts store failures; a request keeps the known keys and refuses the kid.
+            log.debug("Could not load the attempt keys for an unknown kid", failure);
+        }
         return verifiers.get(kid);
+    }
+
+    private boolean mayReloadForUnknownKid() {
+        Instant now = clock.instant();
+        Instant last = lastUnknownKidReload.get();
+        return !now.isBefore(last.plus(UNKNOWN_KID_RELOAD)) && lastUnknownKidReload.compareAndSet(last, now);
     }
 
     /** Publishes this worker's key, and extends it for as long as this worker lives. */
