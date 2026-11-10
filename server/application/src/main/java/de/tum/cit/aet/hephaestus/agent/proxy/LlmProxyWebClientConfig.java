@@ -32,11 +32,13 @@ class LlmProxyWebClientConfig {
     @Bean(destroyMethod = "dispose")
     ConnectionProvider llmProxyConnectionProvider() {
         return ConnectionProvider.builder("llm-proxy-pool")
-                .maxConnections(100)
-                .pendingAcquireMaxCount(200)
+                // Admission already bounds calls across workers. A second per-host limit would queue admitted
+                // calls outside that accounting and turn local saturation into a provider failure.
+                .maxConnections(Integer.MAX_VALUE)
+                // The default pending count doubles the maximum, which would overflow.
+                .pendingAcquireMaxCount(-1)
                 .maxIdleTime(Duration.ofSeconds(20))
                 .maxLifeTime(Duration.ofMinutes(3))
-                .pendingAcquireTimeout(Duration.ofSeconds(60))
                 .evictInBackground(Duration.ofSeconds(30))
                 .build();
     }
