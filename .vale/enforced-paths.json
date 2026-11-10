@@ -220,6 +220,7 @@
 	"docs/decisions/0081-one-server-role-and-sandboxes-that-reach-only-the-server.md",
 	"docs/decisions/0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md",
 	"docs/decisions/0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md",
+	"docs/decisions/0084-every-statement-on-workspace-data-binds-its-workspace.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",
