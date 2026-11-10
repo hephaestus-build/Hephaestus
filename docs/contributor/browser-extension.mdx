@@ -454,7 +454,7 @@ that produced it. It is never formatted or linted, and never edited by hand.
 
 ## Releasing to the Chrome Web Store
 
-The extension is **not yet published**. Operators run a build they distribute themselves until it is.
+The extension is **not yet published**. Until it is, operators distribute the signed package of each release (`hephaestus-chrome-extension-<version>.zip`).
 Publishing needs, once:
 
 1. A Chrome Web Store developer account for the publishing organization, with verified contact details.
@@ -480,9 +480,10 @@ Today those pages do not answer yet.
 
 Then, per release:
 
-1. Build the zip with `vp run build:extension`.
-   Check it with `vp run check:extension-package`.
-   Alternatively, take `extension-chrome-*` from the release commit's **Quality → Extension** run, which did both. Its version is the release version. It carries no `key` field.
+1. Download `hephaestus-chrome-extension-<version>.zip` from the GitHub release and verify it as
+   [Get the extension package](/admin/browser-extension#get-the-extension-package) describes.
+   The release job built it from the released commit and checked it with `check:extension-package`.
+   Its version is the release version. It carries no `key` field.
 2. For the first release, upload the zip as a **draft** in the developer dashboard. Publication is
    not needed to obtain the Item ID and public key. Follow Chrome's
    [consistent extension ID instructions](https://developer.chrome.com/docs/extensions/reference/manifest/key):

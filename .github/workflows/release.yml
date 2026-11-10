@@ -139,8 +139,56 @@ jobs:
             release-body.md
           if-no-files-found: error
 
+  # The Chrome extension package is built here, with the dependencies installed and read-only
+  # access, for the same reason as the notes. It is built once, from the released commit.
+  extension-package:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # The signing job accepts only these bytes: another job of the run could upload an artifact too.
+    outputs:
+      sha256: ${{ steps.build.outputs.sha256 }}
+    steps:
+      - name: Check out the released tree
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      # The manifest and the package check read the root version. A promoted candidate keeps its
+      # source and takes the stable version.
+      - name: Build and check the extension package
+        id: build
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          jq --arg version "$VERSION" '.version = $version' package.json > "$RUNNER_TEMP/package.json"
+          mv "$RUNNER_TEMP/package.json" package.json
+          vp run build:extension
+          node scripts/check-extension-package.ts
+          package="hephaestus-chrome-extension-${VERSION}.zip"
+          cp "extension/.output/hephaestus-${VERSION}-production-chrome.zip" "$package"
+          echo "sha256=$(sha256sum "$package" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the extension package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: extension-package
+          overwrite: true
+          path: hephaestus-chrome-extension-${{ needs.release.outputs.version }}.zip
+          if-no-files-found: error
+
   tag-images:
-    needs: [release, release-notes]
+    needs: [release, release-notes, extension-package]
     if: needs.release.outputs.released == 'true'
     # Moves `X.Y`, `latest` and the version tags; two releases must never interleave here.
     concurrency:
@@ -153,6 +201,8 @@ jobs:
       id-token: write
       attestations: write
       contents: write # gh release create/upload, once the evidence gate has passed
+    env:
+      EXTENSION_PACKAGE: extension-package/hephaestus-chrome-extension-${{ needs.release.outputs.version }}.zip
     outputs:
       agent-pi-digest: ${{ steps.retag.outputs.agent-pi-digest }}
       application-server-digest: ${{ steps.retag.outputs.application-server-digest }}
@@ -170,6 +220,13 @@ jobs:
         with:
           name: release-notes
           path: release-notes
+
+      # Into its own folder, so no file of the artifact can replace a script of this checkout.
+      - name: Download the extension package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: extension-package
+          path: extension-package
 
       - name: Log in to GitHub Container Registry
         uses: ./.github/actions/ghcr-login
@@ -361,8 +418,10 @@ jobs:
           JOINT: ${{ steps.pin.outputs.joint-path }}
           CHART_PACKAGE: ${{ steps.chart.outputs.package }}
           K3S_BUNDLE: ${{ steps.k3s.outputs.bundle-path }}
+          EXTENSION_SHA256: ${{ needs.extension-package.outputs.sha256 }}
         run: |
           set -euo pipefail
+          printf '%s  %s\n' "$EXTENSION_SHA256" "$EXTENSION_PACKAGE" | sha256sum --check --strict
           while IFS=$'\t' read -r image _ digest; do
             printf '%s  %s\n' "${digest#sha256:}" "$image"
           done < release-images.tsv > subjects.sha256
@@ -372,6 +431,7 @@ jobs:
             >> subjects.sha256
           sha256sum "$JOINT" >> subjects.sha256
           sha256sum "$K3S_BUNDLE" >> subjects.sha256
+          printf '%s  %s\n' "$EXTENSION_SHA256" "$(basename "$EXTENSION_PACKAGE")" >> subjects.sha256
           cat subjects.sha256
           # purl namespace/name are canonically lowercase; derive them from the run
           # context so the attestation follows a repository transfer (issue #1599).
@@ -386,16 +446,16 @@ jobs:
           predicate: |
             { "purl": "pkg:github/${{ steps.subjects.outputs.purl-repository }}@${{ needs.release.outputs.tag_name }}" }
 
-      # The joint lock and the k3s bundle, each with its own signature bundle, and the chart's digest in
-      # the registry, all with the release workflow identity. Operators verify the chart with
-      # `cosign verify` on that digest.
+      # The joint lock, the k3s bundle and the extension package, each with its own signature bundle,
+      # and the chart's digest in the registry, all with the release workflow identity. Operators
+      # verify the chart with `cosign verify` on that digest.
       - name: Sign release image lock
         env:
           JOINT: ${{ steps.pin.outputs.joint-path }}
           K3S_BUNDLE: ${{ steps.k3s.outputs.bundle-path }}
         run: |
           set -euo pipefail
-          for lock in "$JOINT" "$K3S_BUNDLE"; do
+          for lock in "$JOINT" "$K3S_BUNDLE" "$EXTENSION_PACKAGE"; do
             node scripts/keyless-sign.ts sign-blob --yes --bundle "${lock}.sigstore.json" "$lock"
           done
           chart=$(jq -er '"\(.chart.repository)@\(.chart.digest)"' "$JOINT")
@@ -408,7 +468,7 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           set -euo pipefail
-          for lock in "$JOINT" "$K3S_BUNDLE"; do
+          for lock in "$JOINT" "$K3S_BUNDLE" "$EXTENSION_PACKAGE"; do
             cosign verify-blob \
               --bundle "${lock}.sigstore.json" \
               --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
@@ -474,7 +534,8 @@ jobs:
           # every name that already exists.
           gh release upload "$TAG_NAME" \
             "$provenance" "$JOINT" "${JOINT}.sigstore.json" \
-            "$K3S_BUNDLE" "${K3S_BUNDLE}.sigstore.json" evidence/* \
+            "$K3S_BUNDLE" "${K3S_BUNDLE}.sigstore.json" \
+            "$EXTENSION_PACKAGE" "${EXTENSION_PACKAGE}.sigstore.json" evidence/* \
             --clobber \
             --repo "${{ github.repository }}"
 
@@ -614,16 +675,17 @@ jobs:
             --bundle "evidence/release-${TAG_NAME}.intoto.jsonl" \
             --predicate-type https://in-toto.io/attestation/release/v0.1 \
             --repo "${{ github.repository }}"
-          # The k3s bundle of the one-host install, with the same identity.
-          k3s="evidence/hephaestus-k3s-${TAG_NAME#v}.tar.gz"
-          [ -f "$k3s" ] || { echo "::error::The release has no ${k3s#evidence/}"; exit 1; }
-          cosign verify-blob --bundle "$k3s.sigstore.json" \
-            --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
-            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' "$k3s" >/dev/null
-          gh attestation verify "$k3s" \
-            --bundle "evidence/release-${TAG_NAME}.intoto.jsonl" \
-            --predicate-type https://in-toto.io/attestation/release/v0.1 \
-            --repo "${{ github.repository }}"
+          # The k3s bundle of the one-host install and the Chrome extension package, with the same identity.
+          for asset in "hephaestus-k3s-${TAG_NAME#v}.tar.gz" "hephaestus-chrome-extension-${TAG_NAME#v}.zip"; do
+            [ -f "evidence/$asset" ] || { echo "::error::The release has no $asset"; exit 1; }
+            cosign verify-blob --bundle "evidence/$asset.sigstore.json" \
+              --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
+              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' "evidence/$asset" >/dev/null
+            gh attestation verify "evidence/$asset" \
+              --bundle "evidence/release-${TAG_NAME}.intoto.jsonl" \
+              --predicate-type https://in-toto.io/attestation/release/v0.1 \
+              --repo "${{ github.repository }}"
+          done
 
       - name: Publish immutable release
         env:

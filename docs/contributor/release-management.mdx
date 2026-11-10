@@ -177,6 +177,22 @@ The packer refuses any other name, because the bundle unpacks into the installer
 A dispatch of `release-host-smoke.yml` needs a release that has the bundle.
 Releases before the bundle cannot be smoked again that way.
 
+### Extension package
+
+The release job that packages the extension builds the production Chrome extension once, from the released commit, with `vp run build:extension`.
+It runs with read-only access, because it installs and runs the dependencies.
+It writes the release version into the root `package.json` of its checkout first, because the manifest takes its version from there.
+A promoted candidate thus ships its source with the stable version.
+
+`scripts/check-extension-package.ts` then holds the ZIP's manifest to the release.
+The job reports the package's SHA-256 as a job output.
+`tag-images` downloads the package into its own folder and refuses other bytes.
+It attests the package with the release, signs it, verifies the signature, and uploads `hephaestus-chrome-extension-<version>.zip` and its signature beside the k3s bundle.
+`publish-release` verifies the downloaded package's signature and attestation, as it does for the k3s bundle.
+
+The source SBOMs cover the extension's dependencies through the pnpm lockfile.
+Submission to the Chrome Web Store is a manual step: [Releasing to the Chrome Web Store](./browser-extension#releasing-to-the-chrome-web-store).
+
 ### Platform pins
 
 `deploy/platform/k3s-platform.yaml` holds the pins of k3s, Traefik, and cert-manager.

@@ -26,8 +26,8 @@ Workspace admins can also reach everyone’s records in **Practice reviews**.
 We support desktop Chrome because its sign-in, site permissions, and private report frame are [verified together](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0049-browser-extension-report-in-the-page.md#decision).
 
 The extension is not yet in the Chrome Web Store.
-Instance operators either install it through your organization’s Chrome settings or supply a package with installation instructions.
-The package method requires Chrome developer mode.
+Your organization’s Chrome settings may install it for you.
+Otherwise, [install it](#install-it) from the package of a Hephaestus release.
 
 ## The review line
 
@@ -119,6 +119,21 @@ The extension sends Hephaestus the address of each work page you open on an allo
 It reads no page text.
 [Chrome extension privacy](./browser-extension-privacy) lists what it reads, sends, and stores, and [Your data in Hephaestus](./privacy) explains the recorded data.
 
+## Install it
+
+If the Hephaestus icon is already in Chrome’s puzzle-piece menu, your organization installed it for you. Go to [Connect it to your Hephaestus](#connect-it-to-your-hephaestus).
+
+1. Get `hephaestus-chrome-extension-X.Y.Z.zip` from your Hephaestus admins. They check that the release signed it.
+2. Unzip it into a folder that you keep. Chrome runs the extension from that folder, so do not move or delete it.
+3. Open `chrome://extensions` and turn on **Developer mode**.
+4. Select **Load unpacked** and choose the folder.
+5. Copy the ID that Chrome shows under **Hephaestus**, and send it to your admins.
+   Chrome gives each unpacked folder its own ID, and your instance accepts sign-in only from the IDs it allows.
+
+Chrome labels the extension as unpacked, and it does not update itself.
+To update it, replace the folder’s contents with a newer package, and select the reload button under **Hephaestus** on `chrome://extensions`.
+The ID stays the same while the folder stays in the same place.
+
 ## Connect it to your Hephaestus
 
 1. If you cannot see the Hephaestus icon, pin it from Chrome’s puzzle-piece menu.
@@ -191,6 +206,7 @@ The extension clears its content from every tab.
 
 Sign-in shows this when the instance does not allow the extension.
 Ask its operators to allow it.
+If you [installed it yourself](#install-it), send them the ID that Chrome shows on `chrome://extensions`.
 
 ### No GitHub or GitLab site to allow yet
 
