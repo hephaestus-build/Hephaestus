@@ -36,10 +36,16 @@ class FeedbackAnswerPrivacyArchTest extends HephaestusArchitectureTest {
                 .isSubsetOf(HOLD_THE_FULL_RESPONSE);
     }
 
+    /**
+     * The wire types with a field of {@code type}, also as a type argument such as {@code List<type>}. Only a type that
+     * ends in {@code DTO} reaches the generated spec, so the other records are not on the wire.
+     */
     private static List<String> dtosWithAFieldOf(Class<?> type) {
         return classes.stream()
                 .filter(c -> c.getSimpleName().endsWith("DTO"))
-                .filter(c -> c.getFields().stream().anyMatch(f -> f.getRawType().isEquivalentTo(type)))
+                .filter(c -> c.getFields().stream()
+                        .anyMatch(f -> f.getType().getAllInvolvedRawTypes().stream()
+                                .anyMatch(involved -> involved.isEquivalentTo(type))))
                 .map(JavaClass::getSimpleName)
                 .sorted()
                 .toList();

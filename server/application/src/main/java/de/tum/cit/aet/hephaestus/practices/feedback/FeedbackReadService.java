@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -106,12 +107,21 @@ public class FeedbackReadService {
                 actualCopies,
                 activeSend,
                 decisionHistory(workspaceId, id),
-                responses
-                        .findCurrent(workspaceId, id)
-                        .map(FeedbackAnswerDTO::of)
-                        .orElse(null),
+                answer(workspaceId, id),
                 checks(row),
                 readable ? digests.current(workspaceId, id) : null);
+    }
+
+    private @Nullable FeedbackAnswerDTO answer(long workspaceId, UUID id) {
+        var answeredAt = responses.responseTimes(workspaceId, List.of(id)).stream()
+                .map(FeedbackResponseRepository.ResponseTime::answeredAt)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+        return responses
+                .findCurrent(workspaceId, id)
+                .map(response -> FeedbackAnswerDTO.of(response, answeredAt))
+                .orElse(null);
     }
 
     public List<FeedbackDecisionDTO> decisionHistory(long workspaceId, UUID id) {

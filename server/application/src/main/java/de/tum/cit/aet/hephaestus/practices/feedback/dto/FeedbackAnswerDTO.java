@@ -23,15 +23,17 @@ public record FeedbackAnswerDTO(
 
         @NonNull Instant createdAt) {
 
-    /** {@code null} for a response without a resolution: a rating alone is no answer an admin may read. */
-    public static @Nullable FeedbackAnswerDTO of(FeedbackResponse response) {
+    /**
+     * {@code null} for a response without a resolution: a rating alone is no answer an admin may read.
+     *
+     * @param answeredAt when the developer gave this answer, which a later rating or private note does not move
+     */
+    public static @Nullable FeedbackAnswerDTO of(FeedbackResponse response, @Nullable Instant answeredAt) {
         FeedbackResolution resolution = response.getResolution();
-        if (resolution == null) {
+        if (resolution == null || answeredAt == null) {
             return null;
         }
         return new FeedbackAnswerDTO(
-                resolution,
-                resolution == FeedbackResolution.DISAGREE ? response.getComment() : null,
-                response.getCreatedAt());
+                resolution, resolution == FeedbackResolution.DISAGREE ? response.getComment() : null, answeredAt);
     }
 }

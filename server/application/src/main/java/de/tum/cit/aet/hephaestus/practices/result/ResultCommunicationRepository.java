@@ -23,9 +23,20 @@ public interface ResultCommunicationRepository extends Repository<Result, UUID> 
         """, nativeQuery = true)
     List<BoundFeedback> boundFeedback(long ws, UUID id);
 
+    // The time is that of the first row of the newest run with the same disagreement and explanation: a later private
+    // rating appends a row too, and the admin must not see when it changed.
     @Query(value = """
         SELECT DISTINCT f.id,f.destination,s.comment,s.created_at AS respondedAt FROM feedback f
-        JOIN feedback_basis b ON b.feedback_id=f.id AND b.workspace_id=f.workspace_id JOIN LATERAL (SELECT r.* FROM feedback_response r WHERE r.feedback_id=f.id AND r.workspace_id=f.workspace_id ORDER BY r.created_at DESC,r.id::text DESC LIMIT 1) s ON true
+        JOIN feedback_basis b ON b.feedback_id=f.id AND b.workspace_id=f.workspace_id JOIN LATERAL (
+          SELECT v.resolution,v.comment,v.created_at FROM (
+            SELECT r.id,r.created_at,r.resolution,CASE WHEN r.resolution='DISAGREE' THEN r.comment END AS comment,
+              lag(r.resolution) OVER w AS previous_resolution,
+              lag(CASE WHEN r.resolution='DISAGREE' THEN r.comment END) OVER w AS previous_comment,
+              row_number() OVER w AS position
+            FROM feedback_response r WHERE r.feedback_id=f.id AND r.workspace_id=f.workspace_id
+            WINDOW w AS (ORDER BY r.created_at,r.id::text)) v
+          WHERE v.position=1 OR v.resolution IS DISTINCT FROM v.previous_resolution OR v.comment IS DISTINCT FROM v.previous_comment
+          ORDER BY v.created_at DESC,v.id::text DESC LIMIT 1) s ON true
         WHERE f.workspace_id=:ws AND b.result_id=:id AND s.resolution='DISAGREE' ORDER BY s.created_at
         """, nativeQuery = true)
     List<Disagreement> disagreements(long ws, UUID id);

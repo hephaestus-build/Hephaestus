@@ -109,9 +109,49 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
         answer(ratedOnly).jsonPath("$.answer").isEmpty();
     }
 
+    @Test
+    @WithAdminUser
+    void shouldKeepTheAnswerTimeWhenOnlyThePrivateRatingOrNoteChanges() {
+        var addressed = answered(FeedbackResolution.ADDRESSED, FeedbackUsefulness.HELPFUL, "Fixed it.");
+        respond(addressed, FeedbackResolution.ADDRESSED, FeedbackUsefulness.UNHELPFUL, "Changed my mind.", 1);
+        var disagreed = answered(FeedbackResolution.DISAGREE, FeedbackUsefulness.HELPFUL, "The rule allows this.");
+        respond(disagreed, FeedbackResolution.DISAGREE, FeedbackUsefulness.UNHELPFUL, "The rule allows this.", 1);
+        var explained = answered(FeedbackResolution.DISAGREE, null, "The rule allows this.");
+        respond(explained, FeedbackResolution.DISAGREE, null, "The rule allows this here.", 1);
+        var answeredAgain = answered(FeedbackResolution.ADDRESSED, null, "Fixed it.");
+        respond(answeredAgain, FeedbackResolution.NOT_APPLICABLE, null, null, 1);
+        respond(answeredAgain, FeedbackResolution.ADDRESSED, null, null, 2);
+
+        answer(addressed).jsonPath("$.answer.createdAt").isEqualTo(AT.toString());
+        answer(disagreed)
+                .jsonPath("$.answer.createdAt")
+                .isEqualTo(AT.toString())
+                .jsonPath("$.disagreedAt")
+                .isEqualTo(AT.toString());
+        // The explanation of a disagreement is part of the answer that an admin reads, so its change is a new answer.
+        answer(explained)
+                .jsonPath("$.answer.createdAt")
+                .isEqualTo(AT.plusSeconds(1).toString())
+                .jsonPath("$.disagreedAt")
+                .isEqualTo(AT.plusSeconds(1).toString());
+        answer(answeredAgain)
+                .jsonPath("$.answer.createdAt")
+                .isEqualTo(AT.plusSeconds(2).toString());
+    }
+
     private Feedback answered(
             @Nullable FeedbackResolution resolution, @Nullable FeedbackUsefulness usefulness, String comment) {
         var parent = piece(FeedbackDestination.PRACTICE_PAGE, FeedbackState.DELIVERED, AT);
+        respond(parent, resolution, usefulness, comment, 0);
+        return parent;
+    }
+
+    private void respond(
+            Feedback parent,
+            @Nullable FeedbackResolution resolution,
+            @Nullable FeedbackUsefulness usefulness,
+            @Nullable String comment,
+            long secondsLater) {
         responses.saveAndFlush(FeedbackResponse.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(workspace.getId())
@@ -119,9 +159,8 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
                 .resolution(resolution)
                 .usefulness(usefulness)
                 .comment(comment)
-                .createdAt(AT)
+                .createdAt(AT.plusSeconds(secondsLater))
                 .build());
-        return parent;
     }
 
     private WebTestClient.BodyContentSpec answer(Feedback parent) {
