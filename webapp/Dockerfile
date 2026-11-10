@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.28@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
-FROM ghcr.io/pnpm/pnpm:12.3.4@sha256:b81d53184f670fe19d1a33f9d5041907d314b31d596838e8133cbd83d45be043 AS build
+FROM ghcr.io/pnpm/pnpm:12.18.0@sha256:41c39d1c734b0a810669c07587888aa7dbe9ef9b4c8e98b346b3654f7b269b6d AS build
 WORKDIR /repo
 # renovate: datasource=node-version depName=node
-ARG NODE_VERSION=24.22.1
+ARG NODE_VERSION=24.22.2
 RUN pnpm runtime set node ${NODE_VERSION} -g
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .oxfmtrc.json .oxlintrc.json oxlint.react.jsonc oxlint.app.jsonc /repo/
 COPY webapp/package.json /repo/webapp/

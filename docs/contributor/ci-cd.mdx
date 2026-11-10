@@ -639,7 +639,7 @@ The package store and pnpm's lockfile-verification cache are separate. `setup-to
 `lockfile-verified.jsonl` from the directory reported by `pnpm cache path`. Without it, a warm store
 still needs registry metadata for release-age and resolution checks. Only successful default-branch
 push installs publish this record, keyed by platform, pnpm
-version, lockfile, workspace policy and any repository `.npmrc`. pnpm's [native verification cache](https://github.com/pnpm/pnpm/blob/v12.3.4/pnpm/crates/lockfile-verification/src/cache.rs)
+version, lockfile, workspace policy and any repository `.npmrc`. pnpm's [native verification cache](https://github.com/pnpm/pnpm/blob/v12.18.0/pnpm/crates/lockfile-verification/src/cache.rs)
 validates the content and policy before reusing a verdict.
 
 The frozen install still runs with scripts

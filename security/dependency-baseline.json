@@ -1,6 +1,6 @@
 {
 	"pnpm-lock.yaml": {
-		"envPackages": 9,
+		"envPackages": 15,
 		"packages": 2382,
 		"importers": {
 			".": {
