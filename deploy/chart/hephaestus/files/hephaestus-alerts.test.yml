@@ -1157,18 +1157,13 @@ tests:
         exp_alerts: []
 
   # 100 acquires a minute. From minute 5, 10 of them take longer than 50 ms on the server: 10 % slow.
-  - name: sustained slow connection acquires fire, a quiet process does not
+  - name: sustained slow connection acquires fire
     interval: 1m
     input_series:
       - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1",le="0.05"}'
         values: "0+100x5 500+90x60"
       - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1"}'
         values: "0+100x65"
-      # A quiet process: 5 acquires a minute, all slow.
-      - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1",le="0.05"}'
-        values: "0x65"
-      - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1"}'
-        values: "0+5x65"
     alert_rule_test:
       - eval_time: 10m
         alertname: HephaestusDatabasePoolSlow
@@ -1182,6 +1177,19 @@ tests:
             exp_annotations:
               summary: More than 5 % of the server role's database connections took longer than 50 ms to get
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a quiet server whose few acquires are all slow does not fire
+    interval: 1m
+    input_series:
+      # 5 acquires a minute, all slow: fewer than the 300 in 30 minutes that the rule needs.
+      - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1",le="0.05"}'
+        values: "0x65"
+      - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1"}'
+        values: "0+5x65"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: HephaestusDatabasePoolSlow
+        exp_alerts: []
 
   # A restart: every acquire of two minutes is slow, then the pool recovers.
   - name: a brief burst of slow connection acquires does not fire

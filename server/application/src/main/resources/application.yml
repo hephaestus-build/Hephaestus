@@ -272,8 +272,9 @@ springdoc:
         enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
     default-produces-media-type: application/json
     writer-with-order-by-keys: true
-    # The sandbox gateway is private to agent containers, not part of the public API.
-    paths-to-exclude: /internal/**
+    # The sandbox gateway is private to agent containers, and providers post to /webhooks; neither is part of the
+    # public API.
+    paths-to-exclude: /internal/**, /webhooks/**
 
 hephaestus:
     commit-identity-resolution:
