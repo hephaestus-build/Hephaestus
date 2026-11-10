@@ -6,7 +6,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
@@ -49,7 +49,7 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
     private OrganizationService organizationService;
 
     @Autowired
-    private NatsMessageDeserializer deserializer;
+    private EventPayloadDeserializer deserializer;
 
     @Autowired
     private TransactionTemplate transactionTemplate;

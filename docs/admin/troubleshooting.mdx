@@ -139,13 +139,13 @@ Without it, updates wait for the scheduled sync.
 
 ## Deliveries return `503`
 
-**Cause:** The broker did not acknowledge the delivery in time.
+**Cause:** PostgreSQL did not commit the delivery in time.
 Each `503` has a log record with `event.name=webhook.publish.failed`.
 
 **Fix:**
 
 1. Read `webhook.publish.reason` in the log records of the server.
-2. Check broker readiness, stream bounds, and volume space, as [Webhook ingestion operations](./webhook-ingestion-operations) describes.
+2. Check the PostgreSQL connection, locks, and volume space, as [Webhook ingestion operations](./webhook-ingestion-operations) describes.
 3. After the repair, recover the failed deliveries, as [Which providers deliver again](./webhook-ingestion-operations#which-providers-deliver-again) describes.
 
 **Check:** The `webhook.publish` meter records no new `outcome=failure`.
@@ -236,7 +236,6 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
 3. If the PostgreSQL volume is full, read the log of the latest backup Job.
    A failed WAL archive keeps the WAL on the volume.
 4. After you restore space, a broker that could not write its metadata can need a restart.
-   Follow [Recovering a wedged broker](./webhook-ingestion-operations#recovering-a-wedged-broker).
 5. If data or a volume is lost, use [Backup and restore](./backup-restore).
 
 **Check:** Each Pod of the release is ready:

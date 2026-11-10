@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
-import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
-
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
@@ -11,8 +9,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationRepositoryEnumerator;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationSuspensionTracker;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -41,7 +37,6 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,15 +49,11 @@ public class WorkspaceRepositoryMonitorService {
     private static final Logger log = LoggerFactory.getLogger(WorkspaceRepositoryMonitorService.class);
     private static final String GITHUB_SERVER_URL = "https://github.com";
 
-    private final NatsConnectionProperties natsProperties;
-
     private final WorkspaceRepository workspaceRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final RepositoryRepository repositoryRepository;
     private final IdentityProviderRepository gitProviderRepository;
 
-    // natsConsumerService absent under webhook profile.
-    private final ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
 
     /**
@@ -82,12 +73,10 @@ public class WorkspaceRepositoryMonitorService {
     private final ManualRepositoryMonitorService manualAdds;
 
     public WorkspaceRepositoryMonitorService(
-            NatsConnectionProperties natsProperties,
             WorkspaceRepository workspaceRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             RepositoryRepository repositoryRepository,
             IdentityProviderRepository gitProviderRepository,
-            ObjectProvider<IntegrationNatsConsumer> natsConsumerService,
             WorkspaceScopeFilter workspaceScopeFilter,
             ConnectionService connectionService,
             ConnectionRepository connectionRepository,
@@ -97,13 +86,11 @@ public class WorkspaceRepositoryMonitorService {
             ApplicationEventPublisher eventPublisher,
             TransactionTemplate transactionTemplate,
             ManualRepositoryMonitorService manualAdds) {
-        this.natsProperties = natsProperties;
         this.manualAdds = manualAdds;
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.repositoryRepository = repositoryRepository;
         this.gitProviderRepository = gitProviderRepository;
-        this.natsConsumerService = natsConsumerService;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.connectionService = connectionService;
         this.connectionRepository = connectionRepository;
@@ -439,10 +426,6 @@ public class WorkspaceRepositoryMonitorService {
         });
     }
 
-    private boolean shouldUseNats(Workspace workspace) {
-        return natsProperties.enabled() && workspace != null;
-    }
-
     /**
      * Deletes an exact source repository only after its last matching monitor is removed and no
      * workspace still keeps it indexed, as a stopped GitLab project is kept until its work is
@@ -482,12 +465,8 @@ public class WorkspaceRepositoryMonitorService {
         announceRepositoryMonitor(workspace, monitor, deferSync);
     }
 
-    // Consumers read committed monitors; refresh only after commit, never after rollback.
     private void announceRepositoryMonitor(Workspace workspace, RepositoryToMonitor monitor, boolean deferSync) {
         boolean repositoryAllowed = workspaceScopeFilter.isRepositoryAllowed(monitor);
-        if (repositoryAllowed) {
-            refreshScopeConsumerAfterCommit(workspace);
-        }
         if (deferSync) {
             log.debug(
                     "Persisted repository with deferred sync: repoName={}",
@@ -522,15 +501,6 @@ public class WorkspaceRepositoryMonitorService {
         workspaceRepository.saveAndFlush(workspace);
         eventPublisher.publishEvent(
                 new RepositoryMonitoringChangedEvent(workspace.getId(), repositoryIds, retainIndex));
-        refreshScopeConsumerAfterCommit(workspace);
-    }
-
-    /** The consumer builds its subject filters from committed monitors, so it is refreshed only after commit. */
-    private void refreshScopeConsumerAfterCommit(Workspace workspace) {
-        if (shouldUseNats(workspace)) {
-            Long workspaceId = workspace.getId();
-            afterCommit(() -> natsConsumerService.ifAvailable(svc -> svc.updateScopeConsumer(workspaceId)));
-        }
     }
 
     /**
@@ -579,7 +549,6 @@ public class WorkspaceRepositoryMonitorService {
                     LoggingUtils.sanitizeForLog(monitor.getNameWithOwner()),
                     LoggingUtils.sanitizeForLog(nameWithOwner));
             monitor.setNameWithOwner(nameWithOwner);
-            refreshScopeConsumerAfterCommit(workspace);
         }
         if (renamed) {
             repositoryToMonitorRepository.saveAndFlush(monitor);

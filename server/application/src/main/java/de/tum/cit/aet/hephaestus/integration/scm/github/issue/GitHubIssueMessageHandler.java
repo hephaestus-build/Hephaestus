@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.issue;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -38,7 +38,7 @@ public class GitHubIssueMessageHandler extends AbstractIntegrationMessageHandler
             GitHubIssueProcessor issueProcessor,
             GitHubSubIssueSyncService subIssueSyncService,
             GitHubUserProcessor userProcessor,
-            NatsMessageDeserializer deserializer,
+            EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
                 IntegrationKind.GITHUB,

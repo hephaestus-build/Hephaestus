@@ -13,7 +13,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,22 +25,25 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.TransactionException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Inbound webhook pipeline: verify → derive → publish.
+ * Inbound webhook pipeline: verify → derive → store.
  *
  * <p>Verification can short-circuit with {@code RespondImmediately} (Slack
  * {@code url_verification}); on {@code Verified} the
- * pipeline derives the NATS subject + dedup-id via the per-kind {@link SubjectKeyDeriver}
- * and publishes through {@link JetStreamPublisher}.
+ * pipeline derives the subject and delivery key via the per-kind {@link SubjectKeyDeriver}
+ * and stores the delivery in the provider event inbox through {@link ProviderEventReceiver}. It answers 202 only
+ * after the delivery is stored, and 503 when PostgreSQL cannot store it, so the provider retries.
  *
  * <p>Error responses carry only a coarse category ({@code "invalid"} / {@code "missing-signature"} /
  * {@code "stale-timestamp"}). The verifier's {@code Invalid.reason} — which distinguishes a missing secret from a
@@ -53,8 +55,6 @@ public class WebhookIngestPipeline {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookIngestPipeline.class);
 
-    static final String NATS_MSG_ID = "Nats-Msg-Id";
-    private static final Duration SLACK_PUBLISH_TIMEOUT = Duration.ofSeconds(2);
     static final String BUSY_REASON = "busy";
     static final String BUSY_RETRY_AFTER_SECONDS = "30";
 
@@ -62,8 +62,7 @@ public class WebhookIngestPipeline {
     private final Map<IntegrationKind, SubjectKeyDeriver> deriversByKind;
     private final Map<IntegrationKind, WebhookPublishGate> publishGatesByKind;
 
-    @Nullable
-    private final JetStreamPublisher jetStreamPublisher;
+    private final ProviderEventReceiver receiver;
 
     private final ObjectMapper objectMapper;
     private final WebhookInFlightBudget budget;
@@ -72,21 +71,21 @@ public class WebhookIngestPipeline {
     public WebhookIngestPipeline(
             List<WebhookSignatureVerifier> verifiers,
             List<SubjectKeyDeriver> derivers,
-            @Nullable JetStreamPublisher jetStreamPublisher,
+            ProviderEventReceiver receiver,
             ObjectMapper objectMapper) {
-        this(verifiers, derivers, jetStreamPublisher, objectMapper, List.of());
+        this(verifiers, derivers, receiver, objectMapper, List.of());
     }
 
     public WebhookIngestPipeline(
             List<WebhookSignatureVerifier> verifiers,
             List<SubjectKeyDeriver> derivers,
-            @Nullable JetStreamPublisher jetStreamPublisher,
+            ProviderEventReceiver receiver,
             ObjectMapper objectMapper,
             List<WebhookPublishGate> publishGates) {
         this(
                 verifiers,
                 derivers,
-                jetStreamPublisher,
+                receiver,
                 objectMapper,
                 publishGates,
                 WebhookInFlightBudget.forHeap(Runtime.getRuntime().maxMemory()),
@@ -97,7 +96,7 @@ public class WebhookIngestPipeline {
     public WebhookIngestPipeline(
             List<WebhookSignatureVerifier> verifiers,
             List<SubjectKeyDeriver> derivers,
-            @Nullable JetStreamPublisher jetStreamPublisher,
+            ProviderEventReceiver receiver,
             ObjectMapper objectMapper,
             List<WebhookPublishGate> publishGates,
             WebhookInFlightBudget budget,
@@ -116,7 +115,7 @@ public class WebhookIngestPipeline {
                 .collect(Collectors.toUnmodifiableMap(WebhookPublishGate::kind, Function.identity(), (a, b) -> {
                     throw new IllegalStateException("Duplicate WebhookPublishGate for kind=" + a.kind());
                 }));
-        this.jetStreamPublisher = jetStreamPublisher;
+        this.receiver = receiver;
         this.objectMapper = objectMapper;
     }
 
@@ -200,13 +199,6 @@ public class WebhookIngestPipeline {
 
     private ResponseEntity<?> publishHeld(
             IntegrationKind kind, byte[] body, Map<String, String> headers, @Nullable Route route) {
-        if (jetStreamPublisher == null) {
-            // No publisher bean — the webhook runtime role is disabled. Vendor will retry.
-            // 503 is the right surface here: the verification succeeded, but the downstream
-            // pipe is intentionally not wired on this pod.
-            log.warn("WebhookIngestPipeline: verified {} webhook but no JetStreamPublisher bean — replying 503", kind);
-            return problem(HttpStatus.SERVICE_UNAVAILABLE, "publisher not wired");
-        }
         SubjectKeyDeriver deriver = deriversByKind.get(kind);
         if (route == null && deriver == null) {
             // Kind has a verifier but no derivation — surface as NOT_IMPLEMENTED so the
@@ -227,13 +219,16 @@ public class WebhookIngestPipeline {
             WebhookPublishGate.Decision decision;
             try {
                 decision = gate.evaluate(payload, headers);
-            } catch (ProjectedKeys.UnavailableException e) {
-                // The gate cannot read what it decides on: nothing is published, and the provider retries.
-                log.warn("Publish gate for kind={} unavailable: bucket={}, cause={}", kind, e.bucket(), e.causeClass());
+            } catch (DataAccessException e) {
+                // The gate cannot read what it decides on: nothing is stored, and the provider retries.
+                log.warn(
+                        "Publish gate for kind={} unavailable: cause={}",
+                        kind,
+                        e.getClass().getName());
                 return problem(HttpStatus.SERVICE_UNAVAILABLE, "gate-unavailable");
             }
             if (!decision.publish()) {
-                log.info("Dropped {} webhook before durable publish: {}", kind, sanitizeForLog(decision.reason()));
+                log.info("Dropped {} webhook before it was stored: {}", kind, sanitizeForLog(decision.reason()));
                 return ResponseEntity.accepted().body(Map.of("status", "dropped"));
             }
         }
@@ -245,44 +240,41 @@ public class WebhookIngestPipeline {
                 ? route.dedupId()
                 : Objects.requireNonNull(deriver).deriveDedupKey(body, headers);
 
-        // Nats-Msg-Id also rides in JetStreamPublisher's PublishOptions; duplicating it on the
-        // headers keeps the wire trace self-describing.
-        Map<String, String> outboundHeaders = new LinkedHashMap<>();
-        passthroughHeader(outboundHeaders, headers, "X-GitHub-Event");
-        passthroughHeader(outboundHeaders, headers, "X-GitHub-Delivery");
-        passthroughHeader(outboundHeaders, headers, "X-Gitlab-Event");
-        passthroughHeader(outboundHeaders, headers, "X-Gitlab-Webhook-UUID");
+        Map<String, String> storedHeaders = new LinkedHashMap<>();
+        passthroughHeader(storedHeaders, headers, "X-GitHub-Event");
+        passthroughHeader(storedHeaders, headers, "X-GitHub-Delivery");
+        passthroughHeader(storedHeaders, headers, "X-Gitlab-Event");
+        passthroughHeader(storedHeaders, headers, "X-Gitlab-Webhook-UUID");
         if (route != null) {
-            outboundHeaders.putAll(route.headers());
+            storedHeaders.putAll(route.headers());
         }
-        outboundHeaders.put(NATS_MSG_ID, dedupId);
 
+        String provider = kind.name().toLowerCase(Locale.ROOT);
+        int stored;
         try {
-            PublishRequest request = new PublishRequest(subject, dedupId, outboundHeaders, body);
-            if (kind == IntegrationKind.SLACK) {
-                jetStreamPublisher.publishFast(request, SLACK_PUBLISH_TIMEOUT);
-            } else {
-                jetStreamPublisher.publish(request);
-            }
-        } catch (JetStreamPublisher.PublishFailedException e) {
+            stored = receiver.receive(kind, subject, dedupId, storedHeaders, body);
+        } catch (DataAccessException | TransactionException e) {
+            meterRegistry
+                    .counter(IntegrationCoreMetrics.WEBHOOK_PUBLISH, "stream", provider, "outcome", "failure")
+                    .increment();
             log.atError()
                     .addKeyValue("event.name", "webhook.publish.failed")
-                    .addKeyValue("webhook.publish.reason", e.failureCause().label())
-                    .addKeyValue("webhook.publish.attempts", e.attempts())
                     .log(
-                            "Webhook not stored for kind={} subject={}: cause={} attempts={} detail={}",
+                            "Webhook not stored for kind={} subject={}: cause={}",
                             kind,
                             sanitizeForLog(subject),
-                            e.failureCause().label(),
-                            e.attempts(),
-                            sanitizeForLog(e.detail()));
-            return problem(HttpStatus.SERVICE_UNAVAILABLE, "publish-failed");
+                            e.getClass().getName());
+            return problem(HttpStatus.SERVICE_UNAVAILABLE, "store-failed");
         }
+        meterRegistry
+                .counter(IntegrationCoreMetrics.WEBHOOK_PUBLISH, "stream", provider, "outcome", "success")
+                .increment();
         log.info(
-                "Published {} webhook to NATS: subject={} dedupId={}",
+                "Stored {} webhook: subject={} dedupId={} events={}",
                 kind,
                 sanitizeForLog(subject),
-                sanitizeForLog(dedupId));
+                sanitizeForLog(dedupId),
+                stored);
         return ResponseEntity.accepted().body(Map.of("status", "ok"));
     }
 

@@ -21,7 +21,6 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import io.nats.client.impl.NatsMessage;
 import java.time.Instant;
 import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +40,10 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
     private static final long REPOSITORY_NATIVE_ID = 998279771L;
 
     @Autowired
-    private IntegrationNatsConsumer consumer;
+    private ProviderEventConsumer consumer;
+
+    @Autowired
+    private ProviderEventStore store;
 
     @Autowired
     private IdentityProviderRepository providers;
@@ -145,11 +147,14 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
         var target = workspace("dispatch-a", LOGIN);
         workspace("dispatch-b", LOGIN);
 
-        var message = new NatsMessage(
-                "github.HephaestusTest.?.team",
-                null,
-                new ClassPathResource("github/team.org.created.json").getContentAsByteArray());
-        assertThat(consumer.dispatch(target.getId(), message)).isNotNull();
+        assertThat(StoredEventHandling.handle(
+                        store,
+                        consumer,
+                        jdbc,
+                        target.getId(),
+                        "github.HephaestusTest.?.team",
+                        new ClassPathResource("github/team.org.created.json").getContentAsByteArray()))
+                .isEqualTo("DONE");
 
         var team = teams.findByNativeIdAndProviderId(
                         14170707L,
@@ -172,9 +177,14 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
 
         var payload = (ObjectNode) mapper.readTree(new ClassPathResource("github/push.json").getContentAsByteArray());
         payload.put("ref", "refs/heads/main");
-        var message =
-                new NatsMessage("github.HephaestusTest.TestRepository.push", null, mapper.writeValueAsBytes(payload));
-        assertThat(consumer.dispatch(target.getId(), message)).isNotNull();
+        assertThat(StoredEventHandling.handle(
+                        store,
+                        consumer,
+                        jdbc,
+                        target.getId(),
+                        "github.HephaestusTest.TestRepository.push",
+                        mapper.writeValueAsBytes(payload)))
+                .isEqualTo("DONE");
 
         assertThat(commits.findByShaAndRepositoryId("5e25fac12d5c56488a01b1e4375828fe7d30d64e", repository.getId()))
                 .isPresent();
@@ -188,12 +198,14 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
     void shouldNotInferAWorkspaceForAnUnscopedDispatch() throws Exception {
         workspace("dispatch-a", LOGIN);
         workspace("dispatch-b", LOGIN);
-        var message = new NatsMessage(
-                "github.HephaestusTest.TestRepository.issues",
-                null,
-                new ClassPathResource("github/issues.opened.json").getContentAsByteArray());
-
-        assertThat(consumer.dispatch(null, message)).isNotNull();
+        assertThat(StoredEventHandling.handle(
+                        store,
+                        consumer,
+                        jdbc,
+                        null,
+                        "github.HephaestusTest.TestRepository.issues",
+                        new ClassPathResource("github/issues.opened.json").getContentAsByteArray()))
+                .isEqualTo("DONE");
 
         var issue = issues.findByRepositoryIdAndNumber(repository.getId(), 20).orElseThrow();
         assertThat(events.ofType(ScmDomainEvent.IssueCreated.class))
@@ -231,9 +243,14 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
         relatedRef.put("id", related.getNativeId());
         relatedRef.put("full_name", related.getNameWithOwner());
 
-        var message = new NatsMessage(
-                "github.HephaestusTest.TestRepository.sub_issues", null, mapper.writeValueAsBytes(payload));
-        assertThat(consumer.dispatch(target.getId(), message)).isNotNull();
+        assertThat(StoredEventHandling.handle(
+                        store,
+                        consumer,
+                        jdbc,
+                        target.getId(),
+                        "github.HephaestusTest.TestRepository.sub_issues",
+                        mapper.writeValueAsBytes(payload)))
+                .isEqualTo("DONE");
 
         var issue = issues.findByRepositoryIdAndNumber(related.getId(), 21).orElseThrow();
         assertThat(events.ofType(ScmDomainEvent.IssueCreated.class))
@@ -268,11 +285,14 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
     }
 
     private void dispatchIssue(Workspace workspace) throws Exception {
-        var message = new NatsMessage(
-                "github.HephaestusTest.TestRepository.issues",
-                null,
-                new ClassPathResource("github/issues.opened.json").getContentAsByteArray());
-        assertThat(consumer.dispatch(workspace.getId(), message)).isNotNull();
+        assertThat(StoredEventHandling.handle(
+                        store,
+                        consumer,
+                        jdbc,
+                        workspace.getId(),
+                        "github.HephaestusTest.TestRepository.issues",
+                        new ClassPathResource("github/issues.opened.json").getContentAsByteArray()))
+                .isEqualTo("DONE");
     }
 
     private void assertIssueAndScope(Workspace workspace) {

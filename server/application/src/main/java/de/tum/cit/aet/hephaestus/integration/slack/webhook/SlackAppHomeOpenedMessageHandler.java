@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -18,7 +18,7 @@ public class SlackAppHomeOpenedMessageHandler extends AbstractSlackEnvelopeHandl
 
     private final SlackAppHomeService appHomeService;
 
-    public SlackAppHomeOpenedMessageHandler(SlackAppHomeService appHomeService, NatsMessageDeserializer deserializer) {
+    public SlackAppHomeOpenedMessageHandler(SlackAppHomeService appHomeService, EventPayloadDeserializer deserializer) {
         super("app_home_opened", deserializer);
         this.appHomeService = appHomeService;
     }

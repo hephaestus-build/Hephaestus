@@ -169,7 +169,7 @@ nats:
   maxPayloadBytes: 26279936
   jetstream:
     maxMemory: 1G
-    # The broker's max_file and the server's stream storage budget. The bundled volume is
+    # The broker's max_file. The bundled volume is
     # sized from it, so the two cannot drift. For an external broker, state that broker's max_file.
     maxFileBytes: 17179869184
   persistence:
@@ -225,24 +225,6 @@ migration:
   resources:
     requests: { cpu: 250m, memory: 1536Mi, ephemeral-storage: 64Mi }
     limits: { cpu: "2", memory: 1536Mi, ephemeral-storage: 256Mi }
-
-# The JetStream streams that the server's receiver bounds.
-webhook:
-  stream:
-    # Consumers acknowledge within seconds, so the age holds the stream in steady state. Keep the age
-    # times the daily GitHub volume within maxBytesByStream.github (webhook ingestion operations).
-    maxAge: 7d
-    # Empty keeps application defaults, including the shorter Slack and Outline retention.
-    maxAgeByStream: {}
-    maxBytes: 1GB
-    maxBytesByStream:
-      github: 10GB
-    # Set true for one release to apply a limit that deletes stored messages, such as a shorter
-    # maxAge on a stream that already holds older deliveries; then set it back to false.
-    allowDestructiveLimitUpdates: false
-    # How long the receiver's start waits for one such limit update. A bound that sheds messages
-    # deletes them before the broker answers, so a large stream on a slow disk can need more.
-    limitUpdateTimeout: 5m
 
 webapp:
   replicas: 1

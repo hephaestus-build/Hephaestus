@@ -91,8 +91,7 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "pull_request_closing_issue",
             "pull_request_requested_team",
             "release_start",
-            "installation_inbox_step", // Delivery ids and step names contain no person data.
-            "consumer_inbox_step", // Delivery ids and step names contain no person data.
+            "provider_event_step", // Event ids and step names contain no person data.
             "repository_to_monitor",
             "attempt_public_key",
             "workspace",

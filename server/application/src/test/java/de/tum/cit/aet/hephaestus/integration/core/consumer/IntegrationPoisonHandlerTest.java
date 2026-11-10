@@ -2,19 +2,20 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.inOrder;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.ProviderEvents;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.nats.client.Message;
-import io.nats.client.impl.NatsJetStreamMetaData;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.ConnectException;
@@ -36,19 +37,17 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 class IntegrationPoisonHandlerTest extends BaseUnitTest {
-    private final ConsumerDeadLetterService deadLetters = mock(ConsumerDeadLetterService.class);
+    private final ProviderEventStore store = mock(ProviderEventStore.class);
     private final IntegrationPoisonHandler handler = new IntegrationPoisonHandler(
-            NatsConsumerPropertiesFixture.defaults(), new SimpleMeterRegistry(), deadLetters);
+            ProviderEventConsumerPropertiesFixture.defaults(), new SimpleMeterRegistry(), store);
 
     @ParameterizedTest
     @ValueSource(longs = {1, 10, 100, 10000, Long.MAX_VALUE})
     void shouldNeverDropTransientFailuresWhenDeliveryCountGrows(long deliveries) {
-        Message message = message(deliveries);
-        handler.handleFailure(42L, message, new DataAccessResourceFailureException("database unavailable"));
-        verify(message).nakWithDelay(any(Duration.class));
-        verify(message, never()).ack();
-        verify(message, never()).term();
-        verifyNoInteractions(deadLetters);
+        ProviderEventStore.Claimed message = claimed(deliveries);
+        handler.handleFailure(message, new DataAccessResourceFailureException("database unavailable"));
+        verify(store).retry(eq(1L), eq(1), any(Duration.class), eq(false));
+        verify(store, never()).dead(anyLong(), anyInt(), anyString());
     }
 
     @ParameterizedTest
@@ -57,34 +56,32 @@ class IntegrationPoisonHandlerTest extends BaseUnitTest {
         long elapsed = 0;
         long deliveries = 1;
         while (elapsed < Duration.ofMinutes(minutes).toMillis()) {
-            Message message = message(deliveries);
-            handler.handleFailure(42L, message, new DataAccessResourceFailureException("offline"));
-            verify(message, never()).ack();
-            verify(message, never()).term();
+            ProviderEventStore.Claimed message = claimed(deliveries);
+            handler.handleFailure(message, new DataAccessResourceFailureException("offline"));
             var delay = ArgumentCaptor.forClass(Duration.class);
-            verify(message).nakWithDelay(delay.capture());
+            verify(store).retry(eq(1L), eq(1), delay.capture(), eq(false));
+            clearInvocations(store);
             elapsed += delay.getValue().toMillis();
             deliveries++;
         }
-        verifyNoInteractions(deadLetters);
+        verify(store, never()).dead(anyLong(), anyInt(), anyString());
     }
 
     @Test
     void shouldRetryProviderOutage() {
-        Message message = message(100);
-        handler.handleFailure(42L, message, new ConnectException("provider unavailable"));
-        verify(message).nakWithDelay(any(Duration.class));
-        verifyNoInteractions(deadLetters);
+        ProviderEventStore.Claimed message = claimed(100);
+        handler.handleFailure(message, new ConnectException("provider unavailable"));
+        verify(store).retry(eq(1L), eq(1), any(Duration.class), eq(false));
+        verify(store, never()).dead(anyLong(), anyInt(), anyString());
     }
 
     @ParameterizedTest
     @MethodSource("connectionPoolFailures")
     void shouldRetryJdbcConnectionFailuresWithoutSqlState(SQLException failure) {
-        Message message = message(100);
-        handler.handleFailure(42L, message, failure);
-        verify(message).nakWithDelay(any(Duration.class));
-        verify(message, never()).term();
-        verifyNoInteractions(deadLetters);
+        ProviderEventStore.Claimed message = claimed(100);
+        handler.handleFailure(message, failure);
+        verify(store).retry(eq(1L), eq(1), any(Duration.class), eq(false));
+        verify(store, never()).dead(anyLong(), anyInt(), anyString());
     }
 
     private static Stream<SQLException> connectionPoolFailures() {
@@ -96,11 +93,10 @@ class IntegrationPoisonHandlerTest extends BaseUnitTest {
     @ParameterizedTest
     @MethodSource("unclassifiedIoFailures")
     void shouldCaptureUnclassifiedIoFailuresWhenBudgetIsExhausted(IOException failure) {
-        Message message = message(100);
-        handler.handleFailure(42L, message, failure);
-        verify(deadLetters).capture(42L, message, failure);
-        verify(message).term();
-        verify(message, never()).nakWithDelay(any(Duration.class));
+        ProviderEventStore.Claimed message = claimed(100);
+        handler.handleFailure(message, failure);
+        verify(store).dead(eq(1L), eq(1), anyString());
+        verify(store, never()).retry(anyLong(), anyInt(), any(Duration.class), anyBoolean());
     }
 
     private static Stream<IOException> unclassifiedIoFailures() {
@@ -114,30 +110,35 @@ class IntegrationPoisonHandlerTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(longs = {1, 9})
     void shouldRetryUnknownFailureBeforeItsBudgetIsExhausted(long deliveries) {
-        Message message = message(deliveries);
-        handler.handleFailure(42L, message, new IllegalStateException("unknown"));
-        verify(message).nakWithDelay(any(Duration.class));
-        verifyNoInteractions(deadLetters);
+        ProviderEventStore.Claimed message = claimed(deliveries);
+        handler.handleFailure(message, new IllegalStateException("unknown"));
+        verify(store).retry(eq(1L), eq(1), any(Duration.class), eq(true));
+        verify(store, never()).dead(anyLong(), anyInt(), anyString());
+    }
+
+    @Test
+    void shouldNotSpendTheBudgetOnOperationalRetriesWhenAnUnknownFailureFollows() {
+        ProviderEventStore.Claimed message = new ProviderEventStore.Claimed(
+                1L, 42L, ProviderEvents.event("github.acme.repo.issues", "{}"), 50, 0, 1);
+        handler.handleFailure(message, new IllegalStateException("unknown"));
+        verify(store).retry(eq(1L), eq(1), any(Duration.class), eq(true));
+        verify(store, never()).dead(anyLong(), anyInt(), anyString());
     }
 
     @Test
     void shouldCaptureUnknownFailureAtTheBudgetBeforeTermination() {
-        Message message = message(10);
+        ProviderEventStore.Claimed message = claimed(10);
         var failure = new IllegalStateException("unknown");
-        handler.handleFailure(42L, message, failure);
-        var order = inOrder(deadLetters, message);
-        order.verify(deadLetters).capture(42L, message, failure);
-        order.verify(message).term();
+        handler.handleFailure(message, failure);
+        verify(store).dead(1L, 1, IllegalStateException.class.getName());
     }
 
     @Test
     void shouldFindParsingFailureInTheCauseChain() {
-        Message message = mock(Message.class);
-        when(message.getSubject()).thenReturn("github.acme.repo.issues");
+        ProviderEventStore.Claimed message = claimed(1);
         var failure = new IllegalStateException("wrapper", new PayloadParsingException("invalid JSON"));
-        handler.handleFailure(42L, message, failure);
-        verify(deadLetters).capture(42L, message, failure);
-        verify(message).term();
+        handler.handleFailure(message, failure);
+        verify(store).dead(eq(1L), eq(1), anyString());
     }
 
     @ParameterizedTest
@@ -147,34 +148,10 @@ class IntegrationPoisonHandlerTest extends BaseUnitTest {
         headers.set("X-RateLimit-Remaining", "0");
         var response =
                 WebClientResponseException.create(status, "provider", headers, new byte[0], StandardCharsets.UTF_8);
-        Message message = message(100);
-        handler.handleFailure(42L, message, new IllegalStateException("wrapper", response));
-        verify(message).nakWithDelay(any(Duration.class));
-        verifyNoInteractions(deadLetters);
-    }
-
-    @Test
-    void shouldCommitDeadLetterBeforeTerminatingParsingFailure() {
-        Message message = mock(Message.class);
-        when(message.getSubject()).thenReturn("github.acme.repo.issues");
-        var failure = new PayloadParsingException("invalid JSON");
-        handler.handleFailure(42L, message, failure);
-        var order = inOrder(deadLetters, message);
-        order.verify(deadLetters).capture(42L, message, failure);
-        order.verify(message).term();
-        verify(message, never()).ack();
-    }
-
-    @Test
-    void shouldRetryPoisonWhenItsDurableCaptureFails() {
-        Message message = message(100);
-        doThrow(new DataAccessResourceFailureException("offline"))
-                .when(deadLetters)
-                .capture(any(), any(), any());
-        handler.handleFailure(42L, message, new PayloadParsingException("invalid JSON"));
-        verify(message).nakWithDelay(any(Duration.class));
-        verify(message, never()).term();
-        verify(message, never()).ack();
+        ProviderEventStore.Claimed message = claimed(100);
+        handler.handleFailure(message, new IllegalStateException("wrapper", response));
+        verify(store).retry(eq(1L), eq(1), any(Duration.class), eq(false));
+        verify(store, never()).dead(anyLong(), anyInt(), anyString());
     }
 
     @Test
@@ -186,12 +163,14 @@ class IntegrationPoisonHandlerTest extends BaseUnitTest {
         }
     }
 
-    private static Message message(long deliveries) {
-        Message message = mock(Message.class);
-        NatsJetStreamMetaData metadata = mock(NatsJetStreamMetaData.class);
-        when(message.metaData()).thenReturn(metadata);
-        when(metadata.deliveredCount()).thenReturn(deliveries);
-        when(message.getSubject()).thenReturn("github.acme.repo.issues");
-        return message;
+    private static ProviderEventStore.Claimed claimed(long attempt) {
+        return new ProviderEventStore.Claimed(
+                1L,
+                42L,
+                ProviderEvents.event("github.acme.repo.issues", "{}"),
+                (int) Math.min(attempt, Integer.MAX_VALUE),
+                // Every earlier attempt failed for an unknown reason.
+                (int) Math.min(attempt - 1, Integer.MAX_VALUE),
+                1);
     }
 }

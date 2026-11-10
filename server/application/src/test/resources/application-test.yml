@@ -98,6 +98,9 @@ hephaestus:
     # OAuth state HMAC secret + webhook secret — required by HmacOAuthStateService
     # at boot. Without these the integration framework can't construct.
     integration:
+        # Tests claim provider events themselves (ProviderEventConsumer#claimAndHandle), so no claimer races them.
+        consumer:
+            claimers: 0
         oauth-state:
             secret: test-oauth-state-hmac-secret-not-real
         slack:

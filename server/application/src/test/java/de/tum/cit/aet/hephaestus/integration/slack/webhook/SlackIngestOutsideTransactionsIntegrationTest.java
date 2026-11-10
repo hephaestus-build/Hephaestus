@@ -10,7 +10,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
@@ -24,10 +25,10 @@ import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityR
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.ProviderEvents;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipRoster;
-import io.nats.client.impl.NatsMessage;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -136,11 +137,12 @@ class SlackIngestOutsideTransactionsIntegrationTest extends BaseIntegrationTest 
                 threads,
                 new SlackRosterIdentityResolver(providers, people, memberships, slack, suppression),
                 conversationFeedbackErasure,
+                mock(ProviderEventStore.class),
                 true,
                 new TransactionTemplate(transactionManager));
         return new SlackChannelMessageHandler(
                 ingest,
-                new NatsMessageDeserializer(JsonMapper.builder().build()),
+                new EventPayloadDeserializer(JsonMapper.builder().build()),
                 new TransactionTemplate(transactionManager));
     }
 
@@ -151,8 +153,8 @@ class SlackIngestOutsideTransactionsIntegrationTest extends BaseIntegrationTest 
                 """.formatted(team, channel);
 
         handler()
-                .onMessage(new NatsMessage(
-                        "slack." + team + "." + channel + ".message", null, payload.getBytes(StandardCharsets.UTF_8)));
+                .onMessage(ProviderEvents.event(
+                        "slack." + team + "." + channel + ".message", payload.getBytes(StandardCharsets.UTF_8)));
 
         assertThat(transactionOpenAtLookup).containsExactly(false);
         assertThat(jdbc.queryForObject("""
@@ -173,8 +175,8 @@ class SlackIngestOutsideTransactionsIntegrationTest extends BaseIntegrationTest 
                 """.formatted(team, channel);
 
         handler()
-                .onMessage(new NatsMessage(
-                        "slack." + team + "." + channel + ".message", null, payload.getBytes(StandardCharsets.UTF_8)));
+                .onMessage(ProviderEvents.event(
+                        "slack." + team + "." + channel + ".message", payload.getBytes(StandardCharsets.UTF_8)));
 
         assertThat(messages.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, channel, "600.1"))
                 .isFalse();

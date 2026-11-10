@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingExceptio
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.nats.client.Message;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -33,7 +32,11 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
-/** Retries operational failures; permanent or exhausted unknown failures require durable capture before TERM. */
+/**
+ * Decides what a failed event does next. A proven operational failure retries with backoff until it recovers; a
+ * payload that does not parse, or an unknown failure that used its attempts, becomes a dead letter that keeps its
+ * payload for a replay. The event stays at the head of its scope while it waits, so its scope keeps its order.
+ */
 @Component
 @ConditionalOnServerRole
 public class IntegrationPoisonHandler {
@@ -44,78 +47,34 @@ public class IntegrationPoisonHandler {
     /** Prevent shift and multiplication overflow during a long outage. */
     private static final int MAX_EXPONENT = 30;
 
-    private final NatsConsumerProperties properties;
+    private final ProviderEventConsumerProperties properties;
     private final MeterRegistry meterRegistry;
-    private final ConsumerDeadLetterService deadLetters;
-    private final Map<String, Counter> nakCounters = new ConcurrentHashMap<>();
+    private final ProviderEventStore store;
+    private final Map<String, Counter> retryCounters = new ConcurrentHashMap<>();
     private final Map<String, Counter> poisonCounters = new ConcurrentHashMap<>();
 
     public IntegrationPoisonHandler(
-            NatsConsumerProperties properties, MeterRegistry meterRegistry, ConsumerDeadLetterService deadLetters) {
+            ProviderEventConsumerProperties properties, MeterRegistry meterRegistry, ProviderEventStore store) {
         this.properties = properties;
         this.meterRegistry = meterRegistry;
-        this.deadLetters = deadLetters;
+        this.store = store;
     }
 
-    /**
-     * NAKs a transient or unclassified failure without a delivery-count limit.
-     *
-     * <p>Designed to be a no-throw call from the consumer's catch-all error path: on any
-     * failure to NAK (e.g. closed connection during shutdown) we fall back to an
-     * unconditional {@link Message#nak()} and then to silence. The message will be
-     * redelivered after the JetStream ack-wait if all NAK strategies fail.
-     */
-    public void nakWithBackoff(@Nullable Message msg) {
-        if (msg == null) {
-            return;
-        }
-        long deliveredCount = readDeliveredCount(msg);
-
-        // deliveredCount is 1-based — first attempt is 1, so use (count - 1) as exponent.
-        int attempt = (int) Math.min(deliveredCount - 1, Integer.MAX_VALUE);
-        long delayMs = exponentialBackoffMillis(
-                attempt,
-                properties.poison().baseDelay().toMillis(),
-                properties.poison().maxDelay().toMillis());
-
-        nakCounter(msg).increment();
-        try {
-            log.debug(
-                    "NAKing message with backoff: route={}, attempt={}, delayMs={}",
-                    ConsumerSubjectMath.routeLabel(msg.getSubject()),
-                    deliveredCount,
-                    delayMs);
-            msg.nakWithDelay(Duration.ofMillis(delayMs));
-        } catch (Exception nakWithDelayFailed) {
-            // Closed connection / shutdown / etc. — fall back to immediate NAK so the
-            // server-side ack-wait timeout becomes the only thing the message is waiting on.
-            log.debug(
-                    "Failed to NAK with delay, using immediate NAK: error={}",
-                    nakWithDelayFailed.getClass().getSimpleName());
-            try {
-                msg.nak();
-            } catch (Exception immediateNakFailed) {
-                // Message will be redelivered after ack timeout — nothing more we can do.
-                log.trace(
-                        "Failed to NAK message: error={}",
-                        immediateNakFailed.getClass().getSimpleName());
-            }
-        }
-    }
-
-    public void handleFailure(@Nullable Long workspaceId, Message msg, Throwable failure) {
+    /** Records the outcome of a failed attempt; a lease that was taken back meanwhile records nothing. */
+    public void handleFailure(ProviderEventStore.Claimed claimed, Throwable failure) {
+        String subject = claimed.event().subject();
         FailureKind kind = classify(failure);
         if (kind == FailureKind.PERMANENT
                 || (kind == FailureKind.UNKNOWN
-                        && readDeliveredCount(msg) >= properties.poison().maxRedeliver())) {
-            try {
-                deadLetters.capture(workspaceId, msg, failure);
-                Throwable diagnostic = diagnosticCause(failure);
+                        && claimed.failures() + 1 >= properties.poison().maxAttempts())) {
+            Throwable diagnostic = diagnosticCause(failure);
+            if (store.dead(
+                    claimed.id(), claimed.leaseEpoch(), diagnostic.getClass().getName())) {
                 log.atError()
                         .addKeyValue("event.name", "integration.message.captured")
-                        .addKeyValue("integration.route", ConsumerSubjectMath.routeLabel(msg.getSubject()))
-                        .addKeyValue("integration.scope.id", workspaceId)
-                        .addKeyValue("integration.delivery", readDeliveredCount(msg))
+                        .addKeyValue("integration.route", ConsumerSubjectMath.routeLabel(subject))
+                        .addKeyValue("integration.scope.id", claimed.workspaceId())
+                        .addKeyValue("integration.delivery", claimed.attempt())
                         .addKeyValue("error.type", failure.getClass().getName())
                         .addKeyValue("error.root_type", diagnostic.getClass().getName())
                         .addKeyValue(
@@ -125,16 +84,26 @@ public class IntegrationPoisonHandler {
                                         .map(StackTraceElement::toString)
                                         .toList())
                         .log("Failed event stored for replay");
-                msg.term();
-                poisonCounter(msg).increment();
-                return;
-            } catch (Exception captureOrTermFailure) {
-                log.warn(
-                        "Dead-letter capture or termination failed: error.type={}",
-                        captureOrTermFailure.getClass().getName());
+                poisonCounter(subject).increment();
             }
+            return;
         }
-        nakWithBackoff(msg);
+        retry(claimed, kind == FailureKind.UNKNOWN);
+    }
+
+    /**
+     * Returns the event to its scope's head after a backoff that grows with its attempts. An operational failure
+     * does not spend the poison budget: it retries without a limit.
+     */
+    public void retry(ProviderEventStore.Claimed claimed, boolean counted) {
+        // The attempt is 1-based, so the first retry waits the base delay.
+        long delayMs = exponentialBackoffMillis(
+                claimed.attempt() - 1,
+                properties.poison().baseDelay().toMillis(),
+                properties.poison().maxDelay().toMillis());
+        if (store.retry(claimed.id(), claimed.leaseEpoch(), Duration.ofMillis(delayMs), counted)) {
+            retryCounter(claimed.event().subject()).increment();
+        }
     }
 
     static Throwable diagnosticCause(Throwable failure) {
@@ -194,27 +163,17 @@ public class IntegrationPoisonHandler {
                                 || "0".equals(headers.getFirst("X-RateLimit-Remaining"))));
     }
 
-    static long readDeliveredCount(Message msg) {
-        try {
-            var metadata = msg.metaData();
-            return metadata != null ? metadata.deliveredCount() : 1L;
-        } catch (Exception e) {
-            // Non-JetStream message or detached metadata — treat as first delivery.
-            return 1L;
-        }
-    }
-
-    private Counter nakCounter(Message msg) {
-        String kindTag = kindTag(msg);
-        return nakCounters.computeIfAbsent(
+    private Counter retryCounter(String subject) {
+        String kindTag = kindTag(subject);
+        return retryCounters.computeIfAbsent(
                 kindTag,
-                k -> Counter.builder(IntegrationCoreMetrics.INTEGRATION_CONSUMER_NAK)
+                k -> Counter.builder(IntegrationCoreMetrics.INTEGRATION_CONSUMER_RETRY)
                         .tag("kind", k)
                         .register(meterRegistry));
     }
 
-    private Counter poisonCounter(Message msg) {
-        String kindTag = kindTag(msg);
+    private Counter poisonCounter(String subject) {
+        String kindTag = kindTag(subject);
         return poisonCounters.computeIfAbsent(
                 kindTag,
                 k -> Counter.builder(IntegrationCoreMetrics.INTEGRATION_CONSUMER_POISON)
@@ -229,11 +188,7 @@ public class IntegrationPoisonHandler {
         return ThreadLocalRandom.current().nextLong(Math.max(1, cap / 2), Math.max(2, cap + 1));
     }
 
-    static String kindTag(@Nullable Message msg) {
-        if (msg == null) {
-            return UNKNOWN_KIND_TAG;
-        }
-        String subject = msg.getSubject();
+    static String kindTag(@Nullable String subject) {
         return ConsumerSubjectMath.kindFromSubjectPrefix(subject)
                 .map(k -> k.name().toLowerCase(Locale.ROOT))
                 .orElse(UNKNOWN_KIND_TAG);

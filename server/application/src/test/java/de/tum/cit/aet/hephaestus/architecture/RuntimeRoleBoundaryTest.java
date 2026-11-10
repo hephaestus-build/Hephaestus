@@ -39,11 +39,11 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     "de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(
-                    "de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookConfiguration",
+                    "de.tum.cit.aet.hephaestus.integration.core.webhook.ProviderEventReceiver",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
-                    "de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer",
+                    "de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.workspace.WorkspaceStartupListener", RuntimeRole.SERVER_PROPERTY),
             // Admin surfaces and the services behind them are server-only: a context without the server role does

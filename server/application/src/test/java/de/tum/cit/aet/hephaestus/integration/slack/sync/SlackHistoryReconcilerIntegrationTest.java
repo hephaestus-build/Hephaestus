@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.slack.api.model.Message;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessage;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -112,6 +113,7 @@ class SlackHistoryReconcilerIntegrationTest extends BaseIntegrationTest {
                 threads,
                 mock(SlackRosterIdentityResolver.class),
                 feedbackErasure,
+                mock(ProviderEventStore.class),
                 true,
                 new TransactionTemplate(transactionManager));
         var properties = new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 5, true, 10);

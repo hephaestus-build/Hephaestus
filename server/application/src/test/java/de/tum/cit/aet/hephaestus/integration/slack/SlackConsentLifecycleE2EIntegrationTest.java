@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackMonitoredChannelDTO;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
@@ -208,6 +209,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 threadRepository,
                 roster,
                 conversationFeedbackErasure,
+                mock(ProviderEventStore.class),
                 /* conversationIngestEnabled */ true,
                 new TransactionTemplate(transactionManager));
         consentService = new SlackChannelConsentService(

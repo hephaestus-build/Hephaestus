@@ -9,8 +9,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
@@ -39,7 +37,6 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,8 +53,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
 
     private static final Logger log = LoggerFactory.getLogger(GitHubLifecycleListener.class);
 
-    private final NatsConnectionProperties natsProperties;
-
     private final WorkspaceRepository workspaceRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final RepositoryRepository repositoryRepository;
@@ -68,8 +63,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     private final MembershipService workspaceMembershipService;
     private final PeopleRegistry people;
 
-    private final ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
-
     private final GitHubAppTokenService gitHubAppTokenService;
     private final OrganizationService organizationService;
     private final ConnectionService connectionService;
@@ -79,7 +72,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     private final GitHubInstallationRequests installationRequests;
 
     public GitHubLifecycleListener(
-            NatsConnectionProperties natsProperties,
             WorkspaceRepository workspaceRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             RepositoryRepository repositoryRepository,
@@ -88,7 +80,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             WorkspaceSlugService workspaceSlugService,
             MembershipService workspaceMembershipService,
             PeopleRegistry people,
-            ObjectProvider<IntegrationNatsConsumer> natsConsumerService,
             GitHubAppTokenService gitHubAppTokenService,
             OrganizationService organizationService,
             ConnectionService connectionService,
@@ -96,7 +87,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             IntegrationAttentionService attention,
             ScmWorkspaceContentEraser contentEraser,
             GitHubInstallationRequests installationRequests) {
-        this.natsProperties = natsProperties;
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.repositoryRepository = repositoryRepository;
@@ -105,7 +95,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         this.workspaceSlugService = workspaceSlugService;
         this.workspaceMembershipService = workspaceMembershipService;
         this.people = people;
-        this.natsConsumerService = natsConsumerService;
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.organizationService = organizationService;
         this.connectionService = connectionService;
@@ -410,19 +399,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     }
 
     /**
-     * Used when an installation is unsuspended, to resume webhook processing.
-     *
-     * @param installationId the GitHub App installation ID
-     */
-    public void startNatsForInstallation(long installationId) {
-        workspaceRepository.findByInstallationId(installationId).ifPresent(workspace -> {
-            if (shouldUseNats(workspace)) {
-                natsConsumerService.ifAvailable(svc -> svc.startConsumingScope(workspace.getId()));
-            }
-        });
-    }
-
-    /**
      * Vendor-side uninstall ({@code installation.deleted}) — runs the SAME purge an admin-initiated
      * workspace deletion runs, via {@link WorkspaceLifecycleService#purgeWorkspace(String)}.
      *
@@ -524,11 +500,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             workspace = workspaceRepository.save(workspace);
         }
 
-        if (status == Workspace.WorkspaceStatus.SUSPENDED && shouldUseNats(workspace)) {
-            Long workspaceId = workspace.getId();
-            natsConsumerService.ifAvailable(svc -> svc.stopConsumingScope(workspaceId));
-        }
-
         if (status == Workspace.WorkspaceStatus.SUSPENDED || status == Workspace.WorkspaceStatus.ACTIVE) {
             long workspaceId = workspace.getId();
             connectionService
@@ -601,7 +572,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                             if (oldLogin != null) {
                                 retargetRepositoryMonitors(workspace, oldLogin, newLogin);
                                 renameTrackedRepositories(oldLogin, newLogin);
-                                rotateOrganizationConsumer(workspace, oldLogin, newLogin);
                             }
                         },
                         () -> log.warn(
@@ -645,10 +615,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             monitor.setNameWithOwner(target);
             repositoryToMonitorRepository.save(monitor);
         });
-
-        if (shouldUseNats(workspace)) {
-            natsConsumerService.ifAvailable(svc -> svc.updateScopeConsumer(workspace.getId()));
-        }
     }
 
     private void renameTrackedRepositories(String oldLogin, String newLogin) {
@@ -681,18 +647,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             repository.setHtmlUrl("https://github.com/" + repository.getNameWithOwner());
         });
         repositoryRepository.saveAll(repositories);
-    }
-
-    private void rotateOrganizationConsumer(Workspace workspace, String oldLogin, String newLogin) {
-        if (!natsProperties.enabled()
-                || workspace == null
-                || isBlank(oldLogin)
-                || isBlank(newLogin)
-                || oldLogin.equalsIgnoreCase(newLogin)) {
-            return;
-        }
-
-        natsConsumerService.ifAvailable(svc -> svc.updateScopeConsumer(workspace.getId()));
     }
 
     private Workspace createWorkspace(
@@ -798,10 +752,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"))
                 .getId());
-    }
-
-    private boolean shouldUseNats(@Nullable Workspace workspace) {
-        return natsProperties.enabled() && workspace != null;
     }
 
     private boolean isBlank(@Nullable String value) {

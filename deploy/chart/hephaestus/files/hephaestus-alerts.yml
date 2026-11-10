@@ -63,15 +63,15 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: An integration event was stored for administrator replay
+          summary: An integration event became a dead letter for administrator replay
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # A handler that outlived the handler timeout gave its event back to the stream; it retries like a failure.
+      # A handler that outlived the handler timeout gave its event back to the inbox; it retries like a failure.
       - alert: HephaestusConsumerHandlerTimedOut
         expr: sum by (kind) (increase(integration_message_process_duration_seconds_count{job="hephaestus",outcome="timed_out"}[10m])) > 0
         labels:
           severity: warning
         annotations:
-          summary: An integration event outlived the handler timeout and returned to its stream
+          summary: An integration event outlived the handler timeout and returned to the inbox
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A publication that its listener can never complete is retried every five minutes without a limit.
       - alert: HephaestusEventPublicationsOverdue
@@ -106,7 +106,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Delivery inbox cleanup failed more than once in 24 hours
+          summary: Provider event inbox cleanup failed more than once in 24 hours
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # Each count is one statement that read a workspace's table without binding the workspace. In throw mode the
       # server refused it, so its request or job failed. One count is a defect, so the alert has no threshold.
@@ -124,52 +124,30 @@ groups:
           summary: A database statement on {{ $labels.table }} did not stay in one workspace ({{ $labels.mode }} mode)
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusConsumerRetryStalled
-        expr: sum by (kind) (increase(integration_consumer_nak_total{job="hephaestus"}[10m])) > 0
+        expr: sum by (kind) (increase(integration_consumer_retry_total{job="hephaestus"}[10m])) > 0
         for: 15m
         labels:
           severity: warning
         annotations:
           summary: Integration events kept retrying for 15 minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusStreamPollStale
-        expr: >-
-          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="server"} > 180
-          or webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="server"}
-          != webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="server"}
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: Webhook stream gauges are stale or have never been refreshed
-          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusStreamPollMissing
-        expr: >-
-          up{job="hephaestus",runtime_role="server"} == 1
-          unless on (job, instance)
-          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="server"}
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: A scraped webhook receiver exports no stream poll age
-          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusStreamBacklog
-        expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="server"}) > 50
+      # The claim takes the oldest due event whose scope is free, so a due event that keeps waiting means that no server
+      # claims, or that a handler holds its scope. A suspended workspace's events are not due for the claim but count
+      # here, so a long suspension also fires.
+      - alert: HephaestusProviderEventsWaiting
+        expr: max by (provider) (integration_consumer_oldest_due_seconds{job="hephaestus"}) > 300
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: More than 50 events of a stream stayed undelivered to the consumers for 15 minutes
+          summary: A provider's oldest due event waited more than 5 minutes for 15 minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusWebhookStreamPastAgeBound
-        expr: >-
-          max by (stream) (webhook_stream_oldest_message_age_seconds{job="hephaestus",runtime_role="server"})
-          > 1.1 * max by (stream) (webhook_stream_age_bound_seconds{job="hephaestus",runtime_role="server"})
-        for: 1h
+      - alert: HephaestusProviderEventBacklogUnsampled
+        expr: sum(increase(integration_consumer_backlog_sampler_failures_total{job="hephaestus"}[15m])) > 10
         labels:
           severity: warning
         annotations:
-          summary: A webhook stream holds deliveries past its age bound; a shorter bound has not taken effect
+          summary: The provider event backlog gauges failed to refresh for 15 minutes and show old values
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A wait is measured when the event is handled. A catch-up after a restart ends inside the short window and
       # the hold, so only a consumer that stays behind fires.
@@ -185,32 +163,13 @@ groups:
         annotations:
           summary: More than 10 % of a provider's events kept waiting over 5 minutes for 15 minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusStreamConsumerStopped
-        expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="server"}) > 0
-        for: 6h
-        labels:
-          severity: warning
-        annotations:
-          summary: A stream kept undelivered events for 6 hours; a consumer that stays stopped past its retention loses them
-          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusWebhookRetentionBelowAgeBound
-        expr: >-
-          max by (stream) (webhook_stream_oldest_message_age_seconds{job="hephaestus",runtime_role="server"})
-          < 0.9 * max by (stream) (webhook_stream_age_bound_seconds{job="hephaestus",runtime_role="server"})
-          and max by (stream) (webhook_stream_bytes_utilization{job="hephaestus",runtime_role="server"}) > 0.9
-        for: 1h
-        labels:
-          severity: warning
-        annotations:
-          summary: A webhook stream sheds deliveries at its byte bound before its age bound; it keeps less than it promises
-          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookPublishFailing
         expr: sum(increase(webhook_publish_total{job="hephaestus",outcome="failure"}[10m])) > 0
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: The webhook receiver cannot store deliveries on the broker
+          summary: The server cannot store deliveries in the provider event inbox
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookReceiverBusy
         expr: sum(increase(webhook_rejected_total{job="hephaestus",reason="busy"}[10m])) > 0

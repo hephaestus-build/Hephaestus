@@ -20,6 +20,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.StoredEventHandling;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -30,7 +32,6 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.InboxTestMessages;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
@@ -104,6 +105,9 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
     @Autowired
     private DeliveryInbox inbox;
 
+    @Autowired
+    private ProviderEventStore eventStore;
+
     private SlackWorkspaceResolver workspaceResolver;
     private SlackRosterIdentityResolver identityResolver;
     private SlackIngestService ingestService;
@@ -149,12 +153,13 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                 threadRepository,
                 identityResolver,
                 conversationFeedbackErasure,
+                mock(ProviderEventStore.class),
                 /* conversationIngestEnabled */ true,
                 new TransactionTemplate(transactionManager));
     }
 
     @Test
-    void shouldFinishAnEditAfterItsBaseInsertCommittedAndSkipCompletedRedelivery() {
+    void shouldFinishAnEditAfterItsBaseInsertCommittedAndRecordBothSteps() {
         var faultingMessages = mock(SlackMessageRepository.class, delegatesTo(messageRepository));
         Instant editedAt = Instant.ofEpochSecond(201);
         doThrow(new IllegalStateException("edit transaction failed"))
@@ -162,10 +167,10 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                 .applyEdit(workspaceId, CHANNEL, "200.1", "edited body", editedAt);
         var interrupted = service(faultingMessages);
         var edit = new SlackIngestService.Edit("200.1", null, ALLOWED_USER, "edited body", "201.0");
-        var delivery = InboxTestMessages.delivery("slack-edit-" + UUID.randomUUID(), 1, Instant.now());
+        long delivery = StoredEventHandling.stored(eventStore, jdbcTemplate, workspaceId, "slack.T1.C1.message");
 
-        assertThatThrownBy(
-                        () -> inbox.dispatch(workspaceId, delivery, () -> interrupted.editMessage(TEAM, CHANNEL, edit)))
+        assertThatThrownBy(() ->
+                        inbox.dispatch(delivery, Instant.now(), () -> interrupted.editMessage(TEAM, CHANNEL, edit)))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "200.1"))
                 .isTrue();
@@ -177,7 +182,7 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                         "200.1"))
                 .isNull();
 
-        inbox.dispatch(workspaceId, delivery, () -> ingestService.editMessage(TEAM, CHANNEL, edit));
+        inbox.dispatch(delivery, Instant.now(), () -> ingestService.editMessage(TEAM, CHANNEL, edit));
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT edited_at FROM slack_message WHERE workspace_id = ? AND slack_channel_id = ? AND slack_ts = ?",
                         Timestamp.class,
@@ -186,15 +191,9 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                         "200.1"))
                 .isEqualTo(Timestamp.from(editedAt));
         verify(identityResolver, times(1)).humanAccountId(workspaceId, TEAM, ALLOWED_USER, "A person");
-        inbox.dispatch(workspaceId, delivery, () -> {
-            throw new AssertionError("A completed edit must skip handler preparation");
-        });
         assertThat(jdbcTemplate.queryForList(
-                        "SELECT step_name FROM consumer_inbox_step WHERE workspace_id = ? AND consumer_name = ?",
-                        String.class,
-                        workspaceId,
-                        delivery.metaData().getConsumer()))
-                .containsExactlyInAnyOrder("slack.message.ingest", "slack.message.edit", "complete");
+                        "SELECT step_name FROM provider_event_step WHERE event_id = ?", String.class, delivery))
+                .containsExactlyInAnyOrder("slack.message.ingest", "slack.message.edit");
     }
 
     @Test

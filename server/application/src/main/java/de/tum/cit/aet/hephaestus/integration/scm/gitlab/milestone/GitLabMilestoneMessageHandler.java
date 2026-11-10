@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.milestone;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventAction;
@@ -42,7 +42,7 @@ public class GitLabMilestoneMessageHandler extends AbstractIntegrationMessageHan
     GitLabMilestoneMessageHandler(
             GitLabMilestoneProcessor milestoneProcessor,
             GitLabWebhookContextResolver contextResolver,
-            NatsMessageDeserializer deserializer,
+            EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
                 IntegrationKind.GITLAB,

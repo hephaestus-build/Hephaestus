@@ -360,37 +360,22 @@ Use a network plugin that encrypts traffic between nodes, for example WireGuard 
 | Data | Bound | Setting |
 | --- | --- | --- |
 | PostgreSQL | Volume size | `postgresql.persistence.size` |
-| JetStream | Broker `max_file` and stream storage budget | `nats.jetstream.maxFileBytes` |
+| JetStream | Broker `max_file` | `nats.jetstream.maxFileBytes` |
 | JetStream volume | `max_file` plus 25 % | Derived from `nats.jetstream.maxFileBytes` |
-| Webhook streams | Age and size for each stream, and one start that may delete stored messages to apply a smaller bound | `webhook.stream.*` |
-| Server Git mirrors | `emptyDir` size limit on the node | `server.gitCache.sizeLimit` |
-| Server Git mirrors | `emptyDir` size limit on the node, per server | `server.gitCache.sizeLimit` |
+| Provider event inbox | 3 days for handled events, 30 days for dead letters | `hephaestus.integration.consumer.replay-window`, `dead-retention` |
+| Server Git mirrors and review clones | `emptyDir` size limit on the node, per server | `server.gitCache.sizeLimit` |
 | AI spend ledger | Retention | `config.llmUsageRetention` |
 | Conversations, feedback and practice results | Retention | `config.feedbackRetention` |
 | Temporary files | `emptyDir` size limit | Fixed in the templates |
 
-One value sets both the broker `max_file` and the server's stream storage budget.
-The server refuses to start when the stream bounds add up to more than that budget.
+The provider event inbox is in PostgreSQL, so `postgresql.persistence.size` also holds the webhook deliveries of its retention.
 [Webhook ingestion operations](./webhook-ingestion-operations) gives the durability guarantee.
 
-The `small.yaml` profile sets GitHub to 6 GiB and each GitLab, Slack and Outline stream to 512 MiB.
-GitHub and GitLab keep deliveries for the shorter of seven days and what the byte bound holds. Slack and Outline keep them for 72 hours at most, because they carry personal content that an erasure request cannot reach in a stream. The byte bounds total 7.5 GiB.
-These bounds count uncompressed bytes, so compression lowers the disk use but does not lengthen the retention.
-
-The broker file budget is 8 GiB. A fresh bundled broker claims 10 GiB, including the 25 % storage allowance.
-
-The server keeps an inactive durable consumer for 30 days.
-
-A byte bound can remove messages before seven days. Measure peak traffic before you select these bounds.
+The broker file budget of the `small.yaml` profile is 8 GiB. A fresh bundled broker claims 10 GiB, including the 25 % storage allowance.
 
 For an existing installation, keep its current `nats.jetstream.maxFileBytes` in your site values before you apply this profile.
 Do not shrink an existing PVC or change the StatefulSet claim template to adopt the smaller broker budget.
 Do not lower the broker budget below its stored data.
-
-Before you shorten stream limits, verify an off-host backup and test its restore.
-Then use the [guarded stream-limit procedure](./webhook-ingestion-operations#changing-a-bound-on-a-stream-that-already-exists).
-A higher limit cannot recover deleted messages.
-The server updates expiry only on durables it uses. Review orphan durables separately before you change or delete them.
 
 The Git mirrors are caches.
 A restarted server or server clones them again, so they use node storage and no volume claim.

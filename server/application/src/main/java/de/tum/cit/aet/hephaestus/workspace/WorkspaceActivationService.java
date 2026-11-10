@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceDataSyncTrigger;
@@ -17,7 +15,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
@@ -31,14 +28,10 @@ public class WorkspaceActivationService {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceActivationService.class);
 
-    private final NatsConnectionProperties natsProperties;
     private final SyncSchedulerProperties syncSchedulerProperties;
 
     private final WorkspaceRepository workspaceRepository;
 
-    // natsConsumerService is absent under the webhook profile (server.enabled=false);
-    // activation paths that need it are themselves server-only.
-    private final ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
     private final ConnectionService connectionService;
 
@@ -52,18 +45,14 @@ public class WorkspaceActivationService {
     private final AsyncTaskExecutor monitoringExecutor;
 
     public WorkspaceActivationService(
-            NatsConnectionProperties natsProperties,
             SyncSchedulerProperties syncSchedulerProperties,
             WorkspaceRepository workspaceRepository,
-            ObjectProvider<IntegrationNatsConsumer> natsConsumerService,
             WorkspaceScopeFilter workspaceScopeFilter,
             ConnectionService connectionService,
             List<WorkspaceDataSyncTrigger> dataSyncTriggerList,
             @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor) {
-        this.natsProperties = natsProperties;
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.workspaceRepository = workspaceRepository;
-        this.natsConsumerService = natsConsumerService;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.connectionService = connectionService;
         Map<IntegrationKind, WorkspaceDataSyncTrigger> map = new EnumMap<>(IntegrationKind.class);
@@ -201,10 +190,6 @@ public class WorkspaceActivationService {
             return;
         }
 
-        if (shouldUseNats(workspace)) {
-            natsConsumerService.ifAvailable(svc -> svc.startConsumingScope(workspace.getId()));
-        }
-
         boolean fullSync = syncSchedulerProperties.runOnStartup();
         log.info("Starting monitoring on startup: workspaceId={}, fullSync={}", workspace.getId(), fullSync);
 
@@ -238,9 +223,5 @@ public class WorkspaceActivationService {
         } finally {
             WorkspaceContextHolder.clearContext();
         }
-    }
-
-    private boolean shouldUseNats(Workspace workspace) {
-        return natsProperties.enabled() && workspace != null;
     }
 }

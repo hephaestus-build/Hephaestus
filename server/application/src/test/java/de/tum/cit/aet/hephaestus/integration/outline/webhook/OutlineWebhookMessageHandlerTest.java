@@ -17,11 +17,10 @@ import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.OutlineSubscription;
 import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineDocumentModel;
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
-import io.nats.client.impl.Headers;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.Set;
@@ -60,17 +59,17 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
                 new OutlineOriginPolicy(Set.of("https://wiki.example.com")));
     }
 
-    private static Message message(String subscriptionId, String event, @Nullable String payloadId) {
+    private static ProviderEvent message(String subscriptionId, String event, @Nullable String payloadId) {
         return message(subscriptionId, event, payloadId, null, null);
     }
 
-    private static Message message(
+    private static ProviderEvent message(
             String subscriptionId,
             String event,
             @Nullable String payloadId,
             @Nullable String actorId,
             @Nullable String createdAt) {
-        Message msg = routedMessage(ROUTE);
+        ProviderEvent msg = routedMessage(ROUTE);
         String payload = payloadId == null ? "{}" : "{\"id\":\"" + payloadId + "\"}";
         StringBuilder body = new StringBuilder("{\"webhookSubscriptionId\":\"")
                 .append(subscriptionId)
@@ -84,14 +83,14 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
             body.append(",\"createdAt\":\"").append(createdAt).append("\"");
         }
         body.append(",\"payload\":").append(payload).append("}");
-        when(msg.getData()).thenReturn(body.toString().getBytes(StandardCharsets.UTF_8));
+        when(msg.payload()).thenReturn(body.toString().getBytes(StandardCharsets.UTF_8));
         return msg;
     }
 
     /** A message the receiver published from a delivery verified on {@code route}. */
-    private static Message routedMessage(String route) {
-        Message msg = mock(Message.class);
-        lenient().when(msg.getHeaders()).thenReturn(new Headers().add(OutlineWebhookController.HEADER_ROUTE, route));
+    private static ProviderEvent routedMessage(String route) {
+        ProviderEvent msg = mock(ProviderEvent.class);
+        lenient().when(msg.header(OutlineWebhookController.HEADER_ROUTE)).thenReturn(route);
         return msg;
     }
 
@@ -197,8 +196,8 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     @ParameterizedTest(name = "malformed body [{index}] becomes a replayable parsing failure")
     @MethodSource("malformedBodies")
     void shouldRejectMalformedBodyForDurableCapture(byte[] body) {
-        Message msg = routedMessage(ROUTE);
-        when(msg.getData()).thenReturn(body);
+        ProviderEvent msg = routedMessage(ROUTE);
+        when(msg.payload()).thenReturn(body);
 
         assertThatThrownBy(() -> handler().onMessage(msg)).isInstanceOf(PayloadParsingException.class);
 
@@ -210,10 +209,10 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         // payload.model is a JSON string, not the expected object — parseModel's field lookups on a
         // scalar node must degrade to "no usable model", not throw.
         resolves("sub-1", 42L);
-        Message msg = routedMessage(ROUTE);
+        ProviderEvent msg = routedMessage(ROUTE);
         String body = "{\"webhookSubscriptionId\":\"sub-1\",\"event\":\"documents.update\","
                 + "\"payload\":{\"id\":\"doc-9\",\"model\":\"not-an-object\"}}";
-        when(msg.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
+        when(msg.payload()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
 
         handler().onMessage(msg);
 
@@ -223,11 +222,11 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     @Test
     void documentEventWithUsableModel_passesItThrough() {
         resolves("sub-1", 42L);
-        Message msg = routedMessage(ROUTE);
+        ProviderEvent msg = routedMessage(ROUTE);
         String body = "{\"webhookSubscriptionId\":\"sub-1\",\"event\":\"documents.update\","
                 + "\"payload\":{\"id\":\"doc-9\",\"model\":{\"id\":\"doc-9\",\"collectionId\":\"col-1\","
                 + "\"title\":\"Doc\",\"url\":\"/doc/doc-9\"}}}";
-        when(msg.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
+        when(msg.payload()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
 
         handler().onMessage(msg);
 
@@ -242,10 +241,10 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     @Test
     void documentEventWithModelMissingCollectionId_fallsBackToNull() {
         resolves("sub-1", 42L);
-        Message msg = routedMessage(ROUTE);
+        ProviderEvent msg = routedMessage(ROUTE);
         String body = "{\"webhookSubscriptionId\":\"sub-1\",\"event\":\"documents.update\","
                 + "\"payload\":{\"id\":\"doc-9\",\"model\":{\"id\":\"doc-9\",\"title\":\"Doc\"}}}";
-        when(msg.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
+        when(msg.payload()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
 
         handler().onMessage(msg);
 

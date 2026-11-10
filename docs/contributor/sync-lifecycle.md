@@ -268,11 +268,11 @@ the seconds between a reviewer change and the next read.
 
 Two gaps remain. A provider that delivers a
 webhook late, or retries a failed delivery, dates it by its arrival, not by when the provider sent
-it. And a provider's redelivery that reaches the receiver after `hephaestus.webhook.stream.duplicate-window`
-(3 hours by default) is a new message with a new date. Either can restate an old list over a sync
+it. A redelivery of a delivery that the inbox stored adds no event, but the redelivery of a failed
+delivery is the first copy, dated by its arrival. It can restate an old list over a sync
 page read in between, until the next sync reads the list again.
 `GitHubWebhookRedelivery` asks GitHub to redeliver failed deliveries for up to two hours after the original.
-Thus, after a broker stall, a late copy is a normal event, not a rare one.
+Thus, after a database stall, a late copy is a normal event, not a rare one.
 
 GitLab's webhooks state each reviewer's review from 18.6
 ([`reviewers_hook_attrs`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/models/concerns/issuable.rb#L589-597)). Before, they name

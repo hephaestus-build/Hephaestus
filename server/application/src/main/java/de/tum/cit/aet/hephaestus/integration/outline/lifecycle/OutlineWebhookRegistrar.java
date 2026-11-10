@@ -7,11 +7,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import de.tum.cit.aet.hephaestus.integration.core.webhook.ProjectedKeys;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineWebhookSubscription;
 import de.tum.cit.aet.hephaestus.integration.outline.metrics.OutlineMetrics;
@@ -44,11 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Best-effort and never throws: without a routing key or token, or on any Outline-side failure, the
  * periodic reconcile remains the source of truth and a missing subscription only costs freshness.
  *
- * <p>The single seam through which a subscription id changes. The workspace's {@code NatsSubscriptionProvider}
- * derives the {@code outline} subject from that id, so every change must be followed by a scope-consumer
- * reconcile — otherwise the running consumer keeps filtering on a stale subject and the workspace receives no
- * deliveries until the next restart. {@link #reconcileScopeConsumer} therefore runs from every branch that
- * changes the id, never from the early no-op returns.
+ * <p>The single seam through which a subscription id changes. The receiver reads the id from the connection when a
+ * delivery arrives, so a stored id takes effect with the delivery after its commit.
  */
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.outline.enabled", havingValue = "true", matchIfMissing = false)
@@ -65,11 +60,6 @@ public class OutlineWebhookRegistrar {
     private final PublicApiUrls publicApiUrls;
 
     /** Absent when {@code hephaestus.sync.nats.enabled=false}, so every use goes through {@link ObjectProvider#ifAvailable}. */
-    private final ObjectProvider<IntegrationNatsConsumer> natsConsumer;
-
-    /** Absent without NATS or off the server role; then no receiver reads routes either. */
-    private final ObjectProvider<OutlineRouteProjection> routes;
-
     private final ConnectionRepository connections;
 
     private final ClusterLock locks;
@@ -87,8 +77,6 @@ public class OutlineWebhookRegistrar {
             OutlineWebhookClient outlineApiClient,
             OutlineRouteCredential credential,
             PublicApiUrls publicApiUrls,
-            ObjectProvider<IntegrationNatsConsumer> natsConsumer,
-            ObjectProvider<OutlineRouteProjection> routes,
             ConnectionRepository connections,
             ClusterLock locks,
             MeterRegistry meterRegistry) {
@@ -96,8 +84,6 @@ public class OutlineWebhookRegistrar {
         this.outlineApiClient = outlineApiClient;
         this.credential = credential;
         this.publicApiUrls = publicApiUrls;
-        this.natsConsumer = natsConsumer;
-        this.routes = routes;
         this.connections = connections;
         this.locks = locks;
         this.failedDeletions = Counter.builder(OutlineMetrics.OUTLINE_WEBHOOK_SUBSCRIPTION_DELETION_FAILED)
@@ -138,20 +124,6 @@ public class OutlineWebhookRegistrar {
             left++;
         }
         unrouted.set(left);
-    }
-
-    /**
-     * Brings the workspace's scope consumer in line with the subscription id this class just stored or
-     * invalidated. {@code startConsumingScope} no-ops once the scope already has consumers (the common
-     * case: an SCM stream is already running) and {@code updateScopeConsumer} no-ops when the scope has
-     * none yet (the rare case: Outline is the workspace's first-ever integration) — calling both in
-     * sequence therefore reconciles every state without duplicating work in either.
-     */
-    private void reconcileScopeConsumer(long workspaceId) {
-        natsConsumer.ifAvailable(consumer -> {
-            consumer.startConsumingScope(workspaceId);
-            consumer.updateScopeConsumer(workspaceId);
-        });
     }
 
     /**
@@ -204,8 +176,6 @@ public class OutlineWebhookRegistrar {
             if (storedRoute != null && credential.isCurrent(storedRoute)) {
                 Boolean healthy = isSubscriptionHealthy(serverUrl, token, storedId, deliveryUrl(storedRoute));
                 if (healthy == null || healthy) {
-                    // A reactivated connection's route left the projection while it was not ACTIVE.
-                    allowQuietly(storedRoute);
                     return; // healthy, or unverifiable — don't churn a subscription we cannot see
                 }
             }
@@ -248,14 +218,12 @@ public class OutlineWebhookRegistrar {
 
     /** Registers a subscription on a new route and stores it; {@code false} when Outline did not register one. */
     private boolean register(long workspaceId, String serverUrl, String token) {
-        // Deliveries land on the receiver's route endpoint, are verified against the route's derived secret,
-        // and are published to the durable `outline` stream (ADR 0023 §3, ADR 0066).
+        // Deliveries land on the receiver's route endpoint, are verified against the route's derived secret, and are
+        // stored in the provider event inbox (ADR 0023 §3).
         OutlineRouteCredential.Issued route = credential.issue();
         String deliveryUrl = deliveryUrl(route.route());
         String subscriptionId = null;
         try {
-            // Allowed first: the receiver refuses a route it does not know, and Outline may deliver at once.
-            routes.ifAvailable(projection -> projection.allow(route.route()));
             subscriptionId = outlineApiClient.createWebhookSubscription(
                     serverUrl,
                     token,
@@ -287,7 +255,6 @@ public class OutlineWebhookRegistrar {
             log.info("outline.webhook: registered subscription {} for workspaceId={}", subscriptionId, workspaceId);
             // The subject the scope consumer filters on is derived from this id — reconcile now instead of
             // waiting for a restart (fresh register) or the next 6h reconcile (self-heal re-register).
-            reconcileScopeConsumer(workspaceId);
             return true;
         } catch (RuntimeException e) {
             // Best-effort: the periodic reconcile still keeps the mirror fresh without a subscription.
@@ -300,17 +267,6 @@ public class OutlineWebhookRegistrar {
                 deleteQuietly(serverUrl, token, subscriptionId);
             }
             return false;
-        }
-    }
-
-    private void allowQuietly(String route) {
-        try {
-            routes.ifAvailable(projection -> projection.allow(route));
-        } catch (ProjectedKeys.UnavailableException e) {
-            log.warn(
-                    "outline.webhook: could not project route; the next rebuild adds it: bucket={}, cause={}",
-                    e.bucket(),
-                    e.causeClass());
         }
     }
 
@@ -364,9 +320,7 @@ public class OutlineWebhookRegistrar {
                     e.getClass().getSimpleName());
             hadSubscription = true;
         }
-        if (hadSubscription) {
-            reconcileScopeConsumer(workspaceId);
-        }
+        if (hadSubscription) {}
     }
 
     /**

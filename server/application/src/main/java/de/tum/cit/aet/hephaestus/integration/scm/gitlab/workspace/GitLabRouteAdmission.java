@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.RouteAdmission;
 import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -32,8 +33,6 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
-import io.nats.client.Message;
-import io.nats.client.impl.Headers;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -178,8 +177,8 @@ public class GitLabRouteAdmission implements RouteAdmission {
     }
 
     @Override
-    public boolean admit(@Nullable Long scopeId, Message msg, Runnable handling) {
-        Optional<GitLabRouteCredential.Route> claims = claims(msg);
+    public boolean admit(@Nullable Long scopeId, ProviderEvent event, Runnable handling) {
+        Optional<GitLabRouteCredential.Route> claims = claims(event);
         if (claims.isEmpty()) {
             log.warn("Skipped GitLab delivery: reason=malformedRoute");
             return false;
@@ -190,7 +189,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
         }
         JsonNode payload;
         try {
-            payload = objectMapper.readTree(msg.getData());
+            payload = objectMapper.readTree(event.payload());
         } catch (JacksonException failure) {
             throw new PayloadParsingException("GitLab webhook payload cannot be parsed", failure);
         }
@@ -576,21 +575,16 @@ public class GitLabRouteAdmission implements RouteAdmission {
     }
 
     /** The route the receiver verified, from the subject it published on and the headers it wrote. */
-    private static Optional<GitLabRouteCredential.Route> claims(Message msg) {
-        String subject = msg.getSubject();
-        Headers headers = msg.getHeaders();
-        if (subject == null || headers == null) {
-            return Optional.empty();
-        }
+    private static Optional<GitLabRouteCredential.Route> claims(ProviderEvent event) {
+        String subject = event.subject();
         String[] tokens = subject.split("\\.", -1);
         try {
             long connectionId = Long.parseLong(tokens[2]);
             long workspaceId =
-                    Long.parseLong(Objects.requireNonNull(headers.getFirst(GitLabRouteCredential.HEADER_WORKSPACE)));
-            long groupId =
-                    Long.parseLong(Objects.requireNonNull(headers.getFirst(GitLabRouteCredential.HEADER_GROUP_ID)));
-            String origin = Objects.requireNonNull(headers.getFirst(GitLabRouteCredential.HEADER_ORIGIN));
-            String groupPath = Objects.requireNonNull(headers.getFirst(GitLabRouteCredential.HEADER_GROUP_PATH));
+                    Long.parseLong(Objects.requireNonNull(event.header(GitLabRouteCredential.HEADER_WORKSPACE)));
+            long groupId = Long.parseLong(Objects.requireNonNull(event.header(GitLabRouteCredential.HEADER_GROUP_ID)));
+            String origin = Objects.requireNonNull(event.header(GitLabRouteCredential.HEADER_ORIGIN));
+            String groupPath = Objects.requireNonNull(event.header(GitLabRouteCredential.HEADER_GROUP_PATH));
             return Optional.of(new GitLabRouteCredential.Route(connectionId, workspaceId, origin, groupId, groupPath));
         } catch (RuntimeException e) {
             return Optional.empty();

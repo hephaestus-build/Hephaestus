@@ -12,8 +12,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -49,7 +47,6 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -542,11 +539,6 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 organizationRepository,
                 monitorRepository,
                 repositoryRepository,
-                new NatsConnectionProperties(
-                        false,
-                        "nats://localhost:4222",
-                        null,
-                        new NatsConnectionProperties.Consumer(Duration.ofSeconds(60))),
                 new SyncSchedulerProperties(
                         true,
                         7,
@@ -554,7 +546,6 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                         cooldownMinutes,
                         new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
                         new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of())),
-                absent.getBeanProvider(IntegrationNatsConsumer.class),
                 syncTargetProvider,
                 services,
                 absent.getBeanProvider(GitLabWebhookService.class),

@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelJoinNoticeHandler;
 import java.time.Clock;
 import java.time.Duration;
@@ -21,7 +21,7 @@ public class SlackMemberJoinedChannelMessageHandler extends AbstractSlackEnvelop
     private final Clock clock;
 
     public SlackMemberJoinedChannelMessageHandler(
-            SlackChannelJoinNoticeHandler joinNoticeHandler, NatsMessageDeserializer deserializer) {
+            SlackChannelJoinNoticeHandler joinNoticeHandler, EventPayloadDeserializer deserializer) {
         super("member_joined_channel", deserializer);
         this.joinNoticeHandler = joinNoticeHandler;
         this.clock = Clock.systemUTC();

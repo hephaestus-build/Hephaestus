@@ -11,7 +11,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
@@ -22,7 +24,6 @@ import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver
 import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Optional;
@@ -84,10 +85,11 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                 threadRepository,
                 identityResolver,
                 conversationFeedbackErasure,
+                mock(ProviderEventStore.class),
                 true, // conversation-ingest capability on
                 new TransactionTemplate(mock(PlatformTransactionManager.class)));
-        NatsMessageDeserializer deserializer =
-                new NatsMessageDeserializer(JsonMapper.builder().build());
+        EventPayloadDeserializer deserializer =
+                new EventPayloadDeserializer(JsonMapper.builder().build());
         TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
         lenient()
                 .doAnswer(invocation -> {
@@ -112,10 +114,11 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                 threadRepository,
                 identityResolver,
                 conversationFeedbackErasure,
+                mock(ProviderEventStore.class),
                 false, // conversation-ingest capability OFF
                 new TransactionTemplate(mock(PlatformTransactionManager.class)));
-        NatsMessageDeserializer deserializer =
-                new NatsMessageDeserializer(JsonMapper.builder().build());
+        EventPayloadDeserializer deserializer =
+                new EventPayloadDeserializer(JsonMapper.builder().build());
         TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
         lenient()
                 .doAnswer(invocation -> {
@@ -129,10 +132,10 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         return new SlackChannelMessageHandler(ingestService, deserializer, transactionTemplate);
     }
 
-    private static Message natsMessage(String body) {
-        Message m = mock(Message.class);
-        when(m.getSubject()).thenReturn("slack.T1.C1.message");
-        when(m.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
+    private static ProviderEvent natsMessage(String body) {
+        ProviderEvent m = mock(ProviderEvent.class);
+        when(m.subject()).thenReturn("slack.T1.C1.message");
+        when(m.payload()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
         return m;
     }
 

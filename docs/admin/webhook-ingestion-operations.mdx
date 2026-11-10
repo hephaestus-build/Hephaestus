@@ -1,13 +1,14 @@
 ---
+id: webhook-ingestion-operations
 title: Webhook ingestion operations
-description: Metrics, storage bounds, and recovery for the webhook receiver and its JetStream streams.
+description: Metrics, retention, and recovery for the webhook receiver and its provider event inbox.
 page_type: reference
 ---
 
-The server receives provider webhooks.
-It buffers all deliveries on NATS JetStream before anything else reads them.
+The server receives webhooks.
+It stores each verified delivery in the provider event inbox, a PostgreSQL table, before it answers.
 This page explains what to monitor, configure, and do after a failure.
-[Runtime roles](./runtime-roles) describes the server and its restart behavior.
+[Ingest durability](/contributor/ingest-durability#the-database-inbox) explains the design.
 
 GitHub counts a delivery as failed when the receiver answers with an error or takes longer than 10 seconds.
 It never retries a failed delivery on its own, but it keeps deliveries from the past three days and can [redeliver](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks) them.
@@ -15,58 +16,30 @@ Hephaestus asks GitHub to redeliver failed deliveries of its GitHub App automati
 Hephaestus does not redeliver GitLab, Slack and Outline deliveries that the receiver did not accept.
 The reconciliation sync recovers their effect over `SYNC_TIMEFRAME_DAYS` days.
 
-## Durability and availability
+## What the receiver stores
 
-The supported chart topology runs one NATS server and every webhook stream has one replica (R1).
-The bundled broker sets `sync_interval: always`, so it calls `fsync` for each message before
-acknowledging it. An acknowledged webhook or integration-sync event therefore survives host power
-loss or an unclean shutdown, provided the storage stack honors `fsync`. The
-[NATS durability documentation](https://docs.nats.io/nats-concepts/jetstream#syncing-data-to-disk)
-defines this guarantee. [Jepsen's NATS 2.12.1 analysis](https://jepsen.io/analyses/nats-2.12.1)
-shows the acknowledged-write loss possible with periodic syncing.
+The receiver verifies a delivery, then stores one event for each workspace whose subscription matches it, in one transaction.
+It reads the subscriptions in that transaction.
+A workspace that starts to monitor a repository therefore gets every event that the receiver stores after the change commits.
+A GitHub App installation event also gets one event with no workspace, because it can create the workspace.
+The receiver answers `202` only after the transaction commits.
+If PostgreSQL does not commit within 2 seconds, the receiver answers `503`. Each statement of the transaction stops after 1.5 seconds.
+The receiver thus answers inside Slack's 3-second window, also while the database pool is exhausted.
+A transaction that still commits after a `503` is harmless: the provider's retry or redelivery adds no event.
 
-Waiting for durable storage costs write throughput and latency. R1 remains unavailable while its
-only server is down, and cannot survive loss or corruption of its only JetStream volume.
-
-A clustered profile with three servers and R3 streams can remain available after one server fails,
-as described by [NATS replicated storage](https://docs.nats.io/nats-concepts/jetstream/replication).
-That profile may use a longer sync interval after an assessment of its failure model and latency budget.
-Keep `always` to protect acknowledgments from a correlated, unclean shutdown of the whole cluster.
-
-## While the broker is slow
-
-The receiver answers `202` only after JetStream acknowledges the delivery.
-If the broker does not acknowledge in time, the receiver answers `503`.
-It never accepts a delivery that it has not stored.
-
-- The receiver waits up to `hephaestus.webhook.publish.deadline` (8 seconds by default) for the acknowledgment.
-  The deadline ends before the 10-second response window of GitHub and GitLab.
-  After that window, the provider has already failed the delivery, and another attempt only holds a request thread.
-  Outline stops waiting after 5 seconds: a delivery stored later is kept, but Outline records a failure.
-  Slack deliveries wait 2 seconds, inside Slack's 3-second window.
-- Within the deadline, the receiver publishes again in two cases.
-  The client stopped waiting for an acknowledgment, which it does after 5 to 10 seconds.
-  Or the broker refused at once, for example with no responders or a dropped connection.
-  In that case, the receiver first waits a short backoff.
-  Each attempt carries the same `Nats-Msg-Id`.
-  If an earlier attempt was stored late, the broker answers the next one as a duplicate, and the receiver answers `202`.
-- A stream that refuses the message (for example, a full stream) is not retried.
+- A delivery that arrives again with the same identifier adds no event.
+  GitHub uses `X-GitHub-Delivery`, Slack its `event_id`, and GitLab a hash of the body, the event UUID and the event kind for each connection.
+- Each `503` has a log record with `event.name=webhook.publish.failed` and `webhook.publish.reason=store-failed`.
 - What each provider does after a `503` is in [Which providers deliver again](#which-providers-deliver-again).
-- Each `503` has a log record with `event.name=webhook.publish.failed`.
-  `webhook.publish.reason` names the cause and `webhook.publish.attempts` the attempts.
-  The causes are `timeout`, `no_responders`, `connection`, `connection_closed`, `stream_full`, `rejected` and `interrupted`.
-- The receiver's health check reads only the state of the NATS connection.
-  It makes no request to the broker, so it stays fast while the broker is slow.
-  The stream gauges below report a broker that does not answer.
 
-Slow storage under the broker is the usual cause.
-The bundled broker calls `fsync` for each message, so every publish waits for the disk.
-Give the JetStream volume storage that is not shared with a busy database or container runtime.
-See [Troubleshooting](./troubleshooting.mdx).
+Each server claims due events from the inbox.
+A claim leases one event for 2 minutes, and the handling server renews the lease every 30 seconds.
+A workspace handles the events of one resource, such as a repository or a Slack channel, one at a time and in arrival order.
+[Replay a failed webhook event](./webhook-replay.mdx) has the retries, the dead letters and their replay.
 
 ## Failed GitHub deliveries
 
-When the broker is slow or down, the receiver cannot store a delivery in time, and GitHub records the delivery as failed.
+When PostgreSQL is slow or down, the receiver cannot store a delivery in time, and GitHub records the delivery as failed.
 Every 10 minutes, the server reads the GitHub App's deliveries of the past two hours from the
 [GitHub App webhook API](https://docs.github.com/en/rest/apps/webhooks).
 For each event with no successful delivery, it asks GitHub to redeliver the latest attempt once the next redelivery is due.
@@ -83,14 +56,12 @@ This is the procedure that GitHub [recommends](https://docs.github.com/en/webhoo
 - An event whose latest answer was a client error (`4xx`) is not redelivered. The receiver refused it on purpose, for example for a bad signature or an oversized payload.
 - An event gets at most six attempts: the original and five redeliveries.
   The redeliveries are due 0, 10, 20, 40 and 80 minutes after the original delivery.
-  The gaps double, so the attempts outlast a broker stall of up to 80 minutes.
+  The gaps double, so the attempts outlast a database stall of up to 80 minutes.
   A stall that still lasts gets few requests.
 - A redelivery keeps its `X-GitHub-Delivery` identifier.
-  The stream discards a copy of a delivery that it stored within `hephaestus.webhook.stream.duplicate-window`.
-  The default is 3 hours, longer than the 2-hour look-back of the redelivery job.
-  An existing stream gets this window at the receiver's first start, with no step.
-  A manual redelivery within the window of a delivery that the stream stored is answered `202` and not processed again.
-- A slow broker can still store a delivery after GitHub stopped waiting for it. If its redelivery comes after the duplicate window, the event is processed twice. A late copy can restate an older reviewer list until the next sync reads the list again. [Reviewer lists are dated snapshots](/contributor/sync-lifecycle#reviewer-lists-are-dated-snapshots) explains this.
+  The inbox stores a delivery once for each workspace and identifier, so a redelivery of a stored delivery adds no event.
+  The inbox keeps a handled event for `hephaestus.integration.consumer.replay-window` (default `3d`), as long as GitHub keeps a delivery.
+- A slow database can still store a delivery after GitHub stopped waiting for it. Its redelivery then adds no event.
 - Silent mode does not stop redelivery. A redelivery sends nothing to people. It only asks GitHub to send the event to the receiver again.
 
 The job needs the GitHub App credentials and runs in the server role.
@@ -107,430 +78,55 @@ After that, only the reconciliation sync recovers their effect.
 | Slack | Yes. Slack retries 3 times: at once, after 1 minute and after 5 minutes. With [Delayed Events](https://docs.slack.dev/apis/events-api/) turned on in the Slack app, it also retries every hour for 24 hours. The receiver answers Slack within 2 seconds and stores a retry once, by its `event_id`. | Reconciliation of monitored channels. |
 | Outline | No. Outline waits 5 seconds and does not retry. It disables a subscription when 80 % of its deliveries in 24 hours fail. | Reconciliation of the Outline connection. |
 
-## Key-value buckets that the receiver reads
-
-The receiver has no database.
-The server writes two NATS key-value buckets from PostgreSQL, at start and every minute:
-
-| Bucket | Holds | Without it |
-| --- | --- | --- |
-| `outline-routes` | The route id of each active Outline connection. | Outline deliveries get `503`. |
-| `slack-channel-consent` | The Slack team and channel ids of each monitored channel. | Slack deliveries get `503`, and Slack retries them. |
-
-The buckets hold no secret and no content.
-The server recreates a lost bucket within one minute of its start.
-Do not delete them while the server is down: Outline does not retry a refused delivery.
-When at least 80 % of at least 10 deliveries in 24 hours failed, Outline disables the subscription and emails the Outline admin.
-The server registers it again at the next full sync.
-
-Two server meters show the state of Outline subscriptions:
-
-- `outline.webhook.subscription.unrouted` counts the active Outline connections that wait for a subscription on a current route. The server retries every 5 minutes.
-- `outline.webhook.subscription.deletion.failed` counts upstream deletions that failed. Outline disables such a subscription after its deliveries are refused.
-
 ## What to alert on
 
-The receiver exports these Micrometer meters on its private management listener. See
-[Scrape metrics](./monitoring.md#scrape-metrics) for the port and scrape configuration.
-[Alert rules](./alert-rules.md) gives the shipped rules that read these meters. The meters below are tagged `stream` with one of
-`github`, `gitlab`, `slack`, `outline`.
-
-| Metric                                           | Type        | What it means                                                                                                           |
-| ------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `webhook.stream.consumer.pending`                | gauge       | Messages not yet delivered, summed over your deployment's consumers. A message two consumers match counts twice.        |
-| `webhook.stream.consumer.ack.pending`            | gauge       | Messages delivered and not yet acknowledged, including ones waiting for redelivery, summed the same way.                |
-| `webhook.stream.consumers.without.pull.requests` | gauge       | Your deployment's consumers with no pull request waiting when polled. A healthy consumer can read zero between fetches. |
-| `webhook.stream.poll.age`                        | gauge (s)   | Seconds since the gauges on this page were last refreshed. `NaN` means never.                                           |
-| `webhook.stream.oldest.message.age`              | gauge (s)   | **Your effective retention.** The age of the oldest message the stream still holds.                                     |
-| `webhook.stream.bytes`                           | gauge       | Bytes stored.                                                                                                           |
-| `webhook.stream.bytes.limit`                     | gauge       | The bound in force on the live stream.                                                                                  |
-| `webhook.stream.bytes.utilization`               | gauge (0-1) | `bytes` over `bytes.limit`.                                                                                             |
-| `webhook.stream.messages`                        | gauge       | Messages stored.                                                                                                        |
-| `webhook.stream.consumers`                       | gauge       | Durable consumers on the stream.                                                                                        |
-
-These meters describe the publishes to the stream, the deliveries that never reached it, and their recovery. Only `webhook.publish` is tagged by `stream`:
-
-| Metric                           | Type    | Role     | What it means                                                                                                                 |
-| -------------------------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `webhook.publish`                | counter | webhook  | Publishes the broker acknowledged (`outcome=success`) or did not acknowledge in time (`outcome=failure`), by `stream`. A failure is a delivery the provider records as failed. |
-| `github.webhook.redelivery`      | counter | server   | Redelivery requests that GitHub accepted (`requested`) or refused (`refused`). Runs that could not read the deliveries (`unavailable`), only probed a failing receiver (`paused`), or stopped listing at a bound (`truncated`). |
-| `github.webhook.unrecovered`     | gauge   | server   | GitHub events of the past two hours that failed all six attempts. Above zero means events that Hephaestus did not receive.        |
-
-**No metric counts deliveries that the stream removed.**
-A delivery is lost when the stream removes it before its required consumer acknowledges it.
-The gauges describe what the stream holds now.
-Zero pending means nothing waits, not that nothing was lost.
-
-Stream positions cannot establish loss either.
-Each consumer reads only its own subjects on a shared stream.
-A caught-up consumer therefore trails the stream's oldest message whenever other subjects are busier.
-The broker can announce a delivered but unacknowledged message that it deleted as a consumer advisory.
-Hephaestus does not subscribe to that advisory.
-
-1. Alert if `webhook.stream.consumer.pending` or `webhook.stream.consumer.ack.pending` stays above zero or grows for several monitor intervals.
-2. If `webhook.stream.bytes.utilization` is also near 1, investigate the risk.
-3. Alert on `webhook.stream.poll.age` at a few times `hephaestus.webhook.stream.monitor-interval` (default 60s).
-4. Alert when `github.webhook.unrecovered` is above zero, or when `github.webhook.redelivery` keeps counting `unavailable` or `refused`. Redeliver those events by hand, or let reconciliation recover their effect.
-5. Alert when `webhook.publish` failures continue. Redelivery covers a short stall of the broker, not one that lasts.
-
-At its bound, the stream removes its oldest message on the next publish, regardless of which consumer still needs it.
-`webhook.stream.oldest.message.age` shows how much history remains, not how long a pending message has left.
-`webhook.stream.consumers.without.pull.requests` above zero with a growing backlog indicates a consumer from which nothing fetches.
-Alone, that value is not an alert.
-A receiver that cannot reach the broker holds all gauges at their last values.
-Those stale values look like current values.
-
-Provider reconciliation restores current source state within each integration's own limits, not every
-event. See
-[choosing the broker recovery strategy](./production-operations-runbook.mdx#choose-the-broker-recovery-strategy-before-starting-consumers).
-
-Alert when `webhook.stream.bytes.utilization` stays above 0.5.
-In steady state the age bound holds the stream, well below its byte bound.
-A stream at its byte bound deletes its oldest message on every publish.
-Lower `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE` or raise the byte bound.
-
-`webhook.stream.consumers` climbing and never falling means durables are accumulating on a shared
-broker. See [Consumers that outlive their deployment](#consumers-that-outlive-their-deployment).
-
-## How long a delivery is actually kept
-
-The chart's default stream bounds are `1GB` per stream and `10GB` for GitHub.
-`nats.jetstream.maxFileBytes` sets the broker cap, with a default of 16 GiB.
-The selected profile can lower these values. Inspect the values that you deploy.
-
-The four configured stream bounds must fit within
-the broker's file-storage cap. Do not size that cap above the volume's available space.
-
-Each stream carries two bounds:
-
-- `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE` (default `7d`) holds the stream in steady state.
-  Consumers acknowledge a delivery within seconds.
-  The age decides only how long a deployment that is offline can resume from the stream.
-- `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES` (default `1GB`, and
-  `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB` at `10GB`) is the disk-safety bound behind it.
-  At this bound, the broker deletes the oldest message on every publish.
-
-**A stream's retention is the shorter of its age bound and what its byte bound holds.**
-At 750 MB a day, a byte bound of 4 GiB holds about 5.5 days, whatever the age bound says.
-A consumer that stops for longer loses the older events from the stream.
-
-Size the byte bound so that it holds your daily GitHub volume times the age.
-With `discard old`, a stream at its byte bound is normal, and it loses nothing until the bound holds less than the age.
-`HephaestusWebhookRetentionBelowAgeBound` fires when it does.
-The defaults keep a busy instance (750 MB a day) at about 5 GB.
-Lower the age as your volume grows.
-`webhook.stream.oldest.message.age` shows the retention that your deployment gets.
-
-### Upgrading a stream that is already full
-
-An existing stream keeps its earlier limits until startup applies the new ones.
-Startup withholds a shorter age, because it deletes messages that the stream holds.
-The webhook receiver then logs `Stream github limit change withheld because it would delete stored messages` at every start.
-
-To apply the new age once:
-
-1. Check that `webhook.stream.consumer.pending` and `webhook.stream.consumer.ack.pending` are near zero.
-   The messages that the new age deletes were then delivered already.
-2. Set `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true` and restart the server.
-   On the Helm chart, set `webhook.stream.allowDestructiveLimitUpdates` instead.
-   The broker deletes the old messages before it answers.
-   How long that takes on a large stream on a slow disk is unmeasured.
-   [Reception during a restart](./runtime-roles#reception-during-a-restart) describes the interruption and provider recovery.
-   If the log reports a timeout, raise `HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT` (chart: `webhook.stream.limitUpdateTimeout`) and restart again.
-3. Look for `Reconciled JetStream stream limits and DELETED stored messages` in the log.
-4. Set the flag back to `false`.
-
-Scheduled sync (`SYNC_CRON`, hourly by default in production) fetches the last `SYNC_TIMEFRAME_DAYS` days from the provider API again.
-Other means can recover a delivery removed inside that window.
-Nothing can recover one removed outside it.
-
-1. The age bound removes messages in steady state.
-   A deployment that was offline gets back what it missed inside `SYNC_TIMEFRAME_DAYS` days through reconciliation.
-2. The byte bound only protects the disk.
-   Keep it above twice your daily GitHub volume times the age, so the age binds first.
-
-The broker compresses each stream's full blocks on disk with S2.
-Both bounds and `nats stream info` count uncompressed bytes, so size them as if there were no compression.
-To see the disk use, read the volume.
-On GitHub deliveries, blocks took about 5 % of their size in a test.
-A stream from an earlier release needs no recreation:
-
-1. The server turns compression on when it starts after the upgrade.
-2. The broker applies it to new blocks after its next restart.
-   Run `kubectl -n hephaestus rollout restart statefulset/hephaestus-nats` at a quiet time.
-   Or wait for the next upgrade of the broker.
-3. Blocks that the stream already holds stay readable and uncompressed until their age bound removes them.
-
-By default, streams with personal message content, `slack` and `outline`, have a 72-hour age bound.
-Their `hephaestus.webhook.stream.max-age-by-stream` entries take precedence over the shared age.
-PostgreSQL is the system of record. An erasure request cannot reach inside a broker stream.
-These streams are transport buffers.
-
-This holds on every chart profile. The `small` profile selects its own [byte bounds](./helm-chart#storage-and-retention).
-A site value in `webhook.stream.maxAgeByStream` overrides this, and it then keeps personal content for longer.
-
-An outage longer than the age bound loses older Slack and Outline events from the stream:
-
-- The nightly Slack history sync refills messages in active monitored channels.
-  It also removes a stored message that a complete read of Slack no longer returns.
-  [Messages deleted or edited in Slack](./data-retention#messages-deleted-or-edited-in-slack) lists the messages that it does not compare.
-- The Outline sync restores each document's current state, and it removes deleted documents on a clean reconciliation pass.
-
-## The storage budget, and why it is not just a number
-
-The chart's `nats.jetstream.maxFileBytes` sets both the broker's JetStream budget and the receiver's storage-budget check.
-**The receiver refuses to start if the four bounds sum above that budget:**
-
-```text
-Webhook stream bounds total 21474836480 bytes, over the 17179869184-byte broker storage budget
-(hephaestus.webhook.stream.storage-budget). Lower hephaestus.webhook.stream.max-bytes[-by-stream],
-or raise the budget and the JetStream volume with it.
-```
-
-Keep the budget **below the free space on the broker's volume**. The two failure modes are not alike:
-
-| The broker fills…        | What happens                                                                 |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| its own JetStream budget | refuses new messages, keeps running, recovers by itself when messages expire |
-| the **filesystem**       | cannot write its own metadata, and stays wedged even after space is freed    |
-
-The second one needs a human. That is what the arithmetic above exists to make unreachable — for
-webhook stream growth. `max_file` governs the whole JetStream store, so anything else sharing that
-volume can still fill it.
-
-## Changing a bound on a stream that already exists
-
-Startup reconciles an existing stream's **limits** with your configuration. It never rewrites
-subjects, retention mode, storage type or discard policy.
-
-| Situation                                                             | Startup does                                                    |
-| --------------------------------------------------------------------- | --------------------------------------------------------------- |
-| The change cannot delete anything                                     | applies it, logs at INFO                                        |
-| The change would delete stored messages                               | **withholds it**, logs at ERROR with exactly what it would cost |
-| …and `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true` | applies it, logs what was deleted                               |
-| The change would leave the stream with no bound at all                | **withholds it**, logs at ERROR — no flag overrides this        |
-| Stream state cannot be read                                           | withholds everything. Nothing can be proven safe                |
-| The live stream's shape has drifted                                   | withholds everything, logs at ERROR                             |
-
-A withheld change looks like this:
-
-```text
-Stream github limit change withheld because it would delete stored messages:
-[maxBytes -1 -> 10737418240 (32300000000 bytes stored, 21562581760 would be deleted)] —
-set hephaestus.webhook.stream.allow-destructive-limit-updates=true to apply it
-```
-
-:::caution[CAUTION: Destructive limit changes]
-A destructive change deletes stored messages.
-A flag left on gives all future deploys permission to delete messages.
-Enable it only for one deliberate change.
-Unset it after you confirm the deletion.
-:::
-
-To apply a withheld change deliberately:
-
-1. Run:
-
-   ```bash
-   nats stream report
-   ```
-
-2. Decide whether the size is legitimate for your traffic.
-3. If it is, raise `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB` (or `..._MAX_BYTES`) instead.
-4. Keep the four bounds under `NATS_JS_MAX_FILE_BYTES`.
-5. If the size is not legitimate, set `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true`.
-6. If the size is not legitimate, restart the server **once**.
-   [Reception during a restart](./runtime-roles#reception-during-a-restart) describes the interruption and provider recovery.
-7. After that destructive restart, confirm the `DELETED stored messages` log line.
-8. After that confirmation, unset the flag again.
-
-The broker deletes excess messages **before** it replies.
-On a large stream, the call therefore takes as long as the deletion.
-`HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT` (default `5m`) specifies startup's wait time.
-
-1. If deletion takes longer, raise the timeout.
-
-If the call still times out, startup reports the stream's actual limits.
-It does not assume the update failed.
-The broker may have applied a timed-out update:
-
-```text
-Failed to reconcile JetStream stream limits: name=github changed=[maxBytes -1 -> 10737418240]
-— live configuration is now maxAge=PT4320H maxBytes=10737418240 maxMessages=-1
-```
-
-That line says the change **did** occur.
-
-1. Before retrying, confirm with:
-
-   ```bash
-   nats stream info github
-   ```
-
-If instead you see a shape-drift error, the stream is not what this deployment expects and no bound
-is written onto it at all:
-
-```text
-Stream github has drifted from the shape this deployment expects: [discardPolicy=New (expected Old)]
-— limits left unreconciled
-```
-
-1. Before applying the bound, repair the shape with:
-
-   ```bash
-   nats stream edit github
-   ```
-
-`discardPolicy=New` makes the broker reject incoming publishes at the bound instead of removing old messages.
-A full stream therefore causes a total ingestion outage.
-
-## Recovering a wedged broker
-
-A wedged broker has these symptoms:
-
-- `webhook.publish` counts `outcome=failure`, and providers receive `503`.
-- `webhook.stream.poll.age` grows or shows `NaN`.
-- The NATS container logs write errors.
-- The NATS Pod remains unready or restarts without recovering.
-
-Use the names below for a release named `hephaestus` in namespace `hephaestus`.
-
-1. **Confirm it is the disk.**
-
-   ```bash
-   kubectl -n hephaestus exec hephaestus-nats-0 -c nats -- df -h /data   # free space on the JetStream volume
-   kubectl -n hephaestus logs hephaestus-nats-0 --tail=100
-   ```
-
-   `no space left on device` on a JetStream write identifies this failure.
-   If space is free, the fault is different.
-   Check the network path instead.
-   Check with:
-
-   ```bash
-   nats server check connection
-   ```
-
-2. **Free space.** Remove other content from that volume.
-   JetStream will *not* recover alone after it fails to write its metadata.
-   The errors therefore continue.
-
-3. **Restart the broker**, which is the step that clears the wedge:
-
-   ```bash
-   kubectl -n hephaestus rollout restart statefulset/hephaestus-nats
-   kubectl -n hephaestus rollout status statefulset/hephaestus-nats --timeout=5m
-   ```
-
-4. **Restart the server** so it re-establishes its connection and reconciles the streams.
-   The rollout waits for the server's [graceful drain](./runtime-roles#graceful-drain).
-   Follow [Reception during a restart](./runtime-roles#reception-during-a-restart) for the interruption and provider recovery:
-
-   ```bash
-   kubectl -n hephaestus rollout restart deployment/hephaestus-server
-   kubectl -n hephaestus rollout status deployment/hephaestus-server
-   ```
-
-5. Before another incident, set `nats.jetstream.maxFileBytes` below the volume's actual free space.
-6. Bring the per-stream bounds under it.
-   Startup deliberately refuses to run if they do not fit.
-
-7. **Account for what was lost.** Deliveries that arrived while the broker could not write were
-   dropped at the edge. The provider saw a 503 or a timeout. Hephaestus redelivers failed GitHub App
-   deliveries of the past two hours. Redeliver older GitHub deliveries in the App settings, within three days.
-8. Under **Administration → Integrations → GitHub/GitLab**, select **Sync now** on the workspace connection.
-   It fetches what falls inside `SYNC_TIMEFRAME_DAYS` again. Anything older than that window is gone.
+The server exports these Micrometer meters on its private management listener.
+[Scrape metrics](./monitoring.md#scrape-metrics) has the port and the scrape configuration.
+[Alert rules](./alert-rules.md) gives the shipped rules that read them.
+
+| Metric | Type | What it means |
+| --- | --- | --- |
+| `webhook.publish` | counter | Deliveries that the receiver stored (`outcome=success`) or could not store (`outcome=failure`), by `stream`, which names the provider. A failure is a delivery that the provider records as failed. |
+| `integration.consumer.backlog` | gauge | Events in the inbox, by `provider` and `state`: `QUEUED`, `LEASED` or `DEAD`. |
+| `integration.consumer.oldest.due.seconds` | gauge (s) | Seconds since the oldest due event of a `provider` became due. 0 when none is due. |
+| `integration.consumer.backlog.sampler.failures` | counter | Passes that could not read the backlog. The gauges keep their last values. |
+| `integration.consumer.retry` | counter | Attempts that failed and wait for a retry, by `kind`. |
+| `integration.consumer.poison` | counter | Events that became dead letters, by `kind`. |
+| `integration.consumer.inbox.retention.failures` | counter | Retention passes that failed. |
+| `github.webhook.redelivery` | counter | Redelivery requests that GitHub accepted (`requested`) or refused (`refused`). Runs that could not read the deliveries (`unavailable`), only probed a failing receiver (`paused`), or stopped listing at a bound (`truncated`). |
+| `github.webhook.unrecovered` | gauge | GitHub events of the past two hours that failed all six attempts. Above zero means events that Hephaestus did not receive. |
+
+1. Alert when `integration.consumer.oldest.due.seconds` stays above a few minutes.
+   No server claims, or a handler holds a resource's order.
+   The events of a suspended workspace are not claimed but count here, so a long suspension also shows.
+2. Alert when `webhook.publish` counts failures. The database refuses deliveries.
+3. Read the `DEAD` backlog after a `HephaestusConsumerPoison` alert, and replay the dead letters after the fix.
+
+## How long the inbox keeps an event
+
+| Event | Kept for | Setting |
+| --- | --- | --- |
+| Handled | 3 days after its handling | `hephaestus.integration.consumer.replay-window` (`HEPHAESTUS_INTEGRATION_CONSUMER_REPLAY_WINDOW`) |
+| Dead letter | 30 days after its failure | `hephaestus.integration.consumer.dead-retention` (`HEPHAESTUS_INTEGRATION_CONSUMER_DEAD_RETENTION`) |
+| Queued or leased | Until it is handled or becomes a dead letter | — |
+
+One server deletes the ended events every hour.
+The handled events cover the three days in which GitHub can redeliver, so a late redelivery is not handled twice.
+Deleting a workspace deletes its events.
+Erasing a person deletes the events that name them. An event that a server handles at that moment stays, and its retention removes it.
 
 ## Payload size
 
-The receiver accepts webhook deliveries up to 25 MiB, matching GitHub's delivery cap.
-`nats.maxPayloadBytes` (default `26279936`) sets the bundled broker's `max_payload`: 25 MiB and 64 KiB for the message's headers.
-This chart value does not reach an external broker: set `max_payload` on that broker to the same value.
-NATS' own default is only 1 MB.
-Without sufficient capacity, each delivery in the gap would pass verification and acceptance but fail at publish.
-
-1. Configure the broker to carry at least 25 MiB and 64 KiB.
-
-The receiver reads the broker's live limit at startup and logs at ERROR if the two disagree:
-
-```text
-The receiver needs messages of up to 26279936 bytes, headers included, but this NATS server caps a message at 1048576
-```
-
-The receiver holds each delivery in its heap until the broker stores it, and a body costs several times its size.
+The receiver accepts webhook deliveries up to 25 MiB, matching GitHub's delivery cap (`hephaestus.webhook.http.max-payload-bytes`).
+The inbox stores the body as it arrived.
+The receiver holds each delivery in its heap until the inbox stores it, and a body costs several times its size.
 So it bounds what large deliveries hold at once, from its heap.
 A delivery of 256 KiB or less does not count, and it never waits.
 A larger one that does not fit waits for 1.5 seconds.
 Then the receiver answers `503` with `Retry-After`, and counts `webhook_rejected_total{reason="busy"}`.
-A sender that is still sending the body can see a closed connection instead.
-
-The receiver keeps running.
-What happens to a refused delivery depends on [the provider](#which-providers-deliver-again):
-
-- GitHub delivers it again, when Hephaestus asks.
-- Slack retries it. A Slack delivery above 256 KiB that waits can also pass Slack's 3-second window, which costs a retry.
-- GitLab and Outline do not retry, and repeated failures can disable the hook.
-  Reconciliation recovers the event.
-
 To hold more at once, raise `server.resources`.
-The same server memory also holds API requests and provider-event processing.
-
 A delivery's body must arrive within 30 seconds, or the receiver answers `408` and counts `webhook_rejected_total{reason="too-slow"}`.
 No provider waits that long for an answer.
-A sender cannot keep a connection and the bytes behind it by sending slowly.
-
-## Consumers that outlive their deployment
-
-Only JetStream removes a durable consumer.
-A stack that is *deleted*, rather than shut down, never removes its consumers.
-On a shared broker, each former stack therefore leaves a generation of durables whose backlogs never drain.
-
-The server sets an inactive threshold of 30 days on each durable consumer, so JetStream removes them.
-It measures time with **nothing connected**, not time without traffic.
-A running deployment holds continuous requests against its consumers.
-Those requests continuously reset the clock, even with silent queues.
-Only a deployment that no longer exists ages out.
-
-Values between `0s` and `1h` fail at startup.
-A threshold that short expires a consumer during an ordinary restart, which the setting must prevent.
-A removed consumer is recreated at new messages only.
-It skips messages that arrived while the deployment was gone.
-
-1. On disposable stacks that share a broker, set a much shorter value (`72h`).
-   This includes temporary test stacks.
-2. If an offline deployment must resume after the threshold exactly where it stopped, set `0s` to disable removal.
-
-`0s` preserves the consumer's *position*, not its *messages*.
-Messages still expire under the stream's retention.
-A deployment offline past the stream's byte or age bound returns to a cursor that points at messages no longer present.
-Those messages are not delivered.
-
-## Who reaches the broker
-
-The chart exposes the broker on its private cluster Service.
-The NetworkPolicy admits only the server and the configured administrative clients.
-Do not add an internet Gateway route or a public Service for the broker.
-Use an authenticated NATS CLI context from an allowed administrative Pod.
-
-## Broker image security scope
-
-The bundled broker uses standalone JetStream with user/password authentication and plain NATS
-on the private cluster network. Its image assessment for CVE-2026-111943 applies to these
-shipped launches. The certificate-verification code is present but its TLS, HTTPS resolver, OCSP
-and remote-cluster paths are not enabled.
-
-A custom broker configuration that enables certificate verification is outside that assessment.
-Use a fixed vendor image or reassess the advisory before enabling those features. This also
-applies to an external broker reached through a `tls://` application connection.
-
-## Making a change actually reach the broker
-
-Change the broker's chart values and upgrade the verified chart with your site values.
-The StatefulSet template includes the broker configuration checksum, so a configuration change restarts the broker.
-Wait for the StatefulSet rollout and check broker readiness before resuming traffic.
-
-A restart preserves the JetStream volume but interrupts active deliveries.
-[Which providers deliver again](#which-providers-deliver-again) describes the recovery limits.
 
 ## Known limits
 
@@ -540,13 +136,8 @@ A restart preserves the JetStream volume but interrupts active deliveries.
   If more changed, for example after a long outage, the sync of that repository stops with an error.
   The next run reads the same window again, so it can stop again.
   The repository's resource sync table shows the error ([Read sync errors](./integrations#read-sync-errors)).
-- **A new consumer can miss events of its first seconds.**
-  A consumer for a new connection or repository starts with the events that arrive after it starts.
-  Events that arrive in the seconds before that can be lost.
-  The first sync of the connection repairs the state of the work, such as open, merged or closed.
-  It does not repair activity that only the event carried, such as a review request at that moment.
 
 ## Where these settings live
 
-The server's receiver reads the stream bounds ([Runtime Roles](./runtime-roles.mdx)).
-The chart puts them on the server. `gate:env` checks the rendered configuration.
+The server reads all of them ([Runtime Roles](./runtime-roles.mdx)).
+`gate:env` checks the rendered configuration.

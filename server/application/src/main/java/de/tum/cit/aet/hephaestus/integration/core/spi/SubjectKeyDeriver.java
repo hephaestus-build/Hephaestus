@@ -4,7 +4,7 @@ import java.util.Map;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Per-kind NATS subject + dedup-key derivation on the publisher side.
+ * Per-kind subject and delivery-key derivation on the receive side.
  *
  * <p>Subjects stay vendor-prefixed ({@code github.*}, {@code gitlab.*}, etc.). Adding
  * a new kind = registering a new {@link SubjectKeyDeriver} bean keyed on
@@ -13,16 +13,17 @@ import tools.jackson.databind.JsonNode;
 public interface SubjectKeyDeriver {
     IntegrationKind kind();
 
-    /** Builds the JetStream subject from payload + headers. */
+    /** Builds the provider event subject from payload + headers. */
     String deriveSubject(JsonNode payload, Map<String, String> headers);
 
     /**
-     * Builds the JetStream {@code Nats-Msg-Id} from the raw body + headers.
+     * Builds the delivery key from the raw body + headers. The inbox stores one row per workspace and delivery key, so a
+     * provider's retry or redelivery adds none.
      *
      * <p>Per-vendor strategy:
      * <ul>
-     *   <li>GitHub: {@code "github-" + X-GitHub-Delivery}
-     *   <li>GitLab: {@code "gitlab-" + (Idempotency-Key | X-Gitlab-Event-UUID | sha256)}
+     *   <li>GitHub: {@code "github-" + X-GitHub-Delivery}, which a redelivery keeps
+     *   <li>GitLab: a connection's key from {@code GitLabSubjectKeyDeriver#deriveConnectionDedupKey}
      *   <li>Slack: {@code "slack-" + event_id}
      * </ul>
      */

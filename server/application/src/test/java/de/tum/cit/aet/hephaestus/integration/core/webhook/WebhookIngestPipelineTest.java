@@ -43,6 +43,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -59,7 +60,7 @@ import tools.jackson.databind.ObjectMapper;
 class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Mock
-    private JetStreamPublisher publisher;
+    private ProviderEventReceiver publisher;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -88,7 +89,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
             assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
             assertThat(refused.getHeaders().getFirst("Retry-After")).isEqualTo("30");
         }
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
         assertThat(meters.get(IntegrationCoreMetrics.WEBHOOK_REJECTED)
                         .tag("reason", "busy")
                         .counter()
@@ -137,15 +138,16 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         assertThat(resp.getBody()).isEqualTo(Map.of("status", "ok"));
-        ArgumentCaptor<PublishRequest> captor = ArgumentCaptor.forClass(PublishRequest.class);
-        verify(publisher).publish(captor.capture());
-        PublishRequest pr = captor.getValue();
-        assertThat(pr.subject()).isEqualTo("github.acme.repo.push");
-        assertThat(pr.dedupId()).isEqualTo("github-DEADBEEF");
-        assertThat(pr.headers()).containsEntry("Nats-Msg-Id", "github-DEADBEEF");
-        assertThat(pr.headers()).containsEntry("X-GitHub-Event", "push");
-        assertThat(pr.headers()).containsEntry("X-GitHub-Delivery", "DEADBEEF");
-        assertThat(pr.body()).isEqualTo("{\"action\":\"opened\"}".getBytes(StandardCharsets.UTF_8));
+        ArgumentCaptor<Map<String, String>> stored = headersCaptor();
+        verify(publisher)
+                .receive(
+                        eq(IntegrationKind.GITHUB),
+                        eq("github.acme.repo.push"),
+                        eq("github-DEADBEEF"),
+                        stored.capture(),
+                        eq("{\"action\":\"opened\"}".getBytes(StandardCharsets.UTF_8)));
+        assertThat(stored.getValue()).containsEntry("X-GitHub-Event", "push");
+        assertThat(stored.getValue()).containsEntry("X-GitHub-Delivery", "DEADBEEF");
     }
 
     @Test
@@ -165,12 +167,15 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
         ResponseEntity<?> resp = pipeline.handle(IntegrationKind.OUTLINE, body, headers());
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-        ArgumentCaptor<PublishRequest> captor = ArgumentCaptor.forClass(PublishRequest.class);
-        verify(publisher).publish(captor.capture());
-        PublishRequest pr = captor.getValue();
-        assertThat(pr.subject()).isEqualTo("outline.sub-1.documents~update");
-        assertThat(pr.dedupId()).startsWith("outline-");
-        assertThat(pr.headers()).containsEntry("Nats-Msg-Id", pr.dedupId());
+        ArgumentCaptor<String> delivery = ArgumentCaptor.forClass(String.class);
+        verify(publisher)
+                .receive(
+                        eq(IntegrationKind.OUTLINE),
+                        eq("outline.sub-1.documents~update"),
+                        delivery.capture(),
+                        any(),
+                        any());
+        assertThat(delivery.getValue()).startsWith("outline-");
     }
 
     @Test
@@ -187,11 +192,15 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                 Map.of("Hephaestus-Route-Workspace", "3"));
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-        ArgumentCaptor<PublishRequest> captor = ArgumentCaptor.forClass(PublishRequest.class);
-        verify(publisher).publish(captor.capture());
-        assertThat(captor.getValue().subject()).isEqualTo("gitlab.?connection.7.push");
-        assertThat(captor.getValue().dedupId()).isEqualTo("gitlab-c7-abc");
-        assertThat(captor.getValue().headers()).containsEntry("Hephaestus-Route-Workspace", "3");
+        ArgumentCaptor<Map<String, String>> stored = headersCaptor();
+        verify(publisher)
+                .receive(
+                        eq(IntegrationKind.GITLAB),
+                        eq("gitlab.?connection.7.push"),
+                        eq("gitlab-c7-abc"),
+                        stored.capture(),
+                        any());
+        assertThat(stored.getValue()).containsEntry("Hephaestus-Route-Workspace", "3");
     }
 
     @Test
@@ -206,7 +215,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                 pipeline.handle(IntegrationKind.GITHUB, "{}".getBytes(StandardCharsets.UTF_8), headers());
 
         assertProblem(resp, HttpStatus.UNAUTHORIZED, "invalid");
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -217,7 +226,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                 pipeline.handle(IntegrationKind.SLACK, "{}".getBytes(StandardCharsets.UTF_8), headers());
 
         assertProblem(resp, HttpStatus.NOT_IMPLEMENTED, "no verifier wired for SLACK");
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -232,42 +241,25 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                 pipeline.handle(IntegrationKind.GITHUB, "{}".getBytes(StandardCharsets.UTF_8), headers());
 
         assertProblem(resp, HttpStatus.NOT_IMPLEMENTED, "no subject deriver for GITHUB");
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
-    void missingPublisher() {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
-                List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
-                List.of(stubDeriver(IntegrationKind.GITHUB, "s", "d")),
-                /* publisher */ null,
-                objectMapper);
-
-        ResponseEntity<?> resp =
-                pipeline.handle(IntegrationKind.GITHUB, "{}".getBytes(StandardCharsets.UTF_8), headers());
-
-        assertProblem(resp, HttpStatus.SERVICE_UNAVAILABLE, "publisher not wired");
-    }
-
-    @Test
-    void publisherExceptionMapsTo503AndTheLogNamesItsCause(CapturedOutput output) {
+    void shouldAnswer503AndNameTheCauseWhenTheInboxCannotStore(CapturedOutput output) {
         WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
                 List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
                 List.of(stubDeriver(IntegrationKind.GITHUB, "github.foo.bar.push", "github-uuid")),
                 publisher,
                 objectMapper);
-        doThrow(new JetStreamPublisher.PublishFailedException(
-                        new JetStreamPublisher.Failure(JetStreamPublisher.Cause.NO_RESPONDERS, "503"),
-                        3,
-                        "github.foo.bar.push"))
+        doThrow(new CannotGetJdbcConnectionException("database down"))
                 .when(publisher)
-                .publish(any());
+                .receive(any(), any(), any(), any(), any());
 
         ResponseEntity<?> resp =
                 pipeline.handle(IntegrationKind.GITHUB, "{}".getBytes(StandardCharsets.UTF_8), headers());
 
-        assertProblem(resp, HttpStatus.SERVICE_UNAVAILABLE, "publish-failed");
-        assertThat(output.getAll()).contains("cause=no_responders attempts=3");
+        assertProblem(resp, HttpStatus.SERVICE_UNAVAILABLE, "store-failed");
+        assertThat(output.getAll()).contains("cause=org.springframework.jdbc.CannotGetJdbcConnectionException");
     }
 
     @Test
@@ -282,7 +274,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                 pipeline.handle(IntegrationKind.GITHUB, "not json".getBytes(StandardCharsets.UTF_8), headers());
 
         assertProblem(resp, HttpStatus.BAD_REQUEST, "invalid-json");
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -295,7 +287,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
             @Override
             public Decision evaluate(JsonNode payload, Map<String, String> headers) {
-                throw new ProjectedKeys.UnavailableException("slack-channel-consent", new IllegalStateException());
+                throw new CannotGetJdbcConnectionException("database down");
             }
         };
         WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
@@ -311,7 +303,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                 headers());
 
         assertProblem(resp, HttpStatus.SERVICE_UNAVAILABLE, "gate-unavailable");
-        verify(publisher, never()).publishFast(any(), any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -341,8 +333,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         assertThat(resp.getBody()).isEqualTo(Map.of("status", "dropped"));
-        verify(publisher, never()).publishFast(any(), any());
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -360,7 +351,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
         // All auth failures (missing / bad signature / stale) collapse to opaque 401 so
         // attackers can't probe the signing scheme through status-code side channels.
         assertProblem(resp, HttpStatus.UNAUTHORIZED, "stale-timestamp");
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -382,8 +373,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
         assertThat(resp.getHeaders().getContentType()).isEqualTo(MediaType.TEXT_PLAIN);
         assertThat(resp.getHeaders().getFirst("X-Challenge")).isEqualTo("ack");
         assertThat(resp.getBody()).isEqualTo(echoBody);
-        verify(publisher, never()).publish(any());
-        verify(publisher, never()).publishFast(any(), any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -424,7 +414,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                     .doesNotContain("canary");
             assertThat(event.getThrowableProxy()).isNull();
         });
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -438,7 +428,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
         ResponseEntity<?> response = pipeline.handle(IntegrationKind.GITHUB, new byte[0], headers());
 
         assertProblem(response, HttpStatus.UNAUTHORIZED, "missing-signature");
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -451,29 +441,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
         ResponseEntity<?> response = controller.ingest("github", request);
 
         assertProblem(response, HttpStatus.BAD_REQUEST, "could not read body");
-        verify(publisher, never()).publish(any());
-    }
-
-    @Test
-    void shouldUseFastPublishTimeoutAndReturn503WhenSlackPublishFails() {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
-                List.of(stubVerifier(IntegrationKind.SLACK, new VerificationResult.Verified())),
-                List.of(stubDeriver(IntegrationKind.SLACK, "slack.T.C.message", "slack-Ev1")),
-                publisher,
-                objectMapper);
-        doThrow(new JetStreamPublisher.PublishFailedException(
-                        new JetStreamPublisher.Failure(JetStreamPublisher.Cause.TIMEOUT, "private failure data"),
-                        1,
-                        "slack.T.C.message"))
-                .when(publisher)
-                .publishFast(any(), any());
-
-        ResponseEntity<?> response =
-                pipeline.handle(IntegrationKind.SLACK, "{}".getBytes(StandardCharsets.UTF_8), headers());
-
-        assertProblem(response, HttpStatus.SERVICE_UNAVAILABLE, "publish-failed");
-        verify(publisher).publishFast(any(), eq(Duration.ofSeconds(2)));
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -549,5 +517,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
         Map<String, String> m = new LinkedHashMap<>();
         for (int i = 0; i + 1 < kv.length; i += 2) m.put(kv[i], kv[i + 1]);
         return m;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ArgumentCaptor<Map<String, String>> headersCaptor() {
+        return ArgumentCaptor.forClass(Map.class);
     }
 }

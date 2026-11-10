@@ -5,7 +5,6 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import io.nats.client.Message;
 import java.io.IOException;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
@@ -43,7 +42,7 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
     private final String subjectEventToken;
 
     private final Class<T> payloadType;
-    private final NatsMessageDeserializer deserializer;
+    private final EventPayloadDeserializer deserializer;
     private final TransactionTemplate transactionTemplate;
 
     /**
@@ -54,7 +53,7 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
      *                            {@code "repository.issues"}); for GitLab it is the
      *                            flat event token (e.g. {@code "merge_request"}).
      * @param payloadType         {@code Class<T>} for Jackson deserialization.
-     * @param deserializer        shared {@link NatsMessageDeserializer} bean.
+     * @param deserializer        shared {@link EventPayloadDeserializer} bean.
      * @param transactionTemplate the framework's {@link TransactionTemplate} (the
      *                            handler runs DB writes; we need a real tx boundary).
      */
@@ -62,7 +61,7 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
             @Nullable IntegrationKind kind,
             String eventType,
             Class<T> payloadType,
-            NatsMessageDeserializer deserializer,
+            EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         if (kind == null) {
             throw new IllegalArgumentException("kind must not be null");
@@ -98,8 +97,8 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
     }
 
     @Override
-    public void onMessage(Message msg) {
-        String subject = msg.getSubject();
+    public void onMessage(ProviderEvent event) {
+        String subject = event.subject();
         String safeSubject = sanitizeForLog(subject);
         if (!subjectMatchesExpectedEvent(subject)) {
             log.error(
@@ -110,8 +109,8 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
         }
 
         try {
-            T eventPayload = deserializer.deserialize(msg, payloadType);
-            dispatchEvent(eventPayload, arrivedAt(msg));
+            T eventPayload = deserializer.deserialize(event, payloadType);
+            dispatchEvent(eventPayload, event.receivedAt());
         } catch (IOException e) {
             log.error("Failed to parse payload: subject={}", safeSubject);
             throw new PayloadParsingException("Payload parsing failed for subject: " + safeSubject, e);
@@ -122,16 +121,8 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
     }
 
     /**
-     * When JetStream stored the message, on the NATS server's clock; a JetStream redelivery keeps it. A core NATS
-     * message has no stored time and arrives now.
-     */
-    private static Instant arrivedAt(Message msg) {
-        return msg.isJetStream() ? msg.metaData().timestamp().toInstant() : Instant.now();
-    }
-
-    /**
-     * Override when the handling compares when Hephaestus received the payload: {@code arrivedAt} is when JetStream
-     * stored it, however long it then waited in the stream.
+     * Override when the handling compares when Hephaestus received the payload: {@code arrivedAt} is when the
+     * receiver stored it, however long it then waited to be claimed.
      */
     protected void dispatchEvent(T eventPayload, Instant arrivedAt) {
         dispatchEvent(eventPayload);

@@ -3,26 +3,20 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubWebhookRedelivery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.availability.ApplicationAvailabilityAutoConfiguration;
 import org.springframework.boot.context.properties.bind.Binder;
-import org.springframework.boot.convert.DurationStyle;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
@@ -37,8 +31,6 @@ import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.util.unit.DataSize;
 
 /**
  * The shipped configuration, checked as the deployment sees it.
@@ -53,20 +45,11 @@ import org.springframework.util.unit.DataSize;
  */
 class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
 
-    private static final Path ALERTS =
-            Path.of("..", "..", "deploy", "chart", "hephaestus", "files", "hephaestus-alerts.yml");
-    private static final Path CHART_VALUES = Path.of("..", "..", "deploy", "chart", "hephaestus", "values.yaml");
-
-    /** GitHub deliveries a busy instance receives in a day. */
-    private static final long BUSY_GITHUB_BYTES_PER_DAY = 750_000_000L;
-
     /**
      * Health contributors of the shipped roles, as bean name to the contributor name Spring derives from it.
      * Always present, on every role: {@code readinessState}.
      */
     private static final Map<String, String> CONTRIBUTOR_BEANS = Map.of(
-            "webhookHealthIndicator",
-            "webhook",
             "integrationConsumerHealthIndicator",
             "integrationConsumer",
             "practiceReviewHealthIndicator",
@@ -122,7 +105,6 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "webhookHealthIndicator",
                 "integrationConsumerHealthIndicator",
                 "practiceReviewHealthIndicator",
                 "kubernetesSandboxHealthIndicator",
@@ -145,131 +127,12 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
     }
 
     @Test
-    void aBackedOffMonitorStillPollsBeforeItsStaleAlertFires() throws IOException {
-        Matcher threshold = Pattern.compile("webhook_stream_poll_age_seconds\\{[^}]*} > (\\d+)")
-                .matcher(Files.readString(ALERTS));
-        assertThat(threshold.find())
-                .as("HephaestusStreamPollStale reads the poll age")
-                .isTrue();
-        Duration oldestPoll = shippedStream()
-                .monitorInterval()
-                .multipliedBy(WebhookStreamMonitor.MAX_BACKOFF_INTERVALS)
-                .plus(WebhookStreamMonitor.SLOW_POLL);
-
-        assertThat(oldestPoll)
-                .as("a slow broker backs the monitor off; the alert must still mean that it cannot read the broker")
-                .isLessThan(Duration.ofSeconds(Long.parseLong(threshold.group(1))));
-    }
-
-    @Test
-    void theDedupWindowOutlastsTheGitHubRedeliveryLookBack() throws IOException {
+    void theReplayWindowOutlastsTheGitHubRedeliveryLookBack() {
         // A delivery stored after GitHub stopped waiting failed there; the job redelivers it within its window.
-        assertThat(shippedStream().duplicateWindow())
-                .as("a redelivery inside the window must be answered as a duplicate, not stored again")
+        assertThat(binder().bind("hephaestus.integration.consumer.replay-window", Duration.class)
+                        .get())
+                .as("a redelivery inside the window must find its stored event, not be stored again")
                 .isGreaterThan(GitHubWebhookRedelivery.WINDOW);
-    }
-
-    @Test
-    void theByteBoundOutlastsWhatReconciliationCanRepair() throws IOException {
-        WebhookProperties.Stream stream = shippedStream();
-        int reconciliationWindowDays = Math.max(
-                binder().bind("hephaestus.sync.timeframe-days", Integer.class).get(),
-                chartDefaults()
-                        .bind("config.sync.timeframe-days", Integer.class)
-                        .get());
-
-        long repairableTraffic = reconciliationWindowDays * BUSY_GITHUB_BYTES_PER_DAY;
-
-        assertThat(stream.maxBytesFor("github"))
-                .as(
-                        "webhook deliveries are not redeliverable (ADR 0008), but nightly RECONCILIATION "
-                                + "re-fetches the last %d days from the provider API, so inside that window a shed "
-                                + "message is recoverable by other means and outside it by nothing. This manufactures a "
-                                + "coupling the code does not have: raising the reconciliation window without raising "
-                                + "the byte bound is meant to fail here rather than in production",
-                        reconciliationWindowDays)
-                .isGreaterThan(repairableTraffic);
-    }
-
-    @Test
-    void aBusyGitHubStreamStaysBelowHalfItsByteBound() throws IOException {
-        WebhookProperties.Stream stream = shippedStream();
-
-        assertThat(busyBytesHeldFor(stream.maxAgeFor("github")))
-                .as("consumers acknowledge within seconds, so max-age is what holds the stream in steady state. "
-                        + "A stream at its byte bound deletes its oldest message on every publish, so a busy "
-                        + "stream has to age out well before it reaches that bound")
-                .isLessThanOrEqualTo(stream.maxBytesFor("github") / 2);
-        Binder chart = chartDefaults();
-        Duration chartAge = DurationStyle.detectAndParse(
-                chart.bind("webhook.stream.max-age", String.class).get());
-        long chartBytes = DataSize.parse(chart.bind("webhook.stream.max-bytes-by-stream.github", String.class)
-                        .get())
-                .toBytes();
-        assertThat(busyBytesHeldFor(chartAge))
-                .as("the Helm chart's values.yaml sets what a Kubernetes release runs")
-                .isLessThanOrEqualTo(chartBytes / 2);
-    }
-
-    private static Binder chartDefaults() throws IOException {
-        return Binder.get(environmentOf(
-                new YamlPropertySourceLoader().load("values.yaml", new FileSystemResource(CHART_VALUES))));
-    }
-
-    @Test
-    void shouldFitChartStreamLimitsInsideBrokerBudget() throws IOException {
-        Binder chart = chartDefaults();
-        long perStream = DataSize.parse(
-                        chart.bind("webhook.stream.max-bytes", String.class).get())
-                .toBytes();
-        long github = DataSize.parse(chart.bind("webhook.stream.max-bytes-by-stream.github", String.class)
-                        .get())
-                .toBytes();
-        long total = github + perStream * (WebhookJetStreamBootstrap.STREAMS.length - 1);
-        assertThat(total)
-                .isLessThanOrEqualTo(
-                        chart.bind("nats.jetstream.max-file-bytes", Long.class).get());
-    }
-
-    @Test
-    void theBrokerBudgetAndTheStreamBudgetAreTheSameNumber() throws IOException {
-        assertThat(chartDefaults()
-                        .bind("nats.jetstream.max-file-bytes", Long.class)
-                        .get())
-                .isEqualTo(shippedStream().storageBudget().toBytes());
-    }
-
-    @Test
-    void theBrokerCarriesEveryPayloadTheReceiverAccepts() throws IOException {
-        long accepted = binder().bind("hephaestus.webhook.http.max-payload-bytes", Long.class)
-                .get();
-        assertThat(chartDefaults().bind("nats.max-payload-bytes", Long.class).get())
-                .isGreaterThanOrEqualTo(accepted);
-    }
-
-    private static StandardEnvironment environmentOf(List<PropertySource<?>> sources) {
-        StandardEnvironment environment = new StandardEnvironment();
-        environment.getPropertySources().remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
-        sources.forEach(environment.getPropertySources()::addLast);
-        return environment;
-    }
-
-    private static long busyBytesHeldFor(Duration age) {
-        return BUSY_GITHUB_BYTES_PER_DAY * age.toHours() / 24;
-    }
-
-    @Test
-    void streamBoundsFitInsideTheBrokerStorageBudget() {
-        WebhookProperties.Stream stream = shippedStream();
-
-        long total = 0;
-        for (String name : WebhookJetStreamBootstrap.STREAMS) {
-            total += stream.maxBytesFor(name);
-        }
-
-        assertThat(total)
-                .as("JetStream that fills the filesystem cannot write its own metadata and stays wedged")
-                .isLessThanOrEqualTo(stream.storageBudget().toBytes());
     }
 
     /**
@@ -307,11 +170,6 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
             }
         }
         return values.toArray(String[]::new);
-    }
-
-    private static WebhookProperties.Stream shippedStream() {
-        return binder().bind("hephaestus.webhook.stream", WebhookProperties.Stream.class)
-                .get();
     }
 
     /** Binds the shipped `application.yml` with no environment, so defaults are what a fresh deploy gets. */

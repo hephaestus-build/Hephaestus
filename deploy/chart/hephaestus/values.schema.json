@@ -789,50 +789,6 @@
 				}
 			}
 		},
-		"webhook": {
-			"type": "object",
-			"additionalProperties": false,
-			"required": ["stream"],
-			"properties": {
-				"stream": {
-					"type": "object",
-					"additionalProperties": false,
-					"required": ["maxAge", "maxBytes", "allowDestructiveLimitUpdates", "limitUpdateTimeout"],
-					"properties": {
-						"maxAge": {
-							"$ref": "#/definitions/duration"
-						},
-						"maxAgeByStream": {
-							"type": "object",
-							"propertyNames": {
-								"$ref": "#/definitions/webhookStreamName"
-							},
-							"additionalProperties": {
-								"$ref": "#/definitions/duration"
-							}
-						},
-						"maxBytes": {
-							"$ref": "#/definitions/dataSize"
-						},
-						"maxBytesByStream": {
-							"type": "object",
-							"propertyNames": {
-								"$ref": "#/definitions/webhookStreamName"
-							},
-							"additionalProperties": {
-								"$ref": "#/definitions/dataSize"
-							}
-						},
-						"allowDestructiveLimitUpdates": {
-							"type": "boolean"
-						},
-						"limitUpdateTimeout": {
-							"$ref": "#/definitions/duration"
-						}
-					}
-				}
-			}
-		},
 		"webapp": {
 			"type": "object",
 			"additionalProperties": false,

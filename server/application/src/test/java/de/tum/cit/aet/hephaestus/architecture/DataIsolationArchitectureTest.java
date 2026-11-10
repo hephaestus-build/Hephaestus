@@ -82,7 +82,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // Through repository (discussion -> Repository -> Organization <- Workspace)
             // Unified integration framework
             "Connection", // has direct Workspace field
-            "ConsumerDeadLetter", // workspace-owned records; installation records have no workspace yet
+            "ProviderEventRow", // workspace-owned events; installation events have no workspace yet
             "ConnectionAudit", // direct workspace_id scalar, equal to its connection's by foreign key
             // Product feedback and copies each carry the tenant independently.
             "Feedback", // direct workspace_id scalar
@@ -146,7 +146,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "AccountExport", // GDPR Art. 20 self-service export; account-scoped, spans workspaces
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
-            "InstallationInboxStep", // Installation deliveries have no workspace until their handler creates one
+            "ProviderEventStep", // Owned by its provider event and deleted with it
             // Fleet-wide public keys that verify attempt tokens; a token's workspace is a signed claim
             "AttemptPublicKey",
             // Installation-wide tools Pods; a bound row names its turn's workspace and is fenced on the turn's lease
@@ -274,7 +274,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
                     // Installation lifecycle events arrive before a workspace exists.
                     .and()
                     .areDeclaredInClassesThat()
-                    .doNotHaveSimpleName("ConsumerDeadLetter")
+                    .doNotHaveSimpleName("ProviderEventRow")
                     .should(beNotNullableIfWorkspaceType())
                     .because("Workspace relationships should be required to prevent orphaned data");
 

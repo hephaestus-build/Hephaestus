@@ -225,7 +225,6 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
                 .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
                 .ifPresent(workspace -> {
                     Long workspaceId = workspace.getId();
-                    afterCommit(() -> githubLifecycleListener.startNatsForInstallation(installationId));
                     afterCommit(() -> triggerInitialSync(installationId, workspaceId));
                 });
 

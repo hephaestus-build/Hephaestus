@@ -3,7 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.core.metrics;
 public final class IntegrationCoreMetrics {
 
     public static final String CREDENTIAL_ROTATION_FAILURES = "integration.credential.rotation.failures";
-    public static final String INTEGRATION_CONSUMER_NAK = "integration.consumer.nak";
+    public static final String INTEGRATION_CONSUMER_BACKLOG = "integration.consumer.backlog";
+    public static final String INTEGRATION_CONSUMER_BACKLOG_SAMPLER_FAILURES =
+            "integration.consumer.backlog.sampler.failures";
+    public static final String INTEGRATION_CONSUMER_OLDEST_DUE_SECONDS = "integration.consumer.oldest.due.seconds";
+    public static final String INTEGRATION_CONSUMER_RETRY = "integration.consumer.retry";
     public static final String INTEGRATION_CONSUMER_POISON = "integration.consumer.poison";
     public static final String INBOX_RETENTION_FAILURES = "integration.consumer.inbox.retention.failures";
     public static final String INTEGRATION_MESSAGE_LAG = "integration.message.lag";
@@ -16,20 +20,7 @@ public final class IntegrationCoreMetrics {
     public static final String PRACTICE_REVIEW_REFUSED = "practice.review.refused";
     public static final String OAUTH_STATE_NONCE_PRUNED = "oauth.state.nonce.pruned";
     public static final String WEBHOOK_PUBLISH = "webhook.publish";
-    public static final String WEBHOOK_PUBLISH_RETRY = "webhook.publish.retry";
     public static final String WEBHOOK_REJECTED = "webhook.rejected";
-    public static final String WEBHOOK_STREAM_BYTES = "webhook.stream.bytes";
-    public static final String WEBHOOK_STREAM_BYTES_LIMIT = "webhook.stream.bytes.limit";
-    public static final String WEBHOOK_STREAM_AGE_BOUND = "webhook.stream.age.bound";
-    public static final String WEBHOOK_STREAM_BYTES_UTILIZATION = "webhook.stream.bytes.utilization";
-    public static final String WEBHOOK_STREAM_CONSUMER_ACK_PENDING = "webhook.stream.consumer.ack.pending";
-    public static final String WEBHOOK_STREAM_CONSUMER_PENDING = "webhook.stream.consumer.pending";
-    public static final String WEBHOOK_STREAM_CONSUMERS = "webhook.stream.consumers";
-    public static final String WEBHOOK_STREAM_CONSUMERS_WITHOUT_PULL_REQUESTS =
-            "webhook.stream.consumers.without.pull.requests";
-    public static final String WEBHOOK_STREAM_MESSAGES = "webhook.stream.messages";
-    public static final String WEBHOOK_STREAM_OLDEST_MESSAGE_AGE = "webhook.stream.oldest.message.age";
-    public static final String WEBHOOK_STREAM_POLL_AGE = "webhook.stream.poll.age";
 
     private IntegrationCoreMetrics() {}
 }

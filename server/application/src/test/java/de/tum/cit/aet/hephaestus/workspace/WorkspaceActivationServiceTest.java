@@ -14,8 +14,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -28,11 +26,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.core.task.support.TaskExecutorAdapter;
 
@@ -40,12 +36,6 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
 
     @Mock
     private WorkspaceRepository workspaceRepository;
-
-    @Mock
-    private ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
-
-    @Mock
-    private IntegrationNatsConsumer natsConsumer;
 
     @Mock
     private WorkspaceScopeFilter workspaceScopeFilter;
@@ -66,13 +56,6 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
         when(gitHubTrigger.kind()).thenReturn(IntegrationKind.GITHUB);
         when(gitLabTrigger.kind()).thenReturn(IntegrationKind.GITLAB);
         when(workspaceScopeFilter.isWorkspaceAllowed(any(Workspace.class))).thenReturn(true);
-        doAnswer(inv -> {
-                    Consumer<IntegrationNatsConsumer> c = inv.getArgument(0);
-                    c.accept(natsConsumer);
-                    return null;
-                })
-                .when(natsConsumerService)
-                .ifAvailable(any());
         // Runs each activation on the calling thread, so the assertions see its effects.
         service = activationService(true, new TaskExecutorAdapter(Runnable::run));
     }
@@ -86,10 +69,8 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
                 new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
                 new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
         return new WorkspaceActivationService(
-                new NatsConnectionProperties(true, "nats://localhost:4222", null, null),
                 syncProps,
                 workspaceRepository,
-                natsConsumerService,
                 workspaceScopeFilter,
                 connectionService,
                 List.of(gitHubTrigger, gitLabTrigger),
@@ -118,9 +99,6 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
 
         service.activateAllWorkspaces();
 
-        verify(natsConsumer).startConsumingScope(9L);
-        verify(natsConsumer).startConsumingScope(12L);
-        verify(natsConsumer, never()).startConsumingScope(5L);
         verify(gitLabTrigger).syncOnStartup(9, true);
         verify(gitHubTrigger).syncOnStartup(12, true);
         verify(gitLabTrigger, never()).syncOnStartup(eq(5L), anyBoolean());
@@ -138,8 +116,6 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
 
         service.activateAllWorkspaces();
 
-        verify(natsConsumer).startConsumingScope(12L);
-        verify(natsConsumer, never()).startConsumingScope(7L);
         verify(gitHubTrigger).syncOnStartup(12, true);
         verify(gitHubTrigger, never()).syncOnStartup(eq(7L), anyBoolean());
         verify(connectionService, never()).findActiveBearerToken(12, IntegrationKind.GITHUB);
@@ -154,7 +130,6 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
 
         service.activateAllWorkspaces();
 
-        verify(natsConsumer).startConsumingScope(12L);
         verify(gitHubTrigger).syncOnStartup(12, false);
         verify(gitHubTrigger, never()).syncAllRepositories(anyLong());
     }
@@ -183,7 +158,6 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
             service.activateAllWorkspaces();
 
             assertThat(gitHubStarted.await(5, TimeUnit.SECONDS)).isTrue();
-            verify(natsConsumer, timeout(5_000)).startConsumingScope(9L);
             verify(gitLabTrigger, timeout(5_000)).syncOnStartup(9, true);
             assertThat(releaseGitHub.getCount()).isOne();
         } finally {

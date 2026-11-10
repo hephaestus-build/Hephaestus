@@ -1,11 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import io.nats.client.Message;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Locale;
@@ -51,31 +52,38 @@ public class IntegrationMessageMeters {
 
     private final MeterRegistry registry;
     private final Clock clock;
+    private final Counter retentionFailures;
 
     public IntegrationMessageMeters(MeterRegistry registry, Clock clock) {
         this.registry = registry;
         this.clock = clock;
+        this.retentionFailures = Counter.builder(IntegrationCoreMetrics.INBOX_RETENTION_FAILURES)
+                .description("Provider event retention passes that failed")
+                .register(registry);
         // A series that a timeout creates starts at 1, and increase() reads that first sample as no increase.
         for (IntegrationKind kind : IntegrationKind.values()) {
             processTimer(kind.name().toLowerCase(Locale.ROOT), Outcome.TIMED_OUT);
         }
     }
 
+    /** One failed retention pass; the next pass deletes what this one left. */
+    void retentionFailed() {
+        retentionFailures.increment();
+    }
+
     /**
-     * A first delivery only: the wait of a retry is its backoff, and the nak counter reports the retry. A measurement
+     * A first attempt only: the wait of a retry is its backoff, and the retry counter reports the retry. A measurement
      * never stops the handling of an event, so neither method lets a failure out.
      */
-    void received(Message message) {
+    void received(ProviderEvent event, int attempt) {
         try {
-            if (!message.isJetStream()) return;
-            var metadata = message.metaData();
-            if (metadata.deliveredCount() > 1) return;
+            if (attempt > 1) return;
             Timer.builder(IntegrationCoreMetrics.INTEGRATION_MESSAGE_LAG)
-                    .description("How long an event waited in its stream before its first handling")
-                    .tag("kind", IntegrationPoisonHandler.kindTag(message))
+                    .description("How long an event waited in the inbox before its first handling")
+                    .tag("kind", IntegrationPoisonHandler.kindTag(event.subject()))
                     .serviceLevelObjectives(LAG_BOUNDS)
                     .register(registry)
-                    .record(Duration.between(metadata.timestamp().toInstant(), clock.instant()));
+                    .record(Duration.between(event.receivedAt(), clock.instant()));
         } catch (RuntimeException failure) {
             log.debug(
                     "Skipped an event's wait: error.type={}", failure.getClass().getName());
@@ -86,7 +94,7 @@ public class IntegrationMessageMeters {
     enum Outcome {
         COMPLETED("completed"),
         FAILED("failed"),
-        /** The handler outlived the handler timeout, and its event returned to the stream. */
+        /** The handler outlived the handler timeout, and its event returned to the inbox. */
         TIMED_OUT("timed_out");
 
         private final String tag;
@@ -96,9 +104,10 @@ public class IntegrationMessageMeters {
         }
     }
 
-    void handled(Message message, Outcome outcome, long nanos) {
+    void handled(ProviderEvent event, Outcome outcome, long nanos) {
         try {
-            processTimer(IntegrationPoisonHandler.kindTag(message), outcome).record(Duration.ofNanos(nanos));
+            processTimer(IntegrationPoisonHandler.kindTag(event.subject()), outcome)
+                    .record(Duration.ofNanos(nanos));
         } catch (RuntimeException failure) {
             log.debug(
                     "Skipped a handling time: error.type={}", failure.getClass().getName());

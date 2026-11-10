@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.OutlineSubscription;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.VerificationResult;
@@ -17,8 +18,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.W
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineDocumentModel;
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
-import io.nats.client.impl.Headers;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -147,9 +146,9 @@ class OutlineWebhookFixtureRoutingTest extends BaseUnitTest {
         // Route the fixture bytes exactly as they arrive off the wire — the handler only trusts
         // event/payload.id for routing (never the document body), but feeding the
         // full real envelope (rather than a hand-built minimal one) exercises the actual JSON shape.
-        Message message = mock(Message.class);
-        when(message.getData()).thenReturn(rawBody);
-        when(message.getHeaders()).thenReturn(new Headers().add(OutlineWebhookController.HEADER_ROUTE, ROUTE));
+        ProviderEvent message = mock(ProviderEvent.class);
+        when(message.payload()).thenReturn(rawBody);
+        when(message.header(OutlineWebhookController.HEADER_ROUTE)).thenReturn(ROUTE);
 
         handler.onMessage(message);
 

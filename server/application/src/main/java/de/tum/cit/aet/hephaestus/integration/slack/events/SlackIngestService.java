@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
@@ -37,6 +38,7 @@ public class SlackIngestService {
     private final SlackThreadRepository threadRepository;
     private final SlackRosterIdentityResolver identityResolver;
     private final ConversationFeedbackErasure conversationFeedbackErasure;
+    private final ProviderEventStore providerEvents;
 
     /**
      * Fleet-wide capability flag, available by default, bound from
@@ -57,6 +59,7 @@ public class SlackIngestService {
             SlackThreadRepository threadRepository,
             SlackRosterIdentityResolver identityResolver,
             ConversationFeedbackErasure conversationFeedbackErasure,
+            ProviderEventStore providerEvents,
             @Value("${hephaestus.integration.slack.conversation-ingest.enabled:true}")
                     boolean conversationIngestEnabled,
             TransactionTemplate transactionTemplate) {
@@ -68,6 +71,7 @@ public class SlackIngestService {
         this.threadRepository = threadRepository;
         this.identityResolver = identityResolver;
         this.conversationFeedbackErasure = conversationFeedbackErasure;
+        this.providerEvents = providerEvents;
         this.conversationIngestEnabled = conversationIngestEnabled;
         this.transactionTemplate = transactionTemplate;
     }
@@ -295,8 +299,8 @@ public class SlackIngestService {
 
     /**
      * Channel erasure: flip the channel to {@code REVOKED} so ingestion stops immediately, and promptly delete the
-     * channel's ingested content — its {@code slack_message} rows and its {@code slack_thread} aggregates (which
-     * hold the {@code participant_account_ids} personal data) — rather than waiting for the 180-day retention sweep,
+     * channel's ingested content — its {@code slack_message} rows, its {@code slack_thread} aggregates (which
+     * hold the {@code participant_account_ids} personal data) and its stored provider events — rather than waiting for the 180-day retention sweep,
      * which covers messages only. Transactional and idempotent (an unknown or already-erased channel deletes 0 rows).
      *
      * <p>Derived CONVERSATION feedback is hard-deleted too (GDPR Art. 17 for the derived copies, not inert-by-gate):
@@ -311,5 +315,6 @@ public class SlackIngestService {
         conversationFeedbackErasure.eraseForThreads(workspaceId, threadIds);
         messageRepository.deleteByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
         threadRepository.deleteByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
+        providerEvents.deleteResource(workspaceId, "slack", channelId);
     }
 }

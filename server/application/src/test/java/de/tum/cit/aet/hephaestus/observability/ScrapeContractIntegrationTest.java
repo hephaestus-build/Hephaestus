@@ -76,18 +76,13 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
             Map.entry("llm_budget_exhausted_total", "the first exhausted budget creates it, with its cap"),
             Map.entry("mentor_turn_completed_total", "the first ended turn creates it, with its outcome"),
             Map.entry("event_publications_overdue", "the first overdue publication creates it, with its listener"),
-            Map.entry("integration_consumer_nak_total", "the first negative acknowledgement creates it"),
+            Map.entry("integration_consumer_retry_total", "the first retry creates it, with its kind"),
             Map.entry("integration_consumer_poison_total", "the first dead letter creates it"),
             Map.entry("integration_message_lag_seconds_bucket", "the first event creates it, with its kind"),
             Map.entry("integration_message_lag_seconds_count", "the first event creates it, with its kind"),
             Map.entry("product_feedback_steps_total", "the first step creates it, with its outcome"),
-            Map.entry("webhook_publish_total", "webhook role"),
-            Map.entry("webhook_rejected_total", "webhook role"),
-            Map.entry("webhook_stream_age_bound_seconds", "webhook role"),
-            Map.entry("webhook_stream_bytes_utilization", "webhook role"),
-            Map.entry("webhook_stream_consumer_pending", "webhook role"),
-            Map.entry("webhook_stream_oldest_message_age_seconds", "webhook role"),
-            Map.entry("webhook_stream_poll_age_seconds", "webhook role"));
+            Map.entry("webhook_publish_total", "the first delivery creates it, with its provider and outcome"),
+            Map.entry("webhook_rejected_total", "the first rejected delivery creates it, with its reason"));
 
     /** The series of a server at start. A meter that registers too many label sets at start grows past it. */
     private static final int SERIES_BUDGET = 3000;

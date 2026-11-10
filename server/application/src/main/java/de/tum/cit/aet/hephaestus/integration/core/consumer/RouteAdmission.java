@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
-import io.nats.client.Message;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -13,9 +13,9 @@ public interface RouteAdmission {
     boolean owns(String subject);
 
     /**
-     * Runs {@code handling} with the route admitted for the scope whose consumer received {@code msg}.
+     * Runs {@code handling} with the route admitted for the workspace that {@code event} was stored for.
      *
      * @return {@code false} when the route may not be handled for that scope; the message is then acknowledged
      */
-    boolean admit(@Nullable Long scopeId, Message msg, Runnable handling);
+    boolean admit(@Nullable Long scopeId, ProviderEvent event, Runnable handling);
 }

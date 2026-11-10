@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelJoinNoticeHandler;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelLifecycleService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
@@ -75,7 +75,7 @@ class SlackManifestTemplateTest extends BaseUnitTest {
     }
 
     private static Set<String> handlerEventTypes() {
-        NatsMessageDeserializer deserializer = mock(NatsMessageDeserializer.class);
+        EventPayloadDeserializer deserializer = mock(EventPayloadDeserializer.class);
         SlackChannelLifecycleService lifecycle = mock(SlackChannelLifecycleService.class);
         SlackUninstallService uninstall = mock(SlackUninstallService.class);
         List<IntegrationMessageHandler> handlers = List.of(

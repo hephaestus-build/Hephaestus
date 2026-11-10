@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -37,14 +38,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProject
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
+import de.tum.cit.aet.hephaestus.testconfig.ProviderEvents;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
-import io.nats.client.Message;
-import io.nats.client.impl.Headers;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -558,27 +559,22 @@ class GitLabRouteAdmissionTest {
         assertNotAdmitted(body, WORKSPACE_ID, h -> {});
     }
 
-    private void assertNotAdmitted(long scopeId, Consumer<Headers> change) {
+    private void assertNotAdmitted(long scopeId, Consumer<Map<String, String>> change) {
         assertNotAdmitted(NEUTRAL_EVENT, scopeId, change);
     }
 
-    private void assertNotAdmitted(String body, long scopeId, Consumer<Headers> change) {
+    private void assertNotAdmitted(String body, long scopeId, Consumer<Map<String, String>> change) {
         Runnable handling = mock(Runnable.class);
         assertThat(admission.admit(scopeId, message(body, change), handling)).isFalse();
         verify(handling, never()).run();
     }
 
-    private static Message message(String body, Consumer<Headers> change) {
-        Headers headers = new Headers();
-        new GitLabRouteCredential.Route(CONNECTION_ID, WORKSPACE_ID, ORIGIN, GROUP_ID, GROUP)
-                .headers()
-                .forEach(headers::put);
+    private static ProviderEvent message(String body, Consumer<Map<String, String>> change) {
+        Map<String, String> headers = new HashMap<>(
+                new GitLabRouteCredential.Route(CONNECTION_ID, WORKSPACE_ID, ORIGIN, GROUP_ID, GROUP).headers());
         change.accept(headers);
-        Message message = mock(Message.class);
-        when(message.getSubject()).thenReturn("gitlab.?connection." + CONNECTION_ID + ".issue");
-        when(message.getHeaders()).thenReturn(headers);
-        when(message.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
-        return message;
+        return ProviderEvents.event(
+                "gitlab.?connection." + CONNECTION_ID + ".issue", body.getBytes(StandardCharsets.UTF_8), headers);
     }
 
     private static ConnectionConfig.GitLabConfig config(String serverUrl, long groupId) {

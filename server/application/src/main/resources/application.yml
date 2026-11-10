@@ -235,10 +235,10 @@ management:
             probes:
                 enabled: true
                 add-additional-paths: true
-            # Readiness answers whether this Pod can serve, never whether a remote dependency is up: a
-            # broker outage would take every Pod out of rotation at once, and a receiver out of rotation
-            # cannot answer a provider's delivery with the 503 that makes the provider retry. `webhook` and
-            # `integrationConsumer` (NATS) stay in /actuator/health and the metrics.
+            # Readiness answers whether this Pod can serve, never whether a remote dependency is up: an
+            # outage would take every Pod out of rotation at once, and a receiver out of rotation cannot
+            # answer a provider's delivery with the 503 that makes the provider retry. `integrationConsumer`
+            # stays in /actuator/health and the metrics.
             #
             # `practiceReview` and `kubernetesSandbox` (the sandbox isolation probe) stay out too: the server
             # serves its API whether or not it may start sandboxes, and no sandbox starts without the proof.
@@ -466,9 +466,7 @@ hephaestus:
             username: ${NATS_USERNAME:}
             password: ${NATS_PASSWORD:}
             consumer:
-                # Request timeout for JetStream API calls. Increase for workspaces with many
-                # repositories. The remaining consumer tuning (ack-wait, poison handling, …)
-                # lives on hephaestus.integration.consumer.* (NatsConsumerProperties).
+                # Request timeout for NATS API calls.
                 request-timeout: 60s
 
     cors:
@@ -722,64 +720,6 @@ hephaestus:
             threshold-days: ${WEBHOOK_TOKEN_ROTATION_THRESHOLD_DAYS:7}
             validity-days: ${WEBHOOK_TOKEN_ROTATION_VALIDITY_DAYS:90}
         # ─── Inbound receiver (integration.webhook.*) ───
-        publish:
-            # Every attempt and its backoff end inside the provider's 10s response window (GitHub,
-            # GitLab), with room to read the request and write the answer. After that the provider has
-            # failed the delivery, and a later attempt only holds a request thread against a broker
-            # that is already slow.
-            deadline: 8s
-            retry-base-delay: 200ms
-        stream:
-            # Must be >= the max vendor replay tolerance (5m: Slack v0). GitHub has
-            # no timestamp, so this dedup window keyed on X-GitHub-Delivery is its only replay
-            # defense. It also outlasts the 2h look-back of the GitHub redelivery job, so a delivery
-            # that was stored but answered late is not stored again when the job redelivers it. The
-            # broker keeps one message id per stored message for this long. See WebhookProperties.Stream.
-            duplicate-window: 3h
-            # The bound that holds a stream in steady state. Consumers acknowledge within seconds, so
-            # the age only decides how long an offline deployment can resume from the stream;
-            # reconciliation repairs what it misses inside hephaestus.sync.timeframe-days. Sized so a
-            # busy GitHub stream's byte bound holds it: a stream at its byte bound deletes its oldest
-            # message on every publish (WebhookIngestionCannotFailSilentlyTest).
-            max-age: ${HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE:7d}
-            # Streams whose messages carry real personal content, not just change pointers. SQL is the
-            # system of record and GDPR erasure cannot reach inside the broker, so these are capped
-            # at a transport-buffer horizon below the bound above:
-            #   slack   — the envelope is the channel/DM message text itself.
-            #   outline — an Outline webhook delivery embeds the whole document in payload.model.text
-            #             (full Markdown body, plus author/collaborator ids), so an erased or corrected
-            #             document would otherwise stay readable in JetStream for months.
-            max-age-by-stream:
-                slack: 72h
-                outline: 72h
-            # The disk-safety bound behind max-age. At the bound JetStream deletes the oldest messages to
-            # admit new ones, so it is sized to outlast what nightly RECONCILIATION can re-fetch
-            # (hephaestus.sync.timeframe-days): inside that window a shed webhook is recoverable from
-            # the provider API, outside it, it is recoverable by nothing. There is deliberately no
-            # message-count bound — a count says nothing about disk.
-            max-bytes: ${HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES:1GB}
-            max-bytes-by-stream:
-                # github carries the traffic; the others are a rounding error next to it.
-                github: ${HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB:10GB}
-            # What the broker may hold for all four streams together; startup refuses to run if their
-            # bounds sum above it. Must match the broker's own max_file and stay under the free space
-            # on the JetStream volume — docs/admin/webhook-ingestion-operations explains why.
-            storage-budget: ${HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET:16GB}
-            # Startup keeps an existing stream's limits in step with this file, but only limits —
-            # subjects, retention, storage and discard are never rewritten. A change that would delete
-            # messages the stream already holds is withheld and logged rather than applied. Set this
-            # once, deliberately, to let that through.
-            allow-destructive-limit-updates: ${HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES:false}
-            # A bound that sheds messages deletes them before the broker replies, so the wait scales
-            # with the bytes shed, not with the request. Startup-only, and deliberately not the
-            # timeout the health probes use — those have to fail fast to be worth alerting on.
-            limit-update-timeout: ${HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT:5m}
-            monitor-interval: 60s
-        shutdown:
-            # Drain budget for in-flight publishes after HTTP closes. Docker stop_grace_period
-            # must cover: Spring HTTP drain (server.shutdown=graceful + lifecycle timeout 20s)
-            # + this drain + small margin. The chart owns terminationGracePeriodSeconds.
-            drain-timeout: 15s
         http:
             # Hard cap enforced by WebhookPayloadSizeFilter (Content-Length check before
             # Spring buffers the body). Tomcat's max-http-post-size only enforces on
@@ -802,11 +742,11 @@ hephaestus:
     # pure helper/subject classes may still load because they do no external work.
     # Flip `enabled` to `true` once credentials and redirect URLs are configured.
     integration:
+        # The provider event inbox (ProviderEventConsumerProperties). A handled event stays for the replay
+        # window, so a provider that sends it again finds it; a dead letter stays for its retention.
         consumer:
-            # Lets JetStream delete a durable nothing has been BOUND to for this long — see
-            # NatsConsumerProperties for what boundness measures and why 0 is the only value below 1h.
-            # A bare number is hours.
-            inactive-threshold: ${HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD:30d}
+            replay-window: ${HEPHAESTUS_INTEGRATION_CONSUMER_REPLAY_WINDOW:3d}
+            dead-retention: ${HEPHAESTUS_INTEGRATION_CONSUMER_DEAD_RETENTION:30d}
         # ─── GitHub authentication (GitHubProperties) ───
         # Can be any OAuth token, such as the PAT.
         github:
@@ -868,9 +808,9 @@ hephaestus:
                 # firewall, and is forward-only (never pre-announcement history). Nothing is read until a channel
                 # is deliberately activated. Set to false to hard-disable the whole subsystem fleet-wide.
                 enabled: ${HEPHAESTUS_INTEGRATION_SLACK_CONVERSATION_INGEST_ENABLED:true}
-                # Slack Events API ingest rides the core /webhooks/slack + NATS/JetStream framework
-                # (subjects slack.<team>.<scope>.<event>, Nats-Msg-Id = slack-<event_id>).
-                # The mentor response stream itself is direct Slack Web API output, not NATS.
+                # Slack Events API ingest rides the core /webhooks/slack receiver and the provider event inbox
+                # (subjects slack.<team>.<scope>.<event>, delivery key slack-<event_id>).
+                # The mentor response stream itself is direct Slack Web API output.
         outline:
             # Master switch for the Outline documentation integration (install, sync, content projection).
             # Off by default; a workspace admin still installs per-workspace with a base URL + token.

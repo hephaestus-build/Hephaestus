@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -18,7 +18,7 @@ public class SlackMentorDmMessageHandler extends AbstractSlackEnvelopeHandler {
 
     private final SlackMentorService mentorService;
 
-    public SlackMentorDmMessageHandler(SlackMentorService mentorService, NatsMessageDeserializer deserializer) {
+    public SlackMentorDmMessageHandler(SlackMentorService mentorService, EventPayloadDeserializer deserializer) {
         super("message_im", deserializer);
         this.mentorService = mentorService;
     }

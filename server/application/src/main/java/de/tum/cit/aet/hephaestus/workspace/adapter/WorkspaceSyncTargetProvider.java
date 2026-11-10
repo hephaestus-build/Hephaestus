@@ -6,8 +6,6 @@ import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
@@ -36,7 +34,6 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,11 +47,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final WorkspaceScopeFilter workspaceScopeFilter;
     private final ConnectionService connectionService;
-    private final NatsConnectionProperties natsProperties;
     private final ApplicationEventPublisher eventPublisher;
-
-    // Absent under the webhook runtime role — reconcile then skips the consumer refresh.
-    private final ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
 
     private final ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository;
     private final MeterRegistry meterRegistry;
@@ -64,8 +57,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             WorkspaceScopeFilter workspaceScopeFilter,
             ConnectionService connectionService,
-            NatsConnectionProperties natsProperties,
-            ObjectProvider<IntegrationNatsConsumer> natsConsumerService,
             ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository,
             ApplicationEventPublisher eventPublisher,
             MeterRegistry meterRegistry) {
@@ -74,9 +65,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.connectionService = connectionService;
-        this.natsProperties = natsProperties;
         this.eventPublisher = eventPublisher;
-        this.natsConsumerService = natsConsumerService;
         this.practiceReviewRepositoryTargetRepository = practiceReviewRepositoryTargetRepository;
     }
 
@@ -556,14 +545,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
             }
             eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(
                     workspaceId, repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(syncTargetId)));
-
-            // A name change moves the repo's NATS subject; rebuild the workspace
-            // consumer filters so
-            // live events under the new name are delivered instead of silently
-            // ACK-dropped.
-            if (nameChanged && natsProperties.enabled()) {
-                natsConsumerService.ifAvailable(svc -> svc.updateScopeConsumer(workspaceId));
-            }
         });
     }
 

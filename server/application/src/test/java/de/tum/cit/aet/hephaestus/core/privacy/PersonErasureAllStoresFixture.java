@@ -273,7 +273,26 @@ final class PersonErasureAllStoresFixture {
                 "{\"text\":\"" + CANARY + "\"}",
                 "error_summary",
                 CANARY);
-        row("consumer_dead_letter", "workspace_id", workspace, "replayed_by", account);
+        row(
+                "provider_event",
+                "workspace_id",
+                workspace,
+                "provider",
+                "github",
+                "subject",
+                "github.acme.app.push",
+                "scope_key",
+                workspace + ":github.acme.app",
+                "payload",
+                "{}".getBytes(StandardCharsets.UTF_8),
+                "state",
+                "DEAD",
+                "ended_at",
+                Timestamp.from(Instant.now()),
+                "error_class",
+                "Failure",
+                "replayed_by",
+                account);
         row("activity_event", "workspace_id", workspace, "actor_id", person.user(), "event_key", CANARY);
         row("activity_automation", "workspace_id", workspace, "user_id", person.user());
         seedActivityPublication(workspace, person.user(), CANARY);

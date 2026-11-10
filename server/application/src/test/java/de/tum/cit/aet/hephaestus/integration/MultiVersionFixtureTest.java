@@ -5,10 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
-import io.nats.client.Message;
 import java.io.InputStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
@@ -23,7 +23,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Pins the tolerant-reader contract for the SCM webhook DTOs through the REAL production path:
- * {@link NatsMessageDeserializer} over the Spring-Boot-autoconfigured Jackson&nbsp;3
+ * {@link EventPayloadDeserializer} over the Spring-Boot-autoconfigured Jackson&nbsp;3
  * {@code tools.jackson.databind.ObjectMapper}.
  *
  * <p>Booting the real auto-config (rather than hand-building a mapper) is the point: unknown-field
@@ -47,11 +47,11 @@ class MultiVersionFixtureTest {
     @Autowired
     private ObjectMapper jackson3;
 
-    private @Nullable NatsMessageDeserializer deserializer;
+    private @Nullable EventPayloadDeserializer deserializer;
 
-    private NatsMessageDeserializer deserializer() {
+    private EventPayloadDeserializer deserializer() {
         if (deserializer == null) {
-            deserializer = new NatsMessageDeserializer(jackson3);
+            deserializer = new EventPayloadDeserializer(jackson3);
         }
         return deserializer;
     }
@@ -150,13 +150,13 @@ class MultiVersionFixtureTest {
 
     /**
      * Drives the real production deserialization path: wrap the fixture bytes in a NATS
-     * {@link Message} and call {@link NatsMessageDeserializer#deserialize}, exactly as the live
+     * {@link Message} and call {@link EventPayloadDeserializer#deserialize}, exactly as the live
      * message handlers do.
      */
     private <T> T deserialize(String classpath, Class<T> type) throws Exception {
         byte[] payload = readBytes(classpath);
-        Message message = mock(Message.class);
-        when(message.getData()).thenReturn(payload);
+        ProviderEvent message = mock(ProviderEvent.class);
+        when(message.payload()).thenReturn(payload);
         return deserializer().deserialize(message, type);
     }
 

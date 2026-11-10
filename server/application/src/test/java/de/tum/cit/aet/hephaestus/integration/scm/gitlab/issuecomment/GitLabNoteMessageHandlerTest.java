@@ -10,7 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmPullRequestItems;
@@ -30,7 +31,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLab
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiffNoteWebhookProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
@@ -69,7 +69,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
     private PullRequestRepository pullRequestRepository;
 
     @Mock
-    private NatsMessageDeserializer deserializer;
+    private EventPayloadDeserializer deserializer;
 
     @Mock
     private GitLabUserService userService;
@@ -126,7 +126,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
         void issueNote_routesToProcessIssueNote() throws IOException {
             GitLabNoteEventDTO event = createIssueNoteEvent("create", false, false, false);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueCommentProcessor).processIssueNote(eq(event), any(ProcessingContext.class));
@@ -137,7 +137,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
         void mrGeneralNote_routesToProcessMergeRequestNote() throws IOException {
             GitLabNoteEventDTO event = createMergeRequestNoteEvent("create", false, false, null);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueCommentProcessor).processMergeRequestNote(eq(event), any(ProcessingContext.class));
@@ -161,7 +161,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
             // position is non-null => diff note => deferred
             GitLabNoteEventDTO event = createMergeRequestNoteEvent("create", false, false, new Object());
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueCommentProcessor, never()).processIssueNote(any(), any());
@@ -172,7 +172,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
         void commitNote_isSkipped() throws IOException {
             GitLabNoteEventDTO event = createCommitNoteEvent();
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueCommentProcessor, never()).processIssueNote(any(), any());
@@ -187,7 +187,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
         void systemNote_isSkipped() throws IOException {
             GitLabNoteEventDTO event = createIssueNoteEvent("create", true, false, false);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueCommentProcessor, never()).processIssueNote(any(), any());
@@ -236,7 +236,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
         void internalNote_isSkipped() throws IOException {
             GitLabNoteEventDTO event = createIssueNoteEvent("create", false, true, false);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueCommentProcessor, never()).processIssueNote(any(), any());
@@ -247,7 +247,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
         void noteOnConfidentialIssue_isSkipped() throws IOException {
             GitLabNoteEventDTO event = createIssueNoteEvent("create", false, false, true);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueCommentProcessor, never()).processIssueNote(any(), any());
@@ -263,7 +263,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
             GitLabNoteEventDTO event =
                     new GitLabNoteEventDTO("note", "note", createUser(), createProject(), null, null, null);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueCommentProcessor, never()).processIssueNote(any(), any());
@@ -275,7 +275,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
             GitLabNoteEventDTO event =
                     new GitLabNoteEventDTO("note", "note", createUser(), null, attrs, createEmbeddedIssue(false), null);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueCommentProcessor, never()).processIssueNote(any(), any());
@@ -283,8 +283,8 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
 
         @Test
         void nonNoteSubject_rejected() throws IOException {
-            Message msg = mock(Message.class);
-            when(msg.getSubject()).thenReturn("gitlab.org.proj.issue");
+            ProviderEvent msg = mock(ProviderEvent.class);
+            when(msg.subject()).thenReturn("gitlab.org.proj.issue");
 
             handler.onMessage(msg);
 
@@ -301,7 +301,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
             when(contextResolver.resolve(eq(PROJECT_PATH), any(), any())).thenReturn(null);
             GitLabNoteEventDTO event = createIssueNoteEvent("create", false, false, false);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueCommentProcessor, never()).processIssueNote(any(), any());
@@ -421,9 +421,9 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
                 246765L, "demo-repository", "https://gitlab.lrz.de/hephaestustest/demo-repository", PROJECT_PATH);
     }
 
-    private Message mockMessage(GitLabNoteEventDTO event) throws IOException {
-        Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn(NATS_SUBJECT);
+    private ProviderEvent mockMessage(GitLabNoteEventDTO event) throws IOException {
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn(NATS_SUBJECT);
         when(deserializer.deserialize(msg, GitLabNoteEventDTO.class)).thenReturn(event);
         return msg;
     }

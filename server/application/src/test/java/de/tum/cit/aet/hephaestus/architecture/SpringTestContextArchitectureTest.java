@@ -74,6 +74,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment(
                     "integration.scm.gitlab.credentials.GitLabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
             assignment(
+                    "integration.scm.gitlab.webhook.GitLabWebhookIngressIntegrationTest",
+                    "provider-event-receiver-spy"),
+            assignment(
                     "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
                     "gitlab-event-routing"),
             assignment(
@@ -260,6 +263,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "scm-source-currentness",
                     "real native SCM capture and current-row reconciliation with a listener spy"
                             + " for transactional rollback and durable retry"),
+            Map.entry("provider-event-receiver-spy", "the provider event receiver spied to fail the inbox write"),
             Map.entry("scrape-contract", "the series of a server at start, before other classes add meters"),
             Map.entry("slack-enabled", "real Slack item resolution with the configured provider adapter"),
             Map.entry("slack-ingest", "enabled Slack ingest wiring with its review-submission spy"),

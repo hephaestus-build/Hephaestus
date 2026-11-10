@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
@@ -57,7 +57,7 @@ class GitHubReviewCommandTest extends BaseUnitTest {
             pullRequests,
             items,
             events,
-            mock(NatsMessageDeserializer.class),
+            mock(EventPayloadDeserializer.class),
             mock(TransactionTemplate.class));
 
     @BeforeEach

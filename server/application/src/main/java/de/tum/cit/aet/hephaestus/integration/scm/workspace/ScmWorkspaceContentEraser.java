@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.ScmMirrorErasedEvent;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -20,7 +18,6 @@ import java.util.List;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,10 +39,6 @@ public class ScmWorkspaceContentEraser {
     private final WorkspaceRepositoryMonitorService repositoryMonitorService;
     private final TeamRepository teamRepository;
     private final OrganizationMembershipRepository organizationMembershipRepository;
-    private final NatsConnectionProperties natsProperties;
-
-    // The webhook runtime does not provide a NATS consumer.
-    private final ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
 
     private final ApplicationEventPublisher eventPublisher;
 
@@ -57,8 +50,6 @@ public class ScmWorkspaceContentEraser {
             WorkspaceRepositoryMonitorService repositoryMonitorService,
             TeamRepository teamRepository,
             OrganizationMembershipRepository organizationMembershipRepository,
-            NatsConnectionProperties natsProperties,
-            ObjectProvider<IntegrationNatsConsumer> natsConsumerService,
             ApplicationEventPublisher eventPublisher) {
         this.workspaceRepository = workspaceRepository;
         this.organizations = organizations;
@@ -67,8 +58,6 @@ public class ScmWorkspaceContentEraser {
         this.repositoryMonitorService = repositoryMonitorService;
         this.teamRepository = teamRepository;
         this.organizationMembershipRepository = organizationMembershipRepository;
-        this.natsProperties = natsProperties;
-        this.natsConsumerService = natsConsumerService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -112,10 +101,6 @@ public class ScmWorkspaceContentEraser {
         }
 
         int teamsErased = eraseOrgTierIfLastWorkspace(workspace);
-
-        if (natsProperties.enabled()) {
-            natsConsumerService.ifAvailable(svc -> svc.updateScopeConsumer(workspaceId));
-        }
 
         log.info(
                 "scm.audit: mirror erase — actor={}, workspaceId={}, erasedRepositories={},"

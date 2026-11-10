@@ -199,7 +199,8 @@ Procedure: `docs/contributor/database-migration.mdx`. What the drift gate reads 
 One `POST /webhooks/{kind}` entry point serves GitHub and the Slack Events API.
 It resolves the kind through `IntegrationKindRouting` and hands it to `WebhookIngestPipeline`.
 The pipeline selects that adapter's `WebhookSignatureVerifier` and `SubjectKeyDeriver`.
-It publishes the verified envelope to JetStream.
+It stores the verified envelope in the provider event inbox (`provider_event`), one row for each subscribing workspace, in the request's transaction.
+`ProviderEventConsumer` claims and handles the rows: `docs/contributor/ingest-durability.md`.
 
 The server runs the receiver. There is no separate webhook role.
 

@@ -19,8 +19,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -46,8 +44,6 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import java.io.IOException;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -82,12 +78,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
     @Mock
     private RepositoryRepository repositoryRepository;
-
-    @Mock
-    private IntegrationNatsConsumer natsConsumerService;
-
-    @Mock
-    private ObjectProvider<IntegrationNatsConsumer> natsConsumerServiceProvider;
 
     @Mock
     private SyncTargetProvider syncTargetProvider;
@@ -135,8 +125,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         lenient().when(actorSelector.connectedProviderId(anyLong())).thenReturn(Optional.of(CONNECTED_PROVIDER_ID));
-        NatsConnectionProperties natsProperties = new NatsConnectionProperties(
-                true, "nats://localhost:4222", null, new NatsConnectionProperties.Consumer(Duration.ofSeconds(60)));
         SyncSchedulerProperties syncProps = new SyncSchedulerProperties(
                 true,
                 7,
@@ -145,7 +133,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
                 new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
 
-        lenient().when(natsConsumerServiceProvider.getIfAvailable()).thenReturn(natsConsumerService);
         lenient().when(dataSyncTriggerProvider.getObject()).thenReturn(dataSyncTrigger);
         lenient().when(syncTargetProvider.isScopeActiveForSync(anyLong())).thenReturn(true);
 
@@ -154,9 +141,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 organizationRepository,
                 repositoryToMonitorRepository,
                 repositoryRepository,
-                natsProperties,
                 syncProps,
-                natsConsumerServiceProvider,
                 syncTargetProvider,
                 gitLabSyncServiceHolderProvider,
                 gitLabWebhookServiceProvider,
@@ -189,43 +174,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         lenient()
                 .when(connectionService.findActiveBearerToken(anyLong(), eq(IntegrationKind.GITLAB)))
                 .thenReturn(Optional.of(new BearerToken("glpat-test-token", null)));
-    }
-
-    /** Creates a service instance with NATS disabled for testing skip behavior. */
-    private GitLabWorkspaceInitializationService createServiceWithNatsDisabled() {
-        NatsConnectionProperties disabledNats = new NatsConnectionProperties(
-                false, "nats://localhost:4222", null, new NatsConnectionProperties.Consumer(Duration.ofSeconds(60)));
-        SyncSchedulerProperties syncProps = new SyncSchedulerProperties(
-                true,
-                7,
-                "0 0 3 * * *",
-                15,
-                new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
-                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
-        return new GitLabWorkspaceInitializationService(
-                workspaceRepository,
-                organizationRepository,
-                repositoryToMonitorRepository,
-                repositoryRepository,
-                disabledNats,
-                syncProps,
-                natsConsumerServiceProvider,
-                syncTargetProvider,
-                gitLabSyncServiceHolderProvider,
-                gitLabWebhookServiceProvider,
-                rateLimitTrackerProvider,
-                dataSyncTriggerProvider,
-                connectionService,
-                new GitLabWorkspaceLinkService(
-                        workspaceRepository,
-                        organizationRepository,
-                        actorSelector,
-                        mock(IdentityProviderRepository.class),
-                        repositoryToMonitorRepository),
-                repositoryMonitors,
-                actorSelector,
-                monitoringExecutor,
-                projectAdmission);
     }
 
     /** Configures the executor mock to run submitted tasks synchronously. */
@@ -334,7 +282,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.completed(0));
 
-            verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
             verify(gitLabWebhookService).registerWebhook(workspace);
         }
 
@@ -356,7 +303,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             assertThat(initService.initialize(workspace)).isEqualTo(expected);
 
             verify(repositoryMonitors).monitorAll(workspace, List.of(found));
-            verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
             verify(gitLabWebhookService, never()).registerWebhook(any());
         }
 
@@ -370,7 +316,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             verify(gitLabWebhookService).rotateTokenIfNeeded(workspace);
             verifyNoInteractions(gitLabGroupSyncService);
-            verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
             verify(gitLabWebhookService, never()).registerWebhook(any());
         }
 
@@ -384,40 +329,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
 
             verify(gitLabWebhookService, never()).registerWebhook(any());
-        }
-
-        @Test
-        void shouldKeepWebhookClosedWhenScopeConsumerCannotBeConfirmed() throws Exception {
-            stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
-            doThrow(new IOException("stream gitlab not found"))
-                    .when(natsConsumerService)
-                    .establishScopeConsumer(1L, "gitlab");
-
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
-
-            verify(gitLabWebhookService, never()).registerWebhook(any());
-        }
-
-        @Test
-        void shouldKeepWebhookClosedWhenThisRuntimeHasNoScopeConsumer() {
-            stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
-            when(natsConsumerServiceProvider.getIfAvailable()).thenReturn(null);
-
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
-
-            verify(gitLabWebhookService, never()).registerWebhook(any());
-        }
-
-        @Test
-        void shouldKeepWebhookClosedWhenNatsIsDisabled() {
-            List<Repository> repos = List.of(createRepo("my-group/project-a"));
-            stubDiscovery(GitLabSyncResult.completed(repos, 1, 0, 0));
-
-            assertThat(createServiceWithNatsDisabled().initialize(workspace)).isEqualTo(SyncResult.completed(1));
-
-            verify(repositoryMonitors).monitorAll(workspace, repos);
-            verify(gitLabWebhookService, never()).registerWebhook(any());
-            verifyNoInteractions(natsConsumerService);
         }
 
         @Test
@@ -435,19 +346,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(false);
 
             assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.completed(0));
-            verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
             verify(gitLabWebhookService, never()).registerWebhook(any());
-        }
-
-        @Test
-        void shouldRequireConsumerConfirmationWhenAutomaticRegistrationIsDisabled() throws Exception {
-            stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
-            lenient().when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(false);
-            doThrow(new IOException("consumer unavailable"))
-                    .when(natsConsumerService)
-                    .establishScopeConsumer(1L, "gitlab");
-
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
         }
     }
 
@@ -493,16 +392,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldNotReportWebhookMissingWhenNatsIsDisabled() {
-            // Registration is otherwise enabled; without NATS it must not even be consulted.
-            lenient().when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(true);
-
-            assertThat(createServiceWithNatsDisabled().initializeIfWebhookMissing(1L))
-                    .isFalse();
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
-        }
-
-        @Test
         void shouldSkipWhenWebhookRegistrationIsDisabled() {
             when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(false);
 
@@ -539,8 +428,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             assertThat(workspace.getOrganizationId()).isEqualTo(organization.getId());
 
             verify(repositoryMonitors).monitorAll(workspace, repos);
-
-            verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
         }
 
         @Test

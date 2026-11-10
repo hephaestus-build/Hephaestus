@@ -411,17 +411,6 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "ExactPersonIdentityResolver",
                     "OutlinePersonSourceIdentityContributor", // Permission reads suppression, whose registry includes
                     // this source.
-                    "WorkspaceActivationService",
-                    "GitHubLifecycleListener", // IntegrationNatsConsumer absent under the webhook runtime role
-                    // (server.enabled=false) — see ADR 0008
-                    "WorkspaceLifecycleService", // IntegrationNatsConsumer absent under the webhook runtime role
-                    "WorkspaceRepositoryMonitorService",
-                    "ScmWorkspaceContentEraser", // IntegrationNatsConsumer absent under the webhook runtime role — the
-                    // erase refreshes the scope consumer once after dropping the
-                    // workspace's monitors
-                    "WorkspaceSyncTargetProvider", // IntegrationNatsConsumer absent under the webhook runtime role —
-                    // reconcileSyncTargetIdentity refreshes the scope consumer after a
-                    // rename re-key
                     "GitLabWorkspaceInitializationService", // Optional GitLab beans gated by @ConditionalOnProperty
                     "GitLabCredentialHealthFilter", // Breaks WebClient builder -> health -> connection strategies ->
                     // GitLab clients -> builder
@@ -445,13 +434,6 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // @ConditionalOnProperty(hephaestus.integration.outline.enabled));
                     // the always-on purge contributor resolves it lazily so it still
                     // drops leftover documents when Outline is disabled
-                    "OutlineWebhookRegistrar", // IntegrationNatsConsumer is optional (gated on
-                    // hephaestus.sync.nats.enabled and the server runtime role); the
-                    // registrar reconciles the scope consumer after every subscription-id
-                    // change and must not require the bean
-                    "SlackScopeConsumerReconciler", // same reason as OutlineWebhookRegistrar: IntegrationNatsConsumer
-                    // is optional (nats/server-role gated); the Slack lifecycle
-                    // reconciler must not require the bean
                     "SyncPushService", // Qualified NATS connection is optional when sync push is disabled or under
                     // specs
                     "GitLabConnectionSyncStateProvider", // Rate-limit tracker is conditional with the GitLab runtime

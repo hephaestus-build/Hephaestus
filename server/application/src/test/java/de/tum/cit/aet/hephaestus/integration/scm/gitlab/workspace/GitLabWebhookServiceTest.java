@@ -102,7 +102,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
     private static GitLabRouteCredential credential(@Nullable String secret, @Nullable String previous) {
         return new GitLabRouteCredential(WebhookPropertiesFixture.configured(
-                SECRET, WebhookPropertiesFixture.stream(), new WebhookProperties.Routing(secret, previous)));
+                SECRET, new WebhookProperties.Routing(secret, previous)));
     }
 
     private GitLabWebhookService service(GitLabRouteCredential credential) {
@@ -495,7 +495,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         @Test
         void shouldSkipWithoutRoutingCredentials() {
             WebhookProperties unconfigured = WebhookPropertiesFixture.configured(
-                    "", WebhookPropertiesFixture.stream(), new WebhookProperties.Routing(null, null));
+                    "", new WebhookProperties.Routing(null, null));
             var service = new GitLabWebhookService(
                     webhookClientProvider,
                     new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN), "/api")),

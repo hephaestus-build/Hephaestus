@@ -12,11 +12,6 @@ nats:
   jetstream:
     maxMemory: 256M
     maxFileBytes: 4294967296
-webhook:
-  stream:
-    maxBytes: 256MB
-    maxBytesByStream:
-      github: 1GB
 server:
   gitCache:
     sizeLimit: 5Gi

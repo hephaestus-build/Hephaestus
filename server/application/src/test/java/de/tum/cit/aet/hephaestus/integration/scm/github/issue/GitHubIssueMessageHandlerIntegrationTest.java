@@ -22,11 +22,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.ProviderEvents;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import io.nats.client.impl.NatsMessage;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -128,13 +128,11 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldKeepTheNewerIssueStateWhenAnOlderEnvelopeIsReplayed() throws Exception {
         var edited = Objects.requireNonNull(loadPayload("issues.edited").issue());
-        handler.onMessage(new NatsMessage(
+        handler.onMessage(ProviderEvents.event(
                 "github.HephaestusTest.TestRepository.issues",
-                null,
                 new ClassPathResource("github/issues.edited.json").getContentAsByteArray()));
-        var older = new NatsMessage(
+        var older = ProviderEvents.event(
                 "github.HephaestusTest.TestRepository.issues",
-                null,
                 new ClassPathResource("github/issues.opened.json").getContentAsByteArray());
         handler.onMessage(older);
         handler.onMessage(older);

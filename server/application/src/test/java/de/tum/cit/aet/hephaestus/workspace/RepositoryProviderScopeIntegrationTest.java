@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleCon
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -56,11 +57,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.GitLabRepositorySelec
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.GitLabStoppedProjectService;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
+import de.tum.cit.aet.hephaestus.testconfig.ProviderEvents;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceSyncTargetProvider;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
-import io.nats.client.Message;
-import io.nats.client.impl.Headers;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -726,17 +726,17 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                             return Mono.fromFuture(held);
                         }))
                         .build());
-        Headers headers = new Headers();
-        new GitLabRouteCredential.Route(
-                        Objects.requireNonNull(connection.getId()), own.getId(), origin, 42L, own.getAccountLogin())
-                .headers()
-                .forEach(headers::put);
-        Message event = mock(Message.class);
-        when(event.getSubject()).thenReturn("gitlab.?connection." + connection.getId() + ".project");
-        when(event.getHeaders()).thenReturn(headers);
-        when(event.getData())
-                .thenReturn(("{\"event_name\":\"project_transfer\",\"project_id\":" + NATIVE_ID + "}")
-                        .getBytes(StandardCharsets.UTF_8));
+        ProviderEvent event = ProviderEvents.event(
+                "gitlab.?connection." + connection.getId() + ".project",
+                ("{\"event_name\":\"project_transfer\",\"project_id\":" + NATIVE_ID + "}")
+                        .getBytes(StandardCharsets.UTF_8),
+                new GitLabRouteCredential.Route(
+                                Objects.requireNonNull(connection.getId()),
+                                own.getId(),
+                                origin,
+                                42L,
+                                own.getAccountLogin())
+                        .headers());
         try (var executor = Executors.newSingleThreadExecutor()) {
             var result = executor.submit(() -> routeAdmission.admit(own.getId(), event, () -> {}));
             try {

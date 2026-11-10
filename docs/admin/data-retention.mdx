@@ -16,14 +16,19 @@ Otherwise, it names the Spring property, and the value is fixed in the supported
 The [configuration reference](./configuration-reference) lists the settings that have an environment variable.
 The times of the scheduled jobs are in the time zone of the server process.
 
-## Webhook dead letters
+## Provider events
 
-Failed events retain only broker coordinates, a subject, timestamps and an error class in PostgreSQL.
-No payload, headers, exception text or routing credential is copied into this table.
-The original event remains in NATS under the stream retention limits below.
-Replay cannot recover an expired event.
+The provider event inbox in PostgreSQL keeps each verified webhook delivery with its payload and headers.
 
-Workspace deletion removes that workspace's dead-letter records through the workspace foreign key.
+| Event | Retention | Where to change it |
+| --- | --- | --- |
+| Handled | 3 days after its handling | `hephaestus.integration.consumer.replay-window` |
+| Dead letter | 30 days after its failure | `hephaestus.integration.consumer.dead-retention` |
+| Waiting or in handling | Until it is handled or becomes a dead letter | — |
+
+Workspace deletion removes that workspace's events through the workspace foreign key.
+Person erasure deletes the events that name the person.
+[Webhook ingestion operations](./webhook-ingestion-operations#how-long-the-inbox-keeps-an-event) explains the windows.
 Unassigned installation events have no workspace and remain until the instance is removed.
 
 Replay completion records the requesting account ID and time without deleting the metadata.
@@ -145,12 +150,6 @@ The conversation retention applies to them.
 An erased entry keeps its place in the conversation, as a deleted message does.
 Erasing an entry also erases each summary that covers it, so a long conversation is summarized again after a weekly run.
 A weekly run erases at most 20,000 entries and 20,000 tool results for each workspace, and a larger backlog takes more weeks.
-
-## NATS JetStream
-
-The `nats-data` volume keeps webhook deliveries.
-Each stream deletes its oldest messages first when it reaches its age limit or its size limit.
-[Webhook ingestion operations](./webhook-ingestion-operations#how-long-a-delivery-is-actually-kept) gives the limits of each stream and their settings.
 
 ## Logs and traces
 
