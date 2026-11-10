@@ -106,9 +106,6 @@ hephaestus:
     workspace:
         init-default: false # Disable PAT workspace bootstrap
         creation-policy: SELF_SERVICE
-        # A5: keep the empty-membership ADMIN auto-seed OFF by default in tests (mirrors prod), so the
-        # disabled-case test is deterministic. The enabled path is covered by a @TestPropertySource override.
-        auto-seed-membership: false
     # OAuth state HMAC secret + webhook secret — required by HmacOAuthStateService
     # at boot. Without these the integration framework can't construct.
     integration:

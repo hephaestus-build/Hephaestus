@@ -528,8 +528,6 @@ hephaestus:
             enabled: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:false}
             base-domain: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:}
         init-default: true
-        # On only for the e2e suites (MembershipAutoSeeder).
-        auto-seed-membership: false
         default:
             login: ${GITHUB_PAT_LOGIN:hephaestus-build}
             token: ${GITHUB_PAT:}

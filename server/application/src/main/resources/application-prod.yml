@@ -73,8 +73,6 @@ hephaestus:
 
     workspace:
         init-default: false
-        # Stated here too: the capacity bench copies this file over its e2e profile to match production.
-        auto-seed-membership: false
 
 
     # ═══════════════════════════════════════════════════════════════════════════

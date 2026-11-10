@@ -11,7 +11,6 @@ hephaestus:
   workspace:
     init-default: false
     creation-policy: SELF_SERVICE
-    auto-seed-membership: true
   dev:
     trigger-enabled: true
   agent:

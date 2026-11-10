@@ -66,7 +66,6 @@ public class WorkspaceContextFilter implements Filter {
     private final WorkspaceRepository workspaceRepository;
     private final MembershipRepository workspaceMembershipRepository;
     private final CurrentAccountUsers currentAccountUsers;
-    private final MembershipAutoSeeder membershipAutoSeeder;
     private final WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository;
     private final ObjectMapper objectMapper;
     private final WorkspaceElevationAudit elevationAudit;
@@ -78,7 +77,6 @@ public class WorkspaceContextFilter implements Filter {
             WorkspaceRepository workspaceRepository,
             MembershipRepository workspaceMembershipRepository,
             CurrentAccountUsers currentAccountUsers,
-            MembershipAutoSeeder membershipAutoSeeder,
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
             ObjectMapper objectMapper,
             WorkspaceElevationAudit elevationAudit,
@@ -88,7 +86,6 @@ public class WorkspaceContextFilter implements Filter {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.currentAccountUsers = currentAccountUsers;
-        this.membershipAutoSeeder = membershipAutoSeeder;
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
         this.objectMapper = objectMapper;
         this.elevationAudit = elevationAudit;
@@ -167,7 +164,7 @@ public class WorkspaceContextFilter implements Filter {
             var viewed = UserViewContextHolder.get();
             var currentUsers =
                     viewed == null ? currentAccountUsers.resolve() : currentAccountUsers.resolve(viewed.accountId());
-            MembershipResolution membership = fetchUserRoles(workspace, currentUsers, viewed == null);
+            MembershipResolution membership = fetchUserRoles(workspace, currentUsers);
             Set<WorkspaceRole> roles = membership.roles();
 
             // Instance admins may enter without membership, but elevation never grants ownership.
@@ -249,7 +246,7 @@ public class WorkspaceContextFilter implements Filter {
                 .flatMap(id -> members.stream().filter(u -> id == u.actorId()).findFirst());
     }
 
-    private MembershipResolution fetchUserRoles(Workspace workspace, Collection<ActorProfile> users, boolean maySeed) {
+    private MembershipResolution fetchUserRoles(Workspace workspace, Collection<ActorProfile> users) {
         var viewed = UserViewContextHolder.get();
         Long accountId =
                 viewed == null ? SecurityUtils.getCurrentAccountId().orElse(null) : Long.valueOf(viewed.accountId());
@@ -257,7 +254,6 @@ public class WorkspaceContextFilter implements Filter {
         var member = workspaceMembershipRepository
                 .findByWorkspace_IdAndId_AccountId(workspace.getId(), accountId)
                 .filter(candidate -> candidate.getLeftAt() == null);
-        if (member.isEmpty() && maySeed) member = membershipAutoSeeder.seedFirstUserWhenEmpty(workspace, users);
         if (member.isEmpty()) return MembershipResolution.EMPTY;
         Set<Long> actorIds = users.stream()
                 .map(ActorProfile::actorId)
