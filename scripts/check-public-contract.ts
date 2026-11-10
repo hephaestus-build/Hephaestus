@@ -297,6 +297,24 @@ export function findings(
 	];
 }
 
+/**
+ * What the gate refuses: each problem, unless the checkout declares the break. A break is declared
+ * by a major changeset, which verify-changesets accepts only with its `.migration` fragment.
+ */
+export async function refusals(
+	rootDir: string,
+	base: string,
+	problems: readonly string[],
+): Promise<string[]> {
+	if (problems.length === 0 || (await headsForMajorRelease(rootDir, base))) {
+		return [];
+	}
+	return [
+		...problems.map((problem) => `${problem}.`),
+		`This change breaks what ${base} promised. Keep it, or add a major changeset. See docs/admin/compatibility-policy.mdx.`,
+	];
+}
+
 async function main(): Promise<void> {
 	const { values } = parseArgs({ options: { base: { type: "string" } } });
 	if (values.base !== undefined && !/^v\d+\.\d+\.\d+(?:-rc\.\d+)?$/u.test(values.base)) {
@@ -320,10 +338,6 @@ async function main(): Promise<void> {
 		}
 		return;
 	}
-	if (await headsForMajorRelease(ROOT, base)) {
-		console.log(`The change heads for a major release after ${base}, so it can break it.`);
-		return;
-	}
 	// Reading the contract files fetches the base tag that the template listing needs.
 	const baseFiles = await contractFiles(async (file) => fileAt(base, file), []);
 	const listing = await output("git", ["ls-tree", "--name-only", base, CHART_TEMPLATES], {
@@ -340,17 +354,17 @@ async function main(): Promise<void> {
 		await contractFiles(async (file) => readFile(path.join(ROOT, file), "utf8"), headTemplates),
 		await readFile(path.join(ROOT, ROUTE_TREE), "utf8"),
 	);
-	for (const problem of problems) {
-		console.log(`::error title=Public contract::${problem}.`);
+	const errors = await refusals(ROOT, base, problems);
+	for (const error of errors) {
+		console.log(`::error title=Public contract::${error}`);
 	}
-	if (problems.length > 0) {
-		console.log(
-			`::error title=Public contract::This change breaks what ${base} promised. Keep it, or add a major changeset. See docs/admin/compatibility-policy.mdx.`,
-		);
+	if (errors.length > 0) {
 		process.exitCode = 1;
-		return;
+	} else if (problems.length > 0) {
+		console.log(`The change heads for a major release after ${base}, so it can break it.`);
+	} else {
+		console.log(`Nothing that ${base} promised is gone.`);
 	}
-	console.log(`Nothing that ${base} promised is gone.`);
 }
 
 if (import.meta.main) {

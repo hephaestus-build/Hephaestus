@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { globSync, readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -15,6 +17,7 @@ import {
 	findings,
 	metricsIn,
 	problemSlugs,
+	refusals,
 	secretKeys,
 } from "./check-public-contract.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
@@ -255,6 +258,51 @@ const sized = (size: object) =>
 			size,
 		}),
 	);
+
+/** A checkout at version 1.0.0 with the given changesets. */
+async function checkout(changesets: Record<string, string>): Promise<string> {
+	const root = await mkdtemp(path.join(tmpdir(), "public-contract-"));
+	await writeFile(path.join(root, "package.json"), JSON.stringify({ version: "1.0.0" }));
+	await mkdir(path.join(root, ".changeset"));
+	for (const [name, text] of Object.entries(changesets)) {
+		await writeFile(path.join(root, ".changeset", `${name}.md`), text);
+	}
+	return root;
+}
+
+void test("a new required Secret key fails unless a major changeset declares the break", async () => {
+	// The database roles change: one login became an owner and an application login.
+	const head = after(
+		TEMPLATE,
+		secretEnv("WEBHOOK_SECRET") +
+			secretEnv("GH_AUTH_TOKEN", true) +
+			secretEnv("DATABASE_OWNER_PASSWORD") +
+			secretEnv("DATABASE_APP_PASSWORD"),
+	);
+	const problems = findings(RELEASE, head, ROUTES);
+	assert.deepEqual(problems, [
+		"The chart now requires the Secret key DATABASE_APP_PASSWORD",
+		"The chart now requires the Secret key DATABASE_OWNER_PASSWORD",
+	]);
+	const undeclared = await checkout({
+		"database-roles": '---\n"hephaestus": minor\n---\n\nThe server connects with its own login.\n',
+	});
+	const declared = await checkout({
+		"database-roles": '---\n"hephaestus": major\n---\n\nThe server connects with its own login.\n',
+	});
+	try {
+		const refused = await refusals(undeclared, "v1.0.0", problems);
+		assert.equal(refused.length, 3);
+		assert.match(
+			refused.join("\n"),
+			/DATABASE_OWNER_PASSWORD[\s\S]*breaks what v1\.0\.0 promised/u,
+		);
+		assert.deepEqual(await refusals(declared, "v1.0.0", problems), []);
+	} finally {
+		await rm(undeclared, { recursive: true, force: true });
+		await rm(declared, { recursive: true, force: true });
+	}
+});
 
 void test("a changed pattern is refused unless the old one stays as a branch", () => {
 	const base = sized({ type: "string", pattern: "^[0-9]+Mi$" });
