@@ -95,6 +95,8 @@ spec:
             {{- end }}
             - name: HEPHAESTUS_RESEARCH_ORGANIZATION
               value: {{ $config.researchOrganization | quote }}
+            - name: HEPHAESTUS_WORKSPACE_CREATIONPOLICY
+              value: {{ $config.workspaceCreationPolicy | quote }}
             - name: HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED
               value: {{ $config.publicActivity.enabled | quote }}
             - name: HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE

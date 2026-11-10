@@ -373,7 +373,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     @Test
     void shouldSendAProviderInitiatedCallbackHomeWithoutConnectingAnything() {
-        slackStrategy.providerInitiated = true;
+        slackStrategy.providerInitiatedLanding = "/";
 
         ResponseEntity<?> response = controller.callbackGet(
                 "slack", null, null, null, Map.of("installation_id", "4242", "setup_action", "install"), htmlRequest());
@@ -418,10 +418,11 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSendHomeToTheRootOfTheApplicationTheSuccessRedirectPointsInto() {
-        assertThat(new OAuthCallbackProperties("https://app.example.com/integrations?status=success", null)
-                        .homeRedirect())
-                .isEqualTo("https://app.example.com/");
+    void shouldResolveALandingInTheApplicationTheSuccessRedirectPointsInto() {
+        var properties = new OAuthCallbackProperties("https://app.example.com/integrations?status=success", null);
+        assertThat(properties.applicationUrl("/")).isEqualTo("https://app.example.com/");
+        assertThat(properties.applicationUrl("/github/installations/7/setup?code=a"))
+                .isEqualTo("https://app.example.com/github/installations/7/setup?code=a");
     }
 
     @Test
@@ -588,15 +589,16 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         @Nullable
         Map<String, String> lastCallbackParams;
 
-        boolean providerInitiated;
+        @Nullable
+        String providerInitiatedLanding;
 
         FakeStrategy(IntegrationKind kind) {
             this.kind = kind;
         }
 
         @Override
-        public boolean isProviderInitiated(Map<String, String> callbackParams) {
-            return providerInitiated;
+        public Optional<String> providerInitiatedLanding(Map<String, String> callbackParams) {
+            return Optional.ofNullable(providerInitiatedLanding);
         }
 
         @Override

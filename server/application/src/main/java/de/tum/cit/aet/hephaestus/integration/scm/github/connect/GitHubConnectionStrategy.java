@@ -43,6 +43,7 @@ public class GitHubConnectionStrategy implements ConnectionStrategy {
     private static final String CALLBACK_PARAM_SETUP_ACTION = "setup_action";
     private static final String CALLBACK_PARAM_STATE = "state";
     private static final String SETUP_ACTION_REQUEST = "request";
+    private static final String SETUP_ACTION_INSTALL = "install";
 
     private final @Nullable String installationUrl;
     private final OAuthStateService oauthStateService;
@@ -91,13 +92,26 @@ public class GitHubConnectionStrategy implements ConnectionStrategy {
         return new ConnectInitiation.RedirectToVendor(vendorUrl, state);
     }
 
+    /**
+     * With user authorization during installation, GitHub sends every installer here, including one who installed
+     * from GitHub or from the workspace wizard. A new installation goes to its setup page, which proves the
+     * installer with the one-time code; an update or a request for an owner's approval goes home.
+     */
     @Override
-    public boolean isProviderInitiated(Map<String, String> callbackParams) {
-        // With user authorization during installation, GitHub sends every installer here —
-        // including one who
-        // installed from GitHub or from the workspace wizard, where the installation webhook
-        // creates the workspace.
-        return callbackParams.containsKey(CALLBACK_PARAM_SETUP_ACTION);
+    public Optional<String> providerInitiatedLanding(Map<String, String> callbackParams) {
+        if (!callbackParams.containsKey(CALLBACK_PARAM_SETUP_ACTION)) {
+            return Optional.empty();
+        }
+        Optional<Long> installationId = parseInstallationId(callbackParams.get(CALLBACK_PARAM_INSTALLATION_ID));
+        String code = callbackParams.get(CALLBACK_PARAM_CODE);
+        if (!SETUP_ACTION_INSTALL.equals(callbackParams.get(CALLBACK_PARAM_SETUP_ACTION))
+                || installationId.isEmpty()
+                || code == null
+                || code.isBlank()) {
+            return Optional.of("/");
+        }
+        return Optional.of("/github/installations/" + installationId.get() + "/setup?code="
+                + URLEncoder.encode(code, StandardCharsets.UTF_8));
     }
 
     @Override

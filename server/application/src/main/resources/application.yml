@@ -520,10 +520,12 @@ hephaestus:
         from-name: ${HEPHAESTUS_EMAIL_FROM_NAME:Hephaestus}
         reply-to: ${HEPHAESTUS_EMAIL_REPLY_TO:}
 
-    # PAT-mode bootstrap for local dev. init-default only gates PAT workspace creation;
-    # GitHub App installations are always processed regardless. Mode docs + cross-field
-    # validation live on WorkspaceProperties (IDE-surfaced via spring-configuration-processor).
+    # PAT-mode bootstrap for local dev. init-default only gates PAT workspace creation.
+    # creation-policy decides who creates workspaces, including through a GitHub App installation.
+    # Mode docs + cross-field validation live on WorkspaceProperties (IDE-surfaced via
+    # spring-configuration-processor).
     workspace:
+        creation-policy: ${HEPHAESTUS_WORKSPACE_CREATIONPOLICY:ADMIN_ONLY}
         subdomains:
             enabled: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:false}
             base-domain: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:}

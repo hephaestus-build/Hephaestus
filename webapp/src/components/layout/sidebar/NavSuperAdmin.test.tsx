@@ -21,6 +21,7 @@ const DESTINATIONS: [path: string, entry: string][] = [
 	["/admin/research", "Research datasets"],
 	["/admin/workspaces", "Workspaces"],
 	["/admin/workspaces/acme/users", "Workspaces"],
+	["/admin/github-installations", "GitHub installations"],
 	["/admin/login-providers", "Login providers"],
 	["/admin/catalog", "Practice catalog"],
 	["/admin/feedback", "Inbox"],

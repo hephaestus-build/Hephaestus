@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionPropert
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -61,6 +63,9 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     private RepositoryRepository repositoryRepository;
 
     @Mock
+    private OrganizationService organizationService;
+
+    @Mock
     private IdentityProviderRepository gitProviderRepository;
 
     private GitHubLifecycleListener listener;
@@ -86,7 +91,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
                 new StaticListableBeanFactory(Map.of("consumers", consumers))
                         .getBeanProvider(IntegrationNatsConsumer.class),
                 gitHubAppTokenService,
-                mock(),
+                organizationService,
                 connectionService,
                 workspaceLifecycleService,
                 mock(),
@@ -177,12 +182,17 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     }
 
     @Test
-    void newInstallationCannotReplaceAPurgedWorkspaceWithTheSameAccount() {
+    void newInstallationCannotReactivateThePurgedWorkspaceOfTheSameOrganization() {
         Workspace workspace = workspace(11L, "acme");
         workspace.setAccountLogin("acme");
         workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
+        IdentityProvider github = mock();
+        when(github.getId()).thenReturn(3L);
+        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
+                .thenReturn(Optional.of(github));
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.empty());
-        when(workspaceRepository.findByAccountLoginIgnoreCaseForUpdate("acme")).thenReturn(Optional.of(workspace));
+        when(organizationService.findId(99L, 3L)).thenReturn(Optional.of(7L));
+        when(workspaceRepository.findByOrganizationIdForUpdate(7L)).thenReturn(Optional.of(workspace));
 
         Workspace result = listener.createOrUpdateFromInstallation(
                 INSTALLATION_ID, 99L, "acme", AccountKind.ORGANIZATION, null, RepositorySelection.ALL);

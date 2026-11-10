@@ -104,6 +104,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "Organization", // Synced from GitHub, workspace is set separately
             "Workspace", // Is the tenant root
             "WorkspaceSlugReservation", // Instance-wide DNS namespace tombstones
+            "GitHubInstallationRequest", // Installations an instance admin decides before a workspace exists
             "WorkspaceSlugHistory", // Tracks workspace slug changes
             "IssueType", // GitHub issue types are workspace-scoped through issue
             "IdentityProvider", // Global provider instances (e.g., github.com, gitlab.com)

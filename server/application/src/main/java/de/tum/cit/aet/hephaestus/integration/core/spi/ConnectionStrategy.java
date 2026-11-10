@@ -30,11 +30,12 @@ public interface ConnectionStrategy {
     ConnectFinalization finalizeConnect(IntegrationRef ref, Map<String, String> callbackParams);
 
     /**
-     * Whether a callback carrying no state is the provider ending a flow started on its own site rather than from a
-     * workspace. It connects nothing, so the callback sends the person home instead of reporting a failure.
+     * Where a callback carrying no state goes when it is the provider ending a flow started on its own site rather
+     * than from a workspace: a path in the application, such as {@code /} for home. It connects nothing, so the
+     * callback sends the person there instead of reporting a failure. Empty when the callback is not one.
      */
-    default boolean isProviderInitiated(Map<String, String> callbackParams) {
-        return false;
+    default Optional<String> providerInitiatedLanding(Map<String, String> callbackParams) {
+        return Optional.empty();
     }
 
     /**

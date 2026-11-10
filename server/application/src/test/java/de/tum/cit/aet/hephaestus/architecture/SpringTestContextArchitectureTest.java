@@ -69,6 +69,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("integration.scm.domain.item.ScmItemSourceIntegrationTest", "scm-source-currentness"),
             assignment("integration.scm.github.BaseGitHubLiveIntegrationTest", "github-live"),
             assignment(
+                    "integration.scm.github.installation.adoption.GitHubInstallationAdoptionIntegrationTest",
+                    "github-installation-adoption"),
+            assignment(
                     "integration.scm.gitlab.credentials.GitLabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
             assignment(
                     "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
@@ -171,6 +174,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                             + " irreversible upstream token rotation mocked"),
             Map.entry("webhook-role", "the webhook role alone, with real JetStream and no database"),
             Map.entry("outline-enabled", "enabled Outline integration wiring"),
+            Map.entry(
+                    "github-installation-adoption",
+                    "the default admin-only workspace creation policy, with the GitHub App's own installation read stubbed"),
             Map.entry("outline-origin", "enabled Outline integration wiring with one allowed document origin"),
             Map.entry(
                     "practice-script-live",
@@ -298,6 +304,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
+            "integration.scm.github.installation.adoption.GitHubInstallationAdoptionIntegrationTest",
             "core.auth.webauthn.TestInstanceAssuranceIntegrationTest",
             "core.auth.webauthn.PasskeyLifecycleIntegrationTest",
             "core.auth.clientsession.ClientSessionConcurrencyIntegrationTest",
@@ -357,6 +364,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             TestPropertySource.class);
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
+            "integration.scm.github.installation.adoption.GitHubInstallationAdoptionIntegrationTest",
             "productfeedback.ProductFeedbackCleanupIntegrationTest",
             "productfeedback.ProductFeedbackTrustGatesIntegrationTest",
             "agent.job.ReviewJobEventListenerIntegrationTest",

@@ -122,6 +122,9 @@ public class AuthEvent {
         // window, not per request — see WorkspaceElevationAuditAdapter.
         WORKSPACE_ELEVATION,
         INSTALLATION_EVENT_REPLAYED,
+        // An instance admin's decision on a GitHub App installation: GLOBAL, like the installation's record.
+        GITHUB_INSTALLATION_ADOPTED,
+        GITHUB_INSTALLATION_DECLINED,
         // Instance LLM catalog: GLOBAL, so the workspace-scoped config trail cannot carry it.
         LLM_CONNECTION_CREATED,
         LLM_CONNECTION_UPDATED,

@@ -64,6 +64,9 @@ import org.springframework.validation.annotation.Validated;
  * @param defaultProperties configuration for the default GitHub workspace; required when {@code initDefault} is {@code true}
  * @param initGitlabDefault Creates a default GitLab workspace with a personal access token at startup.
  * @param gitlabDefault configuration for the default GitLab workspace; required when {@code initGitlabDefault} is {@code true}
+ * @param creationPolicy who creates workspaces. Under {@code ADMIN_ONLY}, instance admins
+ *     create them, and a GitHub App installation waits until an instance admin adopts it. Under {@code SELF_SERVICE},
+ *     every signed-in user can create one, and each GitHub App installation creates its own.
  * @see DefaultProperties
  */
 @Validated
@@ -75,9 +78,8 @@ public record WorkspaceProperties(
         @Valid GitLabDefaultProperties gitlabDefault,
         @DefaultValue("ADMIN_ONLY") CreationPolicy creationPolicy) {
     /**
-     * Who may create workspaces via {@code POST /workspaces}. Defaults to {@code ADMIN_ONLY} (safe for
-     * a shared instance); set {@code SELF_SERVICE} to let any authenticated user create one. This is
-     * the actor gate; per-provider availability (e.g. the GitLab feature flag) is orthogonal.
+     * Who may create workspaces, through {@code POST /workspaces} or a GitHub App installation. This is the actor
+     * gate; per-provider availability (e.g. the GitLab feature flag) is orthogonal.
      */
     public enum CreationPolicy {
         ADMIN_ONLY,

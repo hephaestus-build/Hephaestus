@@ -87,6 +87,8 @@ Classic tokens and the GitHub App also read it with each sync.
    A public personally owned app can be installed on organizations.
    **Only on this account** restricts it to its owner.
    Installation and repository selection remain required.
+   The default [workspace creation policy](#who-creates-the-workspace-of-an-installation) is `ADMIN_ONLY`.
+   With it, an installation waits until an instance admin adopts it.
 8. Select **Identifying and authorizing users → Request user authorization (OAuth) during installation**.
 9. Set **Callback URL** to `https://<APP_HOSTNAME>/api/oauth/callback/github`.
    GitHub then returns to Hephaestus after installation and hides **Setup URL**.
@@ -108,15 +110,53 @@ These conditions also apply:
   A refusal names the other workspace only to its workspace admins.
 - **Disconnect uninstalls only what the workspace holds.** A disconnect removes the installation from GitHub only when the connection recorded it.
 - **Installed from GitHub or the workspace wizard.** The return has no workspace to connect.
-  Hephaestus sends the person to its home page.
-  The installation webhook creates or updates the workspace as before.
+  Hephaestus sends the person to the setup page of the installation.
+  The person selects **Continue**, and Hephaestus checks the authorization.
+  The person must have access to the installation.
+  Their GitHub account must be the account that is linked to the signed-in Hephaestus account.
+  The setup page never creates a workspace.
+  [Who creates the workspace of an installation](#who-creates-the-workspace-of-an-installation) gives the next step.
+  A return after an update of an installation goes to the home page.
 - **Installation requests.** A member without permission to install the App sends a request to the account's owners instead.
   After an owner approves it, connect again.
+
+### Who creates the workspace of an installation
+
+The Helm value `config.workspaceCreationPolicy` sets who creates workspaces.
+The chart gives it to the server role as `HEPHAESTUS_WORKSPACE_CREATIONPOLICY`.
+
+| Value | GitHub App installations | **Create workspace** in Hephaestus |
+| --- | --- | --- |
+| `ADMIN_ONLY` (default) | A new installation waits until an instance admin adopts it | Instance admins only |
+| `SELF_SERVICE` | Each new installation creates its own workspace, without approval | Every signed-in user |
+
+Under `ADMIN_ONLY`, Hephaestus records each new installation without a workspace.
+The installation webhook, the startup reconciliation and the setup page record it.
+An installation that already has a workspace keeps it.
+An installation that `allowed-organizations` filters out is also recorded, because the filter limits only the sync.
+
+Instance admins decide in **Instance administration → GitHub installations**:
+
+- **Adopt** reads the installation again from GitHub with the App credentials.
+  Hephaestus refuses the adoption and changes nothing if GitHub no longer has the installation.
+  It also refuses a suspended installation, and an installation that moved to a different account.
+  Otherwise, Hephaestus creates the workspace with the adopting admin as its owner and starts the first sync.
+- **Decline** keeps the installation in the list.
+  An instance admin can adopt a declined installation later.
+- To undo an adoption, delete the workspace.
+  The installation stays adopted, and a later installation event does not create a new workspace for it.
+  To use the account again, uninstall the App on GitHub and install it again.
+
+Adopt and decline require a recent sign-in.
+The audit log records each decision as **GitHub installation adopted** or **GitHub installation declined**, with the installation id.
+An uninstall on GitHub removes the record of an installation that no admin adopted.
 
 ### Workspace attachment
 
 An existing GitHub installation stays bound to its workspace after an account rename.
-A new or reinstalled installation can reuse a matching-name workspace only if that workspace already recorded the same immutable GitHub organization identity.
+A new or reinstalled installation on an organization joins the workspace that already recorded the immutable GitHub identity of that organization.
+Hephaestus never finds that workspace by its account name, because several workspaces can share a name.
+An installation on a personal account never joins an existing workspace.
 A PAT connection with a stored token remains in PAT mode.
 
 Personal-account workspaces cannot establish that match from an account name alone.

@@ -144,10 +144,22 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     @Test
-    void shouldSendSomeoneWhoInstalledFromGitHubHomeWithoutConnectingAnything() {
+    void shouldSendSomeoneWhoInstalledFromGitHubToTheSetupPageWithoutConnectingAnything() {
         URI location = browserCallback(uri -> uri.queryParam("code", "code-1")
                 .queryParam("installation_id", installationId)
                 .queryParam("setup_action", "install"));
+
+        assertThat(location)
+                .hasPath("/github/installations/" + installationId + "/setup")
+                .hasParameter("code", "code-1");
+        verifyNoInteractions(userAuthorization);
+    }
+
+    @Test
+    void shouldSendSomeoneWhoUpdatedAnInstallationOnGitHubHome() {
+        URI location = browserCallback(uri -> uri.queryParam("code", "code-1")
+                .queryParam("installation_id", installationId)
+                .queryParam("setup_action", "update"));
 
         assertThat(location).hasPath("/").hasNoParameters();
         verifyNoInteractions(userAuthorization);

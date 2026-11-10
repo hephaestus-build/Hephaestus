@@ -34,6 +34,8 @@ public class WorkspaceScopedTables {
             "workspace",
             "workspace_slug_history",
             "workspace_slug_reservation",
+            // GitHub App installations before an instance admin decides whether they get a workspace
+            "github_installation_request",
             "user",
             // Synced upstream identity (workspace linked separately via FK)
             "organization",

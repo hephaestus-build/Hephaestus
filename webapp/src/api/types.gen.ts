@@ -1727,6 +1727,40 @@ export type GeneratedPathReview = {
 };
 
 /**
+ * What happens next with the GitHub App installation that the signed-in person set up
+ */
+export type GitHubInstallationClaim = {
+    outcome: 'READY' | 'AWAITING_APPROVAL' | 'SETTING_UP';
+    /**
+     * The installation's workspace, when it has one
+     */
+    workspaceSlug?: string;
+};
+
+export type GitHubInstallationClaimRequest = {
+    /**
+     * The code that GitHub returned to the setup page; it is used once and never stored
+     */
+    code: string;
+};
+
+/**
+ * A GitHub App installation and an instance admin's decision on it
+ */
+export type GitHubInstallationRequest = {
+    accountKind: 'USER' | 'ORGANIZATION';
+    accountLogin: string;
+    decidedAt?: Date;
+    installationId: number;
+    receivedAt: Date;
+    status: 'PENDING' | 'DECLINED' | 'ADOPTED';
+    /**
+     * The workspace that the adoption created; absent once that workspace is deleted
+     */
+    workspaceSlug?: string;
+};
+
+/**
  * GitHub provider configuration
  */
 export type GitHubProvider = {
@@ -7436,7 +7470,7 @@ export type AdminListAuthEventsData = {
         size?: number;
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'PRODUCT_FEEDBACK_FILED_BY_ADMIN' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'GITHUB_INSTALLATION_ADOPTED' | 'GITHUB_INSTALLATION_DECLINED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'PRODUCT_FEEDBACK_FILED_BY_ADMIN' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: Date;
         to?: Date;
@@ -7459,7 +7493,7 @@ export type AdminCountAuthEventsData = {
     query?: {
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'PRODUCT_FEEDBACK_FILED_BY_ADMIN' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'GITHUB_INSTALLATION_ADOPTED' | 'GITHUB_INSTALLATION_DECLINED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'PRODUCT_FEEDBACK_FILED_BY_ADMIN' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: Date;
         to?: Date;
@@ -7482,7 +7516,7 @@ export type AdminExportAuthEventsData = {
     query?: {
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'PRODUCT_FEEDBACK_FILED_BY_ADMIN' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'GITHUB_INSTALLATION_ADOPTED' | 'GITHUB_INSTALLATION_DECLINED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'PRODUCT_FEEDBACK_FILED_BY_ADMIN' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: Date;
         to?: Date;
@@ -7607,6 +7641,58 @@ export type AdminSendTestEmailResponses = {
 };
 
 export type AdminSendTestEmailResponse = AdminSendTestEmailResponses[keyof AdminSendTestEmailResponses];
+
+export type ListGitHubInstallationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/github-installations';
+};
+
+export type ListGitHubInstallationsResponses = {
+    /**
+     * OK
+     */
+    200: Array<GitHubInstallationRequest>;
+};
+
+export type ListGitHubInstallationsResponse = ListGitHubInstallationsResponses[keyof ListGitHubInstallationsResponses];
+
+export type AdoptGitHubInstallationData = {
+    body?: never;
+    path: {
+        installationId: number;
+    };
+    query?: never;
+    url: '/admin/github-installations/{installationId}/adopt';
+};
+
+export type AdoptGitHubInstallationResponses = {
+    /**
+     * OK
+     */
+    200: GitHubInstallationRequest;
+};
+
+export type AdoptGitHubInstallationResponse = AdoptGitHubInstallationResponses[keyof AdoptGitHubInstallationResponses];
+
+export type DeclineGitHubInstallationData = {
+    body?: never;
+    path: {
+        installationId: number;
+    };
+    query?: never;
+    url: '/admin/github-installations/{installationId}/decline';
+};
+
+export type DeclineGitHubInstallationResponses = {
+    /**
+     * OK
+     */
+    200: GitHubInstallationRequest;
+};
+
+export type DeclineGitHubInstallationResponse = DeclineGitHubInstallationResponses[keyof DeclineGitHubInstallationResponses];
 
 export type ListInstallationDeadLettersData = {
     body?: never;
@@ -9336,6 +9422,24 @@ export type ListGlobalContributorsResponses = {
 };
 
 export type ListGlobalContributorsResponse = ListGlobalContributorsResponses[keyof ListGlobalContributorsResponses];
+
+export type ClaimGitHubInstallationData = {
+    body: GitHubInstallationClaimRequest;
+    path: {
+        installationId: number;
+    };
+    query?: never;
+    url: '/github-installations/{installationId}/claim';
+};
+
+export type ClaimGitHubInstallationResponses = {
+    /**
+     * OK
+     */
+    200: GitHubInstallationClaim;
+};
+
+export type ClaimGitHubInstallationResponse = ClaimGitHubInstallationResponses[keyof ClaimGitHubInstallationResponses];
 
 export type ListIdentityProvidersData = {
     body?: never;

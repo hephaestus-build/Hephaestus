@@ -194,6 +194,13 @@ function leaves(value: unknown, prefix = ""): Map<string, unknown> {
 	);
 }
 
+/** What Spring reads for `${VARIABLE:default}` when the server sets no such variable. */
+function withPlaceholderDefault(value: unknown): unknown {
+	const placeholder =
+		typeof value === "string" ? /^\$\{[A-Z0-9_]+:(?<fallback>.*)\}$/u.exec(value) : null;
+	return placeholder?.groups?.fallback ?? value;
+}
+
 await test("every e2e property has a production value or an explicit auth exception", () => {
 	const root = "server/application/src/main/resources/";
 	const e2e = leaves(parse(readFileSync(`${root}application-e2e.yml`, "utf8")));
@@ -217,7 +224,6 @@ await test("every e2e property has a production value or an explicit auth except
 		"hephaestus.auth.cookie-name",
 	]);
 	const defaults = new Map<string, unknown>([
-		["hephaestus.workspace.creation-policy", "ADMIN_ONLY"],
 		["hephaestus.security.encryption-key", `\${HEPHAESTUS_SECURITY_ENCRYPTION_KEY}`],
 		[
 			"hephaestus.security.credential-encryption-key",
@@ -230,10 +236,12 @@ await test("every e2e property has a production value or an explicit auth except
 		if (exceptions.has(key)) {
 			continue;
 		}
-		const expected = production.get(key) ?? base.get(key) ?? defaults.get(key);
+		const expected = withPlaceholderDefault(
+			production.get(key) ?? base.get(key) ?? defaults.get(key),
+		);
 		assert.notEqual(expected, undefined, `Unreviewed e2e property: ${key}`);
 		assert.deepEqual(
-			explicit.has(key) ? explicit.get(key) : value,
+			withPlaceholderDefault(explicit.has(key) ? explicit.get(key) : value),
 			expected,
 			`Production parity: ${key}`,
 		);

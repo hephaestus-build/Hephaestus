@@ -1,9 +1,14 @@
 {
 	"accepted": [
 		{
-			"load": "entry",
-			"gzipBytes": 385380,
-			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/3887"
+			"load": "src/routes/_authenticated/admin.github-installations.tsx?tsr-split=component",
+			"gzipBytes": 7267,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4069"
+		},
+		{
+			"load": "src/routes/github.installations.$installationId.setup.tsx?tsr-split=component",
+			"gzipBytes": 5506,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4069"
 		}
 	]
 }

@@ -5,6 +5,7 @@ import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationRequests;
 import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
@@ -27,6 +28,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
     private final GitHubLifecycleListener githubLifecycleListener;
     private final WorkspaceRepositoryMonitorService repositoryMonitorService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
+    private final GitHubInstallationRequests installationRequests;
 
     private final GitHubWorkspaceDataSyncTrigger dataSyncTrigger;
     private final AsyncTaskExecutor monitoringExecutor;
@@ -36,8 +38,10 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
             WorkspaceRepositoryMonitorService repositoryMonitorService,
             WorkspaceScopeFilter workspaceScopeFilter,
             GitHubWorkspaceDataSyncTrigger dataSyncTrigger,
-            @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor) {
+            @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor,
+            GitHubInstallationRequests installationRequests) {
         this.githubLifecycleListener = githubLifecycleListener;
+        this.installationRequests = installationRequests;
         this.repositoryMonitorService = repositoryMonitorService;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.dataSyncTrigger = dataSyncTrigger;
@@ -52,11 +56,21 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         }
 
         String accountLogin = installation.accountLogin();
-        if (accountLogin == null || !workspaceScopeFilter.isOrganizationAllowed(accountLogin)) {
+        if (accountLogin == null) {
             log.debug(
-                    "Skipped workspace provisioning: reason=organizationFiltered, accountLogin={}, installationId={}",
-                    installation.accountLogin(),
+                    "Skipped workspace provisioning: reason=missingAccountLogin, installationId={}",
                     installation.installationId());
+            return;
+        }
+        if (!workspaceScopeFilter.isOrganizationAllowed(accountLogin)) {
+            log.debug(
+                    "Skipped workspace provisioning: reason=organizationFiltered, installationId={}",
+                    installation.installationId());
+            installationRequests.recordFiltered(
+                    installation.installationId(),
+                    installation.accountId(),
+                    accountLogin,
+                    mapAccountKind(installation.accountType()));
             return;
         }
 
@@ -70,8 +84,8 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
                 selection);
 
         if (workspace == null) {
-            log.warn(
-                    "Skipped installation event: reason=workspaceCreationFailed, installationId={}",
+            log.info(
+                    "Skipped repository provisioning: reason=noWorkspace, installationId={}",
                     installation.installationId());
             return;
         }
@@ -123,6 +137,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         // practice/activity
         // rows, and the Connection's stored credentials.
         githubLifecycleListener.purgeWorkspaceForInstallation(installationId);
+        installationRequests.forgetUnadopted(installationId);
 
         log.info("Completed installation cleanup: installationId={}", installationId);
     }

@@ -139,8 +139,11 @@ public class OAuthCallbackController {
 
         if (state == null || state.isBlank()) {
             ConnectionStrategy strategy = strategies.get(kind);
-            if (strategy != null && strategy.isProviderInitiated(allParams == null ? Map.of() : allParams)) {
-                return redirect(properties.homeRedirect());
+            Optional<String> landing = strategy == null
+                    ? Optional.empty()
+                    : strategy.providerInitiatedLanding(allParams == null ? Map.of() : allParams);
+            if (landing.isPresent()) {
+                return redirect(properties.applicationUrl(landing.get()));
             }
             log.info("OAuth callback for kind={} missing state parameter", kind);
             return failure(

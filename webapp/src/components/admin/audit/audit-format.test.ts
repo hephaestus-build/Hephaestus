@@ -7,6 +7,8 @@ describe("audit events", () => {
 		["RESEARCH_DATASET_RELEASED", "Research dataset released"],
 		["RESEARCH_REMOVAL_RECORDED", "Research removal recorded"],
 		["INSTALLATION_EVENT_REPLAYED", "Installation event replayed"],
+		["GITHUB_INSTALLATION_ADOPTED", "GitHub installation adopted"],
+		["GITHUB_INSTALLATION_DECLINED", "GitHub installation declined"],
 	] as const)("names %s in words", (eventType, label) => {
 		expect(EVENT_TYPE_LABELS[eventType]).toBe(label);
 		expect(eventLabel(eventType)).toBe(label);

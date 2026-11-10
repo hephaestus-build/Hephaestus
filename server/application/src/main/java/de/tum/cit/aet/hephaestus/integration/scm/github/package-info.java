@@ -23,7 +23,11 @@
             // Runtime-role gate (@ConditionalOnServerRole) on the connection-OAuth strategy.
             "core::runtime",
             "core::webhook",
+            // The signed-in account of the installation adopt, decline and claim endpoints.
+            "core::security",
             "workspace",
+            // An adopted installation's record forgets its purged workspace.
+            "workspace::spi",
             // Activity ledger write path consumed by the Projects v2 listener under
             // project/activity/ — vendor-side records lifecycle rows through the narrow SPI.
             "activity",

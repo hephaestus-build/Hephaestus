@@ -1553,6 +1553,39 @@ export const zGeneratedPathReview = z.object({
 });
 
 /**
+ * What happens next with the GitHub App installation that the signed-in person set up
+ */
+export const zGitHubInstallationClaim = z.object({
+    outcome: z.enum([
+        'READY',
+        'AWAITING_APPROVAL',
+        'SETTING_UP'
+    ]),
+    workspaceSlug: z.string().optional()
+});
+
+export const zGitHubInstallationClaimRequest = z.object({
+    code: z.string().min(0).max(255)
+});
+
+/**
+ * A GitHub App installation and an instance admin's decision on it
+ */
+export const zGitHubInstallationRequest = z.object({
+    accountKind: z.enum(['USER', 'ORGANIZATION']),
+    accountLogin: z.string(),
+    decidedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+    installationId: z.int(),
+    receivedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+    status: z.enum([
+        'PENDING',
+        'DECLINED',
+        'ADOPTED'
+    ]),
+    workspaceSlug: z.string().optional()
+});
+
+/**
  * GitHub provider configuration
  */
 export const zGitHubProvider = z.object({
