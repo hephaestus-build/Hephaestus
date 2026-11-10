@@ -198,7 +198,7 @@ Access differs by role and destination:
 - The About page lists the people who contribute to the Hephaestus open-source project, as GitHub shows them.
 - Feedback on GitHub, GitLab, or Slack is visible to that destination’s audience.
 - Instance admins can use **View as user** to read activity, practice pages, feedback, and existing conversations. This includes access before your first Hephaestus sign-in. Each read has a recorded reason. This access cannot send messages, answer questions, or make choices for you. It does not count as you seeing feedback. Workspace admins do not have this access.
-- Instance admins can also open any workspace as one of its admins, but never as an owner. Each such access is recorded. They then see what a workspace admin sees.
+- Instance admins who are not members can also open any workspace as an admin, never as an owner. The authentication history records that they opened the workspace this way. They then see what a workspace admin sees.
 - Instance operators can access stored data for operation and privacy requests. Instance admins can read product feedback submissions.
 
 ## Your choices and right to object
@@ -427,7 +427,7 @@ The sections above describe account and export timing.
 
 - **Slack channel threads:** retention uses a rolling period measured from the latest message. An active thread can still contain much older messages. This period does not apply to your conversation.
 - **Outline:** selected content stays while its collection and connection stay active.
-- **Conversations:** each message, answer, digest, and summary is erased at the end of the conversation retention period. Deleting one of your messages, account deletion, workspace removal, or verified person erasure erases it sooner.
+- **Conversations:** each message, answer, digest, and summary is erased near the end of the conversation retention period. Deleting one of your messages, account deletion, workspace removal, or verified person erasure erases it sooner.
 - **Memberships:** records stay with the workspace. Account deletion, workspace removal, or verified person erasure removes them.
 - **Product feedback submissions:** there is no automatic expiry by age. Account deletion, applicable workspace removal, or verified erasure removes instance records and starts GitHub cleanup. The app cannot delete issues or their edit history. Maintainers complete those steps where needed, and public copies can remain.
 
