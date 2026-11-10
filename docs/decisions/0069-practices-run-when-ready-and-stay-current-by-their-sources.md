@@ -1,6 +1,6 @@
 # ADR 0069: Practices run when they are ready and stay current by their sources
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md)
 **Date:** 2026-10-28
 **Authors:** Felix T.J. Dietrich
 

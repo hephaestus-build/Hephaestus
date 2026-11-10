@@ -1,6 +1,6 @@
 # ADR 0061: A practice review seals its results, then feedback is composed
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md)
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
