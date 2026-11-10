@@ -67,6 +67,10 @@ public class ActionExecutor {
                 throw new IllegalStateException("Two adapters carry out " + adapter.kind());
         for (ActionKind kind : ActionKind.values())
             if (!this.adapters.containsKey(kind)) throw new IllegalStateException("No adapter carries out " + kind);
+        // An uncertain end is rare and alerted on. A counter that first appears at 1 shows no increase to Prometheus,
+        // so each of its series exists at 0 from the start.
+        for (ActionKind kind : ActionKind.values())
+            for (ActionStopReason reason : ActionStopReason.values()) endCounter(kind, ActionState.UNCERTAIN, reason);
     }
 
     /**
@@ -160,13 +164,7 @@ public class ActionExecutor {
     private void recordEnd(ActionStore.Settled settled) {
         ActionStopReason reason = settled.reason();
         if (reason == null) return;
-        Counter.builder(CoreMetrics.ACTION_ENDED)
-                .description("Outbox actions that ended, by kind, state and reason")
-                .tag("kind", settled.kind().name())
-                .tag("state", settled.state().name())
-                .tag("reason", reason.name())
-                .register(meters)
-                .increment();
+        endCounter(settled.kind(), settled.state(), reason).increment();
         if (settled.state() == ActionState.UNCERTAIN)
             event(log.atWarn(), "action.ended.uncertain", settled.id(), settled.workspaceId(), settled.kind())
                     .addKeyValue("action.reason", reason.name())
@@ -183,6 +181,15 @@ public class ActionExecutor {
                 .addKeyValue("action.id", id)
                 .addKeyValue("action.kind", kind.name());
         return workspaceId == null ? named : named.addKeyValue("workspace.id", workspaceId);
+    }
+
+    private Counter endCounter(ActionKind kind, ActionState state, ActionStopReason reason) {
+        return Counter.builder(CoreMetrics.ACTION_ENDED)
+                .description("Outbox actions that ended, by kind, state and reason")
+                .tag("kind", kind.name())
+                .tag("state", state.name())
+                .tag("reason", reason.name())
+                .register(meters);
     }
 
     /** 30 s, then doubling per attempt, at most an hour. */

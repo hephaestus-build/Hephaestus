@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -82,6 +83,21 @@ class ActionExecutorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldShowEveryUncertainEndAtZeroFromTheStartSoItsFirstCountIsAnIncrease() {
+        var meters = new SimpleMeterRegistry();
+        new ActionExecutor(store, JsonMapper.builder().build(), List.of(emailAdapter()), meters);
+
+        for (ActionStopReason reason : ActionStopReason.values())
+            assertThat(meters.get(CoreMetrics.ACTION_ENDED)
+                            .tag("kind", "EMAIL")
+                            .tag("state", "UNCERTAIN")
+                            .tag("reason", reason.name())
+                            .counter()
+                            .count())
+                    .isZero();
+    }
+
+    @Test
     void shouldEndUncertainWhenAnEarlierAttemptMayHaveWritten() {
         ActionResult result = executor(attempt -> {
                     throw new IllegalStateException("readback failed");
@@ -112,7 +128,16 @@ class ActionExecutorTest extends BaseUnitTest {
 
     private ActionExecutor executor(Function<ActionAttempt, ActionResult> execute) {
         when(store.settle(any(), anyLong(), any())).thenReturn(Optional.empty());
-        ActionAdapter adapter = new ActionAdapter() {
+        return new ActionExecutor(
+                store, JsonMapper.builder().build(), List.of(adapter(execute)), new SimpleMeterRegistry());
+    }
+
+    private static ActionAdapter emailAdapter() {
+        return adapter(attempt -> new ActionResult.Done(null));
+    }
+
+    private static ActionAdapter adapter(Function<ActionAttempt, ActionResult> execute) {
+        return new ActionAdapter() {
             @Override
             public ActionKind kind() {
                 return ActionKind.EMAIL;
@@ -123,7 +148,6 @@ class ActionExecutorTest extends BaseUnitTest {
                 return execute.apply(attempt);
             }
         };
-        return new ActionExecutor(store, JsonMapper.builder().build(), List.of(adapter), new SimpleMeterRegistry());
     }
 
     private static ActionStore.Claim claim(boolean writeStarted) {

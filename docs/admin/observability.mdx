@@ -25,6 +25,7 @@ The alert or the objective tells the operator when the answer needs work.
 | How long after a push or a request does the developer get feedback? | `practice_review_first_delivery_seconds` | `HephaestusFeedbackDeliverySlow` |
 | Do feedback sends repeatedly retry? | `practice_feedback_send_attempts` and `practice_feedback_send_readback_limit` | `HephaestusFeedbackSendRetrying` |
 | Does feedback wait and never arrive? | `practice_feedback_oldest_waiting_seconds` | `HephaestusFeedbackDeliveryStalled` |
+| Does the outbox carry out its actions, and do any end uncertain? | `action_backlog`, `action_oldest_due_seconds`, `action_ended_total`, by `kind` | `HephaestusOutboxStalled`, `HephaestusOutboxUncertain` |
 | Do review attempts fail, and where? | `agent_job_total`, `agent_job_infra_retry_requeued_total`, `agent_run_reaped_total` | `HephaestusAgentJobsFailing` and the other review alerts |
 | How long does each stage of a review take? | `agent_job_stage_duration_seconds`, by `stage` and `outcome`. Admission: `http_server_requests_seconds` on the two [admission routes](#agent-job-metrics) | None |
 | Which statements take the most database time, and do tables collect dead rows? | `pg_stat_statements_seconds_total` by `queryid`, `pg_stat_user_tables_n_dead_tup`, `pg_long_running_transactions_oldest_timestamp_seconds`, with the [database metrics](#database-metrics) on | `HephaestusDatabaseDeadlocks`, `HephaestusDatabaseTransactionOpenLong`, `HephaestusDatabaseDeadRowsHigh`, `HephaestusDatabaseTransactionIdAgeHigh` |
@@ -356,6 +357,8 @@ For the volume rules, change their name patterns.
 | `HephaestusAgentSandboxReaperFailing` | `agent_sandbox_reaper_failure_total` | The sandbox reaper failed at least ten times in ten minutes, for ten minutes. A sandbox that it cannot delete keeps its Pod and its share of the sandbox quota, but its token no longer works. The event `agent.sandbox.claim_delete_failed` names the sandbox |
 | `HephaestusAgentSandboxUnisolated` | `agent_sandbox_revoked_total{reason="unisolated"}` | A sandbox could still reach the Kubernetes API 10 seconds after it started. Its driver started none of its run's work and gave the run back, and the server took the sandbox back. The event `agent.sandbox.taken_back` with `sandbox.reason` `unisolated` names the sandbox |
 | `HephaestusReviewFeedbackUnconfirmed` | `agent_job_composition_stopped_total` with outcome `unrecorded` | Each count is a review that closed as Partial because every attempt ended before it confirmed where its feedback went. The results stay. |
+| `HephaestusOutboxStalled` | `action_oldest_due_seconds`, by `kind` | An action of the kind has been due for more than 15 minutes, for 10 minutes. No server replica carries it out, or an action that does not end holds its lane |
+| `HephaestusOutboxUncertain` | `action_ended_total{state="UNCERTAIN"}`, by `kind` | An action ended uncertain in the last hour: its write may have reached the provider, and nothing confirms it. An uncertain email is never sent again. The alert stays up for one hour after the count |
 | `HephaestusAgentQueueStalled` | `agent_queue_oldest_age_seconds` | A practice review usually runs for 10 to 16 minutes. A wait of several review durations shows that no worker claims work |
 | `HephaestusSandboxIsolationFailed` | `sandbox_isolation_passed` of a worker | A later probe failed, and the worker starts no sandbox until a probe passes. The wait covers the first probe at the start |
 | `HephaestusWalArchiveFailing` | `database_wal_archive_failing`, and `database_wal_archive_sample_failures_total` | PostgreSQL retries a failed segment about once each minute, so a short fault of the bucket clears itself. A longer failure stops point-in-time recovery after the last archived segment. A server that cannot read the archiver for the same time cannot show that the archive works, so the alert also fires then |
@@ -743,6 +746,20 @@ These are fields, not metric labels.
 
 An outbox event names no person and no payload.
 An account email has no workspace, so its events have no `workspace.id`.
+
+### Outbox metrics
+
+The outbox carries out every effect that Hephaestus has on a provider, such as an email.
+Each server replica samples the backlog every 30 seconds.
+A failed sample keeps the last values.
+
+| Prometheus name | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `action_attempts_total` | Counter | `kind`, `result`, `recorded` | Attempts to carry out an action, by the adapter's result, and whether the result was recorded |
+| `action_ended_total` | Counter | `kind`, `state`, `reason` | Actions that ended: `DONE`, `UNCERTAIN`, `FAILED` or `CANCELLED`, with the reason |
+| `action_backlog` | Gauge | `kind`, `state` | Actions that have not ended: `PROPOSED`, `ADMITTED` or `EXECUTING` |
+| `action_oldest_due_seconds` | Gauge | `kind` | How long the oldest due action of the kind has waited. An admitted action is due from its next attempt time, and an action in its retry backoff is not due yet. An action whose lease expired, and that no replica took again, is due from the end of that lease. 0 when none is due |
+| `action_backlog_sampler_failures_total` | Counter | none | Backlog samples that failed |
 
 ## Feedback trust
 
