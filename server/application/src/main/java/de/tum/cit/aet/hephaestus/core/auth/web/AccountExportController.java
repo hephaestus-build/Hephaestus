@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportService;
 import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportCreatedDTO;
 import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportStatusDTO;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,9 +41,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class AccountExportController {
 
     private final AccountExportService exportService;
+    private final PublicApiUrls publicApiUrls;
 
-    public AccountExportController(AccountExportService exportService) {
+    public AccountExportController(AccountExportService exportService, PublicApiUrls publicApiUrls) {
         this.exportService = exportService;
+        this.publicApiUrls = publicApiUrls;
     }
 
     @PostMapping
@@ -51,7 +54,7 @@ public class AccountExportController {
     public ResponseEntity<ExportCreatedDTO> requestExport() {
         Long accountId = CurrentAccount.requireId();
         AccountExport export = exportService.requestExport(accountId);
-        URI location = URI.create("/user/exports/" + Objects.requireNonNull(export.getId()));
+        URI location = publicApiUrls.uri("/user/exports/{id}", Objects.requireNonNull(export.getId()));
         return ResponseEntity.accepted()
                 .location(location)
                 .body(new ExportCreatedDTO(

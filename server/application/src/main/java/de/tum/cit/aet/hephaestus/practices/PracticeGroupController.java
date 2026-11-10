@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeGroupRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.ReorderRequestDTO;
@@ -16,7 +17,6 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
-import java.net.URI;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -40,6 +40,7 @@ public class PracticeGroupController {
     private final PracticeGroupService groups;
     private final PracticeReleaseService releases;
     private final CatalogOriginPresenter presenter;
+    private final PublicApiUrls publicApiUrls;
 
     @GetMapping
     @Operation(operationId = "listPracticeGroups")
@@ -67,8 +68,8 @@ public class PracticeGroupController {
                 input.slug(),
                 new GroupAttributes(input.name(), input.description(), input.position(), input.icon(), input.color()),
                 input.shownToDevelopers());
-        return ResponseEntity.created(
-                        URI.create("/api/workspaces/" + ctx.slug() + "/practice-groups/" + group.getSlug()))
+        return ResponseEntity.created(publicApiUrls.uri(
+                        "/workspaces/{workspaceSlug}/practice-groups/{slug}", ctx.slug(), group.getSlug()))
                 .body(presenter.present(ctx.id(), group));
     }
 

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -24,7 +25,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * Workspace-admin management of "your AI provider" — a workspace's own, tenant-scoped LLM connection.
@@ -41,6 +41,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class WorkspaceLlmConnectionController {
 
     private final WorkspaceLlmConnectionService connectionService;
+    private final PublicApiUrls publicApiUrls;
 
     @GetMapping
     @Operation(summary = "List your AI provider connections", operationId = "workspaceListLlmConnections")
@@ -63,10 +64,8 @@ public class WorkspaceLlmConnectionController {
     public ResponseEntity<WorkspaceLlmConnectionDTO> create(
             WorkspaceContext workspaceContext, @Valid @RequestBody CreateWorkspaceLlmConnectionRequestDTO request) {
         WorkspaceLlmConnection created = connectionService.create(workspaceContext, request);
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{id}")
-                .buildAndExpand(created.getId())
-                .toUri();
+        URI location = publicApiUrls.uri(
+                "/workspaces/{workspaceSlug}/llm/connections/{id}", workspaceContext.slug(), created.getId());
         return ResponseEntity.created(location).body(WorkspaceLlmConnectionDTO.from(created));
     }
 

@@ -6,12 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportCreatedDTO;
+import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportStatusDTO;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
+import java.net.URI;
 import java.time.Instant;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -54,6 +57,35 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
+
+    @Test
+    void shouldFollowTheCanonicalExportLocationWithWorkspaceSubdomainsEnabled() {
+        IssuedAccount issued = issueRealTokenForNewAccount("Export Location");
+        var response = webTestClient
+                .post()
+                .uri("/user/exports")
+                .header(HttpHeaders.HOST, "workspace.hephaestus.build")
+                .headers(headers -> headers.setBearerAuth(issued.token()))
+                .exchange()
+                .expectStatus()
+                .isAccepted()
+                .expectBody(ExportCreatedDTO.class)
+                .returnResult();
+        var created = Objects.requireNonNull(response.getResponseBody());
+        URI location = Objects.requireNonNull(response.getResponseHeaders().getLocation());
+        assertEquals(URI.create("https://hephaestus.build/api/user/exports/" + created.id()), location);
+
+        // The Gateway removes /api before the request reaches this application listener.
+        webTestClient
+                .get()
+                .uri(location.getRawPath().substring("/api".length()))
+                .headers(headers -> headers.setBearerAuth(issued.token()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(ExportStatusDTO.class)
+                .value(status -> assertEquals(created.id(), status.id()));
+    }
 
     @Test
     void cookieOnlyRequestAuthenticatesAndGetUserReturnsAccount() {

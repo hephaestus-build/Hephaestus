@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserTeamsDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
@@ -32,7 +33,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @WorkspaceScopedController
 @Tag(name = "workspace")
@@ -40,6 +40,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @Validated
 public class ScmWorkspaceController {
     private final WorkspaceRepositoryMonitorService workspaceRepositoryMonitorService;
+    private final PublicApiUrls publicApiUrls;
     private final WorkspaceTeamLabelService workspaceTeamLabelService;
     private final GitLabRepositorySelectionService gitLabRepositorySelectionService;
     private final GitLabStoppedProjectService gitLabStoppedProjectService;
@@ -67,7 +68,7 @@ public class ScmWorkspaceController {
     public ResponseEntity<Void> addRepositoryToMonitor(
             WorkspaceContext workspaceContext, @RequestParam String nameWithOwner) {
         workspaceRepositoryMonitorService.addRepositoryToMonitor(workspaceContext, nameWithOwner);
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest().build().toUri();
+        URI location = publicApiUrls.uri("/workspaces/{workspaceSlug}/repositories", workspaceContext.slug());
         return ResponseEntity.created(location).build();
     }
 

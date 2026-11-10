@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -25,7 +26,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * Instance-admin management of the pools of provider capacity: which models share one, and the ceiling and rates that
@@ -42,6 +42,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class LlmCallPoolAdminController {
 
     private final LlmCallPoolService pools;
+    private final PublicApiUrls publicApiUrls;
 
     @GetMapping
     @Operation(summary = "List the pools of provider capacity", operationId = "adminListLlmCallPools")
@@ -59,10 +60,7 @@ public class LlmCallPoolAdminController {
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_SETTINGS_CHANGED")
     public ResponseEntity<LlmCallPoolDTO> create(@Valid @RequestBody SaveLlmCallPoolRequestDTO request) {
         LlmCallPool created = pools.create(request);
-        URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/admin/llm/call-pools/{id}")
-                .buildAndExpand(created.getId())
-                .toUri();
+        URI location = publicApiUrls.uri("/admin/llm/call-pools/{id}", created.getId());
         return ResponseEntity.created(location).body(LlmCallPoolDTO.from(created));
     }
 

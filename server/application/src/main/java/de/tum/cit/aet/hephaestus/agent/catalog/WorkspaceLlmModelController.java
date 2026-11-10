@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -24,7 +25,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * Workspace-admin management of models on "your AI provider", plus the available-models projection a
@@ -40,6 +40,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class WorkspaceLlmModelController {
 
     private final WorkspaceLlmModelService modelService;
+    private final PublicApiUrls publicApiUrls;
     private final LlmCallPoolService callPools;
     private final LlmModelCapabilityProbe capabilityProbe;
 
@@ -61,10 +62,8 @@ public class WorkspaceLlmModelController {
             @PathVariable Long connectionId,
             @Valid @RequestBody CreateWorkspaceLlmModelRequestDTO request) {
         WorkspaceLlmModel created = modelService.create(workspaceContext, connectionId, request);
-        URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/workspaces/{workspaceSlug}/llm/models/{id}")
-                .buildAndExpand(workspaceContext.slug(), created.getId())
-                .toUri();
+        URI location = publicApiUrls.uri(
+                "/workspaces/{workspaceSlug}/llm/models/{id}", workspaceContext.slug(), created.getId());
         return ResponseEntity.created(location).body(toDTO(created));
     }
 

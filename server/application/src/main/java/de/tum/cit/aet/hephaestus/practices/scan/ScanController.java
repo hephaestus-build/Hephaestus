@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.CancelScanRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanReportDTO;
@@ -23,7 +24,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import java.net.URI;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -50,6 +50,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RequestMapping("/practices/scans")
 public class ScanController {
     private final ScanQueryService query;
+    private final PublicApiUrls publicApiUrls;
     private final ScanExportService exports;
     private final ScanRequestService requests;
     private final ScanReportItemsService items;
@@ -80,7 +81,8 @@ public class ScanController {
         var scan =
                 requests.start(context.id(), SecurityUtils.getCurrentAccountId().orElseThrow(), key, request);
         return ResponseEntity.accepted()
-                .location(URI.create("/workspaces/" + context.slug() + "/practices/scans/" + scan.id()))
+                .location(publicApiUrls.uri(
+                        "/workspaces/{workspaceSlug}/practices/scans/{scanId}", context.slug(), scan.id()))
                 .body(scan);
     }
 

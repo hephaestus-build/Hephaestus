@@ -74,7 +74,7 @@ import tools.jackson.databind.JsonNode;
                             "Why each practice did or did not run on one piece of work. Any workspace member can read"
                                     + " it."),
         },
-        servers = {@Server(url = "/", description = "Default Server URL")},
+        servers = {@Server(url = "/api", description = "Public API")},
         security = {@SecurityRequirement(name = "bearerAuth")})
 @SecurityScheme(
         name = "bearerAuth",

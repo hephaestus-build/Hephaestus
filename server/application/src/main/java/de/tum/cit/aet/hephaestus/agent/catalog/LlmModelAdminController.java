@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -25,7 +26,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * Instance-admin management of the LLM catalog model list: CRUD plus pricing and sharing.
@@ -44,6 +44,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class LlmModelAdminController {
 
     private final LlmModelService modelService;
+    private final PublicApiUrls publicApiUrls;
     private final LlmModelCapabilityProbe capabilityProbe;
 
     @PostMapping("/connections/{connectionId}/models")
@@ -61,10 +62,7 @@ public class LlmModelAdminController {
     public ResponseEntity<LlmModelDTO> create(
             @PathVariable Long connectionId, @Valid @RequestBody CreateLlmModelRequestDTO request) {
         LlmModel created = modelService.create(connectionId, request);
-        URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/admin/llm/models/{id}")
-                .buildAndExpand(created.getId())
-                .toUri();
+        URI location = publicApiUrls.uri("/admin/llm/models/{id}", created.getId());
         return ResponseEntity.created(location).body(toDTO(created));
     }
 

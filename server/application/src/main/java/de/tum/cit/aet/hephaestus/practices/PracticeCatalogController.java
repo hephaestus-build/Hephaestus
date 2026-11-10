@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.practices.dto.BindPracticeGroupRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.FeedbackModeRollupDTO;
@@ -27,7 +28,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
-import java.net.URI;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -58,6 +58,7 @@ public class PracticeCatalogController {
     private final PracticeDefinitionOptionsService options;
     private final FeedbackModeRollupService modes;
     private final PracticeScriptSummaries scripts;
+    private final PublicApiUrls publicApiUrls;
 
     @GetMapping
     @RequireAtLeastWorkspaceAdmin
@@ -82,7 +83,8 @@ public class PracticeCatalogController {
     public ResponseEntity<PracticeDTO> create(
             WorkspaceContext ctx, @RequestBody @Valid CreatePracticeRequestDTO input) {
         var created = practices.createPractice(ctx, input);
-        return ResponseEntity.created(URI.create("/api/workspaces/" + ctx.slug() + "/practices/" + created.getSlug()))
+        return ResponseEntity.created(publicApiUrls.uri(
+                        "/workspaces/{workspaceSlug}/practices/{slug}", ctx.slug(), created.getSlug()))
                 .body(presenter.present(ctx.id(), created));
     }
 
