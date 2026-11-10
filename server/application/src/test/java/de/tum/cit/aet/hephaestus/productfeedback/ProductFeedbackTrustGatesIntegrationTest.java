@@ -804,16 +804,17 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
         // The report's own store goes; its action stays, as a workspace purge leaves an instance action.
         feedbackErasure.eraseAccount(Objects.requireNonNull(reporter.getId()));
-        ActionTestSupport.drain(executor, jdbc);
-
-        verify(issues, never()).create(any(), anyString(), anyString(), any());
         assertThat(jdbc.queryForObject(
-                        "SELECT next_attempt_at > now() + interval '2 minutes' FROM product_feedback_cleanup"
-                                + " WHERE marker = ?",
+                        "SELECT a.next_attempt_at > now() + interval '2 minutes' FROM agent_action a"
+                                + " JOIN product_feedback_cleanup c ON a.idempotency_key = 'cleanup:' || c.id"
+                                + " WHERE c.marker = ?",
                         Boolean.class,
                         id))
                 .as("cleanup reconciles only after the action's lease")
                 .isTrue();
+        ActionTestSupport.drain(executor, jdbc);
+
+        verify(issues, never()).create(any(), anyString(), anyString(), any());
     }
 
     /** A private report that filing takes next. */

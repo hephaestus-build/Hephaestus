@@ -39,7 +39,13 @@ public enum ActionKind {
      * Publishes a private product-feedback issue as a new public one, for the instance, on a maintainer's
      * {@code /publish}. The new issue carries a marker, so an attempt whose write may have started looks for it first.
      */
-    PUBLISH_REPORT(false, true);
+    PUBLISH_REPORT(false, true),
+
+    /**
+     * Scrubs the GitHub issue of an erased product-feedback report, for the instance: moves a public one to the private
+     * repository, then replaces its text and closes it. Each step can be read back or repeated safely.
+     */
+    CLEANUP_ISSUE(false, true);
 
     private final boolean atMostOnce;
     private final boolean instanceLevel;

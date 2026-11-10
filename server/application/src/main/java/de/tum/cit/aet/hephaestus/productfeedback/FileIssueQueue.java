@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,11 @@ class FileIssueQueue {
 
     void enqueue(FileIssueAdapter.Payload payload, @Nullable Long accountId) {
         actions.enqueue(FileIssueAdapter.request(mapper, payload, accountId));
+    }
+
+    /** Queues the scrub of one erased report's issue, due after {@code delay}; it gives up at {@code until}. */
+    void cleanup(UUID recordId, Duration delay, Instant until) {
+        actions.enqueueNew(CleanupIssueAdapter.request(mapper, recordId, until), delay);
     }
 
     /** Queues a {@code /publish} command, in the report's lane, after its filing. */

@@ -5,7 +5,7 @@ page_type: reference
 ---
 
 An effect on the outside world is one action in the `agent_action` table.
-Email, product-feedback issues (`FILE_ISSUE` and `/publish` as `PUBLISH_REPORT`), feedback on the reviewed work (`DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`) and Hephaestus's Slack posts (`SLACK_POST`) are the kinds of action in this release.
+Email, product-feedback issues (`FILE_ISSUE`, `/publish` as `PUBLISH_REPORT`, and the scrub after an erasure as `CLEANUP_ISSUE`), feedback on the reviewed work (`DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`) and Hephaestus's Slack posts (`SLACK_POST`) are the kinds of action in this release.
 One executor carries out the actions on every server replica.
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) records why there is one outbox.
 The code is in `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/action/`.

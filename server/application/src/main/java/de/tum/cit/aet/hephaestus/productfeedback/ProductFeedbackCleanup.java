@@ -56,12 +56,6 @@ public class ProductFeedbackCleanup {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    @Column(name = "next_attempt_at", nullable = false)
-    private Instant nextAttemptAt;
-
-    @Column(nullable = false)
-    private int attempts;
-
     /** Set once the app can do no more: a maintainer finishes on GitHub, then an admin confirms it. */
     @Enumerated(EnumType.STRING)
     @Column(name = "manual_step", length = 16)
@@ -99,6 +93,5 @@ public class ProductFeedbackCleanup {
         this.publicIssue = publicIssue;
         this.since = since;
         this.createdAt = now;
-        this.nextAttemptAt = now;
     }
 }

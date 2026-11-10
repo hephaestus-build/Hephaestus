@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -110,6 +112,9 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
     private ActionExecutor executor;
 
     @Autowired
+    private FileIssueQueue queue;
+
+    @Autowired
     private DestinationService destinationService;
 
     @Autowired
@@ -132,16 +137,19 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
     @AfterEach
     void tearDown() {
         cleanups.deleteAllById(createdCleanups);
+        for (UUID id : createdCleanups)
+            jdbc.update("DELETE FROM agent_action WHERE idempotency_key = ?", "cleanup:" + id);
         subscribed(admin, false);
         mail.sent().clear();
     }
 
     /**
-     * Runs one sweep on the bean behind its lock proxy. The lock's 30-second floor would skip every sweep after the
-     * first; the replica test covers the lock itself.
+     * Runs every due scrub, then one announcement on the bean behind its lock proxy. The lock's 30-second floor would
+     * skip every announcement after the first; the replica test covers the lock itself.
      */
     private void sweep() {
-        AopTestUtils.<CleanupService>getUltimateTargetObject(cleanup).cleanDue();
+        ActionTestSupport.drain(executor, jdbc);
+        AopTestUtils.<CleanupService>getUltimateTargetObject(cleanup).announceDue();
     }
 
     @Test
@@ -302,6 +310,65 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldHandAScrubThatKeepsFailingAfterAWriteToAMaintainerAfterThirtyDays() {
+        ProductFeedbackCleanup record = record(false, 12L, "I_12", Instant.now());
+        doThrow(new ProductFeedbackIssues.Unknown("read timed out", null))
+                .when(updates)
+                .edit(eq(PRIVATE_REPOSITORY), eq(12L), anyString(), anyString());
+        sweep();
+        assertThat(cleanups.findById(record.getId()).orElseThrow().getManualStep())
+                .isNull();
+
+        jdbc.update(
+                "UPDATE product_feedback_cleanup SET created_at = now() - interval '31 days' WHERE id = ?",
+                record.getId());
+        ActionTestSupport.due(jdbc, "cleanup:" + record.getId());
+        executor.runDue(); // a reread waits as an executing action, which a drain does not count
+        sweep();
+
+        assertThat(cleanups.findById(record.getId()).orElseThrow().getManualStep())
+                .isEqualTo(ProductFeedbackCleanup.ManualStep.UNFINISHED);
+        assertThat(sentTo(admin)).hasSize(1);
+    }
+
+    @Test
+    void shouldFindAMovedIssueInsteadOfMovingItAgainWhenGitHubsAnswerWasLost() {
+        ProductFeedbackDestination before =
+                destinationRows.findById(ProductFeedbackDestination.SINGLETON).orElse(null);
+        @Nullable String previousPrivate = before == null ? null : before.getPrivateRepository();
+        ProductFeedbackDestination destination = before == null ? new ProductFeedbackDestination() : before;
+        destination.setPrivateRepository(PRIVATE_REPOSITORY.fullName());
+        destinationRows.save(destination);
+        try {
+            when(issues.repository(PRIVATE_REPOSITORY.fullName())).thenReturn(Optional.of(PRIVATE_REPOSITORY));
+            ProductFeedbackCleanup record = record(true, 40L, "I_40", Instant.now());
+            when(updates.transfer(any(), eq(PRIVATE_REPOSITORY)))
+                    .thenThrow(new ProductFeedbackIssues.Unknown("read timed out", null));
+            sweep();
+
+            when(issues.findByMarker(
+                            eq(PRIVATE_REPOSITORY), eq(record.getMarker().toString()), any()))
+                    .thenReturn(Optional.of(new ProductFeedbackIssues.Issue(
+                            77, "I_77", "https://github.com/acme/feedback-private/issues/77")));
+            ActionTestSupport.due(jdbc, "cleanup:" + record.getId());
+            executor.runDue(); // a reread waits as an executing action, which a drain does not count
+            sweep();
+
+            verify(updates, times(1)).transfer(any(), eq(PRIVATE_REPOSITORY));
+            verify(updates).edit(eq(PRIVATE_REPOSITORY), eq(77L), eq(CleanupService.ERASED), anyString());
+            assertThat(cleanups.findById(record.getId()).orElseThrow().getManualStep())
+                    .isEqualTo(ProductFeedbackCleanup.ManualStep.EDIT_HISTORY);
+        } finally {
+            if (before == null) {
+                destinationRows.deleteById(ProductFeedbackDestination.SINGLETON);
+            } else {
+                destination.setPrivateRepository(previousPrivate);
+                destinationRows.save(destination);
+            }
+        }
+    }
+
+    @Test
     void shouldForgetTheCleanupWhenTheCreateNeverReachedGitHub() {
         ProductFeedbackCleanup record = record(false, null, null, Instant.now());
         when(issues.findByMarker(any(), anyString(), any())).thenReturn(Optional.empty());
@@ -415,8 +482,8 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
                 createdAt.minusSeconds(60),
                 createdAt);
         record.setIssueNodeId(nodeId);
-        record.setNextAttemptAt(Instant.EPOCH);
         record = cleanups.save(record);
+        queue.cleanup(record.getId(), Duration.ZERO, createdAt.plus(CleanupService.MANUAL_AFTER));
         createdCleanups.add(record.getId());
         return record;
     }
