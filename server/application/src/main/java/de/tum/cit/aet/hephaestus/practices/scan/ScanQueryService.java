@@ -173,9 +173,7 @@ public class ScanQueryService {
                 reports.exclusions(review),
                 new ScanAvailabilityDTO(
                         expired,
-                        review.getCompletedAt() == null
-                                ? null
-                                : review.getCompletedAt().plus(ScanReportService.RETENTION),
+                        reports.expiresAt(review),
                         expired ? 0 : withheld + recorded.redactedProofPairs(),
                         expired
                                 ? recorded.expiredProofPairs() == 0

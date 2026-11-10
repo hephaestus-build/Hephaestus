@@ -34,14 +34,18 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
         String getBody();
     }
 
+    /**
+     * Results recorded before {@code cutoff} that no feedback cites and no running review reads, directly or through a
+     * problem that a running scan compares. A completed review's references go with the result.
+     */
     @Query(value = """
-        SELECT r.id FROM result r WHERE r.workspace_id=:workspaceId AND r.ended_at<=:cutoff
+        SELECT r.id FROM result r WHERE r.workspace_id=:workspaceId AND r.recorded_at<=:cutoff
         AND NOT EXISTS(SELECT 1 FROM feedback_basis b WHERE b.workspace_id=r.workspace_id AND b.result_id=r.id)
-        AND NOT EXISTS(SELECT 1 FROM review_item i JOIN review v ON v.id=i.review_id AND v.workspace_id=i.workspace_id WHERE i.workspace_id=r.workspace_id AND i.result_id=r.id AND v.kind='SCAN' AND (v.completed_at IS NULL OR v.completed_at>:cutoff))
-        AND NOT EXISTS(SELECT 1 FROM review_item member JOIN review scan ON scan.id=member.review_id AND scan.workspace_id=member.workspace_id CROSS JOIN LATERAL jsonb_array_elements(COALESCE(member.detail->'problemComparison','[]'::jsonb)) comparison JOIN problem prior ON (prior.id=(comparison->>'problemId')::uuid OR prior.id=(comparison->>'previousProblemId')::uuid) AND prior.workspace_id=member.workspace_id WHERE prior.result_id=r.id AND prior.workspace_id=r.workspace_id AND scan.kind='SCAN' AND (scan.completed_at IS NULL OR scan.completed_at>:cutoff))
-        ORDER BY r.id::text
+        AND NOT EXISTS(SELECT 1 FROM review_item i JOIN review v ON v.id=i.review_id AND v.workspace_id=i.workspace_id WHERE i.workspace_id=r.workspace_id AND i.result_id=r.id AND v.completed_at IS NULL)
+        AND NOT EXISTS(SELECT 1 FROM review_item member JOIN review scan ON scan.id=member.review_id AND scan.workspace_id=member.workspace_id CROSS JOIN LATERAL jsonb_array_elements(COALESCE(member.detail->'problemComparison','[]'::jsonb)) comparison JOIN problem prior ON (prior.id=(comparison->>'problemId')::uuid OR prior.id=(comparison->>'previousProblemId')::uuid) AND prior.workspace_id=member.workspace_id WHERE prior.result_id=r.id AND prior.workspace_id=r.workspace_id AND scan.kind='SCAN' AND scan.completed_at IS NULL)
+        ORDER BY r.id::text LIMIT :limit
         """, nativeQuery = true)
-    List<UUID> expiredUnreferencedIds(long workspaceId, Instant cutoff);
+    List<UUID> expiredUnreferencedIds(long workspaceId, Instant cutoff, int limit);
 
     @Modifying
     @Query(value = """

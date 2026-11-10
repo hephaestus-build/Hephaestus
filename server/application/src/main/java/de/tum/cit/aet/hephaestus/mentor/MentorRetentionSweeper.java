@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.FeedbackRetentionProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Duration;
@@ -13,7 +14,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Erases every conversation entry that reaches {@link MentorRetentionProperties#conversationRetention()}, as a delete
+ * Erases every conversation entry that reaches {@link FeedbackRetentionProperties#feedbackRetention()}, as a delete
  * erases it. It runs once a week and erases an entry up to two weeks before its limit, so a missed run still keeps it:
  * an erased entry also erases every summary over it, and a nightly run would cost each long conversation a full
  * compaction every night. A run erases at most {@link #MAX_PER_RUN} entries for each workspace and says so when it
@@ -35,7 +36,7 @@ public class MentorRetentionSweeper {
 
     private final MentorEntryRepository entries;
     private final MentorEntryService entryService;
-    private final MentorRetentionProperties properties;
+    private final FeedbackRetentionProperties properties;
     private final Clock clock;
 
     @Scheduled(cron = "0 45 3 * * SUN")
@@ -46,8 +47,7 @@ public class MentorRetentionSweeper {
 
     /** @return how many entries it erased across every workspace */
     public long sweepNow() {
-        Instant cutoff =
-                clock.instant().minus(properties.conversationRetention().minus(EARLY));
+        Instant cutoff = clock.instant().minus(properties.feedbackRetention().minus(EARLY));
         long erased = 0;
         for (long workspaceId : entries.findWorkspaceIdsWithUnredactedEntries()) {
             try {

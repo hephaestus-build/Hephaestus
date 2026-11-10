@@ -91,7 +91,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQue
     @Query(value = """
         SELECT DISTINCT workspace_id FROM review WHERE kind='SCAN' AND completed_at<=:cutoff AND
         COALESCE((report->>'expired')::boolean,false)=false UNION SELECT DISTINCT workspace_id
-        FROM result WHERE ended_at<=:cutoff ORDER BY workspace_id
+        FROM result WHERE recorded_at<=:cutoff ORDER BY workspace_id
         """, nativeQuery = true)
     List<Long> workspacesWithExpiredProof(Instant cutoff);
 
