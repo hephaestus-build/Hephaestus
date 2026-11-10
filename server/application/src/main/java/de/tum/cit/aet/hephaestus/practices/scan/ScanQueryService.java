@@ -146,7 +146,7 @@ public class ScanQueryService {
     @Transactional
     public ScanDetailDTO cancel(long workspaceId, UUID id) {
         reports.require(workspaceId, id);
-        service.cancel(workspaceId, id, "CANCELLED_BY_ADMIN");
+        service.cancel(workspaceId, id);
         return detail(workspaceId, id);
     }
 

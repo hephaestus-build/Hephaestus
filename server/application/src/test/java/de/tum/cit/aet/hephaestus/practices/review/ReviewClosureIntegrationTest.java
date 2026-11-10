@@ -44,7 +44,7 @@ class ReviewClosureIntegrationTest extends BaseIntegrationTest {
                 pending.jobId());
 
         assertThat(reviews.cancel(
-                        pending.review().getWorkspaceId(), pending.review().getId(), null))
+                        pending.review().getWorkspaceId(), pending.review().getId()))
                 .isTrue();
         completion.tick();
 
@@ -63,7 +63,7 @@ class ReviewClosureIntegrationTest extends BaseIntegrationTest {
                 pending.review().getId());
 
         assertThat(reviews.cancel(
-                        pending.review().getWorkspaceId(), pending.review().getId(), null))
+                        pending.review().getWorkspaceId(), pending.review().getId()))
                 .isTrue();
 
         assertClosedWithheld(pending, "CANCELLED");

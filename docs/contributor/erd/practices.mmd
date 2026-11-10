@@ -265,6 +265,7 @@ erDiagram
         UUID request_key UK
         VARCHAR(64) request_digest
         JSONB checks "NOT NULL"
+        BOOLEAN cancel_requested "NOT NULL"
     }
 
     ReviewBatch {

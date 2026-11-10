@@ -92,7 +92,7 @@ class ReviewStartServiceTest extends BaseUnitTest {
                 .id(REVIEW)
                 .workspaceId(WORKSPACE)
                 .status(status)
-                .checks(JsonNodeFactory.instance.objectNode().put("cancellationRequested", true))
+                .cancelRequested(true)
                 .build();
         when(reviews.lockByIdAndWorkspaceId(REVIEW, WORKSPACE)).thenReturn(Optional.of(review));
 

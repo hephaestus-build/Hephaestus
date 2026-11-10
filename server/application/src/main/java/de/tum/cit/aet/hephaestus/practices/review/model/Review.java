@@ -128,6 +128,12 @@ public class Review {
     @Column(name = "request_digest", length = 64)
     private @Nullable String requestDigest;
 
+    /** Someone asked to cancel the review; it ends CANCELLED once no invocation of it runs. */
+    @Default
+    @ColumnDefault("false")
+    @Column(name = "cancel_requested", nullable = false)
+    private boolean cancelRequested = false;
+
     @Default
     @JdbcTypeCode(SqlTypes.JSON)
     @ColumnDefault("'{}'")

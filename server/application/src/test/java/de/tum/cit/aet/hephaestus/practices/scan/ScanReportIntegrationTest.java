@@ -531,7 +531,7 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                         .update());
         when(runtime.activeJobIds(workspaceId, reviewId)).thenReturn(Set.of());
         when(runtime.unsettledJobIds(workspaceId, reviewId)).thenReturn(Set.of(jobId));
-        assertThat(reviews.cancel(workspaceId, reviewId, "CANCELLED_BY_ADMIN")).isTrue();
+        assertThat(reviews.cancel(workspaceId, reviewId)).isTrue();
         assertThat(jdbc.sql("SELECT report IS NULL FROM review WHERE workspace_id=:ws AND id=:id")
                         .param("ws", workspaceId)
                         .param("id", reviewId)

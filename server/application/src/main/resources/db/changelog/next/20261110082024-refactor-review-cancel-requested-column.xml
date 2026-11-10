@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794277527321-1" author="hephaestus">
+        <addColumn tableName="review">
+            <column name="cancel_requested" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794277527321-2" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <columnExists tableName="review" columnName="cancel_requested"/>
+        </preConditions>
+        <comment>A cancel request moves from review.checks into its own column. Nothing reads cancellationReason, so it is dropped.</comment>
+        <sql>UPDATE review SET cancel_requested = true WHERE (checks->>'cancellationRequested')::boolean;
+UPDATE review SET checks = checks - 'cancellationRequested' - 'cancellationReason'
+WHERE jsonb_exists_any(checks, ARRAY['cancellationRequested', 'cancellationReason']);</sql>
+        <rollback>
+            <sql>UPDATE review SET checks = checks || jsonb_build_object('cancellationRequested', true) WHERE cancel_requested;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

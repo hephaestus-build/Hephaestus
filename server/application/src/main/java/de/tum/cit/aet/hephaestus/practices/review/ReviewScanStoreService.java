@@ -75,8 +75,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
         limit(limit);
         var review = reviews.findByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
         if (review.getKind() != ReviewKind.SCAN) throw new IllegalArgumentException("Select a scan review.");
-        if (review.getStatus().isTerminal()
-                || review.getChecks().path("cancellationRequested").asBoolean()) return List.of();
+        if (review.getStatus().isTerminal() || review.isCancelRequested()) return List.of();
         var activeJobs = runtime.activeJobIds(workspaceId, reviewId);
         return items.pending(workspaceId, reviewId, activeJobs.toArray(UUID[]::new), PageRequest.of(0, limit)).stream()
                 .map(row -> new ReviewAssignmentId(reviewId, row.getPracticeId(), row.getItemId()))
@@ -101,7 +100,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
                 review.getStatus(),
                 Objects.requireNonNull(review.getBudgetUsd(), "A scan must have a budget."),
                 review.getCreatedAt(),
-                review.getChecks().path("cancellationRequested").asBoolean(),
+                review.isCancelRequested(),
                 inventory != null,
                 inventory != null && inventory.path("complete").asBoolean(),
                 listedPractices,
@@ -247,9 +246,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
 
     private Review active(long workspaceId, UUID reviewId) {
         var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
-        if (review.getKind() != ReviewKind.SCAN
-                || review.getStatus().isTerminal()
-                || review.getChecks().path("cancellationRequested").asBoolean())
+        if (review.getKind() != ReviewKind.SCAN || review.getStatus().isTerminal() || review.isCancelRequested())
             throw new IllegalStateException("This scan no longer accepts work.");
         return review;
     }
