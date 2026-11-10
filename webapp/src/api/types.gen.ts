@@ -711,23 +711,6 @@ export type ConfigurationFact = {
 };
 
 /**
- * Audit-log entry returned by <code>GET /workspaces/{workspaceSlug</code>/connections/{id}/audit}.
- *
- * <p>Lean projection of {@link ConnectionAudit ConnectionAudit} — the entity carries a back-reference to
- * <code>Connection</code> that this DTO omits.
- */
-export type ConnectionAuditEntry = {
-    actorAccountId?: number;
-    actorKind?: string;
-    actorRef?: string;
-    correlationId?: string;
-    eventType?: string;
-    fromState?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'UNINSTALLED';
-    occurredAt?: Date;
-    toState?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'UNINSTALLED';
-};
-
-/**
  * Detailed view of a single Connection — extends {@link ConnectionSummaryDTO ConnectionSummaryDTO} with the
  * sealed config serialized to a free-form JSON object (<code>Map&lt;String, Object&gt;</code> →
  * <code>type: object, additionalProperties: true</code> in the spec, so it round-trips through
@@ -748,7 +731,6 @@ export type ConnectionAuditEntry = {
  */
 export type ConnectionDetail = {
     attentionProblem?: 'CREDENTIAL_EXPIRING' | 'CREDENTIAL_REVOKED' | 'PROVIDER_SUSPENDED' | 'PROVIDER_CLEANUP_UNCONFIRMED';
-    capabilities?: Array<'WEBHOOK_INGEST' | 'TOKEN_REFRESH' | 'FEEDBACK_DELIVERY' | 'INLINE_FEEDBACK' | 'APPROVAL_WORKFLOW' | 'SCOPE_CHANGES'>;
     config?: {
         [key: string]: unknown;
     };
@@ -757,10 +739,8 @@ export type ConnectionDetail = {
     displayName?: string;
     family?: 'SCM' | 'MESSAGING' | 'DOCUMENTATION';
     id?: number;
-    instanceKey?: string;
     kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
     state?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'UNINSTALLED';
-    stateReason?: string;
     tokenExpiresAt?: Date;
     tokenExpiryCheckedAt?: Date;
     updatedAt?: Date;
@@ -769,21 +749,17 @@ export type ConnectionDetail = {
 /**
  * Wire shape returned by the <code>GET /workspaces/{workspaceSlug</code>/connections}
  * list + by lifecycle endpoints (suspend, reactivate). Lightweight — no config, no
- * credentials, no audit. Capabilities are looked up from the per-kind manifest at
- * response build time so adding/removing a capability needs no DB migration.
+ * credentials, no audit.
  */
 export type ConnectionSummary = {
     attentionProblem?: 'CREDENTIAL_EXPIRING' | 'CREDENTIAL_REVOKED' | 'PROVIDER_SUSPENDED' | 'PROVIDER_CLEANUP_UNCONFIRMED';
-    capabilities?: Array<'WEBHOOK_INGEST' | 'TOKEN_REFRESH' | 'FEEDBACK_DELIVERY' | 'INLINE_FEEDBACK' | 'APPROVAL_WORKFLOW' | 'SCOPE_CHANGES'>;
     createdAt?: Date;
     credentialsUnreadableSince?: Date;
     displayName?: string;
     family?: 'SCM' | 'MESSAGING' | 'DOCUMENTATION';
     id?: number;
-    instanceKey?: string;
     kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
     state?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'UNINSTALLED';
-    stateReason?: string;
     updatedAt?: Date;
 };
 
@@ -1609,12 +1585,6 @@ export type FeedbackRequest = {
     pagePath?: string;
     share?: boolean;
     userAgent?: string;
-};
-
-export type FeedbackResolutionCounts = {
-    addressed: number;
-    disagree: number;
-    notApplicable: number;
 };
 
 export type FeedbackResponse = {
@@ -4911,7 +4881,6 @@ export type ReviewDetail = {
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
     runtime: ReviewRuntime | null;
-    stageTiming: Array<ReviewStageTiming>;
     startedBy: ItemEvent | null;
     /**
      * Where the review stands.
@@ -5294,13 +5263,6 @@ export type ReviewScheduleInput = {
 export type ReviewScopeRepository = {
     baseBranches: Array<string>;
     repositoryItemId: string;
-};
-
-export type ReviewStageTiming = {
-    completedAt: Date | null;
-    durationMs: null | number;
-    stage: string;
-    startedAt: Date | null;
 };
 
 export type ReviewStatusCounts = {
@@ -5797,10 +5759,8 @@ export type SlackUserPreferences = {
 export type SlackUserWorkspacePreferences = {
     activeMonitoredChannelCount?: number;
     channelMessagesAllowed?: boolean;
-    slackDisplayName?: string;
     slackTeamId: string;
     slackTeamName?: string;
-    slackUserId: string;
     workspaceName: string;
     workspaceSlug: string;
 };
@@ -9666,24 +9626,6 @@ export type UpdateProductFeedbackSharingResponses = {
 
 export type UpdateProductFeedbackSharingResponse = UpdateProductFeedbackSharingResponses[keyof UpdateProductFeedbackSharingResponses];
 
-export type GetMyProductFeedbackData = {
-    body?: never;
-    path: {
-        feedbackId: string;
-    };
-    query?: never;
-    url: '/product-feedback/{feedbackId}';
-};
-
-export type GetMyProductFeedbackResponses = {
-    /**
-     * OK
-     */
-    200: MyProductFeedback;
-};
-
-export type GetMyProductFeedbackResponse = GetMyProductFeedbackResponses[keyof GetMyProductFeedbackResponses];
-
 export type AllowMyProductFeedbackPublicData = {
     body: AllowPublic;
     path: {
@@ -11595,28 +11537,6 @@ export type ReadResponses = {
 
 export type ReadResponse = ReadResponses[keyof ReadResponses];
 
-export type AuditData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        id: number;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/connections/{id}/audit';
-};
-
-export type AuditResponses = {
-    /**
-     * OK
-     */
-    200: Array<ConnectionAuditEntry>;
-};
-
-export type AuditResponse = AuditResponses[keyof AuditResponses];
-
 export type UpdateConnectionStatusData = {
     body: UpdateConnectionStatusRequest;
     path: {
@@ -13401,27 +13321,6 @@ export type GetOwnPracticePageFeedbackResponses = {
 };
 
 export type GetOwnPracticePageFeedbackResponse = GetOwnPracticePageFeedbackResponses[keyof GetOwnPracticePageFeedbackResponses];
-
-export type GetOwnFeedbackResolutionCountsData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/practices/feedback/resolution-counts';
-};
-
-export type GetOwnFeedbackResolutionCountsResponses = {
-    /**
-     * OK
-     */
-    200: FeedbackResolutionCounts;
-};
-
-export type GetOwnFeedbackResolutionCountsResponse = GetOwnFeedbackResolutionCountsResponses[keyof GetOwnFeedbackResolutionCountsResponses];
 
 export type ClearOwnFeedbackResponseData = {
     body?: never;

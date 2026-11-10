@@ -3,12 +3,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
 	allowMyProductFeedbackPublicMutation,
 	editMyProductFeedbackDraftMutation,
-	getMyProductFeedbackQueryKey,
 	keepMyProductFeedbackPrivateMutation,
 	listMyProductFeedbackQueryKey,
 	makeMyProductFeedbackPrivateMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { EditProductFeedbackDraft, MyProductFeedback } from "@/api/types.gen";
+import type { EditProductFeedbackDraft } from "@/api/types.gen";
 import type { ProductFeedbackAction } from "@/components/product-feedback/sharing-copy";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { toast } from "@/lib/toast";
@@ -16,11 +15,7 @@ import { toast } from "@/lib/toast";
 /** The person's own changes to a report, shared by the confirmation and Your product feedback. */
 export function useMyProductFeedbackActions() {
 	const queryClient = useQueryClient();
-	const settle = (report: MyProductFeedback) => {
-		queryClient.setQueryData(
-			getMyProductFeedbackQueryKey({ path: { feedbackId: report.id } }),
-			report,
-		);
+	const settle = () => {
 		void queryClient.invalidateQueries({ queryKey: listMyProductFeedbackQueryKey() });
 	};
 	const refused = (fallback: string) => (error: unknown) => {
@@ -29,8 +24,8 @@ export function useMyProductFeedbackActions() {
 	};
 	const keepPrivate = useMutation({
 		...keepMyProductFeedbackPrivateMutation(),
-		onSuccess: (report) => {
-			settle(report);
+		onSuccess: () => {
+			settle();
 			toast.success("Report kept private");
 		},
 		onError: refused("We could not keep it private"),
@@ -42,8 +37,8 @@ export function useMyProductFeedbackActions() {
 	});
 	const makePrivate = useMutation({
 		...makeMyProductFeedbackPrivateMutation(),
-		onSuccess: (report) => {
-			settle(report);
+		onSuccess: () => {
+			settle();
 			toast.success("The issue is in the private repository now");
 		},
 		onError: refused("We could not make the issue private"),

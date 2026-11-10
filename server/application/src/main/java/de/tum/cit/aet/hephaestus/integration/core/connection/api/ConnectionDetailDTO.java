@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
-import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
-import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationFamily;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -42,12 +40,9 @@ public record ConnectionDetailDTO(
         IntegrationKind kind,
         IntegrationFamily family,
         IntegrationState state,
-        @Nullable String instanceKey,
         @Nullable String displayName,
-        @Nullable String stateReason,
         Instant createdAt,
         Instant updatedAt,
-        Set<Capability> capabilities,
         @Nullable Map<String, Object> config,
         @Nullable Instant credentialsUnreadableSince,
         @Nullable LocalDate tokenExpiresAt,
@@ -67,7 +62,7 @@ public record ConnectionDetailDTO(
     public static final Set<String> SENSITIVE_CONFIG_KEYS = Set.of("tokenmetadata");
 
     @SuppressWarnings("unchecked")
-    public static ConnectionDetailDTO from(Connection c, IntegrationManifestRegistry manifests, ObjectMapper mapper) {
+    public static ConnectionDetailDTO from(Connection c, ObjectMapper mapper) {
         Map<String, Object> configMap =
                 c.getConfig() == null ? null : redactSensitive(mapper.convertValue(c.getConfig(), Map.class));
         var tokenMetadata =
@@ -77,12 +72,9 @@ public record ConnectionDetailDTO(
                 c.getKind(),
                 c.getKind().family(),
                 c.getState(),
-                c.getInstanceKey(),
                 c.getDisplayName(),
-                c.getStateReason(),
                 c.getCreatedAt(),
                 c.getUpdatedAt(),
-                manifests.capabilitiesFor(c.getKind()),
                 configMap,
                 c.credentialsUnreadableSince(),
                 tokenMetadata == null ? null : tokenMetadata.expiresAt(),

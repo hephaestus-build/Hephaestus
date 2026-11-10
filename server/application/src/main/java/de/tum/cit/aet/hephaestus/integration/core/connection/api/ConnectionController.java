@@ -69,8 +69,6 @@ public class ConnectionController {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectionController.class);
 
-    private static final int AUDIT_PAGE_CAP = 200;
-
     private final ConnectionAdminService admin;
     private final ConnectionService connectionService;
     private final ObjectMapper objectMapper;
@@ -100,7 +98,7 @@ public class ConnectionController {
     @GetMapping
     public ResponseEntity<List<ConnectionSummaryDTO>> list(WorkspaceContext workspace) {
         List<ConnectionSummaryDTO> summaries = admin.listForWorkspace(workspace.id()).stream()
-                .map(c -> ConnectionSummaryDTO.from(c, admin.manifests()))
+                .map(c -> ConnectionSummaryDTO.from(c))
                 .toList();
         return ResponseEntity.ok(summaries);
     }
@@ -108,7 +106,7 @@ public class ConnectionController {
     @GetMapping("/{id}")
     public ResponseEntity<ConnectionDetailDTO> read(WorkspaceContext workspace, @PathVariable Long id) {
         Connection connection = admin.findInWorkspaceOrThrow(workspace.id(), id);
-        return ResponseEntity.ok(ConnectionDetailDTO.from(connection, admin.manifests(), objectMapper));
+        return ResponseEntity.ok(ConnectionDetailDTO.from(connection, objectMapper));
     }
 
     @PostMapping
@@ -183,7 +181,7 @@ public class ConnectionController {
         Connection updated = target == IntegrationState.UNINSTALLED
                 ? connectionService.disconnect(connection, request, strategyForDisconnect(connection))
                 : connectionService.transition(connection, request);
-        return ResponseEntity.ok(ConnectionSummaryDTO.from(updated, admin.manifests()));
+        return ResponseEntity.ok(ConnectionSummaryDTO.from(updated));
     }
 
     /** Without its strategy nothing can erase the integration's data, so the connection stays as it is. */
@@ -195,17 +193,6 @@ public class ConnectionController {
                             + "Ask your instance operator to turn it on, then disconnect again.");
         }
         return strategy;
-    }
-
-    @GetMapping("/{id}/audit")
-    public ResponseEntity<List<ConnectionAuditEntryDTO>> audit(WorkspaceContext workspace, @PathVariable Long id) {
-        // findInWorkspaceOrThrow enforces the workspace scope before we expose audit history,
-        // so cross-workspace audit reads return 404 rather than leaking a partial trail.
-        admin.findInWorkspaceOrThrow(workspace.id(), id);
-        List<ConnectionAuditEntryDTO> entries = admin.auditForConnection(id, AUDIT_PAGE_CAP).stream()
-                .map(ConnectionAuditEntryDTO::from)
-                .toList();
-        return ResponseEntity.ok(entries);
     }
 
     /**

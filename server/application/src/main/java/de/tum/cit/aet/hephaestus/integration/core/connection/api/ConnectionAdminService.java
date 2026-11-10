@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAudit;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -42,7 +40,7 @@ import org.springframework.web.server.ResponseStatusException;
  * <p>This is intentionally a separate type from {@link ConnectionService}: that one
  * owns the state-machine + audit invariants (called from many places — credential
  * providers, lifecycle webhooks, purge contributor). This service owns admin-only
- * orchestration (list, lookup, audit projection, inline-credentials Connection
+ * orchestration (list, lookup, inline-credentials Connection
  * creation) and is only called from the REST surface.
  */
 @ConditionalOnServerRole
@@ -55,7 +53,6 @@ public class ConnectionAdminService {
     private @Nullable EntityManager entityManager;
 
     private final ConnectionRepository connectionRepository;
-    private final ConnectionAuditRepository auditRepository;
     private final ConnectionService connectionService;
     private final WorkspaceRepository workspaceRepository;
     private final IntegrationManifestRegistry manifests;
@@ -63,13 +60,11 @@ public class ConnectionAdminService {
 
     public ConnectionAdminService(
             ConnectionRepository connectionRepository,
-            ConnectionAuditRepository auditRepository,
             ConnectionService connectionService,
             WorkspaceRepository workspaceRepository,
             IntegrationManifestRegistry manifests,
             CredentialBundleConverter credentialConverter) {
         this.connectionRepository = connectionRepository;
-        this.auditRepository = auditRepository;
         this.connectionService = connectionService;
         this.workspaceRepository = workspaceRepository;
         this.manifests = manifests;
@@ -104,13 +99,6 @@ public class ConnectionAdminService {
             throw new NoSuchElementException("Connection not found in workspace " + workspaceId + ": id=" + id);
         }
         return connection;
-    }
-
-    @Transactional(readOnly = true)
-    public List<ConnectionAudit> auditForConnection(long connectionId, int limit) {
-        return auditRepository.findByConnectionIdOrderByOccurredAtDesc(connectionId).stream()
-                .limit(limit)
-                .toList();
     }
 
     public IntegrationManifestRegistry manifests() {

@@ -78,7 +78,6 @@ const activeOutlineConnection = {
 	state: "ACTIVE",
 	family: "DOCUMENTATION",
 	displayName: "Acme Wiki",
-	instanceKey: "9a1b2c3d",
 };
 
 const engineering = {
@@ -374,21 +373,6 @@ describe("Outline integration — sync now", () => {
 });
 
 describe("Outline integration — token lifecycle", () => {
-	it("does not expose an opaque connection identifier when no display name is available", async () => {
-		const collectionsRef = { current: [engineering] as unknown[] };
-		useConnectedHandlers(collectionsRef);
-		server.use(
-			http.get("*/workspaces/demo/connections", () =>
-				HttpResponse.json([{ ...activeOutlineConnection, displayName: undefined }]),
-			),
-		);
-
-		renderContainer();
-
-		await screen.findByText(/^outline connected$/iu);
-		expect(screen.queryByText(activeOutlineConnection.instanceKey)).toBeNull();
-	});
-
 	it("surfaces token status failures and offers a retry", async () => {
 		const collectionsRef = { current: [engineering] as unknown[] };
 		useConnectedHandlers(collectionsRef);

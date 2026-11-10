@@ -169,8 +169,6 @@ public class SlackUserPreferencesService {
                 workspace.displayName(),
                 Objects.requireNonNull(connection.getInstanceKey()),
                 connection.getDisplayName(),
-                slackUserId,
-                null,
                 allowed,
                 monitoredChannelRepository.countByWorkspaceIdAndConsentState(workspaceId, ConsentState.ACTIVE));
     }

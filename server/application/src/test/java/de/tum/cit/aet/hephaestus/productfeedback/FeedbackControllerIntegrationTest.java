@@ -227,14 +227,6 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         send(author, "Only mine").expectStatus().isOk().expectBody(Void.class);
         UUID id = feedback.findAllByAccountId(author.accountId()).getFirst().getId();
         webTestClient
-                .get()
-                .uri("/product-feedback/" + id)
-                .headers(other.headers())
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
-        webTestClient
                 .post()
                 .uri("/product-feedback/" + id + "/keep-private")
                 .headers(other.headers())
@@ -244,14 +236,24 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectBody(Void.class);
         webTestClient
                 .get()
-                .uri("/product-feedback/" + id)
+                .uri("/product-feedback/mine")
+                .headers(other.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$[?(@.id == '" + id + "')]")
+                .doesNotExist();
+        webTestClient
+                .get()
+                .uri("/product-feedback/mine")
                 .headers(author.headers())
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.id")
-                .isEqualTo(id.toString());
+                .jsonPath("$[?(@.id == '" + id + "')]")
+                .exists();
     }
 
     @Test

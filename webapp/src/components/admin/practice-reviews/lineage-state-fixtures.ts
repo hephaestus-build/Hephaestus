@@ -258,7 +258,7 @@ const reviewCases: LineageStateCase[] = [
 		chain({
 			review: { completedAt: dayAt("05-02", "13:44:00"), createdAt: dayAt("05-02", "13:35:00") },
 		}),
-		(lineage) => detailOf(lineage, { runtime: null, stageTiming: [] }),
+		(lineage) => detailOf(lineage, { runtime: null }),
 	),
 	{
 		key: "scan-many-jobs",
@@ -696,14 +696,6 @@ export const richReviewFixture = (() => {
 		startedAt,
 		completedAt: runCompletedAt,
 	}));
-	review.stageTiming = [
-		{
-			stage: "RUN",
-			startedAt,
-			completedAt: runCompletedAt,
-			durationMs: runCompletedAt.getTime() - startedAt.getTime(),
-		},
-	];
 	if (review.startedBy !== null) {
 		review.startedBy = {
 			...review.startedBy,

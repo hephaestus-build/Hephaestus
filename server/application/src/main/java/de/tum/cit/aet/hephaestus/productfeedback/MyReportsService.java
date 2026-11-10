@@ -167,12 +167,6 @@ class MyReportsService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
-    public MyProductFeedbackDTO get(long accountId, UUID id) {
-        ProductFeedback report = owned(accountId, id);
-        return dto(report, filings.findById(id).orElse(null));
-    }
-
     @Transactional
     public MyProductFeedbackDTO keepPrivate(long accountId, UUID id) {
         ProductFeedback report = owned(accountId, id);

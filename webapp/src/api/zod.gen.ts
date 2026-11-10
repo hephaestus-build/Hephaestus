@@ -555,33 +555,6 @@ export const zConfigurationFact = z.object({
 });
 
 /**
- * Audit-log entry returned by <code>GET /workspaces/{workspaceSlug</code>/connections/{id}/audit}.
- *
- * <p>Lean projection of {@link ConnectionAudit ConnectionAudit} — the entity carries a back-reference to
- * <code>Connection</code> that this DTO omits.
- */
-export const zConnectionAuditEntry = z.object({
-    actorAccountId: z.int().optional(),
-    actorKind: z.string().optional(),
-    actorRef: z.string().optional(),
-    correlationId: z.string().optional(),
-    eventType: z.string().optional(),
-    fromState: z.enum([
-        'PENDING',
-        'ACTIVE',
-        'SUSPENDED',
-        'UNINSTALLED'
-    ]).optional(),
-    occurredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-    toState: z.enum([
-        'PENDING',
-        'ACTIVE',
-        'SUSPENDED',
-        'UNINSTALLED'
-    ]).optional()
-});
-
-/**
  * Detailed view of a single Connection — extends {@link ConnectionSummaryDTO ConnectionSummaryDTO} with the
  * sealed config serialized to a free-form JSON object (<code>Map&lt;String, Object&gt;</code> →
  * <code>type: object, additionalProperties: true</code> in the spec, so it round-trips through
@@ -607,14 +580,6 @@ export const zConnectionDetail = z.object({
         'PROVIDER_SUSPENDED',
         'PROVIDER_CLEANUP_UNCONFIRMED'
     ]).optional(),
-    capabilities: z.array(z.enum([
-        'WEBHOOK_INGEST',
-        'TOKEN_REFRESH',
-        'FEEDBACK_DELIVERY',
-        'INLINE_FEEDBACK',
-        'APPROVAL_WORKFLOW',
-        'SCOPE_CHANGES'
-    ])).optional(),
     config: z.record(z.string(), z.unknown()).optional(),
     createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
     credentialsUnreadableSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
@@ -625,7 +590,6 @@ export const zConnectionDetail = z.object({
         'DOCUMENTATION'
     ]).optional(),
     id: z.int().optional(),
-    instanceKey: z.string().optional(),
     kind: z.enum([
         'GITHUB',
         'GITLAB',
@@ -638,7 +602,6 @@ export const zConnectionDetail = z.object({
         'SUSPENDED',
         'UNINSTALLED'
     ]).optional(),
-    stateReason: z.string().optional(),
     tokenExpiresAt: z.iso.date().pipe(z.coerce.date()).optional(),
     tokenExpiryCheckedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
     updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional()
@@ -647,8 +610,7 @@ export const zConnectionDetail = z.object({
 /**
  * Wire shape returned by the <code>GET /workspaces/{workspaceSlug</code>/connections}
  * list + by lifecycle endpoints (suspend, reactivate). Lightweight — no config, no
- * credentials, no audit. Capabilities are looked up from the per-kind manifest at
- * response build time so adding/removing a capability needs no DB migration.
+ * credentials, no audit.
  */
 export const zConnectionSummary = z.object({
     attentionProblem: z.enum([
@@ -657,14 +619,6 @@ export const zConnectionSummary = z.object({
         'PROVIDER_SUSPENDED',
         'PROVIDER_CLEANUP_UNCONFIRMED'
     ]).optional(),
-    capabilities: z.array(z.enum([
-        'WEBHOOK_INGEST',
-        'TOKEN_REFRESH',
-        'FEEDBACK_DELIVERY',
-        'INLINE_FEEDBACK',
-        'APPROVAL_WORKFLOW',
-        'SCOPE_CHANGES'
-    ])).optional(),
     createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
     credentialsUnreadableSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
     displayName: z.string().optional(),
@@ -674,7 +628,6 @@ export const zConnectionSummary = z.object({
         'DOCUMENTATION'
     ]).optional(),
     id: z.int().optional(),
-    instanceKey: z.string().optional(),
     kind: z.enum([
         'GITHUB',
         'GITLAB',
@@ -687,7 +640,6 @@ export const zConnectionSummary = z.object({
         'SUSPENDED',
         'UNINSTALLED'
     ]).optional(),
-    stateReason: z.string().optional(),
     updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional()
 });
 
@@ -1362,12 +1314,6 @@ export const zFeedbackRequest = z.object({
     pagePath: z.string().min(0).max(500).regex(/\/|(\/(?:[a-z0-9][a-z0-9-]*|\$[A-Za-z]*))+/).optional(),
     share: z.boolean().optional(),
     userAgent: z.string().min(0).max(500).regex(/[^\p{Cc}]*/u).optional()
-});
-
-export const zFeedbackResolutionCounts = z.object({
-    addressed: z.int(),
-    disagree: z.int(),
-    notApplicable: z.int()
 });
 
 export const zFeedbackResponse = z.object({
@@ -4390,13 +4336,6 @@ export const zReviewScopeRepository = z.object({
     repositoryItemId: z.string().regex(/[1-9][0-9]*/)
 });
 
-export const zReviewStageTiming = z.object({
-    completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-    durationMs: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    stage: z.string(),
-    startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable()
-});
-
 export const zReviewStatusCounts = z.object({
     cancelled: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     complete: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
@@ -4581,7 +4520,6 @@ export const zReviewDetail = z.object({
     requestedBy: zAccountRef.nullable(),
     results: zReviewResultCounts,
     runtime: zReviewRuntime.nullable(),
-    stageTiming: z.array(zReviewStageTiming),
     startedBy: zItemEvent.nullable(),
     status: z.enum([
         'QUEUED',
@@ -5257,10 +5195,8 @@ export const zSlackScopes = z.object({
 export const zSlackUserWorkspacePreferences = z.object({
     activeMonitoredChannelCount: z.int().optional(),
     channelMessagesAllowed: z.boolean().optional(),
-    slackDisplayName: z.string().optional(),
     slackTeamId: z.string(),
     slackTeamName: z.string().optional(),
-    slackUserId: z.string(),
     workspaceName: z.string(),
     workspaceSlug: z.string()
 });

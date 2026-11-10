@@ -106,7 +106,6 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
             assertThat(workspace.workspaceName()).isEqualTo("Hephaestus");
             assertThat(workspace.slackTeamId()).isEqualTo("T1");
             assertThat(workspace.slackTeamName()).isEqualTo("acme-slack");
-            assertThat(workspace.slackDisplayName()).isNull();
             assertThat(workspace.channelMessagesAllowed()).isFalse();
             assertThat(workspace.activeMonitoredChannelCount()).isEqualTo(3L);
         });

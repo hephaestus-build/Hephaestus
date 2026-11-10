@@ -58,12 +58,6 @@ public class MyProductFeedbackController {
         return reports.mine(CurrentAccount.requireId(), CurrentAccount.roles().contains("app_admin"));
     }
 
-    @GetMapping("/{feedbackId}")
-    @Operation(operationId = "getMyProductFeedback", summary = "Get one of the current account's reports")
-    public MyProductFeedbackDTO get(@PathVariable UUID feedbackId) {
-        return reports.get(CurrentAccount.requireId(), feedbackId);
-    }
-
     @PutMapping("/{feedbackId}/draft")
     @AuditExempt(reason = "a person edits their own held report")
     @Operation(operationId = "editMyProductFeedbackDraft", summary = "Edit a held report before it is filed")
