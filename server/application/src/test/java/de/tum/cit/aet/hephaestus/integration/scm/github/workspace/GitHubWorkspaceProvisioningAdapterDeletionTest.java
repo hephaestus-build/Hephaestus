@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.workspace;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -53,7 +54,8 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
                 repositoryMonitorService,
                 workspaceScopeFilter,
                 dataSyncTrigger,
-                monitoringExecutor);
+                monitoringExecutor,
+                mock());
     }
 
     @Test

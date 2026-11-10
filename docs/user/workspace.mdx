@@ -33,11 +33,14 @@ Signing in opens the first workspace you can access.
 Creation permissions depend on the deployment.
 The default policy permits only instance admins to create workspaces.
 
-For GitHub, when creation is available:
+For GitHub:
 
-1. Install the Hephaestus GitHub App on an organization.
+1. Install the Hephaestus GitHub App on an organization or on your personal account.
+2. When GitHub returns you to Hephaestus, select **Continue**.
 
-Hephaestus creates the workspace from the installation.
+With the default policy, the page then says that an instance administrator must approve the installation.
+Hephaestus creates the workspace when an instance admin adopts it.
+If your deployment lets everyone create workspaces, Hephaestus creates the workspace from the installation without approval.
 
 For GitLab, when creation is available:
 
@@ -61,6 +64,18 @@ Workspace owners always stay members, and teams still come from the whole group.
 Membership changes appear after the next sync.
 
 1. If **Create workspace** is unavailable, ask an instance admin.
+
+### Approve a GitHub App installation
+
+As an instance admin:
+
+1. Open **Instance administration → GitHub installations**.
+2. Select **Adopt** to create the workspace of an installation. You become its owner.
+3. Or select **Decline**. A declined installation stays in the list, and you can still adopt it later.
+
+Both actions need a recent sign-in, and the audit log records them.
+If GitHub no longer has the installation, or it is suspended, Hephaestus does not adopt it and says why.
+To undo an adoption, delete the workspace.
 
 ## Repositories
 

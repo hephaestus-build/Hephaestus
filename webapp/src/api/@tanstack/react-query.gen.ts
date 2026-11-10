@@ -121,6 +121,7 @@ export { adminUpdateLoginProviderMutation } from './react-query/adminUpdateLogin
 export { adminUpdateSilentModeMutation } from './react-query/adminUpdateSilentMode.gen.js';
 export { adminUpdateUserMutation } from './react-query/adminUpdateUser.gen.js';
 export { adminUpdateWorkspaceLlmBudgetMutation } from './react-query/adminUpdateWorkspaceLlmBudget.gen.js';
+export { adoptGitHubInstallationMutation } from './react-query/adoptGitHubInstallation.gen.js';
 export { adoptGroupMutation } from './react-query/adoptGroup.gen.js';
 export { adoptPracticeMutation } from './react-query/adoptPractice.gen.js';
 export { allowMyProductFeedbackPublicMutation } from './react-query/allowMyProductFeedbackPublic.gen.js';
@@ -132,6 +133,7 @@ export { callbackGetOptions, callbackGetQueryKey } from './react-query/callbackG
 export { callbackPostMutation } from './react-query/callbackPost.gen.js';
 export { cancelReviewMutation } from './react-query/cancelReview.gen.js';
 export { checkResearchRemovalsMutation } from './react-query/checkResearchRemovals.gen.js';
+export { claimGitHubInstallationMutation } from './react-query/claimGitHubInstallation.gen.js';
 export { clearMentorVoteMutation } from './react-query/clearMentorVote.gen.js';
 export { clearOwnFeedbackResponseMutation } from './react-query/clearOwnFeedbackResponse.gen.js';
 export { closeResearchDisclosureMutation } from './react-query/closeResearchDisclosure.gen.js';
@@ -151,6 +153,7 @@ export { createResultMarkMutation } from './react-query/createResultMark.gen.js'
 export { createReviewBatchMutation } from './react-query/createReviewBatch.gen.js';
 export { createReviewScheduleMutation } from './react-query/createReviewSchedule.gen.js';
 export { createWorkspaceMutation } from './react-query/createWorkspace.gen.js';
+export { declineGitHubInstallationMutation } from './react-query/declineGitHubInstallation.gen.js';
 export { declinePracticeReleaseMutation } from './react-query/declinePracticeRelease.gen.js';
 export { deleteAgentMutation } from './react-query/deleteAgent.gen.js';
 export { deleteCurrentUserMutation } from './react-query/deleteCurrentUser.gen.js';
@@ -267,6 +270,7 @@ export { listConnectionSyncJobsInfiniteOptions, listConnectionSyncJobsInfiniteQu
 export { listConnectionSyncResourcesOptions, listConnectionSyncResourcesQueryKey } from './react-query/listConnectionSyncResources.gen.js';
 export { listConsumerDeadLettersInfiniteOptions, listConsumerDeadLettersInfiniteQueryKey, listConsumerDeadLettersOptions, listConsumerDeadLettersQueryKey } from './react-query/listConsumerDeadLetters.gen.js';
 export { listFeedbackDecisionsOptions, listFeedbackDecisionsQueryKey } from './react-query/listFeedbackDecisions.gen.js';
+export { listGitHubInstallationsOptions, listGitHubInstallationsQueryKey } from './react-query/listGitHubInstallations.gen.js';
 export { listGitLabGroupsMutation } from './react-query/listGitLabGroups.gen.js';
 export { listGitLabProjectsMutation } from './react-query/listGitLabProjects.gen.js';
 export { listGlobalContributorsOptions, listGlobalContributorsQueryKey } from './react-query/listGlobalContributors.gen.js';

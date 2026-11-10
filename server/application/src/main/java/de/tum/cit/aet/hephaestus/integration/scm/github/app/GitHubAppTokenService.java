@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -402,6 +403,16 @@ public class GitHubAppTokenService {
      * @throws InstallationNotFoundException if the installation no longer exists
      */
     public boolean isInstallationSuspended(long installationId) {
+        return installation(installationId).suspendedAt() != null;
+    }
+
+    /**
+     * Reads an installation of this App with the App JWT: the account it is installed on and whether it is
+     * suspended. The installation id that a person brings is only a claim; this read is what GitHub says about it.
+     *
+     * @throws InstallationNotFoundException if the installation no longer exists
+     */
+    public AppInstallation installation(long installationId) {
         if (!isConfigured()) {
             throw new IllegalStateException("GitHub App credentials not configured.");
         }
@@ -409,19 +420,19 @@ public class GitHubAppTokenService {
         try {
             String appJwt = generateAppJWT();
 
-            InstallationStatusResponse response = webClient
+            AppInstallation response = webClient
                     .get()
                     .uri("/app/installations/{installationId}", installationId)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + appJwt)
                     .retrieve()
-                    .bodyToMono(InstallationStatusResponse.class)
+                    .bodyToMono(AppInstallation.class)
                     .block();
 
             if (response == null) {
                 throw new IllegalStateException("Empty response from GitHub for installation " + installationId);
             }
 
-            return response.suspendedAt() != null;
+            return response;
         } catch (WebClientResponseException.NotFound e) {
             throw new InstallationNotFoundException(installationId, e);
         } catch (InstallationNotFoundException e) {
@@ -474,8 +485,22 @@ public class GitHubAppTokenService {
     private record InstallationTokenResponse(
             String token, @JsonProperty("expires_at") Instant expiresAt) {}
 
-    private record InstallationStatusResponse(
-            Long id,
-            @JsonProperty("suspended_at") Instant suspendedAt,
-            @JsonProperty("suspended_by") Object suspendedBy) {}
+    /**
+     * One installation of this App. {@code targetType} is {@code Organization} or {@code User}; an enterprise
+     * installation's account has no login.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record AppInstallation(
+            long id,
+            @JsonProperty("target_type") @Nullable String targetType,
+            @Nullable Account account,
+            @JsonProperty("repository_selection") @Nullable String repositorySelection,
+            @JsonProperty("suspended_at") @Nullable Instant suspendedAt) {
+
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        public record Account(
+                long id,
+                @Nullable String login,
+                @JsonProperty("avatar_url") @Nullable String avatarUrl) {}
+    }
 }

@@ -5260,6 +5260,91 @@ export const GeneratedPathReviewSchema = {
     ]
 } as const;
 
+export const GitHubInstallationClaimSchema = {
+    type: 'object',
+    description: 'What happens next with the GitHub App installation that the signed-in person set up',
+    properties: {
+        outcome: {
+            type: 'string',
+            enum: [
+                'READY',
+                'AWAITING_APPROVAL',
+                'SETTING_UP'
+            ]
+        },
+        workspaceSlug: {
+            type: 'string',
+            description: 'The installation\'s workspace, when it has one'
+        }
+    },
+    required: [
+        'outcome'
+    ]
+} as const;
+
+export const GitHubInstallationClaimRequestSchema = {
+    type: 'object',
+    properties: {
+        code: {
+            type: 'string',
+            description: 'The code that GitHub returned to the setup page; it is used once and never stored',
+            maxLength: 255,
+            minLength: 0
+        }
+    },
+    required: [
+        'code'
+    ]
+} as const;
+
+export const GitHubInstallationRequestSchema = {
+    type: 'object',
+    description: 'A GitHub App installation and an instance admin\'s decision on it',
+    properties: {
+        accountKind: {
+            type: 'string',
+            enum: [
+                'USER',
+                'ORGANIZATION'
+            ]
+        },
+        accountLogin: {
+            type: 'string'
+        },
+        decidedAt: {
+            type: 'string',
+            format: 'date-time'
+        },
+        installationId: {
+            type: 'integer',
+            format: 'int64'
+        },
+        receivedAt: {
+            type: 'string',
+            format: 'date-time'
+        },
+        status: {
+            type: 'string',
+            enum: [
+                'PENDING',
+                'DECLINED',
+                'ADOPTED'
+            ]
+        },
+        workspaceSlug: {
+            type: 'string',
+            description: 'The workspace that the adoption created; absent once that workspace is deleted'
+        }
+    },
+    required: [
+        'accountKind',
+        'accountLogin',
+        'installationId',
+        'receivedAt',
+        'status'
+    ]
+} as const;
+
 export const GitHubProviderSchema = {
     type: 'object',
     description: 'GitHub provider configuration',

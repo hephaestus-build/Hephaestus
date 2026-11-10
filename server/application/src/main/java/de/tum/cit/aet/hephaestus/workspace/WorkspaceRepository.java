@@ -92,6 +92,12 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
 
     Optional<Workspace> findByOrganizationId(Long organizationId);
 
+    /** At most one workspace binds an organization ({@code uc_workspaceorganization_id_col}). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
+    @Query("SELECT w FROM Workspace w WHERE w.organizationId = :organizationId")
+    Optional<Workspace> findByOrganizationIdForUpdate(@Param("organizationId") Long organizationId);
+
     /**
      * The workspace's group and repository selection as stored. A scalar projection, so it is read
      * from the database even when this transaction already manages a Workspace loaded before a lock
@@ -109,11 +115,6 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     }
 
     Optional<Workspace> findByAccountLoginIgnoreCase(String login);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
-    @Query("SELECT w FROM Workspace w WHERE LOWER(w.accountLogin) = LOWER(:login)")
-    Optional<Workspace> findByAccountLoginIgnoreCaseForUpdate(@Param("login") String login);
 
     List<Workspace> findAllByAccountLoginIgnoreCase(String login);
 

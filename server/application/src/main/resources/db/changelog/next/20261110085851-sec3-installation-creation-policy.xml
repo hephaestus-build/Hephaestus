@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794279017944-1" author="hephaestus">
+        <createTable tableName="github_installation_request">
+            <column name="installation_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="github_installation_requestPK"/>
+            </column>
+            <column name="account_id" type="BIGINT"/>
+            <column name="account_kind" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_login" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decided_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="decided_by_account_id" type="BIGINT"/>
+            <column name="received_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT"/>
+        </createTable>
+    </changeSet>
+    <changeSet id="1794279017944-2" author="hephaestus">
+        <comment>An installation is on a user or an organization account, and an instance admin's decision is one of three.</comment>
+        <sql>ALTER TABLE github_installation_request ADD CONSTRAINT ck_github_installation_request_account_kind CHECK (account_kind IN ('USER', 'ORGANIZATION'))</sql>
+        <sql>ALTER TABLE github_installation_request ADD CONSTRAINT ck_github_installation_request_status CHECK (status IN ('PENDING', 'DECLINED', 'ADOPTED'))</sql>
+        <rollback>
+            <sql>ALTER TABLE github_installation_request DROP CONSTRAINT ck_github_installation_request_status</sql>
+            <sql>ALTER TABLE github_installation_request DROP CONSTRAINT ck_github_installation_request_account_kind</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794279017944-3" author="hephaestus">
+        <comment>The deciding admin and the adopted workspace are plain ids. Deleting either keeps the decision and clears only the reference.</comment>
+        <addForeignKeyConstraint baseTableName="github_installation_request" baseColumnNames="decided_by_account_id" constraintName="sfk_github_installation_request_decided_by" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL" validate="true"/>
+        <addForeignKeyConstraint baseTableName="github_installation_request" baseColumnNames="workspace_id" constraintName="sfk_github_installation_request_workspace" referencedTableName="workspace" referencedColumnNames="id" onDelete="SET NULL" validate="true"/>
+    </changeSet>
+    <changeSet id="1794279017944-4" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conrelid='public.auth_event'::regclass AND conname='ck_auth_event_event_type' AND contype='c'</sqlCheck>
+        </preConditions>
+        <comment>Preserve every existing audit event type and admit an instance admin's decision on a GitHub App installation.</comment>
+        <sql><![CDATA[
+ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN')) NOT VALID;
+        ]]></sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $github_installation_audit_rollback$
+BEGIN
+    IF EXISTS (SELECT 1 FROM auth_event WHERE event_type IN ('GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED')) THEN
+        RAISE EXCEPTION 'GitHub installation decision audit rows exist; retain the widened audit constraint';
+    END IF;
+    ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+    ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'INSTALLATION_EVENT_REPLAYED', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN')) NOT VALID;
+END
+$github_installation_audit_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+    <changeSet id="1794279017944-5" author="hephaestus">
+        <comment>Check the existing audit rows in a later transaction, so the scan does not block audit writes.</comment>
+        <sql>ALTER TABLE auth_event VALIDATE CONSTRAINT ck_auth_event_event_type</sql>
+        <rollback/>
+    </changeSet>
+    <changeSet id="1794279017944-6" author="hephaestus">
+        <createIndex indexName="idx_github_installation_request_decided_by" tableName="github_installation_request">
+            <column name="decided_by_account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794279017944-7" author="hephaestus">
+        <createIndex indexName="idx_github_installation_request_workspace" tableName="github_installation_request">
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

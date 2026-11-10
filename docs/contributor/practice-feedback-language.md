@@ -276,6 +276,8 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Instance admin** | A person with the admin role for the instance. The place where an instance admin works is **Instance administration**. | Instance admin (for the place) |
 | **Workspace admin** | A person with the admin role in one workspace. |  |
 | **Instance operator** | The person or team that runs the deployment. |  |
+| **Workspace creation policy** | Who creates workspaces: instance admins only (`ADMIN_ONLY`, the default), or every signed-in user (`SELF_SERVICE`). A GitHub App installation follows it too. | creation mode |
+| **Adopt** | What an instance admin does to a GitHub App installation that waits under `ADMIN_ONLY`: Hephaestus creates its workspace, with the admin as the owner. The other decision is **Decline**, which an admin can follow with Adopt later. | approve (in controls), accept, claim |
 
 The workspace page never names developers, but small counts can disclose a person's standing.
 It has no minimum count that prevents that disclosure.

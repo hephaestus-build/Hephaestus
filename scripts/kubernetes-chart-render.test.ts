@@ -2442,6 +2442,7 @@ await test("email follows the relay's TLS mode, and authenticates only with a us
 await test("the server's operator settings reach the server alone", () => {
 	const settings = [
 		"HEPHAESTUS_RESEARCH_ORGANIZATION",
+		"HEPHAESTUS_WORKSPACE_CREATIONPOLICY",
 		"HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED",
 		"HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE",
 		"HEPHAESTUS_LLM_DISPLAY_CURRENCY",
@@ -2458,13 +2459,28 @@ await test("the server's operator settings reach the server alone", () => {
 	const defaults = workload(rendered(layersFor("small")), "server");
 	assert.deepEqual(
 		settings.map((name) => envValue(defaults, name)),
-		["", "false", "48h", "", "true", "false", "", "", "true", "7", "0 0 * * * *", "60"],
+		[
+			"",
+			"ADMIN_ONLY",
+			"false",
+			"48h",
+			"",
+			"true",
+			"false",
+			"",
+			"",
+			"true",
+			"7",
+			"0 0 * * * *",
+			"60",
+		],
 	);
 	const resources = rendered([
 		...layersFor("small"),
 		{
 			config: {
 				researchOrganization: "A research group",
+				workspaceCreationPolicy: "SELF_SERVICE",
 				publicActivity: { enabled: true, repositoryVisibilityMaxAge: "12h" },
 				llmDisplayCurrency: "EUR",
 				auth: {
@@ -2488,6 +2504,7 @@ await test("the server's operator settings reach the server alone", () => {
 		settings.map((name) => envValue(workload(resources, "server"), name)),
 		[
 			"A research group",
+			"SELF_SERVICE",
 			"true",
 			"12h",
 			"EUR",

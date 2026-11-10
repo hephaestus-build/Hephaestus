@@ -2,5 +2,6 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
+| `HEPHAESTUS_WORKSPACE_CREATIONPOLICY` | `hephaestus.workspace.creation-policy` | `default: ADMIN_ONLY` | `server` | Who creates workspaces. Under `ADMIN_ONLY`, instance admins create them, and a GitHub App installation waits until an instance admin adopts it. Under `SELF_SERVICE`, every signed-in user can create one, and each GitHub App installation creates its own. |
 | `HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN` | `hephaestus.workspace.subdomains.base-domain` | `default: (empty)` | `server` | Domain under which each workspace gets its subdomain, such as hephaestus.build. Lowercase ASCII without a scheme, port or path, at most 189 characters. Required when subdomains are enabled. |
 | `HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED` | `hephaestus.workspace.subdomains.enabled` | `default: false` | `server` | Gives each workspace its own subdomain address on the base domain. Authentication and the API stay on the apex domain. Prepare DNS, TLS and OAuth callbacks before you turn it on. |

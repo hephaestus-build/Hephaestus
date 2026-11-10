@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.organization;
 
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,6 +11,12 @@ public class OrganizationService {
 
     public OrganizationService(OrganizationRepository organizations) {
         this.organizations = organizations;
+    }
+
+    /** The id of the organization with this immutable native id at a provider, if Hephaestus mirrors it. */
+    @Transactional(readOnly = true)
+    public Optional<Long> findId(long nativeId, Long providerId) {
+        return organizations.findByNativeIdAndProviderId(nativeId, providerId).map(Organization::getId);
     }
 
     /**

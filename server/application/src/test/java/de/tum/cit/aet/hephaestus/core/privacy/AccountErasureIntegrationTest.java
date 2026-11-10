@@ -959,6 +959,17 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         link(targetAccount, github, "4242", null);
         allStores.seedScm(githubUser.getId(), Objects.requireNonNull(github.getId()), 998000L);
         installation("all-stores-personal", "target-github", AccountType.USER);
+        // GitHub App installations: the target's own that no admin adopted, the target's adopted one, a decision
+        // that the target made as an admin, and another person's own.
+        String installationRow = """
+                INSERT INTO github_installation_request
+                  (installation_id, account_id, account_login, account_kind, status, received_at, decided_by_account_id)
+                VALUES (?, ?, ?, ?, ?, now(), ?)
+                """;
+        jdbc.update(installationRow, 991001L, 4242L, "target-github", "USER", "PENDING", null);
+        jdbc.update(installationRow, 991002L, 4242L, "target-github", "USER", "ADOPTED", null);
+        jdbc.update(installationRow, 991003L, 7777L, "decided-org", "ORGANIZATION", "DECLINED", targetAccount.getId());
+        jdbc.update(installationRow, 991004L, 8484L, "other-github", "USER", "PENDING", null);
         var outline = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.OUTLINE, "https://privacy-outline.example.test"));
         String outlineSubject = "00000000-0000-4000-8000-000000000042";
@@ -1209,6 +1220,17 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         .orElseThrow()
                         .getStatus())
                 .isEqualTo(Account.Status.DELETED);
+        assertThat(jdbc.queryForList(
+                        "SELECT installation_id FROM github_installation_request WHERE installation_id BETWEEN 991001 AND 991004"
+                                + " ORDER BY installation_id",
+                        Long.class))
+                .as("the target's unadopted installation goes; the adopted one and another person's stay")
+                .containsExactly(991002L, 991003L, 991004L);
+        assertThat(jdbc.queryForObject(
+                        "SELECT decided_by_account_id IS NULL AND status = 'DECLINED' FROM github_installation_request"
+                                + " WHERE installation_id = 991003",
+                        Boolean.class))
+                .isTrue();
         assertThat(jdbc.queryForObject("""
                 SELECT display_name='deleted-account' AND primary_email IS NULL AND primary_email_verified_at IS NULL
                   AND time_zone IS NULL AND ai_choice IS NULL AND ai_choice_at IS NULL

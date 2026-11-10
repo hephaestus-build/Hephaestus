@@ -16,6 +16,7 @@ import {
 
 import { hasText } from "@/lib/text";
 
+import { GitHubIcon } from "@/components/icons/brand";
 import { ADMIN_NAV_LABELS } from "@/components/layout/sidebar/admin-nav-labels";
 import {
 	SidebarGroup,
@@ -45,6 +46,12 @@ const ADMIN_NAV_GROUPS = [
 				tooltip: "Release consented datasets and record removals",
 			},
 			{ to: "/admin/workspaces", label: "Workspaces", icon: Building2, tooltip: "All workspaces" },
+			{
+				to: "/admin/github-installations",
+				label: "GitHub installations",
+				icon: GitHubIcon,
+				tooltip: "Adopt or decline GitHub App installations",
+			},
 			{
 				to: "/admin/login-providers",
 				label: "Login providers",

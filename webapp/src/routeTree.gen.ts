@@ -29,6 +29,7 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminAuditRouteImport } from './routes/_authenticated/admin.audit'
 import { Route as AuthenticatedAdminCatalogRouteImport } from './routes/_authenticated/admin.catalog'
 import { Route as AuthenticatedAdminFeedbackRouteImport } from './routes/_authenticated/admin.feedback'
+import { Route as AuthenticatedAdminGithubInstallationsRouteImport } from './routes/_authenticated/admin.github-installations'
 import { Route as AuthenticatedAdminLoginProvidersRouteImport } from './routes/_authenticated/admin.login-providers'
 import { Route as AuthenticatedAdminModelsRouteImport } from './routes/_authenticated/admin.models'
 import { Route as AuthenticatedAdminPersonDataRouteImport } from './routes/_authenticated/admin.person-data'
@@ -53,6 +54,7 @@ import { Route as AuthenticatedWWorkspaceSlugViewAsRouteImport } from './routes/
 import { Route as AuthenticatedWorkspacesNewIndexRouteImport } from './routes/_authenticated/workspaces/new/index'
 import { Route as AuthenticatedWorkspacesNewGithubRouteImport } from './routes/_authenticated/workspaces/new/github'
 import { Route as AuthenticatedWorkspacesNewGitlabRouteImport } from './routes/_authenticated/workspaces/new/gitlab'
+import { Route as GithubInstallationsInstallationIdSetupRouteImport } from './routes/github.installations.$installationId.setup'
 import { Route as AuthenticatedAdminWorkspacesWorkspaceSlugUsersRouteImport } from './routes/_authenticated/admin.workspaces_.$workspaceSlug.users'
 import { Route as AuthenticatedWWorkspaceSlugAdminIndexRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/index'
 import { Route as AuthenticatedWWorkspaceSlugAdminAuditRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/audit'
@@ -185,6 +187,12 @@ const AuthenticatedAdminFeedbackRoute =
   AuthenticatedAdminFeedbackRouteImport.update({
     id: '/feedback',
     path: '/feedback',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminGithubInstallationsRoute =
+  AuthenticatedAdminGithubInstallationsRouteImport.update({
+    id: '/github-installations',
+    path: '/github-installations',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminLoginProvidersRoute =
@@ -326,6 +334,12 @@ const AuthenticatedWorkspacesNewGitlabRoute =
     id: '/workspaces/new/gitlab',
     path: '/workspaces/new/gitlab',
     getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const GithubInstallationsInstallationIdSetupRoute =
+  GithubInstallationsInstallationIdSetupRouteImport.update({
+    id: '/github/installations/$installationId/setup',
+    path: '/github/installations/$installationId/setup',
+    getParentRoute: () => rootRouteImport,
   } as any)
 const AuthenticatedAdminWorkspacesWorkspaceSlugUsersRoute =
   AuthenticatedAdminWorkspacesWorkspaceSlugUsersRouteImport.update({
@@ -522,6 +536,7 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/admin/catalog': typeof AuthenticatedAdminCatalogRouteWithChildren
   '/admin/feedback': typeof AuthenticatedAdminFeedbackRoute
+  '/admin/github-installations': typeof AuthenticatedAdminGithubInstallationsRoute
   '/admin/login-providers': typeof AuthenticatedAdminLoginProvidersRoute
   '/admin/models': typeof AuthenticatedAdminModelsRoute
   '/admin/person-data': typeof AuthenticatedAdminPersonDataRoute
@@ -544,6 +559,7 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug/view-as': typeof AuthenticatedWWorkspaceSlugViewAsRoute
   '/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
+  '/github/installations/$installationId/setup': typeof GithubInstallationsInstallationIdSetupRoute
   '/admin/catalog/': typeof AuthenticatedAdminCatalogIndexRoute
   '/workspaces/new/': typeof AuthenticatedWorkspacesNewIndexRoute
   '/admin/workspaces/$workspaceSlug/users': typeof AuthenticatedAdminWorkspacesWorkspaceSlugUsersRoute
@@ -594,6 +610,7 @@ export interface FileRoutesByTo {
   '/w/$workspaceSlug': typeof WWorkspaceSlugIndexRoute
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/admin/feedback': typeof AuthenticatedAdminFeedbackRoute
+  '/admin/github-installations': typeof AuthenticatedAdminGithubInstallationsRoute
   '/admin/login-providers': typeof AuthenticatedAdminLoginProvidersRoute
   '/admin/models': typeof AuthenticatedAdminModelsRoute
   '/admin/person-data': typeof AuthenticatedAdminPersonDataRoute
@@ -614,6 +631,7 @@ export interface FileRoutesByTo {
   '/w/$workspaceSlug/view-as': typeof AuthenticatedWWorkspaceSlugViewAsRoute
   '/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
+  '/github/installations/$installationId/setup': typeof GithubInstallationsInstallationIdSetupRoute
   '/admin/catalog': typeof AuthenticatedAdminCatalogIndexRoute
   '/workspaces/new': typeof AuthenticatedWorkspacesNewIndexRoute
   '/admin/workspaces/$workspaceSlug/users': typeof AuthenticatedAdminWorkspacesWorkspaceSlugUsersRoute
@@ -664,6 +682,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/_authenticated/admin/catalog': typeof AuthenticatedAdminCatalogRouteWithChildren
   '/_authenticated/admin/feedback': typeof AuthenticatedAdminFeedbackRoute
+  '/_authenticated/admin/github-installations': typeof AuthenticatedAdminGithubInstallationsRoute
   '/_authenticated/admin/login-providers': typeof AuthenticatedAdminLoginProvidersRoute
   '/_authenticated/admin/models': typeof AuthenticatedAdminModelsRoute
   '/_authenticated/admin/person-data': typeof AuthenticatedAdminPersonDataRoute
@@ -686,6 +705,7 @@ export interface FileRoutesById {
   '/_authenticated/w_/$workspaceSlug/view-as': typeof AuthenticatedWWorkspaceSlugViewAsRoute
   '/_authenticated/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/_authenticated/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
+  '/github/installations/$installationId/setup': typeof GithubInstallationsInstallationIdSetupRoute
   '/_authenticated/admin/catalog/': typeof AuthenticatedAdminCatalogIndexRoute
   '/_authenticated/workspaces/new/': typeof AuthenticatedWorkspacesNewIndexRoute
   '/_authenticated/admin/workspaces_/$workspaceSlug/users': typeof AuthenticatedAdminWorkspacesWorkspaceSlugUsersRoute
@@ -740,6 +760,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/catalog'
     | '/admin/feedback'
+    | '/admin/github-installations'
     | '/admin/login-providers'
     | '/admin/models'
     | '/admin/person-data'
@@ -762,6 +783,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/view-as'
     | '/workspaces/new/github'
     | '/workspaces/new/gitlab'
+    | '/github/installations/$installationId/setup'
     | '/admin/catalog/'
     | '/workspaces/new/'
     | '/admin/workspaces/$workspaceSlug/users'
@@ -812,6 +834,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug'
     | '/admin/audit'
     | '/admin/feedback'
+    | '/admin/github-installations'
     | '/admin/login-providers'
     | '/admin/models'
     | '/admin/person-data'
@@ -832,6 +855,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/view-as'
     | '/workspaces/new/github'
     | '/workspaces/new/gitlab'
+    | '/github/installations/$installationId/setup'
     | '/admin/catalog'
     | '/workspaces/new'
     | '/admin/workspaces/$workspaceSlug/users'
@@ -881,6 +905,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/audit'
     | '/_authenticated/admin/catalog'
     | '/_authenticated/admin/feedback'
+    | '/_authenticated/admin/github-installations'
     | '/_authenticated/admin/login-providers'
     | '/_authenticated/admin/models'
     | '/_authenticated/admin/person-data'
@@ -903,6 +928,7 @@ export interface FileRouteTypes {
     | '/_authenticated/w_/$workspaceSlug/view-as'
     | '/_authenticated/workspaces/new/github'
     | '/_authenticated/workspaces/new/gitlab'
+    | '/github/installations/$installationId/setup'
     | '/_authenticated/admin/catalog/'
     | '/_authenticated/workspaces/new/'
     | '/_authenticated/admin/workspaces_/$workspaceSlug/users'
@@ -950,6 +976,7 @@ export interface RootRouteChildren {
   AuthErrorRoute: typeof AuthErrorRoute
   WWorkspaceSlugLoginRoute: typeof WWorkspaceSlugLoginRoute
   WWorkspaceSlugIndexRoute: typeof WWorkspaceSlugIndexRoute
+  GithubInstallationsInstallationIdSetupRoute: typeof GithubInstallationsInstallationIdSetupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1092,6 +1119,13 @@ declare module '@tanstack/react-router' {
       path: '/feedback'
       fullPath: '/admin/feedback'
       preLoaderRoute: typeof AuthenticatedAdminFeedbackRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/github-installations': {
+      id: '/_authenticated/admin/github-installations'
+      path: '/github-installations'
+      fullPath: '/admin/github-installations'
+      preLoaderRoute: typeof AuthenticatedAdminGithubInstallationsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/login-providers': {
@@ -1261,6 +1295,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/workspaces/new/gitlab'
       preLoaderRoute: typeof AuthenticatedWorkspacesNewGitlabRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/github/installations/$installationId/setup': {
+      id: '/github/installations/$installationId/setup'
+      path: '/github/installations/$installationId/setup'
+      fullPath: '/github/installations/$installationId/setup'
+      preLoaderRoute: typeof GithubInstallationsInstallationIdSetupRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin/workspaces_/$workspaceSlug/users': {
       id: '/_authenticated/admin/workspaces_/$workspaceSlug/users'
@@ -1486,6 +1527,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAuditRoute: typeof AuthenticatedAdminAuditRoute
   AuthenticatedAdminCatalogRoute: typeof AuthenticatedAdminCatalogRouteWithChildren
   AuthenticatedAdminFeedbackRoute: typeof AuthenticatedAdminFeedbackRoute
+  AuthenticatedAdminGithubInstallationsRoute: typeof AuthenticatedAdminGithubInstallationsRoute
   AuthenticatedAdminLoginProvidersRoute: typeof AuthenticatedAdminLoginProvidersRoute
   AuthenticatedAdminModelsRoute: typeof AuthenticatedAdminModelsRoute
   AuthenticatedAdminPersonDataRoute: typeof AuthenticatedAdminPersonDataRoute
@@ -1502,6 +1544,8 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAuditRoute: AuthenticatedAdminAuditRoute,
   AuthenticatedAdminCatalogRoute: AuthenticatedAdminCatalogRouteWithChildren,
   AuthenticatedAdminFeedbackRoute: AuthenticatedAdminFeedbackRoute,
+  AuthenticatedAdminGithubInstallationsRoute:
+    AuthenticatedAdminGithubInstallationsRoute,
   AuthenticatedAdminLoginProvidersRoute: AuthenticatedAdminLoginProvidersRoute,
   AuthenticatedAdminModelsRoute: AuthenticatedAdminModelsRoute,
   AuthenticatedAdminPersonDataRoute: AuthenticatedAdminPersonDataRoute,
@@ -1744,6 +1788,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthErrorRoute: AuthErrorRoute,
   WWorkspaceSlugLoginRoute: WWorkspaceSlugLoginRoute,
   WWorkspaceSlugIndexRoute: WWorkspaceSlugIndexRoute,
+  GithubInstallationsInstallationIdSetupRoute:
+    GithubInstallationsInstallationIdSetupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

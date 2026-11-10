@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProvisioningHook;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationRequests;
 import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -61,6 +62,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceService workspaceService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
+    private final GitHubInstallationRequests installationRequests;
     private final WebClient webClient;
 
     public GitHubInstallationReconciler(
@@ -69,7 +71,9 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
             WorkspaceRepository workspaceRepository,
             WorkspaceService workspaceService,
             WorkspaceScopeFilter workspaceScopeFilter,
+            GitHubInstallationRequests installationRequests,
             WebClient.Builder webClients) {
+        this.installationRequests = installationRequests;
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.githubLifecycleListener = githubLifecycleListener;
         this.workspaceRepository = workspaceRepository;
@@ -177,16 +181,21 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
         gitHubAppTokenService.markInstallationActive(installation.id());
 
         String login = installation.account().login();
+        String accountType = installation.account().type();
+        IntegrationLifecycleListener.AccountKind wsAccountKind = "Organization".equalsIgnoreCase(accountType)
+                ? IntegrationLifecycleListener.AccountKind.ORGANIZATION
+                : IntegrationLifecycleListener.AccountKind.USER;
 
         if (workspaceScopeFilter.isActive() && !workspaceScopeFilter.isOrganizationAllowed(login)) {
             log.info(
                     "Skipped installation sync: reason=filteredByScope, installationId={}, accountLogin={}",
                     installation.id(),
                     login);
+            installationRequests.recordFiltered(
+                    installation.id(), installation.account().id(), login, wsAccountKind);
             return;
         }
 
-        String accountType = installation.account().type();
         long installationId = installation.id();
         RepositorySelection selection = convertRepositorySelection(installation.repositorySelection());
 
@@ -197,18 +206,12 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
                 selection);
 
         var account = installation.account();
-        IntegrationLifecycleListener.AccountKind wsAccountKind = "Organization".equalsIgnoreCase(accountType)
-                ? IntegrationLifecycleListener.AccountKind.ORGANIZATION
-                : IntegrationLifecycleListener.AccountKind.USER;
 
         Workspace workspace = githubLifecycleListener.createOrUpdateFromInstallation(
                 installationId, account.id(), login, wsAccountKind, account.avatarUrl(), selection);
 
         if (workspace == null) {
-            log.warn(
-                    "Skipped workspace creation: reason=userNotFound, installationId={}, orgLogin={}",
-                    installationId,
-                    login);
+            log.info("Skipped installation sync: reason=noWorkspace, installationId={}", installationId);
             return;
         }
 

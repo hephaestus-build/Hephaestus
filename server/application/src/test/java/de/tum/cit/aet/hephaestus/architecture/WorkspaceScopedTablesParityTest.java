@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.tenancy.WorkspaceScopedTables;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -30,13 +32,13 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("architecture")
 @DisplayName("Tenancy SSOT Parity")
-class WorkspaceScopedTablesParityTest {
+class WorkspaceScopedTablesParityTest extends HephaestusArchitectureTest {
 
     @Test
     @DisplayName("GLOBAL_TABLES (prod) and GLOBAL_ENTITIES (arch) describe the same set")
     void productionAndArchAllowlistsMatch() {
         Set<String> archEntitiesSnakeCase = DataIsolationArchitectureTest.GLOBAL_ENTITIES.stream()
-                .map(WorkspaceScopedTablesParityTest::toSnakeCase)
+                .map(WorkspaceScopedTablesParityTest::tableOf)
                 .collect(Collectors.toUnmodifiableSet());
 
         Set<String> productionTablesExcludingLiquibase = WorkspaceScopedTables.GLOBAL_TABLES.stream()
@@ -49,6 +51,19 @@ class WorkspaceScopedTablesParityTest {
                         + "excluded — those are not @Entity classes). When this fails, update "
                         + "BOTH lists with the same entity in the same commit.")
                 .containsExactlyInAnyOrderElementsOf(archEntitiesSnakeCase);
+    }
+
+    /** The entity's declared {@code @Table} name, or the naming strategy's default for its class name. */
+    private static String tableOf(String entityName) {
+        return classes.stream()
+                .filter(javaClass -> javaClass.getSimpleName().equals(entityName))
+                .filter(javaClass -> javaClass.isAnnotatedWith(Entity.class))
+                .findFirst()
+                .flatMap(javaClass -> javaClass.tryGetAnnotationOfType(Table.class))
+                // A quoted identifier, such as "user", names the same table.
+                .map(table -> table.name().replace("\"", ""))
+                .filter(name -> !name.isBlank())
+                .orElseGet(() -> toSnakeCase(entityName));
     }
 
     /** Converts CamelCase entity name to snake_case table name. Matches Hibernate's

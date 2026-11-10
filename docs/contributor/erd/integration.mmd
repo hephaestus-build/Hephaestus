@@ -157,6 +157,18 @@ erDiagram
         TIMESTAMPTZ git_details_captured_at
     }
 
+    GithubInstallationRequest {
+        BIGINT installation_id PK
+        BIGINT account_id
+        VARCHAR(16) account_kind "NOT NULL"
+        VARCHAR(255) account_login "NOT NULL"
+        TIMESTAMPTZ decided_at
+        BIGINT decided_by_account_id FK
+        TIMESTAMPTZ received_at "NOT NULL"
+        VARCHAR(16) status "NOT NULL"
+        BIGINT workspace_id FK
+    }
+
     IdentityProvider {
         BIGINT id PK
         VARCHAR(10) type UK "NOT NULL"
@@ -682,6 +694,8 @@ erDiagram
     User ||--o{ GitCommit : authored_by
     User ||--o{ GitCommit : references
     Repository ||--o{ GitCommit : has
+    Account ||--o{ GithubInstallationRequest : has
+    Workspace ||--o{ GithubInstallationRequest : has
     Repository ||--o{ Issue : has
     Milestone ||--o{ Issue : has
     IssueType ||--o{ Issue : has

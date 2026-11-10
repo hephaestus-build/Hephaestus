@@ -23,6 +23,8 @@ function GitHubSetupPage() {
 	});
 
 	const appUrl = providers?.github?.appInstallationUrl;
+	// Under the default policy, an instance admin adopts each installation before it has a workspace.
+	const adoptionNeeded = providers?.creationPolicy !== "SELF_SERVICE";
 
 	let installAction: ReactNode;
 	if (isLoading) {
@@ -71,7 +73,7 @@ function GitHubSetupPage() {
 				<div>
 					<h1 className="text-2xl font-semibold tracking-tight">Connect GitHub</h1>
 					<p className="text-muted-foreground">
-						GitHub workspaces are created automatically through the Hephaestus GitHub App.
+						GitHub workspaces are created through the Hephaestus GitHub App.
 					</p>
 				</div>
 			</div>
@@ -85,7 +87,16 @@ function GitHubSetupPage() {
 							organization
 						</li>
 						<li>Select which repositories you want to monitor</li>
-						<li>A workspace is created automatically and appears in your sidebar</li>
+						{adoptionNeeded ? (
+							<li>
+								Back in Hephaestus, adopt the installation under{" "}
+								<strong className="text-foreground">
+									Instance administration → GitHub installations
+								</strong>
+							</li>
+						) : (
+							<li>A workspace is created automatically and appears in your sidebar</li>
+						)}
 					</ol>
 				</div>
 

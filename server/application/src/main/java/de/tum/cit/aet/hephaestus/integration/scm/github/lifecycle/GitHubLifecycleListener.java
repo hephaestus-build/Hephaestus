@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
@@ -23,8 +22,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationRequests;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
-import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceOrganizationLookup;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
@@ -42,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -72,11 +72,11 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
 
     private final GitHubAppTokenService gitHubAppTokenService;
     private final OrganizationService organizationService;
-    private final WorkspaceOrganizationLookup organizations;
     private final ConnectionService connectionService;
     private final WorkspaceLifecycleService workspaceLifecycleService;
     private final IntegrationAttentionService attention;
     private final ScmWorkspaceContentEraser contentEraser;
+    private final GitHubInstallationRequests installationRequests;
 
     public GitHubLifecycleListener(
             NatsConnectionProperties natsProperties,
@@ -95,7 +95,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             WorkspaceLifecycleService workspaceLifecycleService,
             IntegrationAttentionService attention,
             ScmWorkspaceContentEraser contentEraser,
-            WorkspaceOrganizationLookup organizations) {
+            GitHubInstallationRequests installationRequests) {
         this.natsProperties = natsProperties;
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
@@ -108,11 +108,11 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         this.natsConsumerService = natsConsumerService;
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.organizationService = organizationService;
-        this.organizations = organizations;
         this.connectionService = connectionService;
         this.workspaceLifecycleService = workspaceLifecycleService;
         this.attention = attention;
         this.contentEraser = contentEraser;
+        this.installationRequests = installationRequests;
     }
 
     @Override
@@ -145,7 +145,8 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                 account != null ? account.displayName() : null,
                 account != null ? account.kind() : AccountKind.ORGANIZATION,
                 account != null ? account.avatarUrl() : null,
-                RepositorySelection.SELECTED);
+                RepositorySelection.SELECTED,
+                null);
     }
 
     /**
@@ -217,7 +218,36 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             @Nullable String avatarUrl,
             @Nullable RepositorySelection repositorySelection) {
         return createOrUpdateFromInstallationInternal(
-                installationId, accountId, accountLogin, accountKind, avatarUrl, repositorySelection);
+                installationId, accountId, accountLogin, accountKind, avatarUrl, repositorySelection, null);
+    }
+
+    /** The account that GitHub confirmed an installation is on. */
+    public record InstallationAccount(
+            long id,
+            String login,
+            AccountKind kind,
+            @Nullable String avatarUrl) {}
+
+    /**
+     * An instance admin adopts an installation that GitHub has just confirmed: it joins the workspace that the
+     * installation already has, or creates one with the admin as its owner.
+     *
+     * @return the workspace, or null if the installation cannot have one, such as a purged workspace's organization
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public @Nullable Workspace adoptInstallation(
+            long installationId,
+            InstallationAccount account,
+            RepositorySelection repositorySelection,
+            long adminAccountId) {
+        return createOrUpdateFromInstallationInternal(
+                installationId,
+                account.id(),
+                account.login(),
+                account.kind(),
+                account.avatarUrl(),
+                repositorySelection,
+                adminAccountId);
     }
 
     private @Nullable Workspace createOrUpdateFromInstallationInternal(
@@ -226,7 +256,8 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             @Nullable String accountLogin,
             AccountKind accountKind,
             @Nullable String avatarUrl,
-            @Nullable RepositorySelection repositorySelection) {
+            @Nullable RepositorySelection repositorySelection,
+            @Nullable Long adminAccountId) {
         // Check suspension before any reactivation logic: replayed NATS "created" events
         // must not reactivate a suspended workspace and re-trigger failed repository syncs.
         if (gitHubAppTokenService.isInstallationMarkedSuspended(installationId)) {
@@ -242,82 +273,47 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             return null;
         }
 
-        if (workspace == null && !isBlank(accountLogin)) {
-            String resolvedAccountLogin = Objects.requireNonNull(accountLogin);
-            Workspace existingByLogin = workspaceRepository
-                    .findByAccountLoginIgnoreCaseForUpdate(resolvedAccountLogin)
+        // A login is not unique and a personal account's workspace cannot prove its owner, so only an
+        // organization's immutable id finds the workspace that the installation joins.
+        if (workspace == null && accountKind == AccountKind.ORGANIZATION && accountId != null) {
+            Workspace existing = organizationService
+                    .findId(accountId, githubProviderId())
+                    .flatMap(workspaceRepository::findByOrganizationIdForUpdate)
                     .orElse(null);
-            if (existingByLogin != null && existingByLogin.getStatus() == Workspace.WorkspaceStatus.PURGED) {
+            if (existing != null && existing.getStatus() == Workspace.WorkspaceStatus.PURGED) {
                 log.info(
-                        "Skipped installation event for purged workspace account: accountLogin={}, installationId={}",
-                        LoggingUtils.sanitizeForLog(accountLogin),
+                        "Skipped installation event for purged organization workspace: workspaceId={}, installationId={}",
+                        existing.getId(),
                         installationId);
                 return null;
             }
 
-            // Refuse cross-vendor attach: a GitHub install must not co-tenant onto a workspace
-            // whose ACTIVE Connection is GITLAB/SLACK — separate tenants that happen to share
-            // the account-login string.
-            if (existingByLogin != null) {
-                boolean hasNonGithubActive = connectionService
-                                .findActive(existingByLogin.getId(), IntegrationKind.GITLAB)
-                                .isPresent()
-                        || connectionService
-                                .findActive(existingByLogin.getId(), IntegrationKind.SLACK)
-                                .isPresent();
-                if (hasNonGithubActive) {
-                    log.info(
-                            "Skipped GitHub App installation cross-attach, workspace has non-GITHUB ACTIVE Connection: workspaceId={}, accountLogin={}, installationId={}",
-                            existingByLogin.getId(),
-                            LoggingUtils.sanitizeForLog(accountLogin),
-                            installationId);
-                    existingByLogin = null;
-                }
-            }
-
-            if (existingByLogin != null && !matchesInstallationAccount(existingByLogin, accountId, accountKind)) {
-                log.info(
-                        "Kept matching-login workspace separate: reason=unverifiedInstallationAccount, workspaceId={}, installationId={}",
-                        existingByLogin.getId(),
-                        installationId);
-                existingByLogin = null;
-            }
-
-            if (existingByLogin != null) {
+            if (existing != null) {
                 boolean isPatWorkspace = connectionService
-                        .findActiveGitHubPatConfig(existingByLogin.getId())
+                        .findActiveGitHubPatConfig(existing.getId())
                         .isPresent();
                 // Only a PAT workspace runs on a stored token; an App row's blob is not read here.
                 boolean hasPatToken = isPatWorkspace
                         && connectionService
-                                .findActiveBearerToken(existingByLogin.getId(), IntegrationKind.GITHUB)
+                                .findActiveBearerToken(existing.getId(), IntegrationKind.GITHUB)
                                 .map(b -> b.token() != null && !b.token().isBlank())
                                 .orElse(false);
 
                 if (hasPatToken) {
                     log.info(
-                            "Skipped GitHub App installation linking, PAT workspace has stored token: workspaceId={}, accountLogin={}, installationId={}",
-                            existingByLogin.getId(),
-                            LoggingUtils.sanitizeForLog(accountLogin),
+                            "Skipped GitHub App installation linking, PAT workspace has stored token: workspaceId={}, installationId={}",
+                            existing.getId(),
                             installationId);
-                    return existingByLogin;
+                    return existing;
                 }
 
-                if (isPatWorkspace) {
-                    log.info(
-                            "Promoted PAT workspace to GitHub App, no PAT token stored: workspaceId={}, accountLogin={}, installationId={}",
-                            existingByLogin.getId(),
-                            LoggingUtils.sanitizeForLog(accountLogin),
-                            installationId);
-                } else {
-                    log.info(
-                            "Linked existing workspace to installation: workspaceId={}, accountLogin={}, installationId={}",
-                            existingByLogin.getId(),
-                            LoggingUtils.sanitizeForLog(accountLogin),
-                            installationId);
-                }
-
-                workspace = existingByLogin;
+                log.info(
+                        isPatWorkspace
+                                ? "Promoted PAT workspace to GitHub App, no PAT token stored: workspaceId={}, installationId={}"
+                                : "Linked existing workspace to installation: workspaceId={}, installationId={}",
+                        existing.getId(),
+                        installationId);
+                workspace = existing;
             }
         }
 
@@ -326,33 +322,50 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                 throw new IllegalArgumentException(
                         "Cannot create workspace from installation " + installationId + " without accountLogin.");
             }
+            String login = Objects.requireNonNull(accountLogin);
 
-            Long ownerUserId = syncGitHubUserForOwnership(
-                    installationId, accountId, Objects.requireNonNull(accountLogin), accountKind, avatarUrl);
-
-            if (ownerUserId == null) {
-                // Likely an old or deleted installation whose owner user can no longer be resolved.
-                log.warn(
-                        "Skipped workspace creation, cannot sync owner user: installationId={}, accountLogin={}",
-                        installationId,
-                        LoggingUtils.sanitizeForLog(accountLogin));
+            if (adminAccountId == null && installationRequests.isAdopted(installationId)) {
+                // The admin's adoption created this installation's one workspace, which is gone now.
+                log.info(
+                        "Skipped workspace creation: reason=adoptedWorkspaceRemoved, installationId={}",
+                        installationId);
                 return null;
+            }
+            if (adminAccountId == null && installationRequests.requiresApproval()) {
+                installationRequests.recordPending(installationId, accountId, login, accountKind);
+                log.info("Installation awaits an instance admin: installationId={}", installationId);
+                return null;
+            }
+
+            Long ownerAccountId;
+            if (adminAccountId != null) {
+                ownerAccountId = adminAccountId;
+            } else {
+                Long ownerUserId = syncGitHubUserForOwnership(installationId, accountId, login, accountKind, avatarUrl);
+                if (ownerUserId == null) {
+                    // Likely an old or deleted installation whose owner user can no longer be resolved.
+                    log.warn(
+                            "Skipped workspace creation, cannot sync owner user: installationId={}, accountLogin={}",
+                            installationId,
+                            LoggingUtils.sanitizeForLog(accountLogin));
+                    return null;
+                }
+                ownerAccountId = humanAccountOf(ownerUserId);
             }
 
             AccountType wsAccountType = accountKind == AccountKind.ORGANIZATION ? AccountType.ORG : AccountType.USER;
 
-            String availableSlug =
-                    workspaceSlugService.allocate(accountLogin, "install-" + installationId + "-" + accountLogin);
+            String availableSlug = workspaceSlugService.allocate(login, "install-" + installationId + "-" + login);
 
             // Do NOT redirect the desired slug to the allocated slug: the desired slug may
             // belong to another workspace, and redirecting would leak or hijack it. Callers
             // must surface the allocated slug to the user instead.
-            workspace = createWorkspace(availableSlug, accountLogin, accountLogin, wsAccountType, ownerUserId);
+            workspace = createWorkspace(availableSlug, login, login, wsAccountType, ownerAccountId);
             log.info(
-                    "Created workspace from installation: workspaceSlug={}, installationId={}, ownerUserId={}, requestedSlug={}",
+                    "Created workspace from installation: workspaceSlug={}, installationId={}, ownerAccountId={}, requestedSlug={}",
                     LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()),
                     installationId,
-                    ownerUserId,
+                    ownerAccountId,
                     LoggingUtils.sanitizeForLog(accountLogin));
         }
 
@@ -375,12 +388,8 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
 
         // Organization must exist before repositories are created so they get organization_id set.
         if (accountKind == AccountKind.ORGANIZATION && accountId != null) {
-            Long providerId = Objects.requireNonNull(gitProviderRepository
-                    .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                    .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"))
-                    .getId());
-            Organization org =
-                    organizationService.upsertIdentity(accountId, Objects.requireNonNull(accountLogin), providerId);
+            Organization org = organizationService.upsertIdentity(
+                    accountId, Objects.requireNonNull(accountLogin), githubProviderId());
             workspace.setOrganizationId(org.getId());
             log.debug(
                     "Linked organization to workspace: orgId={}, orgLogin={}, workspaceId={}",
@@ -398,17 +407,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                 saved, installationId, accountLogin, "install-bind-" + installationId);
 
         return saved;
-    }
-
-    private boolean matchesInstallationAccount(Workspace workspace, @Nullable Long accountId, AccountKind accountKind) {
-        // Personal workspace owners can change, so memberships cannot prove the provider account.
-        Organization organization = organizations.find(workspace).orElse(null);
-        return accountId != null
-                && accountKind == AccountKind.ORGANIZATION
-                && organization != null
-                && accountId.equals(organization.getNativeId())
-                && organization.getProvider().getType() == IdentityProviderType.GITHUB
-                && "https://github.com".equals(organization.getProvider().getServerUrl());
     }
 
     /**
@@ -698,7 +696,11 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     }
 
     private Workspace createWorkspace(
-            String slug, String displayName, String accountLogin, AccountType accountType, Long ownerUserId) {
+            String slug,
+            String displayName,
+            String accountLogin,
+            AccountType accountType,
+            @Nullable Long ownerAccountId) {
         workspaceSlugService.validate(slug);
 
         Workspace workspace = new Workspace();
@@ -710,18 +712,24 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
 
         Workspace saved = workspaceRepository.save(workspace);
-        User owner = userRepository.findById(ownerUserId).orElseThrow();
-        if (owner.getType() == User.Type.USER) {
-            long ownerAccountId = people.ensureHuman(
-                    new PersonIdentity(
-                            Objects.requireNonNull(
-                                    owner.getProvider().getId(), "Persisted SCM provider requires an id"),
-                            Long.toString(owner.getNativeId()),
-                            null),
-                    owner.getName() == null ? owner.getLogin() : owner.getName());
+        if (ownerAccountId != null) {
             workspaceMembershipService.createMembership(saved, ownerAccountId, Membership.WorkspaceRole.OWNER);
         }
         return saved;
+    }
+
+    /** The account of a personal installation's GitHub user; an organization has no human owner account. */
+    private @Nullable Long humanAccountOf(Long userId) {
+        User owner = userRepository.findById(userId).orElseThrow();
+        if (owner.getType() != User.Type.USER) {
+            return null;
+        }
+        return people.ensureHuman(
+                new PersonIdentity(
+                        Objects.requireNonNull(owner.getProvider().getId(), "Persisted SCM provider requires an id"),
+                        Long.toString(owner.getNativeId()),
+                        null),
+                owner.getName() == null ? owner.getLogin() : owner.getName());
     }
 
     /**
@@ -747,10 +755,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             String typeStr =
                     accountKind == AccountKind.ORGANIZATION ? User.Type.ORGANIZATION.name() : User.Type.USER.name();
 
-            IdentityProvider provider = gitProviderRepository
-                    .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                    .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"));
-            Long providerId = Objects.requireNonNull(provider.getId());
+            long providerId = githubProviderId();
 
             userRepository.acquireLoginLock(accountLogin, providerId);
             userRepository.freeLoginConflicts(accountLogin, accountId, providerId);
@@ -786,6 +791,13 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                 LoggingUtils.sanitizeForLog(accountLogin),
                 installationId);
         return null;
+    }
+
+    private long githubProviderId() {
+        return Objects.requireNonNull(gitProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"))
+                .getId());
     }
 
     private boolean shouldUseNats(@Nullable Workspace workspace) {

@@ -38,6 +38,9 @@ tags:
   name: Account
 - description: GitLab-specific REST endpoints used during the workspace creation wizard.
   name: git-lab-preflight-controller
+- description: The setup page that GitHub returns a person to after they install the
+    app.
+  name: git-hub-installation-claim-controller
 - description: Instance-admin account management
   name: Admin
 - description: Current user's Slack privacy preferences
@@ -208,6 +211,8 @@ paths:
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
             - INSTALLATION_EVENT_REPLAYED
+            - GITHUB_INSTALLATION_ADOPTED
+            - GITHUB_INSTALLATION_DECLINED
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -304,6 +309,8 @@ paths:
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
             - INSTALLATION_EVENT_REPLAYED
+            - GITHUB_INSTALLATION_ADOPTED
+            - GITHUB_INSTALLATION_DECLINED
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -400,6 +407,8 @@ paths:
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
             - INSTALLATION_EVENT_REPLAYED
+            - GITHUB_INSTALLATION_ADOPTED
+            - GITHUB_INSTALLATION_DECLINED
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -708,6 +717,62 @@ paths:
       summary: Send a test email
       tags:
       - Instance Email
+  /admin/github-installations:
+    get:
+      operationId: listGitHubInstallations
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GitHubInstallationRequest"
+          description: OK
+      summary: List GitHub App installations and their decisions
+      tags:
+      - git-hub-installation-admin
+  /admin/github-installations/{installationId}/adopt:
+    post:
+      operationId: adoptGitHubInstallation
+      parameters:
+      - in: path
+        name: installationId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitHubInstallationRequest"
+          description: OK
+      summary: "Create the installation's workspace, with the signed-in admin as its\
+        \ owner"
+      tags:
+      - git-hub-installation-admin
+  /admin/github-installations/{installationId}/decline:
+    post:
+      operationId: declineGitHubInstallation
+      parameters:
+      - in: path
+        name: installationId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitHubInstallationRequest"
+          description: OK
+      summary: Decline a GitHub App installation
+      tags:
+      - git-hub-installation-admin
   /admin/integration/dead-letters:
     get:
       operationId: listInstallationDeadLetters
@@ -2549,6 +2614,32 @@ paths:
       summary: List global contributors
       tags:
       - Contributors
+  /github-installations/{installationId}/claim:
+    post:
+      operationId: claimGitHubInstallation
+      parameters:
+      - in: path
+        name: installationId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitHubInstallationClaimRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitHubInstallationClaim"
+          description: OK
+      summary: Confirm the installation that the signed-in person set up on GitHub
+      tags:
+      - git-hub-installation-claim
   /identity-providers:
     get:
       operationId: listIdentityProviders
@@ -15761,6 +15852,69 @@ components:
       - patterns
       - reason
       - withheld
+    GitHubInstallationClaim:
+      type: object
+      description: What happens next with the GitHub App installation that the signed-in
+        person set up
+      properties:
+        outcome:
+          type: string
+          enum:
+          - READY
+          - AWAITING_APPROVAL
+          - SETTING_UP
+        workspaceSlug:
+          type: string
+          description: "The installation's workspace, when it has one"
+      required:
+      - outcome
+    GitHubInstallationClaimRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          description: The code that GitHub returned to the setup page; it is used
+            once and never stored
+          maxLength: 255
+          minLength: 0
+      required:
+      - code
+    GitHubInstallationRequest:
+      type: object
+      description: A GitHub App installation and an instance admin's decision on it
+      properties:
+        accountKind:
+          type: string
+          enum:
+          - USER
+          - ORGANIZATION
+        accountLogin:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+        installationId:
+          type: integer
+          format: int64
+        receivedAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - PENDING
+          - DECLINED
+          - ADOPTED
+        workspaceSlug:
+          type: string
+          description: The workspace that the adoption created; absent once that workspace
+            is deleted
+      required:
+      - accountKind
+      - accountLogin
+      - installationId
+      - receivedAt
+      - status
     GitHubProvider:
       type: object
       description: GitHub provider configuration

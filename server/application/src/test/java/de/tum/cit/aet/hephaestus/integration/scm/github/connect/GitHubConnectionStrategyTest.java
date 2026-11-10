@@ -205,10 +205,19 @@ class GitHubConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldTreatACallbackFromAnInstallationStartedOnGitHubAsProviderInitiated() {
-        assertThat(strategy().isProviderInitiated(Map.of("installation_id", "4242", "setup_action", "install")))
-                .isTrue();
-        assertThat(strategy().isProviderInitiated(Map.of("code", "code-1"))).isFalse();
+    void shouldSendANewInstallationStartedOnGitHubToItsSetupPage() {
+        assertThat(strategy()
+                        .providerInitiatedLanding(
+                                Map.of("installation_id", "4242", "setup_action", "install", "code", "a b&c")))
+                .contains("/github/installations/4242/setup?code=a+b%26c");
+        assertThat(strategy().providerInitiatedLanding(Map.of("installation_id", "4242", "setup_action", "install")))
+                .contains("/");
+        assertThat(strategy()
+                        .providerInitiatedLanding(
+                                Map.of("installation_id", "4242", "setup_action", "update", "code", "c")))
+                .contains("/");
+        assertThat(strategy().providerInitiatedLanding(Map.of("code", "code-1")))
+                .isEmpty();
     }
 
     @Test

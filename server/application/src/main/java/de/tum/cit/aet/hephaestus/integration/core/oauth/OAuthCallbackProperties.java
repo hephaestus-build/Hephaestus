@@ -22,9 +22,9 @@ public record OAuthCallbackProperties(
         }
     }
 
-    /** The root of the application {@code successRedirect} points into, for a callback that connected nothing. */
-    public String homeRedirect() {
-        return URI.create(successRedirect).resolve("/").toString();
+    /** A path in the application that {@code successRedirect} points into, for a callback that connected nothing. */
+    public String applicationUrl(String path) {
+        return URI.create(successRedirect).resolve(path).toString();
     }
 
     /**

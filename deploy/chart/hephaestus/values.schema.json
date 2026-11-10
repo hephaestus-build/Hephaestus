@@ -825,6 +825,7 @@
 				"privateCa",
 				"scmPrivateHosts",
 				"researchOrganization",
+				"workspaceCreationPolicy",
 				"publicActivity",
 				"pageExperienceMetrics",
 				"browserFaultReports",
@@ -873,6 +874,7 @@
 					}
 				},
 				"researchOrganization": { "type": "string", "maxLength": 300 },
+				"workspaceCreationPolicy": { "enum": ["ADMIN_ONLY", "SELF_SERVICE"] },
 				"publicActivity": {
 					"type": "object",
 					"additionalProperties": false,

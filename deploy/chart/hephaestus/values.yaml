@@ -414,6 +414,10 @@ config:
   scmPrivateHosts: []
   # The organization that runs research on this instance, as the privacy notice names it.
   researchOrganization: ""
+  # Who creates workspaces. ADMIN_ONLY: instance admins create them, and a GitHub App installation
+  # waits until an instance admin adopts it. SELF_SERVICE: every signed-in user can create one, and
+  # each GitHub App installation creates its own. docs/admin/github-integration.mdx.
+  workspaceCreationPolicy: ADMIN_ONLY
   publicActivity:
     enabled: false
     repositoryVisibilityMaxAge: 48h
