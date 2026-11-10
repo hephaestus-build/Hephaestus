@@ -131,7 +131,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0054](0054-practice-visuals-and-guides.md) | Practice visuals and guides are themeable inline SVG and Markdown | Accepted |
 | [0055](0055-practice-scripts-use-one-result-contract.md) | Practice scripts use one result contract | Accepted |
 | [0056](0056-one-practice-model-for-items-and-scans.md) | One practice model for items and scans | Accepted |
-| [0057](0057-one-heph-conversation-per-developer.md) | One Heph conversation per developer, on a stateless shared Heph host | Accepted |
+| [0057](0057-one-heph-conversation-per-developer.md) | One Heph conversation per developer, on a stateless shared Heph host | Superseded by [0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) |
 | [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) | The Helm chart is the only supported deployment from 1.0 | Accepted |
 | [0059](0059-previews-run-on-the-staging-cluster.md) | Previews run on the staging cluster | Accepted |
 | [0060](0060-the-kubernetes-floor-follows-upstream-support.md) | The Kubernetes floor follows upstream support | Accepted |
@@ -156,6 +156,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0079](0079-one-agent-system.md) | One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain | Accepted |
 | [0080](0080-provider-events-go-to-a-postgresql-inbox.md) | Provider events go to a PostgreSQL inbox, and the server receives them | Accepted |
 | [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) | One server role runs Hephaestus, and agent work runs in sandboxes that reach only the server | Accepted |
+| [0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) | A developer has one Heph conversation, and its ledger is Heph's memory | Accepted |
 | [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) | Each module owns its aggregates, declares its dependencies, and changes a lifecycle only through the aggregate | Accepted |
 | [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
 

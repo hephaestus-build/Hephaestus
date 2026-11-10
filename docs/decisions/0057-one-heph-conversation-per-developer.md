@@ -1,6 +1,6 @@
 # ADR 0057: One Heph conversation per developer, on a stateless shared Heph host
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md)
 **Date:** 2026-10-09
 **Authors:** Felix T.J. Dietrich
 
