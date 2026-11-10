@@ -135,15 +135,15 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) | The Helm chart is the only supported deployment from 1.0 | Accepted |
 | [0059](0059-previews-run-on-the-staging-cluster.md) | Previews run on the staging cluster | Accepted |
 | [0060](0060-the-kubernetes-floor-follows-upstream-support.md) | The Kubernetes floor follows upstream support | Accepted |
-| [0061](0061-review-seals-then-feedback-composes.md) | A practice review seals its results, then feedback is composed | Accepted |
-| [0062](0062-the-item-is-the-review-scope.md) | The item is the review scope | Accepted |
-| [0063](0063-each-practice-is-staged-when-it-ends.md) | Each practice is staged when it ends, and the review seals once | Accepted |
+| [0061](0061-review-seals-then-feedback-composes.md) | A practice review seals its results, then feedback is composed | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
+| [0062](0062-the-item-is-the-review-scope.md) | The item is the review scope | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
+| [0063](0063-each-practice-is-staged-when-it-ends.md) | Each practice is staged when it ends, and the review seals once | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
 | [0064](0064-one-evidence-contract-for-every-producer.md) | One evidence contract for every result producer | Accepted |
 | [0065](0065-standing-counts-the-newest-observation-of-each-item.md) | Standing counts the newest observation of each item | Superseded by [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) |
 | [0066](0066-the-webhook-receiver-has-no-database.md) | The webhook receiver has no database | Superseded by [0080](0080-provider-events-go-to-a-postgresql-inbox.md) |
 | [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted |
 | [0068](0068-reviews-and-heph-run-on-one-agent-runtime.md) | Reviews and Heph run on one agent runtime | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
-| [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) | Practices run when they are ready and stay current by their sources | Accepted |
+| [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) | Practices run when they are ready and stay current by their sources | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
 | [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Accepted |
 | [0071](0071-every-user-visible-failure-is-observable.md) | Every user-visible failure is observable, through one first-party pipeline | Accepted |
 | [0072](0072-few-dependencies-owned-slivers-kept-foundations.md) | Few dependencies — own a sliver, keep a foundation | Accepted |
@@ -160,5 +160,6 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) | Each purpose uses one governed model within the member's AI choice, and every model call is counted | Accepted |
 | [0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) | Every statement on workspace data binds its workspace, and a shared mirror binds it through the monitored scope | Accepted |
 | [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) | An observation has one of four outcomes, holds one current claim while its sources stay unchanged, and standing reads the newest decision | Accepted |
+| [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) | A practice review stages, seals, then composes, and each stage records why it stops | Accepted |
 
 Template: [0000-template.md](0000-template.md).
