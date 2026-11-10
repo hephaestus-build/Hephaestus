@@ -1,8 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ArrowRightIcon, HistoryIcon } from "lucide-react";
 
-import { listSlackChannelConsentEventsOptions } from "@/api/@tanstack/react-query.gen";
 import type { SlackChannelConsentEvent, SlackMonitoredChannel } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
@@ -27,28 +25,27 @@ import { hasText } from "@/lib/text";
 
 import { ConsentStateBadge } from "./consent-terms";
 
+/** The consent history of the channel whose sheet is open, as the route read it. */
+export interface ChannelHistory {
+	events?: readonly SlackChannelConsentEvent[];
+	isLoading: boolean;
+	/** The read failed. */
+	error?: unknown;
+	onRetry: () => void;
+}
+
 export interface ChannelHistorySheetProps {
-	workspaceSlug: string;
 	channel: SlackMonitoredChannel | null;
+	history: ChannelHistory;
 	onOpenChange: (open: boolean) => void;
 }
 
-export function ChannelHistorySheet({
-	workspaceSlug,
-	channel,
-	onOpenChange,
-}: ChannelHistorySheetProps) {
+export function ChannelHistorySheet({ channel, history, onOpenChange }: ChannelHistorySheetProps) {
 	const open = channel != null;
 	const label = channel ? (channel.channelName ?? channel.slackChannelId) : "";
-
-	const { data, isLoading, error, refetch } = useQuery({
-		...listSlackChannelConsentEventsOptions({
-			path: { workspaceSlug, slackChannelId: channel?.slackChannelId ?? "" },
-		}),
-		enabled: open,
-	});
-
-	const events = data ?? [];
+	const { isLoading, error, onRetry } = history;
+	const failed = error !== undefined;
+	const events = history.events ?? [];
 
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
@@ -69,17 +66,15 @@ export function ChannelHistorySheet({
 						</div>
 					)}
 
-					{!isLoading && error && (
+					{!isLoading && failed && (
 						<QueryErrorAlert
 							error={error}
 							title="We could not load the consent history"
-							onRetry={() => {
-								void refetch();
-							}}
+							onRetry={onRetry}
 						/>
 					)}
 
-					{!isLoading && !error && events.length === 0 && (
+					{!isLoading && !failed && events.length === 0 && (
 						<Empty>
 							<EmptyHeader>
 								<EmptyMedia variant="icon">
@@ -94,7 +89,7 @@ export function ChannelHistorySheet({
 						</Empty>
 					)}
 
-					{!isLoading && !error && events.length > 0 && (
+					{!isLoading && !failed && events.length > 0 && (
 						<ItemGroup className="has-[[data-size=sm]]:gap-0">
 							{events.map((event) => (
 								<HistoryEntry key={event.id} event={event} />

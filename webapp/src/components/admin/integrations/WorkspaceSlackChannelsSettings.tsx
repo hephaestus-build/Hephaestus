@@ -23,7 +23,7 @@ import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 import { IntegrationCardHeading } from "./IntegrationCardHeading";
 import { ActivateChannelDialog } from "./slack-channels/ActivateChannelDialog";
 import { AddChannelDialog, type AddChannelDialogProps } from "./slack-channels/AddChannelDialog";
-import { ChannelHistorySheet } from "./slack-channels/ChannelHistorySheet";
+import { type ChannelHistory, ChannelHistorySheet } from "./slack-channels/ChannelHistorySheet";
 import type { SlackConsentState } from "./slack-channels/consent-terms";
 import { RemoveChannelAlertDialog } from "./slack-channels/RemoveChannelAlertDialog";
 import { SlackChannelRow } from "./slack-channels/SlackChannelRow";
@@ -51,7 +51,6 @@ function ChannelsTableHeader() {
 }
 
 export interface WorkspaceSlackChannelsSettingsProps {
-	workspaceSlug: string;
 	/** Whether the workspace has an installed Slack app. Without one, the section is discoverable
 	 * but inert: it explains what monitoring does and points at the connect card above. */
 	hasSlackConnection: boolean;
@@ -83,6 +82,10 @@ export interface WorkspaceSlackChannelsSettingsProps {
 	}) => Promise<void> | void;
 	/** Terminal revoke + erase. Resolves on success, rejects to keep the dialog open. */
 	onRemoveChannel: (input: { slackChannelId: string; reason?: string }) => Promise<void> | void;
+	/** The consent history of the channel last opened with `onViewHistory`. */
+	consentHistory: ChannelHistory;
+	/** A channel's consent history opens: read it. */
+	onViewHistory: (slackChannelId: string) => void;
 }
 
 /** One open of a channel dialog. Every open is a new object, even for the same channel. */
@@ -128,7 +131,6 @@ function useChannelDialog(channels: readonly SlackMonitoredChannel[]) {
  */
 
 export function WorkspaceSlackChannelsSettings({
-	workspaceSlug,
 	hasSlackConnection,
 	channels,
 	channelCandidates,
@@ -142,6 +144,8 @@ export function WorkspaceSlackChannelsSettings({
 	onRegisterChannel,
 	onUpdateConsent,
 	onRemoveChannel,
+	consentHistory,
+	onViewHistory,
 }: WorkspaceSlackChannelsSettingsProps) {
 	const [addOpen, setAddOpen] = useState(false);
 	const activate = useChannelDialog(channels);
@@ -222,7 +226,10 @@ export function WorkspaceSlackChannelsSettings({
 												}),
 											)
 										}
-										onViewHistory={history.open}
+										onViewHistory={(viewed) => {
+											history.open(viewed);
+											onViewHistory(viewed.slackChannelId);
+										}}
 									/>
 								))}
 							</TableBody>
@@ -260,8 +267,8 @@ export function WorkspaceSlackChannelsSettings({
 
 			{history.dialog && (
 				<ChannelHistorySheet
-					workspaceSlug={workspaceSlug}
 					channel={history.dialog.channel}
+					history={consentHistory}
 					onOpenChange={history.dialog.onOpenChange}
 				/>
 			)}

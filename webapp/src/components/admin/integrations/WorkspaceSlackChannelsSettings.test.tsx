@@ -1,6 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
@@ -11,13 +9,6 @@ import {
 	WorkspaceSlackChannelsSettings,
 	type WorkspaceSlackChannelsSettingsProps,
 } from "./WorkspaceSlackChannelsSettings";
-
-function renderWithClient(node: ReactNode) {
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	});
-	return render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>);
-}
 
 const base = {
 	slackTeamId: "T0000000000",
@@ -55,7 +46,6 @@ const revoked: SlackMonitoredChannel = {
 
 function setup(overrides: Partial<WorkspaceSlackChannelsSettingsProps> = {}) {
 	const props = {
-		workspaceSlug: "demo",
 		hasSlackConnection: true,
 		isLoading: false,
 		channels: [pending, active],
@@ -63,9 +53,11 @@ function setup(overrides: Partial<WorkspaceSlackChannelsSettingsProps> = {}) {
 		onRegisterChannel: vi.fn<WorkspaceSlackChannelsSettingsProps["onRegisterChannel"]>(),
 		onUpdateConsent: vi.fn<WorkspaceSlackChannelsSettingsProps["onUpdateConsent"]>(),
 		onRemoveChannel: vi.fn<WorkspaceSlackChannelsSettingsProps["onRemoveChannel"]>(),
+		consentHistory: { isLoading: false, onRetry: vi.fn() },
+		onViewHistory: vi.fn<WorkspaceSlackChannelsSettingsProps["onViewHistory"]>(),
 		...overrides,
 	};
-	renderWithClient(<WorkspaceSlackChannelsSettings {...props} />);
+	render(<WorkspaceSlackChannelsSettings {...props} />);
 	return { props };
 }
 
