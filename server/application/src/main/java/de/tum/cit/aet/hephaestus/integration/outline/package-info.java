@@ -16,6 +16,7 @@
             // The route endpoint publishes through the receiver; its secret derives from the routing key (ADR 0066).
             "integration.core::webhook",
             "core::webhook",
+            "core::web",
             // The scope consumer is reconciled when the stored subscription id changes.
             "integration.core::consumer",
             // ConnectionLifecycleEvent: register the webhook on activate, deregister on deactivate.

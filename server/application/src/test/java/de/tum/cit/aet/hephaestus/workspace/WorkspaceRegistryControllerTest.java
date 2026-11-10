@@ -6,8 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
@@ -82,12 +84,13 @@ class WorkspaceRegistryControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isSameAs(dto);
-        assertThat(response.getHeaders().getLocation()).hasPath("/workspaces/test-workspace");
+        assertThat(response.getHeaders().getLocation()).hasPath("/api/workspaces/test-workspace");
     }
 
     private WorkspaceRegistryController controller(WorkspaceProperties.CreationPolicy policy) {
         return new WorkspaceRegistryController(
                 mock(AdminPasskeyAccess.class),
+                new PublicApiUrls(AuthPropertiesFixture.withApiBasePath("/api")),
                 workspaceService,
                 workspaceQueryService,
                 new WorkspaceProperties(false, null, false, null, policy));

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -29,7 +30,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * Instance-admin CRUD for {@code login_provider} rows — the sign-in options offered on the login page
@@ -50,10 +50,13 @@ public class LoginProviderAdminController {
     private final LoginProviderService loginProviderService;
 
     private final String callbackBase;
+    private final PublicApiUrls publicApiUrls;
 
-    public LoginProviderAdminController(LoginProviderService loginProviderService, AuthProperties authProperties) {
+    public LoginProviderAdminController(
+            LoginProviderService loginProviderService, AuthProperties authProperties, PublicApiUrls publicApiUrls) {
         this.loginProviderService = loginProviderService;
         this.callbackBase = authProperties.apiBaseUrl();
+        this.publicApiUrls = publicApiUrls;
     }
 
     @GetMapping
@@ -79,10 +82,7 @@ public class LoginProviderAdminController {
                 body.clientSecret(),
                 body.scopes()));
         LoginProviderViewDTO view = toView(created, callbackBase);
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{registrationId}")
-                .buildAndExpand(created.getRegistrationId())
-                .toUri();
+        URI location = publicApiUrls.uri("/admin/login-providers/{registrationId}", created.getRegistrationId());
         return ResponseEntity.created(location).body(view);
     }
 

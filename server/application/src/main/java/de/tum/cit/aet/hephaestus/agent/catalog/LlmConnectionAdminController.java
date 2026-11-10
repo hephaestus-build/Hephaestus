@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -26,7 +27,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * Instance-admin management of the LLM provider connection catalog: CRUD plus a "test &amp; fetch
@@ -45,6 +45,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class LlmConnectionAdminController {
 
     private final LlmConnectionService connectionService;
+    private final PublicApiUrls publicApiUrls;
     private final LlmConnectionProbeService probeService;
 
     @GetMapping
@@ -65,10 +66,7 @@ public class LlmConnectionAdminController {
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_CONNECTION_CREATED")
     public ResponseEntity<LlmConnectionDTO> create(@Valid @RequestBody CreateLlmConnectionRequestDTO request) {
         LlmConnection created = connectionService.create(request);
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{id}")
-                .buildAndExpand(created.getId())
-                .toUri();
+        URI location = publicApiUrls.uri("/admin/llm/connections/{id}", created.getId());
         return ResponseEntity.created(location).body(LlmConnectionDTO.from(created));
     }
 

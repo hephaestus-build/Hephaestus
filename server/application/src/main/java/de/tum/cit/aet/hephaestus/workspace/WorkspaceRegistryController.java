@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
@@ -27,7 +28,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
 @ConditionalOnServerRole
@@ -38,6 +38,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class WorkspaceRegistryController {
 
     private final AdminPasskeyAccess passkeyAccess;
+    private final PublicApiUrls publicApiUrls;
     private final WorkspaceService workspaceService;
     private final WorkspaceQueryService workspaceQueryService;
     private final WorkspaceProperties workspaceProperties;
@@ -73,10 +74,7 @@ public class WorkspaceRegistryController {
 
         Workspace workspace = workspaceService.createWorkspaceWithInitialization(createWorkspaceRequest);
 
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{workspaceSlug}")
-                .buildAndExpand(workspace.getWorkspaceSlug())
-                .toUri();
+        URI location = publicApiUrls.uri("/workspaces/{workspaceSlug}", workspace.getWorkspaceSlug());
 
         return ResponseEntity.created(location).body(workspaceQueryService.toWorkspaceDTO(workspace));
     }

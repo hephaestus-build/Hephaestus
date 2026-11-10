@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogCustomizationService;
@@ -29,6 +30,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    @Autowired
+    private AuthProperties authProperties;
+
     @Autowired
     WebTestClient client;
 
@@ -81,6 +85,11 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .exchange()
                 .expectStatus()
                 .isCreated()
+                .expectHeader()
+                .valueEquals(
+                        "Location",
+                        authProperties.apiBaseUrl() + "/workspaces/" + workspace.getWorkspaceSlug()
+                                + "/practice-groups/scans")
                 .expectBody(Void.class);
         assertThat(groups.findByWorkspaceIdAndSlug(workspace.getId(), "scans")).isPresent();
     }
@@ -118,6 +127,11 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .exchange()
                 .expectStatus()
                 .isCreated()
+                .expectHeader()
+                .valueEquals(
+                        "Location",
+                        authProperties.apiBaseUrl() + "/workspaces/" + workspace.getWorkspaceSlug()
+                                + "/practices/repository-scan")
                 .expectBody()
                 .jsonPath("$.currentVersion.definition.reviewOn.events")
                 .isEmpty()

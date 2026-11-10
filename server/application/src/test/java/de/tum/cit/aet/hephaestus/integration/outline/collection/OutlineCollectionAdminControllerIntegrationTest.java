@@ -7,6 +7,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -60,6 +61,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 @TestPropertySource(properties = "hephaestus.integration.outline.enabled=true")
 class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    @Autowired
+    AuthProperties authProperties;
 
     private static final String SERVER_URL = "https://outline.example.test";
     private static final String COLLECTION_ID = "col-1";
@@ -175,7 +178,8 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .isCreated()
                 // 201 points at the freshly minted item resource.
                 .expectHeader()
-                .location("/workspaces/" + workspace.getWorkspaceSlug() + "/outline/collections/" + COLLECTION_ID)
+                .location(authProperties.apiBaseUrl() + "/workspaces/" + workspace.getWorkspaceSlug()
+                        + "/outline/collections/" + COLLECTION_ID)
                 .expectBody(OutlineCollectionDTO.class)
                 .returnResult()
                 .getResponseBody();

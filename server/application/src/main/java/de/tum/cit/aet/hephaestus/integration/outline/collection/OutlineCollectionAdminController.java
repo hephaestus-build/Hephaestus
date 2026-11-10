@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.collection;
 
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.outline.collection.OutlineCollectionAdminService.RegistrationOutcome;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -50,9 +51,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 public class OutlineCollectionAdminController {
 
     private final OutlineCollectionAdminService adminService;
+    private final PublicApiUrls publicApiUrls;
 
-    public OutlineCollectionAdminController(OutlineCollectionAdminService adminService) {
+    public OutlineCollectionAdminController(OutlineCollectionAdminService adminService, PublicApiUrls publicApiUrls) {
         this.adminService = adminService;
+        this.publicApiUrls = publicApiUrls;
     }
 
     @GetMapping
@@ -124,8 +127,10 @@ public class OutlineCollectionAdminController {
         if (!outcome.created()) {
             return ResponseEntity.ok(outcome.collection());
         }
-        URI itemLocation = URI.create("/workspaces/" + workspace.slug() + "/outline/collections/"
-                + outcome.collection().collectionId());
+        URI itemLocation = publicApiUrls.uri(
+                "/workspaces/{workspaceSlug}/outline/collections/{collectionId}",
+                workspace.slug(),
+                outcome.collection().collectionId());
         return ResponseEntity.created(itemLocation).body(outcome.collection());
     }
 

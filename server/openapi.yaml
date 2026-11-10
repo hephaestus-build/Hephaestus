@@ -14,8 +14,8 @@ info:
   title: Hephaestus API
   version: 0.0.0-development
 servers:
-- description: Default Server URL
-  url: /
+- description: Public API
+  url: /api
 security:
 - bearerAuth: []
 tags:

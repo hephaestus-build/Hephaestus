@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
+import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionField;
 import de.tum.cit.aet.hephaestus.practices.PracticeReleaseChoice;
@@ -22,6 +24,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,6 +40,12 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class CatalogAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    @Autowired
+    AuthProperties authProperties;
+
+    @Autowired
+    WorkspaceSubdomainProperties subdomains;
+
     @Autowired
     WebTestClient client;
 
@@ -220,9 +229,11 @@ class CatalogAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
     @WithAdminUser
     void shouldRequireAValidInstanceCatalogDefinition() {
         persistUser("admin");
+        assertThat(subdomains.enabled()).isFalse();
         String slug = "instance-" + UUID.randomUUID();
-        client.post()
+        var response = client.post()
                 .uri("/admin/practice-catalog/practices")
+                .header("Host", "workspace.example.test")
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new CatalogPracticeInputDTO(
@@ -236,14 +247,26 @@ class CatalogAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .expectStatus()
                 .isCreated()
                 .expectHeader()
-                .valueMatches("Location", ".*/admin/practice-catalog/practices/" + slug)
+                .valueEquals("Location", authProperties.apiBaseUrl() + "/admin/practice-catalog/practices/" + slug)
                 .expectBody()
                 .jsonPath("$.kind")
                 .isEqualTo("scm.pull_request")
                 .jsonPath("$.definition.name")
                 .isEqualTo(DefinitionTestFixtures.definition().name())
                 .jsonPath("$.state")
-                .isEqualTo("YOURS");
+                .isEqualTo("YOURS")
+                .returnResult();
+        URI location = Objects.requireNonNull(response.getResponseHeaders().getLocation());
+        String applicationPath =
+                location.getRawPath().substring(authProperties.apiBasePath().length());
+        client.get()
+                .uri(applicationPath)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(CatalogPracticeDTO.class)
+                .value(practice -> assertThat(practice.slug()).isEqualTo(slug));
     }
 
     @Test

@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExport;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportService;
 import de.tum.cit.aet.hephaestus.core.auth.web.AccountExportController;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Tag;
@@ -31,7 +35,9 @@ class ApiSuccessStatusContractTest {
         var export = new AccountExport(42L);
         export.setId(17L);
         when(exports.requestExport(42L)).thenReturn(export);
-        var mvc = MockMvcBuilders.standaloneSetup(new AccountExportController(exports))
+        var urls =
+                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://heph.example.test"), "/api"));
+        var mvc = MockMvcBuilders.standaloneSetup(new AccountExportController(exports, urls))
                 .build();
         var jwt =
                 Jwt.withTokenValue("test").header("alg", "ES256").subject("42").build();
@@ -39,6 +45,7 @@ class ApiSuccessStatusContractTest {
         try {
             mvc.perform(post("/user/exports"))
                     .andExpect(status().isAccepted())
+                    .andExpect(header().string("Location", "https://heph.example.test/api/user/exports/17"))
                     .andExpect(jsonPath("$.id").value(17))
                     .andExpect(jsonPath("$.status").value("PENDING"));
         } finally {

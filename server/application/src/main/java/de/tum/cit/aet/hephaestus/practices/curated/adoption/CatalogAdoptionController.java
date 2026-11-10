@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.exception.PreconditionRequiredException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.practices.CatalogOriginPresenter;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -31,7 +32,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @WorkspaceScopedController
 @RequestMapping("/practice-catalog/adoption")
@@ -42,6 +42,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class CatalogAdoptionController {
 
     private final CatalogAdoptionService service;
+    private final PublicApiUrls publicApiUrls;
     private final CatalogOriginPresenter presenter;
 
     @GetMapping
@@ -139,10 +140,8 @@ public class CatalogAdoptionController {
             throw new PreconditionRequiredException();
         }
         Practice adopted = service.adopt(context, slug, ifMatch);
-        URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/workspaces/{workspaceSlug}/practices/{practiceSlug}")
-                .buildAndExpand(context.slug(), adopted.getSlug())
-                .toUri();
+        URI location = publicApiUrls.uri(
+                "/workspaces/{workspaceSlug}/practices/{practiceSlug}", context.slug(), adopted.getSlug());
         return ResponseEntity.created(location)
                 .cacheControl(CacheControl.noStore().cachePrivate())
                 .body(presenter.present(context.id(), adopted));

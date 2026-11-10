@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionOptionsService;
 import de.tum.cit.aet.hephaestus.practices.dto.AcceptPracticeReleaseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.CatalogDTO;
@@ -38,7 +39,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
 @RequestMapping("/admin/practice-catalog")
@@ -50,6 +50,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @ConditionalOnServerRole
 public class CatalogAdminController {
     private final CatalogService catalog;
+    private final PublicApiUrls publicApiUrls;
     private final CatalogCustomizationService customization;
     private final PracticeDefinitionOptionsService options;
 
@@ -83,10 +84,7 @@ public class CatalogAdminController {
     @Operation(operationId = "createCatalogPractice")
     @ApiResponse(responseCode = "201", description = "Practice created; URL in the Location header")
     public ResponseEntity<CatalogPracticeDTO> createPractice(@RequestBody @Valid CatalogPracticeInputDTO input) {
-        return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
-                        .path("/{slug}")
-                        .buildAndExpand(input.slug())
-                        .toUri())
+        return ResponseEntity.created(publicApiUrls.uri("/admin/practice-catalog/practices/{slug}", input.slug()))
                 .body(catalog.practiceView(customization.createPractice(input)));
     }
 
@@ -105,10 +103,7 @@ public class CatalogAdminController {
     @Operation(operationId = "createCatalogGroup")
     @ApiResponse(responseCode = "201", description = "Group created; URL in the Location header")
     public ResponseEntity<CatalogGroupDTO> createGroup(@RequestBody @Valid CatalogGroupInputDTO input) {
-        return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
-                        .path("/{slug}")
-                        .buildAndExpand(input.slug())
-                        .toUri())
+        return ResponseEntity.created(publicApiUrls.uri("/admin/practice-catalog/groups/{slug}", input.slug()))
                 .body(catalog.groupView(customization.createGroup(input)));
     }
 
