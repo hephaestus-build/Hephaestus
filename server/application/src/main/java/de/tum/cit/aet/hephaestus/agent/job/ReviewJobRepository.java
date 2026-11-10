@@ -75,26 +75,22 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query("SELECT j FROM ReviewJob j  WHERE j.id = :id AND j.workspaceId = :workspaceId")
     Optional<ReviewJob> findByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
+    /** A job blocks a purge until it ends and settlement marks it DONE or FAILED. */
     @Query("SELECT CASE WHEN COUNT(j) > 0 THEN true ELSE false END FROM ReviewJob j "
             + "WHERE j.workspaceId = :workspaceId AND ("
             + "j.status IN ("
             + "de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.QUEUED, "
             + "de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.RUNNING) OR "
-            + "(j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.COMPLETED AND "
-            + "j.processingStatus = de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus.PENDING))")
+            + "j.processingStatus IN ("
+            + "de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus.NONE, "
+            + "de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus.PENDING))")
     boolean existsPurgeBlockingWork(@Param("workspaceId") Long workspaceId);
 
-    /** Migrated invocations retain their processing history, not work for the current completion pass. */
     @WorkspaceAgnostic("Bounded server completion pass; each selected job is reloaded under its own workspace")
     @Query(value = """
         SELECT j.id,j.workspace_id AS "workspaceId",j.review_id AS "reviewId"
         FROM review_job j
         WHERE j.status NOT IN ('QUEUED','RUNNING') AND j.processing_status IN ('NONE','PENDING')
-          AND NOT EXISTS (
-              SELECT 1 FROM review r
-              WHERE r.id=j.review_id AND r.workspace_id=j.workspace_id AND r.id=j.id
-                AND jsonb_exists(r.checks,'MIGRATION')
-          )
         ORDER BY j.completed_at,j.id LIMIT :limit
         """, nativeQuery = true)
     List<CompletionCandidate> findTerminalForProcessing(@Param("limit") int limit);
@@ -519,7 +515,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             """, nativeQuery = true)
     boolean existsQueuedForRoom();
 
-    /** Pending delivery recovery still reads output; stripping it would make delivery permanently unrecoverable. */
+    /** Settlement reads the capture and output of a job that is not yet DONE or FAILED, so only a settled job loses them. */
     @WorkspaceAgnostic("Cross-workspace retention batch; caller is @WorkspaceAgnostic retention service")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(
@@ -527,7 +523,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
                     + "  SELECT id FROM review_job "
                     + "  WHERE status IN ('COMPLETED','FAILED','TIMED_OUT','CANCELLED') "
                     + "  AND completed_at < :cutoff "
-                    + "  AND processing_status <> 'PENDING' "
+                    + "  AND processing_status IN ('DONE','FAILED') "
                     + "  AND (capture IS NOT NULL OR output IS NOT NULL) "
                     + "  LIMIT :batchSize"
                     + ")",
@@ -540,7 +536,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             value = "DELETE FROM review_job WHERE id IN (" + "  SELECT j.id FROM review_job j "
                     + "  WHERE j.status IN ('COMPLETED','FAILED','TIMED_OUT','CANCELLED') "
                     + "  AND j.completed_at < :cutoff "
-                    + "  AND j.processing_status <> 'PENDING' "
+                    + "  AND j.processing_status IN ('DONE','FAILED') "
                     + "  LIMIT :batchSize"
                     + ") RETURNING run_id",
             nativeQuery = true)

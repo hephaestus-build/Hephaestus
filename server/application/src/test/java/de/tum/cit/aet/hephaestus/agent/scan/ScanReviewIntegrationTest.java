@@ -227,7 +227,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldExcludeMigratedHistoryBeforeLimitingCompletionCandidatesAcrossWorkspaces() {
+    void shouldSkipSettledHistoryBeforeLimitingCompletionCandidatesAcrossWorkspaces() {
         var firstWorkspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("completion-native-first"));
         var secondWorkspace =
                 workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("completion-native-second"));
@@ -237,7 +237,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
         historical.setId(historical.getReviewId());
         historical.setStatus(ReviewJobStatus.COMPLETED);
         historical.setCompletedAt(historyAt);
-        historical.setProcessingStatus(ProcessingStatus.NONE);
+        historical.setProcessingStatus(ProcessingStatus.DONE);
         RuntimeJobTestData.persistParent(jdbc, historical);
         jobs.saveAndFlush(historical);
         jdbc.update(
@@ -269,7 +269,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
         assertThat(jobs.findByIdAndWorkspaceId(historical.getId(), firstWorkspace.getId()))
                 .get()
                 .extracting(ReviewJob::getStatus, ReviewJob::getProcessingStatus)
-                .containsExactly(ReviewJobStatus.COMPLETED, ProcessingStatus.NONE);
+                .containsExactly(ReviewJobStatus.COMPLETED, ProcessingStatus.DONE);
         assertThat(jobs.findByIdAndWorkspaceId(nativePending.getId(), firstWorkspace.getId()))
                 .isEmpty();
     }

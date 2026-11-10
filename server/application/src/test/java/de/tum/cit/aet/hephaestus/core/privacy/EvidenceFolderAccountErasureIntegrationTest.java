@@ -1171,7 +1171,9 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         copy(mounted, owner, recorder, erased, identity).close();
         copy(mounted, owner, recorder, other, identity).close();
         RuntimeJobTestData.updateJobs(
-                jdbc, "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE id=?", erased.getId());
+                jdbc,
+                "UPDATE review_job SET status='COMPLETED',processing_status='DONE',completed_at=now() WHERE id=?",
+                erased.getId());
         Path erasedFolder = mounted.resolve("jobs")
                 .resolve(Long.toString(erased.getWorkspaceId()))
                 .resolve(erased.getId().toString());
