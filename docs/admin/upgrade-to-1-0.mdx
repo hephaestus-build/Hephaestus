@@ -12,10 +12,10 @@ Plan for one outage, from the first stopped role to the last passed check.
 
 1.0.0 carries the source and images of the last qualified release candidate.
 A host that already runs that candidate changes only its release metadata.
-It still needs the verified recovery point and the checks below.
+It still stops every role, and it still needs the verified recovery point and the checks below.
 
 The target release's [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns each required action.
-This page orders those actions and links each one.
+This page orders the actions of the migration entries after `1.0.0-rc.5` and names the entry of each.
 
 :::note[TODO(K5)]
 This page states no sizing number for 1.0, because the K5 measurement is not done.
@@ -54,12 +54,13 @@ Thus, the controller must exist before the chart.
    The migration entry *Install the agent-sandbox controller before the chart* gives the commands.
    Without it, `helm upgrade` stops because it cannot find the kind `SandboxTemplate`.
 2. **Sandbox runtime.**
-   The one-host platform runs sandboxes on [gVisor](./kubernetes#the-platform-files).
-   The installer downloads the pinned release from `storage.googleapis.com`, so the host must reach that address.
+   Review and probe Pods run on `worker.runtime.runtimeClassName`, or on the cluster's default runtime.
+   They always need [user namespace support](./kubernetes#sandbox-prerequisites): a RuntimeClass does not replace it.
+   The one-host platform installs [gVisor](./kubernetes#the-platform-files) for the chart's sandbox templates (`worker.sandbox.templates.runtimeClassName`).
+   No component claims a sandbox from those templates in this release.
+   The installer downloads the pinned gVisor release from `storage.googleapis.com`, so the host must reach that address.
    The first run with gVisor restarts k3s once, which stops the running Pods for a short time.
    Do this during the window, as the cutover steps below describe.
-   On another cluster, set `worker.sandbox.templates.runtimeClassName` to your RuntimeClass.
-   If you leave it empty, the sandbox nodes need [user namespace support](./kubernetes#sandbox-prerequisites).
 3. **NetworkPolicy enforcement.**
    The network plugin must enforce NetworkPolicy for egress and ingress.
    Each worker proves it with its isolation probe, and it starts no sandbox while the probe fails.
@@ -78,14 +79,14 @@ Thus, the controller must exist before the chart.
    See the migration entry *NATS broker certificate names*.
 
 A one-host installation that another tool deploys, such as [pull-based deployment](./pull-based-deployment), updates its platform with the installer's `--platform-only` mode.
-[Install only the platform](./kubernetes#install-only-the-platform) gives the checks and the procedure.
-It installs k3s, the controller, gVisor and the other platform files.
-It does not read or change the release Secret, `site.yaml` or the Helm release.
+[Install only the platform](./kubernetes#install-only-the-platform) gives what it installs, its checks and the procedure.
 
 ### Values and keys to move
 
 The chart refuses an old name.
-Change your site file and the release Secret before the window.
+Phase 1 of the window still runs the current release with your current site file and Secret, so change neither before the window.
+Before the window, prepare a copy of your site file for the target release, as step 1 of [Upgrade the host](./kubernetes#upgrade-the-host) describes.
+Change the Secret in step 7, after phase 1.
 The migration guide owns each change. This table gives the names.
 
 | Where | Before | After | Migration entry |
@@ -144,7 +145,11 @@ Each step names the page that owns it.
    ```
 
    If this step restarts k3s, wait until PostgreSQL and NATS are ready before the next step.
-7. Run the target release's `hephaestus-keys.sh` so that the Secret holds every new key.
+   On a one-host installation, the platform files also renew the internal PostgreSQL certificate: do *Refresh the internal PostgreSQL certificate* before you go on.
+7. Change the Secret.
+   First move the database logins, as step 3 of *Give each database purpose its own login* describes.
+   `hephaestus-keys.sh` stops while the Secret still holds `DATABASE_USERNAME` or `DATABASE_PASSWORD`.
+   Then run the target release's `hephaestus-keys.sh` so that the Secret holds every new key.
    Export the keys again and keep that copy with the restore point.
 8. Migrate.
    Do phase 2 of [Stopped schema upgrades](./kubernetes#stopped-schema-upgrades) with the target chart and your changed site values.
@@ -163,14 +168,19 @@ Each step names the page that owns it.
     If it fails, fix the policy enforcement of the network plugin before you go on.
 11. On a one-host installation, run the target release's installer with `--version`, as [Upgrade the host](./kubernetes#upgrade-the-host) describes.
     Keep deployment automation paused until it finishes.
-12. Make the pull-based channel name the installed release, then resume reconciliation.
+12. If pull-based deployment is enabled, make its channel name the installed release, then resume reconciliation.
     [Stopped major upgrades](./pull-based-deployment#stopped-major-upgrades) gives the reconciler's rules for a cutover.
 13. Load the alert rules of the target release into your Prometheus or vmalert.
     A chart upgrade brings them, but your own Prometheus does not read them until you load them ([Alert rules](./observability#alert-rules)).
 14. Do [Check that it worked](#check-that-it-worked).
 
-A review that a worker still held when it stopped is a lost attempt.
-After the upgrade, the server records its usage and queues it again, or fails it at its retry limit.
+What happens to a review that a worker still held when it stopped is in *Stop every role before moving review leases to agent runs*.
+
+The webhook role is stopped during the window, so provider deliveries in that time reach no receiver.
+GitHub redelivers the failed deliveries of the last two hours.
+For the other providers, the reconciliation sync recovers the effect.
+[Webhook ingestion operations](./webhook-ingestion-operations) gives the details.
+Keep the window short.
 
 ## Roll back
 
@@ -178,11 +188,12 @@ After the upgrade, the server records its usage and queues it again, or fails it
 An older image or `helm rollback` does not undo the migration.
 
 1. Keep every role stopped.
-2. Restore the verified backup and the keys from step 5 into the database, as [If migration fails](./upgrade#if-migration-fails) describes.
+2. Restore the verified backup from step 5 into the database.
+   Restore its keys into the Secret.
+   [If migration fails](./upgrade#if-migration-fails) gives the procedure.
    Use the previous release's signed lock.
 3. Install the previous release.
-   For a chart host, [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover) gives the Helm and applied-record steps.
-   On one host, restore the backup before you return to the old release.
+   For a pull-based host, [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover) gives the Helm and applied-record steps.
 4. Start the roles of the previous release only on the restored database.
 5. Report the recovery point and any lost writes.
 
@@ -214,6 +225,9 @@ Then follow the cutover above.
    Reviews leave the queue, and no role is missing from the scrape.
 9. Check these alerts for the first hours: `HephaestusAgentQueueStalled`, `HephaestusAgentRunReaperFailing`, `HephaestusAgentSandboxReaperFailing`, `HephaestusReviewSandboxFailing`, `HephaestusSandboxGatewayRefusing` and `HephaestusSandboxIsolationFailed`.
    [Alert response](./production-operations-runbook#alert-response) gives the action for each.
+10. Did the upgrade cross *Stop every role before correcting unknown issue comment counts*?
+    Then ask the administrators of each affected workspace to run its backfill.
+    Until it finishes, those issues show an unknown comment count.
 
 Check [Sizing and scaling](./sizing) before increasing capacity.
 Its measurements state their workload and limits.
