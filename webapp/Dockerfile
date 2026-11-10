@@ -11,10 +11,12 @@ COPY extension/package.json /repo/extension/
 COPY scripts/api-generator/package.json /repo/scripts/api-generator/
 COPY patches/ /repo/patches/
 COPY docker/agents/pi/patches/ /repo/docker/agents/pi/patches/
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
-    pnpm fetch --filter webapp
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
-    pnpm install --offline --frozen-lockfile --ignore-scripts --filter webapp
+# The cache holds packages only, in a store of its own: pnpm keeps the Node.js runtime that
+# `pnpm runtime set` installed in /pnpm/store, and a cache mounted there would hide it.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store-cache,sharing=locked \
+    pnpm fetch --filter webapp --store-dir /pnpm/store-cache
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store-cache,sharing=locked \
+    pnpm install --offline --frozen-lockfile --ignore-scripts --filter webapp --store-dir /pnpm/store-cache
 # `pnpm run` installs before it runs, so the workspace root's `prepare` executes here even though
 # the install above ignored scripts. It has to resolve; there is no work tree, so it enables nothing.
 COPY scripts/ /repo/scripts/
