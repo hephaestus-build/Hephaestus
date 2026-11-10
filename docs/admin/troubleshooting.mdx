@@ -11,7 +11,8 @@ Do not print Secret objects or credentials while you collect diagnostics.
 
 ## Startup fails: `server.tomcat.remoteip.internal-proxies is unset while forward-headers-strategy=native in prod`
 
-**Cause:** `trustedProxies` is blank.
+**Cause:** `trustedProxies` holds only whitespace.
+The chart schema refuses an empty value.
 The server does not start in production with a blank value.
 
 **Fix:**
@@ -211,7 +212,7 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
 
 **Check:** Queue depth and oldest age go down.
 
-## Script runs end with `Practice script stopped without a result: it ran out of time.`
+## A practice script stopped without a candidate observation: `it ran out of time`
 
 **Cause:** The model provider is slow or limits the rate of calls.
 
