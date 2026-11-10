@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.lifecycle;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -28,7 +29,6 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
  * delivery failures. Each registration gets a new route ({@link OutlineRouteCredential}); the subscription id and
  * the route are stored on the Connection, and the signing secret is derived from the route, never stored.
  *
- * <p>Best-effort and never throws: without an external URL or token, or on any Outline-side failure, the
+ * <p>Best-effort and never throws: without a routing key or token, or on any Outline-side failure, the
  * periodic reconcile remains the source of truth and a missing subscription only costs freshness.
  *
  * <p>The single seam through which a subscription id changes. The workspace's {@code NatsSubscriptionProvider}
@@ -62,7 +62,7 @@ public class OutlineWebhookRegistrar {
     private final ConnectionService connectionService;
     private final OutlineWebhookClient outlineApiClient;
     private final OutlineRouteCredential credential;
-    private final String externalUrl;
+    private final PublicApiUrls publicApiUrls;
 
     /** Absent when {@code hephaestus.sync.nats.enabled=false}, so every use goes through {@link ObjectProvider#ifAvailable}. */
     private final ObjectProvider<IntegrationNatsConsumer> natsConsumer;
@@ -86,7 +86,7 @@ public class OutlineWebhookRegistrar {
             ConnectionService connectionService,
             OutlineWebhookClient outlineApiClient,
             OutlineRouteCredential credential,
-            @Value("${hephaestus.webhook.external-url:}") String externalUrl,
+            PublicApiUrls publicApiUrls,
             ObjectProvider<IntegrationNatsConsumer> natsConsumer,
             ObjectProvider<OutlineRouteProjection> routes,
             ConnectionRepository connections,
@@ -95,7 +95,7 @@ public class OutlineWebhookRegistrar {
         this.connectionService = connectionService;
         this.outlineApiClient = outlineApiClient;
         this.credential = credential;
-        this.externalUrl = externalUrl;
+        this.publicApiUrls = publicApiUrls;
         this.natsConsumer = natsConsumer;
         this.routes = routes;
         this.connections = connections;
@@ -118,7 +118,7 @@ public class OutlineWebhookRegistrar {
     @WorkspaceAgnostic(
             "Heals the Outline subscription of every workspace; each registration is scoped to its workspace")
     public void healRoutes() {
-        if (externalUrl == null || externalUrl.isBlank() || !credential.isConfigured()) {
+        if (!credential.isConfigured()) {
             return;
         }
         int left = 0;
@@ -156,7 +156,7 @@ public class OutlineWebhookRegistrar {
 
     /**
      * Ensures the workspace has a live change-notification subscription. Without a stored id this
-     * registers one (a quiet no-op when the integration has no external URL, ACTIVE Outline connection,
+     * registers one (a quiet no-op when the integration has no routing key, ACTIVE Outline connection,
      * server URL, or token). With a stored id it verifies the subscription upstream: gone,
      * {@code enabled=false} (Outline disables a subscription whose deliveries fail too often), posting to
      * another URL, or on a route of a retired routing key is replaced: a new subscription is registered and
@@ -181,7 +181,7 @@ public class OutlineWebhookRegistrar {
     }
 
     private void ensure(long workspaceId) {
-        if (externalUrl == null || externalUrl.isBlank() || !credential.isConfigured()) {
+        if (!credential.isConfigured()) {
             return;
         }
         Optional<Connection> active = connectionService.findActive(workspaceId, IntegrationKind.OUTLINE);
@@ -315,7 +315,13 @@ public class OutlineWebhookRegistrar {
     }
 
     private String deliveryUrl(String route) {
-        return externalUrl.replaceAll("/+$", "") + OutlineWebhookController.PATH_PREFIX + route;
+        int separator = route.indexOf('/');
+        return publicApiUrls
+                .originUri(
+                        OutlineWebhookController.PATH_PREFIX + "{keyId}/{routeId}",
+                        route.substring(0, separator),
+                        route.substring(separator + 1))
+                .toString();
     }
 
     /**

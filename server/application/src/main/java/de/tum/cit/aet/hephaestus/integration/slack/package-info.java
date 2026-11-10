@@ -23,6 +23,7 @@
             // The interactivity Request URL bounds its payload with the webhook ingress filter, which reads the shared
             // WebhookProperties.
             "core::webhook",
+            "core::web",
             // SlackChannelAdminController uses RequireAtLeastWorkspaceAdmin (authorization) and
             // resolves the workspace via @WorkspaceScopedController / WorkspaceContext (context).
             "workspace::authorization",

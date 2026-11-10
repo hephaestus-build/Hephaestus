@@ -12,7 +12,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 /**
  * Authentication configuration. Operator guidance: {@code docs/admin/configuration-readiness.mdx}.
  *
- * @param issuer canonical {@code iss} claim
+ * @param issuer canonical {@code iss} claim. Its origin is also the public origin of the API and of the webhook
+ *     receivers that GitLab and Outline registrations name.
  * @param apiBasePath public prefix stripped by the reverse proxy, prepended to public API
  *                   URLs. Tomcat's native forwarded-header support does not restore
  *                   {@code X-Forwarded-Prefix}; see {@code ProxyTrustGuard} before changing that strategy.

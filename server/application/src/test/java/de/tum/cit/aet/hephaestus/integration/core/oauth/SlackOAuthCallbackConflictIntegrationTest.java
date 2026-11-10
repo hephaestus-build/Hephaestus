@@ -49,7 +49,6 @@ import org.springframework.web.util.UriComponentsBuilder;
         properties = {
             "hephaestus.integration.slack.enabled=true",
             "hephaestus.integration.slack.signing-secret=test-signing-secret",
-            "hephaestus.integration.slack.redirect-uri=https://hephaestus.test/oauth/callback/slack",
         })
 class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegrationTest {
 

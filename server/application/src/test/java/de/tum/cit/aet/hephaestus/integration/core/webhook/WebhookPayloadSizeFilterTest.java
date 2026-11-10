@@ -31,7 +31,6 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
 
     private final WebhookProperties properties = new WebhookProperties(
             null,
-            null,
             new WebhookProperties.TokenRotation(7, 90),
             new WebhookProperties.Publish(Duration.ofSeconds(8), Duration.ofMillis(200)),
             WebhookPropertiesFixture.stream(),
@@ -49,7 +48,6 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
     private static final int LARGE = (int) WebhookInFlightBudget.SMALL_BODY_BYTES + 1024;
 
     private final WebhookProperties roomy = new WebhookProperties(
-            null,
             null,
             new WebhookProperties.TokenRotation(7, 90),
             new WebhookProperties.Publish(Duration.ofSeconds(8), Duration.ofMillis(200)),

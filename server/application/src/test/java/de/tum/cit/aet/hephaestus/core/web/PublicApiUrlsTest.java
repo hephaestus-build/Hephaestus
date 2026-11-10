@@ -23,4 +23,18 @@ class PublicApiUrlsTest extends BaseUnitTest {
         assertThat(urls.uri("/items/{id}", "opaque/token").toString())
                 .isEqualTo(expectedBase + "/items/opaque%2Ftoken");
     }
+
+    @ParameterizedTest
+    @CsvSource(
+            value = {
+                "https://example.org/api | /api | https://example.org",
+                "https://example.org/old | /edge/api | https://example.org",
+                "http://localhost:8080 | '' | http://localhost:8080"
+            },
+            delimiter = '|')
+    void shouldKeepReceiverPathsOutsideTheApiPrefix(String issuer, String prefix, String origin) {
+        var urls = new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(issuer), prefix));
+        assertThat(urls.originUri("/webhooks/provider/{route}", "opaque/token").toString())
+                .isEqualTo(origin + "/webhooks/provider/opaque%2Ftoken");
+    }
 }

@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
-import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -57,7 +57,7 @@ public class GitLabWebhookService {
     private static final Logger log = LoggerFactory.getLogger(GitLabWebhookService.class);
 
     private final ObjectProvider<GitLabWebhookClient> webhookClientProvider;
-    private final WebhookProperties webhookProperties;
+    private final PublicApiUrls publicApiUrls;
     private final GitLabRouteCredential routeCredential;
     private final WorkspaceRepository workspaceRepository;
     private final ConnectionService connectionService;
@@ -65,13 +65,13 @@ public class GitLabWebhookService {
 
     public GitLabWebhookService(
             ObjectProvider<GitLabWebhookClient> webhookClientProvider,
-            WebhookProperties webhookProperties,
+            PublicApiUrls publicApiUrls,
             GitLabRouteCredential routeCredential,
             WorkspaceRepository workspaceRepository,
             ConnectionService connectionService,
             ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle) {
         this.webhookClientProvider = webhookClientProvider;
-        this.webhookProperties = webhookProperties;
+        this.publicApiUrls = publicApiUrls;
         this.routeCredential = routeCredential;
         this.workspaceRepository = workspaceRepository;
         this.connectionService = connectionService;
@@ -92,9 +92,9 @@ public class GitLabWebhookService {
         if (lifecycle != null) lifecycle.check(workspace.getId());
     }
 
-    /** Whether this deployment registers group webhooks: GitLab is enabled and a webhook URL is set. */
+    /** Whether this deployment registers group webhooks: it can sign their routes and has the GitLab webhook client. */
     public boolean isRegistrationEnabled() {
-        return webhookProperties.isConfigured() && webhookClientProvider.getIfAvailable() != null;
+        return routeCredential.isConfigured() && webhookClientProvider.getIfAvailable() != null;
     }
 
     private Optional<GitLabConfig> gitLabConfig(Workspace workspace) {
@@ -121,10 +121,6 @@ public class GitLabWebhookService {
             return WebhookSetupResult.skipped("Not a GitLab workspace");
         }
 
-        if (!webhookProperties.isConfigured()) {
-            return WebhookSetupResult.skipped(
-                    "The webhook properties are not configured. The external URL is missing.");
-        }
         if (!routeCredential.isConfigured()) {
             return WebhookSetupResult.skipped("The webhook routing secret is not configured.");
         }
@@ -296,8 +292,9 @@ public class GitLabWebhookService {
     }
 
     private String connectionWebhookUrl(long connectionId) {
-        String baseUrl = Objects.requireNonNull(webhookProperties.externalUrl()).replaceAll("/+$", "");
-        return baseUrl + GitLabConnectionWebhookController.PATH_PREFIX + connectionId + "/";
+        return publicApiUrls
+                .originUri(GitLabConnectionWebhookController.PATH_PREFIX + "{connectionId}/", connectionId)
+                .toString();
     }
 
     /**
@@ -390,7 +387,7 @@ public class GitLabWebhookService {
     @SchedulerLock(name = "gitlab-webhook-health", lockAtMostFor = "PT30M", lockAtLeastFor = "PT5M")
     public void checkWebhookHealth() {
         var client = webhookClientProvider.getIfAvailable();
-        if (client == null || !webhookProperties.isConfigured()) {
+        if (client == null || !routeCredential.isConfigured()) {
             return;
         }
 

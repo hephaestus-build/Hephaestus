@@ -67,7 +67,7 @@ public class SlackOAuthClient {
      *
      * @throws SlackOAuthException on HTTP failure, malformed body, or {@code ok=false}.
      */
-    public OAuthV2Access exchangeCode(String code, @Nullable String redirectUri) {
+    public OAuthV2Access exchangeCode(String code, String redirectUri) {
         if (clientId.isBlank() || clientSecret.isBlank()) {
             throw new SlackOAuthException("slack oauth client not configured");
         }
@@ -75,9 +75,7 @@ public class SlackOAuthClient {
         body.add("client_id", clientId);
         body.add("client_secret", clientSecret);
         body.add("code", code);
-        if (redirectUri != null && !redirectUri.isBlank()) {
-            body.add("redirect_uri", redirectUri);
-        }
+        body.add("redirect_uri", redirectUri);
 
         OAuthV2Access response;
         try {

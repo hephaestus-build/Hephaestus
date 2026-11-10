@@ -156,8 +156,6 @@ spec:
             - name: HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID
               value: {{ $config.slack.clientId | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET" "optional" true) | nindent 12 }}
-            - name: HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI
-              value: {{ $config.slack.redirectUri | quote }}
             - name: OUTLINE_OAUTH_BASE_URL
               value: {{ $config.outline.oauthBaseUrl | quote }}
             - name: OUTLINE_OAUTH_DISPLAY_NAME

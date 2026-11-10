@@ -161,7 +161,6 @@ class DeliveryInboxIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 Duration.ofMinutes(5),
                 Duration.ofSeconds(60));
         var properties = new WebhookProperties(
-                configuredWebhook.externalUrl(),
                 configuredWebhook.secret(),
                 configuredWebhook.tokenRotation(),
                 configuredWebhook.publish(),

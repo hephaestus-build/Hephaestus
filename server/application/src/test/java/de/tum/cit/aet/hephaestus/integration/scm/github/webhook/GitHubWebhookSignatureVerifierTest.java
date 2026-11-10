@@ -125,7 +125,6 @@ class GitHubWebhookSignatureVerifierTest extends BaseUnitTest {
     /** Builds a fully-populated WebhookProperties (record requires all components). */
     private static WebhookProperties propsWithSecret(@Nullable String secret) {
         return new WebhookProperties(
-                /* externalUrl */ null,
                 secret,
                 new WebhookProperties.TokenRotation(7, 90),
                 new WebhookProperties.Publish(Duration.ofSeconds(8), Duration.ofMillis(200)),

@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
@@ -22,12 +24,19 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient.OAuthV2Access;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @Tag("unit")
 class SlackConnectionStrategyTest extends BaseUnitTest {
@@ -54,7 +63,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
                 oauthClient,
                 workspaceContentEraser,
                 "client-id",
-                "https://app.test/oauth/callback/slack");
+                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://app.test"), "/api")));
     }
 
     private static ConnectionStrategy.ProviderFootprint footprint(String token) {
@@ -106,7 +115,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
 
     @Test
     void finalize_happyPath_returnsCompletedWithTeamConfigAndBearerToken() {
-        when(oauthClient.exchangeCode(eq("c"), eq("https://app.test/oauth/callback/slack")))
+        when(oauthClient.exchangeCode(eq("c"), eq("https://app.test/api/oauth/callback/slack")))
                 .thenReturn(new OAuthV2Access(
                         true, null, "xoxb-abc", new OAuthV2Access.Team("T9", "Hephaestus Test"), null, null));
 
@@ -145,7 +154,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
         assertThat(url).doesNotContain("users%3Aread.email");
         assertThat(url).contains("state=state-abc");
         assertThat(url).contains("client_id=client-id");
-        assertThat(url).contains("redirect_uri=https%3A%2F%2Fapp.test%2Foauth%2Fcallback%2Fslack");
+        assertThat(url).contains("redirect_uri=https%3A%2F%2Fapp.test%2Fapi%2Foauth%2Fcallback%2Fslack");
     }
 
     @Test
@@ -189,12 +198,50 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void initiate_withoutRedirectUri_failsFast() {
+    void initiate_withoutClientId_failsFast() {
         SlackConnectionStrategy misconfigured = new SlackConnectionStrategy(
-                oauthStateService, connectionService, oauthClient, workspaceContentEraser, "client-id", "");
+                oauthStateService,
+                connectionService,
+                oauthClient,
+                workspaceContentEraser,
+                "",
+                new PublicApiUrls(AuthPropertiesFixture.withApiBasePath("/api")));
 
         assertThatThrownBy(() -> misconfigured.initiate(new InitiateRequest(42L, IntegrationKind.SLACK, Map.of(), 42L)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Slack is not set up on this instance");
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+            value = {
+                "https://api.example.test | /api | https://api.example.test/api/oauth/callback/slack",
+                "https://api.example.test/old | /edge/api/ | https://api.example.test/edge/api/oauth/callback/slack",
+                "http://localhost:8080 | '' | http://localhost:8080/oauth/callback/slack"
+            },
+            delimiter = '|')
+    void shouldUseTheSameCanonicalCallbackForAuthorizationAndCodeExchange(
+            String issuer, String prefix, String expected) {
+        var callbackStrategy = new SlackConnectionStrategy(
+                oauthStateService,
+                connectionService,
+                oauthClient,
+                workspaceContentEraser,
+                "client-id",
+                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(issuer), prefix)));
+        when(oauthStateService.issue(42L, IntegrationKind.SLACK, 42L)).thenReturn("state");
+        when(oauthClient.exchangeCode("code", expected)).thenThrow(new SlackOAuthException("invalid_code"));
+
+        var initiation = callbackStrategy.initiate(new InitiateRequest(42L, IntegrationKind.SLACK, Map.of(), 42L));
+        assertThat(initiation).isInstanceOfSatisfying(RedirectToVendor.class, redirect -> {
+            String encoded = Objects.requireNonNull(UriComponentsBuilder.fromUri(redirect.vendorUrl())
+                    .build()
+                    .getQueryParams()
+                    .getFirst("redirect_uri"));
+            assertThat(URLDecoder.decode(encoded, StandardCharsets.UTF_8)).isEqualTo(expected);
+        });
+        assertThat(callbackStrategy.finalizeConnect(ref(), Map.of("code", "code")))
+                .isInstanceOf(ConnectFinalization.Failed.class);
+        verify(oauthClient).exchangeCode("code", expected);
     }
 }

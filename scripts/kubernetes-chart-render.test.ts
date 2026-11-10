@@ -2352,6 +2352,23 @@ await test("the broker consumer policy comes from the application defaults, not 
 	}
 });
 
+await test("Slack callbacks use the canonical API origin in either workspace-host mode", () => {
+	for (const enabled of [false, true]) {
+		const resources = rendered([
+			...layersFor("small"),
+			{
+				host: "callbacks.example.test",
+				workspaceSubdomains: { enabled },
+				config: { slack: { enabled: true, clientId: "slack-client" } },
+			},
+		]);
+		const server = workload(resources, "server");
+		assert.equal(envValue(server, "HEPHAESTUS_AUTH_ISSUER"), "https://callbacks.example.test");
+		assert.equal(envValue(server, "SPRING_PROFILES_ACTIVE"), "prod");
+		assert.equal(env(server, "HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI"), undefined);
+	}
+});
+
 /** One turn count for the server, every worker and each of the loop's replicas. */
 const everywhere = (count: string) => ({ worker: count, loop: [count], server: count });
 

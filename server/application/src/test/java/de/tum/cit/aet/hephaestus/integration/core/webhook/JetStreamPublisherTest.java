@@ -41,7 +41,6 @@ class JetStreamPublisherTest extends BaseUnitTest {
 
     private final WebhookProperties properties = new WebhookProperties(
             null,
-            null,
             new WebhookProperties.TokenRotation(7, 90),
             new WebhookProperties.Publish(DEADLINE, Duration.ofMillis(10)),
             WebhookPropertiesFixture.stream(),

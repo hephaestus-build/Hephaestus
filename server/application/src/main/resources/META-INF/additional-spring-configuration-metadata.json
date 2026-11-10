@@ -91,11 +91,6 @@
       "description": "Use the Slack app's client secret to connect workspaces to Slack."
     },
     {
-      "name": "hephaestus.integration.slack.redirect-uri",
-      "type": "java.lang.String",
-      "description": "Redirect URI registered on the Slack app. It must match the authorization URL that Hephaestus builds for the Slack connection."
-    },
-    {
       "name": "hephaestus.integration.slack.api-base",
       "type": "java.lang.String",
       "description": "Base URL of the Slack API. Override it only to point at a mock server in tests."

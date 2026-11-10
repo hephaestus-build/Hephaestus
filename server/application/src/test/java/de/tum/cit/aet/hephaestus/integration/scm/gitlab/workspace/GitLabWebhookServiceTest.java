@@ -19,6 +19,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -35,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCrede
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -104,20 +107,13 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
     private static GitLabRouteCredential credential(@Nullable String secret, @Nullable String previous) {
         return new GitLabRouteCredential(WebhookPropertiesFixture.configured(
-                EXTERNAL_URL,
-                SECRET,
-                WebhookPropertiesFixture.stream(),
-                new WebhookProperties.Routing(secret, previous)));
+                SECRET, WebhookPropertiesFixture.stream(), new WebhookProperties.Routing(secret, previous)));
     }
 
     private GitLabWebhookService service(GitLabRouteCredential credential) {
         return new GitLabWebhookService(
                 webhookClientProvider,
-                WebhookPropertiesFixture.configured(
-                        EXTERNAL_URL,
-                        SECRET,
-                        WebhookPropertiesFixture.stream(),
-                        new WebhookProperties.Routing(KEY, null)),
+                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(EXTERNAL_URL + "/api"), "/api")),
                 credential,
                 workspaceRepository,
                 connectionService,
@@ -212,6 +208,14 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         lenient()
                 .when(connectionService.updateConfig(anyLong(), eq(IntegrationKind.GITLAB), any()))
                 .thenAnswer(this::applyUpdateConfig);
+    }
+
+    @Test
+    void shouldRegisterOnlyWithARoutingSecret() {
+        when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
+
+        assertThat(webhookService.isRegistrationEnabled()).isTrue();
+        assertThat(service(credential(null, null)).isRegistrationEnabled()).isFalse();
     }
 
     private void bindGitLabConfig(long workspaceId, ConnectionConfig.GitLabConfig cfg) {
@@ -494,12 +498,12 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldSkipWhenNotConfigured() {
+        void shouldSkipWithoutRoutingCredentials() {
             WebhookProperties unconfigured = WebhookPropertiesFixture.configured(
-                    "", "", WebhookPropertiesFixture.stream(), new WebhookProperties.Routing(KEY, null));
+                    "", WebhookPropertiesFixture.stream(), new WebhookProperties.Routing(null, null));
             var service = new GitLabWebhookService(
                     webhookClientProvider,
-                    unconfigured,
+                    new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(EXTERNAL_URL), "/api")),
                     new GitLabRouteCredential(unconfigured),
                     workspaceRepository,
                     connectionService,

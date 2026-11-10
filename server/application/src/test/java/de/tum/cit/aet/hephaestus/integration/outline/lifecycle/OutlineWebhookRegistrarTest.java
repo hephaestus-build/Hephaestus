@@ -16,7 +16,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLocks;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -33,6 +35,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineWebhook
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineRouteCredential;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
@@ -56,7 +59,7 @@ import org.springframework.beans.factory.ObjectProvider;
  * Outline auto-disabled or lost it, or it is not on a current route (but never churned when the upstream
  * cannot be listed); revoke tears
  * the subscription down, including the deactivated-connection variant that resolves by connection id.
- * Registration is gated on a configured external URL.
+ * Registration uses the canonical API origin without the proxy prefix.
  */
 class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
@@ -109,16 +112,16 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         return provider;
     }
 
-    private OutlineWebhookRegistrar registrar(String externalUrl) {
-        return registrar(externalUrl, natsConsumer);
+    private OutlineWebhookRegistrar registrar(String issuer) {
+        return registrar(issuer, natsConsumer);
     }
 
-    private OutlineWebhookRegistrar registrar(String externalUrl, @Nullable IntegrationNatsConsumer consumer) {
+    private OutlineWebhookRegistrar registrar(String issuer, @Nullable IntegrationNatsConsumer consumer) {
         return new OutlineWebhookRegistrar(
                 connectionService,
                 outlineApiClient,
                 CREDENTIAL,
-                externalUrl,
+                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(issuer), "/api")),
                 providerOf(consumer),
                 providerOf(routes),
                 connectionRepository,
@@ -184,7 +187,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
         registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
 
-        // The delivery URL is the external URL (trailing slash trimmed) + the route endpoint, and the secret is the
+        // The delivery URL uses the canonical origin and the route endpoint, and the secret is the
         // one the receiver derives from that route.
         ArgumentCaptor<String> url = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> secret = ArgumentCaptor.forClass(String.class);
@@ -288,8 +291,18 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     }
 
     @Test
-    void ensureSubscription_skipsWhenExternalUrlMissing() {
-        registrar("").ensureSubscription(WORKSPACE_ID);
+    void ensureSubscription_skipsWhenRoutingCredentialsAreMissing() {
+        new OutlineWebhookRegistrar(
+                        connectionService,
+                        outlineApiClient,
+                        credential(""),
+                        new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(EXTERNAL_URL), "/api")),
+                        providerOf(natsConsumer),
+                        providerOf(routes),
+                        connectionRepository,
+                        ClusterLocks.free(),
+                        meters)
+                .ensureSubscription(WORKSPACE_ID);
 
         verify(connectionService, never()).findActive(anyLongMatcher(), any());
         verifyNoInteractions(natsConsumer);

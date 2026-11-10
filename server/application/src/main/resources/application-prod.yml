@@ -67,10 +67,6 @@ hephaestus:
     webapp:
         url: ${APPLICATION_HOST_URL}
 
-    webhook:
-        # Production registers GitLab hooks against its own origin unless WEBHOOK_EXTERNAL_URL names another.
-        external-url: ${WEBHOOK_EXTERNAL_URL:${hephaestus.host-url}}
-
     workspace:
         init-default: false
 

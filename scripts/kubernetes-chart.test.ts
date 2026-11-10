@@ -326,6 +326,7 @@ await test("the schema refuses a value that it does not name, at every level", (
 		{ config: { durableConsumerName: "custom" } },
 		{ config: { consumerInactiveThreshold: "30d" } },
 		{ config: { consumerInactiveThreshold: "0s" } },
+		{ config: { slack: { redirectUri: "https://example.test/api/oauth/callback/slack" } } },
 	]) {
 		assert.equal(validate(merge(valid, change)), false, JSON.stringify(change));
 	}
