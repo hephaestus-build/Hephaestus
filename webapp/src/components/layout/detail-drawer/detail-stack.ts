@@ -100,10 +100,6 @@ export function stackInSearch(detail: unknown): string[] {
 	return typeof detail === "string" ? [detail] : [];
 }
 
-export function encodeDetailStack(entries: DetailStackEntry[]): string[] | undefined {
-	return entries.length > 0 ? entries.map(detailStackKey) : undefined;
-}
-
 /** The search that opens `entry` alone, for a link from another route. */
 export function detailSearch(entry: DetailStackEntry): { detail: string[] } {
 	return { detail: [detailStackKey(entry)] };

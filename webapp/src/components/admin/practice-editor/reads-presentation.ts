@@ -7,13 +7,6 @@ import {
 } from "lucide-react";
 
 import type { ReadSourceOption } from "@/api/types.gen";
-import { evidenceSourceDef } from "@/components/practice-vocabulary/evidence-source-defs";
-
-export function readSourceLabel(source: string, offered: readonly ReadSourceOption[]): string {
-	return (
-		offered.find((option) => option.source === source)?.label ?? evidenceSourceDef(source).label
-	);
-}
 
 export function canReadComplete(option: ReadSourceOption): boolean {
 	return option.needs.includes("COMPLETE");

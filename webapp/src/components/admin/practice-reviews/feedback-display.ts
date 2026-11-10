@@ -19,19 +19,16 @@ const FOOTER_LINES = [
 	],
 	["AI-generated feedback", String.raw`\. Answer or disagree in \[Hephaestus\]${LINK}\.`],
 	["[Why you see this and how to stop it]", LINK],
-].map(([start = "", rest = ""]) => ({
-	start: `<sub>${start}`,
-	pattern: new RegExp(
-		`^<sub>(?<text>${start.replaceAll(/[[\]().]/gu, String.raw`\$&`)}${rest})</sub>$`,
-		"u",
-	),
-}));
+].map(
+	([start = "", rest = ""]) =>
+		new RegExp(
+			`^<sub>(?<text>${start.replaceAll(/[[\]().]/gu, String.raw`\$&`)}${rest})</sub>$`,
+			"u",
+		),
+);
 
 /** The hidden line where the server's footer starts; the provider shows nothing for it. */
 const FOOTER_START = /^<!-- hephaestus-disclosure:\d+ -->$/u;
-
-/** The formatter's rule between the feedback and its footer. */
-const FOOTER_RULE = "---";
 
 /**
  * A stored comment as it reads on the work, for a renderer that prints HTML as text.
@@ -43,22 +40,6 @@ const FOOTER_RULE = "---";
  * other HTML and code stay intact, and a body with neither comes back as the same string.
  */
 export function feedbackDisplayMarkdown(body: string): string {
-	return rewrite(body, false, false);
-}
-
-/**
- * The authored words of a stored comment, for an excerpt: the comment and the whole footer go,
- * along with the rule the formatter puts before it.
- *
- * A `cut` excerpt can stop inside the footer. Its last line then goes as well, but only when it
- * already starts with the full opening words of a footer line, such as `<sub>Practice review`. A
- * shorter remnant cannot be told from the author's own text and stays.
- */
-export function feedbackExcerptMarkdown(body: string, cut: boolean): string {
-	return rewrite(body, true, cut);
-}
-
-function rewrite(body: string, excerpt: boolean, cut: boolean): string {
 	const blocks = parseMarkdownIntoBlocks(body);
 	// CommonMark normalizes line endings; other parser rewrites must not change authored text.
 	const normalized = body.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
@@ -73,38 +54,25 @@ function rewrite(body: string, excerpt: boolean, cut: boolean): string {
 		}
 		return block;
 	});
-	let footerAt: number | undefined;
 	for (let index = shown.length - 1; index >= 0; index -= 1) {
 		const block = shown[index] ?? "";
 		if (!hasText(block.trim())) {
 			continue;
 		}
-		const unwrapped = unwrapFooter(block, cut && footerAt === undefined);
+		const unwrapped = unwrapFooter(block);
 		if (unwrapped === undefined) {
-			if (excerpt && footerAt !== undefined && block.trimEnd() === FOOTER_RULE) {
-				shown[index] = "";
-			}
 			break;
 		}
-		shown[index] = excerpt ? "" : unwrapped;
-		footerAt = index;
+		shown[index] = unwrapped;
 		changed = true;
 	}
 	return changed ? shown.join("") : body;
 }
 
-/**
- * The block with each footer line's words in place of its `<sub>` line, if every line is one. With
- * `cut`, the block's last line may instead be a footer line the cut ended inside; it is dropped.
- */
-function unwrapFooter(block: string, cut: boolean): string | undefined {
-	const lines = block.split("\n");
-	let last = lines.length - 1;
-	while (last >= 0 && !hasText(lines[last]?.trim())) {
-		last -= 1;
-	}
+/** The block with each footer line's words in place of its `<sub>` line, if every line is one. */
+function unwrapFooter(block: string): string | undefined {
 	const unwrapped: string[] = [];
-	for (const [index, line] of lines.entries()) {
+	for (const line of block.split("\n")) {
 		if (!hasText(line.trim())) {
 			unwrapped.push(line);
 			continue;
@@ -112,14 +80,11 @@ function unwrapFooter(block: string, cut: boolean): string | undefined {
 		if (FOOTER_START.test(line.trim())) {
 			continue;
 		}
-		const text = FOOTER_LINES.map(({ pattern }) => pattern.exec(line)?.groups?.text).find(hasText);
-		if (text !== undefined) {
-			unwrapped.push(text);
-		} else if (cut && index === last && FOOTER_LINES.some(({ start }) => line.startsWith(start))) {
-			unwrapped.push("");
-		} else {
+		const text = FOOTER_LINES.map((pattern) => pattern.exec(line)?.groups?.text).find(hasText);
+		if (text === undefined) {
 			return undefined;
 		}
+		unwrapped.push(text);
 	}
 	return unwrapped.join("\n");
 }

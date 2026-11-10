@@ -139,8 +139,6 @@ export const peopleSearchSchema = periodSearchSchema.extend({
 	dir: z.enum(["asc", "desc"]).optional().catch(undefined),
 });
 
-export const PEOPLE_SEARCH_DEFAULTS = peopleSearchSchema.parse({});
-
 export type PeopleSearch = z.infer<typeof peopleSearchSchema>;
 
 /** Public people open only their published pull request, review and issue details. */

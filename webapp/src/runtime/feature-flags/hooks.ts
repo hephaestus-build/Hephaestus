@@ -56,16 +56,6 @@ function useFeatureFlagsQuery(): {
 	return userView ? { data: USER_VIEW_FLAGS, isLoading: false, isError: false } : query;
 }
 
-export function useFeatureFlag(flag: FeatureFlagName) {
-	const { data, isLoading, isError } = useFeatureFlagsQuery();
-
-	return {
-		enabled: data?.[flag] ?? false,
-		isLoading,
-		isError,
-	};
-}
-
 export function useFeatureFlags() {
 	const { data, isLoading, isError } = useFeatureFlagsQuery();
 
@@ -73,23 +63,5 @@ export function useFeatureFlags() {
 		flags: data,
 		isLoading,
 		isError,
-	};
-}
-
-export function useAllFeatureFlags(...flags: FeatureFlagName[]) {
-	const { data, isLoading } = useFeatureFlagsQuery();
-
-	return {
-		enabled: data !== undefined && flags.every((f) => data[f]),
-		isLoading,
-	};
-}
-
-export function useAnyFeatureFlags(...flags: FeatureFlagName[]) {
-	const { data, isLoading } = useFeatureFlagsQuery();
-
-	return {
-		enabled: data !== undefined && flags.some((f) => data[f]),
-		isLoading,
 	};
 }

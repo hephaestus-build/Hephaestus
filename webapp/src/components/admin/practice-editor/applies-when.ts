@@ -1,7 +1,34 @@
 import type { AppliesWhen, AppliesWhenClause, PracticeItemTypeOption } from "@/api/types.gen";
 import { hasText } from "@/lib/text";
 
-import { pathPatternProblem } from "./scan-settings";
+const MAX_SCAN_PATTERN_LENGTH = 512;
+
+/** Match server path rules: relative paths, forward slashes, and no traversal, .git, NUL, or brace expansion. */
+export function pathPatternProblem(pattern: string): string | undefined {
+	if (pattern.length > MAX_SCAN_PATTERN_LENGTH) {
+		return `Use at most ${MAX_SCAN_PATTERN_LENGTH} characters in a pattern.`;
+	}
+	if (pattern.startsWith("/") || /^[A-Za-z]:/u.test(pattern)) {
+		return `Use a path relative to the repository root, not “${pattern}”.`;
+	}
+	if (pattern.includes("\\")) {
+		return `Use forward slashes in “${pattern}”.`;
+	}
+	if (pattern.includes("\0") || pattern.includes("{") || pattern.includes("}")) {
+		return `Remove the brace expansion or control character from “${pattern}”.`;
+	}
+	const components = pattern.split("/");
+	if (components.some((component) => component === "" || component === ".")) {
+		return `Remove the empty or “.” segment from “${pattern}”.`;
+	}
+	if (components.includes("..")) {
+		return `A pattern cannot leave the repository: remove “..” from “${pattern}”.`;
+	}
+	if (components.includes(".git")) {
+		return `A scan never reads the .git folder: remove it from “${pattern}”.`;
+	}
+	return undefined;
+}
 
 export type ApplicabilityClause = PracticeItemTypeOption["applicabilityClauses"][number];
 

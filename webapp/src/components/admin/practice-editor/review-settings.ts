@@ -69,8 +69,7 @@ export function reviewOnFieldId(field: "events" | "state" | "reads"): string {
 }
 
 /**
- * Why a set of read sources cannot be saved for an automated review, or undefined when it can. Shared
- * by the practice's own reads and by a scan's reads, which the server checks the same way.
+ * Why a set of read sources cannot be saved for an automated review, or undefined when it can.
  */
 export function readsProblem(
 	sources: readonly PracticeReadSource[],

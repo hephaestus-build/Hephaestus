@@ -61,8 +61,8 @@ const ORDER_ITEMS: readonly [ReviewSortItem<string>, ...ReviewSortItem<string>[]
 ];
 
 /**
- * The kinds of work to offer: the ones this build knows, the ones the list shows and any chosen,
- * for the reason `TraceKindFilter` gives.
+ * The kinds of work to offer: the ones this build knows, the ones the list shows and any chosen. No
+ * endpoint enumerates the kinds, and a filter that arrives by link must stay visible to be cleared.
  */
 function kindOptions(
 	reviews: readonly { review: { item: { kind: string } } }[],

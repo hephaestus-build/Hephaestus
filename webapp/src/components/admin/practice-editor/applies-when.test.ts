@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { type AppliesWhenDraft, appliesWhenDraftOf, parseAppliesWhen } from "./applies-when";
+import {
+	type AppliesWhenDraft,
+	appliesWhenDraftOf,
+	parseAppliesWhen,
+	pathPatternProblem,
+} from "./applies-when";
 import { mockIssueItemType, mockPullRequestItemType } from "./fixtures";
 
 const swift = {
@@ -80,5 +85,28 @@ describe("parseAppliesWhen", () => {
 	it("restores saved conditions without a JSON representation", () => {
 		expect(parseAppliesWhen(appliesWhenDraftOf(swift), undefined).value).toStrictEqual(swift);
 		expect(appliesWhenDraftOf(null)).toStrictEqual({ clauses: [], otherwise: "" });
+	});
+});
+
+describe("pathPatternProblem", () => {
+	it.each(["src/**/*.ts", "**/*", "packages/app/src/main.ts"])("accepts %s", (pattern) => {
+		expect(pathPatternProblem(pattern)).toBeUndefined();
+	});
+
+	it.each([
+		"/etc/passwd",
+		"C:/repo",
+		String.raw`src\main.ts`,
+		"../outside",
+		"src/../../outside",
+		".git/config",
+		"src/.git/hooks",
+		"src//main.ts",
+		"./src",
+		"src/{a,b}.ts",
+		"src/\0.ts",
+		"a".repeat(513),
+	])("refuses %s", (pattern) => {
+		expect(pathPatternProblem(pattern)).toBeDefined();
 	});
 });
