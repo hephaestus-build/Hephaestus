@@ -1453,7 +1453,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 jobRepository,
                 mock(DefaultReviewExecutionHandler.class),
                 agent,
-                mock(AttemptTokenIssuer.class),
                 sandbox,
                 SandboxTestLimits.PROPERTIES,
                 mock(AsyncTaskExecutor.class),
@@ -1468,7 +1467,16 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 reviewRuns,
                 agentRuns,
                 mock(AgentRunNotifications.class),
-                new ReviewJobTerminal(jobRepository, agentRuns, attemptUsage, objectMapper, null, continuation));
+                new ReviewJobTerminal(jobRepository, agentRuns, attemptUsage, objectMapper, null, continuation),
+                new ReviewAttemptPreparation(
+                        jobRepository,
+                        mock(DefaultReviewExecutionHandler.class),
+                        agent,
+                        mock(AttemptTokenIssuer.class),
+                        SandboxTestLimits.PROPERTIES,
+                        transactionTemplate,
+                        objectMapper,
+                        new ReviewJobTelemetry(meterRegistry, Tracer.NOOP)));
         return executor;
     }
 

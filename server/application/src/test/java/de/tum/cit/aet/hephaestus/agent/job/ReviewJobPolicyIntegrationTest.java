@@ -172,7 +172,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 jobs,
                 mock(DefaultReviewExecutionHandler.class),
                 mock(PracticePiAdapter.class),
-                mock(AttemptTokenIssuer.class),
                 roomySandboxes(),
                 SandboxTestLimits.PROPERTIES,
                 mock(AsyncTaskExecutor.class),
@@ -200,7 +199,20 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 reviewRuns,
                 agentRuns,
                 mock(AgentRunNotifications.class),
-                new ReviewJobTerminal(jobs, agentRuns, attemptUsage(), mapper, admission, null));
+                new ReviewJobTerminal(jobs, agentRuns, attemptUsage(), mapper, admission, null),
+                preparation(SandboxTestLimits.PROPERTIES));
+    }
+
+    private ReviewAttemptPreparation preparation(SandboxProperties limits) {
+        return new ReviewAttemptPreparation(
+                jobs,
+                mock(DefaultReviewExecutionHandler.class),
+                mock(PracticePiAdapter.class),
+                mock(AttemptTokenIssuer.class),
+                limits,
+                transactions,
+                mapper,
+                new ReviewJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP));
     }
 
     private ReviewAttemptUsageService attemptUsage() {
@@ -733,7 +745,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 jobs,
                 mock(DefaultReviewExecutionHandler.class),
                 mock(PracticePiAdapter.class),
-                mock(AttemptTokenIssuer.class),
                 sandboxes,
                 limits,
                 mock(AsyncTaskExecutor.class),
@@ -761,7 +772,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 reviewRuns,
                 agentRuns,
                 mock(AgentRunNotifications.class),
-                new ReviewJobTerminal(jobs, agentRuns, usage, mapper, admission, null));
+                new ReviewJobTerminal(jobs, agentRuns, usage, mapper, admission, null),
+                preparation(limits));
     }
 
     @Test
