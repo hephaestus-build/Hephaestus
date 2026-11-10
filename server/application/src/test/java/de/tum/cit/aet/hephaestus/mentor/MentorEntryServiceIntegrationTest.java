@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.EntityManager;
 import java.sql.Types;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -38,6 +37,9 @@ import tools.jackson.databind.node.ObjectNode;
 
 @RecordApplicationEvents
 class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private MentorTurnClaims claims;
 
     @Autowired
     private EntityManager entityManager;
@@ -170,7 +172,7 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                Objects.requireNonNull(running.getLeaseId()),
+                Objects.requireNonNull(running.getRunId()),
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(compaction("Friday", kept), searchResult(asked.question(), "Deploy on Friday")),
@@ -514,7 +516,7 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(
@@ -578,15 +580,14 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(piEntry), null, null));
         return MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
                 .getLast();
     }
 
     private MentorTurn claim(MentorTurnService.Submission submission) {
-        MentorTurn claimed =
-                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+        MentorTurn claimed = claims.claimNext().orElseThrow();
         assertThat(claimed.getId()).isEqualTo(submission.turn().getId());
         return claimed;
     }

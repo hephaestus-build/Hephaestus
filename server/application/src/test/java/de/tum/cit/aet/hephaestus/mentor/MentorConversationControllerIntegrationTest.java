@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -37,6 +36,9 @@ import tools.jackson.databind.node.ObjectNode;
 
 /** The app's Hephaestus routes, through the real filter chain, as the developer the token signs in. */
 class MentorConversationControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private MentorTurnClaims claims;
 
     /** Signs in as the user with login {@code mentor}. */
     private static final String MEMBER = "mock-jwt-token-for-mentor-user";
@@ -285,7 +287,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     void shouldSayInEveryReadOfATurnWhetherItWaitsForAFreeHeph() {
         // The suite's deployment has one Hephaestus slot (application-test.yml), and the started turn takes it.
         MentorTurnService.Submission first = submit(main(), "What did the review say?");
-        assertThat(turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE)).isPresent();
+        assertThat(claims.claimNext()).isPresent();
         UUID parent = first.question().getId();
         UUID waits = UUID.randomUUID();
         UUID followsUp = UUID.randomUUID();
@@ -408,8 +410,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     @Test
     void shouldShowHephsMessagesWithTheFeedbackTheyShowedWhenToolResultsWereStored() {
         MentorTurnService.Submission question = submit(main(), "What did the review say?");
-        MentorTurn running =
-                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         UUID shown = UUID.randomUUID();
         UUID refused = UUID.randomUUID();
         ObjectNode shownCall = JsonNodeFactory.instance
@@ -424,7 +425,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                Objects.requireNonNull(running.getLeaseId()),
+                Objects.requireNonNull(running.getRunId()),
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(
@@ -485,8 +486,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     /** Claims turns until the submitted one starts; a turn of another test that starts first is left running. */
     private MentorTurn started(MentorTurnService.Submission submitted) {
         while (true) {
-            MentorTurn claimed =
-                    turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+            MentorTurn claimed = claims.claimNext().orElseThrow();
             if (claimed.getId().equals(submitted.turn().getId())) {
                 return claimed;
             }
@@ -499,7 +499,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                Objects.requireNonNull(running.getLeaseId()),
+                Objects.requireNonNull(running.getRunId()),
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(
@@ -548,13 +548,12 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     @Test
     void shouldCarryTheOutcomeOfItsTurnOnTheQuestionWhenTheTurnFailed() {
         MentorTurnService.Submission question = submit(main(), "Explain my review.");
-        MentorTurn running =
-                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         turns.end(
                 running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                Objects.requireNonNull(running.getLeaseId()),
+                Objects.requireNonNull(running.getRunId()),
                 new MentorTurnService.Ending(
                         MentorTurn.Status.FAILED,
                         List.of(),

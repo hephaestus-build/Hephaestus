@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.time.Duration;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -14,6 +15,10 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param leaseTtl how long a claimed run stays leased without a renewal. A holder that stalls longer loses its run,
  *     and the reaper requeues it. Allow for the database connection timeout: a false expiry stops a live holder.
+ * @param turnLeaseTtl the same for a conversation turn. A person waits for the answer, so a lost turn is taken back
+ *     sooner; its holder renews every 5 s.
+ * @param turns how many conversation turns run at once in the installation; unset runs as many as are asked. The claim
+ *     leases no turn beyond it, so a question waits for a free Heph instead.
  * @param leaseRenewal how often a holder renews each lease it holds, and how often each server replica reaps the
  *     expired ones. At most half the lease, so a holder survives one missed renewal.
  * @param reviewRetries how many lost leases a review job survives. A requeue that its holder does not charge, such as
@@ -35,6 +40,8 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "hephaestus.agent.capacity")
 public record AgentCapacityProperties(
         @DefaultValue("5m") @NotNull Duration leaseTtl,
+        @DefaultValue("60s") @NotNull Duration turnLeaseTtl,
+        @Nullable @Min(1) Integer turns,
         @DefaultValue("25s") @NotNull Duration leaseRenewal,
         @DefaultValue("5") @Min(0) int reviewRetries,
         @DefaultValue("10m") @NotNull Duration bandAging,
@@ -55,6 +62,9 @@ public record AgentCapacityProperties(
             throw new IllegalArgumentException("hephaestus.agent.capacity.permit-aging must be at least 1s");
         if (leaseRenewal.compareTo(Duration.ofSeconds(1)) < 0)
             throw new IllegalArgumentException("hephaestus.agent.capacity.lease-renewal must be at least 1s");
+        if (turnLeaseTtl.compareTo(Duration.ofSeconds(15)) < 0)
+            throw new IllegalArgumentException(
+                    "hephaestus.agent.capacity.turn-lease-ttl must be at least 15s: the turn's holder renews every 5s");
         if (leaseRenewal.multipliedBy(2).compareTo(leaseTtl) > 0)
             throw new IllegalArgumentException(
                     "hephaestus.agent.capacity.lease-renewal must be at most half of lease-ttl, so a holder survives"

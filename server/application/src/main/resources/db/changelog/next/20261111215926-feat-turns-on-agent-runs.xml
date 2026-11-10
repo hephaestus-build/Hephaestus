@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794282151000-1" author="hephaestus">
+        <comment>Turns run on agent runs. A run may wait only so long for room once it is due (start_within_seconds), and its deadline bounds its current claim: it only moves earlier within a claim, and a requeue clears it. A queued run may move to another subject, as when two conversations merge.</comment>
+        <addColumn tableName="agent_run">
+            <column name="start_within_seconds" type="INTEGER"/>
+        </addColumn>
+        <sql splitStatements="false">
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_start_within CHECK (start_within_seconds IS NULL OR start_within_seconds &gt; 0);
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_kind;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_kind CHECK (kind IN ('REVIEW', 'REVIEW_COMPOSE', 'TURN'));
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_stop_reason;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_stop_reason CHECK (stop_reason IS NULL
+    OR stop_reason IN ('COMPLETED', 'CANCELLED', 'ATTEMPTS_EXHAUSTED', 'NOT_STARTED', 'DEADLINE'));
+CREATE OR REPLACE FUNCTION guard_agent_run() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF ROW(NEW.id, NEW.workspace_id, NEW.kind, NEW.band, NEW.created_at, NEW.start_within_seconds)
+    IS DISTINCT FROM ROW(OLD.id, OLD.workspace_id, OLD.kind, OLD.band, OLD.created_at, OLD.start_within_seconds) THEN
+  RAISE EXCEPTION 'a run''s identity is immutable' USING ERRCODE = '55000';
+ END IF;
+ IF NEW.concurrency_key IS DISTINCT FROM OLD.concurrency_key AND NOT (OLD.state = 'QUEUED' AND NEW.state = 'QUEUED') THEN
+  RAISE EXCEPTION 'only a queued run moves to another subject' USING ERRCODE = '55000';
+ END IF;
+ IF OLD.state = 'ENDED' THEN
+  RAISE EXCEPTION 'an ended run is final' USING ERRCODE = '55000';
+ END IF;
+ IF NEW.attempt &lt; OLD.attempt THEN
+  RAISE EXCEPTION 'a run''s spent attempts never decrease' USING ERRCODE = '23514';
+ END IF;
+ IF OLD.state = 'QUEUED' AND NEW.state = 'LEASED' THEN
+  IF NEW.lease_epoch &lt;&gt; OLD.lease_epoch + 1 THEN
+   RAISE EXCEPTION 'a claim takes the next epoch' USING ERRCODE = '23514';
+  END IF;
+ ELSIF NEW.lease_epoch &lt;&gt; OLD.lease_epoch THEN
+  RAISE EXCEPTION 'only a claim changes the epoch' USING ERRCODE = '23514';
+ END IF;
+ IF OLD.state = 'LEASED' AND NEW.state = 'LEASED' AND NEW.attempt &lt;&gt; OLD.attempt THEN
+  RAISE EXCEPTION 'a renewal spends no attempt' USING ERRCODE = '23514';
+ END IF;
+ IF NEW.deadline IS DISTINCT FROM OLD.deadline
+    AND NOT (NEW.deadline IS NULL AND NEW.state = 'QUEUED')
+    AND NOT (NEW.deadline IS NOT NULL AND (OLD.deadline IS NULL OR NEW.deadline &lt; OLD.deadline)) THEN
+  RAISE EXCEPTION 'a run''s deadline only moves earlier, until a requeue clears it' USING ERRCODE = '23514';
+ END IF;
+ RETURN NEW;
+END $$;
+        </sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup. The previous release reads a turn's lease from mentor_turn.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794282151000-2" author="hephaestus">
+        <comment>Each turn gets its run, keyed to its conversation. A turn that a host held keeps its claim and its lease, so the run reaper takes it back once the lease runs out, as any lost holder. An ended turn gets an ended run.</comment>
+        <addColumn tableName="mentor_turn">
+            <column name="run_id" type="UUID"/>
+        </addColumn>
+        <sql>
+UPDATE mentor_turn SET run_id = gen_random_uuid();
+INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key, state, attempt, lease_epoch, leased_until,
+                       available_at, start_within_seconds, stop_reason, created_at, started_at, ended_at)
+SELECT t.run_id, t.workspace_id, 'TURN', 'INTERACTIVE', 'conversation:' || t.conversation_id,
+       CASE WHEN t.status = 'QUEUED' THEN 'QUEUED'
+            WHEN t.status = 'RUNNING' OR (t.status = 'STOPPED' AND t.lease_id IS NOT NULL) THEN 'LEASED'
+            ELSE 'ENDED' END,
+       GREATEST(0, t.attempt - 1),
+       t.attempt,
+       CASE WHEN t.status = 'RUNNING' OR (t.status = 'STOPPED' AND t.lease_id IS NOT NULL)
+            THEN COALESCE(t.leased_until, now()) END,
+       t.queued_at,
+       180,
+       CASE WHEN t.status IN ('QUEUED', 'RUNNING') OR (t.status = 'STOPPED' AND t.lease_id IS NOT NULL) THEN NULL
+            WHEN t.status = 'STOPPED' AND t.started_at IS NULL THEN 'CANCELLED'
+            ELSE 'COMPLETED' END,
+       t.created_at,
+       CASE WHEN t.status = 'QUEUED' THEN NULL
+            WHEN t.status = 'RUNNING' OR (t.status = 'STOPPED' AND t.lease_id IS NOT NULL)
+            THEN COALESCE(t.started_at, now())
+            ELSE t.started_at END,
+       CASE WHEN t.status IN ('QUEUED', 'RUNNING') OR (t.status = 'STOPPED' AND t.lease_id IS NOT NULL) THEN NULL
+            ELSE COALESCE(t.finished_at, now()) END
+  FROM mentor_turn t;
+ALTER TABLE mentor_turn ALTER COLUMN run_id SET NOT NULL;
+ALTER TABLE mentor_turn ADD CONSTRAINT uk_mentor_turn_run UNIQUE (run_id, workspace_id);
+ALTER TABLE mentor_turn ADD CONSTRAINT sfk_mentor_turn_run FOREIGN KEY (run_id, workspace_id)
+    REFERENCES agent_run (id, workspace_id);
+        </sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794282151000-3" author="hephaestus">
+        <comment>The turn's run holds its lease; the turn keeps none of its own.</comment>
+        <dropColumn tableName="mentor_turn" columnName="lease_id"/>
+        <dropColumn tableName="mentor_turn" columnName="leased_until"/>
+        <rollback><stop>Restore the verified pre-upgrade database backup.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794282151000-4" author="hephaestus">
+        <comment>A turn and its run agree when each transaction commits: queued with queued, running with leased, stopped with leased while its host may still end it or with ended, and an ended turn with an ended run.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION enforce_mentor_turn_run() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+ turn_status varchar;
+ run_state varchar;
+BEGIN
+ FOR turn_status, run_state IN
+  SELECT t.status, r.state FROM mentor_turn t JOIN agent_run r ON r.id = t.run_id
+   WHERE (TG_TABLE_NAME = 'mentor_turn' AND t.id = NEW.id) OR (TG_TABLE_NAME = 'agent_run' AND t.run_id = NEW.id)
+ LOOP
+  IF NOT ((turn_status = 'QUEUED' AND run_state = 'QUEUED')
+       OR (turn_status = 'RUNNING' AND run_state = 'LEASED')
+       OR (turn_status = 'STOPPED' AND run_state IN ('LEASED', 'ENDED'))
+       OR (turn_status IN ('DONE', 'FAILED') AND run_state = 'ENDED')) THEN
+   RAISE EXCEPTION 'a turn that is % needs a run that agrees, not one that is %', turn_status, run_state
+    USING ERRCODE = '23514';
+  END IF;
+ END LOOP;
+ RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER mentor_turn_run_agrees AFTER INSERT OR UPDATE OF status, run_id ON mentor_turn
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION enforce_mentor_turn_run();
+CREATE CONSTRAINT TRIGGER agent_run_turn_agrees AFTER UPDATE OF state ON agent_run
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.kind = 'TURN') EXECUTE FUNCTION enforce_mentor_turn_run();
+        </sql>
+        <rollback>DROP TRIGGER agent_run_turn_agrees ON agent_run; DROP TRIGGER mentor_turn_run_agrees ON mentor_turn; DROP FUNCTION enforce_mentor_turn_run();</rollback>
+    </changeSet>
+    <changeSet id="1794282151000-5" author="hephaestus">
+        <comment>A turn's run goes with its turn, whoever deletes the turn: an erasure, a retention sweep, or a conversation's cascade. A run left without its turn would be offered to every claim, which could not start it.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION forget_mentor_turn_run() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ DELETE FROM agent_run WHERE id = OLD.run_id AND workspace_id = OLD.workspace_id;
+ RETURN NULL;
+END $$;
+CREATE TRIGGER mentor_turn_forgets_run AFTER DELETE ON mentor_turn
+ FOR EACH ROW EXECUTE FUNCTION forget_mentor_turn_run();
+        </sql>
+        <rollback>DROP TRIGGER mentor_turn_forgets_run ON mentor_turn; DROP FUNCTION forget_mentor_turn_run();</rollback>
+    </changeSet>
+    <changeSet id="1794282151000-6" author="hephaestus">
+        <comment>Workers no longer beat in a registry: a run's lease is the only fact of a live holder.</comment>
+        <dropTable tableName="worker_registry"/>
+        <rollback><stop>Restore the verified pre-upgrade database backup.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

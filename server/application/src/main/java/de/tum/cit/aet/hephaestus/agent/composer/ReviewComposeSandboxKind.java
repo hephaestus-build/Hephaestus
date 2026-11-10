@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Tracer;
 import java.time.Duration;
@@ -31,6 +32,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -122,7 +124,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
                         ProxyAttempt.Caller.REVIEW,
                         jobId,
                         fence.workspaceId(),
-                        ReviewRunKind.attempt(fence.epoch()),
+                        fence.epoch(),
                         fence.runId(),
                         runs.find(ref).map(AgentRun::getDeadline).orElse(null)));
     }
@@ -182,20 +184,27 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
             return endedBy(fence);
         }
         UUID jobId = composing.identity().jobId();
-        boolean held = switch (outcome) {
-            case COMPLETED -> terminal.completeComposed(jobId, fence);
-            case HANDED_ON -> reviewRuns.requeue(jobId, fence, AgentRuns.Charge.SPEND, Duration.ZERO, null);
-        };
-        custody.release(composing.identity());
-        var decision = decisions.remove(fence);
-        if (held && decision != null)
-            stages.record(
-                    ReviewStageTelemetry.Stage.COMPOSITION,
-                    Duration.between(decision.claimedAt(), Instant.now()),
-                    outcome == Outcome.COMPLETED
-                            ? ReviewStageTelemetry.Outcome.OK
-                            : ReviewStageTelemetry.Outcome.HANDED_ON);
-        return held;
+        var previous = MDC.getCopyOfContextMap();
+        MDC.put(StructuredLogKeys.JOB_ID, jobId.toString());
+        try {
+            boolean held = switch (outcome) {
+                case COMPLETED -> terminal.completeComposed(jobId, fence);
+                case HANDED_ON -> reviewRuns.requeue(jobId, fence, AgentRuns.Charge.SPEND, Duration.ZERO, null);
+            };
+            custody.release(composing.identity());
+            var decision = decisions.remove(fence);
+            if (held && decision != null)
+                stages.record(
+                        ReviewStageTelemetry.Stage.COMPOSITION,
+                        Duration.between(decision.claimedAt(), Instant.now()),
+                        outcome == Outcome.COMPLETED
+                                ? ReviewStageTelemetry.Outcome.OK
+                                : ReviewStageTelemetry.Outcome.HANDED_ON);
+            return held;
+        } finally {
+            if (previous == null) MDC.clear();
+            else MDC.setContextMap(previous);
+        }
     }
 
     /** Whether this claim already ended its run, as a repeated end of the same claim finds it. */

@@ -11,15 +11,16 @@ import org.jspecify.annotations.Nullable;
  * else, so a caller cannot claim more.
  *
  * @param id the {@code review_job} id, or the {@code mentor_turn} id
- * @param leaseId the lease that the attempt holds: a review job's run, or a turn's lease
+ * @param epoch the claim of the run that the attempt holds ({@code lease_epoch})
+ * @param runId the attempt's run: a review job's, or a turn's
  * @param workDeadline when a review attempt's work ends; null for a turn
  */
 public record ProxyAttempt(
         Caller caller,
         UUID id,
         long workspaceId,
-        int attempt,
-        UUID leaseId,
+        int epoch,
+        UUID runId,
         @Nullable Instant workDeadline) {
 
     /** Whose attempt it is. */
@@ -36,8 +37,8 @@ public record ProxyAttempt(
                 },
                 token.id(),
                 token.workspaceId(),
-                token.attempt(),
-                token.leaseId(),
+                token.epoch(),
+                token.runId(),
                 token.workDeadline());
     }
 }

@@ -15544,10 +15544,6 @@ export const ReviewProgressSchema = {
 export const ReviewQueueSchema = {
     type: 'object',
     properties: {
-        activeWorkers: {
-            type: 'integer',
-            format: 'int64'
-        },
         asOf: {
             type: 'string',
             format: 'date-time'
@@ -15591,7 +15587,6 @@ export const ReviewQueueSchema = {
         }
     },
     required: [
-        'activeWorkers',
         'asOf',
         'finishedLastDay',
         'finishedLastHour',

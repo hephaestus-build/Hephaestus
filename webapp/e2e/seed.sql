@@ -64,10 +64,18 @@ INSERT INTO mentor_conversation (id, workspace_id, account_id, created_at, last_
 SELECT 'e2e0c0a0-0000-4000-8000-000000000001', 1, id, now() - interval '1 day', now() - interval '1 day'
 FROM account WHERE primary_email = 'e2e@dev.invalid'
 ON CONFLICT DO NOTHING;
-INSERT INTO mentor_turn (id, workspace_id, conversation_id, request_id, status, surface, created_at, started_at, finished_at)
-VALUES ('e2e0c0a0-0000-4000-8000-000000000004', 1, 'e2e0c0a0-0000-4000-8000-000000000001',
-        'e2e0c0a0-0000-4000-8000-000000000005', 'DONE', 'APP', now() - interval '1 day',
+-- A turn runs on an agent run; a finished turn's run has ended.
+INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key, state, attempt, lease_epoch, start_within_seconds,
+                       stop_reason, created_at, started_at, ended_at)
+VALUES ('e2e0c0a0-0000-4000-8000-000000000006', 1, 'TURN', 'INTERACTIVE',
+        'conversation:e2e0c0a0-0000-4000-8000-000000000001', 'ENDED', 0, 1, 180, 'COMPLETED', now() - interval '1 day',
         now() - interval '1 day', now() - interval '1 day')
+ON CONFLICT DO NOTHING;
+INSERT INTO mentor_turn (id, workspace_id, conversation_id, request_id, status, surface, run_id, created_at, started_at,
+                         finished_at)
+VALUES ('e2e0c0a0-0000-4000-8000-000000000004', 1, 'e2e0c0a0-0000-4000-8000-000000000001',
+        'e2e0c0a0-0000-4000-8000-000000000005', 'DONE', 'APP', 'e2e0c0a0-0000-4000-8000-000000000006',
+        now() - interval '1 day', now() - interval '1 day', now() - interval '1 day')
 ON CONFLICT DO NOTHING;
 INSERT INTO mentor_entry (id, workspace_id, conversation_id, seq, kind, surface, text, turn_id, created_at)
 VALUES ('e2e0c0a0-0000-4000-8000-000000000002', 1, 'e2e0c0a0-0000-4000-8000-000000000001', 1, 'USER', 'APP',

@@ -15,8 +15,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 
 class MentorTurnQueueSamplerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private ApplicationContext beans;
 
     @Autowired
     private MentorConversationService conversations;
@@ -39,7 +43,7 @@ class MentorTurnQueueSamplerIntegrationTest extends AbstractWorkspaceIntegration
         sampler.sample();
         double before = queued();
 
-        MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), main.getId(), "First");
+        MentorTurnStarts.askAndStart(beans, metrics, workspace.getId(), main.getId(), "First");
         ask(workspace, main, "Second");
         ask(workspace, main, "Third");
         sampler.sample();

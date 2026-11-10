@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -87,9 +86,8 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
         if (request.runtimeJobId() != null
                 && !request.runtimeJobId().equals(jwt.id().toString())) throw invalid();
         // A valid credential of an attempt that ended or was requeued, so that it lost its lease: its runner stops.
-        if (!job.getRunId().equals(jwt.leaseId())
-                || !runs.isCurrent(
-                        new AgentRunRef(jwt.leaseId(), jwt.workspaceId()), ReviewRunKind.epoch(jwt.attempt())))
+        if (!job.getRunId().equals(jwt.runId())
+                || !runs.isCurrent(new AgentRunRef(jwt.runId(), jwt.workspaceId()), jwt.epoch()))
             throw new AttemptLeaseConflict("This review attempt no longer holds its lease");
         return new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes(), null);
     }
@@ -136,7 +134,7 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
             // An unknown turn, or one of another workspace, is no credential at all; only a known turn's ended attempt
             // gets 409.
             if (turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId()).isEmpty()) throw invalid();
-            if (!turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+            if (!turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.epoch(), jwt.runId()))
                 throw new AttemptLeaseConflict("This turn attempt no longer holds its lease");
         }
         return new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes(), jwt);

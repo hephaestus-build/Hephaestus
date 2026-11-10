@@ -5,5 +5,7 @@ public enum AgentRunKind {
     /** A review's measurement: its practices checked against the captured work. */
     REVIEW,
     /** A review's composition: the feedback written from its admitted results, after its measurement ended. */
-    REVIEW_COMPOSE
+    REVIEW_COMPOSE,
+    /** A turn that answers one question in a conversation ({@code TurnRunKind}); its subject is the conversation. */
+    TURN
 }

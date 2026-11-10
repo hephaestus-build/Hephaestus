@@ -19,6 +19,12 @@ public class MentorWorkspacePurgeAdapter implements WorkspacePurgeContributor {
     private final MentorTurnRepository turns;
     private final MentorConversationRepository conversations;
 
+    /** Turns reference agent runs, so remove them before the agent purge removes the remaining runs. */
+    @Override
+    public int getOrder() {
+        return -60;
+    }
+
     @Override
     public void deleteWorkspaceData(Long workspaceId) {
         entries.deleteByWorkspaceId(workspaceId);

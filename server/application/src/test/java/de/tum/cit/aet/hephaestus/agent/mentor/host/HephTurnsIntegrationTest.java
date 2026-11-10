@@ -24,9 +24,11 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -42,6 +44,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
@@ -53,6 +56,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManager;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -79,7 +83,8 @@ import tools.jackson.databind.ObjectMapper;
  * The conversation turns of the installation as every worker serves them: a pull claims a turn, and each later call
  * of the attempt reads its row, on whichever worker it reaches. The worker role is off in the test context, so each
  * test builds its workers' turns from the context's beans. Most tests hand them ledger changes directly; the
- * notification test owns its PostgreSQL listener. Their clock is the test's, so a test moves it past a stop or a deadline.
+ * notification test owns its PostgreSQL listener. Their clock moves past an attempt's work deadline. The run's
+ * grace runs on the database clock: a test lets it pass and runs the run reaper.
  */
 class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -122,6 +127,12 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private TransactionTemplate transactions;
 
+    @Autowired
+    private AgentRunReaper reaper;
+
+    @Autowired
+    private MentorTurnClaims claims;
+
     private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(AttemptKeyFixtures.keyring(KEY));
 
     private final AttemptTokenVerifier verifier =
@@ -155,17 +166,16 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** A started worker that hands out at most {@code cap} turns at once in the installation. */
     private HephTurns worker(int cap) {
-        return worker(MentorTurnStarts.admitting(turnService, metrics), issuer, cap, PULL_WAIT);
+        return worker(MentorTurnStarts.admitting(beans, metrics, cap), issuer, PULL_WAIT);
     }
 
-    private HephTurns worker(MentorTurnStarter starter, AttemptTokenIssuer signing, int cap, Duration pullWait) {
-        return worker(starter, signing, cap, pullWait, mock(MentorLedgerNotifications.class), callsInFlight);
+    private HephTurns worker(MentorTurnStarter starter, AttemptTokenIssuer signing, Duration pullWait) {
+        return worker(starter, signing, pullWait, mock(MentorLedgerNotifications.class), callsInFlight);
     }
 
     private HephTurns worker(
             MentorTurnStarter starter,
             AttemptTokenIssuer signing,
-            int cap,
             Duration pullWait,
             MentorLedgerNotifications notifications,
             ProxyCallsInFlight calls) {
@@ -180,10 +190,9 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 calls,
                 toolsPods,
                 signing,
+                beans.getBean(TurnRunsAdapter.class),
                 clock,
                 meters,
-                cap,
-                Duration.ofMinutes(1),
                 pullWait);
         started.start();
         workers.add(started);
@@ -226,12 +235,34 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 token.workspaceId(),
                 conversation.getAccountId(),
                 conversation.getId(),
-                token.attempt(),
-                token.leaseId());
+                token.epoch(),
+                token.runId());
     }
 
     private MentorTurn row(MentorTurn turn) {
         return turnRepository.findById(turn.getId()).orElseThrow();
+    }
+
+    /** When the lease of the turn's run ends. */
+    private Instant leasedUntil(MentorTurn turn) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                        "SELECT leased_until FROM agent_run WHERE id = ?",
+                        Timestamp.class,
+                        row(turn).getRunId()))
+                .toInstant();
+    }
+
+    /** Whether a host still holds the turn: its run is leased. */
+    private boolean held(MentorTurn turn) {
+        return turnService.isHeld(row(turn));
+    }
+
+    /** Lets the deadline of the turn's run pass, as its grace does on the database clock, and runs the reaper. */
+    private void deadlinePasses(MentorTurn turn) {
+        jdbc.update(
+                "UPDATE agent_run SET deadline = clock_timestamp() - interval '1 second' WHERE id = ?",
+                row(turn).getRunId());
+        reaper.reap();
     }
 
     private static JsonNode answer(String text) {
@@ -284,8 +315,8 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(token.kind()).isEqualTo(AttemptJwt.Kind.TURN);
         assertThat(token.id()).isEqualTo(asked.getId());
         assertThat(token.workspaceId()).isEqualTo(workspace.getId());
-        assertThat(token.attempt()).isEqualTo(assignment.attempt()).isOne();
-        assertThat(token.leaseId()).isEqualTo(running.getLeaseId());
+        assertThat(token.epoch()).isEqualTo(assignment.attempt()).isOne();
+        assertThat(token.runId()).isEqualTo(running.getRunId());
         Instant deadline = clock.instant().plus(timeout());
         assertThat(assignment.deadline()).isEqualTo(deadline);
         assertThat(token.workDeadline()).isEqualTo(deadline.truncatedTo(ChronoUnit.SECONDS));
@@ -329,11 +360,11 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         MentorTurn asked = ask("Is the deployment ready?");
         AttemptJwt token = token(assigned(worker, asked));
         HephTurns other = worker(Integer.MAX_VALUE);
-        Instant claimedUntil = Objects.requireNonNull(row(asked).getLeasedUntil());
+        Instant claimedUntil = leasedUntil(asked);
 
         TurnAttempt served = other.held(token, false);
         other.lease(token);
-        assertThat(row(asked).getLeasedUntil()).isNotEqualTo(claimedUntil);
+        assertThat(leasedUntil(asked)).isNotEqualTo(claimedUntil);
         controller(other)
                 .end(
                         asked.getId(),
@@ -344,7 +375,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(served.conversationId()).isEqualTo(conversation.getId());
         assertThat(served.accountId()).isEqualTo(conversation.getAccountId());
         assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.DONE);
-        assertThat(row(asked).isLeased()).isFalse();
+        assertThat(held(asked)).isFalse();
         assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), asked.getId()))
                 .filteredOn(entry -> entry.getKind() == MentorEntry.Kind.HEPH)
                 .extracting(MentorEntry::getText)
@@ -355,7 +386,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldTellTheAttemptToStopAndEndItStoppedWhenItsLoopDoesNotWithinTheGraceAfterTheDeveloperStopsIt() {
         MentorTurn asked = ask("Walk me through the release.");
         AttemptJwt token = token(assigned(worker, asked));
-        ProxyCallsInFlight.Call silent = silentCall(asked, token.attempt());
+        ProxyCallsInFlight.Call silent = silentCall(asked, token.epoch());
 
         turnService.stop(workspace.getId(), asked.getId());
 
@@ -366,27 +397,36 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(worker.held(token, true).turnId())
                 .as("its end is still taken")
                 .isEqualTo(asked.getId());
-        Instant claimedUntil = Objects.requireNonNull(row(asked).getLeasedUntil());
+        Instant claimedUntil = leasedUntil(asked);
         assertThatThrownBy(() -> worker.lease(token)).isInstanceOf(HephTurns.StopException.class);
-        assertThat(row(asked).getLeasedUntil())
+        assertThat(leasedUntil(asked))
                 .as("its lease is renewed, so that its loop can end it")
                 .isNotEqualTo(claimedUntil);
 
-        clock.advance(HephTurns.STOP_GRACE.plusSeconds(5));
+        // Every worker seals the stopped attempt's calls in flight, which record what they received.
+        worker.turnChanged(new MentorLedgerEvents.TurnChanged(
+                workspace.getId(),
+                conversation.getId(),
+                asked.getId(),
+                MentorTurn.Status.STOPPED,
+                MentorTurn.Surface.APP,
+                token.epoch()));
+        assertThat(silent.isCancelled()).isTrue();
+        deadlinePasses(asked);
         assertThatThrownBy(() -> worker.lease(token)).isInstanceOf(MentorLeaseLostException.class);
 
         MentorTurn stopped = row(asked);
         assertThat(stopped.getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
         assertThat(stopped.getError()).isNull();
-        assertThat(stopped.isLeased()).isFalse();
-        assertSettled(asked, token.attempt(), silent);
+        assertThat(turnService.isHeld(stopped)).isFalse();
+        assertSettled(asked, token.epoch(), silent);
     }
 
     @Test
     void shouldTellTheAttemptToStopAtItsDeadlineAndFailItWhenItsLoopDoesNotEndItWithinTheGrace() {
         MentorTurn asked = ask("Summarise every pull request.");
         AttemptJwt token = token(assigned(worker, asked));
-        ProxyCallsInFlight.Call silent = silentCall(asked, token.attempt());
+        ProxyCallsInFlight.Call silent = silentCall(asked, token.epoch());
 
         clock.advance(timeout().plusSeconds(1));
 
@@ -397,29 +437,35 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThatThrownBy(() -> worker.lease(token)).isInstanceOf(HephTurns.StopException.class);
         assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
 
-        clock.advance(HephTurns.STOP_GRACE);
+        deadlinePasses(asked);
         assertThatThrownBy(() -> worker.lease(token)).isInstanceOf(MentorLeaseLostException.class);
 
         MentorTurn failed = row(asked);
         assertThat(failed.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(failed.getError()).isEqualTo(HephTurns.TOOK_TOO_LONG);
+        assertThat(failed.getError()).isEqualTo(MentorTurnCompletion.TOOK_TOO_LONG);
         assertThat(failed.getFailureCause())
-                .isEqualTo(
-                        "its conversation loop did not end it within " + HephTurns.STOP_GRACE + " after its deadline");
-        assertThat(failed.isLeased()).isFalse();
-        assertSettled(asked, token.attempt(), silent);
+                .isEqualTo("its holder did not end it within " + TurnRunsAdapter.GRACE + " after its deadline");
+        assertThat(held(asked)).isFalse();
+        // Its end reaches every worker, which refuses the attempt's later calls.
+        worker.turnChanged(new MentorLedgerEvents.TurnChanged(
+                workspace.getId(),
+                conversation.getId(),
+                asked.getId(),
+                MentorTurn.Status.FAILED,
+                MentorTurn.Surface.APP,
+                token.epoch()));
+        assertThat(silent.isCancelled()).isTrue();
     }
 
     @Test
     void shouldRefuseEveryCallOfAnAttemptThatLostItsLeaseAndClaimItsRetry() {
         MentorTurn asked = ask("Is the deployment ready?");
         AttemptJwt token = token(assigned(worker, asked));
-        ProxyCallsInFlight.Call program = call(asked, token.attempt());
+        ProxyCallsInFlight.Call program = call(asked, token.epoch());
 
-        // What the lease reaper does once the lease expired.
-        turnService.renewLease(workspace.getId(), asked.getId(), 1, token.leaseId(), Duration.ofSeconds(-1));
-        transactions.executeWithoutResult(status -> completion.billLostAttempt(
-                turnService.expireLease(asked.getId()).orElseThrow()));
+        // The loop is gone: its run's lease runs out, and the run reaper takes the turn back.
+        claims.expireLease(row(asked));
+        reaper.reap();
         worker.turnChanged(new MentorLedgerEvents.TurnChanged(
                 workspace.getId(),
                 conversation.getId(),
@@ -445,7 +491,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldSealTheAttemptsModelCallsWhenItsTurnStops() {
         MentorTurn asked = ask("Walk me through the release.");
         AttemptJwt token = token(assigned(worker, asked));
-        ProxyCallsInFlight.Call program = call(asked, token.attempt());
+        ProxyCallsInFlight.Call program = call(asked, token.epoch());
 
         worker.turnChanged(new MentorLedgerEvents.TurnChanged(
                 workspace.getId(),
@@ -453,11 +499,11 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 asked.getId(),
                 MentorTurn.Status.STOPPED,
                 MentorTurn.Surface.APP,
-                token.attempt()));
+                token.epoch()));
 
         assertThat(program.isCancelled()).isTrue();
         program.close();
-        assertThat(call(asked, token.attempt()).isCancelled())
+        assertThat(call(asked, token.epoch()).isCancelled())
                 .as("a later call of the attempt is refused")
                 .isTrue();
     }
@@ -481,9 +527,8 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         });
         var calls = spy(new ProxyCallsInFlight(12));
         HephTurns resumed = worker(
-                MentorTurnStarts.admitting(turnService, metrics),
+                MentorTurnStarts.admitting(beans, metrics, Integer.MAX_VALUE),
                 issuer,
-                Integer.MAX_VALUE,
                 PULL_WAIT,
                 notifications,
                 calls);
@@ -493,7 +538,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 MentorTurn asked = ask("Stop this reply after the worker resumes.");
                 AttemptJwt token = token(assigned(resumed, asked));
                 var billed = new ProxyRouting.BilledAttempt(
-                        UsageSourceType.MENTOR_TURN, asked.getId(), token.attempt(), BILLED_LEASE);
+                        UsageSourceType.MENTOR_TURN, asked.getId(), token.epoch(), BILLED_LEASE);
                 var delivered = new CompletableFuture<Void>();
                 // This listener runs after every subscription of the resumed worker, so the notification is fully
                 // handled.
@@ -514,7 +559,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     try (ProxyCallsInFlight.Call late = calls.begin(billed)) {
                         assertThat(late.isCancelled()).isTrue();
                     }
-                    verify(calls, times(1)).seal(asked.getId(), token.attempt(), true);
+                    verify(calls, times(1)).seal(asked.getId(), token.epoch(), true);
                 }
             });
         } finally {
@@ -546,7 +591,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(failed.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(failed.getError()).isEqualTo(HephTurns.COULD_NOT_FINISH);
         assertThat(failed.getFailureCause()).isEqualTo("context_changed");
-        assertThat(failed.isLeased()).isFalse();
+        assertThat(turnService.isHeld(failed)).isFalse();
         await().atMost(Duration.ofSeconds(5))
                 .untilAsserted(() -> assertThat(runtime.running)
                         .as("its tools Pod is removed")
@@ -562,7 +607,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldEndAnAttemptAtItsLeaseWhenAPersonWasErasedSinceItStarted() {
         MentorTurn asked = ask("Who reviewed the change?");
         AttemptJwt token = token(assigned(worker, asked));
-        ProxyCallsInFlight.Call silent = silentCall(asked, token.attempt());
+        ProxyCallsInFlight.Call silent = silentCall(asked, token.epoch());
 
         erasePersonOfTheWorkspace();
 
@@ -571,8 +616,8 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(failed.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(failed.getError()).isEqualTo(HephTurns.COULD_NOT_FINISH);
         assertThat(failed.getFailureCause()).isEqualTo("context_changed");
-        assertThat(failed.isLeased()).isFalse();
-        assertSettled(asked, token.attempt(), silent);
+        assertThat(turnService.isHeld(failed)).isFalse();
+        assertSettled(asked, token.epoch(), silent);
     }
 
     /** Long enough to tell a pull that a change woke from one that waited out its wait. */
@@ -587,7 +632,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldLeaveAWaitingPullAsleepWhenARunningTurnChanges() throws Exception {
-        HephTurns pulling = worker(MentorTurnStarts.admitting(turnService, metrics), issuer, Integer.MAX_VALUE, PARKED);
+        HephTurns pulling = worker(MentorTurnStarts.admitting(beans, metrics), issuer, PARKED);
         long started = System.nanoTime();
         CompletableFuture<Optional<HephTurns.Assignment>> pull = parked(pulling);
 
@@ -604,7 +649,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldWakeAWaitingPullWhenANewQuestionIsQueued() throws Exception {
-        HephTurns pulling = worker(MentorTurnStarts.admitting(turnService, metrics), issuer, Integer.MAX_VALUE, PARKED);
+        HephTurns pulling = worker(MentorTurnStarts.admitting(beans, metrics), issuer, PARKED);
         long started = System.nanoTime();
         CompletableFuture<Optional<HephTurns.Assignment>> pull = parked(pulling);
 
@@ -649,7 +694,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .doCallRealMethod()
                 .when(failingOnce)
                 .issueForTurn(any(), any(), anyInt(), any(), any(), any());
-        HephTurns starting = worker(MentorTurnStarts.admitting(turnService, metrics), failingOnce, 4, PULL_WAIT);
+        HephTurns starting = worker(MentorTurnStarts.admitting(beans, metrics, 4), failingOnce, PULL_WAIT);
         MentorTurn broken = ask("First question");
 
         assertThat(starting.assign()).isEmpty();
@@ -659,7 +704,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         MentorTurn failed = row(broken);
         assertThat(failed.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(failed.getError()).isEqualTo(MentorTurnCompletion.COULD_NOT_START);
-        assertThat(failed.isLeased()).isFalse();
+        assertThat(turnService.isHeld(failed)).isFalse();
         assertThat(meters.counter(AgentMetrics.MENTOR_TURN_CLAIM_FAILURE).count())
                 .isEqualTo(1.0);
         assertThat(call(broken, 1).isCancelled())
@@ -669,7 +714,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldEndATurnStoppedThatTheDeveloperStoppedWhileItsClaimCommitted() {
-        MentorTurnStarter stopping = spy(MentorTurnStarts.admitting(turnService, metrics));
+        MentorTurnStarter stopping = spy(MentorTurnStarts.admitting(beans, metrics));
         doAnswer(claim -> {
                     @SuppressWarnings("unchecked") // The starter's own return type.
                     var started = (Optional<MentorTurnStarter.StartedTurn>) claim.callRealMethod();
@@ -679,22 +724,22 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 })
                 .doCallRealMethod()
                 .when(stopping)
-                .startNext(any(), anyInt());
-        HephTurns starting = worker(stopping, issuer, Integer.MAX_VALUE, PULL_WAIT);
+                .startNext();
+        HephTurns starting = worker(stopping, issuer, PULL_WAIT);
         MentorTurn asked = ask("Stop me at once");
 
         assertThat(starting.assign()).as("no loop runs a stopped turn").isEmpty();
 
         MentorTurn stopped = row(asked);
         assertThat(stopped.getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
-        assertThat(stopped.isLeased()).isFalse();
+        assertThat(turnService.isHeld(stopped)).isFalse();
     }
 
     @Test
     void shouldBillTheLastModelCallWhenTheLoopEndsTheTurnBeforeTheProxyRecordedIt() throws Exception {
         MentorTurn asked = ask("Is the deployment ready?");
         AttemptJwt token = token(assigned(worker, asked));
-        ProxyCallsInFlight.Call lastCall = call(asked, token.attempt());
+        ProxyCallsInFlight.Call lastCall = call(asked, token.epoch());
 
         // The loop read the end of the answer from the stream; the proxy has not written the call's usage yet.
         CompletableFuture<Void> ended = CompletableFuture.runAsync(() -> controller(worker)
@@ -705,7 +750,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         HephTurnFixtures.authenticated(token)));
         await().during(Duration.ofMillis(300)).atMost(Duration.ofSeconds(2)).until(() -> !ended.isDone());
         transactions.executeWithoutResult(tx -> turnRepository.accumulateUsage(
-                asked.getId(), token.attempt(), new MentorTurnUsage(1200, 80, 0, 0, 0, 1)));
+                asked.getId(), token.epoch(), new MentorTurnUsage(1200, 80, 0, 0, 0, 1)));
         lastCall.close();
         ended.get(10, TimeUnit.SECONDS);
 
@@ -717,8 +762,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldHandOutNoTurnAndWakeAWaitingPullWhenTheWorkerStops() throws Exception {
-        HephTurns draining = worker(
-                MentorTurnStarts.admitting(turnService, metrics), issuer, Integer.MAX_VALUE, Duration.ofSeconds(30));
+        HephTurns draining = worker(MentorTurnStarts.admitting(beans, metrics), issuer, Duration.ofSeconds(30));
         CompletableFuture<Optional<HephTurns.Assignment>> waiting = CompletableFuture.supplyAsync(draining::assign);
         await().during(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).until(() -> !waiting.isDone());
 

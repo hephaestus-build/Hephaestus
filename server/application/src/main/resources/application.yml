@@ -650,13 +650,6 @@ hephaestus:
     conversation-loop:
         secret: ${HEPHAESTUS_CONVERSATION_LOOP_SECRET:}
 
-    # Per-workspace readiness of Heph is the Heph model binding. The capacity is the turns that the whole installation
-    # runs at once. The other hephaestus.mentor.turn.* keys keep their code defaults: docs/admin/runtime-roles.mdx
-    # § Tunables.
-    mentor:
-        turn:
-            capacity: ${HEPHAESTUS_MENTOR_TURN_CAPACITY:}
-
     # Age at which what Hephaestus says about a person is erased: conversation entries, feedback and practice results.
     # The erasure is irreversible. docs/admin/data-retention.mdx.
     feedback-retention: ${HEPHAESTUS_FEEDBACK_RETENTION:P400D}
@@ -674,7 +667,6 @@ hephaestus:
         image:
             reference: ghcr.io/hephaestus-build/agent-pi:${spring.application.version}
         enabled: ${AGENT_ENABLED:false}
-        heartbeat-interval: 25s
         # Strip heavy job payloads after payload-retention; delete unreferenced terminal jobs after row-retention.
         payload-retention: ${AGENT_PAYLOAD_RETENTION:P14D}
         row-retention: ${AGENT_ROW_RETENTION:P90D}
@@ -688,6 +680,8 @@ hephaestus:
           band-aging: 10m
           # A model call that waited this long for its call pool orders one band higher, never into the interactive band.
           permit-aging: 30s
+          # The conversation turns that the whole installation runs at once; unset runs as many as are asked.
+          turns: ${HEPHAESTUS_MENTOR_TURN_CAPACITY:}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # LLM GOVERNANCE

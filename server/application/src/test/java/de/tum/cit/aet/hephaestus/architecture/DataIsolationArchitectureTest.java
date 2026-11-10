@@ -147,7 +147,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
             "InstallationInboxStep", // Installation deliveries have no workspace until their handler creates one
-            "WorkerRegistry", // Fleet-wide worker liveness/capacity registry; not workspace-scoped
             // Fleet-wide public keys that verify attempt tokens; a token's workspace is a signed claim
             "AttemptPublicKey",
             // Installation-wide tools Pods; a bound row names its turn's workspace and is fenced on the turn's lease

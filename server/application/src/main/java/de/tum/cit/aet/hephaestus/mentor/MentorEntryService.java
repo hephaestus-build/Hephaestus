@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.mentor;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.mentor.spi.TurnRuns;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -36,6 +37,7 @@ public class MentorEntryService {
     private final MentorContextPathBuilder paths;
     private final PersonDataWriteFence writeFence;
     private final ApplicationEventPublisher events;
+    private final TurnRuns runs;
     private final Clock clock;
     private final MentorSlackReplies slackReplies;
 
@@ -389,9 +391,11 @@ public class MentorEntryService {
         events.publishEvent(new MentorTurnWaits.SlotsChanged(workspaceId));
     }
 
-    /** Stops a turn the caller locked, unless it ended. */
+    /** Stops a turn the caller locked, unless it ended, and its run with it ({@link TurnRuns#stopped}). */
     private void stop(MentorTurn turn) {
+        boolean running = turn.getStatus() == MentorTurn.Status.RUNNING;
         if (turn.stopIfActive(clock.instant())) {
+            runs.stopped(turn.getWorkspaceId(), turn.getRunId(), running);
             turnChanged(turn, false);
         }
     }

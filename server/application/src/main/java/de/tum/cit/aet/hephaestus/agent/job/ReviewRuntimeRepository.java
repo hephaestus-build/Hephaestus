@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
@@ -96,14 +95,6 @@ public interface ReviewRuntimeRepository extends Repository<ReviewJob, UUID> {
             @Param("asOf") Instant asOf,
             @Param("hour") Instant hour,
             @Param("day") Instant day);
-
-    default long liveWorkers(Instant asOf) {
-        return countLiveWorkers(asOf.minus(AgentProperties.WORKER_LEASE_TTL));
-    }
-
-    @WorkspaceAgnostic("Counts the shared worker pool; the registry is not workspace-owned")
-    @Query(value = "SELECT COUNT(*) FROM worker_registry WHERE last_heartbeat>=:live", nativeQuery = true)
-    long countLiveWorkers(@Param("live") Instant live);
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository$TimingJob(

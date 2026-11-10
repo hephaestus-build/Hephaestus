@@ -42,6 +42,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -56,6 +57,9 @@ import tools.jackson.databind.ObjectMapper;
  * context; {@code LlmProxySecurityConfigTest} runs the whole chain.
  */
 class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private ApplicationContext beans;
 
     @Autowired
     private ReviewJobRepository jobRepository;
@@ -111,7 +115,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         workspace = createWorkspace("turn-auth-" + suffix, "Turn Auth", "turn-auth-org", AccountType.ORG, developer);
         developerAccount = accountId(developer);
         conversation = conversations.findOrCreateMain(workspace.getId(), developerAccount);
-        turn = MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), conversation.getId(), "Question");
+        turn = MentorTurnStarts.askAndStart(beans, metrics, workspace.getId(), conversation.getId(), "Question");
     }
 
     @AfterEach
@@ -120,7 +124,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private String token(UUID turnId, long workspaceId, int attempt) {
-        return token(turnId, workspaceId, attempt, Objects.requireNonNull(turn.getLeaseId()));
+        return token(turnId, workspaceId, attempt, Objects.requireNonNull(turn.getRunId()));
     }
 
     private String token(UUID turnId, long workspaceId, int attempt, UUID leaseId) {
@@ -191,12 +195,19 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     private RunningSpend spendOfATurnThatStandsAt(String status, boolean leased) {
         transactions.executeWithoutResult(tx -> turnRepository.accumulateUsage(
                 turn.getId(), turn.getAttempt(), new MentorTurnUsage(100_000, 0, 0, 0, 0, 1)));
+        // A turn that its host no longer holds has a queued or an ended run; the database checks that they agree.
+        String state = leased ? "LEASED" : status.equals("QUEUED") ? "QUEUED" : "ENDED";
         jdbc.update(
-                "UPDATE mentor_turn SET status=?,lease_id=CASE WHEN ? THEN lease_id END,"
-                        + "leased_until=CASE WHEN ? THEN leased_until END WHERE id=?",
+                "WITH moved AS (UPDATE agent_run SET state = ?, leased_until = CASE WHEN ? = 'LEASED' THEN leased_until END,"
+                        + " stop_reason = CASE WHEN ? = 'ENDED' THEN 'COMPLETED' END,"
+                        + " ended_at = CASE WHEN ? = 'ENDED' THEN now() END WHERE id = ?)"
+                        + " UPDATE mentor_turn SET status = ? WHERE id = ?",
+                state,
+                state,
+                state,
+                state,
+                turn.getRunId(),
                 status,
-                leased,
-                leased,
                 turn.getId());
         return new ProxyRunningSpend(reviewAttemptUsage, turnRepository).of(workspace.getId());
     }
@@ -271,7 +282,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
 
         Result result = call("PUT", "/internal/llm/turn/" + turn.getId() + "/partial", token());
@@ -286,7 +297,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
 
         Result result = call("POST", "/internal/llm/responses", token());

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRunRows;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyReceipt;
@@ -86,23 +87,22 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     /** A turn whose first attempt runs now, as a worker's claim leaves it. */
     private UUID runningTurn(UUID conversation) {
         UUID id = UUID.randomUUID();
+        UUID run = UUID.randomUUID();
+        jdbc.update(MentorTurnRunRows.insert(run, workspace.getId(), conversation, "RUNNING", 1));
         jdbc.update(
-                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,lease_id,"
-                        + "leased_until,started_at,created_at)"
-                        + " VALUES (?,?,?,?,'RUNNING','APP',1,gen_random_uuid(),now()+interval '5 minutes',now(),now())",
+                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
+                        + "started_at,created_at) VALUES (?,?,?,?,'RUNNING','APP',1,?,now(),now())",
                 id,
                 workspace.getId(),
                 conversation,
-                "request-" + id);
+                "request-" + id,
+                run);
         return id;
     }
 
     /** The lease reaper's retry: the turn runs a second attempt, started after the first one's claims. */
     private void retry() {
-        jdbc.update(
-                "UPDATE mentor_turn SET attempt=2,started_at=clock_timestamp() WHERE id=? AND workspace_id=?",
-                turnId,
-                workspace.getId());
+        jdbc.execute(MentorTurnRunRows.retry(turnId));
     }
 
     /** Heph's answer: its words, and the successful {@code show_feedback} call whose text showed the feedback. */
@@ -159,9 +159,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     }
 
     private void endTurn() {
-        jdbc.update(
-                "UPDATE mentor_turn SET status='DONE',lease_id=NULL,leased_until=NULL,finished_at=now() WHERE id=?",
-                turnId);
+        jdbc.update(MentorTurnRunRows.endDone(turnId));
     }
 
     private Optional<CopyWriteFence> claim(int attempt) {
@@ -258,8 +256,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                         Thread.currentThread().interrupt();
                         throw new IllegalStateException(e);
                     }
-                    jdbc.update(
-                            "UPDATE mentor_turn SET status='DONE',lease_id=NULL,leased_until=NULL WHERE id=?", turnId);
+                    jdbc.update(MentorTurnRunRows.endDone(turnId));
                 }));
         assertThat(locked.await(30, TimeUnit.SECONDS)).isTrue();
         var claiming = CompletableFuture.supplyAsync(() -> claim(1));

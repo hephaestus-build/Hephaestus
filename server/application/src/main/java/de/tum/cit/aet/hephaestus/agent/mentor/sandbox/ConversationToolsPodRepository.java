@@ -15,15 +15,16 @@ import org.springframework.stereotype.Repository;
  * clock, so any worker can bind, and an attempt that lost its lease binds nothing.
  */
 @Repository
-@WorkspaceAgnostic(
-        "Tools Pods are installation-wide; a bound row is fenced on its turn's lease and names its workspace")
+@WorkspaceAgnostic("Tools Pods are installation-wide; a bound row is fenced on its turn's run and names its workspace")
 public interface ConversationToolsPodRepository extends JpaRepository<ConversationToolsPod, String> {
 
-    /** The fence of every bind: the attempt holds its live lease. */
+    /** The fence of every bind: the attempt holds its turn's run under its claim, with a live lease. */
     String LIVE_ATTEMPT = """
             SELECT t.workspace_id, t.id, t.attempt FROM mentor_turn t
+              JOIN agent_run r ON r.id = t.run_id AND r.workspace_id = t.workspace_id AND r.state = 'LEASED'
+                               AND r.lease_epoch = t.attempt AND r.leased_until > clock_timestamp()
              WHERE t.id = :turnId AND t.workspace_id = :workspaceId AND t.attempt = :attempt
-               AND t.lease_id = :leaseId AND t.status = 'RUNNING' AND t.leased_until > clock_timestamp()
+               AND t.run_id = :runId AND t.status = 'RUNNING'
             """;
 
     /** A Pod that the pool starts: no attempt holds it yet. */
@@ -53,7 +54,7 @@ public interface ConversationToolsPodRepository extends JpaRepository<Conversati
             @Param("workspaceId") long workspaceId,
             @Param("turnId") UUID turnId,
             @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId);
+            @Param("runId") UUID runId);
 
     /** The Pod's tools program runs at this address. */
     @Modifying
@@ -95,7 +96,7 @@ public interface ConversationToolsPodRepository extends JpaRepository<Conversati
             @Param("workspaceId") long workspaceId,
             @Param("turnId") UUID turnId,
             @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId,
+            @Param("runId") UUID runId,
             @Param("poolLifeSeconds") long poolLifeSeconds);
 
     /** Pooled Pods that a bind may still take, started or starting. */
@@ -164,8 +165,10 @@ public interface ConversationToolsPodRepository extends JpaRepository<Conversati
               DELETE FROM conversation_tools_pod p
                WHERE (p.turn_id IS NOT NULL AND NOT EXISTS (
                         SELECT 1 FROM mentor_turn t
+                          JOIN agent_run r ON r.id = t.run_id AND r.workspace_id = t.workspace_id AND r.state = 'LEASED'
+                                           AND r.lease_epoch = t.attempt AND r.leased_until > clock_timestamp()
                          WHERE t.workspace_id = p.workspace_id AND t.id = p.turn_id AND t.attempt = p.attempt
-                           AND t.status IN ('RUNNING', 'STOPPED') AND t.leased_until > clock_timestamp()))
+                           AND t.status IN ('RUNNING', 'STOPPED')))
                   OR (p.turn_id IS NULL AND p.created_at <= clock_timestamp() - make_interval(secs => :poolLifeSeconds))
                   OR (p.address IS NULL AND p.created_at <= clock_timestamp() - make_interval(secs => :startSeconds))
               RETURNING p.name

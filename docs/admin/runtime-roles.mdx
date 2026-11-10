@@ -408,34 +408,38 @@ The provider pool bounds physical calls independently of resident turns.
 The tools quota bounds tools Pods independently of both.
 `mentor_turn_tools_wait_seconds` records the interval from quota refusal until tools are ready or the attempt ends, including Pod start.
 
-A queued turn has a separate wait of three minutes to start, counted from its stored queue time.
-Server maintenance ends an overdue queued question with a message that asks the developer to try again.
+A queued turn has a separate wait of three minutes to start, counted from when it can start.
+The server's run reaper then ends the question with a message that asks the developer to try again.
 
-A follow-up stays queued while an answer holds its conversation.
-The wait survives worker restarts. A lease retry gets a new wait.
+A follow-up stays queued while an answer holds its conversation, and its wait starts when that answer ends.
+The wait survives worker restarts. A retry after a lost loop gets a new wait.
 
 Within that limit, size the capacity from the expected load.
 Concurrent turns are about the questions each second multiplied by the seconds for each answer.
 For example, 1.8 questions each second with 4.5-second answers need 8 concurrent turns.
 `mentor_turn_queue_wait_seconds` and `mentor_turn_queued` show how long and how many questions wait ([Metrics](./metrics.md#conversation-turn-metrics)).
 
-The server reads the same value, `hephaestus.mentor.turn.capacity`.
+The server reads the same value, `hephaestus.agent.capacity.turns`.
 While that many turns run, a question that a worker can start next says that Hephaestus is answering other questions.
 If you run the roles without the chart, set the same value on the server, on each worker and on each loop replica.
 If it is not set on the server, no question says why it waits.
 A worker without it hands out turns without a limit.
 
-A turn whose loop stopped holds its slot until its lease expires.
+A turn whose loop stopped holds its slot until its run's lease expires.
 Thus, for a short time, a question can say that Hephaestus is busy while a loop has room.
 The question starts at the next pull.
 
 ### Lease, retry, and deadline
 
-The conversation loop renews the lease of each running turn every 5 seconds, through any worker.
-The lease is `hephaestus.mentor.turn.lease`, 60 seconds by default.
+The conversation loop renews the lease of each running turn's run every 5 seconds, through any worker.
+The lease is `hephaestus.agent.capacity.turn-lease-ttl`, 60 seconds by default.
 If the loop that runs the turn stops, or no worker answers for that long, the lease expires.
-The server's lease reaper then returns the turn to the queue once, and any worker can claim it.
+The server's run reaper then returns the turn to the queue once, and any worker can claim it.
 If the lease of the second attempt also expires, the turn fails with **Hephaestus could not finish this reply. Try again.**
+
+A stopped turn, and a turn past its time limit, gets 30 seconds in which its loop can end it with what it wrote.
+The run's lease is not renewed past that.
+Then the run reaper ends the turn: stopped, or failed with **Hephaestus took too long to reply and stopped. Try again.**
 
 The lease end and its expiry both use the database clock.
 Thus, a clock difference between the server and the worker does not take back a running turn.
@@ -839,12 +843,11 @@ Its `auto` setting uses the chart's CPU budget.
 
 | Property                                    | Default       | Effect                                                                  |
 | ------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
-| `hephaestus.mentor.turn.lease`              | `PT1M`        | The lease of a running turn. The conversation loop renews it every 5 seconds. |
+| `hephaestus.agent.capacity.turn-lease-ttl`  | `60s`         | The lease of a running turn's run. The conversation loop renews it every 5 seconds. |
 | `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M`  | How long one model call of a turn, or one streamed model call of a review, may wait for the provider's response headers |
 | `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn or of a review may send nothing |
-| `hephaestus.mentor.turn.lease-reaper-delay` | `PT15S`       | The interval at which the server looks for expired leases               |
 | `hephaestus.mentor.turn.max-follow-ups`     | `3`           | The number of questions that can wait in one conversation or thread |
-| `hephaestus.mentor.turn.capacity`           | Not set       | The conversation turns that the whole installation runs at once. The server, each worker and each loop replica read it ([Conversation turn capacity](#conversation-turn-capacity)) |
+| `hephaestus.agent.capacity.turns`           | Not set       | The conversation turns that the whole installation runs at once. The server, each worker and each loop replica read it ([Conversation turn capacity](#conversation-turn-capacity)) |
 | `hephaestus.mentor.agent.max-prompt-chars`  | `100000`      | The maximum length of a question sent in the webapp, in characters      |
 
 Give all roles the same values.
@@ -903,8 +906,6 @@ The [host development launcher](/contributor/local-development#kubernetes) suppl
 A subject's sandbox is an agent-sandbox claim from the warm pool of its kind (`HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_*`).
 The claim passes the address of the gateway Service (`HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL`), which the worker resolves, to the sandbox.
 Each worker deletes the claims that no work needs, without a leader ([Agent runs](/contributor/agent-runs#sandbox-reaper)).
-
-Every worker beats in `worker_registry`, also with `AGENT_ENABLED=false`.
 
 ## Graceful drain
 

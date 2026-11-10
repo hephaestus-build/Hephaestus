@@ -7,7 +7,6 @@ import org.jspecify.annotations.Nullable;
 public record ReviewQueueSnapshot(
         Instant asOf,
         long running,
-        long activeWorkers,
         long waiting,
         @Nullable Instant oldestWaitingSince,
         long heldForBudget,

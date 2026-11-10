@@ -224,7 +224,6 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 | `llm_proxy_upstream_stalled_total`         | Counter   | `apiProtocol` | conversation model calls and streamed review model calls that the worker's LLM proxy cut after the first-byte or the idle bound |
 | `resilience4j_circuitbreaker_state`        | Gauge     | `name`, `state` | The provider breaker of each connection, named `llm-connection-<scope>-<connection id>`. `state="open"` is 1 while it refuses calls |
 | `resilience4j_circuitbreaker_not_permitted_calls_total` | Counter | `name`, `kind` | Model calls that a provider breaker refused |
-| `mentor_turn_lease_reaper_failure_total`   | Counter   | none      | Expired leases that the lease reaper could not take back on one pass    |
 | `agent_run_reaped_total`                   | Counter   | `kind`, `outcome` | Expired run leases taken back, by kind, and whether the run was `requeued` or ended (`attempts_exhausted`, `deadline`) |
 | `agent_run_reaper_failure_total`           | Counter   | none      | Runs that the reaper failed to take back. It tries each again next pass  |
 | `agent_sandbox_reaped_total`             | Counter   | `reason`  | Sandboxes that the reaper took back: `expired`, `start_limit`, `idle`, or `orphan` for a claim that no sandbox row names |
@@ -257,7 +256,7 @@ An attempt that ends before any part of an answer records no first-token time.
 An attempt records a cost only when it made a model call and its model has a price.
 
 Workers record most of these series.
-The server role records `lease_expired` outcomes, the two lease-reaper counters, the cost of an attempt that lost its lease, the Slack replies and the live streams.
+The server role records `lease_expired` outcomes, the run reaper's counters, the cost of an attempt that lost its lease, the Slack replies and the live streams.
 Thus, sum each series across all roles.
 
 The share of attempts that did not succeed shows problems that developers see.
@@ -303,7 +302,7 @@ A lease that expires writes no `failed_call`, because the server role, not the w
 The columns are empty for a turn that did not fail, and for a turn that admission declines.
 
 A turn that admission declines, for example because the budget is spent, is logged at `INFO` as `was declined at its start`.
-A turn whose second attempt loses its lease fails on the server role, which logs it at `INFO` as `Mentor turn lease expired`.
+A turn whose second attempt loses its lease fails on the server role, which logs it at `INFO` as `Conversation turn lost its holder`.
 Its `failure_cause` is `its lease expired on its last attempt`.
 
 An increase in `mentor_turn_claim_failure_total` shows a worker that claims turns but cannot start them.

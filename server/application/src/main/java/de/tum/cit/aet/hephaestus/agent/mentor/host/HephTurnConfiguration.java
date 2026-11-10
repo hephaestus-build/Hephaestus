@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextRevocations;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
@@ -21,11 +22,9 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -89,10 +88,7 @@ public class HephTurnConfiguration {
         return new TurnContextFolder(toolsPods, turns, loaders, clock);
     }
 
-    /**
-     * @param capacity the most turns that run at once in the installation; unset, a worker started outside the chart
-     *     hands out turns without a cap
-     */
+    /** The turns' cap is the claim's ({@code hephaestus.agent.capacity.turns}). */
     @Bean
     HephTurns hephTurns(
             MentorTurnStarter starter,
@@ -105,11 +101,10 @@ public class HephTurnConfiguration {
             ProxyCallsInFlight callsInFlight,
             ConversationToolsPods toolsPods,
             AttemptTokenIssuer issuer,
+            TurnRunsAdapter turnRuns,
             ConversationLoopProperties loop,
             Clock clock,
-            MeterRegistry meters,
-            @Value("${hephaestus.mentor.turn.capacity:#{null}}") @Nullable Integer capacity,
-            @Value("${hephaestus.mentor.turn.lease:PT1M}") Duration lease) {
+            MeterRegistry meters) {
         loop.requireFormat();
         if (!loop.configured()) {
             // The worker profile requires it; a local worker without it serves no conversation.
@@ -126,10 +121,9 @@ public class HephTurnConfiguration {
                 callsInFlight,
                 toolsPods,
                 issuer,
+                turnRuns,
                 clock,
-                meters,
-                capacity == null ? Integer.MAX_VALUE : capacity,
-                lease);
+                meters);
     }
 
     /** {@link ConversationToolsPods#reap} on a thread of its own: it lists and removes Pods, which can wait. */

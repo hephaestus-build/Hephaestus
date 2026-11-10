@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.run;
 
+import java.time.Duration;
+
 /**
  * The domain side of one {@link AgentRunKind}. The reaper calls it in the transaction that takes a run back, before it
  * writes the run, so the domain row moves with its run or neither moves, and the domain still reads the run as the lost
@@ -11,6 +13,11 @@ public interface AgentRunHandler {
 
     /** How many lost leases a run of this kind survives before the reaper ends it. */
     int retries();
+
+    /** How long a run that lost its lease waits before it is offered again, after it spent {@code spentAttempts}. */
+    default Duration retryAfter(int spentAttempts) {
+        return AgentRuns.backoff(spentAttempts);
+    }
 
     /**
      * Locks the run's domain row, and whatever this kind's writers lock before it. The reaper calls it before anything

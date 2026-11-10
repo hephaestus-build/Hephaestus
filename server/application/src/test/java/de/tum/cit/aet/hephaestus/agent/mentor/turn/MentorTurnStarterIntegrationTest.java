@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -22,16 +23,22 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** Admission runs when a worker starts a turn, because a follow-up can wait while the member's choice changes. */
 class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private AgentRuns agentRuns;
+
+    @Autowired
+    private TransactionTemplate transactions;
 
     @Autowired
     private MentorConversationService conversations;
@@ -69,15 +76,14 @@ class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 main.getId(),
                 new MentorTurnService.Question(
                         MentorTurn.Surface.APP, "Question", UUID.randomUUID().toString(), null, null));
-        starter = new MentorTurnStarter(turns, admission, attemptUsage, metrics, connections);
+        starter = starter(metrics);
     }
 
     @Test
     void shouldFreezeTheAdmittedModelAndRatesOnTheAttemptWhenAdmissionAccepts() {
         when(admission.admit(workspace.getId(), accountId)).thenReturn(LlmCatalogTestFixtures.admittedMentorConfig());
 
-        MentorTurnStarter.StartedTurn started =
-                starter.startNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+        MentorTurnStarter.StartedTurn started = starter.startNext().orElseThrow();
 
         assertThat(started.accountId()).isEqualTo(accountId);
         MentorTurn row = turnRepository.findById(started.turn().getId()).orElseThrow();
@@ -122,11 +128,11 @@ class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         admitted.priceSnapshot(),
                         admitted.timeoutSeconds()));
 
-        assertThat(starter.startNext(Duration.ofMinutes(5), Integer.MAX_VALUE)).isEmpty();
+        assertThat(starter.startNext()).isEmpty();
 
         MentorTurn row = failedTurn();
         assertThat(row.getError()).isEqualTo(MentorTurnStarter.MODEL_TOO_SMALL);
-        assertThat(row.isLeased()).isFalse();
+        assertThat(turns.isHeld(row)).isFalse();
     }
 
     @Test
@@ -138,7 +144,7 @@ class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest 
                     .failed(new IllegalStateException("upstream stalled"));
         }
 
-        assertThat(starter.startNext(Duration.ofMinutes(5), Integer.MAX_VALUE)).isEmpty();
+        assertThat(starter.startNext()).isEmpty();
 
         assertThat(failedTurn().getError()).isEqualTo(MentorTurnStarter.PROVIDER_PAUSED);
     }
@@ -148,8 +154,7 @@ class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest 
         when(admission.admit(workspace.getId(), accountId)).thenReturn(LlmCatalogTestFixtures.admittedMentorConfig());
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
-        new MentorTurnStarter(turns, admission, attemptUsage, meters, connections)
-                .startNext(Duration.ofMinutes(5), Integer.MAX_VALUE);
+        starter(meters).startNext();
 
         assertThat(meters.get(AgentMetrics.MENTOR_TURN_QUEUE_WAIT).timer().count())
                 .isEqualTo(1);
@@ -159,11 +164,23 @@ class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest 
     void shouldFailTheTurnWithTheReasonWhenAdmissionDeclinesTheDeveloper() {
         when(admission.admit(workspace.getId(), accountId)).thenThrow(new MentorRefusedException(MentorRefusal.NO_AI));
 
-        starter.startNext(Duration.ofMinutes(5), Integer.MAX_VALUE);
+        starter.startNext();
 
         MentorTurn row = failedTurn();
         assertThat(row.getError()).isEqualTo(MentorRefusal.NO_AI.userMessage());
-        assertThat(row.isLeased()).isFalse();
+        assertThat(turns.isHeld(row)).isFalse();
+    }
+
+    private MentorTurnStarter starter(MeterRegistry meters) {
+        return new MentorTurnStarter(
+                turns,
+                admission,
+                attemptUsage,
+                meters,
+                connections,
+                agentRuns,
+                MentorTurnStarts.capacity(null),
+                transactions);
     }
 
     private MentorTurn failedTurn() {

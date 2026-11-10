@@ -401,7 +401,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             }
             return;
         }
-        if (status != MentorTurn.Status.RUNNING && turn.isLeased()) {
+        if (status == MentorTurn.Status.STOPPED && turns.isHeld(turn)) {
             return; // Stopped; its host still commits what Hephaestus wrote.
         }
         if (projection.owner == Owner.UNKNOWN && !take(projection, status)) {

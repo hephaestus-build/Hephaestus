@@ -3007,7 +3007,6 @@ export const reviewQueueHead = {
 export const idleReviewQueue: ReviewQueue = {
 	asOf: new Date(STORY_NOW),
 	running: 0,
-	activeWorkers: 0,
 	waiting: 0,
 	heldForBudget: 0,
 	oldestWaitingSince: null,
@@ -3020,7 +3019,6 @@ export const idleReviewQueue: ReviewQueue = {
 export const busyReviewQueue: ReviewQueue = {
 	...idleReviewQueue,
 	running: 2,
-	activeWorkers: 2,
 	waiting: 4,
 	heldForBudget: 1,
 	oldestWaitingSince: minutesBefore(4),

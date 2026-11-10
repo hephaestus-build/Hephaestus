@@ -10,6 +10,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
@@ -22,6 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobTerminal;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -39,6 +43,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -83,6 +89,16 @@ class ReviewComposeSandboxKindTest {
             new ResultAdmissionService.AdmissionIdentity(UUID.randomUUID(), 7L, 1, fence.runId()),
             null);
     private final AtomicInteger closed = new AtomicInteger();
+
+    @Test
+    void shouldRouteModelCallsWithTheRunsLeaseEpoch() {
+        claim(null);
+
+        assertThat(kind.attempt(run)).hasValueSatisfying(attempt -> {
+            assertThat(attempt.runId()).isEqualTo(fence.runId());
+            assertThat(attempt.epoch()).isEqualTo(fence.epoch());
+        });
+    }
 
     @Test
     void shouldWithholdOnceAndMakeNoModelCallWhenTheClaimOnlyWithholds() {
@@ -139,7 +155,47 @@ class ReviewComposeSandboxKindTest {
         when(terminal.completeComposed(composing.identity().jobId(), fence)).thenReturn(true);
         kind.prepare(run);
 
-        assertThat(kind.end(run, SandboxRunKind.Outcome.COMPLETED)).isTrue();
+        var logger = (Logger) LoggerFactory.getLogger(ReviewStageTelemetry.class);
+        var appender = new ListAppender<ILoggingEvent>() {
+            @Override
+            protected void append(ILoggingEvent event) {
+                event.prepareForDeferredProcessing();
+                super.append(event);
+            }
+        };
+        appender.start();
+        logger.addAppender(appender);
+        var previous = MDC.getCopyOfContextMap();
+        var gateway = Map.of(
+                "workspace.id",
+                "7",
+                "review.id",
+                composing.job().getReviewId().toString(),
+                "run.id",
+                fence.runId().toString(),
+                "run.epoch",
+                Integer.toString(fence.epoch()),
+                "job.attempt",
+                Integer.toString(ReviewRunKind.attempt(fence.epoch())),
+                "subject.key",
+                "review:1");
+        MDC.setContextMap(gateway);
+        try {
+            assertThat(kind.end(run, SandboxRunKind.Outcome.COMPLETED)).isTrue();
+            assertThat(MDC.getCopyOfContextMap()).isEqualTo(gateway);
+        } finally {
+            logger.detachAppender(appender);
+            if (previous == null) MDC.clear();
+            else MDC.setContextMap(previous);
+        }
+        assertThat(appender.list)
+                .filteredOn(event -> fence.runId()
+                        .toString()
+                        .equals(event.getMDCPropertyMap().get("run.id")))
+                .singleElement()
+                .satisfies(event -> assertThat(event.getMDCPropertyMap())
+                        .containsAllEntriesOf(gateway)
+                        .containsEntry("job.id", composing.identity().jobId().toString()));
 
         assertThat(closed).hasValue(1);
         assertThat(meters.get(AgentMetrics.AGENT_JOB_STAGE_DURATION)

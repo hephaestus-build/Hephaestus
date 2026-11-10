@@ -168,7 +168,6 @@ export const LongWait: Story = {
 			queue: {
 				...busyReviewQueue,
 				running: 1,
-				activeWorkers: 1,
 				waiting: 2,
 				heldForBudget: 0,
 				oldestWaitingSince: minutesBefore(45),
@@ -284,7 +283,6 @@ export const ManyItems: Story = {
 			queue: {
 				...busyReviewQueue,
 				running: 4,
-				activeWorkers: 4,
 				waiting: 37,
 				oldestWaitingSince: minutesBefore(9),
 				heldForBudget: 2,

@@ -96,6 +96,8 @@ class PracticeV1FeedbackDigestDatabaseTest {
                 "toolCallId":"call-1","toolName":"show_feedback","isError":false,
                 "content":[{"type":"text","text":"Shown"}]}}'::jsonb,
                 '00000000-0000-0000-0000-000000978053',now());
+            UPDATE agent_run SET state='ENDED',leased_until=NULL,stop_reason='COMPLETED',ended_at=now()
+            WHERE id='00000000-0000-0000-0000-000000978058';
             UPDATE mentor_turn SET status='DONE',finished_at=now() WHERE id='00000000-0000-0000-0000-000000978053';
             UPDATE feedback_copy SET state='POSTED',posted_at=now(),body='Actual shown words.',
                 mentor_entry_id='00000000-0000-0000-0000-000000978052'

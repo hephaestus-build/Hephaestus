@@ -75,7 +75,7 @@ class ProxyRoutingService {
 
     boolean ownsAttempt(ProxyRouting routing) {
         var attempt = routing.attempt();
-        UUID lease = attempt.leaseId();
+        UUID lease = attempt.runId();
         Long workspace = routing.workspaceId();
         if (lease == null || workspace == null) return false;
         return routing.hephTurn()
@@ -96,23 +96,22 @@ class ProxyRoutingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
         if (job.getWorkspaceId() != caller.workspaceId())
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable");
-        if (!job.getRunId().equals(caller.leaseId())
-                || !runs.isCurrent(
-                        new AgentRunRef(caller.leaseId(), caller.workspaceId()), ReviewRunKind.epoch(caller.attempt())))
+        if (!job.getRunId().equals(caller.runId())
+                || !runs.isCurrent(new AgentRunRef(caller.runId(), caller.workspaceId()), caller.epoch()))
             throw attemptEnded();
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
         // The live checks above decide whether this attempt may call at all; its work deadline decides until when.
         Instant workDeadline = Objects.requireNonNull(caller.workDeadline(), "a review attempt has a work deadline");
         if (!request.getRequestURI().startsWith(JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PATH)) {
-            register(job, caller.leaseId(), ModelKind.CHAT, snapshot.model());
-            return reviewRouting(job, caller.leaseId(), snapshot, workDeadline);
+            register(job, caller.runId(), ModelKind.CHAT, snapshot.model());
+            return reviewRouting(job, caller.runId(), snapshot, workDeadline);
         }
         var slot = practiceScriptSlot(request.getRequestURI());
         if (slot == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        ProxyRouting routing = practiceScriptRouting(job, caller.leaseId(), snapshot, slot, workDeadline)
+        ProxyRouting routing = practiceScriptRouting(job, caller.runId(), snapshot, slot, workDeadline)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         FrozenModel model = slot == ModelKind.CHAT ? snapshot.model() : snapshot.practiceScriptSlot(slot);
-        register(job, caller.leaseId(), slot, model);
+        register(job, caller.runId(), slot, model);
         return routing;
     }
 
@@ -122,16 +121,16 @@ class ProxyRoutingService {
      *
      * @throws ResponseStatusException 401 when the attempt no longer holds this lease
      */
-    ProxyRouting attemptRouting(UUID jobId, long workspaceId, int attempt, UUID leaseId, Instant workDeadline) {
+    ProxyRouting attemptRouting(UUID jobId, long workspaceId, int attempt, UUID runId, Instant workDeadline) {
         var job = agentJobRepository
                 .findById(jobId)
                 .filter(found -> found.getWorkspaceId() == workspaceId
-                        && found.getRunId().equals(leaseId)
-                        && runs.isCurrent(new AgentRunRef(leaseId, workspaceId), ReviewRunKind.epoch(attempt)))
+                        && found.getRunId().equals(runId)
+                        && runs.isCurrent(new AgentRunRef(runId, workspaceId), ReviewRunKind.epoch(attempt)))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-        register(job, leaseId, ModelKind.CHAT, snapshot.model());
-        return reviewRouting(job, leaseId, snapshot, workDeadline);
+        register(job, runId, ModelKind.CHAT, snapshot.model());
+        return reviewRouting(job, runId, snapshot, workDeadline);
     }
 
     /**
@@ -139,12 +138,12 @@ class ProxyRoutingService {
      * later claim freezes a new configuration onto the row, so a call that returns after a hand-off is priced from
      * this registration. The attempt must still run on this worker; otherwise the call does not start.
      */
-    private void register(ReviewJob job, UUID leaseId, ModelKind kind, @Nullable FrozenModel model) {
+    private void register(ReviewJob job, UUID runId, ModelKind kind, @Nullable FrozenModel model) {
         boolean running = attemptUsage.registerCall(
                 job.getId(),
                 job.getWorkspaceId(),
                 job.getAttempt(),
-                leaseId,
+                runId,
                 kind,
                 model == null ? FrozenCharge.UNKNOWN : FrozenCharge.of(model));
         if (!running) throw attemptEnded();
@@ -163,7 +162,7 @@ class ProxyRoutingService {
         var turn = mentorTurns
                 .findByIdAndWorkspaceId(caller.id(), caller.workspaceId())
                 .filter(found ->
-                        mentorTurns.hasLiveLease(caller.id(), caller.workspaceId(), caller.attempt(), caller.leaseId()))
+                        mentorTurns.hasLiveLease(caller.id(), caller.workspaceId(), caller.epoch(), caller.runId()))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.CONFLICT, "This turn attempt no longer holds its lease"));
         var admitted = MentorTurnAdmission.read(turn.getAdmission())
@@ -178,17 +177,17 @@ class ProxyRoutingService {
                 route.modelId(),
                 turn.getWorkspaceId(),
                 new ProxyRouting.BilledAttempt(
-                        UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), caller.leaseId()),
+                        UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), caller.runId()),
                 null,
                 null,
                 null);
     }
 
-    private ProxyRouting reviewRouting(ReviewJob job, UUID leaseId, ConfigSnapshot snapshot, Instant workDeadline) {
+    private ProxyRouting reviewRouting(ReviewJob job, UUID runId, ConfigSnapshot snapshot, Instant workDeadline) {
         return routing(
                 "job:" + job.getId(),
                 job,
-                leaseId,
+                runId,
                 snapshot.model(),
                 UsageSourceType.REVIEW_JOB,
                 0L,
@@ -198,7 +197,7 @@ class ProxyRoutingService {
     }
 
     private Optional<ProxyRouting> practiceScriptRouting(
-            ReviewJob job, UUID leaseId, ConfigSnapshot snapshot, ModelKind slot, Instant workDeadline) {
+            ReviewJob job, UUID runId, ConfigSnapshot snapshot, ModelKind slot, Instant workDeadline) {
         FrozenModel model = slot == ModelKind.CHAT ? snapshot.model() : snapshot.practiceScriptSlot(slot);
         if (model == null) {
             return Optional.empty();
@@ -208,7 +207,7 @@ class ProxyRoutingService {
         return Optional.of(routing(
                 "job:" + job.getId() + ":practice-script",
                 job,
-                leaseId,
+                runId,
                 model,
                 ScriptUsage.ledgerSourceType(slot),
                 used.stream().mapToLong(PracticeScriptKindTotal::tokens).sum(),
@@ -220,7 +219,7 @@ class ProxyRoutingService {
     private static ProxyRouting routing(
             String principal,
             ReviewJob job,
-            UUID leaseId,
+            UUID runId,
             FrozenModel model,
             UsageSourceType sourceType,
             long directModelTokens,
@@ -239,7 +238,7 @@ class ProxyRoutingService {
                         sourceType,
                         job.getId(),
                         job.getAttempt(),
-                        leaseId,
+                        runId,
                         directModelTokens,
                         directModelSearchUnits,
                         job.getWorkspaceId()),

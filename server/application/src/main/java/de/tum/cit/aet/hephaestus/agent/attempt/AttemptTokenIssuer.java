@@ -21,7 +21,8 @@ public class AttemptTokenIssuer {
     static final String ATTEMPT_TOKEN_TYPE = "attempt+jwt";
     static final String KIND_CLAIM = "attempt_kind";
     static final String ID_CLAIM = "attempt_id";
-    static final String LEASE_CLAIM = "lease_id";
+    static final String RUN_CLAIM = "run_id";
+    static final String EPOCH_CLAIM = "epoch";
     static final String WORK_DEADLINE_CLAIM = "work_deadline";
     static final String SANDBOX_TOKEN_TYPE = "sandbox+jwt";
     static final String SANDBOX_CLAIM = "sandbox_id";
@@ -44,8 +45,8 @@ public class AttemptTokenIssuer {
      * its work; both are whole seconds when signed, and the deadline must not be later than the expiry.
      */
     public String issueForReview(
-            UUID id, Long workspaceId, int attempt, UUID leaseId, Instant workDeadline, Instant expiresAt) {
-        return issue(AttemptJwt.Kind.REVIEW, id, workspaceId, attempt, leaseId, workDeadline, expiresAt);
+            UUID id, Long workspaceId, int epoch, UUID runId, Instant workDeadline, Instant expiresAt) {
+        return issue(AttemptJwt.Kind.REVIEW, id, workspaceId, epoch, runId, workDeadline, expiresAt);
     }
 
     /**
@@ -53,21 +54,22 @@ public class AttemptTokenIssuer {
      * attempt can still end after a stop.
      */
     public String issueForTurn(
-            UUID id, Long workspaceId, int attempt, UUID leaseId, Instant workDeadline, Instant expiresAt) {
-        return issue(AttemptJwt.Kind.TURN, id, workspaceId, attempt, leaseId, workDeadline, expiresAt);
+            UUID id, Long workspaceId, int epoch, UUID runId, Instant workDeadline, Instant expiresAt) {
+        return issue(AttemptJwt.Kind.TURN, id, workspaceId, epoch, runId, workDeadline, expiresAt);
     }
 
     private String issue(
             AttemptJwt.Kind kind,
             UUID id,
             Long workspaceId,
-            int attempt,
-            UUID leaseId,
+            int epoch,
+            UUID runId,
             Instant workDeadline,
             Instant expiresAt) {
+        if (epoch < 1) throw new IllegalArgumentException("a claim's epoch counts from 1");
         if (!workDeadline.isAfter(Instant.now()) || workDeadline.isAfter(expiresAt))
             throw new IllegalArgumentException("workDeadline must be in the future and not after expiresAt");
-        return claims(kind, id, workspaceId, attempt, leaseId, expiresAt)
+        return claims(kind, id, workspaceId, epoch, runId, expiresAt)
                 .withClaim(WORK_DEADLINE_CLAIM, workDeadline)
                 .sign(algorithm());
     }
@@ -106,8 +108,8 @@ public class AttemptTokenIssuer {
     }
 
     private JWTCreator.Builder claims(
-            AttemptJwt.Kind kind, UUID id, Long workspaceId, int attempt, UUID leaseId, Instant expiresAt) {
-        Objects.requireNonNull(leaseId, "leaseId");
+            AttemptJwt.Kind kind, UUID id, Long workspaceId, int epoch, UUID runId, Instant expiresAt) {
+        Objects.requireNonNull(runId, "runId");
         Instant now = Instant.now();
         if (!expiresAt.isAfter(now)) throw new IllegalArgumentException("expiresAt must be in the future");
         return JWT.create()
@@ -117,8 +119,8 @@ public class AttemptTokenIssuer {
                 .withClaim(KIND_CLAIM, kind.name())
                 .withClaim(ID_CLAIM, id.toString())
                 .withClaim("workspace_id", workspaceId)
-                .withClaim("attempt", attempt)
-                .withClaim(LEASE_CLAIM, leaseId.toString())
+                .withClaim(EPOCH_CLAIM, epoch)
+                .withClaim(RUN_CLAIM, runId.toString())
                 .withClaim("scope", List.of(LLM_PROXY_SCOPE))
                 .withJWTId(UUID.randomUUID().toString())
                 .withIssuedAt(now)

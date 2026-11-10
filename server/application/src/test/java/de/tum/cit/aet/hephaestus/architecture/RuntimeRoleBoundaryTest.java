@@ -182,7 +182,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackAdminController", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackService", RuntimeRole.SERVER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnLeaseReaper", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnQueueSampler", RuntimeRole.SERVER_PROPERTY),
             // ADR 0006: the LLM proxy runs beside the sandbox on the WORKER, and only there.

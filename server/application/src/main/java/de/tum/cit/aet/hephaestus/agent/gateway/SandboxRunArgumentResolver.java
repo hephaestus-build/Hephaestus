@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -64,6 +65,10 @@ public final class SandboxRunArgumentResolver implements HandlerMethodArgumentRe
         // Checked: the run is the sandbox's own. The token filter removes these with the request's other fields.
         MDC.put(StructuredLogKeys.RUN_ID, run.fence().runId().toString());
         MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(run.fence().epoch()));
+        if (sandbox.subjectKey().startsWith("review:"))
+            MDC.put(
+                    StructuredLogKeys.JOB_ATTEMPT,
+                    Integer.toString(ReviewRunKind.attempt(run.fence().epoch())));
         Span span = tracer.currentSpan();
         if (span != null)
             span.tag("hephaestus.run.id", run.fence().runId().toString())

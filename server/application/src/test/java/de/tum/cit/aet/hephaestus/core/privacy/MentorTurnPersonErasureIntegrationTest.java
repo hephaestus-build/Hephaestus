@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorRejectedException;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.mentor.adapter.MentorPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -42,7 +43,6 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityManager;
-import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -69,6 +69,9 @@ import tools.jackson.databind.node.JsonNodeFactory;
  * copied of the person before the last step must not stay.
  */
 class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private MentorTurnClaims claims;
 
     @Autowired
     private EntityManager entityManager;
@@ -233,7 +236,7 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                Objects.requireNonNull(running.getLeaseId()),
+                Objects.requireNonNull(running.getRunId()),
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Alex merges.")),
@@ -327,7 +330,7 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 main.getId(),
                 new MentorTurnService.Question(
                         MentorTurn.Surface.APP, text, UUID.randomUUID().toString(), null, null));
-        return turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+        return claims.claimNext().orElseThrow();
     }
 
     /** Ends the turn as a host does after a {@code fetch_context} read that copied the person's data. */
@@ -345,7 +348,7 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 new MentorTurnService.Ending(MentorTurn.Status.DONE, appended, null, null));
     }
 

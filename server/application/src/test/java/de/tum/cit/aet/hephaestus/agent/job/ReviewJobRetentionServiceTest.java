@@ -46,7 +46,7 @@ class ReviewJobRetentionServiceTest extends BaseUnitTest {
     private ReviewJobRetentionService service;
 
     private static final AgentProperties AGENT_PROPS =
-            new AgentProperties(true, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90));
+            new AgentProperties(true, Duration.ofDays(14), Duration.ofDays(90));
 
     @BeforeEach
     void setUp() {

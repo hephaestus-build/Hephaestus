@@ -1,14 +1,13 @@
 // The loop's `bash` and `grep` on the tools side: Pi's contracts, against a real tools program and a lying one.
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import type { Server } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test, { after, before } from "node:test";
+import test, { after, before, type TestContext } from "node:test";
 
 import { createGrepTool } from "@earendil-works/pi-coding-agent";
 
@@ -20,6 +19,7 @@ import {
 	toolLines,
 } from "../../../main/resources/agent/pi-tool-side.ts";
 import { ToolClient } from "../../../main/resources/agent/tool-client.ts";
+import { ToolProtocolError } from "../../../main/resources/agent/tool-protocol.ts";
 import { startToolsServer } from "../../../main/resources/agent/tools-server.ts";
 
 const base = realpathSync(mkdtempSync(path.join(tmpdir(), "tool-side-")));
@@ -34,7 +34,7 @@ writeFileSync(path.join(source, "long.ts"), `todo: ${"x".repeat(900)}\n`);
 writeFileSync(path.join(base, "outside.txt"), "todo: not for the model\n");
 const socketPath = path.join(base, "tools.sock");
 const nonce = "pod-nonce";
-const hasRg = spawnSync("rg", ["--version"]).status === 0;
+let hasRg = false;
 
 let server: Server;
 let client: ToolClient;
@@ -51,6 +51,14 @@ before(async () => {
 	});
 	await once(server, "listening");
 	client = await ToolClient.open({ path: socketPath }, nonce);
+	try {
+		await toolLines(client, source)(["rg", "--version"], () => true);
+		hasRg = true;
+	} catch (error) {
+		if (!(error instanceof ToolProtocolError) || error.code !== "spawn") {
+			throw error;
+		}
+	}
 });
 
 after(() => {
@@ -94,7 +102,11 @@ async function grep(tools: Pick<ToolClient, "exec">, input: GrepInput) {
 }
 
 /** Our answer and Pi's, on the same files. */
-async function parity(input: GrepInput) {
+async function parity(input: GrepInput, context: TestContext) {
+	if (!hasRg) {
+		context.skip("rg is not installed on the tools side");
+		return;
+	}
 	const pi = await createGrepTool(source).execute("id", input);
 	const [expected] = pi.content;
 	assert.deepEqual(
@@ -304,9 +316,7 @@ for (const input of [
 	{ pattern: "nothing-here" },
 	{ pattern: "todo", path: "a.ts" },
 ]) {
-	void test(
-		`grep answers as Pi's grep does: ${JSON.stringify(input)}`,
-		{ skip: hasRg ? false : "rg is not installed" },
-		async () => parity(input),
-	);
+	void test(`grep answers as Pi's grep does: ${JSON.stringify(input)}`, async (context) => {
+		await parity(input, context);
+	});
 }

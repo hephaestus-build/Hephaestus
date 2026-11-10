@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorLinkDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
@@ -37,7 +38,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import java.sql.Timestamp;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -52,6 +52,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTest {
+
+    @Autowired
+    private MentorTurnClaims claims;
+
     @Autowired
     FeedbackHistoryQueryService history;
 
@@ -450,7 +454,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                Objects.requireNonNull(running.getLeaseId()),
+                Objects.requireNonNull(running.getRunId()),
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(
@@ -491,8 +495,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
     /** Claims turns until this one starts. A turn of another test that starts first is taken along. */
     private MentorTurn running(UUID turnId) {
         while (true) {
-            MentorTurn claimed =
-                    turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+            MentorTurn claimed = claims.claimNext().orElseThrow();
             if (claimed.getId().equals(turnId)) {
                 return claimed;
             }

@@ -56,7 +56,6 @@ erDiagram
         TEXT error
         TIMESTAMPTZ finished_at
         BIGINT input_tokens "NOT NULL"
-        TIMESTAMPTZ leased_until
         INTEGER llm_calls "NOT NULL"
         BIGINT output_tokens "NOT NULL"
         BIGINT reasoning_tokens "NOT NULL"
@@ -70,16 +69,18 @@ erDiagram
         INTEGER failed_call_status
         VARCHAR(200) failure_cause
         TIMESTAMPTZ queued_at "NOT NULL"
-        UUID lease_id
         INTEGER tools_loads "NOT NULL"
+        UUID run_id FK,UK "NOT NULL"
     }
 
     Account["Account · Core"]
+    AgentRun["AgentRun · Agent"]
     Workspace["Workspace · Workspace (Tenancy)"]
 
     %% Relationships
     %% One-to-One relationships
     MentorEntry ||--|| MentorConversation : references
+    AgentRun ||--|| MentorTurn : has
 
     %% One-to-Many relationships
     Account ||--o{ MentorConversation : has
@@ -98,4 +99,5 @@ erDiagram
     classDef referenceEntity stroke-dasharray:5 5
 
     class Account referenceEntity
+    class AgentRun referenceEntity
     class Workspace referenceEntity

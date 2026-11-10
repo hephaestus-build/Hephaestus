@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.observability;
 public final class StructuredLogKeys {
 
     public static final String JOB_ID = "job.id";
+    public static final String JOB_ATTEMPT = "job.attempt";
     public static final String TRACE_ID = "traceId";
     public static final String TRACE_FLAGS = "traceFlags";
     public static final String SPAN_ID = "spanId";
@@ -11,6 +12,8 @@ public final class StructuredLogKeys {
     public static final String RUN_ID = "run.id";
     /** The lease epoch of that holder: two records of one run with different epochs come from different claims. */
     public static final String RUN_EPOCH = "run.epoch";
+
+    public static final String REVIEW_ID = "review.id";
     /** The subject of the run, such as {@code review:<id>}. */
     public static final String SUBJECT_KEY = "subject.key";
     /** The agent sandbox that the record is about: its claim's name, which is also its Pod's. */

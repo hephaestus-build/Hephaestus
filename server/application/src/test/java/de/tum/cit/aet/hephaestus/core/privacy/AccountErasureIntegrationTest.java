@@ -74,6 +74,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
@@ -109,7 +110,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -145,6 +145,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class AccountErasureIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private MentorTurnClaims claims;
 
     @Autowired
     private PracticeModelTestFixtures modelFixtures;
@@ -1043,14 +1046,13 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        var ownedTurn =
-                mentorTurns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+        var ownedTurn = claims.claimNext().orElseThrow();
         var model = LlmCatalogTestFixtures.admittedMentorConfig();
         assertThat(mentorAttemptUsage.admit(
                         firstWorkspace,
                         ownedTurn.getId(),
                         ownedTurn.getAttempt(),
-                        Objects.requireNonNull(ownedTurn.getLeaseId()),
+                        Objects.requireNonNull(ownedTurn.getRunId()),
                         MentorTurnAdmission.of(model, Objects.requireNonNull(model.priceSnapshot()))))
                 .isTrue();
 
@@ -1642,8 +1644,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        MentorTurn turn =
-                mentorTurns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+        MentorTurn turn = claims.claimNext().orElseThrow();
         var llm = LlmCatalogTestFixtures.admittedMentorConfig();
         var admitted = MentorTurnAdmission.of(llm, Objects.requireNonNull(llm.priceSnapshot()));
         String measurements = "SELECT count(*) FROM mentor_turn_attempt_usage WHERE turn_id=?";
@@ -1659,13 +1660,13 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         turn.getWorkspaceId(),
                         turn.getId(),
                         turn.getAttempt(),
-                        Objects.requireNonNull(turn.getLeaseId()),
+                        Objects.requireNonNull(turn.getRunId()),
                         admitted))
                 .isTrue();
         var meters = new SimpleMeterRegistry();
         MentorTurnUsageAccumulator accumulator = mentorAccumulator(meters);
         var call = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getRunId());
         accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
 
         personData.requestErasure(requestId, administratorId, false);
@@ -1674,7 +1675,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         turn.getWorkspaceId(),
                         turn.getId(),
                         turn.getAttempt(),
-                        Objects.requireNonNull(turn.getLeaseId()),
+                        Objects.requireNonNull(turn.getRunId()),
                         admitted))
                 .isFalse();
 
@@ -1744,27 +1745,23 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        MentorTurn turn =
-                mentorTurns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+        MentorTurn turn = claims.claimNext().orElseThrow();
         var llm = LlmCatalogTestFixtures.admittedMentorConfig();
         assertThat(mentorAttemptUsage.admit(
                         turn.getWorkspaceId(),
                         turn.getId(),
                         turn.getAttempt(),
-                        Objects.requireNonNull(turn.getLeaseId()),
+                        Objects.requireNonNull(turn.getRunId()),
                         MentorTurnAdmission.of(llm, Objects.requireNonNull(llm.priceSnapshot()))))
                 .isTrue();
-        // The lease then runs out, so the take-back below is the lease reaper's.
-        jdbc.update("UPDATE mentor_turn SET leased_until = now() - interval '1 second' WHERE id = ?", turn.getId());
         var meters = new SimpleMeterRegistry();
         MentorTurnUsageAccumulator accumulator = mentorAccumulator(meters);
         var call = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getRunId());
         accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
 
         // The take-back commits and dates the attempt; the billing of the lost attempt has not run yet.
-        MentorTurnService.LostAttempt lost = Objects.requireNonNull(
-                transactions.execute(tx -> mentorTurns.expireLease(turn.getId()).orElseThrow()));
+        MentorTurnService.LostAttempt lost = Objects.requireNonNull(claims.takeBackUnbilled(turn));
         String financial = "SELECT source_id, review_id, input_tokens, total_calls, cost_usd, occurred_at"
                 + " FROM llm_usage_event WHERE workspace_id=? AND source_type='MENTOR_TURN'";
         assertThat(jdbc.queryForList(financial, workspaceId))

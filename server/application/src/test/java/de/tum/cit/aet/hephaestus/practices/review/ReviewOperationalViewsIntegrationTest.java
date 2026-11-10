@@ -198,7 +198,6 @@ class ReviewOperationalViewsIntegrationTest extends BaseIntegrationTest {
                 .thenReturn(new ReviewQueueSnapshot(
                         FROM,
                         2,
-                        1,
                         3,
                         FROM.minusSeconds(20),
                         1,
@@ -218,8 +217,6 @@ class ReviewOperationalViewsIntegrationTest extends BaseIntegrationTest {
                 .expectBody()
                 .jsonPath("$.running")
                 .isEqualTo(2)
-                .jsonPath("$.activeWorkers")
-                .isEqualTo(1)
                 .jsonPath("$.waiting")
                 .isEqualTo(3)
                 .jsonPath("$.heldForBudget")
@@ -235,7 +232,7 @@ class ReviewOperationalViewsIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldExposeAnEmptyQueueWithRequiredNullWaitingClock() {
         when(runtime.queue(eq(scenario.workspace().getId()), any(), eq(5)))
-                .thenReturn(new ReviewQueueSnapshot(FROM, 0, 0, 0, null, 0, List.of(), 0, 0));
+                .thenReturn(new ReviewQueueSnapshot(FROM, 0, 0, null, 0, List.of(), 0, 0));
         get("/queue")
                 .expectStatus()
                 .isOk()

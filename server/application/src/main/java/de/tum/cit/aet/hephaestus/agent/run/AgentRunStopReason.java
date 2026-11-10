@@ -8,6 +8,8 @@ public enum AgentRunStopReason {
     CANCELLED,
     /** Its leases expired more often than its kind's attempt budget allows. */
     ATTEMPTS_EXHAUSTED,
-    /** Its deadline passed before it ended. */
+    /** It waited longer than its {@code start_within} for room to begin, while nothing of its subject was ahead. */
+    NOT_STARTED,
+    /** Its deadline passed while it ran. */
     DEADLINE
 }

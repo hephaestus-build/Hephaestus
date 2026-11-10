@@ -209,7 +209,7 @@ public class HephTurnController {
                 turn.workspaceId(),
                 turn.turnId(),
                 turn.attempt(),
-                turn.leaseId(),
+                turn.runId(),
                 update,
                 first ? token.issuedAt() : null);
         return ResponseEntity.noContent().build();
@@ -274,7 +274,7 @@ public class HephTurnController {
         String error = outcome != MentorTurn.Status.FAILED
                 ? null
                 : switch (reason) {
-                    case DEADLINE -> HephTurns.TOOK_TOO_LONG;
+                    case DEADLINE -> MentorTurnCompletion.TOOK_TOO_LONG;
                     case STALLED -> HephTurns.MODEL_STOPPED_ANSWERING;
                     case ERROR -> HephTurns.COULD_NOT_FINISH;
                 };
@@ -295,7 +295,7 @@ public class HephTurnController {
                     turn.workspaceId(),
                     turn.turnId(),
                     turn.attempt(),
-                    turn.leaseId(),
+                    turn.runId(),
                     new MentorTurnCompletion.Ending(
                             outcome,
                             entries,

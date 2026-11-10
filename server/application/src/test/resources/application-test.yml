@@ -75,17 +75,14 @@ hephaestus:
     # bean a second candidate and let it settle signals before the test does.
     agent:
         enabled: false
+        capacity:
+            # One Heph slot, as a deployment with one worker that runs one turn: a question that a worker may start
+            # says that Heph answers other questions once any turn runs. Tests leave turns running, so a test that
+            # needs a free slot builds its own MentorTurnWaits, and a test's claims take no cap of their own.
+            turns: 1
     # Each item event reaches its readiness edge at once; the quiet window's own tests open one.
     item-event-ledger:
         quiet-window: 0s
-    # Tests take expired Heph turn leases back themselves; a background sweep would race them.
-    mentor:
-        turn:
-            lease-reaper-delay: P1D
-            # One Heph slot, as a deployment with one worker that runs one turn: a question that a worker may start
-            # says that Heph answers other questions once any turn runs. Tests leave turns running, so a test that
-            # needs a free slot builds its own MentorTurnWaits.
-            capacity: 1
         # Slack is on suite-wide; the Heph Slack projector would take Slack turns before the tests that build their
         # own projector.
         slack:

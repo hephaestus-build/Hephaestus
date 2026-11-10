@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRunRows;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.PracticePageFeedbackRouter;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackService;
@@ -750,13 +751,16 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
                 conversationId,
                 workspace.getId(),
                 developer);
+        UUID run = UUID.randomUUID();
+        jdbc.update(MentorTurnRunRows.insert(run, workspace.getId(), conversationId, "RUNNING", 1));
         jdbc.update(
-                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,started_at,"
-                        + "created_at) VALUES (?,?,?,?,'RUNNING','APP',1,now(),now())",
+                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
+                        + "started_at,created_at) VALUES (?,?,?,?,'RUNNING','APP',1,?,now(),now())",
                 turnId,
                 workspace.getId(),
                 conversationId,
-                turnId.toString());
+                turnId.toString(),
+                run);
         return turnId;
     }
 

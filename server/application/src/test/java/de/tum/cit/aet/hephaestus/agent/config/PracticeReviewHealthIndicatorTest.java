@@ -67,6 +67,6 @@ class PracticeReviewHealthIndicatorTest extends BaseUnitTest {
     }
 
     private static AgentProperties agent(boolean enabled) {
-        return new AgentProperties(enabled, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90));
+        return new AgentProperties(enabled, Duration.ofDays(14), Duration.ofDays(90));
     }
 }

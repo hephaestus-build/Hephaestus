@@ -7,4 +7,4 @@ import java.util.UUID;
  * conversation, and the conversation its developer's account. The turn's tools act only within these.
  */
 public record TurnAttempt(
-        UUID turnId, Long workspaceId, Long accountId, UUID conversationId, int attempt, UUID leaseId) {}
+        UUID turnId, Long workspaceId, Long accountId, UUID conversationId, int attempt, UUID runId) {}

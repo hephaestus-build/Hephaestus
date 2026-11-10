@@ -58,7 +58,6 @@ class ReviewQueueService {
         return new ReviewQueueDTO(
                 snapshot.asOf(),
                 snapshot.running(),
-                snapshot.activeWorkers(),
                 snapshot.waiting(),
                 snapshot.oldestWaitingSince(),
                 snapshot.heldForBudget(),

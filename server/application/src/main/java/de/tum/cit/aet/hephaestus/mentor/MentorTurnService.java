@@ -3,9 +3,9 @@ package de.tum.cit.aet.hephaestus.mentor;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.mentor.spi.TurnRuns;
 import java.math.BigDecimal;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,15 +26,13 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The turn lifecycle on the ledger: submit, claim, end, lease expiry and stop
- * ({@code docs/contributor/unified-pi-runtime.mdx} § Turn lifecycle). Billing and feedback delivery are
- * {@code agent.mentor.turn}'s part of ending a turn ({@code MentorTurnCompletion}).
+ * The turn lifecycle on the ledger: submit, start, end, take-back and stop
+ * ({@code docs/contributor/unified-pi-runtime.mdx} § Turn lifecycle). Each turn's run leases its work ({@link TurnRuns});
+ * a write of a turn and of its run commits together, and the turn is always locked first. Billing and feedback
+ * delivery are {@code agent.mentor.turn}'s part of ending a turn ({@code MentorTurnCompletion}).
  */
 @Service
 public class MentorTurnService {
-
-    /** One automatic retry after a lost lease. */
-    static final int MAX_ATTEMPTS = 2;
 
     /** Shown to the developer as the failed reply, so it is in the product voice. */
     private static final String LEASE_EXPIRED = "Hephaestus could not finish this reply. Try again.";
@@ -49,6 +47,7 @@ public class MentorTurnService {
     private final PersonDataCopyFence copies;
     private final PersonDataWriteFence writeFence;
     private final MentorTurnProgress progress;
+    private final TurnRuns runs;
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final int maxFollowUps;
@@ -62,6 +61,7 @@ public class MentorTurnService {
             PersonDataCopyFence copies,
             PersonDataWriteFence writeFence,
             MentorTurnProgress progress,
+            TurnRuns runs,
             ApplicationEventPublisher events,
             Clock clock,
             @Value("${hephaestus.mentor.turn.max-follow-ups:3}") int maxFollowUps) {
@@ -73,6 +73,7 @@ public class MentorTurnService {
         this.copies = copies;
         this.writeFence = writeFence;
         this.progress = progress;
+        this.runs = runs;
         this.events = events;
         this.clock = clock;
         this.maxFollowUps = maxFollowUps;
@@ -164,8 +165,9 @@ public class MentorTurnService {
         if (turns.countQueuedByWorkspaceIdAndConversationId(workspaceId, conversationId) >= maxFollowUps) {
             throw new MentorRejectedException(MentorRejectedException.Reason.FOLLOW_UPS_FULL);
         }
+        UUID runId = runs.enqueue(workspaceId, conversationId);
         MentorTurn turn = turns.saveAndFlush(
-                new MentorTurn(conversation, requestId, asked.surface(), asked.pageContext(), clock.instant()));
+                new MentorTurn(conversation, requestId, asked.surface(), asked.pageContext(), runId, clock.instant()));
         MentorEntry question = entryService.insert(
                 conversation,
                 MentorEntryDraft.question(
@@ -176,33 +178,25 @@ public class MentorTurnService {
         return new Submission(turn, question, true);
     }
 
-    /** Starts the oldest turn a worker may run, if there is one. */
-    @Transactional
-    public Optional<MentorTurn> claimNext(Duration lease, int cap) {
-        turns.lockClaims();
-        if (turns.countLeased() >= cap) {
-            return Optional.empty();
-        }
-        return turns.lockClaimable().map(turn -> {
-            // The lease ends on the database clock, the clock the server's reaper judges it by (expireLease).
-            Instant now = turns.databaseNow();
-            turn.start(now, turns.databaseClock().plus(lease));
+    /**
+     * Starts the turn of a run that the caller's claim just leased under {@code epoch}. Empty when a stop holds the
+     * turn: the caller then rolls its claim back, and the stop ends the run.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<MentorTurn> start(long workspaceId, UUID runId, int epoch) {
+        return turns.lockClaimedByRun(runId, workspaceId).map(turn -> {
+            if (turn.getStatus() != MentorTurn.Status.QUEUED)
+                throw new IllegalStateException("The turn of a queued run waits in the queue");
+            turn.start(turns.databaseNow(), epoch);
             changed(turn, true);
             return turn;
         });
     }
 
-    @Transactional
-    public MentorTurn renewLease(long workspaceId, UUID turnId, int attempt, UUID leaseId, Duration lease) {
-        MentorTurn turn = held(workspaceId, turnId, attempt, leaseId);
-        turn.renew(turns.databaseClock().plus(lease));
-        return turn;
-    }
-
     /** Freezes the model and rates the attempt runs with, so even a lost attempt is billed at them. */
     @Transactional
-    public void admit(long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode admission) {
-        held(workspaceId, turnId, attempt, leaseId).admit(admission);
+    public void admit(long workspaceId, UUID turnId, int epoch, UUID runId, JsonNode admission) {
+        held(workspaceId, turnId, epoch, runId).admit(admission);
     }
 
     /**
@@ -210,14 +204,15 @@ public class MentorTurnService {
      * writes no row: the attempt's end stores the answer once ({@link #end}), and memory alone keeps the partial
      * answer meanwhile ({@link MentorTurnProgress}). A stopped attempt takes no partial answer.
      *
-     * @throws MentorLeaseLostException when the attempt no longer holds its lease
+     * @throws MentorLeaseLostException when the attempt no longer holds its run's claim
      */
     @Transactional
     public boolean updatePartial(
-            long workspaceId, UUID turnId, int attempt, UUID leaseId, MentorTurnProgress.Update update) {
+            long workspaceId, UUID turnId, int epoch, UUID runId, MentorTurnProgress.Update update) {
+        int attempt = epoch;
         turns.commitWithoutFlushWait();
         if (!copies.tryHoldForCapture()) return false;
-        MentorTurnRepository.RunningAttempt running = turns.findRunningAttempt(workspaceId, turnId, attempt, leaseId)
+        MentorTurnRepository.RunningAttempt running = turns.findRunningAttempt(workspaceId, turnId, epoch, runId)
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
         if (redaction.personErasedSince(running.getStartedAt())) throw new MentorLeaseLostException(turnId, attempt);
         var frames = progress.frames(
@@ -239,9 +234,11 @@ public class MentorTurnService {
      * next turn does not shorten the conversation again. An attempt whose question was erased while it ran stores
      * nothing: Hephaestus does not answer words that the developer took back or that a Slack removal erased. An attempt that
      * ends after the developer's erasure was requested stores nothing either, because the erasure would not find it.
+     * The turn's run ends with it, so a repeated end finds the run ended and stores nothing twice.
      */
     @Transactional
-    public EndedTurn end(long workspaceId, UUID turnId, int attempt, UUID leaseId, Ending ending) {
+    public EndedTurn end(long workspaceId, UUID turnId, int epoch, UUID runId, Ending ending) {
+        int attempt = epoch;
         MentorTurn.Status outcome = ending.outcome();
         List<JsonNode> appended = ending.appended();
         // Before any row lock: a person erasure holds this fence while it deletes the ledger.
@@ -261,7 +258,7 @@ public class MentorTurnService {
             // Before any row lock: a person erasure holds this fence while it locks ledger rows.
             copies.holdForCapture();
         }
-        MentorTurn turn = held(workspaceId, turnId, attempt, leaseId);
+        MentorTurn turn = held(workspaceId, turnId, epoch, runId);
         Set<UUID> feedbackCalled = MentorPiEntries.feedbackCalled(appended, ending.lastPartial());
         boolean contextErased =
                 hasAppendedContext && redaction.personErasedSince(Objects.requireNonNull(turn.getStartedAt()));
@@ -274,8 +271,27 @@ public class MentorTurnService {
         if (contextErased) turn.recordFailure("context_changed", null);
         turns.flush();
         events.publishEvent(new MentorLedgerEvents.AttemptEnded(turn.getWorkspaceId(), turnId, attempt, endedAt));
+        runs.ended(workspaceId, runId, epoch);
         changed(turn, true);
         return new EndedTurn(turn, accountId(turn), usage(turn), contextErased ? Set.of() : feedbackCalled);
+    }
+
+    /**
+     * Ends the attempt for the server, after its run's holder did not: a stopped turn whose holder did not end it in its
+     * grace, or a turn past its deadline. It stores no entries, because only the holder has them; the partial answer
+     * readers saw last settles the feedback it called. The caller locked the turn and ends its run.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public EndedTurn endWithoutHolder(
+            MentorTurn locked, MentorTurn.Status outcome, @Nullable String error, @Nullable JsonNode lastPartial) {
+        Instant endedAt = clock.instant();
+        locked.end(outcome, error, endedAt);
+        turns.flush();
+        events.publishEvent(new MentorLedgerEvents.AttemptEnded(
+                locked.getWorkspaceId(), locked.getId(), locked.getAttempt(), endedAt));
+        changed(locked, true);
+        return new EndedTurn(
+                locked, accountId(locked), usage(locked), MentorPiEntries.feedbackCalled(List.of(), lastPartial));
     }
 
     /**
@@ -304,21 +320,20 @@ public class MentorTurnService {
         ended.recordFailure(cause, lastFailedCall);
     }
 
-    /** Stops a turn. Stopping a turn that already ended changes nothing. */
+    /**
+     * Stops a turn. A queued turn ends with its run. A running turn's holder may still end it with what it wrote, for
+     * the run's grace ({@link TurnRuns#stopped}). Stopping a turn that already ended changes nothing.
+     */
     @Transactional
     public MentorTurn stop(long workspaceId, UUID turnId) {
         MentorTurn turn = turns.lockByIdAndWorkspaceId(turnId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("MentorTurn", turnId.toString()));
+        boolean running = turn.getStatus() == MentorTurn.Status.RUNNING;
         if (turn.stopIfActive(clock.instant())) {
+            runs.stopped(workspaceId, turn.getRunId(), running);
             changed(turn, false);
         }
         return turn;
-    }
-
-    /** Stops the running turn of a conversation, if one runs. Queued follow-ups stay queued. */
-    @Transactional
-    public Optional<MentorTurn> stopRunning(long workspaceId, UUID conversationId) {
-        return stopRunningIf(workspaceId, conversationId, running -> true);
     }
 
     /**
@@ -328,54 +343,64 @@ public class MentorTurnService {
      */
     @Transactional
     public Optional<MentorTurn> stopRunning(long workspaceId, UUID conversationId, Predicate<MentorTurn> meant) {
-        return stopRunningIf(workspaceId, conversationId, meant);
-    }
-
-    /** The stop of both {@link #stopRunning} forms, in the caller's transaction. */
-    private Optional<MentorTurn> stopRunningIf(long workspaceId, UUID conversationId, Predicate<MentorTurn> meant) {
         Optional<MentorTurn> running =
                 turns.lockActiveByWorkspaceIdAndConversationId(workspaceId, conversationId).stream()
                         .filter(locked -> locked.getStatus() == MentorTurn.Status.RUNNING)
                         .findFirst()
                         .filter(locked -> meant.test(locked) && locked.stopIfActive(clock.instant()));
-        running.ifPresent(stopped -> changed(stopped, false));
+        running.ifPresent(stopped -> {
+            runs.stopped(workspaceId, stopped.getRunId(), true);
+            changed(stopped, false);
+        });
         return running;
     }
 
-    /** The turns whose lease expired, oldest first. */
+    /** Whether a host still holds the turn: it runs, or it stopped and its host still commits what it wrote. */
     @Transactional(readOnly = true)
-    public List<UUID> expiredLeases() {
-        return turns.findExpiredLeases(turns.databaseNow());
+    public boolean isHeld(MentorTurn turn) {
+        return turns.isHeld(turn.getId());
+    }
+
+    /** Locks the turn of a run, as the run's handler does before it moves the run. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<MentorTurn> lockByRun(long workspaceId, UUID runId) {
+        return turns.lockByRun(runId, workspaceId);
     }
 
     /**
-     * Takes an expired lease back. A running turn returns to the queue for its one retry, or fails after it; a stopped
-     * turn stays stopped. The lost attempt stored nothing ({@link #end}).
+     * Takes back the attempt of a turn whose run lost its holder: a running turn returns to the queue for its retry, or
+     * fails without one; a stopped turn stays stopped. The lost attempt stored nothing ({@link #end}). The caller locked
+     * the turn and moves its run.
      */
-    @Transactional
-    public Optional<LostAttempt> expireLease(UUID turnId) {
-        Optional<MentorTurn> locked = turns.lockById(turnId);
-        if (locked.isEmpty()) {
-            return Optional.empty();
-        }
-        MentorTurn turn = locked.get();
-        Instant now = turns.databaseClock();
-        Instant leasedUntil = turn.getLeasedUntil();
-        if (!turn.isLeased() || leasedUntil == null || !leasedUntil.isBefore(now)) {
-            return Optional.empty();
-        }
-        return Optional.of(takeBack(
-                turn,
-                turn.getStatus() == MentorTurn.Status.RUNNING && turn.getAttempt() < MAX_ATTEMPTS,
-                now,
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LostAttempt takeBack(MentorTurn locked, boolean retry) {
+        return takeBack(
+                locked,
+                retry && locked.getStatus() == MentorTurn.Status.RUNNING,
+                clock.instant(),
                 LEASE_EXPIRED,
-                LEASE_EXPIRED_CAUSE));
+                LEASE_EXPIRED_CAUSE);
     }
 
     /**
-     * Takes back the attempt that runs in a conversation and returns its turn to the queue, as an expired lease does
-     * ({@link #expireLease}). The attempt's host loses its lease, so the ledger refuses its later writes. The question
-     * stays, and the turn starts again from the conversation it is in then. Locks the conversation's queued and running
+     * Ends a queued turn that waited for a free Hephaestus longer than its start wait. The caller locked the turn and
+     * ends its run.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void expireQueued(MentorTurn locked, String error) {
+        if (locked.getStatus() != MentorTurn.Status.QUEUED)
+            throw new IllegalStateException("Only a queued turn waits to start");
+        locked.end(MentorTurn.Status.FAILED, error, clock.instant());
+        locked.recordFailure("start_wait_expired", null);
+        changed(locked, true);
+    }
+
+    /**
+     * Takes back the attempt held in a conversation. A running turn returns to the queue, as a lost holder does
+     * ({@link #takeBack(MentorTurn, boolean)}), without spending its retry. The attempt's host loses its run's claim, so
+     * the ledger refuses its later writes. The question
+     * stays, and the turn starts again from the conversation it is in then. A stopped turn stays stopped and its run ends.
+     * Locks the conversation's queued and held
      * turns until the transaction ends, so no claim starts one in the meantime. Publishes
      * {@link MentorLedgerEvents.AttemptTakenBack}, so the attempt is billed and its claims are settled.
      */
@@ -383,9 +408,18 @@ public class MentorTurnService {
     public Optional<LostAttempt> requeueRunning(long workspaceId, UUID conversationId) {
         Optional<LostAttempt> lost =
                 turns.lockActiveByWorkspaceIdAndConversationId(workspaceId, conversationId).stream()
-                        .filter(turn -> turn.getStatus() == MentorTurn.Status.RUNNING)
+                        .filter(turn -> turn.getStatus() == MentorTurn.Status.RUNNING
+                                || turn.getStatus() == MentorTurn.Status.STOPPED)
                         .findFirst()
-                        .map(turn -> takeBack(turn, true, clock.instant(), LEASE_EXPIRED, LEASE_EXPIRED_CAUSE));
+                        .map(turn -> {
+                            int epoch = turn.getAttempt();
+                            boolean stopped = turn.getStatus() == MentorTurn.Status.STOPPED;
+                            LostAttempt taken =
+                                    takeBack(turn, !stopped, clock.instant(), LEASE_EXPIRED, LEASE_EXPIRED_CAUSE);
+                            if (stopped) runs.ended(workspaceId, turn.getRunId(), epoch);
+                            else runs.requeue(workspaceId, turn.getId(), turn.getRunId(), epoch);
+                            return taken;
+                        });
         // Callers move the turn with SQL next, so the row must not stay RUNNING until the next flush.
         turns.flush();
         lost.ifPresent(taken -> events.publishEvent(new MentorLedgerEvents.AttemptTakenBack(
@@ -512,17 +546,21 @@ public class MentorTurnService {
         redaction.eraseStaleCopies(inserted, attemptStart, personErased);
     }
 
-    private MentorTurn held(long workspaceId, UUID turnId, int attempt, UUID leaseId) {
+    /**
+     * Locks the turn of the attempt that holds its run under {@code epoch}, then holds that claim until the transaction
+     * ends, so no take-back or stop moves the run meanwhile.
+     *
+     * @throws MentorLeaseLostException when the attempt no longer holds the run
+     */
+    private MentorTurn held(long workspaceId, UUID turnId, int epoch, UUID runId) {
         MentorTurn turn = turns.lockByIdAndWorkspaceId(turnId, workspaceId)
-                .orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
-        Instant expires = turn.getLeasedUntil();
-        if (!turn.isLeased()
-                || turn.getAttempt() != attempt
-                || !leaseId.equals(turn.getLeaseId())
-                || expires == null
-                || !expires.isAfter(turns.databaseClock())) {
-            throw new MentorLeaseLostException(turnId, attempt);
+                .orElseThrow(() -> new MentorLeaseLostException(turnId, epoch));
+        if ((turn.getStatus() != MentorTurn.Status.RUNNING && turn.getStatus() != MentorTurn.Status.STOPPED)
+                || turn.getAttempt() != epoch
+                || !runId.equals(turn.getRunId())) {
+            throw new MentorLeaseLostException(turnId, epoch);
         }
+        runs.requireCurrent(workspaceId, turnId, runId, epoch);
         return turn;
     }
 

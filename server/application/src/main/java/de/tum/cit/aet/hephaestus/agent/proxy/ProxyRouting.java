@@ -47,11 +47,10 @@ public record ProxyRouting(
      * The one execution this credential bills to.
      *
      * @param sourceId the {@code review_job} id, or the {@code mentor_turn} id
-     * @param number the row's {@code attempt} when the token was validated. Orphan recovery and the Heph turn lease
-     *     reaper can requeue a row — zeroing its per-attempt accumulators — while a call this credential
-     *     authenticated is still out, so a late call is settled on this attempt's own measurement, never on whoever
-     *     owns the row now.
-     * @param leaseId the lease that authenticated this attempt
+     * @param number the row's {@code attempt} when the token was validated. The run reaper can requeue a row — zeroing
+     *     its per-attempt accumulators — while a call this credential authenticated is still out, so a late call is
+     *     settled on this attempt's own measurement, never on whoever owns the row now.
+     * @param runId the run whose claim authenticated this attempt
      * @param directModelTokens the tokens that the attempt's direct model calls used on every slot; 0 for every other
      *     call
      * @param directModelSearchUnits the search units that the attempt's direct reranking calls billed; 0 for every
@@ -63,23 +62,23 @@ public record ProxyRouting(
             UsageSourceType sourceType,
             UUID sourceId,
             int number,
-            @Nullable UUID leaseId,
+            @Nullable UUID runId,
             long directModelTokens,
             long directModelSearchUnits,
             @Nullable Long workspaceId) {
 
-        public BilledAttempt(UsageSourceType sourceType, UUID sourceId, int number, @Nullable UUID leaseId) {
-            this(sourceType, sourceId, number, leaseId, 0L, 0L, null);
+        public BilledAttempt(UsageSourceType sourceType, UUID sourceId, int number, @Nullable UUID runId) {
+            this(sourceType, sourceId, number, runId, 0L, 0L, null);
         }
 
         public BilledAttempt(
                 UsageSourceType sourceType,
                 UUID sourceId,
                 int number,
-                @Nullable UUID leaseId,
+                @Nullable UUID runId,
                 long directModelTokens,
                 long directModelSearchUnits) {
-            this(sourceType, sourceId, number, leaseId, directModelTokens, directModelSearchUnits, null);
+            this(sourceType, sourceId, number, runId, directModelTokens, directModelSearchUnits, null);
         }
     }
 

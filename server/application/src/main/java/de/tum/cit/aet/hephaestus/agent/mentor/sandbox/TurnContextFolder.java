@@ -221,11 +221,10 @@ public class TurnContextFolder {
             return new Refused(
                     refusal("INVALID_PATH", "Nothing can be loaded at " + requested + ". INDEX.md lists what can."));
         }
-        if (turns.countToolsLoad(
-                        turn.turnId(), turn.workspaceId(), turn.attempt(), turn.leaseId(), MAX_LOADS_PER_ATTEMPT)
+        if (turns.countToolsLoad(turn.turnId(), turn.workspaceId(), turn.attempt(), turn.runId(), MAX_LOADS_PER_ATTEMPT)
                 == 0) {
             return new Refused(
-                    turns.hasLiveLease(turn.turnId(), turn.workspaceId(), turn.attempt(), turn.leaseId())
+                    turns.hasLiveLease(turn.turnId(), turn.workspaceId(), turn.attempt(), turn.runId())
                             ? refusal(
                                     "BUDGET_EXHAUSTED",
                                     "This answer already loaded " + MAX_LOADS_PER_ATTEMPT + " items.")
@@ -397,7 +396,7 @@ public class TurnContextFolder {
             Instant now = clock.instant();
             Instant last = checked.get();
             if (Duration.between(last, now).compareTo(LEASE_CHECK) >= 0 && checked.compareAndSet(last, now)) {
-                lost.set(!turns.hasLiveLease(turn.turnId(), turn.workspaceId(), turn.attempt(), turn.leaseId()));
+                lost.set(!turns.hasLiveLease(turn.turnId(), turn.workspaceId(), turn.attempt(), turn.runId()));
             }
             return lost.get();
         };
