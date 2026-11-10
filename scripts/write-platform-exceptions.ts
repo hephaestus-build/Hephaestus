@@ -6,9 +6,9 @@
  * each pin must be the newest stable release of its upstream: the script checks that first, and
  * refuses to write anything while a newer release exists. Bump that pin instead; its findings may go.
  *
- * Run `node scripts/scan-platform-images.ts --policy` first. This reads its policy results in
- * tmp/platform-policy, replaces every platform exception in security/vulnerability-policy.json, and
- * prints the summary that the change's review reads.
+ * Run `node scripts/scan-platform-images.ts --policy` first. This reads its scan reports in
+ * tmp/platform-policy, replaces the exceptions that it wrote before in
+ * security/vulnerability-policy.json, and prints the summary that the change's review reads.
  */
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -27,8 +27,11 @@ const EXPIRY_DAYS = 90;
 /** One platform pin and the upstream releases it follows. */
 export interface Pin {
 	name: string;
-	/** The GitHub repository whose releases name the upstream versions. */
-	repository: string;
+	/**
+	 * Where the upstream publishes what the pin can move to: a GitHub repository's releases, or, for an
+	 * image that appears in its registry later than its release, the registry's tags.
+	 */
+	source: { kind: "github" | "dockerhub"; repository: string };
 	pinned: string;
 	/** Whether an image of the policy results belongs to this pin. */
 	owns: (image: string) => boolean;
@@ -94,52 +97,69 @@ export function platformPinsOf(platformSource: string, agentSandboxSource: strin
 	return [
 		{
 			name: "k3s",
-			repository: "k3s-io/k3s",
+			source: { kind: "github", repository: "k3s-io/k3s" },
 			pinned: platformPins(platformSource).version,
 			// k3s pins the images it bundles, so they move only with k3s.
 			owns: (image) => image === "k3s" || image.startsWith("k3s-"),
 		},
 		{
 			name: "cert-manager",
-			repository: "cert-manager/cert-manager",
+			source: { kind: "github", repository: "cert-manager/cert-manager" },
 			pinned: chart("cert-manager").version,
 			owns: (image) => image.startsWith("cert-manager-"),
 		},
 		{
 			name: "Traefik chart",
-			repository: "traefik/traefik-helm-chart",
+			source: { kind: "github", repository: "traefik/traefik-helm-chart" },
 			pinned: `v${chart("traefik").version.replace(/^v/u, "")}`,
 			owns: () => false,
 		},
 		{
 			name: "Traefik",
-			repository: "traefik/traefik",
+			// The official image appears on Docker Hub hours after the GitHub release.
+			source: { kind: "dockerhub", repository: "library/traefik" },
 			pinned: traefikImage,
 			owns: (image) => image === "traefik",
 		},
 		{
 			name: "agent-sandbox",
-			repository: "kubernetes-sigs/agent-sandbox",
+			source: { kind: "github", repository: "kubernetes-sigs/agent-sandbox" },
 			pinned: agentSandboxPin(agentSandboxSource).version,
 			owns: (image) => image === "agent-sandbox-controller",
 		},
 	];
 }
 
-async function releasesOf(repository: string) {
+async function getJson(url: string, headers: Record<string, string> = {}): Promise<unknown> {
+	const response = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
+	if (!response.ok) {
+		throw new Error(`${url} is unavailable: HTTP ${response.status}`);
+	}
+	return parseJson(await response.text());
+}
+
+async function releasesOf(source: Pin["source"]) {
+	if (source.kind === "dockerhub") {
+		// Newest first: the newest stable version is on the first page.
+		const page = await getJson(
+			`https://hub.docker.com/v2/repositories/${source.repository}/tags?page_size=100&ordering=last_updated`,
+		);
+		return asArray(asRecord(page, "tags").results, "results").map((value) => ({
+			tag: asString(asRecord(value, "tag").name, "tag.name"),
+			draft: false,
+			prerelease: false,
+		}));
+	}
 	const headers: Record<string, string> = { accept: "application/vnd.github+json" };
 	const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
 	if (token !== undefined && token !== "") {
 		headers.authorization = `Bearer ${token}`;
 	}
-	const response = await fetch(`https://api.github.com/repos/${repository}/releases?per_page=100`, {
+	const releases = await getJson(
+		`https://api.github.com/repos/${source.repository}/releases?per_page=100`,
 		headers,
-		signal: AbortSignal.timeout(30_000),
-	});
-	if (!response.ok) {
-		throw new Error(`The releases of ${repository} are unavailable: HTTP ${response.status}`);
-	}
-	return asArray(parseJson(await response.text()), "releases").map((value) => {
+	);
+	return asArray(releases, "releases").map((value) => {
 		const release = asRecord(value, "release");
 		return {
 			tag: asString(release.tag_name, "release.tag_name"),
@@ -149,7 +169,14 @@ async function releasesOf(repository: string) {
 	});
 }
 
-/** One refused finding of a policy result, with what its exception must carry. */
+/** Where a version of the pin's upstream is published: the evidence of its exceptions. */
+export function releaseUrl(pin: Pin, version: string): string {
+	return pin.source.kind === "github"
+		? `https://github.com/${pin.source.repository}/releases/tag/${encodeURIComponent(version)}`
+		: `https://hub.docker.com/v2/repositories/${pin.source.repository}/tags/${encodeURIComponent(version)}`;
+}
+
+/** One finding that blocks a release unless an exception accepts it. */
 export interface Refusal {
 	image: string;
 	platform: string;
@@ -160,43 +187,73 @@ export interface Refusal {
 	severity: string;
 }
 
-/** The refused findings of one policy result, with their severity from the scan report. */
-export function refusalsOf(result: unknown, report: unknown): Refusal[] {
-	const outcome = asRecord(result, "policy result");
-	const image = asString(outcome.image, "image");
-	const platform = asString(outcome.platform, "platform");
-	const digest = asString(outcome.digest, "digest");
-	const severities = new Map<string, string>();
+/**
+ * Every finding of one scan that blocks a release without an exception: HIGH or CRITICAL, with a fix
+ * that upstream has published. Read from the report, not from the evaluator's refusals, which leave
+ * out the findings that an exception already accepts: a second run writes the same entries.
+ */
+export function blockingFindings(
+	subject: { image: string; platform: string; digest: string },
+	report: unknown,
+): Refusal[] {
+	const findings = new Map<string, Refusal>();
 	for (const entry of asArray(asRecord(report, "Trivy report").Results ?? [], "Results")) {
-		for (const finding of isRecord(entry) && Array.isArray(entry.Vulnerabilities)
+		for (const value of isRecord(entry) && Array.isArray(entry.Vulnerabilities)
 			? entry.Vulnerabilities
 			: []) {
-			const record = asRecord(finding, "vulnerability");
-			severities.set(
-				`${asString(record.VulnerabilityID, "id")}|${asString(record.PkgName, "package")}|${asString(record.InstalledVersion, "version")}`,
-				asString(record.Severity, "severity"),
+			const record = asRecord(value, "vulnerability");
+			const severity = asString(record.Severity, "severity");
+			const fixed = typeof record.FixedVersion === "string" && record.FixedVersion.trim() !== "";
+			if (!fixed || (severity !== "HIGH" && severity !== "CRITICAL")) {
+				continue;
+			}
+			const finding = {
+				...subject,
+				vulnerability: asString(record.VulnerabilityID, "id"),
+				package: asString(record.PkgName, "package"),
+				installedVersion: asString(record.InstalledVersion, "version"),
+				severity,
+			};
+			// A module that several binaries carry is one finding: one exception covers them all.
+			findings.set(
+				`${finding.vulnerability}|${finding.package}|${finding.installedVersion}`,
+				finding,
 			);
 		}
 	}
-	// The evaluator names a finding once for each binary that carries it; one exception covers them all.
-	const rejected = new Set(
-		asArray(outcome.rejected, "rejected").map((value) => asString(value, "fingerprint")),
+	return [...findings.values()];
+}
+
+const exceptionKey = (entry: Record<string, unknown>) =>
+	[entry.image, entry.platform, entry.vulnerability, entry.package, entry.installedVersion].join(
+		"|",
 	);
-	return [...rejected].map((value) => {
-		const [, vulnerability, pkg, installedVersion] = value.split("|");
-		if (vulnerability === undefined || pkg === undefined || installedVersion === undefined) {
-			throw new Error(`malformed policy fingerprint: ${value}`);
-		}
-		return {
-			image,
-			platform,
-			digest,
-			vulnerability,
-			package: pkg,
-			installedVersion,
-			severity: severities.get(`${vulnerability}|${pkg}|${installedVersion}`) ?? "UNKNOWN",
-		};
-	});
+
+/**
+ * The policy's exceptions with this generator's own entries replaced: `affected` entries for a
+ * platform image whose evidence is a release of a platform pin. Every other entry stays, such as a
+ * reviewed `not_affected` decision, or an entry for another image of the same name. A finding that
+ * such an entry already accepts gets no second one.
+ */
+export function mergeExceptions(
+	existing: readonly unknown[],
+	generated: readonly Record<string, unknown>[],
+	platformImages: ReadonlySet<string>,
+	pins: readonly Pin[],
+): unknown[] {
+	const owned = (entry: unknown) =>
+		isRecord(entry) &&
+		entry.status === "affected" &&
+		platformImages.has(String(entry.image)) &&
+		pins.some((pin) => String(entry.evidence).startsWith(releaseUrl(pin, "")));
+	const kept = existing.filter((entry) => !owned(entry));
+	const accepted = new Set(kept.filter(isRecord).map(exceptionKey));
+	return [
+		...kept,
+		...generated
+			.filter((entry) => !accepted.has(exceptionKey(entry)))
+			.toSorted((a, b) => exceptionKey(a).localeCompare(exceptionKey(b))),
+	];
 }
 
 /** The exception that accepts one refused finding while its pin is the newest upstream release. */
@@ -213,8 +270,8 @@ export function exceptionFor(refusal: Refusal, pin: Pin, checked: string, today:
 		installedVersion: refusal.installedVersion,
 		digest: refusal.digest,
 		status: "affected",
-		justification: `No upstream release ships the fix. On ${day}, ${checked} was the newest stable release of ${pin.repository}, and ${pin.pinned} is pinned. Retire this entry when the pin moves.`,
-		evidence: `https://github.com/${pin.repository}/releases/tag/${encodeURIComponent(checked)}`,
+		justification: `No release of ${pin.source.repository} newer than the pin exists: on ${day}, ${checked} was its newest stable release, and ${pin.pinned} is pinned. Retire this entry when the pin moves.`,
+		evidence: releaseUrl(pin, checked),
 		owner: OWNER,
 		expires: expires.toISOString().replace(".000Z", "Z"),
 	};
@@ -228,9 +285,9 @@ if (import.meta.main) {
 	const checked = new Map<string, string>();
 	const stale: string[] = [];
 	for (const pin of pins) {
-		const newest = newestStable(await releasesOf(pin.repository));
+		const newest = newestStable(await releasesOf(pin.source));
 		if (newest === undefined) {
-			throw new Error(`${pin.repository} lists no stable release`);
+			throw new Error(`${pin.source.repository} lists no stable release`);
 		}
 		if (compareVersions(newest, pin.pinned) > 0) {
 			stale.push(`${pin.name}: pinned ${pin.pinned}, newest ${newest}`);
@@ -244,16 +301,23 @@ if (import.meta.main) {
 	}
 
 	const refusals: Refusal[] = [];
+	const platformImages = new Set<string>();
 	for (const platform of PLATFORMS) {
 		const directory = policyDirectory(platform);
 		const files = await readdir(directory);
 		for (const file of files.filter((name) => name.endsWith(".policy.json"))) {
-			const result = parseJson(await readFile(path.join(directory, file), "utf8"));
-			const image = asString(asRecord(result, "policy result").image, "image");
+			const result = asRecord(
+				parseJson(await readFile(path.join(directory, file), "utf8")),
+				"policy result",
+			);
+			const image = asString(result.image, "image");
+			platformImages.add(image);
 			const report = parseJson(
 				await readFile(path.join(directory, `${reportStem(image, platform)}.json`), "utf8"),
 			);
-			refusals.push(...refusalsOf(result, report));
+			refusals.push(
+				...blockingFindings({ image, platform, digest: asString(result.digest, "digest") }, report),
+			);
 		}
 	}
 
@@ -265,25 +329,19 @@ if (import.meta.main) {
 		}
 		return exceptionFor(refusal, pin, checked.get(pin.name) ?? pin.pinned, today);
 	});
-	const platformImages = new Set(refusals.map((refusal) => refusal.image));
 	const policy = asRecord(parseJson(await readFile(POLICY, "utf8")), "policy");
-	const kept = asArray(policy.exceptions, "exceptions").filter(
-		(entry) => !(isRecord(entry) && platformImages.has(String(entry.image))),
+	policy.exceptions = mergeExceptions(
+		asArray(policy.exceptions, "exceptions"),
+		exceptions,
+		platformImages,
+		pins,
 	);
-	policy.exceptions = [
-		...kept,
-		...exceptions.toSorted((a, b) =>
-			`${a.image}|${a.platform}|${a.vulnerability}|${a.package}`.localeCompare(
-				`${b.image}|${b.platform}|${b.vulnerability}|${b.package}`,
-			),
-		),
-	];
 	await writeFile(POLICY, `${JSON.stringify(policy, null, "\t")}\n`);
 
 	const count = (list: readonly Refusal[], severity: string) =>
 		list.filter((refusal) => refusal.severity === severity).length;
 	console.log("| Image | Exceptions | HIGH | CRITICAL |\n|---|---:|---:|---:|");
-	for (const image of [...platformImages].toSorted()) {
+	for (const image of [...new Set(refusals.map((refusal) => refusal.image))].toSorted()) {
 		const own = refusals.filter((refusal) => refusal.image === image);
 		console.log(`| ${image} | ${own.length} | ${count(own, "HIGH")} | ${count(own, "CRITICAL")} |`);
 	}

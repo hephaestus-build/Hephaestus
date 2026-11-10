@@ -794,12 +794,14 @@ export function evaluate(
 	} = {},
 ) {
 	// Trivy omits `Results` when an image holds no package it can analyze, as a static busybox or the
-	// pause image. That is a complete schema 2 report with nothing found, not a missing one.
+	// pause image. That is a complete schema 2 report with nothing found, but only when Trivy also
+	// found no operating system: an OS without results is a scan that missed its packages.
 	const nothingToAnalyze =
 		record(reportValue) &&
 		reportValue.SchemaVersion === 2 &&
 		typeof reportValue.ArtifactName === "string" &&
-		reportValue.Results === undefined;
+		reportValue.Results === undefined &&
+		!(record(reportValue.Metadata) && reportValue.Metadata.OS !== undefined);
 	if (!record(reportValue) || (!Array.isArray(reportValue.Results) && !nothingToAnalyze)) {
 		throw new Error("malformed Trivy report");
 	}

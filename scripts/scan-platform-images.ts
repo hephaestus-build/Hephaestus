@@ -377,18 +377,13 @@ export async function checkPlatformPins(
 	}
 }
 
-/** The platform pins on disk, verified against their releases, and the images they run on a host. */
-export async function verifiedPlatformSubjects(): Promise<{
-	pins: ReturnType<typeof platformPins>;
-	agentSandbox: ReturnType<typeof agentSandboxPin>;
-	subjects: Subject[];
-}> {
+/** The images that a host runs from the platform pins on disk, after checking the pins against their releases. */
+async function verifiedPlatformSubjects(): Promise<Subject[]> {
 	const source = await readFile("deploy/platform/k3s-platform.yaml", "utf8");
-	const agentSandboxSource = await readFile("deploy/platform/k3s-agent-sandbox.yaml", "utf8");
+	const agentSandbox = await readFile("deploy/platform/k3s-agent-sandbox.yaml", "utf8");
 	const containerd = await readFile("deploy/platform/k3s-containerd.toml.tmpl", "utf8");
-	await checkPlatformPins(source, agentSandboxSource, containerd);
+	await checkPlatformPins(source, agentSandbox, containerd);
 	const pins = platformPins(source);
-	const agentSandbox = agentSandboxPin(agentSandboxSource);
 	// The complete upstream list less the add-ons that the host disables. A config change that turns one on scans it again.
 	const bundled = runningBundledSubjects(
 		bundledSubjects(
@@ -398,7 +393,7 @@ export async function verifiedPlatformSubjects(): Promise<{
 		),
 		await readFile("deploy/platform/k3s-config.yaml", "utf8"),
 	);
-	return { pins, agentSandbox, subjects: [...pins.subjects, agentSandbox.subject, ...bundled] };
+	return [...pins.subjects, agentSandboxPin(agentSandbox).subject, ...bundled];
 }
 
 /** The directory of the policy reports of one platform. */
@@ -432,7 +427,7 @@ if (import.meta.main) {
 	if (mode !== undefined && mode !== "--check-pins" && mode !== "--policy") {
 		throw new Error("Usage: scan-platform-images.ts [--check-pins | --policy]");
 	}
-	const { subjects } = await verifiedPlatformSubjects();
+	const subjects = await verifiedPlatformSubjects();
 	if (mode === "--check-pins") {
 		process.exit(0);
 	}

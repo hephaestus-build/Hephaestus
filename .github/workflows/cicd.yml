@@ -863,6 +863,7 @@ jobs:
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
         needs.detect-changes.outputs.release-images == 'true' ||
+        needs.detect-changes.outputs.release-preflight == 'true' ||
         needs.detect-changes.outputs.unfiltered == 'true'
       )
     runs-on: ubuntu-latest
