@@ -45,7 +45,13 @@ public enum ActionKind {
      * Scrubs the GitHub issue of an erased product-feedback report, for the instance: moves a public one to the private
      * repository, then replaces its text and closes it. Each step can be read back or repeated safely.
      */
-    CLEANUP_ISSUE(false, true);
+    CLEANUP_ISSUE(false, true),
+
+    /**
+     * Moves a reporter's public product-feedback issue to the private repository, for the instance. The moved issue
+     * keeps its marker, so an attempt whose write may have started looks for it there first.
+     */
+    TRANSFER_ISSUE(false, true);
 
     private final boolean atMostOnce;
     private final boolean instanceLevel;
