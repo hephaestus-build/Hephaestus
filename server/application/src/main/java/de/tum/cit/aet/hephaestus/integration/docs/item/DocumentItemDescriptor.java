@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.docs.item;
 
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
@@ -82,6 +83,11 @@ public class DocumentItemDescriptor implements ItemDescriptor {
     @Override
     public String recordSchemaResource() {
         return "contracts/items/docs.document.schema.json";
+    }
+
+    @Override
+    public SourceKind recordSource() {
+        return DocumentContentSource.SOURCE;
     }
 
     @Override

@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ConversationThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadEvents;
+import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -39,7 +40,7 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnCaptureRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
 public class ThreadCaptureSource {
-    public static final SourceKind SOURCE = new SourceKind("slack.conversation.thread");
+    public static final SourceKind SOURCE = ThreadItemDescriptor.RECORD_SOURCE;
     public static final String OUTPUT_KEY = "inputs/context/conversation_thread.json";
     private final ObjectMapper mapper;
     private final SlackConversationProjector projection;

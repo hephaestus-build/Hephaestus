@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
@@ -7,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventDefinition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewLimitation;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.PullRequestContentSource;
 import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Component;
@@ -59,6 +61,11 @@ public class PullRequestReviewItemDescriptor implements ItemDescriptor {
     @Override
     public String recordSchemaResource() {
         return "contracts/items/scm/pull_request_review.schema.json";
+    }
+
+    @Override
+    public SourceKind recordSource() {
+        return PullRequestContentSource.CORE;
     }
 
     @Override

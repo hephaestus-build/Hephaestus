@@ -123,6 +123,11 @@ final class FixtureIntegration {
             }
 
             @Override
+            public SourceKind recordSource() {
+                return new SourceKind("fixture.widget.parts");
+            }
+
+            @Override
             public boolean reviewable() {
                 return reviewable;
             }
