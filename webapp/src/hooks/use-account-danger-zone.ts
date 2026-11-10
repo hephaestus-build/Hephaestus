@@ -11,7 +11,9 @@ import type {
 	DangerZoneSectionProps,
 	DataExportState,
 } from "@/components/settings/DangerZoneSection";
+import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { saveBlobFile } from "@/lib/download";
+import { type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 import { recordAccountDeleted } from "@/runtime/auth/account-deleted-notice";
 import { useAuth } from "@/runtime/auth/AuthContext";
@@ -140,12 +142,20 @@ function useAccountDeletion(
 ): DangerZoneSectionProps["deletion"] {
 	const { getUserId } = useAuth();
 	const accountId = getUserId();
+	// Deleting an account cannot be undone, so the server asks for a recent sign-in instead of deleting.
+	const [challenge, setChallenge] = useState<StepUpChallenge>();
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
 	const deleteAccount = useMutation({
 		mutationFn: deleteOwnAccount,
 		onSuccess: async () => {
 			await onAccountDeleted();
 		},
-		onError: () => {
+		onError: (error) => {
+			const stepUp = stepUpChallengeOf(error);
+			if (stepUp !== undefined) {
+				setChallenge(stepUp);
+				return;
+			}
 			toast.error("We could not delete your account. Try again.");
 		},
 	});
@@ -156,6 +166,20 @@ function useAccountDeletion(
 			if (hasText(accountId)) {
 				deleteAccount.mutate(accountId);
 			}
+		},
+		confirmation: {
+			open: challenge !== undefined,
+			onOpenChange: (open) => {
+				if (!open) {
+					setChallenge(undefined);
+				}
+			},
+			maxAgeSeconds: challenge?.maxAgeSeconds,
+			providers: confirmAccess.providers,
+			loading: confirmAccess.loading,
+			error: confirmAccess.error,
+			onRetry: confirmAccess.retry,
+			onSignIn: confirmAccess.signIn,
 		},
 	};
 }

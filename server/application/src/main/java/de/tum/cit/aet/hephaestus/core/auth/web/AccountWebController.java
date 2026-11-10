@@ -1,5 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.auth.web;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
+import de.tum.cit.aet.hephaestus.core.AuditLedger;
+import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.consent.ConsentService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -8,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyAssurancePolicy;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -18,6 +23,7 @@ import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -139,6 +145,7 @@ public class AccountWebController {
         return ResponseEntity.ok(views);
     }
 
+    @RecentSignInExempt(reason = "the link can be added again, and adding it asks for a recent sign-in")
     @DeleteMapping("/identities/{id}")
     @Operation(summary = "Unlink one of the current user's linked identity providers", operationId = "unlinkIdentity")
     @ApiResponses({
@@ -155,6 +162,12 @@ public class AccountWebController {
     @DeleteMapping
     @Operation(summary = "Delete the current account (GDPR Art. 17)", operationId = "deleteCurrentUser")
     @ApiResponse(responseCode = "204", description = "Account deletion requested")
+    @ApiResponse(
+            responseCode = "403",
+            description = "The caller has not signed in recently (problem type step-up-required)",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "ACCOUNT_DELETED")
+    @RequiresRecentSignIn
     public ResponseEntity<Void> deleteAccount(
             @RequestHeader(value = "X-Confirm-Delete", required = false) @Nullable String confirmHeader) {
         Long accountId = CurrentAccount.requireId();

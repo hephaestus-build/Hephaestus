@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
@@ -70,6 +71,7 @@ public class PracticeReleaseController {
         return ResponseEntity.ok(presenter.present(ctx.id(), practice));
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can still take the release later")
     @DeleteMapping("/{slug}")
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_DEFINITION")

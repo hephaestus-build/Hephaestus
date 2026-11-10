@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.web;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentProperties;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
@@ -189,12 +190,14 @@ public class MentorConversationController {
         return vote(workspace.id(), entryId, request.vote());
     }
 
+    @RecentSignInExempt(reason = "clears the person's own rating, which they can give again")
     @DeleteMapping("/entries/{entryId}/vote")
     @Operation(summary = "Clear the vote on one of Hephaestus's messages")
     public MentorEntryDTO clearMentorVote(WorkspaceContext workspace, @PathVariable UUID entryId) {
         return vote(workspace.id(), entryId, null);
     }
 
+    @RecentSignInExempt(reason = "removes the person's own conversation entry and changes no access")
     @DeleteMapping("/entries/{entryId}")
     @Operation(
             summary = "Delete a message the developer wrote",

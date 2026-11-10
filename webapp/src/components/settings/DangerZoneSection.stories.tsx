@@ -12,6 +12,16 @@ const exportIn = (state: DataExportState, downloading = false) => ({
 	onDownload: fn(),
 });
 
+const noSignInAsked = {
+	open: false,
+	onOpenChange: fn(),
+	providers: [{ registrationId: "github", providerType: "GITHUB", displayName: "GitHub" }],
+	loading: false,
+	error: false,
+	onSignIn: fn(),
+	onRetry: fn(),
+};
+
 const meta = {
 	component: DangerZoneSection,
 	parameters: { layout: "fullscreen" },
@@ -19,7 +29,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		dataExport: exportIn("idle"),
-		deletion: { available: true, deleting: false, onDelete: fn() },
+		deletion: { available: true, deleting: false, onDelete: fn(), confirmation: noSignInAsked },
 	},
 } satisfies Meta<typeof DangerZoneSection>;
 
@@ -100,7 +110,9 @@ export const ConfirmDeletion: Story = {
 };
 
 export const Deleting: Story = {
-	args: { deletion: { available: true, deleting: true, onDelete: fn() } },
+	args: {
+		deletion: { available: true, deleting: true, onDelete: fn(), confirmation: noSignInAsked },
+	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Deleting…" })).toBeDisabled();
 	},
@@ -108,11 +120,29 @@ export const Deleting: Story = {
 
 /** The signed-in account is not known yet, so the server could not confirm whose account to delete. */
 export const DeletionUnavailable: Story = {
-	args: { deletion: { available: false, deleting: false, onDelete: fn() } },
+	args: {
+		deletion: { available: false, deleting: false, onDelete: fn(), confirmation: noSignInAsked },
+	},
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Delete account" }));
 		const dialog = within(await screen.findByRole("alertdialog"));
 		await userEvent.type(dialog.getByLabelText("Confirmation phrase"), "delete my account");
 		await expect(dialog.getByRole("button", { name: "Delete account" })).toBeDisabled();
+	},
+};
+
+/** The server asked for a recent sign-in before it deletes the account. */
+export const AsksForARecentSignIn: Story = {
+	args: {
+		deletion: {
+			available: true,
+			deleting: false,
+			onDelete: fn(),
+			confirmation: { ...noSignInAsked, open: true, maxAgeSeconds: 300 },
+		},
+	},
+	play: async () => {
+		const dialog = await screen.findByRole("dialog", { name: "Confirm access" });
+		await expect(within(dialog).getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
 	},
 };

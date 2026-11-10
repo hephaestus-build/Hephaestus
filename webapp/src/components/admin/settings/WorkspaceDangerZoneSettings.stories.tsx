@@ -5,6 +5,16 @@ import { withStandardPage } from "@/stories/decorators";
 
 import { WorkspaceDangerZoneSettings } from "./WorkspaceDangerZoneSettings";
 
+const noSignInAsked = {
+	open: false,
+	onOpenChange: fn(),
+	providers: [{ registrationId: "github", providerType: "GITHUB", displayName: "GitHub" }],
+	loading: false,
+	error: false,
+	onSignIn: fn(),
+	onRetry: fn(),
+};
+
 const meta = {
 	component: WorkspaceDangerZoneSettings,
 	parameters: { layout: "fullscreen", chromatic: { viewports: [320, 1440] } },
@@ -15,6 +25,7 @@ const meta = {
 		ownerCheck: { status: "known", owner: true },
 		deleting: false,
 		onDelete: fn(async () => undefined),
+		confirmation: noSignInAsked,
 	},
 } satisfies Meta<typeof WorkspaceDangerZoneSettings>;
 
@@ -67,5 +78,14 @@ export const RetryingPermissionCheck: Story = {
 	args: { ownerCheck: { status: "failed", retrying: true, onRetry: fn() } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: /retrying/iu })).toBeDisabled();
+	},
+};
+
+/** The server asked for a recent sign-in before it deletes the workspace. */
+export const AsksForARecentSignIn: Story = {
+	args: { confirmation: { ...noSignInAsked, open: true, maxAgeSeconds: 300 } },
+	play: async () => {
+		const dialog = await screen.findByRole("dialog", { name: "Confirm access" });
+		await expect(within(dialog).getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
 	},
 };

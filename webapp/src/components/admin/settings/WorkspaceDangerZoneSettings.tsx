@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 
+import {
+	ConfirmAccessDialog,
+	type ConfirmAccessDialogProps,
+} from "@/components/auth/ConfirmAccessDialog";
+
 import { DeleteWorkspaceAlertDialog } from "./DeleteWorkspaceAlertDialog";
 
 /** Whether the reader owns the workspace, which deletion needs. */
@@ -19,6 +24,8 @@ export interface WorkspaceDangerZoneSettingsProps {
 	deleting: boolean;
 	/** Deletes the workspace. Resolves on success; rejects to keep the confirmation open. */
 	onDelete: () => Promise<void>;
+	/** Shown when the server asks for a recent sign-in before it deletes the workspace. */
+	confirmation: ConfirmAccessDialogProps;
 }
 
 export function WorkspaceDangerZoneSettings({
@@ -26,6 +33,7 @@ export function WorkspaceDangerZoneSettings({
 	ownerCheck,
 	deleting,
 	onDelete,
+	confirmation,
 }: WorkspaceDangerZoneSettingsProps) {
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const isOwner = ownerCheck.status === "known" && ownerCheck.owner;
@@ -93,7 +101,8 @@ export function WorkspaceDangerZoneSettings({
 
 			<DeleteWorkspaceAlertDialog
 				key={workspaceSlug}
-				open={dialogOpen}
+				// The sign-in request replaces the confirmation while it is open.
+				open={dialogOpen && !confirmation.open}
 				onOpenChange={setDialogOpen}
 				workspaceSlug={workspaceSlug}
 				isDeleting={deleting}
@@ -104,6 +113,7 @@ export function WorkspaceDangerZoneSettings({
 						.catch(() => undefined);
 				}}
 			/>
+			<ConfirmAccessDialog {...confirmation} />
 		</section>
 	);
 }

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
@@ -105,6 +106,7 @@ public class PracticeGroupController {
         return presenter.presentGroups(ctx.id(), groups.listGroups(ctx, null));
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can create the group again")
     @DeleteMapping("/{groupSlug}")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_GROUP")
     @Operation(operationId = "deletePracticeGroup")
@@ -114,6 +116,7 @@ public class PracticeGroupController {
         return ResponseEntity.noContent().build();
     }
 
+    @RecentSignInExempt(reason = "returns the group to the catalog version, which a workspace admin can customize again")
     @DeleteMapping("/{groupSlug}/catalog-customization")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_GROUP")
     @Operation(operationId = "resetGroupToCatalog")

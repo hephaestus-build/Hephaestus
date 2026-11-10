@@ -8,6 +8,7 @@ import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
@@ -109,6 +110,42 @@ describe("useAccountDangerZone — account deletion", () => {
 
 		await waitFor(() => expect(onAccountDeleted).toHaveBeenCalledOnce());
 		expect(sentHeader).toBe(String(currentUser.id));
+	});
+
+	it("asks for a recent sign-in instead of reporting a failure, and replaces the confirmation", async () => {
+		const onAccountDeleted = vi.fn();
+		server.use(
+			http.delete("*/user", () =>
+				HttpResponse.json(
+					{
+						status: 403,
+						title: "Confirm access",
+						detail: "This action requires a recent sign-in.",
+						type: problemType("step-up-required"),
+						maxAgeSeconds: 300,
+					},
+					{ status: 403 },
+				),
+			),
+		);
+
+		renderWithClient(<DangerZone onAccountDeleted={onAccountDeleted} />);
+		openDeleteDialog();
+		const dialog = await screen.findByRole("alertdialog");
+		const confirmButton = within(dialog).getByRole<HTMLButtonElement>("button", {
+			name: "Delete account",
+		});
+		fireEvent.change(within(dialog).getByLabelText("Confirmation phrase"), {
+			target: { value: "delete my account" },
+		});
+		await waitFor(() => expect(confirmButton.disabled).toBe(false));
+		fireEvent.click(confirmButton);
+
+		const ask = await screen.findByRole("dialog", { name: "Confirm access" });
+		expect(ask.textContent).toContain("sign-in from the last 5 minutes");
+		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+		expect(screen.queryByText(/could not delete your account/u)).toBeNull();
+		expect(onAccountDeleted).not.toHaveBeenCalled();
 	});
 
 	it("does not call the deletion endpoint when the phrase is wrong (button stays disabled)", async () => {

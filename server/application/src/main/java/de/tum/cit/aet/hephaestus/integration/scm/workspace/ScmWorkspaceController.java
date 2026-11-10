@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
@@ -72,6 +73,7 @@ public class ScmWorkspaceController {
         return ResponseEntity.created(location).build();
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can monitor the repository again, and the next sync restores it")
     @DeleteMapping("/repositories")
     @Operation(summary = "Remove a repository from a workspace monitor list")
     @ApiResponse(responseCode = "204", description = "Repository removed from the monitor list")
@@ -92,6 +94,7 @@ public class ScmWorkspaceController {
         return ResponseEntity.ok(gitLabStoppedProjectService.getStoppedProjects(workspaceContext.id()));
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can add the project again, and the next sync restores its work")
     @DeleteMapping("/repositories/stopped/{repositoryItemId}")
     @Operation(summary = "Remove the synced work a workspace keeps from a stopped GitLab project")
     @RequireAtLeastWorkspaceAdmin
@@ -143,6 +146,7 @@ public class ScmWorkspaceController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can add the label again")
     @DeleteMapping("/teams/{teamId}/labels/{labelId}")
     @Operation(summary = "Remove a repository label from a team")
     @RequireAtLeastWorkspaceAdmin

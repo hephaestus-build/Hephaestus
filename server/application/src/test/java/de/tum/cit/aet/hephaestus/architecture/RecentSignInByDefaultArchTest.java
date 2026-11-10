@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 
 /**
  * Every instance-admin mutation, and every workspace role mutation, must declare whether it needs a recent
@@ -64,6 +65,54 @@ class RecentSignInByDefaultArchTest extends HephaestusArchitectureTest {
                 @RecentSignInExempt. One that can grant, demote or remove an owner declares \
                 @RequiresRecentSignIn(OWNER_CHANGE) and goes through MembershipService.authorizeRoleChange; \
                 one that cannot declares @RecentSignInExempt(reason="…").""").isEmpty();
+    }
+
+    /**
+     * A delete is where a re-authentication matters most when it cannot be undone, so every delete handler records
+     * the decision: {@link RequiresRecentSignIn} for one that removes an account or a workspace for good,
+     * {@link RecentSignInExempt} with the reason for one that can be added back.
+     */
+    @Test
+    void everyDeleteHandlerDeclaresItsRecentSignInStatus() {
+        List<String> undeclared = classes.stream()
+                .filter(AuditByDefaultArchTest::isController)
+                .flatMap(c -> c.getMethods().stream())
+                .filter(m -> m.isAnnotatedWith(DeleteMapping.class))
+                .filter(m -> !m.isAnnotatedWith(RequiresRecentSignIn.class)
+                        && !m.isAnnotatedWith(RecentSignInExempt.class)
+                        && !m.getOwner().isAnnotatedWith(RecentSignInExempt.class))
+                .map(RecentSignInByDefaultArchTest::name)
+                .sorted()
+                .toList();
+
+        assertThat(undeclared).as("""
+                These delete handlers declare neither @RequiresRecentSignIn nor @RecentSignInExempt. One that \
+                removes something for good, such as an account or a workspace, declares @RequiresRecentSignIn; one \
+                whose effect can be undone declares @RecentSignInExempt(reason="…").""").isEmpty();
+    }
+
+    /** The interceptor records a refusal on a type; a gated handler without one could only fail at request time. */
+    @Test
+    void everyHandlerThatAsksOnEveryCallCanRecordItsRefusal() {
+        List<String> unrecordable = classes.stream()
+                .filter(AuditByDefaultArchTest::isController)
+                .flatMap(c -> c.getMethods().stream())
+                .filter(m -> m.tryGetAnnotationOfType(RequiresRecentSignIn.class)
+                        .filter(a -> a.value() == RequiresRecentSignIn.When.EVERY_CALL)
+                        .isPresent())
+                .filter(m -> {
+                    String refusal = m.getAnnotationOfType(RequiresRecentSignIn.class).refusal();
+                    return refusal.isEmpty()
+                            ? malformedReason(m).isPresent()
+                            : !AuditLedger.AUTH_EVENT.vocabulary().contains(refusal);
+                })
+                .map(RecentSignInByDefaultArchTest::name)
+                .sorted()
+                .toList();
+
+        assertThat(unrecordable)
+                .as("@RequiresRecentSignIn handlers with neither @Audited(AUTH_EVENT) nor a valid refusal type")
+                .isEmpty();
     }
 
     /**

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.webauthn;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -94,6 +95,7 @@ public class PasskeyController {
     }
 
     @AuditExempt(reason = "PasskeyService records credential removal")
+    @RecentSignInExempt(reason = "removes one passkey, which the person can register again")
     @DeleteMapping("/{credentialId}")
     @Operation(operationId = "removePasskey", summary = "Remove a passkey")
     public void remove(@PathVariable String credentialId, HttpServletRequest request, HttpServletResponse response) {

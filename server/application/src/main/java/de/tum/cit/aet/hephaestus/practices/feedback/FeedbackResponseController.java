@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResolutionCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
@@ -71,6 +72,7 @@ public class FeedbackResponseController {
         return ResponseEntity.ok(responseService.getResponse(workspaceContext, feedbackId));
     }
 
+    @RecentSignInExempt(reason = "takes back the developer's own answer, which they can give again")
     @DeleteMapping("/{feedbackId}/response")
     @Operation(operationId = "clearOwnFeedbackResponse", summary = "Clear the response to delivered feedback")
     @ApiResponse(responseCode = "200", description = "Complete cleared response returned")

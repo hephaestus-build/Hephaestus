@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
@@ -89,6 +90,7 @@ public class WorkspaceLlmConnectionController {
                 WorkspaceLlmConnectionDTO.from(connectionService.update(workspaceContext, id, request)));
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can add the connection again")
     @DeleteMapping("/{id}")
     @Operation(summary = "Remove your AI provider connection", operationId = "workspaceDeleteLlmConnection")
     @ApiResponse(responseCode = "204", description = "Connection removed")

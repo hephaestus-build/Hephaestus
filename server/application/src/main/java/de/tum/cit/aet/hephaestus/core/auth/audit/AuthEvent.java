@@ -130,6 +130,8 @@ public class AuthEvent {
         // A workspace membership change that grants, demotes or removes an owner. Only its refusal for want of a
         // recent sign-in lands here; the change itself is on the workspace's config audit trail.
         WORKSPACE_OWNER_CHANGE,
+        // A workspace deletion refused for want of a recent sign-in; the deletion itself is on the config audit trail.
+        WORKSPACE_DELETION,
         // Instance LLM catalog: GLOBAL, so the workspace-scoped config trail cannot carry it.
         LLM_CONNECTION_CREATED,
         LLM_CONNECTION_UPDATED,

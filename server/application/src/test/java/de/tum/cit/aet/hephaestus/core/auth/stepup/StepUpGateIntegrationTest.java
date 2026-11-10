@@ -411,6 +411,62 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
         assertThat(role(workspace, member)).isEqualTo(Membership.WorkspaceRole.OWNER);
     }
 
+    @Test
+    void aStaleSessionCannotDeleteItsOwnAccount() {
+        Account person = persistUser("Stale Deleter Dana");
+        long personId = persistedId(person.getId());
+
+        webTestClient
+                .delete()
+                .uri("/user")
+                .headers(h -> h.setBearerAuth(tokenFor(person, staleSignIn())))
+                .header("X-Confirm-Delete", String.valueOf(personId))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString());
+
+        assertThat(accountRepository.findById(personId))
+                .get()
+                .extracting(Account::getStatus)
+                .isEqualTo(Account.Status.ACTIVE);
+        assertThat(authEventRepository.findByAccountSince(personId, Instant.now().minusSeconds(60)))
+                .filteredOn(event -> event.getEventType() == AuthEvent.EventType.ACCOUNT_DELETED)
+                .singleElement()
+                .extracting(AuthEvent::getResult)
+                .isEqualTo(AuthEvent.Result.FAILURE);
+    }
+
+    @Test
+    void aStaleOwnerCannotDeleteTheWorkspace() {
+        Workspace workspace = workspace("stale-owner-delete");
+        Account owner = persistUser("Stale Owner Pia");
+        join(workspace, owner, Membership.WorkspaceRole.OWNER);
+
+        webTestClient
+                .delete()
+                .uri("/workspaces/stale-owner-delete")
+                .headers(h -> h.setBearerAuth(tokenFor(owner, staleSignIn())))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString());
+
+        assertThat(workspaceRepository.findById(workspace.getId()))
+                .get()
+                .extracting(Workspace::getStatus)
+                .isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
+        assertThat(authEventRepository.findByAccountSince(persistedId(owner.getId()), Instant.now().minusSeconds(60)))
+                .filteredOn(event -> event.getEventType() == AuthEvent.EventType.WORKSPACE_DELETION)
+                .singleElement()
+                .extracting(AuthEvent::getResult)
+                .isEqualTo(AuthEvent.Result.FAILURE);
+    }
+
     private Workspace workspace(String slug) {
         Workspace workspace = new Workspace();
         workspace.setWorkspaceSlug(slug);

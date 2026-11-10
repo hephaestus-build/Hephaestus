@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.collection;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
@@ -156,6 +157,7 @@ public class OutlineCollectionAdminController {
         return ResponseEntity.ok(adminService.updateState(workspace.id(), collectionId, request.state()));
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can add the collection again, and the next sync restores it")
     @DeleteMapping("/{collectionId}")
     @Operation(
             operationId = "deleteOutlineCollection",

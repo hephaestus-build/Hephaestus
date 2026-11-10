@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review.schedule;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
@@ -73,6 +74,7 @@ public class ReviewScheduleController {
         return schedules.enabled(ws, scheduleId, input.enabled(), precondition(etag));
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can schedule the review again")
     @DeleteMapping("/{scheduleId}")
     @Operation(operationId = "deleteReviewSchedule", summary = "Delete an unused review schedule")
     @ApiResponse(responseCode = "204", description = "Deleted")

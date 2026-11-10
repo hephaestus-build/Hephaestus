@@ -47,6 +47,15 @@ const meta = {
 			ownerCheck: { status: "known", owner: true },
 			deleting: false,
 			onDelete: fn(async () => undefined),
+			confirmation: {
+				open: false,
+				onOpenChange: fn(),
+				providers: [],
+				loading: false,
+				error: false,
+				onSignIn: fn(),
+				onRetry: fn(),
+			},
 		},
 	},
 } satisfies Meta<typeof WorkspaceSettingsPage>;

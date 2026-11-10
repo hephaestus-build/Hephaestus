@@ -89,6 +89,11 @@ Declare the requirement with `@RequiresRecentSignIn` on the handler.
 To decline it, use `@RecentSignInExempt(reason = …)` on the handler or controller.
 `RecentSignInByDefaultArchTest` fails the build when an instance-admin mutation carries neither annotation.
 The same rule applies to every workspace role mutation: a mutation that `@Audited` files as `WORKSPACE_ROLE`.
+
+It also applies to every delete handler.
+Deleting your own account and deleting a workspace require a recent sign-in, because neither can be undone.
+Every other delete records why it is exempt.
+A handler whose `@Audited` names another ledger declares the refusal type with `@RequiresRecentSignIn(refusal = …)`.
 Thus, a new administrative action cannot ship without a recorded decision.
 
 Only the member's current role decides whether a workspace role change needs the gate.

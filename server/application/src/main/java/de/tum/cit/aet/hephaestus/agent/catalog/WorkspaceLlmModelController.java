@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
@@ -115,6 +116,7 @@ public class WorkspaceLlmModelController {
         return ResponseEntity.ok(result);
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can add the model again")
     @DeleteMapping("/models/{id}")
     @Operation(summary = "Remove a model on your AI provider", operationId = "workspaceDeleteLlmModel")
     @ApiResponse(responseCode = "204", description = "Model removed")

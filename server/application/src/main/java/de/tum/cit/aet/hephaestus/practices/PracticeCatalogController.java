@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices;
 
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
@@ -99,6 +100,7 @@ public class PracticeCatalogController {
         return presenter.present(ctx.id(), practices.updatePractice(ctx, practiceSlug, input));
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can add the practice again from the catalog")
     @DeleteMapping("/{practiceSlug}")
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_DEFINITION")
@@ -169,6 +171,7 @@ public class PracticeCatalogController {
                 ctx.id(), practices.movePractice(ctx, practiceSlug, input.groupSlug(), input.position()));
     }
 
+    @RecentSignInExempt(reason = "returns the practice to the catalog version, which a workspace admin can customize again")
     @DeleteMapping("/{practiceSlug}/catalog-customization")
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_DEFINITION")

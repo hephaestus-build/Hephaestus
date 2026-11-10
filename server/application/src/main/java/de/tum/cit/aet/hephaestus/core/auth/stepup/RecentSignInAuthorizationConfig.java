@@ -68,6 +68,10 @@ public class RecentSignInAuthorizationConfig {
      */
     private static AuthEvent.EventType auditType(MethodInvocation invocation) {
         Method method = invocation.getMethod();
+        RequiresRecentSignIn declared = AnnotatedElementUtils.findMergedAnnotation(method, RequiresRecentSignIn.class);
+        if (declared != null && !declared.refusal().isEmpty()) {
+            return AuthEvent.EventType.valueOf(declared.refusal());
+        }
         Audited audited = AnnotatedElementUtils.findMergedAnnotation(method, Audited.class);
         if (audited == null || audited.ledger() != AuditLedger.AUTH_EVENT) {
             throw new IllegalStateException("@RequiresRecentSignIn needs @Audited(ledger = AUTH_EVENT) on "

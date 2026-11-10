@@ -1,6 +1,10 @@
 import { useState } from "react";
 
 import {
+	ConfirmAccessDialog,
+	type ConfirmAccessDialogProps,
+} from "@/components/auth/ConfirmAccessDialog";
+import {
 	AlertDialog,
 	AlertDialogAction,
 	AlertDialogCancel,
@@ -33,6 +37,8 @@ export interface DangerZoneSectionProps {
 		available: boolean;
 		deleting: boolean;
 		onDelete: () => void;
+		/** Shown when the server asks for a recent sign-in before it deletes the account. */
+		confirmation: ConfirmAccessDialogProps;
 	};
 }
 
@@ -109,7 +115,13 @@ function DataExportRow({
  * GDPR Art. 17 account deletion. Requires typing a confirmation phrase before the
  * destructive action enables.
  */
-function DeleteAccountRow({ available, deleting, onDelete }: DangerZoneSectionProps["deletion"]) {
+function DeleteAccountRow({
+	available,
+	deleting,
+	onDelete,
+	confirmation,
+}: DangerZoneSectionProps["deletion"]) {
+	const [open, setOpen] = useState(false);
 	const [confirmText, setConfirmText] = useState("");
 	const confirmed = confirmText.trim().toLowerCase() === DELETE_CONFIRM_PHRASE;
 
@@ -130,8 +142,11 @@ function DeleteAccountRow({ available, deleting, onDelete }: DangerZoneSectionPr
 				</p>
 			</div>
 			<AlertDialog
-				onOpenChange={(open) => {
-					if (!open) {
+				// The sign-in request replaces the confirmation while it is open.
+				open={open && !confirmation.open}
+				onOpenChange={(next) => {
+					setOpen(next);
+					if (!next) {
 						setConfirmText("");
 					}
 				}}
@@ -179,6 +194,7 @@ function DeleteAccountRow({ available, deleting, onDelete }: DangerZoneSectionPr
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+			<ConfirmAccessDialog {...confirmation} />
 		</div>
 	);
 }

@@ -144,6 +144,7 @@ public class CatalogAdminController {
         return catalog.practiceView(catalog.practice(slug));
     }
 
+    @RecentSignInExempt(reason = "returns a curated practice to its shipped version, which an instance admin can edit again")
     @DeleteMapping("/practices/{slug}/override")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "CATALOG_PRACTICE")
     @Operation(operationId = "resetCatalogPractice")
@@ -173,6 +174,7 @@ public class CatalogAdminController {
         return catalog.view();
     }
 
+    @RecentSignInExempt(reason = "returns a curated group to its shipped version, which an instance admin can edit again")
     @DeleteMapping("/groups/{slug}/override")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "CATALOG_GROUP")
     @Operation(operationId = "resetCatalogGroup")
@@ -212,6 +214,7 @@ public class CatalogAdminController {
         return catalog.view();
     }
 
+    @RecentSignInExempt(reason = "returns the catalog order to its shipped order, which an instance admin can change again")
     @DeleteMapping("/order")
     @AuditExempt(reason = "Order changes presentation only")
     @Operation(operationId = "resetCatalogOrder")
