@@ -3348,56 +3348,76 @@ function assertDatabaseSetup(resources: Resource[], pod: unknown, entry: unknown
 	);
 }
 
-/** Every container of every Pod template: Deployments, StatefulSets, Jobs and the Jobs of CronJobs. */
+/** Every Pod template: Deployments, StatefulSets, Jobs, the Jobs of CronJobs and the sandbox templates. */
 const podTemplates = (resources: Resource[]) =>
 	resources.flatMap((resource) => {
 		const kind = String(kindOf(resource));
 		if (kind === "CronJob") {
 			return [get(resource, "spec", "jobTemplate", "spec", "template", "spec")];
 		}
+		if (kind === "SandboxTemplate") {
+			return [get(resource, "spec", "podTemplate", "spec")];
+		}
 		return ["Deployment", "StatefulSet", "DaemonSet", "Job"].includes(kind)
 			? [get(resource, "spec", "template", "spec")]
 			: [];
 	});
 
-await test("no container command holds text that Kubernetes rewrites", () => {
-	// Kubernetes replaces $(NAME) with the container's variable NAME and $$ with $ in a command and its arguments.
-	// A script inlined there, such as SQL with $$ quotes, then runs changed: the chart ships scripts as files.
+await test("no container holds text that Kubernetes rewrites, beyond the references it means", () => {
+	// Kubernetes replaces $(NAME) with the container's variable NAME and $$ with $ in a command, its arguments and
+	// each variable's value. A script inlined there, such as SQL with $$ quotes, then runs changed: the chart ships
+	// scripts as files.
 	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
-	const everything = {
-		postgresql: {
-			metrics: { enabled: true },
-			backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
-		},
-	};
+	const backup = { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 };
 	const renders = [
 		...profiles.map((name) => rendered([...layersFor(name), workerLayer])),
-		rendered([...layersFor("small"), workerLayer, everything]),
+		rendered([
+			...layersFor("small"),
+			workerLayer,
+			stackOn,
+			{ postgresql: { metrics: { enabled: true }, backup } },
+		]),
+		rendered([
+			...layersFor("small"),
+			workerLayer,
+			{ postgresql: { backup: { ...backup, restore: { enabled: true } } } },
+		]),
 	];
-	const entries = renders
+	// The one reference that the chart makes on purpose: the management listener binds to the Pod's address.
+	const intended = new Set(["env MANAGEMENT_SERVER_ADDRESS: $(POD_IP)"]);
+	const texts = renders
 		.flatMap(podTemplates)
-		.flatMap((spec) => [...list(get(spec, "initContainers")), ...list(get(spec, "containers"))]);
-	const texts = entries.flatMap((entry) => {
-		const defined = new Set(
-			list(get(entry, "env")).map((variable) => String(get(variable, "name"))),
-		);
-		return [...list(get(entry, "command")), ...list(get(entry, "args"))].map((text) => ({
-			name: String(get(entry, "name")),
-			text: String(text),
-			defined,
-		}));
-	});
-	const checked = texts.length;
-	// A reference to the container's own variable is the feature, used on purpose.
-	const rewritten = texts.flatMap(({ name, text, defined }) =>
-		[...text.matchAll(/\$\$|\$\((?<variable>[A-Za-z_][A-Za-z0-9_]*)\)/gu)]
-			.filter(
-				(match) => match.groups?.variable === undefined || !defined.has(match.groups.variable),
-			)
-			.map((match) => `${name}: ${match[0]}`),
+		.flatMap((spec) => [...list(get(spec, "initContainers")), ...list(get(spec, "containers"))])
+		.flatMap((entry) => [
+			...[...list(get(entry, "command")), ...list(get(entry, "args"))].map((text) => ({
+				where: "command",
+				text: String(text),
+			})),
+			...list(get(entry, "env"))
+				.filter((variable) => typeof get(variable, "value") === "string")
+				.map((variable) => ({
+					where: `env ${String(get(variable, "name"))}`,
+					text: String(get(variable, "value")),
+				})),
+		]);
+	const found = texts.flatMap(({ where, text }) =>
+		[...text.matchAll(/\$\$|\$\([A-Za-z_][A-Za-z0-9_]*\)/gu)].map(
+			(match) => `${where}: ${match[0]}`,
+		),
 	);
-	assert.ok(checked > 0, "the renders hold commands");
-	assert.deepEqual(rewritten, []);
+	assert.ok(
+		texts.some(({ where }) => where === "command"),
+		"the renders hold commands",
+	);
+	assert.deepEqual(
+		found.filter((reference) => !intended.has(reference)),
+		[],
+	);
+	// A reference that is no longer made leaves the list, so that the list names only what the chart means.
+	assert.deepEqual(
+		[...intended].filter((reference) => !found.includes(reference)),
+		[],
+	);
 });
 
 /** The Secret keys that one container reads. */

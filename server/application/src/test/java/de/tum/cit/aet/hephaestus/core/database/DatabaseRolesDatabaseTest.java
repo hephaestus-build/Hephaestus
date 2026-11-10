@@ -301,6 +301,28 @@ class DatabaseRolesDatabaseTest {
         }
     }
 
+    /** The scripts hand psql the verifiers alone: the process that talks to PostgreSQL never holds a password. */
+    @Test
+    void shouldGivePsqlNoPasswordWhenAChartScriptRuns() {
+        String shimDirectory = "/tmp/no-password-psql-" + UUID.randomUUID();
+        // A psql that prints the environment it got instead of connecting.
+        String shim = "mkdir -p " + shimDirectory + " && printf '#!/bin/sh\\nenv\\n' > " + shimDirectory
+                + "/psql && chmod +x " + shimDirectory + "/psql && PATH=" + shimDirectory + ":$PATH ";
+        Map<String, String> monitor = Map.of("DATABASE_MONITOR_PASSWORD", "monitor-" + UUID.randomUUID());
+        for (var run :
+                List.of(Map.entry("database-roles.sh", rolePasswords()), Map.entry("database-monitor.sh", monitor))) {
+            var result =
+                    PostgreSQLTestContainer.execShell(shim + "sh /tmp/chart-files/" + run.getKey(), run.getValue());
+            assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+            for (var password : run.getValue().entrySet()) {
+                assertThat(result.getStdout())
+                        .contains(password.getKey().replace("_PASSWORD", "_VERIFIER") + "=SCRAM-SHA-256$4096:")
+                        .doesNotContain(password.getKey() + "=")
+                        .doesNotContain(password.getValue());
+            }
+        }
+    }
+
     private static Map<String, String> rolePasswords() {
         return Map.of(
                 "DATABASE_OWNER_PASSWORD",

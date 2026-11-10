@@ -9,4 +9,6 @@ set -eu
 here=$(dirname "$0")
 DATABASE_MONITOR_VERIFIER=$(perl "$here/scram-sha-256.pl" DATABASE_MONITOR_PASSWORD)
 export DATABASE_MONITOR_VERIFIER
+# psql needs only the verifier: it does not inherit the password.
+unset DATABASE_MONITOR_PASSWORD
 exec psql --no-psqlrc --quiet --file="$here/database-quiet.sql" --file="$here/database-monitor.sql" "$@"
