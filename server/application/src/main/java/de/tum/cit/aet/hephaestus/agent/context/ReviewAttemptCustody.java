@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -77,6 +78,11 @@ public class ReviewAttemptCustody {
                     .isPresent();
             if (!live) close(attempt);
         }
+    }
+
+    /** Releases now the inputs of every attempt of a job that this replica holds, as an erasure of its people does. */
+    public void releaseJob(UUID jobId) {
+        for (AdmissionIdentity attempt : held.keySet()) if (attempt.jobId().equals(jobId)) close(attempt);
     }
 
     private void close(AdmissionIdentity attempt) {

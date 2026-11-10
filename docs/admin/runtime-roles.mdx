@@ -299,12 +299,11 @@ A server pod with the worker role enabled uses one root for both.
 
 The webhook role has no Git.
 
-The worker role also writes each review's feedback after its sandbox ends.
-These model calls take the same proxy path and rules as the sandbox's calls, so they need no new egress.
+A review's sandbox also writes the review's feedback, in a later run of the same sandbox.
+These model calls take the same proxy path and rules as the review's other calls, so they need no new egress.
 
 Sandbox maintenance follows the worker role in both split-out and single-container deployments.
 The worker removes orphaned sandbox resources at startup and then at a fixed interval.
-They also include the sandbox of a review attempt after its review moved to a later attempt.
 This maintenance does not enable server-wide scheduled jobs on the worker.
 API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or startup sync-job recovery.
 
@@ -321,24 +320,22 @@ Server maintenance runs independently of this flag:
 
 - **Submission** (turning pull request, issue and bot-command events into queued jobs) needs
   this flag **and** the server role. A worker-only container executes jobs. It does not submit these reviews.
-- **Lease recovery** takes back the reviews of a worker that stopped.
+- **Lease recovery** takes back the reviews of a sandbox that stopped.
   Each review job runs under an agent run.
-  The worker that claims the run holds its lease, on the database clock, for `hephaestus.agent.capacity.lease-ttl` (5 minutes).
-  It renews the lease every `hephaestus.agent.capacity.lease-renewal` (25 seconds). No other process renews it.
+  The review's sandbox claims the run and holds its lease, on the database clock, for `hephaestus.agent.capacity.lease-ttl` (5 minutes).
+  Its driver renews the lease every `hephaestus.agent.capacity.lease-renewal` (25 seconds). No other process renews it.
   At the same interval, each server replica takes back the runs whose lease expired.
   It queues the review again, or fails it at the retry limit (`AGENT_MAX_RETRIES`, `hephaestus.agent.capacity.review-retries`).
   - Every server replica does this at the same time, without a leader. Each takes back a run with one conditional write, so one replica wins and the others change nothing.
-  - A worker stops renewing an attempt when the attempt passes its time limit and the upload grace. Its lease then expires, and the attempt is taken back.
   - The upgrade to 1.0 queues again every job that a worker held. The job keeps its admitted and staged results and spends no retry.
   - Lease recovery needs the server role, including when `AGENT_ENABLED=false`.
 - **Completion** closes the parent review of a terminal job and records its stop reason.
   This server maintenance also runs when `AGENT_ENABLED=false`.
-- **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
+- **Execution** needs this flag **and** the worker role.
+  The worker requests a sandbox for each queued review. The sandbox claims and runs the review ([Agent runs § A review in its sandbox](/contributor/agent-runs#a-review-in-its-sandbox)).
   Worker admission and server preparation read the same practice-page feedback support, so that read exists in every role.
-  A review attempt that was cancelled, requeued or moved to another worker writes nothing more.
+  A review attempt that was cancelled, requeued or taken back writes nothing more.
   The gateway refuses each of its calls, and the practice review stops at its next refused call.
-  A worker that polls the requeued job while that attempt still runs on it stops that attempt first.
-  Otherwise, the attempt holds its capacity until its next call or its deadline.
 
 `AGENT_ENABLED` is `false` on all roles until you set it, regardless of how the pod starts.
 
@@ -883,8 +880,7 @@ A worker without `HEPHAESTUS_CONVERSATION_LOOP_SECRET` does not start.
 Set `conversationLoop.turns` and `worker.sandbox.reviewMemory` through the chart. The chart derives `SANDBOX_MAX_CONCURRENT` from the review memory and the worker's memory limit ([Kubernetes](./kubernetes)).
 
 `SANDBOX_MAX_CONCURRENT` is the review capacity.
-A worker never claims a review when it already runs that many review sandboxes.
-A review that only writes its feedback holds no sandbox, so it does not count.
+The worker requests no review sandbox while that many review sandboxes are live in the installation ([Agent runs § Sandbox dispatch](/contributor/agent-runs#sandbox-dispatch)).
 The selected chart profile owns this limit.
 A higher review capacity there has no effect until you also raise the sandbox limit.
 
@@ -912,44 +908,13 @@ Every worker beats in `worker_registry`, also with `AGENT_ENABLED=false`.
 
 ## Graceful drain
 
-On SIGTERM, the worker does these actions in order:
+On SIGTERM, the worker stops handing out conversation turns. Its running turns go on through the other workers.
+A practice review does not run in the worker, so the drain does not wait for reviews ([Agent runs § A review in its sandbox](/contributor/agent-runs#a-review-in-its-sandbox)).
 
-1. It reports itself not ready and stops claiming new jobs.
-2. It waits up to `hephaestus.worker.drain.timeout` (default 5 min) for active jobs to finish.
-3. It settles each remaining job under its ownership fence before it waits for any container stop.
-4. It stops the settled jobs' containers in parallel, with one 30s cleanup deadline for the batch.
-
-The drain phase may take `hephaestus.worker.drain.timeout` plus 55 seconds for the poll thread, step 3 and step 4.
-In the same phase, the worker stops handing out conversation turns. Its running turns go on through the other workers.
+The drain phase may take `hephaestus.worker.drain.timeout` (default 5 min) plus 55 seconds.
 Every other shutdown phase keeps `spring.lifecycle.timeout-per-shutdown-phase` (`SHUTDOWN_TIMEOUT`, 20 seconds).
 Give the worker a stop grace period of at least the drain timeout plus 2 minutes.
-The chart sets `drainTimeoutSeconds` plus 2 minutes.
-
-The worker's HTTP connectors, including the sandbox gateway, stay open during step 2.
-Thus, an active review can still send model requests while the worker waits for it.
-The HTTP graceful shutdown starts only after the drain.
-
-Unadmitted reviews return to the queue for another worker to claim.
-The drain is not the review's fault, so it spends none of `AGENT_MAX_RETRIES`.
-The next attempt still gets its own number, so the stopped sandbox cannot write into it.
-
-A concurrent cancellation leaves the job terminal instead.
-Admitted results are never measured again.
-An interrupted review without saved completed feedback fails with an explicit reason and retains its results.
-Completed reviews continue through normal delivery and delivery recovery.
-`timeout=0` skips step 2 and immediately applies the same recovery decisions.
-
-Container cleanup does not delay settlement of the other jobs.
-A failed settlement does not stop the other jobs from being settled.
-Only a job whose settlement won its ownership fence has its container stopped.
-
-If a stop fails or exceeds the cleanup deadline, the worker records incomplete cleanup.
-A container-runtime operation that does not respond to interruption can finish after the deadline.
-The worker does not wait indefinitely for that call.
-Leftover containers remain subject to normal sandbox reconciliation.
-
 The Helm chart sets the drain timeout from `worker.drainTimeoutSeconds`, 1800 by default, and the grace period to that value plus two minutes.
-The cleanup deadline does not extend this grace period or guarantee that all containers stop.
 
 ## Cancellation
 

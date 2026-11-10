@@ -8,10 +8,9 @@ import com.zaxxer.hikari.HikariDataSource;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceDeliveryAuthorization;
 import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxDispatcher;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -217,11 +216,10 @@ class RuntimeRoleContextIntegrationTest {
                 assertThat(application).doesNotHaveBean(SlackWorkspacePurgeAdapter.class);
             }
             if (role == RuntimeRole.WORKER) {
-                assertThat(application).hasSingleBean(ReviewJobExecutor.class);
-                assertThat(application).hasSingleBean(WorkerDrainCoordinator.class);
                 assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
+                assertThat(application).hasSingleBean(SandboxDispatcher.class);
             } else {
-                assertThat(application).doesNotHaveBean(ReviewJobExecutor.class);
+                assertThat(application).doesNotHaveBean(SandboxDispatcher.class);
             }
             if (role == RuntimeRole.WEBHOOK) {
                 assertThat(application).hasSingleBean(JetStreamPublisher.class);

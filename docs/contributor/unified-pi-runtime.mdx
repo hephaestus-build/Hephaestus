@@ -803,7 +803,6 @@ It runs at startup and every 60 seconds on each worker, and removes these Pods:
 Each step is idempotent, so every worker can run it.
 A worker that stops removes no Pod: the other workers serve the calls of its attempts, with their Pods.
 A worker roll does not remove the tools Pod of a live turn.
-`SandboxReconciler` ignores tools Pods.
 
 A command that runs when its Pod goes ends with the container.
 A load that runs then is abandoned: it reads the attempt's lease at most every 2 seconds.

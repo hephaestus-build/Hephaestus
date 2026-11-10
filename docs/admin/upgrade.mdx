@@ -108,12 +108,7 @@ The value is 30 minutes by default and 10 minutes in the single-node profile.
 With `Recreate`, the Helm `--timeout` must cover the drain, 2 minutes of shutdown and up to 5 minutes of start.
 Past the timeout, Helm rolls the release back. If you set a longer drain, set a longer timeout.
 Start the next upgrade only after the old worker is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=worker` shows no `Terminating` Pod.
-A review runs for up to 3 hours.
-
-When the drain ends first, the review stops.
-An attempt that was not yet admitted runs again on another worker, and an admitted one keeps its results.
-A drained attempt spends none of the review's retries. After 3 drains, the next drain cancels the review with the message "Workers stopped this review for updates too often. It is not tried again."
-The metric `agent_job_drained_total{outcome}` counts drained reviews that run again (`requeued`) and that are cancelled (`cancelled`).
+A review runs in its own sandbox, not in a worker ([Agent runs](/contributor/agent-runs#a-review-in-its-sandbox)).
 
 For other database maintenance, use [Database maintenance](./maintenance#database-maintenance).
 

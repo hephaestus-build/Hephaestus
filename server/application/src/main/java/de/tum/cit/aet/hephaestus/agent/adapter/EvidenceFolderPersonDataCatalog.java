@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopy;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -74,7 +74,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     private final ObjectMapper mapper;
     private final PersonDataCopyRecorder recorder;
     private final PersonDataCopyFence fence;
-    private final ObjectProvider<ReviewJobExecutor> executor;
+    private final ObjectProvider<ReviewAttemptCustody> custody;
     private final ObjectProvider<ReviewJobLifecycleService> lifecycles;
     private static final ThreadLocal<ActiveCapture> ACTIVE = new ThreadLocal<>();
     /** Whether a receipt indexes the receipts of every job whose rows its capture copied. */
@@ -96,7 +96,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
             ObjectMapper mapper,
             PersonDataCopyRecorder recorder,
             PersonDataCopyFence fence,
-            ObjectProvider<ReviewJobExecutor> executor,
+            ObjectProvider<ReviewAttemptCustody> custody,
             ObjectProvider<ReviewJobLifecycleService> lifecycles) {
         this.layout = layout;
         this.jdbc = jdbc;
@@ -104,7 +104,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         this.mapper = mapper;
         this.recorder = recorder;
         this.fence = fence;
-        this.executor = executor;
+        this.custody = custody;
         this.lifecycles = lifecycles;
     }
 
@@ -973,8 +973,9 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     UUID jobId = Objects.requireNonNull(rs.getObject(1, UUID.class));
                     long workspaceId = rs.getLong(2);
                     String copyId = Objects.requireNonNull(rs.getString(3));
-                    ReviewJobExecutor localExecutor = executor.getIfAvailable();
-                    if (localExecutor != null) localExecutor.cancelLocalJob(jobId, "Person data erasure");
+                    // An attempt that this replica holds keeps the folder's lease until its inputs are released.
+                    ReviewAttemptCustody held = custody.getIfAvailable();
+                    if (held != null) held.releaseJob(jobId);
                     var acquired = EvidenceFolderLease.tryAcquire(layout.root(), workspaceId, jobId);
                     if (acquired.isEmpty()) return;
                     var lease = acquired.get();

@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import org.springframework.context.ApplicationContext;
-import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -33,7 +32,6 @@ public final class SandboxReviewClaims {
                 policy,
                 mock(ReviewMethodVerifier.class),
                 context.getBean(ReviewJobAssignments.class),
-                context.getBean(TransactionTemplate.class),
                 context.getBean(JsonMapper.class),
                 context.getBean(ReviewStart.class),
                 budgets,

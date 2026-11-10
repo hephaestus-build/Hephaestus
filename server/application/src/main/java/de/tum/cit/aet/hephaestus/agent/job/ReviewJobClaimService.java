@@ -11,9 +11,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
@@ -35,10 +32,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +40,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProp
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
@@ -64,7 +57,6 @@ public class ReviewJobClaimService {
     private final ReviewMemberAiPolicy memberAiPolicy;
     private final ReviewMethodVerifier methods;
     private final ReviewJobAssignments assignments;
-    private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
     private final ReviewStart reviewStart;
     private final LlmBudgetService llmBudgetService;
@@ -79,7 +71,6 @@ public class ReviewJobClaimService {
             ReviewMemberAiPolicy memberAiPolicy,
             ReviewMethodVerifier methods,
             ReviewJobAssignments assignments,
-            TransactionTemplate transactionTemplate,
             ObjectMapper objectMapper,
             ReviewStart reviewStart,
             LlmBudgetService llmBudgetService,
@@ -95,7 +86,6 @@ public class ReviewJobClaimService {
         this.memberAiPolicy = memberAiPolicy;
         this.methods = methods;
         this.assignments = assignments;
-        this.transactionTemplate = transactionTemplate;
         this.objectMapper = objectMapper;
         this.reviewStart = reviewStart;
         this.llmBudgetService = llmBudgetService;
@@ -105,24 +95,12 @@ public class ReviewJobClaimService {
 
     sealed interface ClaimAttempt {}
 
-    /** The run's model pool has background callers waiting; the claim was rolled back, and this poll skips the run. */
+    /** The run's model pool has background callers waiting, so the run waits for its next pull. */
     record PoolWait(UUID runId, long poolId) implements ClaimAttempt {}
 
-    /** The claim was rolled back, and this poll skips the run. */
-    record Declined(UUID runId, ClaimOutcome why) implements ClaimAttempt {}
-
     enum ClaimOutcome implements ClaimAttempt {
-        /** No review run is offered now. */
-        NOTHING,
-        /** Its review or job is held by a lifecycle write. */
-        LOCKED,
-        QUOTA_FULL,
-        BUDGET_HELD,
-        /**
-         * An admitted review that a measuring attempt lost after its admission left on its review run: the claim handed
-         * it on to the run that composes it, and nothing runs here.
-         */
-        HANDED_ON,
+        /** The workspace's budget holds the job. */
+        BUDGET_HELD
     }
 
     /**
@@ -146,65 +124,6 @@ public class ReviewJobClaimService {
     record TerminalClaim(ReviewJob job, ReviewJobStatus status) implements ClaimAttempt {}
 
     /**
-     * Leases the next review run that the claim order offers, and starts its job or settles it. A claim that cannot
-     * start now rolls back, so its run keeps its epoch and its place.
-     *
-     * @param declined the runs this poll already declined
-     */
-    ClaimAttempt claimNext(Set<UUID> declined, BooleanSupplier reviewRoom) {
-        var heldForBudget = new AtomicReference<@Nullable AgentRunRef>();
-        ClaimAttempt attempt = Objects.requireNonNull(transactionTemplate.execute(status -> {
-            AgentRunLease lease =
-                    runs.claim(Set.of(AgentRunKind.REVIEW), declined).orElse(null);
-            if (lease == null) return ClaimOutcome.NOTHING;
-            // The review service locks the parent before it changes the review, so the claim takes the parent before
-            // the job. Both skip a locked row, so a claim never waits behind a lifecycle write that holds them.
-            Optional<ReviewJob> locked =
-                    jobRepository.lockParentForQueuedClaim(lease.runId()).isEmpty()
-                            ? Optional.empty()
-                            : jobRepository.lockQueuedByRun(lease.runId(), lease.workspaceId());
-            if (locked.isEmpty()) {
-                status.setRollbackOnly();
-                return new Declined(lease.runId(), ClaimOutcome.LOCKED);
-            }
-            ReviewJob job = locked.get();
-            AgentRunFence fence = lease.fence();
-            ClaimAttempt claimed;
-            try {
-                claimed = claimLocked(job, fence, reviewRoom);
-            } catch (JobPreparationException failure) {
-                return failPreparation(job, fence, failure);
-            }
-            switch (claimed) {
-                case TerminalClaim ended -> runs.end(fence);
-                case PoolWait waiting -> status.setRollbackOnly();
-                case ClaimOutcome.QUOTA_FULL -> {
-                    status.setRollbackOnly();
-                    return new Declined(lease.runId(), ClaimOutcome.QUOTA_FULL);
-                }
-                case ClaimOutcome.BUDGET_HELD -> {
-                    // A hold runs nothing, so it takes no attempt: the claim rolls back and the hold is written apart.
-                    status.setRollbackOnly();
-                    heldForBudget.set(new AgentRunRef(lease.runId(), lease.workspaceId()));
-                }
-                case ClaimResult started
-                when ResultAdmissionService.isContinuation(started.job()) -> {
-                    // Only the review's composition run composes, in the review's sandbox, and its own claim decides
-                    // whether the attempt composes or withholds.
-                    if (reviewRuns.continueToCompose(job.getId(), fence).isEmpty())
-                        throw new IllegalStateException("The claimed attempt lost its job under its lock");
-                    return ClaimOutcome.HANDED_ON;
-                }
-                default -> {}
-            }
-            return claimed;
-        }));
-        AgentRunRef held = heldForBudget.get();
-        if (held != null) holdForBudget(held);
-        return attempt;
-    }
-
-    /**
      * Starts the job of the run that its sandbox just leased under {@code fence}, in the caller's transaction: the same checks as a claim of
      * the worker's, but no room or quota check, since the sandbox already exists. A claim that cannot start now leaves
      * nothing leased: a refused job ends with its run, and one that must wait goes back to the queue with its run,
@@ -226,7 +145,7 @@ public class ReviewJobClaimService {
         ReviewJob job = locked.get();
         ClaimAttempt claimed;
         try {
-            claimed = claimLocked(job, fence, null);
+            claimed = claimLocked(job, fence);
         } catch (JobPreparationException failure) {
             failPreparation(job, fence, failure);
             return Optional.empty();
@@ -241,24 +160,11 @@ public class ReviewJobClaimService {
                 runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY, null);
                 yield Optional.empty();
             }
-            case ClaimOutcome.BUDGET_HELD -> {
+            case ClaimOutcome held -> {
                 runs.requeue(fence, AgentRuns.Charge.FREE, BUDGET_HOLD_INTERVAL, AgentRunHold.BUDGET);
                 yield Optional.empty();
             }
-            case ClaimOutcome other -> throw new IllegalStateException("A sandbox's claim cannot be " + other);
-            case Declined declined -> throw new IllegalStateException("A sandbox's claim is never declined");
         };
-    }
-
-    /**
-     * Marks the queued job of {@code run} as held by the budget, so raising the cap can release it at once, and offers
-     * the run again after {@link #BUDGET_HOLD_INTERVAL}. A lifecycle write that holds the job meanwhile wins; the next
-     * claim checks the budget again.
-     */
-    private void holdForBudget(AgentRunRef run) {
-        transactionTemplate.executeWithoutResult(status -> jobRepository
-                .lockQueuedByRun(run.id(), run.workspaceId())
-                .ifPresent(job -> runs.hold(run, AgentRunHold.BUDGET, BUDGET_HOLD_INTERVAL)));
     }
 
     /** Fails a job whose inputs could not be prepared, and ends its run, in the caller's transaction. */
@@ -279,8 +185,7 @@ public class ReviewJobClaimService {
         return new TerminalClaim(job, ReviewJobStatus.FAILED);
     }
 
-    /** @param reviewRoom whether a worker has room for one more review sandbox; null where the sandbox exists */
-    private ClaimAttempt claimLocked(ReviewJob job, AgentRunFence fence, @Nullable BooleanSupplier reviewRoom) {
+    private ClaimAttempt claimLocked(ReviewJob job, AgentRunFence fence) {
         int maxRetries = runs.capacity().reviewRetries();
 
         if (memberAiPolicy.isProcessingSuppressed(job)) {
@@ -371,7 +276,6 @@ public class ReviewJobClaimService {
                     : refuseUnavailableModel(job);
         String itemKind = assigned.getFirst().item().kind().value();
         if (!composing) {
-            if (reviewRoom != null && !reviewRoom.getAsBoolean()) return ClaimOutcome.QUOTA_FULL;
             long poolId = callPermits.poolFor(snapshot.model().connectionRef());
             if (callPermits.hasReviewCallsWaiting(poolId)) return new PoolWait(fence.runId(), poolId);
         }

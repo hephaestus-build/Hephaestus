@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
+import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerPropertiesConfiguration;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
@@ -55,8 +55,8 @@ public class HephTurns implements MentorLedgerNotifications.Listener, SmartLifec
     static final String MODEL_STOPPED_ANSWERING =
             "Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.";
 
-    /** The phase of the worker drain: this worker stops handing out turns with the review drain. */
-    static final int PHASE = WorkerDrainCoordinator.PHASE;
+    /** The phase of the worker drain: this worker stops handing out turns as it drains. */
+    static final int PHASE = WorkerPropertiesConfiguration.DRAIN_PHASE;
 
     /** How long a loop has to end a turn after a stop or its deadline. */
     static final Duration STOP_GRACE = Duration.ofSeconds(30);

@@ -1,10 +1,8 @@
 /**
  * Agent module — LLM-driven sandbox runtime that executes practice review and mentor turns.
  *
- * <p>App ↔ worker boundary: see ADR 0005. The queue is the {@code review_job} table itself
- * (ADR 0025): the submission chain runs on server and its QUEUED insert IS the enqueue, while
- * {@code agent.sandbox} + {@code ReviewJobExecutor} run on worker, claiming rows and spawning
- * containers.
+ * <p>A review's job waits on its agent run (ADR 0079): the server dispatches each due run's
+ * sandbox, and the sandbox claims and runs it through the gateway.
  */
 @ApplicationModule(displayName = "Agent")
 @NullMarked

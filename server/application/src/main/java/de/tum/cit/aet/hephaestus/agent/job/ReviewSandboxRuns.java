@@ -15,13 +15,15 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxEnvBlocklist;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxGitHardening;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.io.IOException;
@@ -30,12 +32,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -53,6 +59,8 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @Profile("!specs & !cds-training")
 public class ReviewSandboxRuns implements SandboxRunKind {
+
+    private static final Logger log = LoggerFactory.getLogger(ReviewSandboxRuns.class);
 
     private final ReviewJobClaimService claims;
     private final ReviewAttemptPreparation preparation;
@@ -151,7 +159,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         Measurement measurement = measurement(run);
         var context = objectMapper.createObjectNode();
         context.set("command", objectMapper.valueToTree(measurement.spec().command()));
-        context.set("env", objectMapper.valueToTree(SandboxAttemptRunner.runnerEnvironment(measurement.spec())));
+        context.set("env", objectMapper.valueToTree(runnerEnvironment(measurement.spec())));
         context.put("workDeadline", measurement.workDeadline().toEpochMilli());
         context.put(
                 "uploadDeadline",
@@ -305,5 +313,41 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                 job.getWorkspaceId(),
                 job.getAttempt(),
                 Objects.requireNonNull(run.fence().runId()));
+    }
+
+    /**
+     * The runner's environment from its spec, without the gateway's routes and credential: the spec's variables less the
+     * blocked ones, the trace, and Git's hardening.
+     */
+    private static Map<String, String> runnerEnvironment(SandboxSpec spec) {
+        Map<String, String> env = new HashMap<>();
+
+        // Enforced values must overwrite caller-supplied variables: SandboxEnvBlocklist already drops the
+        // dangerous ones, and this ordering keeps a value added below winning even if it is not listed there.
+        for (var entry : spec.environment().entrySet()) {
+            if (SandboxEnvBlocklist.isBlocked(entry.getKey())) {
+                log.warn("Blocked dangerous environment variable: {}", entry.getKey());
+            } else {
+                env.put(entry.getKey(), entry.getValue());
+            }
+        }
+        addTraceEnvironment(env);
+
+        // The agent can clone a repository at runtime and carry a hostile .git/config in with it.
+        env.putAll(SandboxGitHardening.environment());
+
+        return env;
+    }
+
+    private static void addTraceEnvironment(Map<String, String> env) {
+        String traceId = MDC.get(StructuredLogKeys.TRACE_ID);
+        String spanId = MDC.get(StructuredLogKeys.SPAN_ID);
+        if (traceId != null && spanId != null) {
+            env.put("TRACE_ID", traceId);
+            env.put(
+                    "TRACEPARENT",
+                    "00-" + traceId + "-" + spanId + "-"
+                            + ("01".equals(MDC.get(StructuredLogKeys.TRACE_FLAGS)) ? "01" : "00"));
+        }
     }
 }

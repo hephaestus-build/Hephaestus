@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxClaims;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
@@ -118,16 +117,6 @@ public class KubernetesSandboxConfiguration {
     @Bean
     public SandboxExits sandboxExits(KubernetesPods pods, MeterRegistry meters) {
         return new SandboxExits(pods, meters);
-    }
-
-    @Bean
-    public SandboxBackend kubernetesSandboxBackend(
-            KubernetesPods pods,
-            KubernetesSandboxJobs reviewJobs,
-            KubernetesWorker worker,
-            SandboxExits exits,
-            KubernetesSandboxCache cache) {
-        return new KubernetesSandboxBackend(pods, reviewJobs, worker, exits, cache);
     }
 
     @Bean

@@ -334,7 +334,7 @@ KUBECONFIG="$HOME/.hephaestus/kubernetes-cluster/kubeconfig" \
 The Kubernetes PR job runs the same command with the restored package artifact and `--packaged`.
 The runner requires `HEPHAESTUS_KUBERNETES_LIVE=true` and rejects any skipped or aborted case.
 It records the kernel and elapsed time.
-The suite covers review Jobs, host startup, turn commands, transfer, large-tree staging, read-only context, Git, timeout, cancellation and cleanup.
+The suite runs the isolation probe, then starts a tools Pod and removes it with its Job.
 It uses synthetic data and reaches no model provider.
 The ordinary provider live tests remain separate.
 

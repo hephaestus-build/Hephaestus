@@ -19,10 +19,10 @@ import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.C
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopy;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -141,8 +141,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
 
     private EvidenceFolderPersonDataCatalog catalog(
             Path store, PersonDataCopyRecorder recorder, PersonDataCopyFence captureFence) {
-        ObjectProvider<ReviewJobExecutor> executor =
-                new DefaultListableBeanFactory().getBeanProvider(ReviewJobExecutor.class);
+        ObjectProvider<ReviewAttemptCustody> executor =
+                new DefaultListableBeanFactory().getBeanProvider(ReviewAttemptCustody.class);
         return new EvidenceFolderPersonDataCatalog(
                 new FabricLayout(store.toString()),
                 jdbc,

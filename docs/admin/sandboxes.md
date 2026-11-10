@@ -19,8 +19,7 @@ The chart runs the workers as one Deployment:
 
 - Two replicas by default, spread across nodes where the cluster has several. `worker.replicas` sets the count.
 - A rollout starts all new workers before an old one stops. At two or more workers, a PodDisruptionBudget lets a node drain evict one at a time. A singleton worker blocks voluntary eviction until [planned node maintenance](./maintenance#planned-node-maintenance). `worker.rolloutStrategy=Recreate` stops the old workers first, for a node that cannot hold both ([Profiles](./helm-chart#profiles)).
-- A stopping worker claims no new work and serves its running attempts for `worker.drainTimeoutSeconds`, 1800 by default.
-  A practice review usually takes 10 to 16 minutes. An attempt that outlasts the drain is tried again.
+- A stopping worker hands out no new conversation turns. Kubernetes gives it `worker.drainTimeoutSeconds`, 1800 by default, plus 2 minutes to stop.
 - A worker on a lost node is replaced after 60 seconds.
 - `AGENT_ENABLED=true` on the workers and the server, so that the server submits practice reviews and the workers run them. Without a worker, the server submits none.
 - `worker.sandbox.reviewMemory` sets the memory that the sandbox nodes give review Pods, 3840 MiB by default. The reviews that run at once are that memory over one review Pod's request and `worker.runtime.podOverhead`: 10 by default, five in `small.yaml`. Each worker runs as many of them as its memory limit holds, and the reviews quota holds them once. `worker.conversationTurns` sets the resident conversation turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, eight by default). Tools start on demand within the separate conversations quota ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). The `small` profile selects `auto` ([Profiles](./helm-chart#profiles)).
@@ -46,16 +45,14 @@ It writes these objects into it:
   During a rolling update, the chart's quotas hold the workers of the new and the old version.
   A worker that still drains during a second update can find no room.
   Its sandbox then waits and is tried again.
-  A worker claims a practice review only when every quota that counts review Pods has room for the review's Pod.
-  An unscoped quota counts them, and so does a quota that selects the reviews' PriorityClass.
-  It counts the reviews that it claimed but has not started yet.
-  Otherwise the review stays queued.
+  A worker creates a tools Pod only when every quota that counts the Pod has room for it.
+  An unscoped quota counts it, and so does a quota that selects the Pod's PriorityClass.
   The worker's Role lets it list the quotas.
   Its permissions are listed below.
   It reads the Pod overhead of the sandbox RuntimeClass from its own sandbox Pods.
-  A quota with another scope does not hold a review back, and neither do quotas that the worker cannot read.
-  Another worker can still take the room after the claim.
-  The quota then refuses the review's Pod, and the review is tried again.
+  A quota with another scope does not hold a tools Pod back. A quota that the worker cannot read does not hold it back either.
+  Another worker can still take the room first. The quota then refuses the Pod.
+  The dispatch of review sandboxes does not read the quotas.
 - A deny-all policy for ingress and egress, `<release>-sandbox-deny`.
 - One policy, `<release>-sandbox-gateway`, that lets review sandboxes reach port 8081 of the worker Pods, and nothing else.
   Those sandboxes carry the label `hephaestus.build/sandbox-kind` from the runtime.
@@ -106,32 +103,18 @@ Do not share it with another release or another application.
 
 ## When the sandbox quota is full
 
-A review waits in the queue while the quota has no room for its sandbox.
-Waiting behind running reviews is normal backlog, and it never ends a review.
+When the quota has no room for the Pod of a review sandbox, the Pod does not start.
+The reaper takes back each sandbox that did not call the gateway within 2 minutes of its request ([Agent runs § Sandbox reaper](/contributor/agent-runs#sandbox-reaper)).
+The review's run stays queued, and the dispatch requests a new sandbox at a later pass.
 
-Two cases end queued reviews, with the stop reason `NO_SANDBOX_ROOM`:
-
-- A quota is smaller than one review sandbox. The worker cancels the queued reviews within 30 seconds, with "The sandbox quota is smaller than one review sandbox." It logs one warning.
-- Reviews have waited for an hour while the quota had no room for one and no review ran. Thus, nothing frees room. Usually a quota of your own holds the room. The worker logs a warning when this starts. After the hour, it cancels the queued reviews with "Hephaestus had no room to run this review in time."
-
-A scan that loses a file's job this way ends with the same reason. It does not queue its next file.
-
-A review whose Pod the quota refuses after its claim also waits, and spends none of its retries.
-Its next attempt gets a new number, as every attempt does.
-The waits grow from 30 seconds to 5 minutes. The number of refusals never ends a review. Only the two cases above do.
-
-The metric `sandbox_start_failures_total{kind="review",reason}` counts these refusals and cancellations, with the reasons `quota_exceeded` and `quota_cannot_fit`.
-The gauge `sandbox_review_starved_seconds` shows how long no review could start while none ran. Alert on it well before an hour: the quota is too small for the sandboxes beside the reviews.
-
-The worker learns of the refusal from the events of the sandbox namespace.
-It reads its quotas to tell whether a sandbox can fit at all.
+The worker learns from the events of the sandbox namespace when the quota refuses a tools Pod or an isolation probe Pod.
+It reads its quotas to tell whether a tools Pod can fit at all.
 It needs `list` on `events`, and `list` and `watch` on `resourcequotas` there. The chart's Role grants them.
-Without `list` on `events`, the worker logs one warning, and a refused review waits 2 minutes and spends a retry.
+Without `list` on `events`, the worker logs one warning, and it waits for a refused Pod until the start timeout.
 Without `list` and `watch` on `resourcequotas`, `pods` or `jobs`, the worker stays not ready ([Troubleshooting](./kubernetes#troubleshooting)).
 
 The worker watches the Pods, Jobs and quotas of the sandbox namespace.
-Thus, a claim poll and a readiness probe send no request to the API server.
-A sandbox's credential, not the network, binds it to the worker that started it.
+Thus, a quota check and a readiness probe send no request to the API server.
 
 The worker reaches the Kubernetes API only at `networkPolicy.kubernetesApi`.
 Set the address and port that the selected network plugin sees after address translation.
@@ -142,17 +125,15 @@ The worker's service account has these permissions in the sandbox namespace, and
 
 - Pods: `get`, `list`, `watch`, and `create`. The worker creates Pods only through Jobs. The isolation probe uses `create` for a Pod Security dry run, which creates nothing.
 - `pods/log`: `get`.
-- Jobs: `get`, `list`, `watch`, `create`, and `delete`. Each review attempt and each tools Pod is a Job. A cancellation or a timeout deletes the Job, and Kubernetes deletes its Pod before the Job goes.
-- Events: `list`. A review Pod that the sandbox quota refuses waits for room: the Job controller reports the refusal as an event.
-- ResourceQuotas: `list` and `watch`. The quota tells how many reviews fit and whether a review can ever fit.
+- Jobs: `get`, `list`, `watch`, `create`, and `delete`. Each tools Pod and each isolation probe Pod is a Job. A cancellation or a timeout deletes the Job, and Kubernetes deletes its Pod before the Job goes.
+- Events: `list`. The Job controller reports a Pod that the sandbox quota refuses as an event.
+- ResourceQuotas: `list` and `watch`. The quota tells whether a tools Pod fits now and whether it can ever fit.
 - SandboxClaims (`extensions.agents.x-k8s.io`): `list`, `create`, and `delete`. A subject's sandbox is a claim, and the agent-sandbox controller creates its Pod from the kind's template. The worker deletes each claim that no work needs.
 
 The worker cannot patch or delete a Pod, and it cannot run a command in one.
 A patch could change the image of a sandbox that runs.
 
-A practice review attempt runs as one Job.
-The Job ends at the attempt's upload deadline plus two minutes, also when its worker is gone.
-Kubernetes removes it 15 minutes after it ends.
+Kubernetes removes a sandbox Job 15 minutes after it ends.
 The review-ledger worker identity stays per process.
 The chart does not set `HEPHAESTUS_WORKER_ID`.
 
@@ -237,7 +218,6 @@ With the worker enabled, the chart installs a `SandboxTemplate` for each sandbox
 Their names are `<release>-sandbox-review` and `<release>-sandbox-conversation`.
 Each template has a `SandboxWarmPool` of the same name with no replicas.
 The agent-sandbox controller creates a sandbox's Pod from the template when a `SandboxClaim` names the warm pool.
-No component claims a sandbox yet.
 The release pins the controller in `k3s-agent-sandbox.yaml`: the one-host platform installs it, and on another cluster you apply it yourself ([Install](./kubernetes#install)).
 
 A template's Pod has one container, the agent image, and these settings:

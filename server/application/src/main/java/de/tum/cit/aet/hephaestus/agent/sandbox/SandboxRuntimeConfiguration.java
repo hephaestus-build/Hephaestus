@@ -1,71 +1,21 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox;
 
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
-import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Clock;
-import java.util.concurrent.ThreadPoolExecutor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
-import org.springframework.core.task.AsyncTaskExecutor;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
-/** The worker's review executor, attempt protocol, host workspaces, and reconciliation over its Kubernetes backend. */
+/** The worker's review workspaces: the archives that a review sandbox downloads. */
 @Configuration(proxyBeanMethods = false)
 @Profile("!specs & !cds-training")
 @ConditionalOnWorkerRole
 @EnableConfigurationProperties(SandboxProperties.class)
 public class SandboxRuntimeConfiguration {
 
-    private static final Logger log = LoggerFactory.getLogger(SandboxRuntimeConfiguration.class);
-
     @Bean
     public SandboxWorkspaceManager sandboxWorkspaceManager(FabricLayout layout) {
         return new SandboxWorkspaceManager(layout.root());
-    }
-
-    @Bean
-    public SandboxManager sandboxAttemptRunner(
-            SandboxBackend backend,
-            SandboxWorkspaceManager workspaceManager,
-            SandboxGatewaySessions gatewaySessions,
-            MeterRegistry meterRegistry) {
-        return new SandboxAttemptRunner(backend, workspaceManager, gatewaySessions, meterRegistry);
-    }
-
-    @Bean
-    public SandboxReconciler sandboxReconciler(
-            ReviewJobRepository jobRepository, SandboxBackend backend, MeterRegistry meterRegistry, Clock clock) {
-        return new SandboxReconciler(jobRepository, backend, meterRegistry, clock);
-    }
-
-    /**
-     * Platform threads for review attempts, one per claimed attempt.
-     *
-     * <p>The executor's claim bound limits the attempts that run here to {@code maxConcurrentContainers}; the pool
-     * itself sets no bound. It hands off directly ({@code queueCapacity=0}): a rejected submission undoes the claim and the
-     * row goes back to QUEUED for a later poll.
-     */
-    @Bean(name = "sandboxExecutor")
-    public AsyncTaskExecutor sandboxExecutor(SandboxProperties properties) {
-        var executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(Math.min(2, properties.maxConcurrentContainers()));
-        executor.setMaxPoolSize(Integer.MAX_VALUE);
-        executor.setQueueCapacity(0);
-        executor.setAllowCoreThreadTimeOut(true);
-        executor.setThreadNamePrefix("sandbox-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
-        executor.setWaitForTasksToCompleteOnShutdown(true);
-        executor.setAwaitTerminationSeconds(60);
-        log.info("Sandbox executor configured: maxConcurrent={}", properties.maxConcurrentContainers());
-        return executor;
     }
 }

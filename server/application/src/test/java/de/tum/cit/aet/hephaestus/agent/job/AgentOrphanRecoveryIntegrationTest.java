@@ -4,7 +4,6 @@ import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -35,18 +34,12 @@ import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -98,12 +91,10 @@ import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -117,7 +108,6 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Tracer;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -144,7 +134,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
-import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
@@ -153,6 +142,10 @@ import tools.jackson.databind.json.JsonMapper;
 /** Verifies orphan recovery, retry fencing, and claim eligibility against PostgreSQL. */
 @DisplayName("Orphan recovery over PostgreSQL Integration")
 class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
+
+    private static final SandboxResult TIMED_OUT =
+            new SandboxResult(124, Map.of(), "stopped", true, Duration.ofMinutes(15));
+
     @Autowired
     private ReviewJobCompletionService completion;
 
@@ -188,9 +181,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewRuntimeRepository runtimeRepository;
-
-    @Autowired
-    private ReviewAssignmentStore members;
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
@@ -294,7 +284,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private ScmItemSourceAccess privateSourceAccess;
 
-    private AgentProperties properties;
     private Workspace workspace;
     private LlmModel instanceModel;
     private Practice practice;
@@ -303,7 +292,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        properties = mock(AgentProperties.class);
         workspace = workspaceRepository.save(TestEntities.activeWorkspace("orphan-recovery-ws"));
 
         LlmConnection connection = connectionRepository.save(LlmCatalogTestFixtures.connection("orphan-recovery"));
@@ -358,32 +346,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         fastForwardAvailableAt(jobId);
 
         assertThat(eligibleForClaim(jobId)).isTrue();
-    }
-
-    @Test
-    void shouldRemoveTheLostAttemptsSandboxOnceTheJobIsRequeuedAndKeepTheNewAttempts() {
-        UUID jobId = runningJobOwnedBy("dead-replica", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        expireLeasesOf("dead-replica");
-        List<SandboxBackend.Listed> sandboxes = new ArrayList<>();
-        sandboxes.add(reviewSandbox("attempt-0", jobId, 0));
-        SandboxBackend backend = mock(SandboxBackend.class);
-        when(backend.list()).thenAnswer(invocation -> List.copyOf(sandboxes));
-        doAnswer(invocation -> sandboxes.removeIf(sandbox -> sandbox.handle().equals(invocation.getArgument(0))))
-                .when(backend)
-                .remove(any());
-        var reconciler = new SandboxReconciler(jobRepository, backend, meterRegistry, Clock.systemUTC());
-
-        reaper.reap();
-        sandboxes.add(reviewSandbox("attempt-1", jobId, 1));
-        reconciler.periodicReconciliation();
-
-        assertThat(jobRepository.findById(jobId).orElseThrow().getAttempt()).isEqualTo(1);
-        assertThat(sandboxes).extracting(sandbox -> sandbox.handle().id()).containsExactly("attempt-1");
-    }
-
-    private static SandboxBackend.Listed reviewSandbox(String name, UUID jobId, int attempt) {
-        return new SandboxBackend.Listed(
-                new SandboxBackend.Handle(name), SandboxBackend.Kind.REVIEW, jobId, attempt, Instant.now());
     }
 
     @Test
@@ -958,7 +920,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         spentBeforeItWasLost(jobId, 2);
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
 
-        assertThat(tracking(executor(), running).executePrepared(jobId, running, mock(SandboxSpec.class)))
+        assertThat(results().measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT))
                 .isEqualTo(ReviewJobStatus.TIMED_OUT);
 
         ReviewJob ended = jobRepository.findById(jobId).orElseThrow();
@@ -976,7 +938,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         admitWithResult(jobId);
         keepOriginalInputs(jobId, 0, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
-        ReviewJobExecutor executor = tracking(executor(), running);
+        ReviewAttemptResults results = results();
         var locked = new CountDownLatch(1);
         var pool = Executors.newFixedThreadPool(2);
         try {
@@ -998,7 +960,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             }));
             var handoff = pool.submit(() -> {
                 assertThat(locked.await(30, TimeUnit.SECONDS)).isTrue();
-                return executor.executePrepared(jobId, running, mock(SandboxSpec.class));
+                return results.measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT);
             });
             holder.get(30, TimeUnit.SECONDS);
             assertThat(handoff.get(30, TimeUnit.SECONDS)).isNull();
@@ -1032,7 +994,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
 
         // The measuring attempt keeps what it measured and hands the review on to the run that composes it.
-        assertThat(tracking(executor(), running).executePrepared(jobId, running, mock(SandboxSpec.class)))
+        assertThat(results().measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT))
                 .isNull();
         ReviewJob waiting = jobRepository.findById(jobId).orElseThrow();
         assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
@@ -1080,7 +1042,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 policy,
                 mock(ReviewMethodVerifier.class),
                 assignments,
-                transactionTemplate,
                 context.getBean(JsonMapper.class),
                 context.getBean(ReviewStart.class),
                 budgets,
@@ -1089,6 +1050,37 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 mock(LlmCallPermits.class),
                 agentRuns,
                 reviewRuns);
+    }
+
+    /**
+     * The steps after a review sandbox's result over this database, with the real recovery, continuation, usage and
+     * script-run owners. The sandbox reported a hard timeout without any runner output.
+     */
+    private ReviewAttemptResults results() {
+        var agent = mock(PracticePiAdapter.class);
+        when(agent.parseResult(TIMED_OUT)).thenReturn(new AgentResult(false, Map.of()));
+        var telemetry = new ReviewJobTelemetry(meterRegistry, Tracer.NOOP);
+        return new ReviewAttemptResults(
+                jobRepository,
+                mock(DefaultReviewExecutionHandler.class),
+                agent,
+                new ReviewAttemptPreparation(
+                        jobRepository,
+                        mock(DefaultReviewExecutionHandler.class),
+                        agent,
+                        mock(AttemptTokenIssuer.class),
+                        SandboxTestLimits.PROPERTIES,
+                        transactionTemplate,
+                        objectMapper,
+                        telemetry),
+                new ReviewJobTerminal(jobRepository, agentRuns, attemptUsage, objectMapper, null, continuation),
+                reviewRuns,
+                attemptUsage,
+                new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
+                transactionTemplate,
+                objectMapper,
+                meterRegistry,
+                telemetry);
     }
 
     @Test
@@ -1100,12 +1092,11 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         keepOriginalInputs(jobId, 0, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
         spentBeforeItWasLost(jobId, 2);
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
-        // The stranger's executor claimed this attempt once, under an epoch that a later claim has since replaced.
-        var stranger = tracking(executor(), running);
+        // The stranger claimed this attempt once, under an epoch that a later claim has since replaced.
+        var stranger = RuntimeJobTestData.fence(jdbc, running);
         claimAgainAfterLoss(jobId);
 
-        assertThat(stranger.executePrepared(jobId, running, mock(SandboxSpec.class)))
-                .isNull();
+        assertThat(results().measured(jobId, running, stranger, 0, TIMED_OUT)).isNull();
 
         ReviewJob kept = jobRepository.findById(jobId).orElseThrow();
         assertThat(kept.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
@@ -1232,75 +1223,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("a review whose sandbox the quota has no room for waits in the queue under a new attempt number")
-    void shouldHoldAReviewUnderANewAttemptWhenTheSandboxQuotaHasNoRoom() {
-        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 2);
-        ReviewJob running = jobRepository.findById(jobId).orElseThrow();
-        double counted = sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_EXCEEDED);
-
-        assertThat(tracking(executor(refusedSandbox(SandboxCapacityException.Reason.QUOTA_EXCEEDED)), running)
-                        .executePrepared(jobId, running, mock(SandboxSpec.class)))
-                .isNull();
-
-        ReviewJob held = jobRepository.findById(jobId).orElseThrow();
-        assertThat(held.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-        assertThat(held.getAttempt())
-                .as("nothing of this attempt is reused: its evidence, Job name and token stay its own")
-                .isEqualTo(3);
-        assertThat(held.spentAttempts()).as("the refusal spends no retry").isEqualTo(2);
-        assertThat(RuntimeJobTestData.runState(jdbc, held)).isEqualTo("QUEUED");
-        assertThat(held.getHoldReason()).isEqualTo(AgentRunHold.SANDBOX_ROOM.name());
-        assertThat(held.getAvailableAt()).isAfter(Instant.now());
-        assertThat(eligibleForClaim(jobId)).as("it waits before the next claim").isFalse();
-        assertThat(sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_EXCEEDED))
-                .isEqualTo(counted + 1);
-    }
-
-    @Test
-    @DisplayName("a review that the quota refused many times waits again: only starvation ends it")
-    void shouldHoldAReviewAgainHoweverOftenTheSandboxQuotaHadNoRoom() {
-        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 0);
-        for (int refusal = 1; refusal <= 3; refusal++) {
-            ReviewJob running = jobRepository.findById(jobId).orElseThrow();
-
-            assertThat(tracking(executor(refusedSandbox(SandboxCapacityException.Reason.QUOTA_EXCEEDED)), running)
-                            .executePrepared(jobId, running, mock(SandboxSpec.class)))
-                    .isNull();
-
-            ReviewJob held = jobRepository.findById(jobId).orElseThrow();
-            assertThat(held.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-            assertThat(held.getAttempt()).isEqualTo(refusal);
-            assertThat(held.spentAttempts())
-                    .as("a refusal of room spends no retry")
-                    .isZero();
-            claimAgain(jobId, "live-owner");
-        }
-    }
-
-    @Test
-    @DisplayName("a review whose sandbox no quota room can ever hold is cancelled for capacity with its own message")
-    void shouldCancelAReviewWhoseSandboxTheQuotaCanNeverHold() {
-        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 1);
-        ReviewJob running = jobRepository.findById(jobId).orElseThrow();
-        double counted = sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT);
-
-        assertThat(tracking(executor(refusedSandbox(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT)), running)
-                        .executePrepared(jobId, running, mock(SandboxSpec.class)))
-                .isEqualTo(ReviewJobStatus.CANCELLED);
-
-        ReviewJob failed = jobRepository.findById(jobId).orElseThrow();
-        assertThat(failed.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
-        assertThat(failed.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
-        assertThat(failed.getExecutionStartedAt())
-                .as("nothing of the sandbox ran")
-                .isNull();
-        assertThat(failed.getAttempt()).isEqualTo(1);
-        assertThat(failed.getErrorMessage()).isEqualTo("The sandbox quota is smaller than one review sandbox.");
-        assertThat(sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT))
-                .isEqualTo(counted + 1);
-    }
-
-    @Test
     @DisplayName("the queue counts a review that waits for sandbox room as waiting, and only a budget hold as held")
     void shouldCountASandboxRoomHoldAsWaitingAndOnlyABudgetHoldAsHeld() {
         UUID room = runningJobOwnedBy("live-owner", Instant.now(), 0);
@@ -1326,123 +1248,13 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         });
     }
 
-    @Test
-    @DisplayName("queued reviews that no sandbox room can ever hold are cancelled; composing and budget-held ones stay")
-    void shouldCancelQueuedReviewsWhenNoSandboxRoomCanEverHoldThem() {
-        UUID waiting = queuedAndDue(runningJobOwnedBy("live-owner", Instant.now(), 0));
-        UUID composing = runningJobOwnedBy("live-owner", Instant.now(), 0);
-        admitWithResult(composing);
-        queuedAndDue(composing);
-        UUID budgetHeld = queuedAndDue(runningJobOwnedBy("live-owner", Instant.now(), 0));
-        // Its hold has run out, and no claim has cleared it yet.
-        RuntimeJobTestData.hold(jdbc, jobRepository.findById(budgetHeld).orElseThrow(), AgentRunHold.BUDGET);
-        var sandbox = mock(SandboxManager.class);
-        when(sandbox.neverFits(any())).thenReturn(true);
-
-        executor(sandbox).endReviewsWithoutRoom(Instant.now());
-
-        ReviewJob cancelled = jobRepository.findById(waiting).orElseThrow();
-        assertThat(cancelled.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
-        assertThat(cancelled.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
-        assertThat(cancelled.getErrorMessage()).isEqualTo("The sandbox quota is smaller than one review sandbox.");
-        assertThat(jobRepository.findById(composing).orElseThrow().getStatus())
-                .as("composition needs no sandbox")
-                .isEqualTo(ReviewJobStatus.QUEUED);
-        ReviewJob held = jobRepository.findById(budgetHeld).orElseThrow();
-        assertThat(held.getStatus())
-                .as("a budget hold waits for money, not room")
-                .isEqualTo(ReviewJobStatus.QUEUED);
-        assertThat(held.getHoldReason()).isEqualTo(AgentRunHold.BUDGET.name());
-    }
-
-    @Test
-    @DisplayName("queued reviews end after an hour without room while no review runs, and never behind running reviews")
-    void shouldEndQueuedReviewsAfterAnHourOfStarvationButNeverForBacklog() {
-        UUID backlog = queuedAndDue(runningJobOwnedBy("live-owner", Instant.now(), 0));
-        var busy = mock(SandboxManager.class);
-        when(busy.reviewsRunning()).thenReturn(true);
-        var behindRunningReviews = executor(busy);
-        Instant start = Instant.now();
-        behindRunningReviews.endReviewsWithoutRoom(start);
-        behindRunningReviews.endReviewsWithoutRoom(start.plus(Duration.ofHours(2)));
-        assertThat(jobRepository.findById(backlog).orElseThrow().getStatus())
-                .as("waiting behind running reviews is backlog")
-                .isEqualTo(ReviewJobStatus.QUEUED);
-
-        var starved = executor(mock(SandboxManager.class));
-        starved.endReviewsWithoutRoom(start);
-        assertThat(jobRepository.findById(backlog).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-        starved.endReviewsWithoutRoom(start.plus(Duration.ofMinutes(61)));
-
-        ReviewJob ended = jobRepository.findById(backlog).orElseThrow();
-        assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
-        assertThat(ended.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
-        assertThat(ended.getErrorMessage()).isEqualTo("Hephaestus had no room to run this review in time.");
-    }
-
-    @Test
-    @DisplayName("a review cancelled for sandbox room keeps that reason when it settles, claimed or still queued")
-    void shouldRecordNoSandboxRoomOnTheReviewWhenSettled() {
-        UUID claimed = withoutAssignments(runningJobOwnedBy("live-owner", Instant.now(), 1));
-        ReviewJob running = jobRepository.findById(claimed).orElseThrow();
-        tracking(executor(refusedSandbox(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT)), running)
-                .executePrepared(claimed, running, mock(SandboxSpec.class));
-        UUID queued = queuedAndDue(withoutAssignments(runningJobOwnedBy("live-owner", Instant.now(), 0)));
-        var tooSmall = mock(SandboxManager.class);
-        when(tooSmall.neverFits(any())).thenReturn(true);
-        executor(tooSmall).endReviewsWithoutRoom(Instant.now());
-
-        // A tick settles the 100 earliest ended jobs, and earlier tests leave theirs unsettled.
-        jdbc.update(
-                "UPDATE review_job SET completed_at = completed_at - interval '100 years' WHERE id IN (?, ?)",
-                claimed,
-                queued);
-        var completion = new ReviewJobCompletionService(
-                jobRepository,
-                mock(ReviewWriteGuard.class),
-                assignments,
-                members,
-                reviews,
-                mock(ReviewJobLifecycleService.class),
-                transactionTemplate,
-                Clock.systemUTC());
-        completion.tick();
-
-        for (UUID jobId : List.of(claimed, queued)) {
-            UUID reviewId = jobRepository.findById(jobId).orElseThrow().getReviewId();
-            assertThat(jdbc.queryForMap("SELECT status, stop_reason FROM review WHERE id = ?", reviewId))
-                    .containsEntry("status", "CANCELLED")
-                    .containsEntry("stop_reason", "NO_SANDBOX_ROOM");
-        }
-    }
-
-    /** The job reviews no practice, so settling it touches the review alone; the fixture creates no assignment rows. */
-    private UUID withoutAssignments(UUID jobId) {
-        transactionTemplate.executeWithoutResult(status -> {
-            ReviewJob job = jobRepository.findById(jobId).orElseThrow();
-            job.setInput(new ReviewJobInput(job.getInput().itemId(), List.of()));
-            jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
-        });
-        return jobId;
-    }
-
-    /** The job waits in the queue and is due: nothing holds it back but room. */
-    private UUID queuedAndDue(UUID jobId) {
-        transactionTemplate.executeWithoutResult(status -> {
-            ReviewJob job = jobRepository.findById(jobId).orElseThrow();
-            job.setStatus(ReviewJobStatus.QUEUED);
-            jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
-        });
-        return jobId;
-    }
-
-    /** A drain of the worker that holds the job hands the attempt back, as the executor's drain does. */
+    /** A drain hands the attempt back without spending a retry. */
     private boolean drain(UUID jobId) {
         return Boolean.TRUE.equals(transactionTemplate.execute(
                 status -> reviewRuns.requeue(jobId, ownFence(jobId), AgentRuns.Charge.FREE, Duration.ZERO, null)));
     }
 
-    /** The executor's retry of an attempt that failed before admission: it spends a retry while one is left. */
+    /** The retry of an attempt that failed before admission: it spends a retry while one is left. */
     private boolean retryUnadmitted(UUID jobId) {
         ReviewJob job = jobRepository.findById(jobId).orElseThrow();
         if (!reviewRuns.mayRetry(job)) return false;
@@ -1478,79 +1290,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             job.setStartedAt(Instant.now());
             jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
         });
-    }
-
-    private static SandboxManager refusedSandbox(SandboxCapacityException.Reason reason) {
-        var sandbox = mock(SandboxManager.class);
-        when(sandbox.execute(any())).thenThrow(new SandboxCapacityException("no room", reason));
-        return sandbox;
-    }
-
-    private double sandboxStartFailures(SandboxCapacityException.Reason reason) {
-        var counter = meterRegistry
-                .find("sandbox.start.failures")
-                .tag("kind", "review")
-                .tag("reason", reason.tag())
-                .counter();
-        return counter == null ? 0 : counter.count();
-    }
-
-    /*
-     * The real executor over this database, with the real recovery, continuation, usage and script-run owners. Only
-     * the sandbox, which reports a hard timeout without any runner output, and collaborators executePrepared does not
-     * reach are stand-ins.
-     */
-    /** The executor runs the attempt as the worker that claimed it, so its writes are fenced on the attempt's claim. */
-    private ReviewJobExecutor tracking(ReviewJobExecutor executor, ReviewJob running) {
-        executor.track(new ReviewJobClaimService.ClaimResult(
-                running,
-                RuntimeJobTestData.fence(jdbc, running),
-                ConfigSnapshot.fromJson(running.getConfigSnapshot(), objectMapper),
-                practice.getKind().value()));
-        return executor;
-    }
-
-    private ReviewJobExecutor executor() {
-        var timedOut = new SandboxResult(124, Map.of(), "stopped", true, Duration.ofMinutes(15));
-        var sandbox = mock(SandboxManager.class);
-        when(sandbox.execute(any())).thenReturn(timedOut);
-        return executor(sandbox);
-    }
-
-    private ReviewJobExecutor executor(SandboxManager sandbox) {
-        var timedOut = new SandboxResult(124, Map.of(), "stopped", true, Duration.ofMinutes(15));
-        var agent = mock(PracticePiAdapter.class);
-        when(agent.parseResult(timedOut)).thenReturn(new AgentResult(false, Map.of()));
-        var executor = new ReviewJobExecutor(
-                properties,
-                jobRepository,
-                mock(DefaultReviewExecutionHandler.class),
-                agent,
-                sandbox,
-                SandboxTestLimits.PROPERTIES,
-                mock(AsyncTaskExecutor.class),
-                transactionTemplate,
-                objectMapper,
-                meterRegistry,
-                new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
-                attemptUsage,
-                new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
-                Optional.empty(),
-                mock(ReviewJobClaimService.class),
-                reviewRuns,
-                agentRuns,
-                mock(AgentRunNotifications.class),
-                new ReviewJobTerminal(jobRepository, agentRuns, attemptUsage, objectMapper, null, continuation),
-                new ReviewAttemptPreparation(
-                        jobRepository,
-                        mock(DefaultReviewExecutionHandler.class),
-                        agent,
-                        mock(AttemptTokenIssuer.class),
-                        SandboxTestLimits.PROPERTIES,
-                        transactionTemplate,
-                        objectMapper,
-                        new ReviewJobTelemetry(meterRegistry, Tracer.NOOP)));
-        return executor;
     }
 
     @ParameterizedTest(name = "admission committed: {0}")

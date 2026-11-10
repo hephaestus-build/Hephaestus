@@ -669,16 +669,11 @@ hephaestus:
     # ═══════════════════════════════════════════════════════════════════════════
     # REVIEW JOB QUEUE (PostgreSQL-backed)
     # ═══════════════════════════════════════════════════════════════════════════
-    # ReviewJobExecutor claims queued rows from review_job. Disabled by default.
+    # Review jobs wait on agent runs, which review sandboxes claim. Disabled by default.
     agent:
         image:
             reference: ghcr.io/hephaestus-build/agent-pi:${spring.application.version}
         enabled: ${AGENT_ENABLED:false}
-        # How long the poll loop sleeps when there is nothing to claim.
-        poll-interval: ${AGENT_POLL_INTERVAL:1s}
-        # Max candidate QUEUED jobs considered per poll iteration; bounded by this worker's own
-        # free local capacity so one poll never over-claims.
-        claim-batch-size: ${AGENT_CLAIM_BATCH_SIZE:5}
         heartbeat-interval: 25s
         # Strip heavy job payloads after payload-retention; delete unreferenced terminal jobs after row-retention.
         payload-retention: ${AGENT_PAYLOAD_RETENTION:P14D}

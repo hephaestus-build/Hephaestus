@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
@@ -10,13 +9,11 @@ import org.springframework.boot.convert.DurationUnit;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Configuration for the PostgreSQL-backed agent job queue: the {@code review_job} table itself, claimed
- * by {@link ReviewJobExecutor}'s poll loop with {@code FOR UPDATE SKIP LOCKED}.
+ * Configuration for agent jobs: the {@code review_job} rows of practice reviews, which review sandboxes run, and the
+ * liveness and retention of the worker that serves them.
  *
  * @param enabled           Turns on agent jobs, which run practice reviews. The server role submits jobs and the
  *                          worker role runs them, so set it on both.
- * @param pollInterval      how long the poll loop sleeps when a poll claimed nothing
- * @param claimBatchSize    Maximum candidate batch. A blocked endpoint does not consume a local execution slot.
  * @param heartbeatInterval interval between {@code worker_registry} liveness heartbeats
  * @param payloadRetention  age from {@code completed_at} at which a TERMINAL job's {@code capture}
  *                          and {@code output} are stripped to NULL
@@ -28,19 +25,11 @@ import org.springframework.validation.annotation.Validated;
 public record AgentProperties(
         @DefaultValue("false") boolean enabled,
 
-        @DurationUnit(ChronoUnit.SECONDS) @DefaultValue("1s") @NotNull
-        Duration pollInterval,
-
-        @DefaultValue("5") @Min(1) int claimBatchSize,
-
         @DurationUnit(ChronoUnit.SECONDS) @DefaultValue("25s") @NotNull
         Duration heartbeatInterval,
 
         @DefaultValue("P14D") @NotNull Duration payloadRetention,
         @DefaultValue("P90D") @NotNull Duration rowRetention) {
-    /** Floor for {@link #pollInterval}: below this the poll loop busy-spins against the DB. */
-    public static final Duration MIN_POLL_INTERVAL = Duration.ofMillis(100);
-
     /** Floor for {@link #heartbeatInterval}: below this the liveness signal floods {@code worker_registry}. */
     public static final Duration MIN_HEARTBEAT_INTERVAL = Duration.ofSeconds(1);
 
@@ -52,12 +41,6 @@ public record AgentProperties(
 
     /** Bean Validation has no duration-comparison constraint, so the {@link Duration} bounds are checked here. */
     public AgentProperties {
-        if (pollInterval == null || pollInterval.compareTo(MIN_POLL_INTERVAL) < 0) {
-            throw new IllegalArgumentException(
-                    "hephaestus.agent.poll-interval (AGENT_POLL_INTERVAL) must be >= " + MIN_POLL_INTERVAL
-                            + ", got: "
-                            + pollInterval);
-        }
         if (heartbeatInterval == null || heartbeatInterval.compareTo(MIN_HEARTBEAT_INTERVAL) < 0) {
             throw new IllegalArgumentException(
                     "hephaestus.agent.heartbeat-interval must be >= " + MIN_HEARTBEAT_INTERVAL

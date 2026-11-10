@@ -56,10 +56,10 @@ class WorkerShutdownTimeoutTest extends BaseUnitTest {
             DefaultLifecycleProcessor processor = context.getBean(
                     AbstractApplicationContext.LIFECYCLE_PROCESSOR_BEAN_NAME, DefaultLifecycleProcessor.class);
 
-            assertThat(shutdownTimeout(processor, WorkerDrainCoordinator.PHASE))
+            assertThat(shutdownTimeout(processor, WorkerPropertiesConfiguration.DRAIN_PHASE))
                     .isEqualTo(drain.plus(WorkerPropertiesConfiguration.SHUTDOWN_MARGIN)
                             .toMillis());
-            assertThat(shutdownTimeout(processor, WorkerDrainCoordinator.PHASE - 1))
+            assertThat(shutdownTimeout(processor, WorkerPropertiesConfiguration.DRAIN_PHASE - 1))
                     .as("every other phase keeps the configured timeout")
                     .isEqualTo(50L);
         });
@@ -79,7 +79,7 @@ class WorkerShutdownTimeoutTest extends BaseUnitTest {
 
         @Bean
         SmartLifecycle drain() {
-            return new Recording(WorkerDrainCoordinator.PHASE) {
+            return new Recording(WorkerPropertiesConfiguration.DRAIN_PHASE) {
                 @Override
                 public void stop(Runnable callback) {
                     stop();
@@ -98,7 +98,7 @@ class WorkerShutdownTimeoutTest extends BaseUnitTest {
 
         @Bean
         SmartLifecycle laterPhase() {
-            return new Recording(WorkerDrainCoordinator.PHASE - 1) {
+            return new Recording(WorkerPropertiesConfiguration.DRAIN_PHASE - 1) {
                 @Override
                 public void stop() {
                     drainFinishedWhenLaterPhaseStopped.set(drainFinished.get());
