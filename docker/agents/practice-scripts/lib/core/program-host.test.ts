@@ -94,7 +94,6 @@ const fixture = async (name: string) => readFile(path.join(FIXTURES, `${name}.ts
 
 const program = (imports: string, body: string) =>
 	`import {scm} from "@hephaestus/practice-scripts/scm";
-import { reasonOf } from "../lib/core/practice-script.ts";
 import { ${imports} } from "@hephaestus/practice-scripts";\nexport default definePracticeScript(${body});\n`;
 
 const cited = `await ctx.evidence.citeRecord("metadata.json", 36)`;
@@ -141,9 +140,10 @@ const malformed = async (ws: Workspace) => {
 		sourceFile === "context/metadata.json" ? "scm.pull-request.core" : "scm.review-threads";
 };
 
+/** Stored scripts, as production stages them. A model-slot case stages a private toolkit program instead. */
 async function workspace(
 	scripts: Record<string, string | null>,
-	stage: typeof stagePracticeScripts = stageToolkitPrograms,
+	stage: typeof stagePracticeScripts = stagePracticeScripts,
 ): Promise<Workspace> {
 	const { root, practices } = await stage(scripts);
 	roots.push(root);
@@ -598,15 +598,12 @@ void describe("a practice's result", () => {
 		["a dynamic import", `await import("../lib/core/contract.ts");`],
 	] as const) {
 		void test(`a script that imports ${form} stops as an invalid program, and names the import`, async () => {
-			const ws = await workspace(
-				{
-					importer: `${line}
+			const ws = await workspace({
+				importer: `${line}
 import { definePracticeScript } from "@hephaestus/practice-scripts";
 export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({}) });
 `,
-				},
-				stagePracticeScripts,
-			);
+			});
 			const { outcome, reviews } = await run(ws, "importer");
 			assert.equal(outcome.status, "failed");
 			assert.equal(outcome.stopReason, "invalid-program");
@@ -625,13 +622,10 @@ export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({
 		{ models: {} },
 	]) {
 		void test(`a stored script with nonempty metadata ${JSON.stringify(meta)} is invalid before model binding`, async () => {
-			const ws = await workspace(
-				{
-					importer: `import { definePracticeScript } from "@hephaestus/practice-scripts";
+			const ws = await workspace({
+				importer: `import { definePracticeScript } from "@hephaestus/practice-scripts";
 export default definePracticeScript({ meta: ${JSON.stringify(meta)}, run: async (ctx) => ctx.review() });`,
-				},
-				stagePracticeScripts,
-			);
+			});
 			const { outcome, reviews } = await run(ws, "importer", {
 				models: { chat: new MockLanguageModelV4({}) },
 			});
@@ -645,18 +639,15 @@ export default definePracticeScript({ meta: ${JSON.stringify(meta)}, run: async 
 	}
 
 	void test("a script with a name in the export map runs", async () => {
-		const ws = await workspace(
-			{
-				importer: `import { definePracticeScript, listWithin } from "@hephaestus/practice-scripts";
+		const ws = await workspace({
+			importer: `import { definePracticeScript, listWithin } from "@hephaestus/practice-scripts";
 import { chat } from "@hephaestus/practice-scripts/chat";
 import { docs } from "@hephaestus/practice-scripts/docs";
 import { issueReferences } from "@hephaestus/practice-scripts/scm";
 void [chat, docs, listWithin, issueReferences];
 export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({}) });
 `,
-			},
-			stagePracticeScripts,
-		);
+		});
 		const { outcome } = await run(ws, "importer");
 		assert.equal(outcome.status, "ok", outcome.error);
 	});
@@ -898,7 +889,7 @@ void describe("the host's bounds on a program's messages", () => {
 				}
 			},
 		});
-		const ws = await workspace({ flood: await fixture("flood") });
+		const ws = await workspace({ flood: await fixture("flood") }, stageToolkitPrograms);
 		const budget = new ModelBudget(200_000, 4);
 		const { outcome } = await run(ws, "flood", { models: { embedding }, budget });
 		assert.equal(active, 0);
@@ -997,7 +988,7 @@ void describe("the host's bounds on a program's messages", () => {
 				throw new Error("aborted");
 			},
 		});
-		const ws = await workspace({ flood: await fixture("flood") });
+		const ws = await workspace({ flood: await fixture("flood") }, stageToolkitPrograms);
 		const { outcome } = await run(ws, "flood", { models: { embedding } });
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "error");
@@ -1186,7 +1177,7 @@ void test("direct model calls share the attempt's budget: a later practice sees 
 			warnings: [],
 		},
 	});
-	const spend = program(
+	const spend = `import { reasonOf } from "../lib/core/practice-script.ts";\n${program(
 		"definePracticeScript",
 		`{
 			meta: { models: { chat: "required" } },
@@ -1196,8 +1187,8 @@ void test("direct model calls share the attempt's budget: a later practice sees 
 				return ctx.review({ facts: { before, after: ctx.budget.remaining().tokens, chat } });
 			},
 		}`,
-	);
-	const ws = await workspace({ first: spend, second: spend });
+	)}`;
+	const ws = await workspace({ first: spend, second: spend }, stageToolkitPrograms);
 	const budget = new ModelBudget(reserve + 100, MODEL_CONCURRENCY);
 	const first = await run(ws, "first", { models: { chat }, budget });
 	assert.equal(first.outcome.status, "ok", first.outcome.error);
@@ -1232,15 +1223,18 @@ void test("a model call that a lost side stops counts as unavailable, not as a d
 			throw new Error("the host left this call running");
 		},
 	});
-	const ws = await workspace({
-		waits: program(
-			"definePracticeScript",
-			`{
+	const ws = await workspace(
+		{
+			waits: program(
+				"definePracticeScript",
+				`{
 				meta: { models: { chat: "required" } },
 				async run(ctx) { await ctx.models.chat.doGenerate(${JSON.stringify(call)}); return null; },
 			}`,
-		),
-	});
+			),
+		},
+		stageToolkitPrograms,
+	);
 	const { outcome } = await run(ws, "waits", { models: { chat }, signal: cancel.signal });
 	assert.equal(outcome.stopReason, "unavailable");
 	assert.deepEqual(outcome.models, [
@@ -1288,7 +1282,10 @@ void describe("a program that gives no result", () => {
 });
 
 void test("a program whose required direct model is not bound is skipped", async () => {
-	const ws = await workspace({ "requires-decision": await fixture("requires-decision") });
+	const ws = await workspace(
+		{ "requires-decision": await fixture("requires-decision") },
+		stageToolkitPrograms,
+	);
 	const { outcome, reviews } = await run(ws, "requires-decision");
 	assert.equal(outcome.status, "withheld");
 	assert.equal(outcome.stopReason, "unavailable");

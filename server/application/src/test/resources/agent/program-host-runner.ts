@@ -223,7 +223,7 @@ export default definePracticeScript({
 `;
 }
 
-export function directProgram(before = ""): string {
+export function publicProgram(before = ""): string {
 	return candidateProgram(
 		before,
 		'import { definePracticeScript } from "@hephaestus/practice-scripts";',

@@ -37,7 +37,11 @@ The `exports` map in `docker/agents/practice-scripts/package.json` is the one ho
 
 A map alone does not enforce the boundary, because a relative path still reaches any file.
 Thus, `lib/core/script-imports.ts` resolves each import of a script through the map and refuses anything else.
-This boundary is a contract. It is not a security boundary: the process permissions and the host's reads are.
+This boundary is a contract. It is not a security boundary.
+
+A script can still load a private module, for example through `process.getBuiltinModule`.
+The sandbox container and the host's IPC checks are the boundary.
+The host binds no model slot to a stored script, and it accepts only the reads that it receipts.
 
 A new public name needs at least 3 scripts that use it. Until then, the helper stays in its script.
 Promoting a helper is additive. Demoting a helper is a breaking change.

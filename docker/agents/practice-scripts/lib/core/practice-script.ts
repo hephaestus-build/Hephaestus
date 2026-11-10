@@ -97,11 +97,19 @@ export type PracticeScriptContext<M extends ModelNeeds = ModelNeeds> = PracticeI
 /**
  * What a script reads, as the public API promises it. `review` ends the script: it never returns to
  * the script, so a script returns its call and never reads its result. The toolkit's own context has
- * more; a script cannot rely on it.
+ * more; a script cannot rely on it. An allowlist, so a new toolkit or wire field stays private.
  */
-export type ScriptContext = Omit<
+export type ScriptContext = Pick<
 	PracticeScriptContext,
-	"models" | "budget" | "previous" | "evidence" | "review"
+	| "contractVersion"
+	| "kind"
+	| "item"
+	| "about"
+	| "practice"
+	| "scope"
+	| "now"
+	| "abortSignal"
+	| "log"
 > & {
 	evidence: Pick<Evidence, "record" | "citeRecord">;
 	review: ((options?: ReviewOptions) => Promise<never>) & PracticeInputs["review"];

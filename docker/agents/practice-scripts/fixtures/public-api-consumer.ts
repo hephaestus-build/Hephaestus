@@ -4,9 +4,18 @@ import {
 	listWithin,
 	UnratedError,
 	type Citation,
+	type EvidenceLocation,
+	type Facts,
+	type Omission,
+	type Outcome,
 	type PracticeScriptContext,
 	type PracticeScriptDefinition,
+	type PreparedContext,
+	type Problem,
+	type ReviewLead,
 	type ReviewOptions,
+	type Severity,
+	type UnratedReason,
 } from "@hephaestus/practice-scripts";
 import { chat } from "@hephaestus/practice-scripts/chat";
 import { docs } from "@hephaestus/practice-scripts/docs";
@@ -21,12 +30,74 @@ import {
 	later,
 	scm,
 	subIssueRollup,
+	type ChangeCommit,
 	type ChangeView,
 	type DiffFile,
 	type FileTree,
+	type GeneralComment,
+	type LinkedWorkItem,
+	type ReviewComment,
+	type ReviewDecision,
+	type ReviewThread,
 	type ScmWork,
+	type Site,
+	type SiteOptions,
+	type SiteRule,
+	type SiteRules,
+	type SitesOptions,
 	type SourceFile,
 } from "@hephaestus/practice-scripts/scm";
+
+/** True only when both sides name the same members. */
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+/** The context's members and evidence readers: an added or removed member fails `tsc`. */
+export const contextMembers: Same<
+	keyof PracticeScriptContext,
+	| "contractVersion"
+	| "kind"
+	| "item"
+	| "about"
+	| "practice"
+	| "scope"
+	| "now"
+	| "abortSignal"
+	| "log"
+	| "evidence"
+	| "review"
+> = true;
+export const reviewOptionMembers: Same<
+	keyof ReviewOptions,
+	"leads" | "facts" | "directions" | "context" | "limitations"
+> = true;
+export const evidenceMembers: Same<
+	keyof PracticeScriptContext["evidence"],
+	"record" | "citeRecord"
+> = true;
+
+/** Every exported type that the consumers below do not already use: removing or renaming one fails `tsc`. */
+export type ExportedTypes = [
+	EvidenceLocation,
+	Facts,
+	Omission,
+	Outcome,
+	PreparedContext,
+	Problem,
+	ReviewLead,
+	Severity,
+	UnratedReason,
+	ChangeCommit,
+	GeneralComment,
+	LinkedWorkItem,
+	ReviewComment,
+	ReviewDecision,
+	ReviewThread,
+	Site,
+	SiteOptions,
+	SiteRule,
+	SiteRules,
+	SitesOptions,
+];
 
 const definition: PracticeScriptDefinition = definePracticeScript({
 	meta: {},
@@ -58,6 +129,29 @@ const definition: PracticeScriptDefinition = definePracticeScript({
 	},
 });
 void definition;
+
+/** A result that code decided, returned without a review: the host measures its coverage. */
+export const decided: PracticeScriptDefinition = definePracticeScript({
+	meta: {},
+	async run(ctx) {
+		const cited: Citation = await ctx.evidence.citeRecord("metadata.json", 36);
+		const problem: Problem = {
+			severity: "MINOR",
+			summary: "Too many changed files",
+			explanation: "The record states the count.",
+			citations: [cited],
+			basis: { type: "state", explanation: "The pull request has this state." },
+		};
+		return {
+			outcome: "NOT_MET",
+			summary: "The change is too large",
+			explanation: "The record counts the changed files.",
+			citations: [],
+			evidence: {},
+			problems: [problem],
+		};
+	},
+});
 
 export async function consumeKits(ctx: PracticeScriptContext) {
 	const thread = chat(ctx);

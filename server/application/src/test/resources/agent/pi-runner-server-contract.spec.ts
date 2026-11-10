@@ -16,7 +16,7 @@ import { executionReportSchema } from "../../../../../../docker/agents/practice-
 import { practiceIndexSchema } from "../../../../../../docker/agents/practice-scripts/lib/core/runtime-inputs.ts";
 import { AUTHENTICATION_CRITERION, PRACTICES_DIR } from "./golden-review-workspace.ts";
 import {
-	directProgram,
+	publicProgram,
 	field,
 	readJsonFile,
 	runRunner,
@@ -36,7 +36,7 @@ const CRITERION = AUTHENTICATION_CRITERION;
 
 const PRACTICES = [
 	{ slug: "auth-review" },
-	{ slug: "ui-scope", program: directProgram() },
+	{ slug: "ui-scope", program: publicProgram() },
 	{ slug: "zz-invalid-meta", program: INVALID_META_PROGRAM },
 ] as const;
 

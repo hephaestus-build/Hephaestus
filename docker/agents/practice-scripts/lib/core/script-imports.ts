@@ -25,13 +25,19 @@ function publicEntries(): ReadonlyMap<string, string> {
 	);
 }
 
+/**
+ * The folder that the server stages stored scripts in (`SandboxLayout`, pinned by `SandboxLayoutSyncTest`).
+ * The import guard and the metadata refusal apply only there. Tests stage private toolkit programs elsewhere.
+ */
+const SCRIPT_FOLDER = "practices";
+
 export const isPracticeScriptPath = (file: string): boolean =>
-	path.basename(path.dirname(file)) === "practices";
+	path.basename(path.dirname(file)) === SCRIPT_FOLDER;
 
 const isScript = (parentURL: string | undefined) =>
 	parentURL?.startsWith("file:") === true && isPracticeScriptPath(fileURLToPath(parentURL));
 
-/** Resolve stored scripts in `practices` through the export map; private toolkit fixtures stage elsewhere. */
+/** Resolve a stored script's imports through the export map. Other modules resolve as usual. */
 export function guardScriptImports(): void {
 	const entries = publicEntries();
 	registerHooks({

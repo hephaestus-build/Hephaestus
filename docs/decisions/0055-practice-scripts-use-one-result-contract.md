@@ -33,10 +33,7 @@ A null script uses the built-in script. An invalid script never falls back.
 
 The host owns identity, one job credential, deadline, governed model requests and trusted read receipts.
 Custom child processes have no credentials and use typed host IPC.
-
-Public scripts keep `meta` empty and prepare evidence for `ctx.review`.
-The host refuses a metadata field before model binding.
-Public scripts expose no direct model calls. Review sessions follow the developer's AI ceiling.
+Model access follows declared slots and the developer's AI ceiling.
 The frozen method retains all bound slots and epoch independently of job retention.
 
 Candidate admission is atomic. One refused citation or child withholds the complete candidate.
@@ -54,3 +51,12 @@ A script failure creates no claim about the work.
 ## Revisit trigger
 
 Revisit when a shipped script requires a capability that its domain kit and governed host cannot express.
+
+## Update — 2026-11-10: public scripts declare no models
+
+This update supersedes "Model access follows declared slots" in the decision above for stored scripts.
+A stored script keeps `meta` empty, prepares evidence, and calls `ctx.review`.
+The host refuses a stored script with any metadata field as an invalid program before it binds a model.
+The public toolkit has no direct-model entry, so a stored script makes no direct model call.
+Review sessions follow the developer's AI ceiling.
+Declared slots remain only for the toolkit's private test programs.

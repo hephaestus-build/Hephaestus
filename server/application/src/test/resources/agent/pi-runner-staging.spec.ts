@@ -9,7 +9,7 @@ import { test } from "node:test";
 
 import {
 	capturedLines,
-	directProgram,
+	privateModelProgram,
 	field,
 	runRunner,
 	stagePractices,
@@ -102,16 +102,21 @@ for (const concurrent of [false, true]) {
 		try {
 			const address = server.address();
 			assert.ok(address !== null && typeof address !== "string");
-			stagePractices(cwd, [
-				...(concurrent ? [{ slug: "a-waiting" }] : []),
-				{
-					slug: "b-direct",
-					program: directProgram(`
+			// A direct model call is a private toolkit program, staged outside the guarded practices folder.
+			stagePractices(
+				cwd,
+				[
+					...(concurrent ? [{ slug: "a-waiting" }] : []),
+					{
+						slug: "b-direct",
+						program: privateModelProgram(`
 			await step("one call", () => generateText({
 				model: ctx.models.chat, prompt: "Say yes.", maxOutputTokens: 1000,
 			}));`),
-				},
-			]);
+					},
+				],
+				"work/practice-scripts/toolkit-fixtures",
+			);
 			writeFileSync(
 				path.join(cwd, "practice-script-models.json"),
 				JSON.stringify({
