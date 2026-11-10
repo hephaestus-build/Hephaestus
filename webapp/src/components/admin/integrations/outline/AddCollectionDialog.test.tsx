@@ -1,21 +1,24 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { HttpResponse, http } from "msw";
 import { useState } from "react";
 import { expect, it } from "vitest";
 
 import type { OutlineCollectionCandidate } from "@/api/types.gen";
-import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 
 import { AddCollectionDialog } from "./AddCollectionDialog";
+
+const product = {
+	collectionId: "product",
+	name: "Product",
+	alreadyMirrored: false,
+} satisfies OutlineCollectionCandidate;
 
 function Harness({ onRegister }: { onRegister: () => Promise<void> }) {
 	const [open, setOpen] = useState(true);
 	return (
 		<AddCollectionDialog
-			workspaceSlug="acme"
+			candidates={{ items: [product], isLoading: false, onRetry: () => undefined }}
 			open={open}
 			onOpenChange={setOpen}
 			onRegister={onRegister}
@@ -25,34 +28,15 @@ function Harness({ onRegister }: { onRegister: () => Promise<void> }) {
 
 async function beginRegistration() {
 	const user = userEvent.setup();
-	server.use(
-		http.get("*/workspaces/acme/outline/collections/candidates", () =>
-			HttpResponse.json([
-				{
-					collectionId: "product",
-					name: "Product",
-					alreadyMirrored: false,
-				} satisfies OutlineCollectionCandidate,
-			]),
-		),
-	);
 	const registration = deferred();
-	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	const { unmount } = render(
-		<QueryClientProvider client={client}>
-			<Harness onRegister={async () => registration.promise} />
-		</QueryClientProvider>,
-	);
+	const { unmount } = render(<Harness onRegister={async () => registration.promise} />);
 	await user.click(await screen.findByRole("option", { name: /Product/u }));
 	await user.click(screen.getByRole("button", { name: "Add 1 collection" }));
 	await screen.findByRole("button", { name: "Adding…" });
 	return {
 		registration,
 		user,
-		cleanup: () => {
-			unmount();
-			client.clear();
-		},
+		cleanup: unmount,
 	};
 }
 

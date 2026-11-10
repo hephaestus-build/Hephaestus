@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "@/lib/toast";
 
 import {
@@ -6,6 +7,7 @@ import {
 	getOutlineTokenStatusOptions,
 	initiateMutation,
 	listOptions,
+	listOutlineCollectionCandidatesOptions,
 	listOutlineCollectionsOptions,
 	registerOutlineCollectionMutation,
 	updateConnectionStatusMutation,
@@ -232,6 +234,8 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		await removeCollection.mutateAsync({ path: { workspaceSlug, collectionId } });
 	};
 
+	const candidates = useCollectionCandidates(workspaceSlug);
+
 	return {
 		// Exposed even when SUSPENDED: reading job history is safe, and a suspended connection is when
 		// an admin most needs to see what the last run did. Sync controls stay gated (isConnectionActive).
@@ -271,7 +275,6 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		},
 		collectionsProps: isConnectionActive
 			? {
-					workspaceSlug,
 					collections: collectionsFailed ? [] : (collectionsQuery.data ?? []),
 					isLoading: collectionsQuery.isLoading,
 					error: collectionsFailed ? collectionsQuery.error : undefined,
@@ -286,7 +289,34 @@ export function useOutlineIntegration(workspaceSlug: string) {
 					onRegisterCollection: handleRegisterCollection,
 					onUpdateCollectionState: handleUpdateCollectionState,
 					onRemoveCollection: handleRemoveCollection,
+					...candidates,
 				}
 			: undefined,
+	};
+}
+
+/**
+ * The Add collections dialog and the collections Outline lists for it. Each open reads the list
+ * again, so a collection shared with the bot a moment ago appears.
+ */
+function useCollectionCandidates(workspaceSlug: string) {
+	const [addOpen, setAddOpen] = useState(false);
+	const query = useQuery({
+		...listOutlineCollectionCandidatesOptions({ path: { workspaceSlug } }),
+		enabled: addOpen,
+		staleTime: 0,
+		retry: false,
+	});
+	return {
+		addOpen,
+		onAddOpenChange: setAddOpen,
+		collectionCandidates: {
+			items: query.data,
+			isLoading: query.isLoading,
+			error: query.isError ? query.error : undefined,
+			onRetry: () => {
+				void query.refetch();
+			},
+		},
 	};
 }

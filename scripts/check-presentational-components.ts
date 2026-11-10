@@ -46,13 +46,11 @@ const ALLOWLIST = {
 	fetching: [
 		"webapp/src/components/admin/audit/AuthAuditPanel.tsx",
 		"webapp/src/components/admin/audit/ConfigAuditPanel.tsx",
-		"webapp/src/components/admin/integrations/outline/AddCollectionDialog.tsx",
 		"webapp/src/components/settings/DangerZoneSection.tsx",
 	],
 	storyMocks: [
 		"webapp/src/components/admin/audit/AuthAuditPanel.stories.tsx",
 		"webapp/src/components/admin/audit/ConfigAuditPanel.stories.tsx",
-		"webapp/src/components/admin/integrations/outline/AddCollectionDialog.stories.tsx",
 	],
 };
 
