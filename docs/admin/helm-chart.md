@@ -101,7 +101,7 @@ If a change of profile changes a volume size, read [Change a volume size](./upgr
 
 `small.yaml` supports a node of 4 vCPU, at least 16 GiB of memory, and 150 GiB of disk.
 A node of 32 GiB gives more headroom.
-Its one server runs five reviews at a time. Its one conversation loop runs up to 32 resident conversation turns, also with backups on.
+Its one server runs five reviews at a time. Its one conversation loop runs up to 27 resident conversation turns, and 25 with backups on.
 
 The server uses `Recreate` in the `small` profile.
 The old server drains before its replacement starts, so reviews and conversations pause during each upgrade.
@@ -113,7 +113,7 @@ It subtracts these requests from 3500m of allocatable CPU:
 - The resident roles, and the backup when backups are on.
 - The conversation loop, with one more replica for its rollout.
 - The ten tools Pods.
-- The review-tier reservation.
+- The review-tier reservation and the template isolation gate's two conversation sandboxes.
 
 Each resident turn budgets 50m, with a ceiling of 32 for the installation. An explicit turn count remains the operator's override.
 The declaration also supplies the fit test, which checks it against the kubelet reservation policy.
@@ -144,8 +144,8 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, the conversation loop, one backup, five reviews, eight active tools Pods and two pooled tools Pods | 11.0 GiB of 13.9 GiB | 1.70 of 3.5 |
-| The same, with the isolation probe | 11.6 GiB | — |
+| Steady: every role, the conversation loop, one backup, five reviews, eight active tools Pods and two pooled tools Pods | 12.4 GiB of 13.9 GiB | 2.15 of 3.5 |
+| The same, with the isolation probe | 13.0 GiB | — |
 | An upgrade. The old server is gone. The webapp and conversation loop surge, with the migration and stanza Jobs, the new server's probe, and the pooled tools Pods | 10.6 GiB of 13.9 GiB | 2.10 of 3.5 |
 
 The table counts requests.
@@ -155,7 +155,7 @@ Sandbox Pods may use more than they request, up to their limits.
 If every sandbox Pod used its limit at the same time, the node would be full.
 
 The single-node `small` profile sets `conversationLoop.turns: auto` and `conversationLoop.replicas: 1`.
-With its default values, the chart derives 32 resident conversation turns for the installation, also with backups on.
+With its default values, the chart derives 27 resident conversation turns for the installation, and 25 with backups on.
 
 An earlier staging capture recorded these values on one node of 16 GiB with k3s 1.37.
 Its request figures precede the PostgreSQL memory-request change:

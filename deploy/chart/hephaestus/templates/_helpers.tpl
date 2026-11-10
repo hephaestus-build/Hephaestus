@@ -720,16 +720,38 @@ catch-up only slows (docs/admin/helm-chart.md § NATS memory).
 {{- printf "%dMiB" (div (mul $mi 4) 5) -}}
 {{- end -}}
 
+{{/* Schema-supported Kubernetes quantities, rounded up to the quota's MiB or millicore unit. */}}
+{{- define "hephaestus.quantityUnits" -}}
+{{- $value := toString .value -}}
+{{- $amount := regexFind "^[0-9]+([.][0-9]+)?" $value -}}
+{{- $suffix := trimPrefix $amount $value -}}
+{{- $scales := dict "" 1 "m" 0.001 "k" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "P" 1000000000000000 "E" 1000000000000000000 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 "Pi" 1125899906842624 "Ei" 1152921504606846976 -}}
+{{- divf (mulf $amount (get $scales $suffix)) .unit | ceil | int64 -}}
+{{- end -}}
+
 {{/*
-The reviews that the sandbox nodes hold at once: the memory they give review Pods over one review Pod's request and its
-RuntimeClass overhead. A smaller request in sandbox-pod-requests.json runs more reviews in the same memory.
+What one template sandbox's Pod counts in a quota, as JSON: the requests of its SandboxTemplate, which the
+template Pod takes as they are, and the overhead of the templates' RuntimeClass.
+*/}}
+{{- define "hephaestus.templateSandbox" -}}
+{{- $templates := .root.Values.sandbox.templates -}}
+{{- $requests := (get $templates .kind).resources.requests -}}
+{{- dict
+  "memoryMi" (add (include "hephaestus.quantityUnits" (dict "value" (get $requests "memory") "unit" 1048576) | int) (int $templates.podOverhead.memoryMi))
+  "cpuMillis" (add (include "hephaestus.quantityUnits" (dict "value" (get $requests "cpu") "unit" 0.001) | int) (int $templates.podOverhead.cpuMillis))
+  "ephemeralStorageMi" (include "hephaestus.quantityUnits" (dict "value" (get $requests "ephemeral-storage") "unit" 1048576) | int)
+  | toJson -}}
+{{- end -}}
+
+{{/*
+The reviews that the sandbox nodes hold at once: the memory they give review sandboxes over what one review sandbox
+counts. A smaller request in the review template runs more reviews in the same memory.
 */}}
 {{- define "hephaestus.clusterReviews" -}}
-{{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
 {{- $memory := include "hephaestus.memoryMi" (dict "value" .Values.sandbox.reviewMemory "name" "sandbox.reviewMemory") | int -}}
-{{- $review := add (int $table.review.memoryMi) (int .Values.sandbox.runtime.podOverhead.memoryMi) -}}
+{{- $review := int (include "hephaestus.templateSandbox" (dict "root" . "kind" "review") | fromJson).memoryMi -}}
 {{- if lt $memory $review -}}
-{{- fail (printf "sandbox.reviewMemory holds no review: one review Pod requests %dMi" $review) -}}
+{{- fail (printf "sandbox.reviewMemory holds no review: one review sandbox requests %dMi" $review) -}}
 {{- end -}}
 {{- div $memory $review -}}
 {{- end -}}
@@ -747,14 +769,15 @@ and heap (estimated), which server.resources holds.
 {{- include "hephaestus.clusterReviews" . -}}
 {{- end -}}
 
-{{/* The existing review tier CPU reservation, including each running server's probe and Pod overhead. */}}
+{{/* The reviews tier's CPU: the review sandboxes, and each running server's isolation probe, with their overheads. */}}
 {{- define "hephaestus.reviewCpuMillis" -}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
 {{- $replicas := int .Values.server.replicas -}}
 {{- $running := ternary $replicas (mul $replicas 2) (eq .Values.server.rolloutStrategy "Recreate") -}}
 {{- $reviews := int (include "hephaestus.reviews" .) -}}
-{{- $pods := add (mul $reviews (int $table.review.pods)) (mul $running (int $table.isolationProbe.pods)) -}}
-{{- add (mul $reviews (int $table.review.cpuMillis)) (mul $running (int $table.isolationProbe.cpuMillis)) (mul $pods (int .Values.sandbox.runtime.podOverhead.cpuMillis)) -}}
+{{- $review := include "hephaestus.templateSandbox" (dict "root" . "kind" "review") | fromJson -}}
+{{- $probePods := mul $running (int $table.isolationProbe.pods) -}}
+{{- add (mul $reviews (int $review.cpuMillis)) (mul $running (int $table.isolationProbe.cpuMillis)) (mul $probePods (int .Values.sandbox.runtime.podOverhead.cpuMillis)) -}}
 {{- end -}}
 
 {{/*
@@ -788,6 +811,8 @@ qualified model-only replay, not provider capacity.
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
 {{- $tools := add (int $table.activeToolsPods) (int $table.pooledToolsPods) -}}
 {{- $roles = add $roles (mul $tools (add (int $table.toolsPod.cpuMillis) (int .Values.sandbox.runtime.podOverhead.cpuMillis))) -}}
+{{- $gate := include "hephaestus.templateSandbox" (dict "root" . "kind" "conversation") | fromJson -}}
+{{- $roles = add $roles (mul 2 (int $gate.cpuMillis)) -}}
 {{- $reviews := int (include "hephaestus.reviewCpuMillis" .) -}}
 {{- $available := max 0 (sub (int $budget.allocatableCpuMillis) (add $roles $reviews)) -}}
 {{- $turns := min (int $budget.maximumTurns) (div $available (int $budget.cpuMillisPerTurn)) -}}

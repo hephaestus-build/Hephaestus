@@ -23,7 +23,8 @@ The server's own Deployment, Service account and policy are in server.yaml and n
 {{- if .Values.sandbox.quota.enabled }}
 {{- /*
 Each PriorityClass tier has its own quota, so that review and conversation sandboxes cannot take each
-other's room. sandbox-pod-requests.json holds what each sandbox Pod requests; SandboxPodRequestsTableTest
+other's room. Review requests come from the review SandboxTemplate and its RuntimeClass overhead.
+sandbox-pod-requests.json holds the requests of the server-built Pods; SandboxPodRequestsTableTest
 pins it to the Pods the server builds, and the chart's fit tests read it too. The reviews tier holds the
 reviews that sandbox.reviewMemory holds, once: during a rollout the new server waits for the old one's
 room. Every running server, the old one during a rollout included, has its isolation probe there.
@@ -34,7 +35,7 @@ ones, and one for each turn up to eight. Resident turn admission does not enlarg
 {{- $replicas := int .Values.server.replicas }}
 {{- $running := ternary $replicas (mul $replicas 2) (eq .Values.server.rolloutStrategy "Recreate") }}
 {{- $turns := int (include "hephaestus.conversationTurns" .) }}
-{{- $review := $table.review }}
+{{- $review := include "hephaestus.templateSandbox" (dict "root" . "kind" "review") | fromJson }}
 {{- $probe := $table.isolationProbe }}
 {{- $turn := $table.toolsPod }}
 {{- $tools := min $turns (int $table.activeToolsPods) }}
@@ -44,19 +45,22 @@ ones, and one for each turn up to eight. Resident turn admission does not enlarg
 that the node holds. The scheduler places Pods by their requests; a limit bounds one Pod's own peak. */}}
 {{- /* A quota counts a Pod's RuntimeClass overhead with its requests, so each Pod adds the class's overhead. */}}
 {{- $overhead := $runtime.podOverhead }}
-{{- $reviewPods := add (mul $reviews (int $review.pods)) (mul $running (int $probe.pods)) }}
-{{- $conversationPods := mul $turnSandboxes (int $turn.pods) }}
+{{- $probePods := mul $running (int $probe.pods) }}
+{{- $reviewPods := add $reviews $probePods }}
+{{- /* The template isolation gate runs two conversation sandboxes at once, alongside the tools pool. */}}
+{{- $gate := include "hephaestus.templateSandbox" (dict "root" . "kind" "conversation") | fromJson }}
+{{- $conversationPods := add 2 (mul $turnSandboxes (int $turn.pods)) }}
 {{- $tiers := list
   (dict "tier" "reviews"
     "pods" $reviewPods
-    "memoryMi" (add (mul $reviews (int $review.memoryMi)) (mul $running (int $probe.memoryMi)) (mul $reviewPods (int $overhead.memoryMi)))
+    "memoryMi" (add (mul $reviews (int $review.memoryMi)) (mul $running (int $probe.memoryMi)) (mul $probePods (int $overhead.memoryMi)))
     "cpuMillis" (int (include "hephaestus.reviewCpuMillis" .))
     "diskMi" (add (mul $reviews (int $review.ephemeralStorageMi)) (mul $running (int $probe.ephemeralStorageMi))))
   (dict "tier" "conversations"
     "pods" $conversationPods
-    "memoryMi" (add (mul $turnSandboxes (int $turn.memoryMi)) (mul $conversationPods (int $overhead.memoryMi)))
-    "cpuMillis" (add (mul $turnSandboxes (int $turn.cpuMillis)) (mul $conversationPods (int $overhead.cpuMillis)))
-    "diskMi" (mul $turnSandboxes (int $turn.ephemeralStorageMi))) }}
+    "memoryMi" (add (mul $turnSandboxes (add (int $turn.memoryMi) (int $overhead.memoryMi))) (mul 2 (int $gate.memoryMi)))
+    "cpuMillis" (add (mul $turnSandboxes (add (int $turn.cpuMillis) (int $overhead.cpuMillis))) (mul 2 (int $gate.cpuMillis)))
+    "diskMi" (add (mul $turnSandboxes (int $turn.ephemeralStorageMi)) (mul 2 (int $gate.ephemeralStorageMi)))) }}
 {{- if eq (include "hephaestus.priorityClass" (dict "root" . "tier" "reviews")) (include "hephaestus.priorityClass" (dict "root" . "tier" "conversations")) }}
 {{- fail "priorityClasses.reviews and priorityClasses.conversations must differ: each tier's quota selects its Pods by PriorityClass" }}
 {{- end }}

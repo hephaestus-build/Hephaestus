@@ -306,9 +306,9 @@ sandbox:
   # Required. The namespace that the operator created for this release's sandboxes alone, with the
   # Restricted Pod Security level. Not the release namespace, and no other release's.
   namespace: ""
-  # The memory that the sandbox nodes give review Pods. The reviews that run at once are this over one
-  # review Pod's request, 384 MiB (docs/admin/sandboxes.md § Sandbox sizes), and its RuntimeClass
-  # overhead. The reviews tier's quota and the compositions follow. 3840Mi holds 10 reviews.
+  # The memory that the sandbox nodes give review sandboxes. Capacity follows the review template
+  # memory request and sandbox.templates.podOverhead (docs/admin/sandboxes.md § Sandbox sizes).
+  # The reviews tier's quota and compositions follow. 3840Mi holds seven default review sandboxes.
   reviewMemory: 3840Mi
   # One quota for each tier of sandboxes, reviews and conversations, derived from reviewMemory, the
   # server's replicas, conversationLoop.turns and sandbox-pod-requests.json. Conversation sandboxes
@@ -357,6 +357,10 @@ sandbox:
     # their nodes. `gvisor` Pods keep host users (google/gvisor#13303); any other runs with
     # hostUsers: false. Empty uses the cluster's default runtime.
     runtimeClassName: ""
+    # The overhead.podFixed of this class, counted with each template Pod request.
+    podOverhead:
+      cpuMillis: 0
+      memoryMi: 0
     review:
       resources:
         requests: { cpu: 100m, memory: 512Mi, ephemeral-storage: 1Gi }

@@ -33,3 +33,4 @@ sandbox:
   # gVisor from k3s-containerd.toml.tmpl and k3s-runtimeclass.yaml.
   templates:
     runtimeClassName: gvisor
+    podOverhead: { memoryMi: 48, cpuMillis: 10 }

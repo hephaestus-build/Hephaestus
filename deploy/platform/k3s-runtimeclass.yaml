@@ -5,3 +5,7 @@ kind: RuntimeClass
 metadata:
   name: gvisor
 handler: runsc
+overhead:
+  podFixed:
+    memory: 48Mi
+    cpu: 10m

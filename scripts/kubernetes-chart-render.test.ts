@@ -1556,9 +1556,9 @@ await test("a server with sandboxes receives its runtime settings, its sandbox n
 		/^[1-9][0-9]*Mi$/u,
 	);
 	// One server with Recreate: its five reviews and one probe run of two Pods. The installation's tools
-	// Pods: eight assigned and two warm, whatever the servers.
+	// Pods: eight assigned and two warm, plus the gate's two conversation template Pods.
 	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "7");
-	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "10");
+	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "12");
 
 	// Exactly the calls that the runtime makes, each in one namespace, and no cluster-wide authority.
 	for (const kind of ["ClusterRole", "ClusterRoleBinding"]) {
@@ -2224,14 +2224,23 @@ await test("a private S3 CA reaches every Pod that reads the repository, and no 
 	);
 });
 
-/** One review Pod's memory request in MiB, from the table that the chart sizes the quota from. */
-const reviewPodMi = Number(
-	get(readJsonFileSync(path.join(chart, "sandbox-pod-requests.json")), "review", "memoryMi"),
-);
-/** The memory that holds this many review Pods. */
-const memoryFor = (reviewCount: number) => `${reviewCount * reviewPodMi}Mi`;
 const readValues = (file: string): unknown =>
 	parseAllDocuments(readFileSync(file, "utf8"))[0]?.toJS();
+/** The default review SandboxTemplate request, used to select a capacity in the tests. */
+const reviewPodMi =
+	amount(
+		get(
+			readValues(path.join(chart, "values.yaml")),
+			"sandbox",
+			"templates",
+			"review",
+			"resources",
+			"requests",
+			"memory",
+		),
+	) /
+	2 ** 20;
+const memoryFor = (reviewCount: number) => `${reviewCount * reviewPodMi}Mi`;
 /** sandbox.reviewMemory as these layers set it, over the chart's default, in MiB. */
 const reviewMemoryMi = (layers: readonly Layer[]) => {
 	let value = get(readValues(path.join(chart, "values.yaml")), "sandbox", "reviewMemory");
@@ -2298,9 +2307,9 @@ await test("the server runs the reviews that the sandbox nodes hold, and the quo
 	const fraction = render([...layersFor("small"), { sandbox: { reviewMemory: "1.5Gi" } }]);
 	assert.equal(fraction.ok, false);
 	assert.match(fraction.stderr, /reviewMemory/u);
-	const noReview = render([...layersFor("small"), { sandbox: { reviewMemory: "383Mi" } }]);
+	const noReview = render([...layersFor("small"), { sandbox: { reviewMemory: "511Mi" } }]);
 	assert.equal(noReview.ok, false);
-	assert.match(noReview.stderr, /reviewMemory holds no review: one review Pod requests 384Mi/u);
+	assert.match(noReview.stderr, /reviewMemory holds no review: one review sandbox requests 512Mi/u);
 });
 
 await test("the small profile keeps personal content inside the transport-buffer horizon", () => {
@@ -2403,11 +2412,11 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 			server: envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
 		};
 	};
-	// The roles' requests, with the loop's one more replica of its rollout, leave room for all 32.
-	assert.deepEqual(capacities(layersFor("small")), everywhere("32"));
+	// The roles' requests, with the loop's one more replica of its rollout, leave room for 27.
+	assert.deepEqual(capacities(layersFor("small")), everywhere("27"));
 	assert.deepEqual(
 		capacities([...layersFor("small"), { conversationLoop: { turns: "auto" } }]),
-		everywhere("32"),
+		everywhere("27"),
 	);
 	assert.deepEqual(
 		capacities([...layersFor("small"), { conversationLoop: { turns: 5 } }]),
@@ -2415,7 +2424,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 	);
 	assert.deepEqual(
 		capacities([...layersFor("small"), { sandbox: { reviewMemory: memoryFor(15) } }]),
-		everywhere("26"),
+		everywhere("7"),
 	);
 	// A larger server request comes out of the turns. One review keeps room for a few.
 	assert.deepEqual(
@@ -2426,7 +2435,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 				sandbox: { reviewMemory: memoryFor(1) },
 			},
 		]),
-		everywhere("14"),
+		everywhere("9"),
 	);
 	// So does a larger loop, with the one more replica of its rollout.
 	assert.deepEqual(
@@ -2434,7 +2443,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 			...layersFor("small"),
 			{ conversationLoop: { resources: { requests: { cpu: "500m" } } } },
 		]),
-		everywhere("20"),
+		everywhere("11"),
 	);
 	const exhausted = render([
 		...layersFor("small"),
@@ -2681,7 +2690,48 @@ const sandboxPods = (() => {
 		return value;
 	};
 	return {
-		review: entry("review"),
+		review: {
+			pods: 1,
+			gib: reviewPodMi / 1024,
+			cpu: amount(
+				get(
+					readValues(path.join(chart, "values.yaml")),
+					"sandbox",
+					"templates",
+					"review",
+					"resources",
+					"requests",
+					"cpu",
+				),
+			),
+		},
+		gate: {
+			pods: 1,
+			gib:
+				amount(
+					get(
+						readValues(path.join(chart, "values.yaml")),
+						"sandbox",
+						"templates",
+						"conversation",
+						"resources",
+						"requests",
+						"memory",
+					),
+				) /
+				2 ** 30,
+			cpu: amount(
+				get(
+					readValues(path.join(chart, "values.yaml")),
+					"sandbox",
+					"templates",
+					"conversation",
+					"resources",
+					"requests",
+					"cpu",
+				),
+			),
+		},
 		turn: entry("toolsPod"),
 		probe: entry("isolationProbe"),
 		pooledTurns: count("pooledToolsPods"),
@@ -2755,10 +2805,10 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	disk += amount(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage"));
 	assert.equal(get(workload(resources, "server"), "spec", "replicas"), 1);
 	assert.equal(get(workload(resources, "conversation-loop"), "spec", "replicas"), 1);
-	// With the backup's request beside them, the turns still reach their cap.
+	// The backup's request comes out of the turns too.
 	assert.equal(
 		Number(envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY")),
-		32,
+		25,
 	);
 	assert.ok(cpu <= node.cpu, `${cpu.toFixed(2)} CPU requested, ${node.cpu} on the node`);
 	assert.ok(
@@ -2812,7 +2862,10 @@ for (const name of profiles) {
 					[sandboxPods.review, serverReviews],
 					[sandboxPods.probe, running],
 				]),
-				conversations: sum([[sandboxPods.turn, turnSandboxes]]),
+				conversations: sum([
+					[sandboxPods.turn, turnSandboxes],
+					[sandboxPods.gate, 2],
+				]),
 			};
 			for (const tier of ["reviews", "conversations"] as const) {
 				const hard = get(tierQuota(resources, tier), "spec", "hard");
@@ -2907,7 +2960,11 @@ await test("each tier's quota counts the RuntimeClass overhead of every sandbox 
 	const withOverhead = tierHard([
 		...layersFor("small"),
 		{
-			sandbox: { runtime: overhead, reviewMemory: `${5 * (reviewPodMi + 40)}Mi` },
+			sandbox: {
+				runtime: overhead,
+				templates: overhead,
+				reviewMemory: `${5 * (reviewPodMi + 40)}Mi`,
+			},
 			conversationLoop: { turns: 32 },
 		},
 	]);
@@ -2924,10 +2981,57 @@ await test("each tier's quota counts the RuntimeClass overhead of every sandbox 
 	assert.equal(
 		reviewWidth([
 			...layersFor("small"),
-			{ sandbox: { runtime: overhead }, conversationLoop: { turns: 32 } },
+			{ sandbox: { runtime: overhead, templates: overhead }, conversationLoop: { turns: 32 } },
 		]).sandboxes,
 		"4",
 	);
+});
+
+await test("quotas admit schema-supported template quantities and round fractional quota units up", () => {
+	const base = [
+		...layersFor("small"),
+		{ conversationLoop: { turns: 8 }, sandbox: { reviewMemory: memoryFor(2) } },
+	];
+	const requests = { cpu: "0.0001k", memory: "1.5Gi", "ephemeral-storage": "1000M" };
+	const custom = [
+		...layersFor("small"),
+		{
+			conversationLoop: { turns: 8 },
+			sandbox: {
+				reviewMemory: "3Gi",
+				templates: {
+					review: { resources: { requests } },
+					conversation: {
+						resources: {
+							requests: { cpu: "0.05", memory: "1024Ki", "ephemeral-storage": "1.5Gi" },
+						},
+					},
+				},
+			},
+		},
+	];
+	const before = tierHard(base);
+	const after = tierHard(custom);
+	assert.deepEqual(after("reviews"), {
+		...before("reviews"),
+		memory: before("reviews").memory + 2048 * 2 ** 20,
+	});
+	assert.deepEqual(after("conversations"), {
+		...before("conversations"),
+		memory: before("conversations").memory - 766 * 2 ** 20,
+		millicpu: before("conversations").millicpu - 100,
+	});
+	const resources = rendered(custom);
+	const review = resources.find(
+		(resource) => kindOf(resource) === "SandboxTemplate" && nameOf(resource).endsWith("-review"),
+	);
+	assert.deepEqual(
+		get(review, "spec", "podTemplate", "spec", "containers", 0, "resources", "requests"),
+		requests,
+	);
+	const disk = (resources: Resource[]) =>
+		amount(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage"));
+	assert.equal(disk(resources) - disk(rendered(base)), 2420 * 2 ** 20);
 });
 
 const strategy = (name: (typeof profiles)[number], component: string) =>
@@ -3008,15 +3112,17 @@ await test("the small profile on 16 GiB runs its reviews and Heph turns, and an 
 	// and one for each turn up to the assigned ones.
 	const steady = sum(total([...roles, [backup, 1]]), {
 		cpu:
+			2 * sandboxPods.gate.cpu +
 			reviewSlots * sandboxPods.review.cpu +
 			(sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeToolsPods)) *
 				sandboxPods.turn.cpu,
 		memory:
-			(reviewSlots * sandboxGib.review +
+			(2 * sandboxPods.gate.gib +
+				reviewSlots * sandboxGib.review +
 				(sandboxGib.pooledTurns + Math.min(turns, sandboxPods.activeToolsPods)) * sandboxGib.turn) *
 			2 ** 30,
 	});
-	assert.equal(turns, 32);
+	assert.equal(turns, 25);
 	assert.equal(reviewSlots, 5);
 	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
 	assert.ok(

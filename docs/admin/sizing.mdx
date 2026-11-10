@@ -128,8 +128,9 @@ Keep the larger limit and lower concurrency if the trial fails.
 
 ## Review sandbox limits
 
-The [Pod-kind table](./sandboxes#sandbox-sizes) owns each sandbox's memory, CPU request and disk sizes.
-The review CPU ceiling is 1 CPU. The Helm chart exposes no value to change it.
+`sandbox.templates.review.resources` sets the memory, CPU and disk of a review sandbox ([Sandbox sizes](./sandboxes#sandbox-sizes)).
+By default, it requests 100m and 512 MiB, and its limits are 2 CPUs and 2 GiB.
+The Pod-kind table there owns the sizes of the other sandbox Pods.
 The retired `SANDBOX_MEMORY_BYTES` and `SANDBOX_PIDS_LIMIT` settings do not configure Kubernetes.
 The kubelet enforces the per-Pod process limit, which the server's isolation probe verifies.
 

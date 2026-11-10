@@ -169,7 +169,7 @@ jobs:
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/kubernetes-cluster"
-          if [ "$GVISOR" = true ]; then PROFILES="$PROFILES --set sandbox.templates.runtimeClassName=gvisor"; fi
+          if [ "$GVISOR" = true ]; then PROFILES="$PROFILES --set sandbox.templates.runtimeClassName=gvisor --set sandbox.templates.podOverhead.memoryMi=48 --set sandbox.templates.podOverhead.cpuMillis=10"; fi
           # shellcheck disable=SC2086 # PROFILES is a list of flags.
           node scripts/kubernetes-cluster.ts install --work "$work" $PROFILES
           node scripts/kubernetes-cluster.ts verify
@@ -187,7 +187,7 @@ jobs:
         if: ${{ env.DRILLS == 'true' }}
         run: |
           set -euo pipefail
-          if [ "$GVISOR" = true ]; then PROFILES="$PROFILES --set sandbox.templates.runtimeClassName=gvisor"; fi
+          if [ "$GVISOR" = true ]; then PROFILES="$PROFILES --set sandbox.templates.runtimeClassName=gvisor --set sandbox.templates.podOverhead.memoryMi=48 --set sandbox.templates.podOverhead.cpuMillis=10"; fi
           # shellcheck disable=SC2086 # PROFILES is a list of flags.
           node scripts/kubernetes-cluster.ts turn-roll --work "$RUNNER_TEMP/kubernetes-cluster" $PROFILES \
             --set "release.version=v0.0.1-cluster" --pod-cidr 10.42.0.0/16
