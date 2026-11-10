@@ -1,6 +1,6 @@
 # ADR 0036: Agent runtime runs on Node.js 24 with bounded resources
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md)
 **Supersedes:** [ADR 0030](0030-agent-runtime-is-typescript-on-bun.md) for the sandbox image.
 **Amended by:** [ADR 0057](0057-one-heph-conversation-per-developer.md)
 

@@ -1,6 +1,6 @@
 # ADR 0009: Worker runtime substrate + WSS-over-443 control channel
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md)
 **Date:** 2026-05-21
 **Amended by:** [ADR 0041](0041-compose-1x-kubernetes-2.md), [ADR 0057](0057-one-heph-conversation-per-developer.md), [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)
 

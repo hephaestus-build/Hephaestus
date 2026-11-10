@@ -1,6 +1,6 @@
 # ADR 0074: A review's width and count follow the provider
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md)
 **Date:** 2026-11-02
 **Authors:** Felix T.J. Dietrich
 

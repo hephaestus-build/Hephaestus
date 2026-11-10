@@ -1,6 +1,6 @@
 # ADR 0068: Reviews and Heph run on one agent runtime
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md)
 **Date:** 2026-10-27
 **Authors:** Felix T.J. Dietrich
 

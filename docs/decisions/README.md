@@ -79,11 +79,11 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0002](0002-java-package-rename-to-aet-cit-tum.md) | Rename Java base package to `de.tum.cit.aet.hephaestus` | Accepted |
 | [0003](0003-spring-modulith-adoption.md) | Spring Modulith 2.0 adoption with two empirical shared kernels | Superseded by [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | [0004](0004-sql-layer-tenancy-via-statement-inspector.md) | SQL-layer tenancy enforcement via WorkspaceStatementInspector | Accepted |
-| [0005](0005-two-role-runtime-via-conditional-on-property.md) | Two-role runtime topology via `@ConditionalOnProperty` | Accepted |
-| [0006](0006-llm-proxy-on-coordinator-trust-model.md) | LLM proxy stays on the coordinator (BYO trust model) | Accepted |
+| [0005](0005-two-role-runtime-via-conditional-on-property.md) | Two-role runtime topology via `@ConditionalOnProperty` | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
+| [0006](0006-llm-proxy-on-coordinator-trust-model.md) | LLM proxy stays on the coordinator (BYO trust model) | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0007](0007-sandbox-spi-shape.md) | Sandbox SPI shape — sealed VolumeMount + typed NetworkPolicy | Superseded by [0079](0079-one-agent-system.md) |
 | [0008](0008-webhook-runtime-role.md) | Webhook as a third runtime role (`webhook-server` container) | Accepted |
-| [0009](0009-worker-runtime-substrate-wss-control-channel.md) | Worker runtime substrate + WSS-over-443 control channel | Accepted |
+| [0009](0009-worker-runtime-substrate-wss-control-channel.md) | Worker runtime substrate + WSS-over-443 control channel | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0010](0010-outbound-oauth-state-handrolled.md) | Hand-roll OAuth state for outbound per-workspace integrations | Accepted |
 | [0011](0011-integration-identity-not-wired-from-sync.md) | `integration_identity` is OAuth-fed, not sync-fed (tombstone) | Superseded by [0016](0016-unified-identity-keycloak-as-truth.md) |
 | [0012](0012-cross-instance-identity-safety-on-sync-paths.md) | Cross-instance identity safety on sync paths | Accepted |
@@ -99,7 +99,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0022](0022-observation-presence-assessment-and-schema-cleanup.md) | Observation = presence × assessment (drop `Practice.kind`); reaction anchors on feedback; ruthless column cleanup | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
 | [0023](0023-outline-documentation-integration.md) | Outline documentation integration — a content source, not a detection surface | Accepted |
 | [0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md) | Integration sync lifecycle — drift tombstones and mirror erasure are two different operations | Accepted |
-| [0025](0025-agent-job-queue-on-postgresql.md) | Agent job queue moves off NATS onto PostgreSQL | Accepted |
+| [0025](0025-agent-job-queue-on-postgresql.md) | Agent job queue moves off NATS onto PostgreSQL | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0026](0026-per-purpose-agent-bindings-and-llm-governance.md) | Per-purpose agent bindings and governed OpenAI-compatible LLM catalog | Accepted |
 | [0027](0027-dialog-lifetime-and-where-a-write-outcome-lands.md) | Dialog lifetime, and where a write's outcome lands when the dialog is gone | Accepted |
 | [0028](0028-source-synced-practice-catalog.md) | Source-synced practice catalog with sparse instance overrides | Accepted |
@@ -110,7 +110,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0033](0033-bun-is-the-javascript-runtime-and-package-manager.md) | Bun is the JavaScript runtime and package manager | Superseded by [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) |
 | [0034](0034-signed-release-image-lock.md) | Production consumes one signed release image lock | Accepted |
 | [0035](0035-pull-request-previews-are-label-gated.md) | Pull request previews are label-gated and driven from the default branch | Accepted |
-| [0036](0036-agent-runtime-runs-on-node-24.md) | Agent runtime runs on Node.js 24 with bounded resources | Accepted |
+| [0036](0036-agent-runtime-runs-on-node-24.md) | Agent runtime runs on Node.js 24 with bounded resources | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) | Node.js 24 and pnpm 12 are the JavaScript toolchain | Accepted |
 | [0038](0038-postgresql-18-release-baseline.md) | PostgreSQL 18 is the only supported major version | Accepted |
 | [0039](0039-git-and-postgresql-own-evidence.md) | Git owns repository evidence; PostgreSQL owns captured payloads and references | Accepted |
@@ -142,19 +142,20 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0065](0065-standing-counts-the-newest-observation-of-each-item.md) | Standing counts the newest observation of each item | Accepted |
 | [0066](0066-the-webhook-receiver-has-no-database.md) | The webhook receiver has no database | Superseded by [0080](0080-provider-events-go-to-a-postgresql-inbox.md) |
 | [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted |
-| [0068](0068-reviews-and-heph-run-on-one-agent-runtime.md) | Reviews and Heph run on one agent runtime | Accepted |
+| [0068](0068-reviews-and-heph-run-on-one-agent-runtime.md) | Reviews and Heph run on one agent runtime | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) | Practices run when they are ready and stay current by their sources | Accepted |
 | [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Accepted |
 | [0071](0071-every-user-visible-failure-is-observable.md) | Every user-visible failure is observable, through one first-party pipeline | Accepted |
 | [0072](0072-few-dependencies-owned-slivers-kept-foundations.md) | Few dependencies — own a sliver, keep a foundation | Accepted |
 | [0073](0073-product-feedback-is-worked-on-in-github.md) | Product feedback is worked on in GitHub | Accepted |
-| [0074](0074-a-reviews-width-and-count-follow-the-provider.md) | A review's width and count follow the provider | Accepted |
+| [0074](0074-a-reviews-width-and-count-follow-the-provider.md) | A review's width and count follow the provider | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) | A transaction is one use case and talks to nothing | Accepted |
 | [0076](0076-reads-are-shaped-like-the-screen.md) | Reads are shaped like the screen, entities are for writes | Accepted |
 | [0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md) | Provider mirrors are shared, and the monitored scope isolates them | Accepted |
 | [0078](0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md) | Lifecycles are explicit, and rigor follows the damage | Accepted |
 | [0079](0079-one-agent-system.md) | One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain | Accepted |
 | [0080](0080-provider-events-go-to-a-postgresql-inbox.md) | Provider events go to a PostgreSQL inbox, and the server receives them | Accepted |
+| [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) | One server role runs Hephaestus, and agent work runs in sandboxes that reach only the server | Accepted |
 | [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) | Each module owns its aggregates, declares its dependencies, and changes a lifecycle only through the aggregate | Accepted |
 | [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
 
