@@ -22,13 +22,15 @@ The receiver verifies a delivery, then stores one event for each workspace whose
 It reads the subscriptions in that transaction.
 A workspace that starts to monitor a repository therefore gets every event that the receiver stores after the change commits.
 A GitHub App installation event also gets one event with no workspace, because it can create the workspace.
+
 The receiver answers `202` only after the transaction commits.
 If PostgreSQL does not commit within 2 seconds, the receiver answers `503`. Each statement of the transaction stops after 1.5 seconds.
 The receiver thus answers inside Slack's 3-second window, also while the database pool is exhausted.
 A transaction that still commits after a `503` is harmless: the provider's retry or redelivery adds no event.
 
 - A delivery that arrives again with the same identifier adds no event.
-  GitHub uses `X-GitHub-Delivery`, Slack its `event_id`, and GitLab a hash of the body, the event UUID and the event kind for each connection.
+  GitHub uses `X-GitHub-Delivery`, and Slack its `event_id`.
+  GitLab uses a hash of the body, the event UUID and the event kind, for each connection.
 - Each `503` has a log record with `event.name=webhook.publish.failed` and `webhook.publish.reason=store-failed`.
 - What each provider does after a `503` is in [Which providers deliver again](#which-providers-deliver-again).
 
@@ -59,8 +61,10 @@ This is the procedure that GitHub [recommends](https://docs.github.com/en/webhoo
   The gaps double, so the attempts outlast a database stall of up to 80 minutes.
   A stall that still lasts gets few requests.
 - A redelivery keeps its `X-GitHub-Delivery` identifier.
-  The inbox stores a delivery once for each workspace and identifier, so a redelivery of a stored delivery adds no event.
-  The inbox keeps a handled event for `hephaestus.integration.consumer.replay-window` (default `3d`), as long as GitHub keeps a delivery.
+  The inbox stores a delivery once for each workspace and identifier.
+  A redelivery of a stored delivery thus adds no event.
+  The inbox keeps a handled event for 3 days, as long as GitHub keeps a delivery.
+  `hephaestus.integration.consumer.replay-window` sets this time.
 - A slow database can still store a delivery after GitHub stopped waiting for it. Its redelivery then adds no event.
 - Silent mode does not stop redelivery. A redelivery sends nothing to people. It only asks GitHub to send the event to the receiver again.
 
@@ -119,12 +123,14 @@ Erasing a person deletes the events that name them. An event that a server handl
 
 The receiver accepts webhook deliveries up to 25 MiB, matching GitHub's delivery cap (`hephaestus.webhook.http.max-payload-bytes`).
 The inbox stores the body as it arrived.
+
 The receiver holds each delivery in its heap until the inbox stores it, and a body costs several times its size.
 So it bounds what large deliveries hold at once, from its heap.
 A delivery of 256 KiB or less does not count, and it never waits.
 A larger one that does not fit waits for 1.5 seconds.
 Then the receiver answers `503` with `Retry-After`, and counts `webhook_rejected_total{reason="busy"}`.
 To hold more at once, raise `server.resources`.
+
 A delivery's body must arrive within 30 seconds, or the receiver answers `408` and counts `webhook_rejected_total{reason="too-slow"}`.
 No provider waits that long for an answer.
 
