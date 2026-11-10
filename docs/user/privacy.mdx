@@ -404,6 +404,7 @@ A justified extension of up to two more months requires notice within the first 
 Each category has its own retention period.
 An operator can change several periods.
 [Data retention](/admin/data-retention) lists each period supplied with Hephaestus and identifies those the operator controls.
+This section explains when each period starts and ends, not how long it lasts.
 Your instance’s privacy notice states which periods your deployment applies.
 
 Scheduled removal starts after records become eligible and may need later successful runs to finish.
@@ -425,12 +426,12 @@ The sections above describe account and export timing.
 - **Authentication history:** records expire in monthly batches. Account erasure redacts identifying authentication details.
 - **Settings-change history:** records expire after their own retention period. Account erasure detaches actor references, not the change record.
 - **Review diagnostics:** records become eligible for removal when enough time has passed since job completion. Job history becomes eligible later, only without observation or feedback references. Pending delivery delays both. The job-retention service must also be on. Disabling reviews does not automatically delete old records.
-- **Review working copies:** cleanup removes worker attempt folders after evidence admission. Ended attempts have a one-hour cleanup grace period. Restart cleanup removes abandoned folders. Failed cleanup needs a later successful run. Raw Git mirrors follow repository monitoring. The repository owner must handle Git authorship at source.
+- **Review working copies:** cleanup removes worker attempt folders after evidence admission. Restart cleanup removes abandoned folders. Failed cleanup needs a later successful run. Raw Git mirrors follow repository monitoring. The repository owner must handle Git authorship at source.
 - **AI usage accounting:** records contain token counts, costs, and run identifiers, not message content. They stay long enough for annual accounting. An operator can extend retention for a legal obligation.
 - **Other operational and administration history:** some records of who configured or requested an operation have no automatic expiry. They survive account or workspace removal. A verified erasure request must include them.
 
 ### Copies outside active records
 
-- **Buffered integration events:** supplied limits expire Slack and Outline events within hours, and GitHub and GitLab events within months. Storage limits can shorten retention. Individual erasure cannot selectively remove these copies.
+- **Buffered integration events:** each source's events expire at an age limit or a size limit, whichever comes first. Individual erasure cannot selectively remove these copies.
 - **Logs, support bundles, and backups:** container logs rotate by size, not age. The operator controls support-bundle and backup retention. These copies do not support immediate selective erasure. The operator can explain expiry and treatment of erased data after a restore.
 - **AI-provider copies and posted feedback:** provider policies apply. Completed AI requests cannot be recalled. Posted feedback follows the separate removal process above.
