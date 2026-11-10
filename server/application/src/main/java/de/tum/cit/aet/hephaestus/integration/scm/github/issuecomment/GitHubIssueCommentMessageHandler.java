@@ -2,18 +2,26 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmPullRequestItems;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
+import de.tum.cit.aet.hephaestus.integration.scm.github.feedback.GitHubCommentReplySink;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.dto.GitHubIssueCommentEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.dto.GitHubIssueCommentEventDTO.GitHubCommentDTO;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -36,14 +44,23 @@ public class GitHubIssueCommentMessageHandler extends AbstractIntegrationMessage
 
     private static final Logger log = LoggerFactory.getLogger(GitHubIssueCommentMessageHandler.class);
 
+    /** The one command a pull request comment can carry. Only a comment that is exactly this text counts. */
+    private static final String REVIEW_COMMAND = "/hephaestus review";
+
     private final ProcessingContextFactory contextFactory;
     private final GitHubIssueProcessor issueProcessor;
     private final GitHubIssueCommentProcessor commentProcessor;
+    private final PullRequestRepository pullRequests;
+    private final ScmPullRequestItems pullRequestItems;
+    private final ApplicationEventPublisher eventPublisher;
 
     GitHubIssueCommentMessageHandler(
             ProcessingContextFactory contextFactory,
             GitHubIssueProcessor issueProcessor,
             GitHubIssueCommentProcessor commentProcessor,
+            PullRequestRepository pullRequests,
+            ScmPullRequestItems pullRequestItems,
+            ApplicationEventPublisher eventPublisher,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -55,6 +72,9 @@ public class GitHubIssueCommentMessageHandler extends AbstractIntegrationMessage
         this.contextFactory = contextFactory;
         this.issueProcessor = issueProcessor;
         this.commentProcessor = commentProcessor;
+        this.pullRequests = pullRequests;
+        this.pullRequestItems = pullRequestItems;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -99,6 +119,59 @@ public class GitHubIssueCommentMessageHandler extends AbstractIntegrationMessage
             // entity (Issue or PR) doesn't exist yet. This creates a minimal
             // entity from the webhook data instead of failing.
             commentProcessor.processWithParentCreation(commentDto, issueDto, context);
+            if (event.actionType() == GitHubEventAction.IssueComment.CREATED && issueDto.isPullRequest()) {
+                publishReviewCommand(commentDto, issueDto, context);
+            }
         }
+    }
+
+    /**
+     * Publishes {@code /hephaestus review} on a new pull request comment, as the GitLab note handler does for a merge
+     * request. An edited comment, an app's or bot's comment, and a comment with any other text do not count. The
+     * listener resolves the commenter by the provider's own user id, never by login.
+     */
+    private void publishReviewCommand(GitHubCommentDTO comment, GitHubIssueDTO pullRequest, ProcessingContext context) {
+        if (comment.body() == null || !comment.body().strip().equalsIgnoreCase(REVIEW_COMMAND)) {
+            return;
+        }
+        var author = comment.author();
+        Long scopeId = context.scopeId();
+        var repository = context.repository();
+        Long providerId = context.provider() == null ? null : context.provider().getId();
+        if (author == null
+                || author.type() == User.Type.BOT
+                || author.id() == null
+                || scopeId == null
+                || repository == null
+                || providerId == null
+                || comment.id() == null) {
+            log.info(
+                    "Skipped review command: reason=unattributed, commentId={}, pullRequest={}",
+                    comment.id(),
+                    pullRequest.number());
+            return;
+        }
+        // The scope is the workspace whose consumer received the comment; only its own item may be reviewed.
+        var item = pullRequests
+                .findByRepositoryIdAndNumber(repository.getId(), pullRequest.number())
+                .flatMap(pull -> pullRequestItems.find(scopeId, pull.getId()))
+                .orElse(null);
+        if (item == null) {
+            log.info(
+                    "Skipped review command: reason=noWorkspaceItem, workspaceId={}, pullRequest={}",
+                    scopeId,
+                    pullRequest.number());
+            return;
+        }
+        eventPublisher.publishEvent(new BotCommandReceivedEvent(
+                IntegrationKind.GITHUB,
+                scopeId,
+                item.itemId(),
+                comment.body(),
+                author.login(),
+                providerId,
+                author.id(),
+                comment.id(),
+                GitHubCommentReplySink.address(repository.getNameWithOwner(), pullRequest.number())));
     }
 }

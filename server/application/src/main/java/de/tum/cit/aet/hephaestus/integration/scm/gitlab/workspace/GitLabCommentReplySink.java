@@ -5,8 +5,6 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppressedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScmCommentReplySink;
-import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
-import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import java.time.Duration;
@@ -25,8 +23,6 @@ public class GitLabCommentReplySink implements ScmCommentReplySink {
     private static final Duration GRAPHQL_TIMEOUT = Duration.ofSeconds(10);
     private static final Pattern ADDRESS =
             Pattern.compile("(gid://gitlab/MergeRequest/\\d+) (gid://gitlab/Discussion/[0-9a-f]+)");
-    // Status replies have no feedback-copy receipt; capture retains their marker with uncertain authorship.
-    static final String MARKER = WorkspaceScmProjection.HEPHAESTUS_MARKER + "-request-answer -->";
 
     private final GitLabGraphQlClientProvider gitLab;
     private final OutboundEgressGuard egressGuard;
@@ -59,11 +55,7 @@ public class GitLabCommentReplySink implements ScmCommentReplySink {
             return;
         }
         try {
-            String body = PostedText.of(text)
-                    + "\n\n[Open the feedback in Hephaestus]("
-                    + formatter.feedbackAddress(workspaceId, itemId)
-                    + ")\n"
-                    + MARKER;
+            String body = formatter.requestAnswer(workspaceId, itemId, text);
             egressGuard.requireDeliveryAllowed("gitlab.answer-request-comment");
             var response = gitLab.forScope(workspaceId)
                     .documentName("CreateMergeRequestDiscussionReply")

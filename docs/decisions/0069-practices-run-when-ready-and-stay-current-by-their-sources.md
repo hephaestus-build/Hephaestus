@@ -147,7 +147,7 @@ Fetched on 2026-10-27. [Sources](#sources) lists the pages.
 4. **A second model that checks the facts of the composer's draft.** Rejected. The provider's readback and the tool checks are external ground truth for facts. A second model adds cost and gives no new signal there.
 5. **The provider writers in the composer's process.** Rejected. A model that reads PR text would sit one call from a write token.
 6. **A feedback composer with tools: it checks, publishes once, reads back and corrects, with the guardrails in the tools.** Chosen.
-7. **Comment commands such as `@hephaestus review`.** Rejected for 1.0. The authenticated request on the practice page applies consent and identity checks. No comment parser sits on a trust boundary.
+7. **Comment commands such as `@hephaestus review`.** Rejected for 1.0. The authenticated request on the practice page applies consent and identity checks. No comment parser sits on a trust boundary. Changed: see [Update — 2026-11-10](#update--2026-11-10-the-review-command-stays-on-both-scms).
 
 ### Quality
 
@@ -959,3 +959,16 @@ A missing problem or a failed capture is not that proof.
 
 The decision driver "No plan table, no workflow engine" stays true.
 `agent_run` holds the lease of one unit of agent work. It holds no plan and no step journal, and selection, readiness and freshness stay derived from the rows that exist.
+
+## Update — 2026-11-10: the review command stays, on both SCMs
+
+The maintainers kept `/hephaestus review` (option 7 of § Feedback on the work) and extended it from GitLab to GitHub.
+The command does not bypass the checks that option 7 named:
+
+- The comment is only a trigger. It goes through the same request service as **Request review**, with the same consent, scope, cooldown and budget checks.
+- The service identifies the commenter by the provider's own user id and the linked Hephaestus account, never by login.
+- Only the author or an assignee of the work, or a workspace admin, can ask.
+- Only a new comment that contains exactly the command counts. An edited comment, or a comment from an app or a bot, does not count.
+- A delivered comment that arrives again starts no second review.
+
+On GitLab, the answer goes in the comment's discussion. On GitHub, it is a new comment on the pull request.

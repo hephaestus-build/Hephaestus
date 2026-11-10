@@ -73,17 +73,18 @@ public class ReviewCommandListener {
             // A comment delivered again finds its own review busy or recent: that review answers it.
             if (reviews.findByWorkspaceIdAndRequestKey(command.workspaceId(), key)
                     .isPresent()) return;
-            refusal = refused(outcome.reason());
+            refusal = refused(outcome.reason(), command.kind());
         } catch (AccessForbiddenException forbidden) {
             refused(command, forbidden);
-            refusal = "only the author or an assignee of this merge request, or a workspace admin, can ask for a"
-                    + " review, and only from a GitLab account that is linked to their Hephaestus account.";
+            refusal = "only the author or an assignee of this " + work(command.kind())
+                    + ", or a workspace admin, can ask for a review, and only from a " + provider(command.kind())
+                    + " account that is linked to their Hephaestus account.";
         } catch (EntityNotFoundException | ItemCaptureException unreadable) {
             refused(command, unreadable);
-            refusal = "it could not read this merge request.";
+            refusal = "it could not read this " + work(command.kind()) + ".";
         } catch (ReviewRequestRejected rejected) {
             refused(command, rejected);
-            refusal = refused(rejected);
+            refusal = refused(rejected, command.kind());
         }
         if (answer != null)
             answer(answer, command.workspaceId(), command.itemId(), "Hephaestus did not start a review: " + refusal);
@@ -105,16 +106,15 @@ public class ReviewCommandListener {
         boolean kept = review.getStatus() == ReviewStatus.COMPLETE
                 && counts.getReused() > 0
                 && counts.getReused() == counts.getListed();
+        var kind = IntegrationKind.valueOf(stored.path("kind").asString());
         answer(
-                new ReviewRequest.CommentAnswer(
-                        IntegrationKind.valueOf(stored.path("kind").asString()),
-                        stored.path("address").asString()),
+                new ReviewRequest.CommentAnswer(kind, stored.path("address").asString()),
                 ended.workspaceId(),
                 review.getItemId(),
                 kept
                         ? "Nothing that the practices read has changed since the last review, so Hephaestus did not"
-                                + " review this merge request again. Its observations and feedback still stand."
-                        : "Hephaestus could not review this merge request this time, so it has no new feedback."
+                                + " review this " + work(kind) + " again. Its observations and feedback still stand."
+                        : "Hephaestus could not review this " + work(kind) + " this time, so it has no new feedback."
                                 + " The review in Hephaestus says why.");
     }
 
@@ -135,14 +135,23 @@ public class ReviewCommandListener {
                 reason.getClass().getName());
     }
 
-    private static String refused(@Nullable ReviewRequestReason reason) {
+    /** The provider's own word for the work a command comment is on. */
+    private static String work(IntegrationKind kind) {
+        return kind == IntegrationKind.GITHUB ? "pull request" : "merge request";
+    }
+
+    private static String provider(IntegrationKind kind) {
+        return kind == IntegrationKind.GITHUB ? "GitHub" : "GitLab";
+    }
+
+    private static String refused(@Nullable ReviewRequestReason reason, IntegrationKind kind) {
         if (reason == null) return "it could not be started.";
         return switch (reason) {
             case REQUEST_COOLDOWN_ACTIVE ->
-                "a review of this merge request was requested a short time ago. Ask again later.";
+                "a review of this " + work(kind) + " was requested a short time ago. Ask again later.";
             case REQUESTER_QUOTA_EXHAUSTED ->
                 "you have asked for the most reviews allowed in one hour. Ask again later.";
-            case CONCURRENT_DUPLICATE -> "a review of this merge request is already running.";
+            case CONCURRENT_DUPLICATE -> "a review of this " + work(kind) + " is already running.";
             case MEMBER_AI_DECLINED -> "your account does not take part in AI practice reviews in this workspace.";
             case WORKSPACE_INACTIVE -> "the workspace is not active.";
             case PRACTICES_DISABLED -> "practice review is turned off for this workspace.";
@@ -151,16 +160,16 @@ public class ReviewCommandListener {
         };
     }
 
-    private static String refused(ReviewRequestRejected rejected) {
+    private static String refused(ReviewRequestRejected rejected, IntegrationKind kind) {
         return switch (rejected.reason()) {
             case WORKSPACE_INACTIVE -> "the workspace is not active.";
             case BUDGET_UNAVAILABLE -> "the workspace's review budget is used up.";
             case MODEL_UNAVAILABLE -> "no AI model is available for practice review.";
             case ITEM_INELIGIBLE ->
                 rejected.eventReason() == null
-                        ? "no practice reviews this merge request."
-                        : refused(rejected.eventReason());
-            case REQUEST_CONFLICT -> "a review of this merge request is already running.";
+                        ? "no practice reviews this " + work(kind) + "."
+                        : refused(rejected.eventReason(), kind);
+            case REQUEST_CONFLICT -> "a review of this " + work(kind) + " is already running.";
             default -> "it could not be started.";
         };
     }

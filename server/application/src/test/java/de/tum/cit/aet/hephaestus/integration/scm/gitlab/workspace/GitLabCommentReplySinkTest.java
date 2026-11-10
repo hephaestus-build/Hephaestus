@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppressedException;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -72,7 +73,7 @@ class GitLabCommentReplySinkTest extends BaseUnitTest {
                 // Posted text: a name never notifies anyone.
                 .contains("`@someone`")
                 .contains("/feedback/42")
-                .endsWith(GitLabCommentReplySink.MARKER);
+                .endsWith(ScmFeedbackFormatter.REQUEST_ANSWER_MARKER);
     }
 
     @Test
