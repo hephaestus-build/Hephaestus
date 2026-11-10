@@ -124,13 +124,13 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0047](0047-the-practice-profile-has-one-reader.md) | The Practice profile has one reader | Accepted |
 | [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) | Installed clients sign in with a PKCE handoff to their own revocable session | Accepted |
 | [0049](0049-browser-extension-report-in-the-page.md) | The browser extension shows its report in the page and confirms changes in its own window | Accepted |
-| [0050](0050-one-practice-standard-one-outcome.md) | One practice standard, one outcome | Accepted |
+| [0050](0050-one-practice-standard-one-outcome.md) | One practice standard, one outcome | Superseded by [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) |
 | [0051](0051-practices-across-the-workspace-counts-developers.md) | Practices across the workspace counts developers and never names one | Accepted |
 | [0052](0052-activity-sorts-by-contributions-and-can-be-public.md) | Workspace activity sorts people by plain counts, and a workspace can publish it | Accepted |
 | [0053](0053-workspace-addresses-are-a-presentation-origin.md) | A workspace address is a presentation origin, and sign-in stays on the apex | Accepted |
 | [0054](0054-practice-visuals-and-guides.md) | Practice visuals and guides are themeable inline SVG and Markdown | Accepted |
 | [0055](0055-practice-scripts-use-one-result-contract.md) | Practice scripts use one result contract | Accepted |
-| [0056](0056-one-practice-model-for-items-and-scans.md) | One practice model for items and scans | Accepted |
+| [0056](0056-one-practice-model-for-items-and-scans.md) | One practice model for items and scans | Superseded by [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) |
 | [0057](0057-one-heph-conversation-per-developer.md) | One Heph conversation per developer, on a stateless shared Heph host | Superseded by [0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) |
 | [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) | The Helm chart is the only supported deployment from 1.0 | Accepted |
 | [0059](0059-previews-run-on-the-staging-cluster.md) | Previews run on the staging cluster | Accepted |
@@ -139,7 +139,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0062](0062-the-item-is-the-review-scope.md) | The item is the review scope | Accepted |
 | [0063](0063-each-practice-is-staged-when-it-ends.md) | Each practice is staged when it ends, and the review seals once | Accepted |
 | [0064](0064-one-evidence-contract-for-every-producer.md) | One evidence contract for every result producer | Accepted |
-| [0065](0065-standing-counts-the-newest-observation-of-each-item.md) | Standing counts the newest observation of each item | Accepted |
+| [0065](0065-standing-counts-the-newest-observation-of-each-item.md) | Standing counts the newest observation of each item | Superseded by [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) |
 | [0066](0066-the-webhook-receiver-has-no-database.md) | The webhook receiver has no database | Superseded by [0080](0080-provider-events-go-to-a-postgresql-inbox.md) |
 | [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted |
 | [0068](0068-reviews-and-heph-run-on-one-agent-runtime.md) | Reviews and Heph run on one agent runtime | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
@@ -159,5 +159,6 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) | A developer has one Heph conversation, and its ledger is Heph's memory | Accepted |
 | [0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) | Each purpose uses one governed model within the member's AI choice, and every model call is counted | Accepted |
 | [0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) | Every statement on workspace data binds its workspace, and a shared mirror binds it through the monitored scope | Accepted |
+| [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) | An observation has one of four outcomes, holds one current claim while its sources stay unchanged, and standing reads the newest decision | Accepted |
 
 Template: [0000-template.md](0000-template.md).
