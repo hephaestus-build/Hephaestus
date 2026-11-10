@@ -245,7 +245,8 @@ public class ReviewAdmissionData {
         // The job's run as the claim of this attempt left it: leased under its number.
         UUID run =
                 RuntimeJobTestData.insertRun(jdbc, workspaceId, pending.review().getId(), "RUNNING", attempt);
-        jdbc.sql("UPDATE review_job SET status='RUNNING',run_id=:run WHERE workspace_id=:ws AND id=:id")
+        jdbc.sql(
+                        "UPDATE review_job SET status='RUNNING',completed_at=NULL,cancellation_reason=NULL,run_id=:run WHERE workspace_id=:ws AND id=:id")
                 .param("run", run)
                 .param("ws", workspaceId)
                 .param("id", pending.jobId())

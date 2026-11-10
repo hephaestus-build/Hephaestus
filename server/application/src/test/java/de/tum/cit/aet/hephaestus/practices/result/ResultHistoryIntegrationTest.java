@@ -271,7 +271,9 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
             } else {
                 RuntimeJobTestData.updateJobs(
                         jdbc,
-                        "UPDATE review_job SET status=? WHERE workspace_id=? AND id=?",
+                        "UPDATE review_job SET status=?,completed_at=CASE WHEN ? IN ('QUEUED','RUNNING') THEN NULL"
+                                + " ELSE now() END WHERE workspace_id=? AND id=?",
+                        recheck,
                         recheck,
                         workspace,
                         pending.jobId());

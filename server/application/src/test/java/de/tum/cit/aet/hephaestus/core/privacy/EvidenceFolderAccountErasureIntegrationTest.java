@@ -305,7 +305,10 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var admissionFailure = new IllegalStateException("admission close failed");
         var catalog = failingCloseCatalog(provenanceFailure, admissionFailure);
         if (operation.equals("begin")) {
-            RuntimeJobTestData.updateJobs(jdbc, "UPDATE review_job SET status='QUEUED' WHERE id=?", job.getId());
+            RuntimeJobTestData.updateJobs(
+                    jdbc,
+                    "UPDATE review_job SET status='QUEUED',completed_at=NULL,cancellation_reason=NULL WHERE id=?",
+                    job.getId());
         } else {
             catalog.beginCapture(job);
             jdbc.update("UPDATE person_evidence_copy SET state='ERASED' WHERE job_id=?", job.getId());
@@ -1167,7 +1170,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var other = job("folder-workspace-keep");
         copy(mounted, owner, recorder, erased, identity).close();
         copy(mounted, owner, recorder, other, identity).close();
-        RuntimeJobTestData.updateJobs(jdbc, "UPDATE review_job SET status='COMPLETED' WHERE id=?", erased.getId());
+        RuntimeJobTestData.updateJobs(
+                jdbc, "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE id=?", erased.getId());
         Path erasedFolder = mounted.resolve("jobs")
                 .resolve(Long.toString(erased.getWorkspaceId()))
                 .resolve(erased.getId().toString());

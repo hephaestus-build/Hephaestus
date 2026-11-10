@@ -69,9 +69,9 @@ class ReviewJobInitializationFailureDatabaseTest {
                 VALUES ('%s',%d,'REVIEW','BATCH','review:%s','ENDED',0,2,'COMPLETED',now(),now());
                 INSERT INTO review_job
                     (id,review_id,workspace_id,submitted_at,status,processing_status,trace_id,input,config_snapshot,
-                     run_id,capture)
+                     run_id,capture,completed_at)
                 VALUES ('%s','00000000-0000-0000-0000-000000978011',%d,now(),
-                        'FAILED','DONE','00000000000000000000000000000001','{}','{}','%s',%s)
+                        'FAILED','DONE','00000000000000000000000000000001','{}','{}','%s',%s,now())
                 """.formatted(
                         runId, WORKSPACE, id, id, WORKSPACE, runId, capture == null ? "NULL" : "'" + capture + "'"));
     }

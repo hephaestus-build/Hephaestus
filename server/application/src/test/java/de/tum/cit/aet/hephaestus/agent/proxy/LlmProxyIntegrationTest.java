@@ -1146,6 +1146,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             transactionTemplate.executeWithoutResult(tx -> {
                 ReviewJob ending = jobRepository.findById(job.getId()).orElseThrow();
                 ending.setStatus(ReviewJobStatus.COMPLETED);
+                ending.setCompletedAt(Instant.now());
                 jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, ending));
                 TerminalUsageTestFixtures.appendProxyUsage(jobRepository, usageRecorder, ending, objectMapper);
             });
@@ -1284,6 +1285,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldDropAPracticeScriptCallWhenItsAttemptWasNeverRegistered() {
         ReviewJob job = practiceScriptJob("https://models.example.com/v1");
         job.setStatus(ReviewJobStatus.COMPLETED);
+        job.setCompletedAt(Instant.now());
         job = RuntimeJobTestData.save(transactionTemplate, jdbc, jobRepository, job);
 
         accumulator()

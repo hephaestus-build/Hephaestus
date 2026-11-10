@@ -40,7 +40,7 @@ class ReviewClosureIntegrationTest extends BaseIntegrationTest {
         // A lost attempt requeued: capture left the practice READY, and the job holds no claim.
         RuntimeJobTestData.updateJobs(
                 jdbc,
-                "UPDATE review_job SET status='QUEUED',processing_status='NONE',started_at=NULL WHERE id=?",
+                "UPDATE review_job SET status='QUEUED',completed_at=NULL,cancellation_reason=NULL,processing_status='NONE',started_at=NULL WHERE id=?",
                 pending.jobId());
 
         assertThat(reviews.cancel(

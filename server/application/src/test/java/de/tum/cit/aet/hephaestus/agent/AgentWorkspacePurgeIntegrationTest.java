@@ -128,6 +128,7 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
         RuntimeJobTestData.initialize(job, workspace.getId());
 
         job.setStatus(ReviewJobStatus.COMPLETED);
+        job.setCompletedAt(Instant.now());
         job.setProcessingStatus(ProcessingStatus.PENDING);
         job.setConfigSnapshot(objectMapper.createObjectNode());
         jobRepository.save(RuntimeJobTestData.persistParent(jdbc, job));
@@ -174,6 +175,7 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
         RuntimeJobTestData.initialize(job, workspace.getId());
 
         job.setStatus(ReviewJobStatus.COMPLETED);
+        job.setCompletedAt(Instant.now());
         job.setProcessingStatus(ProcessingStatus.DONE);
         job.setCapture(objectMapper.createObjectNode().put("private", "content-" + suffix));
         job.setConfigSnapshot(objectMapper.createObjectNode().put("baseUrl", connection.getBaseUrl()));

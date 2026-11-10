@@ -356,7 +356,8 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         RuntimeJobTestData.moveJob(
                 jdbcTemplate,
                 active,
-                () -> jdbc.sql("UPDATE review_job SET status='QUEUED' WHERE workspace_id=:ws AND id=:id")
+                () -> jdbc.sql(
+                                "UPDATE review_job SET status='QUEUED',completed_at=NULL,cancellation_reason=NULL WHERE workspace_id=:ws AND id=:id")
                         .param("ws", scan.getWorkspaceId())
                         .param("id", active)
                         .update());
@@ -458,14 +459,16 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         RuntimeJobTestData.moveJob(
                 jdbcTemplate,
                 first,
-                () -> jdbc.sql("UPDATE review_job SET status='FAILED' WHERE workspace_id=:ws AND id=:job")
+                () -> jdbc.sql(
+                                "UPDATE review_job SET status='FAILED',completed_at=now() WHERE workspace_id=:ws AND id=:job")
                         .param("ws", scan.getWorkspaceId())
                         .param("job", first)
                         .update());
         RuntimeJobTestData.moveJob(
                 jdbcTemplate,
                 next,
-                () -> jdbc.sql("UPDATE review_job SET status='QUEUED' WHERE workspace_id=:ws AND id=:job")
+                () -> jdbc.sql(
+                                "UPDATE review_job SET status='QUEUED',completed_at=NULL,cancellation_reason=NULL WHERE workspace_id=:ws AND id=:job")
                         .param("ws", scan.getWorkspaceId())
                         .param("job", next)
                         .update());

@@ -57,6 +57,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         transactions.executeWithoutResult(status -> {
             job.setExecutionStartedAt(Instant.now());
             job.setStatus(ReviewJobStatus.FAILED);
+            job.setCompletedAt(Instant.now());
             job.setExitCode(1);
             jobs.saveAndFlush(job);
             RuntimeJobTestData.agree(jdbc, job.getId());
@@ -90,6 +91,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         transactions.executeWithoutResult(status -> {
             job.setExecutionStartedAt(Instant.now());
             job.setStatus(ReviewJobStatus.FAILED);
+            job.setCompletedAt(Instant.now());
             job.setExitCode(1);
             jobs.saveAndFlush(job);
             RuntimeJobTestData.agree(jdbc, job.getId());

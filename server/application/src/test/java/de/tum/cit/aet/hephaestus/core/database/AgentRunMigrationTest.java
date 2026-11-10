@@ -58,7 +58,9 @@ class AgentRunMigrationTest {
                                 + "'room_refusals','progressed_attempts','available_at')"))
                 .containsExactly("0");
         assertThatThrownBy(() -> PracticeMigrationFixture.execute(
-                        database, "UPDATE review_job SET status='QUEUED' WHERE id='" + running + "'"))
+                        database,
+                        "UPDATE review_job SET status='QUEUED',completed_at=NULL,cancellation_reason=NULL WHERE id='"
+                                + running + "'"))
                 .as("a job and its run that disagree are refused at commit")
                 .hasMessageContaining("needs a run that agrees");
     }
