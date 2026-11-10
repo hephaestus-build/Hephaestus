@@ -101,6 +101,13 @@ await test("a commit outside the default branch is refused before any image is r
 	);
 });
 
+await test("an environment that runs releases refuses a commit of the default branch", async () => {
+	await assert.rejects(
+		resolvePromotion({ ...request, environment: "Production", commit }, sources),
+		/Production runs only published releases: name a release tag, not a commit/u,
+	);
+});
+
 await test("a promotion names exactly one target, and a commit is named whole", async () => {
 	await assert.rejects(
 		resolvePromotion({ ...request, release: "v1.2.3", commit }, sources),

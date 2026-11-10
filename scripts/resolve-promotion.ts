@@ -1,7 +1,7 @@
 /**
  * Resolves what a manual promotion moves an environment to and writes the channel that
- * `promote.yml` signs and publishes: a published release by tag, or a commit of the default branch
- * with the digests its build produced.
+ * `promote.yml` signs and publishes: a published release by tag, or, for the environment that follows
+ * the default branch, a commit of it with the digests its build produced.
  */
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -11,6 +11,9 @@ import { isSet, requiredEnv } from "./lib/env.ts";
 import { compareStatus } from "./lib/github.ts";
 import { output } from "./lib/process.ts";
 import { isCommit, RELEASE_TAG, serializeChannel, type Channel } from "./reconcile-deployment.ts";
+
+/** The one environment that follows the default branch; every other runs published releases only. */
+const FOLLOWS_MAIN = "Staging";
 
 export interface PromotionRequest {
 	environment: string;
@@ -40,13 +43,20 @@ export async function resolvePromotion(
 	sources: PromotionSources,
 ): Promise<Promotion> {
 	const { environment, release, commit, allowRollback, freeze, refreshDatabaseImage } = request;
+	const followsMain = environment === FOLLOWS_MAIN;
 	// Only automatic promotion reads a freeze, and only an environment that follows main has one.
-	if (freeze && environment !== "Staging") {
+	if (freeze && !followsMain) {
 		throw new Error(`${environment} moves only by manual promotion, so there is nothing to freeze`);
 	}
 	if (commit !== undefined) {
 		if (release !== undefined) {
 			throw new Error("Name a release or a commit, not both");
+		}
+		// An approval must not put an unreleased build where only releases run (ADR 0042).
+		if (!followsMain) {
+			throw new Error(
+				`${environment} runs only published releases: name a release tag, not a commit`,
+			);
 		}
 		if (!isCommit(commit)) {
 			throw new Error(`Follow a full commit SHA, not '${commit}'`);
