@@ -21,6 +21,8 @@ public final class AgentMetrics {
     public static final String AGENT_SANDBOX_REAPED = "agent.sandbox.reaped";
     /** Ticks or claim deletes of the sandbox reaper that failed; each is tried again on the next tick. */
     public static final String AGENT_SANDBOX_REAPER_FAILURE = "agent.sandbox.reaper.failure";
+    /** Dispatch passes that failed to request a due run's sandbox; each is tried again at the next pass. */
+    public static final String AGENT_SANDBOX_DISPATCH_FAILURE = "agent.sandbox.dispatch.failure";
     /** Live sandboxes that the server took back before the reaper would, by reason: {@code unisolated}. */
     public static final String AGENT_SANDBOX_REVOKED = "agent.sandbox.revoked";
 

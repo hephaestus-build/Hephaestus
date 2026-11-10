@@ -117,6 +117,17 @@ Each run kind that a sandbox drives has one `SandboxRunKind` bean in `agent.gate
 No kind is registered yet, so `next` answers `204`. Review jobs are still claimed by the worker's executor.
 A `REVIEW_COMPOSE` run continues the `REVIEW` run of its review (`AgentRuns.continueAs`). Its epochs go on from the ended run, and it spends no attempt, because it is the next step of the work, not a retry.
 
+### Sandbox dispatch
+
+`SandboxDispatcher` starts the sandboxes that queued runs need. It runs where the sandbox owner is, when a run is queued and every `hephaestus.agent.capacity.lease-renewal`.
+It reads the runs that the claim would offer next, in the claim's order (`AgentRuns.due`), for each run kind that a `SandboxRunKind` registers.
+For each run whose subject has no live sandbox, it requests one (`AgentSandboxes.ensure`), while the live sandboxes of that kind stay within their limit.
+It leases nothing: the sandbox claims its own run when it pulls.
+Two replicas that read the same run both ask for the subject's sandbox, and the partial unique index on a subject's live sandbox gives both the same one.
+The limit of review sandboxes is `hephaestus.sandbox.max-concurrent-containers` for now, the count that the chart gives each worker.
+A failed pass counts `agent_sandbox_dispatch_failure_total` and tries again at the next pass.
+Each pass also releases the inputs of review attempts whose run no longer holds them (`ReviewAttemptCustody.releaseEnded`).
+
 ### Sandbox driver
 
 The agent image's entrypoint is the driver, `agent/driver.ts`. A sandbox's container runs it, and the kind of each run is its parameter (`agent/driver-kinds.ts`).

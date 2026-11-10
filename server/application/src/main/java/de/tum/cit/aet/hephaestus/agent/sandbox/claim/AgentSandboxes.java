@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
@@ -38,6 +39,9 @@ public class AgentSandboxes {
 
     /** The gateway address, as an IP address: the sandbox has no DNS. */
     static final String GATEWAY_ENV = "HEPHAESTUS_GATEWAY_URL";
+
+    /** Keeps a dispatched sandbox's shutdown inside its token's longest life while the request reaches the server. */
+    private static final Duration SHUTDOWN_MARGIN = Duration.ofMinutes(1);
 
     private final AgentSandboxRepository sandboxes;
     private final AgentRuns runs;
@@ -136,6 +140,28 @@ public class AgentSandboxes {
             SandboxEvents.event(log.atInfo(), "agent.sandbox.requested", row).log("Sandbox requested");
         }
         return live(row);
+    }
+
+    /**
+     * The subject's live sandbox, or a new one that ends no later than its token can: the reaper takes it back once its
+     * subject has no run left, long before. Call it outside a transaction.
+     */
+    public LiveSandbox ensure(long workspaceId, String subjectKey, AgentSandboxKind kind) {
+        return ensure(
+                workspaceId,
+                subjectKey,
+                kind,
+                Instant.now().plus(tokens.longestSandboxToken()).minus(SHUTDOWN_MARGIN));
+    }
+
+    /** How many sandboxes of this kind are live, in every workspace. */
+    public int live(AgentSandboxKind kind) {
+        return sandboxes.countLive(kind.name());
+    }
+
+    /** Whether the subject has a live sandbox. */
+    public boolean hasLive(long workspaceId, String subjectKey) {
+        return sandboxes.findLive(workspaceId, subjectKey).isPresent();
     }
 
     /**

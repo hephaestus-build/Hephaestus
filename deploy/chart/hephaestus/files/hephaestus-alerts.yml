@@ -469,6 +469,14 @@ groups:
         annotations:
           summary: The sandbox reaper keeps failing to delete sandboxes that no work needs, so they hold cluster capacity
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusAgentSandboxDispatchFailing
+        expr: sum(increase(agent_sandbox_dispatch_failure_total{job="hephaestus"}[10m])) >= 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The server keeps failing to request the sandboxes of due runs, so their work waits
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusAgentSandboxUnisolated
         expr: sum(increase(agent_sandbox_revoked_total{job="hephaestus",reason="unisolated"}[15m])) > 0
         labels:

@@ -57,14 +57,46 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
                                      OR (s.state = 'QUEUED' AND (s.created_at, s.id) < (r.created_at, r.id))))
             """;
 
-    String CLAIM_ORDER = """
+    String ORDER = """
             ORDER BY CASE WHEN r.band = 'INTERACTIVE' THEN 0
                           ELSE GREATEST(1, (CASE r.band WHEN 'BATCH' THEN 1 ELSE 2 END)
                                - FLOOR(EXTRACT(EPOCH FROM (clock_timestamp() - r.available_at)) / :agingSeconds))
                      END,
                      COALESCE(busy.leased, 0), r.created_at, r.id
+            """;
+
+    String CLAIM_ORDER = ORDER + """
             LIMIT 1 FOR UPDATE OF r SKIP LOCKED
             """;
+
+    /** A queued run that the claim would offer, as the dispatch of sandboxes reads it. */
+    interface DueRow {
+        UUID getId();
+
+        long getWorkspaceId();
+
+        String getKind();
+
+        String getConcurrencyKey();
+    }
+
+    /**
+     * The queued runs of these kinds that the claim would offer next, in its order, without leasing them: the dispatch
+     * starts their sandboxes, and each sandbox claims its own run.
+     */
+    @WorkspaceAgnostic("The dispatch reads the due runs of every workspace, in the claim's fair-share order")
+    @Query(value = """
+            SELECT r.id AS id, r.workspace_id AS "workspaceId", r.kind AS kind,
+                   r.concurrency_key AS "concurrencyKey"
+            """ + CLAIMABLE + """
+                AND r.kind IN (:kinds)
+            """ + ORDER + """
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<DueRow> findDue(
+            @Param("kinds") Collection<String> kinds,
+            @Param("limit") int limit,
+            @Param("agingSeconds") long agingSeconds);
 
     String LEASE = """
             UPDATE agent_run r SET state = 'LEASED', lease_epoch = r.lease_epoch + 1, hold_reason = NULL,

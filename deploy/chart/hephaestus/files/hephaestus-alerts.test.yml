@@ -917,6 +917,26 @@ tests:
         alertname: HephaestusAgentSandboxReaperFailing
         exp_alerts: []
 
+  - name: a sandbox dispatch that keeps failing fires, a short failure does not
+    interval: 1m
+    input_series:
+      - series: 'agent_sandbox_dispatch_failure_total{job="hephaestus",instance="worker:9090"}'
+        values: "0+2x40"
+      - series: 'agent_sandbox_dispatch_failure_total{job="hephaestus",instance="worker-b:9090"}'
+        values: "0 4 4x38"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HephaestusAgentSandboxDispatchFailing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusAgentSandboxDispatchFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The server keeps failing to request the sandboxes of due runs, so their work waits
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: one sandbox whose network policy did not hold fires, revocations of another reason do not
     interval: 1m
     input_series:

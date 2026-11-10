@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.run;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.postgresql.PGConnection;
@@ -26,18 +28,25 @@ public class AgentRunNotifications implements DisposableBean {
     private final DataSourceProperties dataSource;
     private volatile boolean running = true;
     private @Nullable Thread thread;
+    private final List<Consumer<AgentRunKind>> subscribers = new CopyOnWriteArrayList<>();
 
     AgentRunNotifications(DataSourceProperties dataSource) {
         this.dataSource = dataSource;
     }
 
-    /** Calls {@code queued} with the kind of each run queued from now on, on the listener's thread. */
+    /**
+     * Calls {@code queued} with the kind of each run queued from now on, on the one listener's thread: every subscriber
+     * hears every run, in the order they subscribed. A subscriber must return at once.
+     */
     public synchronized void subscribe(Consumer<AgentRunKind> queued) {
-        if (thread != null || !running) return;
-        thread = Thread.ofPlatform().name("agent-run-listener").daemon(true).start(() -> listen(queued));
+        if (!running) return;
+        subscribers.add(queued);
+        if (thread == null)
+            thread = Thread.ofPlatform().name("agent-run-listener").daemon(true).start(this::listen);
     }
 
-    private void listen(Consumer<AgentRunKind> queued) {
+    private void listen() {
+        Consumer<AgentRunKind> queued = kind -> subscribers.forEach(subscriber -> subscriber.accept(kind));
         long backoffMillis = 1000;
         while (running) {
             try (var connection = DriverManager.getConnection(
