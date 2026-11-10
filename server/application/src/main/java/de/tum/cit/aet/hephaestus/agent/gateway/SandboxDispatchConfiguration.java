@@ -12,6 +12,10 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -51,12 +55,40 @@ class SandboxDispatchConfiguration {
      */
     @Bean
     @Profile("!test")
-    ScheduledTaskRegistrar sandboxDispatchTask(
+    DispatchPasses sandboxDispatchPasses(
             SandboxDispatcher dispatcher, AgentRunNotifications notifications, AgentCapacityProperties capacity) {
-        notifications.subscribe(kind -> dispatcher.wake());
-        var tasks = new ScheduledTaskRegistrar();
-        Duration period = capacity.leaseRenewal();
-        tasks.addFixedDelayTask(new FixedDelayTask(dispatcher::wake, period, Duration.ZERO));
-        return tasks;
+        return new DispatchPasses(dispatcher, notifications, capacity.leaseRenewal());
+    }
+
+    /**
+     * Starts the passes when the application is ready, not while its context starts: no sandbox starts before the
+     * worker serves its gateway, and the run listener's connection opens only then.
+     */
+    static final class DispatchPasses implements ApplicationListener<ApplicationReadyEvent>, DisposableBean {
+
+        private final ScheduledTaskRegistrar tasks = new ScheduledTaskRegistrar();
+        private final SandboxDispatcher dispatcher;
+        private final AgentRunNotifications notifications;
+        private final Duration period;
+        private final AtomicBoolean started = new AtomicBoolean();
+
+        DispatchPasses(SandboxDispatcher dispatcher, AgentRunNotifications notifications, Duration period) {
+            this.dispatcher = dispatcher;
+            this.notifications = notifications;
+            this.period = period;
+        }
+
+        @Override
+        public void onApplicationEvent(ApplicationReadyEvent ready) {
+            if (!started.compareAndSet(false, true)) return;
+            notifications.subscribe(kind -> dispatcher.wake());
+            tasks.addFixedDelayTask(new FixedDelayTask(dispatcher::wake, period, Duration.ZERO));
+            tasks.afterPropertiesSet();
+        }
+
+        @Override
+        public void destroy() {
+            tasks.destroy();
+        }
     }
 }
