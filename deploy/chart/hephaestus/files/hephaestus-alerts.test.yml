@@ -3043,3 +3043,55 @@ tests:
             exp_annotations:
               summary: A server cannot read the attempts of feedback sends that are not DONE
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: an outbox action due for long fires per kind, a short wait does not
+    interval: 1m
+    input_series:
+      - series: 'action_oldest_due_seconds{job="hephaestus",instance="server-a:9090",kind="EMAIL"}'
+        values: "600 960 1020 1080 1140 1200 1260 1320 1380 1440 1500 1560 1620"
+      - series: 'action_oldest_due_seconds{job="hephaestus",instance="server-b:9090",kind="EMAIL"}'
+        values: "0x12"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusOutboxStalled
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: HephaestusOutboxStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: EMAIL
+            exp_annotations:
+              summary: An outbox action has waited for more than 15 minutes since it became due
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: an outbox that drains does not fire
+    interval: 1m
+    input_series:
+      - series: 'action_oldest_due_seconds{job="hephaestus",instance="server-a:9090",kind="EMAIL"}'
+        values: "30 0 45 0 20 0 0 0 0 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HephaestusOutboxStalled
+        exp_alerts: []
+
+  - name: an action that ends uncertain fires for its kind, other ends do not
+    interval: 1m
+    input_series:
+      - series: 'action_ended_total{job="hephaestus",instance="server-a:9090",kind="EMAIL",state="UNCERTAIN",reason="WRITE_UNCONFIRMED"}'
+        values: "0 0 0 1 1 1"
+      - series: 'action_ended_total{job="hephaestus",instance="server-a:9090",kind="EMAIL",state="DONE",reason="COMPLETED"}'
+        values: "0 5 10 15 20 25"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusOutboxUncertain
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HephaestusOutboxUncertain
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: EMAIL
+            exp_annotations:
+              summary: An outbox action ended uncertain, so its write may have reached the provider and nothing confirms it
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response

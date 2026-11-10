@@ -117,11 +117,8 @@ A write that already passed its fence still reaches the provider, as it would ha
 
 ## Observe it
 
-| Metric | Tags |
-| --- | --- |
-| `action.attempts` | `kind`, `result`, `recorded` |
-| `action.ended` | `kind`, `state`, `reason` |
-
+The executor's metrics (`action.attempts`, `action.ended`) and the backlog gauges of `ActionBacklogSampler` are in the [observability contract](/admin/observability#outbox-metrics), with their alerts.
+A new kind gets its series and alerts without a change there: each is labelled by `kind`.
 The executor's log events, such as `action.ended.uncertain`, are in the [observability contract](/admin/observability#agent-run-and-outbox-events).
 Each names `action.id` and `action.kind`, never the payload.
 

@@ -117,6 +117,36 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             @Param("expiresAt") @Nullable Instant expiresAt,
             @Param("lease") long leaseSeconds);
 
+    /** The actions that have not ended, of one kind in one state, and how long the oldest due one has waited. */
+    interface BacklogRow {
+        String getKind();
+
+        String getState();
+
+        long getActions();
+
+        /**
+         * Seconds since the oldest due action of the kind became due; 0 when none is. An admitted action is due from its
+         * {@code next_attempt_at}; an executing one whose lease expired, which no replica took again, from its {@code
+         * leased_until}.
+         */
+        long getOldestDueSeconds();
+    }
+
+    /** One pass over the actions that have not ended, for the backlog gauges; ended rows are not read. */
+    @WorkspaceAgnostic("The outbox backlog of the whole instance; it names no workspace")
+    @Query(value = """
+            SELECT kind AS "kind", state AS "state", count(*) AS "actions",
+                   COALESCE(floor(max(EXTRACT(EPOCH FROM clock_timestamp()
+                                      - CASE state WHEN 'ADMITTED' THEN next_attempt_at ELSE leased_until END))
+                       FILTER (WHERE (state = 'ADMITTED' AND next_attempt_at <= clock_timestamp())
+                                  OR (state = 'EXECUTING' AND leased_until <= clock_timestamp()))), 0)::bigint
+                       AS "oldestDueSeconds"
+              FROM agent_action WHERE state IN ('PROPOSED', 'ADMITTED', 'EXECUTING')
+             GROUP BY kind, state
+            """, nativeQuery = true)
+    List<BacklogRow> backlog();
+
     /**
      * Takes up to {@code limit} due lane heads: an admitted action whose time has come, or one whose lease expired.
      * A lane runs one action at a time: an action waits while another of its lane executes, and an admitted one also
