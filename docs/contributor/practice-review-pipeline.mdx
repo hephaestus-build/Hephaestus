@@ -70,6 +70,12 @@ This is the same rule as for a practice that waits for checks.
 A retry that seals at a moved version writes the same reason, so the next edge also selects what it did not measure.
 A refusal that can pass, such as an exhausted budget, keeps every event of the window waiting, so that the retry still selects their union.
 
+A practice that starts after its sources changed is withheld with `REPLACED` too.
+A run that withheld every practice at its start ends with an empty result, not as a failed run.
+A review whose run ended without a reason of its own takes the one reason that all its withheld practices share.
+That is `REPLACED` when the work changed, and `READINESS_REFUSED` when they wait for the checks or the sources cannot be verified.
+A practice that the run left open, or a mix of reasons, gives `EXECUTION_INCOMPLETE`, which points to the runtime.
+
 A person's request selects every practice, with no such removal.
 At capture, each ready practice can keep its result instead of running.
 It keeps a result that a scan could also reuse (`ReuseCandidateQuery`), under [ADR 0069's freshness and capture comparison](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md#freshness-by-source-fingerprints).

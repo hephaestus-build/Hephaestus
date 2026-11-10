@@ -737,16 +737,16 @@ groups:
       - alert: HephaestusReviewsIncomplete
         expr: >-
           sum(
-            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget"}[6h])
+            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget|replaced"}[6h])
             or increase(practice_review_ended_total{job="hephaestus",kind="item",status="cancelled",reason="no_sandbox_room"}[6h])
           )
           / sum(
-            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget"}[6h])
+            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget|replaced"}[6h])
             or increase(practice_review_ended_total{job="hephaestus",kind="item",status="cancelled",reason="no_sandbox_room"}[6h])
             or increase(practice_review_ended_total{job="hephaestus",kind="item",status="complete"}[6h])
           ) > 0.25
           and sum(
-            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget"}[6h])
+            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget|replaced"}[6h])
             or increase(practice_review_ended_total{job="hephaestus",kind="item",status="cancelled",reason="no_sandbox_room"}[6h])
             or increase(practice_review_ended_total{job="hephaestus",kind="item",status="complete"}[6h])
           ) >= 4

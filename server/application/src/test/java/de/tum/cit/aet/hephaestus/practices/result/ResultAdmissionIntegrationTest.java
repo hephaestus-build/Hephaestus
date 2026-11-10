@@ -92,6 +92,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -1225,6 +1226,40 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 .orElseThrow();
         assertThat(review.getStatus()).isEqualTo(ReviewStatus.PARTIAL);
         assertThat(review.getStopReason()).isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
+    }
+
+    /**
+     * A practice that Hephaestus withheld on purpose names why the review is Partial: the work changed after the
+     * capture, or the practice waits for the checks. Neither is a runtime that fell short. Practices withheld for
+     * different reasons share none, so the review keeps the general reason.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "REPLACED, REPLACED",
+        "CHECKS_PENDING, READINESS_REFUSED",
+        "READINESS_REFUSED, READINESS_REFUSED",
+        "REPLACED;CHECKS_PENDING, EXECUTION_INCOMPLETE"
+    })
+    void shouldCloseTheReviewWithTheReasonItsWithheldPracticeCarries(String withheld, ReviewStopReason expected) {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        for (var reason : withheld.split(";", -1)) admissions.withheld(pending, reason);
+        admit(pending, ResultOutcome.MET);
+        settle(pending);
+
+        service.complete(
+                scenario.workspace().getId(),
+                pending.review().getId(),
+                new ReviewCompletion(
+                        ReviewStatus.COMPLETE,
+                        null,
+                        Instant.now(),
+                        pending.review().getOrderedAt()));
+
+        var review = reviews.findByIdAndWorkspaceId(
+                        pending.review().getId(), scenario.workspace().getId())
+                .orElseThrow();
+        assertThat(review.getStatus()).isEqualTo(ReviewStatus.PARTIAL);
+        assertThat(review.getStopReason()).isEqualTo(expected);
     }
 
     private void settle(ReviewAdmissionData.Pending pending) {

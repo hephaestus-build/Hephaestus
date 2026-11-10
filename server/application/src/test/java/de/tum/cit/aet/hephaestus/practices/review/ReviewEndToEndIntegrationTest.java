@@ -266,11 +266,11 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     /**
-     * What the review left: the practice's status and reason, its results and whether each still describes the work,
-     * the requests that reached the model
-     * provider, and what the runner sent and got.
+     * What the review left: its status and stop reason, the practice's status and reason, its results and whether each
+     * still describes the work, the requests that reached the model provider, and what the runner sent and got.
      */
     private record Reviewed(
+            Map<String, @Nullable Object> review,
             Map<String, @Nullable Object> practice,
             List<@Nullable String> outcomes,
             List<Currentness> currentness,
@@ -337,6 +337,10 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .containsEntry("reason", "REPLACED");
         assertThat(reviewed.outcomes()).isEmpty();
         assertThat(reviewed.modelRequests()).isZero();
+        assertThat(reviewed.review())
+                .as("the review says the work changed, not that its runtime fell short")
+                .containsEntry("status", "PARTIAL")
+                .containsEntry("stop_reason", "REPLACED");
     }
 
     private void assertMeasured(Reviewed reviewed) {
@@ -349,6 +353,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .anySatisfy(call -> assertThat(call.path()).isEqualTo("admit-results"));
         assertThat(reviewed.practice()).as(reviewed.calls()).containsEntry("status", "DONE");
         assertThat(reviewed.outcomes()).as(reviewed.calls()).containsExactly("MET");
+        assertThat(reviewed.review()).containsEntry("status", "COMPLETE").containsEntry("stop_reason", null);
         assertThat(reviewed.currentness())
                 .as("the feedback still describes the work, so it can be delivered and shown")
                 .containsExactly(Currentness.CURRENT);
@@ -444,6 +449,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
             throw new AssertionError("The review did not settle: " + state(reviewId) + " " + sandbox.calls, timeout);
         }
         return new Reviewed(
+                jdbc.queryForMap("SELECT status, stop_reason FROM review WHERE id = ?", reviewId),
                 jdbc.queryForMap(
                         "SELECT status, reason FROM review_practice WHERE review_id = ? AND practice_id = ?",
                         reviewId,

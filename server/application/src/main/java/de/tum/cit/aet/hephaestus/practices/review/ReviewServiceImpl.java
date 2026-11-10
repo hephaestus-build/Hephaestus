@@ -593,9 +593,7 @@ public class ReviewServiceImpl implements ReviewService {
                                 ? cancellationRequested || completion.reason() == null
                                         ? ReviewStopReason.CANCELLED
                                         : completion.reason()
-                                : completion.reason() == null
-                                        ? ReviewStopReason.EXECUTION_INCOMPLETE
-                                        : completion.reason());
+                                : completion.reason() == null ? unmeasuredReason(review) : completion.reason());
         review.setCompletedAt(completion.completedAt());
         closeMembers(review);
         if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspaceId, reviewId);
@@ -625,6 +623,32 @@ public class ReviewServiceImpl implements ReviewService {
             outcomes.ended(review);
         }
         return true;
+    }
+
+    /**
+     * Why a review whose run ended without a reason of its own left practices unmeasured: the one reason that all of
+     * them share, when Hephaestus withheld each on purpose. A practice whose work changed after the capture is
+     * {@code REPLACED}, and one that waits for the item's checks or its verification is not ready. A practice the run
+     * left open, or a mix of reasons, is execution that did not finish.
+     */
+    private ReviewStopReason unmeasuredReason(Review review) {
+        if (review.getKind() != ReviewKind.ITEM) return ReviewStopReason.EXECUTION_INCOMPLETE;
+        var reasons = new HashSet<ReviewStopReason>();
+        for (var member : memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
+                review.getWorkspaceId(), review.getId())) {
+            if (member.getState() == ReviewItemState.LISTED || member.getState() == ReviewItemState.STAGED)
+                return ReviewStopReason.EXECUTION_INCOMPLETE;
+            if (member.getState() == ReviewItemState.WITHHELD) reasons.add(owed(member.getReason()));
+        }
+        return reasons.size() == 1 ? reasons.iterator().next() : ReviewStopReason.EXECUTION_INCOMPLETE;
+    }
+
+    private static ReviewStopReason owed(@Nullable String reason) {
+        if (ReviewStopReason.REPLACED.name().equals(reason)) return ReviewStopReason.REPLACED;
+        return CARRIED_REASONS.contains(reason)
+                        || ReviewStopReason.READINESS_REFUSED.name().equals(reason)
+                ? ReviewStopReason.READINESS_REFUSED
+                : ReviewStopReason.EXECUTION_INCOMPLETE;
     }
 
     /**
