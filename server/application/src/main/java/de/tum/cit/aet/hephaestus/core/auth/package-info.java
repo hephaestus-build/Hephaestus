@@ -28,9 +28,9 @@
  *
  * <h2>JWT format</h2>
  *
- * Claims: {@code iss}, {@code sub}, {@code aud}, {@code jti}, {@code iat}, {@code exp}, {@code
- * preferred_username} (standard OIDC), {@code roles} (flat string array, Hephaestus-specific — read
- * by the authority converter), {@code given_name} (when known), and session deadlines. Signed ES256
+ * Claims: {@code iss}, {@code sub}, {@code aud}, {@code jti}, {@code iat}, {@code exp}, {@code roles}
+ * (flat string array, Hephaestus-specific — read by the authority converter), and session deadlines. No
+ * personal data: names come from the API. Signed ES256
  * with a DB-backed {@code JWKSource}; the public keys are published at {@code
  * /.well-known/jwks.json}. See {@code HephaestusJwtIssuer} for the authoritative shape.
  *

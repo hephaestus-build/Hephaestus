@@ -121,21 +121,18 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<String> lockStatusForUpdate(@Param("id") Long id);
 
     /**
-     * What a token is minted from, read from the row as it stands once share-locked: status,
-     * instance role and display name. Native and projected, so a managed {@link Account} loaded
+     * What a token is minted from, read from the row as it stands once share-locked: status and
+     * instance role. Native and projected, so a managed {@link Account} loaded
      * earlier in the transaction can never supply a stale role or status.
      */
     interface IssuanceAuthority {
         String getStatus();
 
         String getAppRole();
-
-        String getDisplayName();
     }
 
     @Query(
-            value = "SELECT status AS \"status\", app_role AS \"appRole\", display_name AS"
-                    + " \"displayName\" FROM account WHERE id = :id FOR SHARE",
+            value = "SELECT status AS \"status\", app_role AS \"appRole\" FROM account WHERE id = :id FOR SHARE",
             nativeQuery = true)
     Optional<IssuanceAuthority> lockAuthorityForShare(@Param("id") Long id);
 

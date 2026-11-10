@@ -27,7 +27,6 @@ public class SpecsSecurityConfig {
                 .header("typ", "JWT")
                 .claims(claims -> {
                     claims.put("sub", "specs-profile-user");
-                    claims.put("preferred_username", "specs");
                     claims.put("iss", "https://localhost/specs-profile");
                     claims.put("aud", "hephaestus-api");
                     // Flat `roles` claim so the authority converter works (ADR 0017).

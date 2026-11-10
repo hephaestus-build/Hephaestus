@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.ScmMirrorErasedEvent;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
@@ -121,7 +120,7 @@ public class ScmWorkspaceContentEraser {
         log.info(
                 "scm.audit: mirror erase — actor={}, workspaceId={}, erasedRepositories={},"
                         + " sharedRepositoriesSkipped={}, erasedTeams={}",
-                LoggingUtils.sanitizeForLog(SecurityUtils.getCurrentUserLogin().orElse("system")),
+                SecurityUtils.getCurrentAccountId().map(id -> "account " + id).orElse("system"),
                 workspaceId,
                 erased,
                 shared,

@@ -33,8 +33,7 @@ class CurrentAccountUsersTest extends BaseUnitTest {
 
     @Test
     void shouldResolveAuthenticatedAccountWithoutUsingTheLoginClaim() {
-        SecurityContextHolder.setContext(
-                MockSecurityContextUtils.createSecurityContext("unrelated", "42", new String[0], "token"));
+        SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext("42", new String[0], "token"));
         when(providers.accountActors(42L)).thenReturn(List.of(actor(1L, 7L)));
         assertThat(resolver.resolve()).extracting(ActorProfile::actorId).containsExactly(7L);
     }

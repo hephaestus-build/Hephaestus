@@ -37,12 +37,10 @@ public class JwtPrincipalFactory {
         return createPrincipal(
                 accountId,
                 Account.Status.valueOf(authority.getStatus()),
-                Account.AppRole.valueOf(authority.getAppRole()),
-                authority.getDisplayName());
+                Account.AppRole.valueOf(authority.getAppRole()));
     }
 
-    private JwtPrincipal createPrincipal(
-            Long accountId, Account.Status status, Account.AppRole appRole, String displayName) {
+    private JwtPrincipal createPrincipal(Long accountId, Account.Status status, Account.AppRole appRole) {
         // Defense-in-depth account-status gate (ADR 0017). Every JWT-issue path funnels through
         // here.
         // A SUSPENDED / DELETING / DELETED account must never be minted a principal — even if a
@@ -53,7 +51,6 @@ public class JwtPrincipalFactory {
         if (status != Account.Status.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "The account is not active.");
         }
-        String login = "account:" + accountId;
         Set<String> roles = new HashSet<>(accountFeatureRepository.findFlagsByAccountId(accountId));
         // Privilege separation: the instance-admin authority derives ONLY from Account.appRole,
         // never
@@ -66,6 +63,6 @@ public class JwtPrincipalFactory {
         if (appRole == Account.AppRole.APP_ADMIN) {
             roles.add("app_admin");
         }
-        return new JwtPrincipal(accountId, login, displayName, roles);
+        return new JwtPrincipal(accountId, roles);
     }
 }

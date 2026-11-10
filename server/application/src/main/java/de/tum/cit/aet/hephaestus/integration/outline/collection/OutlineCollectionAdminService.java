@@ -224,7 +224,7 @@ public class OutlineCollectionAdminService {
         eventPublisher.publishEvent(new AgentContextChangedEvent(workspaceId));
         log.info(
                 "outline.audit: collection erase — actor={} removed collectionId={} from the mirror for workspaceId={} ({} mirrored document(s) erased)",
-                LoggingUtils.sanitizeForLog(SecurityUtils.getCurrentUserLogin().orElse("system")),
+                SecurityUtils.getCurrentAccountId().map(id -> "account " + id).orElse("system"),
                 LoggingUtils.sanitizeForLog(collectionId),
                 workspaceId,
                 erased);

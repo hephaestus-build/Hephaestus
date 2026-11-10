@@ -32,6 +32,7 @@ import org.springframework.web.server.ResponseStatusException;
  * Mints Hephaestus's cookie-bound access JWTs.
  *
  * <h2>Claim shape</h2>
+ * The cookie carries no personal data: the web app reads names from the API (NIST SP 800-63B-4 § 5.1.1).
  * <pre>
  * iss                — {@link AuthProperties#issuer}
  * sub                — {@code Account.id} as a decimal string
@@ -39,9 +40,7 @@ import org.springframework.web.server.ResponseStatusException;
  * jti                — fresh UUID; also INSERTed into {@code issued_jwt} so revocation can short-circuit
  * iat                — {@link Clock#instant()} of the issuing pod
  * exp                — {@code iat + accessTtl}
- * preferred_username — login (standard OIDC claim)
  * roles              — flat string array of granted roles (Hephaestus-specific; the authority converter reads it)
- * given_name         — first name; only when known
  * session_exp        — absolute session ceiling (epoch seconds); see {@link TokenConstraints}
  * auth_time          — last interactive sign-in (epoch seconds, standard OIDC claim); see {@link TokenConstraints}
  * sid                — installed-client session id (standard OIDC claim); only on tokens a client session holds
@@ -97,7 +96,7 @@ public class HephaestusJwtIssuer {
      * .refresh} re-caps the rotated token at the same instants — a rolling silent refresh cannot
      * extend a session (OWASP absolute timeout).
      *
-     * <p>The login, roles and status baked in are read after the account row is share-locked, never
+     * <p>The roles and status baked in are read after the account row is share-locked, never
      * from a principal a caller assembled earlier: a demotion or suspension that commits while this
      * issuance waits for the lock is what the token carries.
      *
@@ -177,11 +176,7 @@ public class HephaestusJwtIssuer {
                 .id(jti.toString())
                 .issuedAt(now)
                 .expiresAt(expiresAt)
-                .claim("preferred_username", principal.login())
                 .claim("roles", List.copyOf(principal.roles()));
-        if (principal.givenName() != null) {
-            claims.claim("given_name", principal.givenName());
-        }
         if (sessionExpiresAt != null) {
             // Absolute session ceiling (epoch seconds), constant across refreshes (OWASP absolute timeout).
             claims.claim("session_exp", sessionExpiresAt.getEpochSecond());

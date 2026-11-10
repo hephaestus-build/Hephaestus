@@ -90,13 +90,6 @@ public final class CurrentAccount {
         }
     }
 
-    /** The {@code preferred_username} claim (the account's login), or null if absent. */
-    @Nullable
-    public static String preferredUsernameOrNull() {
-        Jwt jwt = jwtOrNull();
-        return jwt == null ? null : jwt.getClaimAsString("preferred_username");
-    }
-
     /** Roles from the JWT's flat {@code roles} claim; empty if absent. */
     public static List<String> roles() {
         Jwt jwt = jwtOrNull();

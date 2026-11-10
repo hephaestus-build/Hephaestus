@@ -42,7 +42,6 @@ public class TestSecurityConfig {
                         .header("alg", "ES256")
                         .header("typ", "JWT")
                         .claim("sub", "1")
-                        .claim("preferred_username", "impersonated")
                         .claim("iss", "https://test-issuer")
                         .claim("aud", "test-audience")
                         .claim("jti", IMPERSONATION_JTI)
@@ -59,7 +58,6 @@ public class TestSecurityConfig {
                         .header("alg", "ES256")
                         .header("typ", "JWT")
                         .claim("sub", "1")
-                        .claim("preferred_username", "numericuser")
                         .claim("iss", "https://test-issuer")
                         .claim("aud", "test-audience")
                         .claim("jti", NUMERIC_JTI)
@@ -123,7 +121,6 @@ public class TestSecurityConfig {
                                             link.getAccount().getId())
                                     .toString())
                             .orElse(userId));
-            claims.put("preferred_username", username);
             claims.put("iss", "https://test-issuer");
             claims.put("aud", "test-audience");
 
@@ -148,7 +145,6 @@ public class TestSecurityConfig {
                 .header("alg", "HS256")
                 .header("typ", "JWT")
                 .claim("sub", sub)
-                .claim("preferred_username", "account-" + sub)
                 .claim("iss", "https://test-issuer")
                 .claim("aud", "test-audience")
                 .claim("roles", Arrays.asList(roles))

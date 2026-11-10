@@ -84,6 +84,6 @@ class FeatureFlagServiceTest extends BaseUnitTest {
 
     private void setSecurityContext(String username, String... authorities) {
         SecurityContextHolder.setContext(
-                MockSecurityContextUtils.createSecurityContext(username, username + "-id", authorities, "mock-token"));
+                MockSecurityContextUtils.createSecurityContext(username + "-id", authorities, "mock-token"));
     }
 }

@@ -26,7 +26,7 @@ class FeatureFlagConfigTest extends BaseUnitTest {
     @Test
     void shouldExposeEnabledConfigFlagWhenPropertyIsTrue() {
         SecurityContextHolder.setContext(
-                MockSecurityContextUtils.createSecurityContext("user", "user-id", new String[0], "mock-token"));
+                MockSecurityContextUtils.createSecurityContext("user-id", new String[0], "mock-token"));
 
         contextRunner.run(context -> {
             FeatureFlagsDTO response = FeatureFlagsDTO.from(context.getBean(FeatureFlagService.class));

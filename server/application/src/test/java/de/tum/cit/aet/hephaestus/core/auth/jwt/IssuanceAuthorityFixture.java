@@ -19,11 +19,6 @@ final class IssuanceAuthorityFixture {
             public String getAppRole() {
                 return account.getAppRole().name();
             }
-
-            @Override
-            public String getDisplayName() {
-                return account.getDisplayName();
-            }
         };
     }
 }

@@ -38,19 +38,6 @@ class JwtPrincipalFactoryRolesTest extends BaseUnitTest {
     }
 
     @Test
-    void loginFallbackIsANonCollidableSentinelNotTheUserControlledDisplayName() {
-        // No usable identity-link username → the login must NOT be the OAuth display name
-        // (user-controlled
-        // free text that could equal another user's git login). A ':' can't appear in a git login,
-        // so the
-        // sentinel matches no real User.login.
-        Account account = active(7L, Account.AppRole.USER);
-        account.setDisplayName("octocat"); // an existing git login, were it ever used as preferred_username
-
-        assertThat(principal(account).login()).isEqualTo("account:7").isNotEqualTo("octocat");
-    }
-
-    @Test
     void grantedReservedFeatureFlagDoesNotEscalateToInstanceAdmin() {
         // account_feature.flag is free-text; a row written by a database edit must NOT be able to
         // inject the

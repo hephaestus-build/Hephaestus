@@ -21,20 +21,17 @@ public class MockSecurityContextUtils {
     /**
      * Creates a security context with JWT authentication for the specified user.
      *
-     * @param username the username for the JWT claims
      * @param userId the user ID for the JWT claims
      * @param authorities the authorities/roles for the user
      * @param tokenValue the JWT token value (used to identify user type in TestSecurityConfig)
      * @return configured SecurityContext
      */
-    public static SecurityContext createSecurityContext(
-            String username, String userId, String[] authorities, String tokenValue) {
+    public static SecurityContext createSecurityContext(String userId, String[] authorities, String tokenValue) {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
 
         // Create mock JWT claims
         Map<String, Object> claims = new HashMap<>();
         claims.put("sub", userId);
-        claims.put("preferred_username", username);
         claims.put("iss", "https://test-issuer");
         claims.put("aud", "test-audience");
 

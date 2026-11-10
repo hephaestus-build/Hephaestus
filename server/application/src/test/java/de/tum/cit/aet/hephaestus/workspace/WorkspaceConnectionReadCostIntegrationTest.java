@@ -53,10 +53,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
     void owner() {
         owner = persistAccount("Workspace read owner");
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "workspace-reader",
-                Objects.requireNonNull(owner.getId()).toString(),
-                new String[0],
-                "read-cost-token"));
+                Objects.requireNonNull(owner.getId()).toString(), new String[0], "read-cost-token"));
     }
 
     @AfterEach
@@ -183,10 +180,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         var own = workspace(owner, 0);
         workspace(persistAccount("Other workspace owner"), 99);
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "workspace-reader",
-                Objects.requireNonNull(owner.getId()).toString(),
-                new String[] {"app_admin"},
-                "read-cost-token"));
+                Objects.requireNonNull(owner.getId()).toString(), new String[] {"app_admin"}, "read-cost-token"));
 
         var read = reads.measure(queries::findAccessibleWorkspaceListItems);
 

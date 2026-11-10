@@ -20,26 +20,6 @@ public final class SecurityUtils {
 
     private SecurityUtils() {}
 
-    /** Display login of the pinned actor or session; not an identity key. */
-    public static Optional<String> getCurrentUserLogin() {
-        Optional<String> workspaceScoped = CurrentScmIdentityHolder.getLogin();
-        if (workspaceScoped.isPresent()) {
-            return workspaceScoped;
-        }
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {
-            return Optional.empty();
-        }
-        if (authentication.getPrincipal() instanceof Jwt jwt) {
-            return Optional.ofNullable(jwt.getClaimAsString("preferred_username"));
-        }
-        return Optional.empty();
-    }
-
-    public static String getCurrentUserLoginOrThrow() {
-        return getCurrentUserLogin().orElseThrow(() -> new IllegalStateException("No authenticated user found"));
-    }
-
     /** Native account id from the JWT subject, independent of the sign-in provider. */
     public static Optional<Long> getCurrentAccountId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -55,24 +35,6 @@ public final class SecurityUtils {
         } catch (NumberFormatException e) {
             return Optional.empty();
         }
-    }
-
-    /**
-     * Get the first name (given_name) from a JWT token.
-     * This is the standard OIDC {@code given_name} claim, carried on our own issued JWT.
-     *
-     * @param jwt The JWT token
-     * @return The given_name claim value, or empty if not present
-     */
-    public static Optional<String> getGivenName(Jwt jwt) {
-        if (jwt == null) {
-            return Optional.empty();
-        }
-        String givenName = jwt.getClaimAsString("given_name");
-        if (givenName != null && !givenName.isBlank()) {
-            return Optional.of(givenName);
-        }
-        return Optional.empty();
     }
 
     /**

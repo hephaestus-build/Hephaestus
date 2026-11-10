@@ -59,7 +59,7 @@ class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
         var scenario = data.scenario();
         var account = Objects.requireNonNull(scenario.account().getId());
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "result-reader", account.toString(), new String[0], "result-read-cost-token"));
+                account.toString(), new String[0], "result-read-cost-token"));
         var at = Instant.parse("2026-01-01T00:00:00Z");
         var ids = new ArrayList<UUID>();
         var first = data.result(scenario, ResultOutcome.NOT_MET, at);

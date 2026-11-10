@@ -39,7 +39,7 @@ class SecurityUtilsTest extends BaseUnitTest {
             builder.subject(subject);
         } else {
             // A Jwt requires a non-null token value but the `sub` claim may legitimately be absent.
-            builder.claim("preferred_username", "no-sub");
+            builder.claim("iss", "no-sub");
         }
         extraClaims.forEach(builder::claim);
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(builder.build()));

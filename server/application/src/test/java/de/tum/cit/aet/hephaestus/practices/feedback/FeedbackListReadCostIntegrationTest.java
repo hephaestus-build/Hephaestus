@@ -62,7 +62,7 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
         scenario = data.scenario();
         var account = Objects.requireNonNull(scenario.account().getId());
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "feedback-reader", account.toString(), new String[0], "feedback-read-cost-token"));
+                account.toString(), new String[0], "feedback-read-cost-token"));
         ids.add(recordedFeedback(scenario, 0));
         ids.add(recordedFeedback(scenario, 1));
         foreignId = recordedFeedback(data.scenario(), 99);
