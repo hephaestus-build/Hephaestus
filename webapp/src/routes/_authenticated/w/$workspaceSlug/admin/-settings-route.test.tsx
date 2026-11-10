@@ -17,6 +17,7 @@ import type {
 	ConnectionSyncStatus,
 	SyncJob,
 	UpdateWorkspacePublicActivityRequest,
+	WorkspaceListItem,
 } from "@/api/types.gen";
 import { SETUP_SYNC_POLL_MS } from "@/hooks/use-workspace-setup";
 import type { Wire } from "@/lib/dates";
@@ -1006,7 +1007,7 @@ describe("workspace settings lifetime", () => {
 	});
 });
 
-function serveTarget(status = "ACTIVE") {
+function serveTarget(status: WorkspaceListItem["status"] = "ACTIVE") {
 	const target = {
 		...workspaceListItem("tutors", { displayName: "Tutors", practicesEnabled: true, status }),
 		publicActivityEnabled: true,
@@ -1081,9 +1082,9 @@ describe("instance administrator workspace settings", () => {
 	});
 
 	it.each([
-		{ status: "ARCHIVED", allowed: true },
+		{ status: "SUSPENDED", allowed: true },
 		{ status: "ACTIVE", allowed: false },
-	])(
+	] satisfies { status: WorkspaceListItem["status"]; allowed: boolean }[])(
 		"does not claim public publication for $status with instance policy $allowed",
 		async ({ status, allowed }) => {
 			serveTarget(status);

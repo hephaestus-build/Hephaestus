@@ -214,7 +214,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
             var read = reads.measure(queries::findAccessibleWorkspaceListItems);
             assertThat(read.value()).extracting(WorkspaceListItemDTO::id).containsExactly(viewed.getId());
             assertThat(read.value().getFirst().providerType()).isEqualTo(IdentityProviderType.GITHUB);
-            assertThat(read.value().getFirst().status()).isEqualTo("SUSPENDED");
+            assertThat(read.value().getFirst().status()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
         } finally {
             UserViewContextHolder.clear();
         }
@@ -228,7 +228,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
 
         var read = reads.measure(() -> queries.toWorkspaceDTO(workspace));
 
-        assertThat(read.value().status()).isEqualTo("SUSPENDED");
+        assertThat(read.value().status()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
         assertThat(read.value().installationId()).isEqualTo(workspace.getId() + 10000);
         assertThat(read.value().providerType()).isEqualTo(IdentityProviderType.GITHUB);
         assertThat(reads.measure(queries::findAccessibleWorkspaceListItems).value())

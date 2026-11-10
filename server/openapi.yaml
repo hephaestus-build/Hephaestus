@@ -26943,8 +26943,11 @@ components:
             \ /connections/{id}/status"
         status:
           type: string
-          description: "Current lifecycle status of the workspace (PENDING, ACTIVE,\
-            \ ARCHIVED)"
+          description: Current lifecycle status of the workspace
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - PURGED
         updatedAt:
           type: string
           format: date-time
@@ -27145,8 +27148,11 @@ components:
             \ it and the workspace turned it on"
         status:
           type: string
-          description: "Current lifecycle status of the workspace (PENDING, ACTIVE,\
-            \ ARCHIVED)"
+          description: Current lifecycle status of the workspace
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - PURGED
         workspaceAddress:
           type: string
           description: Canonical workspace address. Uses the apex path when subdomains
