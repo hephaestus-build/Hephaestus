@@ -145,8 +145,8 @@ spec:
           imagePullPolicy: IfNotPresent
           command: ["sleep", "infinity"]
           resources:
-            requests: { cpu: 1m, memory: 8Mi, ephemeral-storage: 1Mi }
-            limits: { cpu: 10m, memory: 16Mi, ephemeral-storage: 1Mi }
+            requests: { cpu: 1m, memory: 16Mi, ephemeral-storage: 1Mi }
+            limits: { cpu: 10m, memory: 32Mi, ephemeral-storage: 1Mi }
           securityContext:
             {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
 {{- end }}
