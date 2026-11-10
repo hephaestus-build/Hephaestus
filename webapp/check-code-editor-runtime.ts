@@ -13,7 +13,10 @@ import { appSourcePlugins } from "./vite.shared.ts";
 const fixtureRoot = fileURLToPath(new URL("tools/code-editor-runtime", import.meta.url));
 const sourceRoot = fileURLToPath(new URL("src", import.meta.url));
 const headers = await readFile(new URL("docker/security-headers.conf", import.meta.url), "utf8");
-const policy = /Content-Security-Policy "(?<policy>[^"]+)"/u.exec(headers)?.groups?.policy;
+// nginx fills the API origin at runtime; this check serves the app from one origin.
+const policy = /Content-Security-Policy "(?<policy>[^"]+)"/u
+	.exec(headers)
+	?.groups?.policy?.replace(" $hephaestus_api_origin", "");
 assert.ok(
 	policy !== undefined && policy.length > 0,
 	"The shipped content security policy is missing",

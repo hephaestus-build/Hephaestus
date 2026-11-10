@@ -94,6 +94,15 @@ class ConversationRedirectIntegrationTest {
         assertThat(response.headers().firstValue("x-injected")).isEmpty();
     }
 
+    @ParameterizedTest
+    @CsvSource({"/", "/index.html", "/w/acme/settings"})
+    void shouldServeTheAppShellUncachedAndConnectedOnlyToItsOwnOriginWithoutAnApiOrigin(String path) throws Exception {
+        var response = request(path);
+        assertThat(response.headers().firstValue("cache-control")).contains("no-store");
+        assertThat(response.headers().firstValue("content-security-policy"))
+                .hasValueSatisfying(policy -> assertThat(policy).contains("connect-src 'self' ;"));
+    }
+
     private static HttpResponse<Void> request(String path) throws Exception {
         return CLIENT.send(
                 HttpRequest.newBuilder(URI.create("http://" + nginx.getHost() + ":" + nginx.getMappedPort(8080) + path))
