@@ -82,10 +82,10 @@ export interface WorkspaceSlackChannelsSettingsProps {
 	}) => Promise<void> | void;
 	/** Terminal revoke + erase. Resolves on success, rejects to keep the dialog open. */
 	onRemoveChannel: (input: { slackChannelId: string; reason?: string }) => Promise<void> | void;
-	/** The consent history of the channel last opened with `onViewHistory`. */
+	/** The consent history of the channel whose sheet is open, or was last open. */
 	consentHistory: ChannelHistory;
-	/** A channel's consent history opens: read it. */
-	onViewHistory: (slackChannelId: string) => void;
+	/** A channel's consent history sheet opens or closes. The route reads it while it is open. */
+	onHistoryOpenChange: (slackChannelId: string, open: boolean) => void;
 }
 
 /** One open of a channel dialog. Every open is a new object, even for the same channel. */
@@ -145,7 +145,7 @@ export function WorkspaceSlackChannelsSettings({
 	onUpdateConsent,
 	onRemoveChannel,
 	consentHistory,
-	onViewHistory,
+	onHistoryOpenChange,
 }: WorkspaceSlackChannelsSettingsProps) {
 	const [addOpen, setAddOpen] = useState(false);
 	const activate = useChannelDialog(channels);
@@ -228,7 +228,7 @@ export function WorkspaceSlackChannelsSettings({
 										}
 										onViewHistory={(viewed) => {
 											history.open(viewed);
-											onViewHistory(viewed.slackChannelId);
+											onHistoryOpenChange(viewed.slackChannelId, true);
 										}}
 									/>
 								))}
@@ -269,7 +269,13 @@ export function WorkspaceSlackChannelsSettings({
 				<ChannelHistorySheet
 					channel={history.dialog.channel}
 					history={consentHistory}
-					onOpenChange={history.dialog.onOpenChange}
+					onOpenChange={(open) => {
+						const shown = history.dialog?.channel;
+						history.dialog?.onOpenChange(open);
+						if (!open && shown) {
+							onHistoryOpenChange(shown.slackChannelId, false);
+						}
+					}}
 				/>
 			)}
 		</>

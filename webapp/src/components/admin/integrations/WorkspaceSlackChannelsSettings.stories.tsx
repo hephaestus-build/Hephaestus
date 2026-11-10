@@ -23,7 +23,7 @@ const meta = {
 		onUpdateConsent: fn(),
 		onRemoveChannel: fn(),
 		consentHistory: { isLoading: false, onRetry: fn() },
-		onViewHistory: fn(),
+		onHistoryOpenChange: fn(),
 	},
 } satisfies Meta<typeof WorkspaceSlackChannelsSettings>;
 

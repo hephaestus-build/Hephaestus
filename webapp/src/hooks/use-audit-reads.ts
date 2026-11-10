@@ -12,16 +12,15 @@ import {
 import { adminExportAuthEvents } from "@/api/sdk.gen";
 import type { AdminExportAuthEventsData } from "@/api/types.gen";
 import { auditRows } from "@/components/admin/audit/audit-list";
-import type { AuditSearch, ConfigAuditSearch } from "@/components/admin/audit/audit-search";
 import {
-	type AuthAuditPanelProps,
+	type AuditSearch,
 	authAuditFilters,
-} from "@/components/admin/audit/AuthAuditPanel";
-import {
-	type ConfigAuditPanelProps,
+	type ConfigAuditSearch,
 	configAuditFilters,
 	configAuditQuery,
-} from "@/components/admin/audit/ConfigAuditPanel";
+} from "@/components/admin/audit/audit-search";
+import type { AuthAuditPanelProps } from "@/components/admin/audit/AuthAuditPanel";
+import type { ConfigAuditPanelProps } from "@/components/admin/audit/ConfigAuditPanel";
 import { saveTextFile } from "@/lib/download";
 import { formatNumber } from "@/lib/numbers";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";

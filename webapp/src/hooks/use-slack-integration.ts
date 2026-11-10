@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { useState } from "react";
 import { toast } from "@/lib/toast";
 
 import {
@@ -8,7 +7,6 @@ import {
 	getWorkspaceOptions,
 	initiateMutation,
 	listSlackChannelCandidatesOptions,
-	listSlackChannelConsentEventsOptions,
 	listSlackChannelConsentEventsQueryKey,
 	listSlackChannelsOptions,
 	registerSlackChannelMutation,
@@ -27,6 +25,7 @@ import type {
 } from "@/components/admin/integrations/WorkspaceSlackConnectionSettings";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { useConnectionSync } from "@/hooks/use-connection-sync";
+import { useSlackConsentHistory } from "@/hooks/use-slack-consent-history";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
@@ -111,7 +110,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 	const slackChannelCandidatesQueryOptions = listSlackChannelCandidatesOptions({
 		path: { workspaceSlug },
 	});
-	const history = useConsentHistory(workspaceSlug);
+	const history = useSlackConsentHistory(workspaceSlug);
 
 	const candidatesQuery = useQuery({
 		...slackChannelCandidatesQueryOptions,
@@ -313,34 +312,8 @@ export function useSlackIntegration(workspaceSlug: string) {
 			onRegisterChannel: handleRegisterChannel,
 			onUpdateConsent: handleUpdateConsent,
 			onRemoveChannel: handleRemoveChannel,
-			consentHistory: history.consentHistory,
-			onViewHistory: history.onViewHistory,
+			...history,
 		} satisfies WorkspaceSlackChannelsSettingsProps,
-	};
-}
-
-/**
- * The consent history of the channel whose sheet opened last. It is read from the first open on, and
- * a second open of the same channel reuses the cached read.
- */
-function useConsentHistory(workspaceSlug: string) {
-	const [slackChannelId, setSlackChannelId] = useState<string | null>(null);
-	const query = useQuery({
-		...listSlackChannelConsentEventsOptions({
-			path: { workspaceSlug, slackChannelId: slackChannelId ?? "" },
-		}),
-		enabled: slackChannelId !== null,
-	});
-	return {
-		consentHistory: {
-			events: query.data,
-			isLoading: query.isLoading,
-			error: query.isError ? query.error : undefined,
-			onRetry: () => {
-				void query.refetch();
-			},
-		},
-		onViewHistory: setSlackChannelId,
 	};
 }
 

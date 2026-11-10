@@ -234,7 +234,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		await removeCollection.mutateAsync({ path: { workspaceSlug, collectionId } });
 	};
 
-	const candidates = useCollectionCandidates(workspaceSlug);
+	const candidates = useCollectionCandidates(workspaceSlug, isConnectionActive);
 
 	return {
 		// Exposed even when SUSPENDED: reading job history is safe, and a suspended connection is when
@@ -297,13 +297,17 @@ export function useOutlineIntegration(workspaceSlug: string) {
 
 /**
  * The Add collections dialog and the collections Outline lists for it. Each open reads the list
- * again, so a collection shared with the bot a moment ago appears.
+ * again, so a collection shared with the bot a moment ago appears. The dialog belongs to an active
+ * connection: when the connection stops, it closes, and a later reconnect does not reopen it.
  */
-function useCollectionCandidates(workspaceSlug: string) {
+function useCollectionCandidates(workspaceSlug: string, connectionActive: boolean) {
 	const [addOpen, setAddOpen] = useState(false);
+	if (addOpen && !connectionActive) {
+		setAddOpen(false);
+	}
 	const query = useQuery({
 		...listOutlineCollectionCandidatesOptions({ path: { workspaceSlug } }),
-		enabled: addOpen,
+		enabled: addOpen && connectionActive,
 		staleTime: 0,
 		retry: false,
 	});

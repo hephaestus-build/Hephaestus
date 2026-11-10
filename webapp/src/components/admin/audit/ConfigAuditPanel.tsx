@@ -2,8 +2,7 @@ import type { ConfigAuditEntryView } from "@/api/types.gen";
 import type { AuditListState } from "@/components/admin/audit/audit-list";
 import {
 	type ConfigAuditSearch,
-	dayAfterInstant,
-	dayStartInstant,
+	configAuditFilters,
 	fromDateRange,
 	toDateRange,
 } from "@/components/admin/audit/audit-search";
@@ -15,29 +14,10 @@ import { FacetMultiSelect, toFacetOptions } from "@/components/common/FacetMulti
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
-import { narrowToEnum, nonEmpty } from "@/lib/search-params";
+import { nonEmpty } from "@/lib/search-params";
 
 const ENTITY_TYPE_OPTIONS = toFacetOptions(ENTITY_TYPE_LABELS);
 const ACTION_OPTIONS = toFacetOptions(ACTION_LABELS);
-const ENTITY_TYPES = ENTITY_TYPE_OPTIONS.map((option) => option.value);
-const ACTIONS = ACTION_OPTIONS.map((option) => option.value);
-
-/** The server's filters for the settings changes that `search` asks for. */
-export function configAuditFilters(search: ConfigAuditSearch) {
-	const dateRange = toDateRange(search);
-	return {
-		entityType: narrowToEnum(search.entityType, ENTITY_TYPES),
-		action: narrowToEnum(search.action, ACTIONS),
-		actorId: search.actorId,
-		from: dateRange?.from ? dayStartInstant(dateRange.from) : undefined,
-		to: dateRange?.to ? dayAfterInstant(dateRange.to) : undefined,
-	};
-}
-
-/** One page of the settings changes that `search` asks for. */
-export function configAuditQuery(search: ConfigAuditSearch, size: number) {
-	return { size, ...configAuditFilters(search) };
-}
 
 export interface ConfigAuditPanelProps {
 	search: ConfigAuditSearch;

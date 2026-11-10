@@ -54,7 +54,7 @@ function setup(overrides: Partial<WorkspaceSlackChannelsSettingsProps> = {}) {
 		onUpdateConsent: vi.fn<WorkspaceSlackChannelsSettingsProps["onUpdateConsent"]>(),
 		onRemoveChannel: vi.fn<WorkspaceSlackChannelsSettingsProps["onRemoveChannel"]>(),
 		consentHistory: { isLoading: false, onRetry: vi.fn() },
-		onViewHistory: vi.fn<WorkspaceSlackChannelsSettingsProps["onViewHistory"]>(),
+		onHistoryOpenChange: vi.fn<WorkspaceSlackChannelsSettingsProps["onHistoryOpenChange"]>(),
 		...overrides,
 	};
 	render(<WorkspaceSlackChannelsSettings {...props} />);

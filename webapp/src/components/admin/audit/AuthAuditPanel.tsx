@@ -6,8 +6,7 @@ import { EVENT_TYPE_LABELS } from "@/components/admin/audit/audit-format";
 import type { AuditListState } from "@/components/admin/audit/audit-list";
 import {
 	type AuditSearch,
-	dayAfterInstant,
-	dayStartInstant,
+	authAuditFilters,
 	fromDateRange,
 	toDateRange,
 } from "@/components/admin/audit/audit-search";
@@ -19,29 +18,14 @@ import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { narrowToEnum, nonEmpty } from "@/lib/search-params";
+import { nonEmpty } from "@/lib/search-params";
 
 const EVENT_TYPE_OPTIONS = toFacetOptions(EVENT_TYPE_LABELS);
-const EVENT_TYPES = EVENT_TYPE_OPTIONS.map((option) => option.value);
 
 const OUTCOME_OPTIONS = [
 	{ value: "SUCCESS", label: "Success" },
 	{ value: "FAILURE", label: "Failure" },
 ];
-const OUTCOMES: ("SUCCESS" | "FAILURE")[] = ["SUCCESS", "FAILURE"];
-
-/** The server's filters for the auth events that `search` asks for. */
-export function authAuditFilters(search: AuditSearch) {
-	const dateRange = toDateRange(search);
-	return {
-		eventType: narrowToEnum(search.eventType, EVENT_TYPES),
-		result: narrowToEnum(search.outcome, OUTCOMES),
-		accountId: search.accountId,
-		actingAccountId: search.actorId,
-		from: dateRange?.from ? dayStartInstant(dateRange.from) : undefined,
-		to: dateRange?.to ? dayAfterInstant(dateRange.to) : undefined,
-	} as const;
-}
 
 export interface AuthAuditPanelProps {
 	search: AuditSearch;
