@@ -500,15 +500,22 @@ async function agentSandbox(): Promise<void> {
 	await kubectl(["apply", "--server-side", "-f", AGENT_SANDBOX]);
 	// The one-host platform's RuntimeClass. Only a cluster whose nodes have runsc can run its Pods.
 	await kubectl(["apply", "--server-side", "-f", RUNTIME_CLASS]);
-	await kubectl([
-		"wait",
-		"--for=condition=Established",
+	const definitions = [
 		"crd/sandboxes.agents.x-k8s.io",
 		"crd/sandboxtemplates.extensions.agents.x-k8s.io",
 		"crd/sandboxclaims.extensions.agents.x-k8s.io",
 		"crd/sandboxwarmpools.extensions.agents.x-k8s.io",
+	];
+	// A new definition's .status.conditions is null until the API server first writes its status. A condition wait
+	// fails on a null list rather than waiting, but a JSONPath index into it waits. Once the list exists, the
+	// condition wait waits for Established.
+	await kubectl([
+		"wait",
+		"--for=jsonpath={.status.conditions[0].type}",
+		...definitions,
 		"--timeout=2m",
 	]);
+	await kubectl(["wait", "--for=condition=Established", ...definitions, "--timeout=2m"]);
 	await kubectl([
 		"-n",
 		"agent-sandbox-system",
