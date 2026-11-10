@@ -242,25 +242,62 @@ await test("a release publishes one signed k3s bundle, and the smoke runs what o
 	// Signed and verified with the release identity, then uploaded with its signature.
 	assert.match(
 		step("Sign release image lock"),
-		/for lock in "\$JOINT" "\$K3S_BUNDLE"; do\n\s+node scripts\/keyless-sign\.ts sign-blob/u,
+		/for lock in "\$JOINT" "\$K3S_BUNDLE" "\$EXTENSION_PACKAGE"; do\n\s+node scripts\/keyless-sign\.ts sign-blob/u,
 	);
 	assert.match(
 		step("Verify signature with the deploy-side identity (fail fast)"),
-		/for lock in "\$JOINT" "\$K3S_BUNDLE"; do\n\s+cosign verify-blob/u,
+		/for lock in "\$JOINT" "\$K3S_BUNDLE" "\$EXTENSION_PACKAGE"; do\n\s+cosign verify-blob/u,
 	);
 	assert.match(
 		step("Upload release image lock to GitHub Release"),
-		/"\$K3S_BUNDLE" "\$\{K3S_BUNDLE\}\.sigstore\.json" evidence\/\*/u,
+		/"\$K3S_BUNDLE" "\$\{K3S_BUNDLE\}\.sigstore\.json" \\\n\s+"\$EXTENSION_PACKAGE" "\$\{EXTENSION_PACKAGE\}\.sigstore\.json" evidence\/\*/u,
 	);
 	// No loose k3s file is collected, signed or uploaded.
 	assert.doesNotMatch(release, /k3s-platform\/|cp deploy\/platform|find evidence -name 'k3s-/u);
 	// The smoke downloads the bundle, checks its signature, and unpacks it before the installer runs.
 	const smoke = readFileSync(".github/workflows/release-host-smoke.yml", "utf8");
 	assert.match(smoke, /bundle="hephaestus-k3s-\$\{TAG#v\}\.tar\.gz"/u);
-	assert.match(release, /gh attestation verify "\$k3s"/u);
+	assert.match(
+		release,
+		/for asset in "hephaestus-k3s-\$\{TAG_NAME#v\}\.tar\.gz" "hephaestus-chrome-extension-\$\{TAG_NAME#v\}\.zip"; do/u,
+	);
+	assert.match(release, /gh attestation verify "evidence\/\$asset"/u);
 	assert.match(smoke, /cosign verify-blob --bundle "k3s-download\/\$bundle\.sigstore\.json"/u);
 	assert.match(smoke, /tar -xzf "k3s-download\/\$bundle" -C k3s-assets/u);
 	assert.doesNotMatch(smoke, /--pattern 'k3s-\*'/u);
+});
+
+await test("a release signs the extension package that its read-only job built", () => {
+	const workflow: unknown = parseDocument(release).toJS();
+	const job = (name: string) => asRecord(at(workflow, ["jobs", name], name), name);
+	const steps = (name: string) =>
+		asArray(job(name).steps, `${name}.steps`).map((value, index) =>
+			asRecord(value, `${name}.steps[${index}]`),
+		);
+	// The job that runs the dependencies holds no write, signing or registry permission.
+	assert.deepEqual(job("extension-package").permissions, { contents: "read" });
+	const build = asString(
+		steps("extension-package").find((step) => step.id === "build")?.run,
+		"extension build",
+	);
+	assert.match(build, /vp run build:extension\n\s*node scripts\/check-extension-package\.ts/u);
+	// The signer unpacks the artifact into its own folder and accepts only the digest the build reported.
+	const download = steps("tag-images").find(
+		(step) => step.name === "Download the extension package",
+	);
+	assert.equal(asRecord(download?.with, "download").path, "extension-package");
+	const subjects = asString(
+		steps("tag-images").find((step) => step.name === "Generate subject checksums")?.run,
+		"subjects",
+	);
+	assert.match(
+		subjects,
+		/printf '%s {2}%s\\n' "\$EXTENSION_SHA256" "\$EXTENSION_PACKAGE" \| sha256sum --check --strict/u,
+	);
+	assert.match(
+		subjects,
+		/"\$EXTENSION_SHA256" "\$\(basename "\$EXTENSION_PACKAGE"\)" >> subjects\.sha256/u,
+	);
 });
 
 await test("release evidence waits for the digest-bound sandbox checks", () => {

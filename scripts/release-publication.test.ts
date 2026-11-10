@@ -63,6 +63,11 @@ const jointLock = `release-${release}.chart.json`;
 /** The k3s bundle, in the job's workspace as release.yml builds it: the only k3s asset of a release. */
 const k3sBundleFor = (tag: string) => `hephaestus-k3s-${tag.slice(1)}.tar.gz`;
 const k3sBundle = k3sBundleFor(release);
+/** The Chrome extension package, downloaded into the job's workspace from the job that builds it. */
+const extensionPackageFor = (tag: string) => `hephaestus-chrome-extension-${tag.slice(1)}.zip`;
+const extensionPackage = extensionPackageFor(release);
+/** The assets that the producer signs in its workspace and the writer uploads. They are not evidence. */
+const workspaceAssets = [k3sBundle, extensionPackage];
 /** A synthetic Cosign bundle: a JSON object naming the signed bytes. It proves nothing about Sigstore. */
 const bundle = (bytes: string | Uint8Array) => JSON.stringify({ sha256: hash(bytes) });
 const sign = async (file: string) =>
@@ -511,13 +516,14 @@ async function fixture(directory: string, source = commit, tag = release) {
 	for (const file of ["SHA256SUMS", fixtureJointLock]) {
 		await sign(path.join(archive, file));
 	}
-	// The k3s bundle: built in the job's workspace, where the producer signs it, and published beside
-	// the locks. It is not evidence.
-	const bundleName = k3sBundleFor(fixtureRelease);
-	for (const folder of [directory, archive]) {
-		await writeFile(path.join(folder, bundleName), `k3s bundle of ${source}\n`);
+	// The k3s bundle and the extension package: in the job's workspace, where the producer signs
+	// them, and published beside the locks. They are not evidence.
+	for (const name of [k3sBundleFor(fixtureRelease), extensionPackageFor(fixtureRelease)]) {
+		for (const folder of [directory, archive]) {
+			await writeFile(path.join(folder, name), `${name} of ${source}\n`);
+		}
+		await sign(path.join(archive, name));
 	}
-	await sign(path.join(archive, bundleName));
 	// The chart is not evidence: the registry, not the release, holds the package and its signature.
 	// Its values pin the images of the lock that the evidence makes.
 	const pinned = releaseValuesLines(
@@ -632,6 +638,8 @@ const refusalReasons = new Map([
 	["missing-sbom", /sha256sum failed/u],
 	["tampered-k3s-bundle", /Signature mismatch/u],
 	["missing-k3s-bundle", /The release has no hephaestus-k3s-0\.93\.0\.tar\.gz/u],
+	["tampered-extension-package", /Signature mismatch/u],
+	["missing-extension-package", /The release has no hephaestus-chrome-extension-0\.93\.0\.zip/u],
 	["authority-unavailable", /Release authority unavailable/u],
 	["newer-patch", authorityRefusal],
 	["newer-minor", authorityRefusal],
@@ -649,13 +657,21 @@ const refusalReasons = new Map([
 	["chart-attestation-missing", /no matching attestations found/u],
 ]);
 
-/** The k3s bundle of a published release, changed as the bundle scenarios need. Other scenarios change none. */
-async function tamperK3sBundle(scenario: string, archive: string): Promise<void> {
-	if (scenario === "tampered-k3s-bundle") {
-		await writeFile(path.join(archive, k3sBundle), "a bundle that was not signed\n");
-	}
-	if (scenario === "missing-k3s-bundle") {
-		await rm(path.join(archive, k3sBundle));
+/** The workspace assets by the scenario names that change them. */
+const workspaceAssetScenarios = new Map([
+	["k3s-bundle", k3sBundle],
+	["extension-package", extensionPackage],
+]);
+
+/** A workspace asset of a published release, changed as its scenarios need. Other scenarios change none. */
+async function tamperWorkspaceAsset(scenario: string, archive: string): Promise<void> {
+	for (const [name, asset] of workspaceAssetScenarios) {
+		if (scenario === `tampered-${name}`) {
+			await writeFile(path.join(archive, asset), "an asset that was not signed\n");
+		}
+		if (scenario === `missing-${name}`) {
+			await rm(path.join(archive, asset));
+		}
 	}
 }
 
@@ -725,6 +741,8 @@ for (const scenario of [
 	"missing-sbom",
 	"tampered-k3s-bundle",
 	"missing-k3s-bundle",
+	"tampered-extension-package",
+	"missing-extension-package",
 	"wrong-commit",
 	"mutable-publication",
 	"newer-patch",
@@ -819,7 +837,7 @@ for (const scenario of [
 			if (scenario === "missing-sbom") {
 				await rm(path.join(archive, "webapp-linux-arm64.spdx.json"));
 			}
-			await tamperK3sBundle(scenario, archive);
+			await tamperWorkspaceAsset(scenario, archive);
 			if (scenario === "wrong-commit") {
 				const lock = path.join(archive, jointLock);
 				const contents = await readFile(lock, "utf8");
@@ -919,13 +937,15 @@ async function laterEvidence(directory: string) {
 	const evidence = path.join(directory, "evidence");
 	await mkdir(evidence);
 	for (const file of await readdir(archive)) {
-		// The bundle is built in the workspace, not downloaded evidence.
-		if (!remoteState.has(file) && !file.startsWith("hephaestus-k3s-")) {
+		// The bundle and the package are in the workspace, not downloaded evidence.
+		if (!remoteState.has(file) && !workspaceAssets.some((asset) => file.startsWith(asset))) {
 			await copyFile(path.join(archive, file), path.join(evidence, file));
 		}
 	}
 	// What the producer signed in the job's workspace before the writer uploads it.
-	await sign(path.join(directory, k3sBundle));
+	for (const asset of workspaceAssets) {
+		await sign(path.join(directory, asset));
+	}
 	const notes = `## ${release.slice(1)}\n\nComplete release notes.\n`;
 	const notesDirectory = path.join(directory, "release-notes");
 	await mkdir(notesDirectory);
@@ -947,6 +967,7 @@ async function laterEvidence(directory: string) {
 		ATTESTATION: attestation,
 		JOINT: `evidence/${jointLock}`,
 		K3S_BUNDLE: k3sBundle,
+		EXTENSION_PACKAGE: extensionPackage,
 		MIGRATIONS: "false",
 	};
 }
@@ -1021,8 +1042,9 @@ for (const scenario of ["absent", "same-source-draft", ...writerRefusals.keys()]
 					await readFile(path.join(archive, jointLock)),
 					await readFile(path.join(directory, evidence.JOINT)),
 				);
-				// The k3s bundle and its signature are the only k3s assets that the release gets.
-				for (const file of [k3sBundle, `${k3sBundle}.sigstore.json`]) {
+				// The k3s bundle, the extension package and their signatures, from the job's workspace.
+				// They are the only k3s and extension assets that the release gets.
+				for (const file of workspaceAssets.flatMap((asset) => [asset, `${asset}.sigstore.json`])) {
 					assert.deepEqual(
 						await readFile(path.join(archive, file)),
 						await readFile(path.join(directory, file)),
@@ -1311,6 +1333,7 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 				GITHUB_OUTPUT: path.join(directory, "outputs"),
 				JOINT: jointLock,
 				K3S_BUNDLE: k3sBundle,
+				EXTENSION_PACKAGE: extensionPackage,
 				CHART_PACKAGE: path.join(directory, "chart", chartPackage),
 			},
 			producer,
@@ -1382,7 +1405,7 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 			`${chart.repository}@${chart.digest}`,
 			pushed,
 		]);
-		for (const file of [jointLock, k3sBundle]) {
+		for (const file of [jointLock, ...workspaceAssets]) {
 			const signature = asRecord(
 				parseJson(await readFile(path.join(directory, `${file}.sigstore.json`), "utf8")),
 				file,

@@ -15,13 +15,50 @@ On a repository's list, a person can preview one row's work as one line inside t
 
 The extension runs on desktop Chrome only.
 It is not yet in the Chrome Web Store.
-Until publication, you distribute a build yourself (see [Deploy it to your users](#deploy-it-to-your-users)).
-An unpacked build without a manifest public key has an installation-dependent id.
+Each release publishes it as a signed package, `hephaestus-chrome-extension-X.Y.Z.zip`.
+Until store publication, you [get that package](#get-the-extension-package) and [deploy it to your users](#deploy-it-to-your-users).
+
+Chrome gives each unpacked folder its own id.
 Read the actual id from Chrome.
-Keep its installation directory stable.
+Keep the folder in one place.
 
 A store draft supplies a stable id before publication.
 The [contributor release guide](/contributor/browser-extension#releasing-to-the-chrome-web-store) explains how to test a build with that id.
+
+## Get the extension package
+
+Take the package of the release that your server runs.
+Download it, its signature, and the release attestation, then verify both:
+
+```bash
+VERSION=X.Y.Z # the release, without the leading "v"
+PACKAGE="hephaestus-chrome-extension-$VERSION.zip"
+gh release download "v$VERSION" --repo hephaestus-build/Hephaestus \
+  --pattern "$PACKAGE" --pattern "$PACKAGE.sigstore.json" \
+  --pattern "release-v$VERSION.intoto.jsonl"
+cosign verify-blob \
+  --bundle "$PACKAGE.sigstore.json" \
+  --certificate-identity \
+    'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  "$PACKAGE"
+gh attestation verify "$PACKAGE" \
+  --bundle "release-v$VERSION.intoto.jsonl" \
+  --predicate-type https://in-toto.io/attestation/release/v0.1 \
+  --repo hephaestus-build/Hephaestus
+```
+
+`cosign verify-blob` proves that the release workflow of Hephaestus signed these exact bytes.
+`gh attestation verify` proves that the package is a subject of that release.
+If either command fails, do not distribute the package.
+
+The release builds the package once, from the released commit.
+Before it signs the package, it checks the manifest against the [release package contract](/contributor/browser-extension#commands).
+The source SBOMs of the release list the extension's JavaScript dependencies.
+[Release assets](./release-image-lock#release-assets) lists the other assets of a release.
+
+The package is the same ZIP that the Chrome Web Store takes.
+It is not a signed `.crx`.
 
 ## Allow the extension to sign in
 
@@ -113,13 +150,16 @@ Feedback approval and rejection stay in the web app.
 
 Distribution depends on how users' Chrome installations are managed:
 
-- **Unmanaged Chrome.** Users load your unpacked build from `chrome://extensions` with **Developer mode** on.
+- **Unmanaged Chrome.** Give users the package that you verified.
+  They unzip it and load the folder from `chrome://extensions` with **Developer mode** on, as the [user guide](/user/browser-extension#install-it) describes.
   Chrome labels it as unpacked.
   It does not update itself.
+  Each user's folder has its own id: users send you theirs, and you add it to `HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS`.
   Some organizations disable developer mode.
 - **Managed Chrome.** [`ExtensionInstallForcelist`](https://chromeenterprise.google/policies/#ExtensionInstallForcelist) installs an extension for every managed profile.
   Each entry has an extension id and update address.
   An off-store package must be a signed `.crx` that you host with an update manifest.
+  The release package is a ZIP, so you pack and sign the `.crx` with your own key.
   See [self-hosting](https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux).
   Chrome accepts off-store force-installs only on machines that meet its management requirements.
   For example, Windows and macOS require a domain-joined, MDM-managed, or cloud-enrolled browser.

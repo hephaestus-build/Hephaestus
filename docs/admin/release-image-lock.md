@@ -33,13 +33,15 @@ The signing identity is `release.yml` on `main` in `hephaestus-build/Hephaestus`
 | `release-vX.Y.Z.chart.json` and its `.sigstore.json` bundle | The joint lock of schema version 2. | [Chart verification](./kubernetes#verify-the-release-chart), the installer and the reconciler. |
 | The chart at `ghcr.io/hephaestus-build/charts/hephaestus@sha256:…`, signed in the registry | Release metadata and references to all images from the signed joint lock, by digest. | Helm, after chart verification. |
 | `hephaestus-k3s-X.Y.Z.tar.gz` and its `.sigstore.json` bundle | The installer and the platform and host configuration, in one archive. | [Install on one host](./kubernetes#install-on-one-host-k3s). |
-| `release-vX.Y.Z.intoto.jsonl` | The release attestation bundle. Subjects include the first-party image digests, chart manifest and package, joint lock and k3s bundle. | [Independent verification](#independent-verification). |
+| `hephaestus-chrome-extension-X.Y.Z.zip` and its `.sigstore.json` bundle | The production Chrome extension, the ZIP that the Chrome Web Store takes. | [Get the extension package](./browser-extension#get-the-extension-package). |
+| `release-vX.Y.Z.intoto.jsonl` | The release attestation bundle. Subjects include the first-party image digests, chart manifest and package, joint lock, k3s bundle and extension package. | [Independent verification](#independent-verification). |
 | `manifest.json`, SBOMs, vulnerability and license reports, and signed `SHA256SUMS` | Per-platform release evidence. | [Operator verification](/contributor/release-management#operator-verification). |
 | `source.syft.json`, `source.spdx.json`, `source.cdx.json` | The source and build inventory, separate from installed runtime packages. | [Supply-chain evidence](/contributor/release-management#supply-chain-evidence) describes its scope and signed verification. |
 | `host-smoke-k3s-amd64.json`, `host-smoke-k3s-arm64.json` | The native k3s install, repeated-install, upgrade and isolation qualification records. | Operators who check the hosts that the release passed on. |
 
 A stable release that promotes a qualified candidate keeps its image digests.
 The chart is packaged from the same source with stable release metadata.
+The extension package is built from the same source with the stable version.
 The joint lock names the new chart digest.
 Image build metadata retains the candidate version. The chart reports the stable release and source commit.
 
