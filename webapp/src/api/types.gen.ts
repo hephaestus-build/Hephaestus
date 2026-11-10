@@ -6843,9 +6843,9 @@ export type Workspace = {
      */
     slackConnectionId?: number;
     /**
-     * Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)
+     * Current lifecycle status of the workspace
      */
-    status: string;
+    status: 'ACTIVE' | 'SUSPENDED' | 'PURGED';
     /**
      * Timestamp when the workspace was last updated
      */
@@ -6948,9 +6948,9 @@ export type WorkspaceListItem = {
      */
     publishesPublicActivity: boolean;
     /**
-     * Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)
+     * Current lifecycle status of the workspace
      */
-    status: string;
+    status: 'ACTIVE' | 'SUSPENDED' | 'PURGED';
     /**
      * Canonical workspace address. Uses the apex path when subdomains are off.
      */

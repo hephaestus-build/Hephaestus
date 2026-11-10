@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceListData;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -22,8 +22,8 @@ public record WorkspaceListItemDTO(
         @NonNull @Schema(description = "Human-readable name of the workspace")
         String displayName,
 
-        @NonNull @Schema(description = "Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)")
-        String status,
+        @NonNull @Schema(description = "Current lifecycle status of the workspace")
+        WorkspaceStatus status,
 
         @NonNull @Schema(description = "Git provider account login associated with this workspace")
         String accountLogin,
@@ -53,13 +53,13 @@ public record WorkspaceListItemDTO(
                 workspace.workspaceSlug(),
                 workspaceAddress,
                 workspace.displayName(),
-                workspace.status().name(),
+                workspace.status(),
                 workspace.accountLogin(),
                 providerType,
                 workspace.createdAt(),
                 workspace.practicesEnabled(),
                 instanceAllowsPublicActivity
-                        && workspace.status() == Workspace.WorkspaceStatus.ACTIVE
+                        && workspace.status() == WorkspaceStatus.ACTIVE
                         && Boolean.TRUE.equals(workspace.publicActivityEnabled()));
     }
 }

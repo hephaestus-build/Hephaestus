@@ -222,7 +222,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         WorkspaceDTO workspace = Objects.requireNonNull(created, "Workspace creation response was null");
         assertThat(workspace.workspaceSlug()).isEqualTo("controller-space");
-        assertThat(workspace.status()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE.name());
+        assertThat(workspace.status()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
         assertThat(workspace.providerType()).isEqualTo(IdentityProviderType.GITHUB);
         assertThat(workspace.serverUrl()).isEqualTo("https://github.com");
 
@@ -1214,7 +1214,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(suspended).isNotNull();
-        assertThat(suspended.status()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED.name());
+        assertThat(suspended.status()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
 
         Workspace suspendedEntity =
                 workspaceRepository.findById(workspace.getId()).orElseThrow();
@@ -1234,7 +1234,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(resumed).isNotNull();
-        assertThat(resumed.status()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE.name());
+        assertThat(resumed.status()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
 
         Workspace resumedEntity =
                 workspaceRepository.findById(workspace.getId()).orElseThrow();
@@ -1275,7 +1275,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(suspended).isNotNull();
-        assertThat(suspended.status()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED.name());
+        assertThat(suspended.status()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
 
         WorkspaceDTO resumed = webTestClient
                 .patch()
@@ -1291,7 +1291,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(resumed).isNotNull();
-        assertThat(resumed.status()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE.name());
+        assertThat(resumed.status()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
 
         Workspace resumedEntity =
                 workspaceRepository.findById(workspace.getId()).orElseThrow();

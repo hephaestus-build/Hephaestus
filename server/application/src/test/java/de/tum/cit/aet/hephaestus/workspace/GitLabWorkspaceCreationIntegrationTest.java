@@ -540,7 +540,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(workspace.kind()).isEqualTo("GITLAB");
         assertThat(workspace.providerType()).isEqualTo(IdentityProviderType.GITLAB);
         assertThat(workspace.serverUrl()).isEqualTo(DEFAULT_INSTANCE);
-        assertThat(workspace.status()).isEqualTo("ACTIVE");
+        assertThat(workspace.status()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
         assertThat(workspace.hasPersonalAccessToken()).isTrue();
 
         Workspace persisted = workspaceRepository.findById(workspace.id()).orElseThrow();

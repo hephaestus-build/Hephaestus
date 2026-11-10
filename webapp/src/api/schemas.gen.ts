@@ -20424,7 +20424,12 @@ export const WorkspaceSchema = {
         },
         status: {
             type: 'string',
-            description: 'Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)'
+            description: 'Current lifecycle status of the workspace',
+            enum: [
+                'ACTIVE',
+                'SUSPENDED',
+                'PURGED'
+            ]
         },
         updatedAt: {
             type: 'string',
@@ -20673,7 +20678,12 @@ export const WorkspaceListItemSchema = {
         },
         status: {
             type: 'string',
-            description: 'Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)'
+            description: 'Current lifecycle status of the workspace',
+            enum: [
+                'ACTIVE',
+                'SUSPENDED',
+                'PURGED'
+            ]
         },
         workspaceAddress: {
             type: 'string',

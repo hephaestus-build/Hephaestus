@@ -6163,7 +6163,11 @@ export const zWorkspace = z.object({
     publicActivityEnabled: z.boolean(),
     serverUrl: z.string().optional(),
     slackConnectionId: z.int().optional(),
-    status: z.string(),
+    status: z.enum([
+        'ACTIVE',
+        'SUSPENDED',
+        'PURGED'
+    ]),
     updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
     workspaceAddress: z.string(),
     workspaceSlug: z.string()
@@ -6241,7 +6245,11 @@ export const zWorkspaceListItem = z.object({
         'OUTLINE'
     ]).optional(),
     publishesPublicActivity: z.boolean(),
-    status: z.string(),
+    status: z.enum([
+        'ACTIVE',
+        'SUSPENDED',
+        'PURGED'
+    ]),
     workspaceAddress: z.string(),
     workspaceSlug: z.string()
 });
