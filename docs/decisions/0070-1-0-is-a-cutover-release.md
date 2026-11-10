@@ -1,6 +1,6 @@
 # ADR 0070: 1.0 is a cutover release
 
-**Status:** Accepted (amended 2026-10-28 — lease recovery requeues the claimed reviews; amended 2026-11-03 — F-2 removes the legacy feedback link resolver). Amended on 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
+**Status:** Accepted (amended 2026-10-28 — lease recovery requeues the claimed reviews; amended 2026-11-03 — F-2 removes the legacy feedback link resolver). Amended on 2026-11-09 by [ADR 0079](0079-one-agent-system.md). Amended 2026-11-10 — the webhook role stops in the cutover too.
 **Date:** 2026-10-28
 **Authors:** Felix T.J. Dietrich
 **Amends:** ADR 0058 (§ Supported deployment, § Notice and removal, gate 10), ADR 0041, ADR 0042 and ADR 0005.
@@ -176,3 +176,17 @@ The [retired words](../contributor/practice-feedback-language.md#retired-words) 
 - The drain of the workers in phase 1 stays a step of the 0.95 chart.
 
 The lanes that delete the worker and add `agent_run` update § Procedure and § In-flight work in the same pull requests.
+
+## Update — 2026-11-10: the webhook role stops in the cutover too
+
+This update amends § Procedure and § In-flight work for the webhook role.
+
+- The shipped procedure is [Stopped schema upgrades](../admin/kubernetes.mdx#stopped-schema-upgrades), and the [1.0 upgrade guide](../admin/upgrade-to-1-0.mdx) follows it.
+  Phase 1 sets `webhook.replicas` to 0 with the server and the worker. The webhook role thus does not receive during the window.
+  § Procedure step 2, "The webhook role keeps receiving into JetStream", no longer holds.
+  The migration entries that say **Stop every role** name the webhook role too.
+- Provider deliveries in the window reach no receiver.
+  - GitHub: the server redelivers the failed deliveries of its GitHub App from the last two hours after it starts.
+  - The other providers: the reconciliation sync recovers the effect of their deliveries.
+  - [Webhook ingestion operations](../admin/webhook-ingestion-operations.mdx) owns both rules. In a window longer than two hours, the sync also recovers the effect of the older GitHub deliveries.
+- § In-flight work, JetStream: the 1.0 server still reads every message that the previous receiver published before phase 1. No message is published during the window.
