@@ -2304,6 +2304,9 @@ The change can be the new release values, a new PostgreSQL configuration, or a n
 Phase 3 runs the new release's migration Job and starts its server alone.
 
 Before phase 1, record the current `worker.replicas`, and back up the database and the NATS JetStream data.
+On a host with [pull-based reconciliation](./pull-based-deployment#settings-for-the-chart), pause the timer before phase 1 and resume it after phase 4.
+A tick applies `/etc/hephaestus/chart.yaml` with its own replica counts.
+
 A count of 0 is a desired state.
 Check on the cluster that the pods stopped, that the sandbox Pods and Jobs are gone, and that the migrations completed before the next phase.
 Set `worker.replicas=0` to stop the workers.

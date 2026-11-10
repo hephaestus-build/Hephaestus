@@ -37,6 +37,7 @@ It restarts nothing.
 If its own request is not applied yet, for example after a failed apply, the host tries it again.
 Each promotion signs again, so a promotion of the target that already runs applies again.
 A frozen promotion of the target that already runs is the exception: it restarts nothing, unless it also asks for **refresh-database-image**.
+A change to the site values applies the target again, also on a frozen channel ([Settings for the chart](#settings-for-the-chart)).
 A frozen promotion that does not ask for it also replaces a request for that target that the host has not applied yet.
 
 `applied.json` records the last-applied request as `channelIdentity`.
@@ -202,6 +203,16 @@ Do not set `images` or `release` in it.
 The reconciler writes the verified pins to `/var/lib/hephaestus/chart/<target>.images.yaml`.
 That file is the last values file, so it overrides any image in your file.
 
+A change to `/etc/hephaestus/chart.yaml` or to `HEPHAESTUS_CHART_PROFILE` takes effect at the next tick.
+The reconciler records a digest of both in `applied.json`.
+When the current digest differs from the recorded digest, it applies the running target again.
+A change does not wait for a new promotion, and a frozen channel does not stop it.
+If that apply fails, the record keeps the old digest, and each tick tries again until you correct the file.
+
+Pause the timer while you edit the file, so that the tick does not read a half-written file.
+Also keep the timer paused while you hold replica counts by hand that the file does not carry, for example in [Database maintenance](./kubernetes#database-maintenance).
+When you resume the timer, the next tick applies the file with its own counts.
+
 A commit apply runs this command:
 
 ```bash
@@ -252,7 +263,9 @@ Record the stopped phase-1 Helm revision from `helm history <release> --namespac
 
 Verify the backups, record the worker and webhook counts, and use the verified source chart to stop all three roles.
 Wait until their Pods and every sandbox Pod and Job are removed.
-Then promote the target release and restart the timer for phase 2.
+Then promote the target release.
+Restart the timer for phase 2 only after the channel names the target.
+A tick before that applies your edited file to the source release and starts the writers again.
 
 The reconciler checks both its applied record and the installed chart version.
 For a major transition, it requires zero server and worker replicas in the installed values and no remaining writer workloads.
@@ -267,7 +280,7 @@ It never rolls old workloads onto a migrated database.
 
 After the server is ready, pause the timer and restore the recorded worker and webhook counts with the verified target chart, as phase 4 describes.
 Keep the desired worker and webhook counts in `/etc/hephaestus/chart.yaml`, then resume the timer.
-A new promotion of the same target can also restore that count after the cutover succeeds.
+After the cutover succeeds, a change to `/etc/hephaestus/chart.yaml` or a new promotion of the same target also restores that count.
 
 The reconciler removes no image on a chart host.
 The kubelet's image garbage collection removes unused images.
@@ -314,7 +327,7 @@ This version boundary does not apply to it.
 | Roll back                                              | Pause reconciliation, then follow [Rollback](./upgrade#rollback). After the database matches the older release, promote that release with **allow-rollback** |
 | Keep Staging on a release or commit                    | Promote it with **freeze**                                                                                                                                   |
 | Let Staging follow `main` again                        | Promote a commit of `main` with **freeze** cleared. The next successful build moves it on. Promoting the commit that runs applies it again                   |
-| Reapply chart configuration                            | Promote the release or commit the host already runs                                                                                                          |
+| Reapply chart configuration                            | Edit `/etc/hephaestus/chart.yaml`: the next tick applies it. To apply an unchanged file again, promote the release or commit the host already runs |
 | Move a following host onto the commit's database image | Promote the commit with **refresh-database-image**                                                                                                           |
 | Prevent new reconciliation runs                        | Use the timer-disable command below                                                                                                                          |
 | See what a host runs                                   | Use the applied-record command below                                                                                                                         |

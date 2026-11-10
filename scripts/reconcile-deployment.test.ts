@@ -34,6 +34,7 @@ import {
 	lockedReleaseCommit,
 	parseChannel,
 	readApplied,
+	valuesDigest,
 	renderMetrics,
 	requestIdentity,
 	serializeChannel,
@@ -103,6 +104,80 @@ await test("re-promoting the release a host already runs re-applies it, so drift
 		decide({ release: applied.release }, current, "c".repeat(40), newRequest, true),
 		{ action: "apply", release: applied.release },
 	);
+});
+
+await test("changed site values re-apply the running release, also on an unchanged or frozen channel", () => {
+	const reapply = { action: "apply", release: applied.release };
+	assert.deepEqual(
+		decide(
+			{ release: applied.release },
+			current,
+			applied.channelCommit,
+			appliedRequest,
+			false,
+			false,
+			true,
+		),
+		reapply,
+	);
+	assert.deepEqual(
+		decide(
+			{ release: applied.release, freeze: true },
+			current,
+			applied.channelCommit,
+			appliedRequest,
+			false,
+			false,
+			true,
+		),
+		reapply,
+	);
+	// Unchanged values keep the no-op.
+	assert.equal(
+		decide(
+			{ release: applied.release },
+			current,
+			applied.channelCommit,
+			appliedRequest,
+			false,
+			false,
+			false,
+		).action,
+		"noop",
+	);
+	// A divergent channel history is still refused, whatever the values.
+	assert.equal(
+		decide(
+			{ release: applied.release },
+			current,
+			"a".repeat(40),
+			appliedRequest,
+			false,
+			false,
+			true,
+		).action,
+		"refuse",
+	);
+	// Changed values do not let an older target through.
+	assert.equal(
+		decide({ release: "v0.75.1" }, current, "c".repeat(40), newRequest, true, true, true).action,
+		"refuse",
+	);
+});
+
+await test("the values digest follows the site values and the profiles, nothing else", () => {
+	const settings = {
+		release: "hephaestus",
+		namespace: "hephaestus",
+		profiles: ["small"],
+		helm: "helm",
+	};
+	const site = '{"config":{"commitIdentityResolutionEnabled":false}}\n';
+	const digest = valuesDigest(settings, site);
+	assert.match(digest, /^[0-9a-f]{64}$/u);
+	assert.equal(valuesDigest({ ...settings, helm: "/usr/local/bin/helm" }, site), digest);
+	assert.notEqual(valuesDigest(settings, site.replace("false", "true")), digest);
+	assert.notEqual(valuesDigest({ ...settings, profiles: ["small", "extra"] }, site), digest);
 });
 
 await test("a record from before requests were kept vouches only for its accepted commit", () => {
@@ -216,6 +291,11 @@ await test("only a missing applied-state file means first run", async () => {
 			}),
 		);
 		await assert.rejects(readApplied(corrupt), /ISO timestamp/u);
+		await writeFile(corrupt, JSON.stringify({ ...applied, valuesDigest: "not-a-digest" }));
+		await assert.rejects(readApplied(corrupt), /applied\.valuesDigest/u);
+		const withDigest = path.join(directory, "with-digest.json");
+		await writeFile(withDigest, JSON.stringify({ ...applied, valuesDigest: "e".repeat(64) }));
+		assert.deepEqual(await readApplied(withDigest), { ...applied, valuesDigest: "e".repeat(64) });
 
 		// The commit is kept from the first record that carried it, and an older record has none.
 		const withCommit = path.join(directory, "with-commit.json");
@@ -1236,6 +1316,7 @@ await test(
 				HEPHAESTUS_HELM: helm,
 				HEPHAESTUS_SECRETS: directory,
 			};
+			await writeFile(path.join(directory, "chart.yaml"), "{}\n");
 
 			const failed = fixture.run({
 				channel: "chart",
@@ -1292,6 +1373,48 @@ await test(
 			assert.equal(again.status, 0, again.stderr);
 			const after = await log();
 			assert.equal(after.length, calls);
+
+			// Changed site values apply the running release again, once, without a new promotion.
+			const siteValues = path.join(directory, "chart.yaml");
+			await writeFile(siteValues, '{"config":{"commitIdentityResolutionEnabled":true}}\n');
+			// A failed re-apply keeps the old record, so the next tick tries again.
+			const failedReapply = fixture.run({
+				channel: "chart",
+				environment: { ...environment, FAIL_HELM: "1" },
+			});
+			assert.notEqual(failedReapply.status, 0, "a failed re-apply fails the tick");
+			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), record);
+			const changed = fixture.run({ channel: "chart", environment });
+			assert.equal(changed.status, 0, changed.stderr);
+			assert.match(changed.stdout, /Site values changed: applying .* again/u);
+			const reapplied = await log();
+			assert.ok(reapplied.length > calls, "the changed values reach Helm");
+			assert.match(reapplied.at(-1) ?? "", /^upgrade --install hephaestus /u);
+			const recorded = await readApplied(path.join(directory, "applied.json"));
+			assert.ok(recorded, "the re-apply keeps its record");
+			assert.equal(recorded.release, release);
+			assert.equal(recorded.commit, record.commit);
+			assert.equal(recorded.previous, record.previous);
+			assert.notEqual(recorded.valuesDigest, record.valuesDigest);
+			const recordedDigest = recorded.valuesDigest;
+			assert.ok(
+				recordedDigest !== undefined && /^[0-9a-f]{64}$/u.test(recordedDigest),
+				"the record keeps the digest",
+			);
+			const steady = fixture.run({ channel: "chart", environment });
+			assert.equal(steady.status, 0, steady.stderr);
+			const unchangedLog = await log();
+			assert.equal(unchangedLog.length, reapplied.length);
+
+			// A record from before the digest was kept adopts the current values and calls Helm no more.
+			const legacy = { ...recorded, valuesDigest: undefined };
+			await writeFile(path.join(directory, "applied.json"), JSON.stringify(legacy));
+			const adopted = fixture.run({ channel: "chart", environment });
+			assert.equal(adopted.status, 0, adopted.stderr);
+			const adoptedLog = await log();
+			assert.equal(adoptedLog.length, reapplied.length);
+			const adoptedRecord = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(adoptedRecord?.valuesDigest, recordedDigest);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
