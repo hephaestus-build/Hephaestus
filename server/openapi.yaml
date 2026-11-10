@@ -213,6 +213,7 @@ paths:
             - INSTALLATION_EVENT_REPLAYED
             - GITHUB_INSTALLATION_ADOPTED
             - GITHUB_INSTALLATION_DECLINED
+            - WORKSPACE_OWNER_CHANGE
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -311,6 +312,7 @@ paths:
             - INSTALLATION_EVENT_REPLAYED
             - GITHUB_INSTALLATION_ADOPTED
             - GITHUB_INSTALLATION_DECLINED
+            - WORKSPACE_OWNER_CHANGE
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -409,6 +411,7 @@ paths:
             - INSTALLATION_EVENT_REPLAYED
             - GITHUB_INSTALLATION_ADOPTED
             - GITHUB_INSTALLATION_DECLINED
+            - WORKSPACE_OWNER_CHANGE
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -6128,7 +6131,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkspaceMembership"
-          description: OK
+          description: The member's role
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "The change grants, demotes or removes an owner and the caller\
+            \ has not signed in recently (problem type step-up-required), or the caller\
+            \ cannot manage the role"
       summary: Assign a workspace role
       tags:
       - membership
@@ -6178,6 +6189,14 @@ paths:
       responses:
         "204":
           description: Membership removed
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "The change grants, demotes or removes an owner and the caller\
+            \ has not signed in recently (problem type step-up-required), or the caller\
+            \ cannot manage the role"
       summary: Remove a workspace member
       tags:
       - membership

@@ -12,13 +12,21 @@ export interface WorkspaceChangeRoleDialogProps {
 	finalFocus?: ConfirmDialogProps<WorkspaceRoleChange>["finalFocus"];
 }
 
-/** `roleChangeAsksFirst` admits only these three: someone becomes an owner, or you lower your own role. */
-function copyFor({ name, from, to }: WorkspaceRoleChange) {
+/** `roleChangeAsksFirst` admits only these: someone becomes or stops being an owner, or you lower your own role. */
+function copyFor({ name, from, to, own }: WorkspaceRoleChange) {
 	if (to === "OWNER") {
 		return {
 			title: `Make ${name} an owner?`,
 			description: `${name} can then delete this workspace and change the role of anyone in it, including you.`,
 			action: "Make owner",
+			lowers: false,
+		};
+	}
+	if (from === "OWNER" && !own) {
+		return {
+			title: `Remove ${name}’s owner role?`,
+			description: `${name} can then no longer delete this workspace or change who owns it. Only an owner can make them an owner again.`,
+			action: "Remove owner role",
 			lowers: false,
 		};
 	}

@@ -223,3 +223,21 @@ Browser registration and verification are separate user actions; only the cookie
 ## Update — 2026-10-14 (#2656): the practice model cutover
 
 Superseded in part by [ADR 0056](0056-one-practice-model-for-items-and-scans.md) for accounts, provider identities and memberships.
+
+## Update — 2026-11-10: the recent sign-in gate covers workspace ownership
+
+The 2026-09 recent sign-in gate covered instance-admin actions and identity linking.
+Workspace role changes stayed outside it as a tenant's own configuration.
+That exemption no longer holds for the top tier of a workspace.
+A change that grants the owner role, or demotes or removes an owner, now requires the same recent sign-in.
+An owner can delete the workspace and change any role in it, so this change carries the same risk as granting instance admin.
+
+The gate uses the same policy, window, refusal and confirmation dialog.
+Only the member's current role decides whether a change needs it.
+Thus, `MembershipService.authorizeRoleChange` asks under the workspace lock instead of the method interceptor.
+The handlers declare `@RequiresRecentSignIn(OWNER_CHANGE)`.
+`RecentSignInByDefaultArchTest` now requires a declaration on every workspace role mutation.
+A refusal records `WORKSPACE_OWNER_CHANGE` on the authentication audit trail.
+
+Changes between member and admin, and an owner who lowers their own role, stay one confirmed step with the configuration audit row.
+[Instance administration](../contributor/instance-admin.md#recent-sign-in-gate) owns the enforcement details.

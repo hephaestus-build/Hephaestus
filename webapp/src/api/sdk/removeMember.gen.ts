@@ -3,12 +3,12 @@
 import { client } from '../client.gen.js';
 import type { RequestResult } from '../client/index.js';
 import type { Options } from '../sdk.gen.js';
-import type { RemoveMemberData, RemoveMemberResponses } from '../types.gen.js';
+import type { RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses } from '../types.gen.js';
 
 /**
  * Remove a workspace member
  */
-export const removeMember = <ThrowOnError extends boolean = false>(options: Options<RemoveMemberData, ThrowOnError>): RequestResult<RemoveMemberResponses, unknown, ThrowOnError> => (options.client ?? client).delete<RemoveMemberResponses, unknown, ThrowOnError>({
+export const removeMember = <ThrowOnError extends boolean = false>(options: Options<RemoveMemberData, ThrowOnError>): RequestResult<RemoveMemberResponses, RemoveMemberErrors, ThrowOnError> => (options.client ?? client).delete<RemoveMemberResponses, RemoveMemberErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/workspaces/{workspaceSlug}/members/{accountId}',
     ...options

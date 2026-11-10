@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
+import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceOwnerChangeAssurance;
+import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
@@ -47,6 +49,8 @@ public class MembershipService {
     private final MembershipSearch memberSearch;
     private final WorkspaceActorSelector actors;
     private final PublicActivityPolicy publicActivityPolicy;
+    // Only the server role changes roles over HTTP; the other roles never reach a gated change.
+    private final ObjectProvider<WorkspaceOwnerChangeAssurance> ownerChangeAssurance;
 
     public long accountIdForUser(long scmUserId) {
         var actor = providers
@@ -172,8 +176,8 @@ public class MembershipService {
 
     public Membership assignRole(Long workspaceId, Long accountId, Membership.WorkspaceRole role) {
         var workspace = lockForMembershipChange(workspaceId);
-        requireCanManageRole(workspace, role);
         var existing = memberships.findByWorkspace_IdAndId_AccountId(workspaceId, accountId);
+        authorizeRoleChange(workspace, accountId, existing.orElse(null), role);
         if (existing.isEmpty()) {
             var member = createMembership(workspace, accountId, role);
             configAudit.record(ConfigAuditEntry.created(
@@ -181,8 +185,6 @@ public class MembershipService {
             return member;
         }
         var member = existing.get();
-        requireCanManageRole(workspace, member.getRole());
-        if (role != Membership.WorkspaceRole.OWNER) requireNotLastOwner(workspace, member);
         var before = snapshot(member);
         member.setRole(role);
         member.setLeftAt(null);
@@ -194,8 +196,7 @@ public class MembershipService {
     public void removeMembership(Long workspaceId, Long accountId) {
         var workspace = lockForMembershipChange(workspaceId);
         var member = requireMembership(workspaceId, accountId);
-        requireCanManageRole(workspace, member.getRole());
-        requireNotLastOwner(workspace, member);
+        authorizeRoleChange(workspace, accountId, member, null);
         if (member.getLeftAt() != null) return;
         member.setLeftAt(clock.instant());
         configAudit.record(ConfigAuditEntry.deleted(
@@ -279,6 +280,32 @@ public class MembershipService {
         return workspaces
                 .findByIdForUpdate(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
+    }
+
+    /**
+     * The one decision for a change of {@code accountId}'s role to {@code target}, where {@code null} removes the
+     * member. Call it with the workspace that {@link #lockForMembershipChange} locked and the member read after the
+     * lock, before anything changes. The caller must be allowed to manage both the current and the target role, and
+     * the last owner stays. A change that grants an owner, or demotes or removes one, also needs a recent sign-in,
+     * except when the caller lowers their own role.
+     */
+    public void authorizeRoleChange(
+            Workspace workspace,
+            long accountId,
+            @Nullable Membership member,
+            Membership.@Nullable WorkspaceRole target) {
+        if (target != null) requireCanManageRole(workspace, target);
+        if (member != null) {
+            requireCanManageRole(workspace, member.getRole());
+            if (target != Membership.WorkspaceRole.OWNER) requireNotLastOwner(workspace, member);
+        }
+        var current = member == null || member.getLeftAt() != null ? null : member.getRole();
+        boolean grantsOwner = target == Membership.WorkspaceRole.OWNER && current != Membership.WorkspaceRole.OWNER;
+        boolean takesOwner = current == Membership.WorkspaceRole.OWNER && target != Membership.WorkspaceRole.OWNER;
+        boolean lowersOwnRole = takesOwner && Long.valueOf(accountId).equals(CurrentAccount.idOrNull());
+        if (grantsOwner || (takesOwner && !lowersOwnRole)) {
+            ownerChangeAssurance.getObject().requireRecentSignIn();
+        }
     }
 
     private void requireCanManageRole(Workspace workspace, Membership.WorkspaceRole role) {

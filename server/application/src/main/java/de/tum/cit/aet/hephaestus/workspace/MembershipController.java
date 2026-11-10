@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
 import de.tum.cit.aet.hephaestus.core.auth.validation.AccountId;
@@ -19,6 +21,7 @@ import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceMembershipDTO;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
@@ -31,6 +34,7 @@ import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -92,8 +96,18 @@ public class MembershipController {
 
     @PostMapping("/assign")
     @Operation(operationId = "assignMemberRole", summary = "Assign a workspace role")
+    @ApiResponse(
+            responseCode = "200",
+            description = "The member's role",
+            content = @Content(schema = @Schema(implementation = WorkspaceMembershipDTO.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "The change grants, demotes or removes an owner and the caller has not signed in recently"
+                    + " (problem type step-up-required), or the caller cannot manage the role",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_ROLE")
+    @RequiresRecentSignIn(RequiresRecentSignIn.When.OWNER_CHANGE)
     public ResponseEntity<WorkspaceMembershipDTO> assignRole(
             WorkspaceContext context, @Valid @RequestBody AssignRoleRequestDTO request) {
         Membership membership =
@@ -105,6 +119,7 @@ public class MembershipController {
     @Operation(operationId = "setMemberHidden", summary = "Change a member’s activity visibility")
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_ROLE")
+    @RecentSignInExempt(reason = "changes whether a member's activity shows, not what they can reach")
     public ResponseEntity<WorkspaceMembershipDTO> updateMemberVisibility(
             WorkspaceContext context,
             @PathVariable @AccountId String accountId,
@@ -117,8 +132,14 @@ public class MembershipController {
     @DeleteMapping("/{accountId}")
     @Operation(operationId = "removeMember", summary = "Remove a workspace member")
     @ApiResponse(responseCode = "204", description = "Membership removed")
+    @ApiResponse(
+            responseCode = "403",
+            description = "The change grants, demotes or removes an owner and the caller has not signed in recently"
+                    + " (problem type step-up-required), or the caller cannot manage the role",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_ROLE")
+    @RequiresRecentSignIn(RequiresRecentSignIn.When.OWNER_CHANGE)
     public ResponseEntity<Void> removeMember(WorkspaceContext context, @PathVariable @AccountId String accountId) {
         workspaceMembershipService.removeMembership(context.id(), accountId(accountId));
         return ResponseEntity.noContent().build();
