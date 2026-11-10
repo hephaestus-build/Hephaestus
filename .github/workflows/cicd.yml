@@ -1139,8 +1139,8 @@ jobs:
     with:
       leg: chart
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
-      # A pull request runs the chart and latest k3s on amd64. The queue adds the floor on both
-      # architectures and kind, using the commit that main receives.
+      # A pull request runs the chart and latest k3s on amd64. The queue adds the floor on amd64 and
+      # kind, using the commit that main receives. Only the nightly run adds arm64.
       queue: ${{ github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
 
   Kubernetes:

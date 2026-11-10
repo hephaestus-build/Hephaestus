@@ -1011,7 +1011,9 @@ Right after a merge, that run is still building, so the pull request builds ever
   Trivy copies each image layer to a temporary file after the builds have filled the root volume.
   Thus, `scripts/prepare-image-scan-runner.ts` gives the scans' temporary files the volume with the most free space.
 - A pull request that matches the `kubernetes` filter runs `Chart` and the latest k3s on amd64.
-  The merge queue also runs the lowest supported minor on amd64 and arm64 and `kind 1.37 Calico`.
+  The merge queue also runs the lowest supported minor on amd64 and `kind 1.35 Calico`.
+  Only the nightly run adds the lowest supported minor on arm64.
+  Runners limit the merge queue, so the queue does not wait for an arm64 runner.
   The kind leg removes kind's bind mounts over `/sys/devices/virtual/dmi/id` on each
   node, because with them no sandbox Pod with `hostUsers: false` can start. It tests the commit that `main` receives, so a pull request does not repeat
   them. A dispatch runs the same legs as the queue.

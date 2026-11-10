@@ -25,7 +25,11 @@ on:
         type: string
         required: true
       queue:
-        description: Whether to run the lowest minor on amd64 and arm64 and kind with Calico; a pull request runs the latest k3s alone
+        description: Whether to add the lowest minor on amd64 and kind with Calico; a pull request runs the latest k3s alone
+        type: boolean
+        default: false
+      arm64:
+        description: Whether the queue's legs add the lowest minor on arm64; only the nightly run sets it, so that arm64 runners stay out of the merge queue
         type: boolean
         default: false
       backup-drill:
@@ -67,7 +71,7 @@ jobs:
       queue: ${{ inputs.queue }}
       # Native workflow data stays independent of the tested ref, which a nightly run can select
       # from before this workflow changed.
-      matrix: ${{ inputs.queue && '{"include":[{"leg":"k3d","minor":"1.35","arch":"amd64"},{"leg":"k3d","minor":"1.35","arch":"arm64"},{"leg":"k3d","minor":"1.37","arch":"amd64"},{"leg":"calico","minor":"1.37","arch":"amd64"}]}' || '{"include":[{"leg":"k3d","minor":"1.37","arch":"amd64"}]}' }}
+      matrix: ${{ inputs.queue && inputs.arm64 && '{"include":[{"leg":"k3d","minor":"1.35","arch":"amd64"},{"leg":"k3d","minor":"1.35","arch":"arm64"},{"leg":"k3d","minor":"1.37","arch":"amd64"},{"leg":"calico","minor":"1.35","arch":"amd64"}]}' || inputs.queue && '{"include":[{"leg":"k3d","minor":"1.35","arch":"amd64"},{"leg":"k3d","minor":"1.37","arch":"amd64"},{"leg":"calico","minor":"1.35","arch":"amd64"}]}' || '{"include":[{"leg":"k3d","minor":"1.37","arch":"amd64"}]}' }}
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     steps:
@@ -115,8 +119,7 @@ jobs:
       # shipped profile that cannot start fails here. The other legs install the dev profile.
       PROFILES: ${{ inputs.minor == '1.35' && inputs.arch == 'amd64' && '--profile small' || '--profile dev' }}
       # The latest minor on amd64, the pull request's leg, runs the sandbox templates on gVisor, as
-      # the one-host platform does. The other legs, in the merge queue, prove the default runtime
-      # with hostUsers: false.
+      # the one-host platform does. The other legs prove the default runtime with hostUsers: false.
       GVISOR: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -229,7 +232,7 @@ jobs:
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
 
   calico:
-    name: "kind 1.37 Calico"
+    name: "kind 1.35 Calico"
     if: inputs.leg == 'calico'
     permissions:
       contents: read
@@ -237,7 +240,7 @@ jobs:
     timeout-minutes: 45
     runs-on: ubuntu-24.04
     env:
-      NODE_IMAGE: docker.io/kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+      NODE_IMAGE: docker.io/kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
       CALICO_URL: https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/calico.yaml
       CALICO_SHA256: 2de8f47595fb9c41b3f47d7b767a1f8e72ecf84057af834738ff12689a234da5
       # Calico's default pool, which the operator's PostgreSQL gets its address from.

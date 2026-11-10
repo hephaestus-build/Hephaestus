@@ -34,12 +34,12 @@ Hephaestus supports the chart on a cluster with these items:
 
 CI installs and upgrades the chart on Kubernetes 1.35 and on the latest minor version, 1.37, on `amd64`.
 1.35 is the lowest version that the chart takes.
-It also runs 1.35 on `arm64`.
-A pull request runs only the latest minor version on `amd64`.
-When a change touches the chart or the sandbox runtime, the merge queue runs all of them before the commit reaches `main`.
-A nightly run repeats them on `main`.
+A pull request runs only the latest minor version.
+When a change touches the chart or the sandbox runtime, the merge queue runs both before the commit reaches `main`.
+A nightly run repeats them on `main`, and it also runs 1.35 on `arm64`.
 
-One more run uses three nodes, Calico for network policy, and an external PostgreSQL.
+One more run uses Kubernetes 1.35, three nodes, Calico for network policy, and an external PostgreSQL.
+The merge queue and the nightly run include it.
 Each run starts two workers with the `dev.yaml` profile, and each worker passes its isolation probe on that cluster.
 In the merge queue, the 1.35 run on `amd64` uses `small.yaml` instead, with one worker, on a runner of 16 GiB.
 
