@@ -14,6 +14,8 @@ import {
 	exportedNames,
 	findings,
 	metricsIn,
+	problemSlugs,
+	secretKeys,
 } from "./check-public-contract.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 
@@ -27,6 +29,12 @@ const ENTRY = "docker/agents/practice-scripts/lib/api.ts";
 const SCM = "docker/agents/practice-scripts/kits/scm/api.ts";
 const CHAT = "docker/agents/practice-scripts/kits/chat/index.ts";
 const DOCS = "docker/agents/practice-scripts/kits/docs/index.ts";
+const PROBLEMS =
+	"server/application/src/main/java/de/tum/cit/aet/hephaestus/core/exception/ProblemType.java";
+const TEMPLATE = "deploy/chart/hephaestus/templates/server.yaml";
+
+const secretEnv = (env: string, optional = false) =>
+	`{{ include "hephaestus.secretEnv" (dict "root" . "env" "${env}"${optional ? ' "optional" true' : ""}) }}\n`;
 
 const chart = (worker: object) =>
 	JSON.stringify({
@@ -70,6 +78,8 @@ export const SEVERITIES = ["MAJOR"] as const;
 		ENTRY,
 		"export const definePracticeScript = () => {};\nexport type { Outcome } from './core/practice-script.ts';\n",
 	],
+	[PROBLEMS, "public enum ProblemType {\n    STEP_UP_REQUIRED,\n    SYNC_NOT_SUPPORTED;\n}\n"],
+	[TEMPLATE, secretEnv("WEBHOOK_SECRET") + secretEnv("GH_AUTH_TOKEN", true)],
 	[SCM, "export function scm() {}\n"],
 	[CHAT, "export function chat() {}\n"],
 	[DOCS, "export function docs() {}\n"],
@@ -101,6 +111,12 @@ void test("additions are compatible", () => {
 			}),
 		],
 		[ENTRY, `${RELEASE.get(ENTRY) ?? ""}export function added() {}\n`],
+		[
+			PROBLEMS,
+			"public enum ProblemType {\n    STEP_UP_REQUIRED,\n    SYNC_NOT_SUPPORTED,\n    NEW_KIND;\n}\n",
+		],
+		[TEMPLATE, `${RELEASE.get(TEMPLATE) ?? ""}${secretEnv("SPRING_MAIL_PASSWORD", true)}`],
+		["deploy/chart/hephaestus/templates/new.yaml", ""],
 	]);
 	assert.deepEqual(findings(RELEASE, head, ROUTES), []);
 });
@@ -143,6 +159,40 @@ for (const [name, head, expected] of [
 			}),
 		),
 		/worker\.strategy: value "Recreate" is gone/u,
+	],
+	[
+		"a lost type",
+		after(
+			CHART,
+			chart({
+				reviews: { type: "string", minimum: 1, maximum: 64 },
+				strategy: { type: "string", enum: ["RollingUpdate", "Recreate"] },
+			}),
+		),
+		/worker\.reviews: type integer is gone/u,
+	],
+	[
+		"a new required Secret key",
+		after(TEMPLATE, `${RELEASE.get(TEMPLATE) ?? ""}${secretEnv("NATS_WEBHOOK_PASSWORD")}`),
+		/requires the Secret key NATS_WEBHOOK_PASSWORD/u,
+	],
+	[
+		"an optional Secret key made required",
+		after(TEMPLATE, secretEnv("WEBHOOK_SECRET") + secretEnv("GH_AUTH_TOKEN")),
+		/requires the Secret key GH_AUTH_TOKEN/u,
+	],
+	[
+		"a lost problem type",
+		after(PROBLEMS, "public enum ProblemType {\n    STEP_UP_REQUIRED;\n}\n"),
+		/problem type sync-not-supported is gone/u,
+	],
+	[
+		"a narrowed definition field",
+		after(
+			CATALOG_SCHEMA,
+			JSON.stringify({ type: "object", properties: { $defs: {}, groups: { type: "object" } } }),
+		),
+		/definition schema narrowed groups: type array is gone/u,
 	],
 	[
 		"a lost alert",
@@ -195,6 +245,70 @@ for (const [name, head, expected] of [
 		assert.match(findings(RELEASE, head, ROUTES).join("\n"), expected);
 	});
 }
+
+const sized = (size: object) =>
+	after(
+		CHART,
+		chart({
+			reviews: { type: "integer", minimum: 1, maximum: 64 },
+			strategy: { type: "string", enum: ["RollingUpdate", "Recreate"] },
+			size,
+		}),
+	);
+
+void test("a changed pattern is refused unless the old one stays as a branch", () => {
+	const base = sized({ type: "string", pattern: "^[0-9]+Mi$" });
+	assert.deepEqual(findings(base, sized({ type: "string", pattern: "^[0-9]+Gi$" }), ROUTES), [
+		"Chart value worker.size: pattern ^[0-9]+Mi$ is gone",
+	]);
+	const widened = sized({
+		anyOf: [
+			{ type: "string", pattern: "^[0-9]+Mi$" },
+			{ type: "string", pattern: "^[0-9]+Gi$" },
+		],
+	});
+	assert.deepEqual(findings(base, widened, ROUTES), []);
+	assert.deepEqual(findings(base, sized({ type: "string" }), ROUTES), []);
+});
+
+void test("Secret keys come from secretEnv calls and secretKeyRef blocks", () => {
+	assert.deepEqual(
+		[
+			...secretKeys(`{{ include "hephaestus.secretEnv" (dict "root" . "env" "PGPASSWORD" "key" "DATABASE_ADMIN_PASSWORD") }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "GH_AUTH_TOKEN" "optional" true) }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "NATS_PASSWORD" "optional" true) }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "NATS_PASSWORD") }}
+- name: PGBACKREST_PG1_USER
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.secret.name }}
+      key: DATABASE_ADMIN_USERNAME
+      optional: true
+`),
+		],
+		[
+			["DATABASE_ADMIN_PASSWORD", true],
+			["GH_AUTH_TOKEN", false],
+			["NATS_PASSWORD", true],
+			["DATABASE_ADMIN_USERNAME", false],
+		],
+	);
+});
+
+void test("problem slugs are the enum constants in their wire form", () => {
+	assert.deepEqual(
+		[
+			...problemSlugs(`public enum ProblemType {
+    // A comment, not a constant.
+    CSRF_TOKEN_REJECTED,
+    STEP_UP_REQUIRED;
+
+    private static final String BASE = "x";
+}`),
+		],
+		["csrf-token-rejected", "step-up-required"],
+	);
+});
 
 void test("a deep link without a route is refused", () => {
 	const routes = ROUTES.replace("'/settings': typeof Route", "");

@@ -7,7 +7,7 @@
  * Usage: vp run gate:public-contract [--base vX.Y.Z[-rc.N]]
  */
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -32,6 +32,10 @@ const CATALOG_SCHEMA =
 const CATALOG = "server/application/src/main/resources/practices/default-catalog.json";
 const SCRIPT_CONTRACT = "docker/agents/practice-scripts/lib/core/contract.ts";
 const ROUTE_TREE = "webapp/src/routeTree.gen.ts";
+const PROBLEM_TYPES =
+	"server/application/src/main/java/de/tum/cit/aet/hephaestus/core/exception/ProblemType.java";
+/** The chart templates: each key of the release Secret that they read. */
+const CHART_TEMPLATES = "deploy/chart/hephaestus/templates/";
 
 /**
  * The files that the `exports` map of `docker/agents/practice-scripts/package.json` names: what a
@@ -61,6 +65,7 @@ const CONTRACT_FILES = [
 	CATALOG_SCHEMA,
 	CATALOG,
 	SCRIPT_CONTRACT,
+	PROBLEM_TYPES,
 	...SCRIPT_ENTRY_POINTS,
 ];
 
@@ -120,6 +125,67 @@ export function catalogSlugs(catalog: string): Set<string> {
 	return slugs;
 }
 
+/** Each problem type slug that a client can branch on: the enum constants, lowercase and hyphenated. */
+export function problemSlugs(source: string): Set<string> {
+	const body = /\benum\s+ProblemType\s*\{(?<body>[^;]*)/u.exec(source)?.groups?.body ?? "";
+	return new Set(
+		body
+			.replaceAll(/\/\*[\s\S]*?\*\/|\/\/.*$/gmu, "")
+			.split(",")
+			.map((constant) => constant.trim())
+			.filter((constant) => /^[A-Z][A-Z0-9_]*$/u.test(constant))
+			.map((constant) => constant.toLowerCase().replaceAll("_", "-")),
+	);
+}
+
+/**
+ * Each key of the release Secret that the chart templates read: a `hephaestus.secretEnv` call names
+ * it with `key`, or else with `env`, and a `secretKeyRef` names it with `key`. A key is required when
+ * one read does not mark it optional.
+ */
+export function secretKeys(templates: string): Map<string, boolean> {
+	const keys = new Map<string, boolean>();
+	const read = (key: string, optional: boolean) =>
+		keys.set(key, (keys.get(key) ?? false) || !optional);
+	for (const { groups } of templates.matchAll(
+		/"hephaestus\.secretEnv"\s*\(dict(?<arguments>[^)]*)\)/gu,
+	)) {
+		const argument = (name: string) =>
+			new RegExp(`"${name}"\\s+("(?<text>[^"]*)"|(?<bare>\\w+))`, "u").exec(groups?.arguments ?? "")
+				?.groups;
+		const key = argument("key")?.text ?? argument("env")?.text;
+		if (key === undefined) {
+			throw new Error(`A secretEnv call names no literal key: ${groups?.arguments ?? ""}`);
+		}
+		read(key, argument("optional")?.bare === "true");
+	}
+	for (const { groups } of templates.matchAll(
+		/secretKeyRef:\s*\n(?<body>(?:[ \t]+\S[^\n]*\n?)+)/gu,
+	)) {
+		const key = /^\s*key:\s*(?<key>[A-Z][A-Z0-9_]*)\s*$/mu.exec(groups?.body ?? "")?.groups?.key;
+		if (key !== undefined) {
+			read(key, /^\s*optional:\s*true\s*$/mu.test(groups?.body ?? ""));
+		}
+	}
+	return keys;
+}
+
+/** The text of every chart template in `files`. */
+const templatesIn = (files: ReadonlyMap<string, string>) =>
+	[...files]
+		.filter(([file]) => file.startsWith(CHART_TEMPLATES))
+		.map(([, text]) => text)
+		.join("\n");
+
+/** Each Secret key that `head` requires and `base` did not: a new key, or an optional one made required. */
+const newlyRequiredSecretKeys = (base: string, head: string) => {
+	const before = secretKeys(base);
+	return [...secretKeys(head)]
+		.filter(([key, required]) => required && before.get(key) !== true)
+		.map(([key]) => key)
+		.toSorted();
+};
+
 /** The names of one `export { … }` list, each under the name that it exports. */
 const namesInList = (list: string) =>
 	list
@@ -167,10 +233,12 @@ const contentOf = (files: ReadonlyMap<string, string>, file: string) => {
 	return text;
 };
 
-/** Each contract file, as `reader` gives it. */
-const contractFiles = async (reader: (file: string) => Promise<string>) =>
+/** Each contract file and each named chart template, as `reader` gives it. */
+const contractFiles = async (reader: (file: string) => Promise<string>, templates: string[]) =>
 	new Map(
-		await Promise.all(CONTRACT_FILES.map(async (file) => [file, await reader(file)] as const)),
+		await Promise.all(
+			[...CONTRACT_FILES, ...templates].map(async (file) => [file, await reader(file)] as const),
+		),
 	);
 
 const lost = (before: ReadonlySet<string>, after: ReadonlySet<string>) =>
@@ -192,8 +260,18 @@ export function findings(
 		...lost(alertNames(baseOf(ALERT_RULES)), alertNames(headOf(ALERT_RULES))).map(
 			(name) => `The shipped alert rules lost ${name}`,
 		),
+		...newlyRequiredSecretKeys(templatesIn(base), templatesIn(head)).map(
+			(key) => `The chart now requires the Secret key ${key}`,
+		),
 		...removedChartValues(parseJson(baseOf(CATALOG_SCHEMA)), parseJson(headOf(CATALOG_SCHEMA))).map(
 			(name) => `The practice definition schema lost ${name}`,
+		),
+		...narrowedChartValues(
+			parseJson(baseOf(CATALOG_SCHEMA)),
+			parseJson(headOf(CATALOG_SCHEMA)),
+		).map((line) => `The practice definition schema narrowed ${line}`),
+		...lost(problemSlugs(baseOf(PROBLEM_TYPES)), problemSlugs(headOf(PROBLEM_TYPES))).map(
+			(slug) => `The problem type ${slug} is gone`,
 		),
 		...lost(catalogSlugs(baseOf(CATALOG)), catalogSlugs(headOf(CATALOG))).map(
 			(name) => `The catalog lost ${name}`,
@@ -246,9 +324,20 @@ async function main(): Promise<void> {
 		console.log(`The change heads for a major release after ${base}, so it can break it.`);
 		return;
 	}
+	// Reading the contract files fetches the base tag that the template listing needs.
+	const baseFiles = await contractFiles(async (file) => fileAt(base, file), []);
+	const listing = await output("git", ["ls-tree", "--name-only", base, CHART_TEMPLATES], {
+		cwd: ROOT,
+	});
+	const baseTemplates = listing.split("\n").filter((file) => file !== "");
+	const headEntries = await readdir(path.join(ROOT, CHART_TEMPLATES));
+	const headTemplates = headEntries.map((file) => `${CHART_TEMPLATES}${file}`);
+	for (const file of baseTemplates) {
+		baseFiles.set(file, await fileAt(base, file));
+	}
 	const problems = findings(
-		await contractFiles(async (file) => fileAt(base, file)),
-		await contractFiles(async (file) => readFile(path.join(ROOT, file), "utf8")),
+		baseFiles,
+		await contractFiles(async (file) => readFile(path.join(ROOT, file), "utf8"), headTemplates),
 		await readFile(path.join(ROOT, ROUTE_TREE), "utf8"),
 	);
 	for (const problem of problems) {
