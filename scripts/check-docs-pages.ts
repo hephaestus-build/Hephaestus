@@ -14,7 +14,7 @@ const PAGE_TYPES: Record<Guide, readonly string[]> = {
 	contributor: ["overview", "tutorial", "how-to", "reference", "explanation"],
 };
 // Every page of these guides declares a type, so each page answers to every rule.
-const FULLY_CHECKED = new Set<Guide>(["user"]);
+const FULLY_CHECKED = new Set<Guide>(["user", "admin"]);
 
 const CALLOUTS = new Set(["note", "tip", "caution"]);
 const SECTION_NAMES = new Map([

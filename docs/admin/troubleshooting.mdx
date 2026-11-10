@@ -16,7 +16,7 @@ The server does not start in production with a blank value.
 
 **Fix:**
 
-1. Find the addresses of the Gateway Pods, as [Gateway routes](./kubernetes#gateway-routes) describes.
+1. Find the addresses of the Gateway Pods, as [Prepare the Gateway](./kubernetes#prepare-the-gateway) describes.
 2. Set `trustedProxies` to a Tomcat regular expression for the Pod network that holds them.
 3. Run `helm upgrade` with your site values.
 
@@ -92,7 +92,7 @@ A Helm failure does not prove that the Job stopped.
    kubectl --namespace hephaestus describe httproute
    ```
 
-2. If the conditions show `Accepted=False NotAllowedByListeners`, set `allowedRoutes.namespaces` on the listener, as [Gateway routes](./kubernetes#gateway-routes) shows.
+2. If the conditions show `Accepted=False NotAllowedByListeners`, set `allowedRoutes.namespaces` on the listener, as [Prepare the Gateway](./kubernetes#prepare-the-gateway) shows.
 
 **Check:** The route conditions show `Accepted=True` and `ResolvedRefs=True`.
 
@@ -104,7 +104,7 @@ A Helm failure does not prove that the Job stopped.
 
 1. Check that the DNS record of the host name points to the Gateway.
 2. Check the Gateway certificate and the status of its cert-manager Certificate.
-3. On one host, follow [Certificate renewal](./kubernetes#certificate-renewal).
+3. On one host, follow [Certificate renewal](./k3s#certificate-renewal).
 
 **Check:** The browser opens `https://<your hostname>` without a certificate error.
 
@@ -172,13 +172,13 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
    ```
 
 2. Find the row of [Other symptoms](./kubernetes#other-symptoms) that matches the log, and do its fix.
-3. Check the chart service account, the namespace, the quota, and NetworkPolicy, as [Sandbox prerequisites](./kubernetes#sandbox-prerequisites) describes.
+3. Check the chart service account, the namespace, the quota, and NetworkPolicy, as [Sandbox prerequisites](./sandboxes#sandbox-prerequisites) describes.
 
 **Check:** The worker Pod becomes ready.
 
 ## A sandbox Pod is refused or cannot start
 
-**Cause:** Admission policy, a quota, an image pull, or a missing [sandbox prerequisite](./kubernetes#sandbox-prerequisites) stops the Pod.
+**Cause:** Admission policy, a quota, an image pull, or a missing [sandbox prerequisite](./sandboxes#sandbox-prerequisites) stops the Pod.
 
 **Fix:**
 

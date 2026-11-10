@@ -119,7 +119,6 @@
 	"docs/admin/first-steps.mdx",
 	"docs/admin/github-integration.mdx",
 	"docs/admin/helm-chart.md",
-	"docs/admin/install.mdx",
 	"docs/admin/instance-admin.mdx",
 	"docs/admin/integrations.mdx",
 	"docs/admin/k3s.md",

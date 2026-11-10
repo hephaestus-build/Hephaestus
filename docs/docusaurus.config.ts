@@ -236,6 +236,7 @@ const config: Config = {
 			{
 				redirects: [
 					{ from: "/user/ai-mentor", to: "/user/ask-hephaestus" },
+					{ from: "/admin/install", to: "/admin/kubernetes" },
 					{ from: "/contributor/practice-catalogue", to: "/contributor/practice-catalog" },
 					{
 						from: "/contributor/buildpacks-cds-decision",

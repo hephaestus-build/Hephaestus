@@ -1,8 +1,10 @@
 ---
-title: Backup & Restore
-description: Keep the data, keys and release identity needed to recover a Helm installation.
+title: Back up and restore
+description: Keep the data, keys and release identity needed to recover a Helm installation, and restore an installation from them.
+page_type: how-to
 ---
 
+Back up the database, the keys and the release identity of an instance, and restore the instance from them.
 The [operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream) owns the recovery gates and broker procedure.
 
 ## Backup policy for 1.0
@@ -366,6 +368,13 @@ Scheduled sync cannot recover all events in the gap.
 4. Restore with the backup's signed release lock. Then upgrade.
 
 Do not restore into an older application version.
+
+## Check that it worked
+
+1. Run `kubectl --namespace hephaestus get jobs`.
+   The stanza Job and the latest backup Job are `Complete`.
+2. Check that `HephaestusBackupStale` does not fire ([Alert rules](./alert-rules)).
+3. Restore the latest backup on a clone, as [Isolated restore drill](#isolated-restore-drill) describes.
 
 ## Unsupported PostgreSQL versions
 

@@ -23,8 +23,8 @@ await describe("checkPage", async () => {
 	});
 
 	await test("rejects a page type that the guide does not have", () => {
-		assert.deepEqual(check(page("page_type: feature", "Text."), "admin"), [
-			'page.md:1: page_type "feature" is not a admin guide type: overview, tutorial, how-to, reference, explanation, troubleshooting.',
+		assert.deepEqual(check(page("page_type: feature", "Text."), "contributor"), [
+			'page.md:1: page_type "feature" is not a contributor guide type: overview, tutorial, how-to, reference, explanation.',
 		]);
 	});
 
@@ -83,10 +83,19 @@ await describe("checkPage", async () => {
 
 	await test("holds a declared type to its template in a guide that is not fully checked", () => {
 		const source = page("page_type: how-to", "1. Rotate the key.");
-		assert.deepEqual(check(source, "admin"), [
+		assert.deepEqual(check(source, "contributor"), [
 			'page.md:4: A how-to page needs a "Check that it worked" section.',
 		]);
-		assert.deepEqual(check("1. Rotate the key.", "admin"), []);
+		assert.deepEqual(check("1. Rotate the key.", "contributor"), []);
+	});
+
+	await test("asks every admin page for its page type", () => {
+		assert.deepEqual(
+			check(page("title: Back up\ndescription: Back up the database.", "Text."), "admin"),
+			[
+				"page.md:1: Add a page_type to the front matter: overview, tutorial, how-to, reference, explanation, troubleshooting.",
+			],
+		);
 	});
 
 	await test("accepts a tutorial in the contributor guide", () => {
@@ -116,7 +125,11 @@ await describe("checkPage", async () => {
 		assert.deepEqual(check("Text.\n\n:::warning[Careful]\nText.\n:::", "contributor"), [
 			'page.md:3: Use a note, tip or caution callout, not "warning".',
 		]);
-		assert.equal(check("::::info\nText.\n::::", "admin").length, 1);
+		const reference = page(
+			"title: Sizing\ndescription: The sizes.\npage_type: reference",
+			"::::info\nText.\n::::",
+		);
+		assert.equal(check(reference, "admin").length, 1);
 	});
 
 	await test("asks a user page to show the product with a screenshot component", () => {

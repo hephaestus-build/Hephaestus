@@ -11,7 +11,7 @@ Stages 3 to 6 follow the first start.
 
 ## Before you start
 
-- An instance that you install with the Helm chart, as [Install Hephaestus](./install) describes.
+- An instance of the Helm chart. [Install on one host](./k3s) or [on a Kubernetes cluster](./kubernetes) installs it.
 - The host name of the instance.
 - A GitHub organization in which you can create and install apps.
 - An account at an AI provider, with an API key.
@@ -87,7 +87,7 @@ A **GitHub App** reads the repositories, receives their webhooks, and posts feed
 Practice review needs a running worker and a model that the workspace can run on.
 The job queue runs on PostgreSQL, so practice review needs no NATS setup.
 
-1. Turn on the worker, reviews, and repository checkouts in the [chart values](./kubernetes#integration-values).
+1. Turn on the worker, reviews, and repository checkouts in the [chart values](./helm-chart#integration-values).
    On Kubernetes, the `small.yaml` profile turns on the worker.
 2. Run the install command again with your site values.
 3. Connect the provider, then price, enable, and share a model, as [The staged flow](./ai-providers#1-the-staged-flow-and-why-it-is-staged) describes.

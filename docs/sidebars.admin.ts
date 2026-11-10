@@ -11,7 +11,6 @@ const sidebars: SidebarsConfig = {
 				{ type: "doc", id: "kubernetes", label: "Install on Kubernetes" },
 				"k3s",
 				"first-steps",
-				{ type: "doc", id: "install", label: "Install Hephaestus" },
 				"pull-based-deployment",
 				"external-database",
 				"private-network",

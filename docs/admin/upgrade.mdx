@@ -1,6 +1,7 @@
 ---
 title: Upgrade
 description: Upgrade the Helm release to a new release, recover from a failed migration, and check for new releases.
+page_type: how-to
 ---
 
 This page owns the upgrade and recovery of the Helm release.
@@ -223,6 +224,17 @@ The volume of PostgreSQL is `data-<release>-postgresql-0`, and the volume of NAT
    It restarts a Pod only if the upgrade also changes the Pod template.
 
 Before you change the volume of PostgreSQL, take a backup ([Backup and restore](./backup-restore#back-up-the-database)).
+
+## Check that it worked
+
+1. Run `helm history hephaestus --namespace hephaestus`.
+   The new revision is `deployed`.
+2. Read the log of the migration Job of that revision: `kubectl --namespace hephaestus logs job/hephaestus-migration-<revision>`.
+   It logs `Database migration completed`.
+3. Run `kubectl --namespace hephaestus get pods`.
+   Each role Pod of the new revision is ready.
+4. Query `application_build_info` in Prometheus, as [Release metric](./metrics#release-metric) shows.
+   Each role reports the new `version`.
 
 ## If migration fails
 
