@@ -1,6 +1,6 @@
 # ADR 0005: Two-role runtime topology via `@ConditionalOnProperty`
 
-**Status:** Accepted (amended 2026-05-20 #1110 — webhook role wired; 2026-07-20 #1368 — proxy capability flag removed; 2026-07-21 #1368 — agent queue moved to PostgreSQL; 2026-07-22 #1368 — what the worker gate covers; 2026-08-22 — role-scoped settings gate; 2026-09-03 #1719 — role deferral superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-01 #1158 — server-only application server; 2026-10-09 — Heph host on the worker, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-28 — one sandbox runtime for reviews and Heph, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md); 2026-11-09 — superseded in part by [ADR 0079](0079-one-agent-system.md))
+**Status:** Accepted (amended 2026-05-20 #1110 — webhook role wired; 2026-07-20 #1368 — proxy capability flag removed; 2026-07-21 #1368 — agent queue moved to PostgreSQL; 2026-07-22 #1368 — what the worker gate covers; 2026-08-22 — role-scoped settings gate; 2026-09-03 #1719 — role deferral superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-01 #1158 — server-only application server; 2026-10-09 — Heph host on the worker, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-28 — one sandbox runtime for reviews and Heph, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md); 2026-11-09 — superseded in part by [ADR 0079](0079-one-agent-system.md); 2026-11-10 — the webhook role goes, [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -215,3 +215,9 @@ The server takes every concern of the worker: the Kubernetes client, capture, th
 The server runs as several replicas with rolling updates.
 `hephaestus.runtime.worker.enabled` and the worker Deployment go.
 The role selection by `@ConditionalOnProperty` stays for the server and webhook roles.
+
+## Update — 2026-11-10: the webhook role goes
+
+[ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md) supersedes the webhook role of this ADR and of its 2026-05-20 update.
+The server receives provider deliveries and writes them to a PostgreSQL inbox. With the worker role gone ([ADR 0079](0079-one-agent-system.md)), one JAR has one runtime role, the server, plus the migrate run mode.
+The sections above stay as the record of the role split.
