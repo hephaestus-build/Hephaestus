@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
@@ -44,7 +45,12 @@ final class ComposerReplayGateway implements AutoCloseable {
             Instant deadline,
             Function<byte[], ReviewModelGateway.Answer> model)
             throws IOException {
-        this.mapper = mapper;
+        // The server leaves null fields out of its JSON (application.yml), and so does this gateway.
+        this.mapper = mapper.rebuild()
+                .changeDefaultPropertyInclusion(inclusion -> inclusion
+                        .withValueInclusion(JsonInclude.Include.NON_NULL)
+                        .withContentInclusion(JsonInclude.Include.NON_NULL))
+                .build();
         this.sessions = sessions;
         this.job = job;
         this.identity = identity;
@@ -91,10 +97,8 @@ final class ComposerReplayGateway implements AutoCloseable {
             switch (next) {
                 case CompositionSessions.Session session -> {
                     answer.set("session", mapper.valueToTree(session));
-                    answer.putNull("unavailable");
                 }
                 case CompositionSessions.Unavailable unavailable -> {
-                    answer.putNull("session");
                     answer.put("unavailable", unavailable.cause().name());
                 }
             }
@@ -126,11 +130,9 @@ final class ComposerReplayGateway implements AutoCloseable {
                         CompositionStop.valueOf(entry.getValue().asString()));
             });
             var handedOn = sessions.close(job, identity, stops);
-            send(
-                    exchange,
-                    200,
-                    JSON.objectNode()
-                            .set("handedOn", handedOn == null ? JSON.nullNode() : JSON.stringNode(handedOn.name())));
+            var answer = JSON.objectNode();
+            if (handedOn != null) answer.put("handedOn", handedOn.name());
+            send(exchange, 200, answer);
         } else send(exchange, 404, null);
     }
 

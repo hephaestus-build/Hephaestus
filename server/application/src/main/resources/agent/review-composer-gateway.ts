@@ -175,7 +175,7 @@ export function compositionClient(gateway: Gateway): Client {
 			if (!isRecord(answer)) {
 				return fail("close");
 			}
-			const { handedOn } = answer;
+			const handedOn = answer.handedOn ?? null;
 			return handedOn === null
 				? null
 				: (PASSING.find((cause) => cause === handedOn) ?? fail("hand-on cause"));
@@ -213,6 +213,8 @@ async function json(response: Response): Promise<unknown> {
 	return body;
 }
 
+// The server leaves a null field out of its JSON, so every nullable field below reads an absent value as null.
+
 function asNext(value: unknown): Next {
 	if (
 		!isRecord(value) ||
@@ -222,37 +224,43 @@ function asNext(value: unknown): Next {
 		return fail("next");
 	}
 	return {
-		session: value.session === null ? null : asSession(value.session),
-		unavailable: asStop(value.unavailable),
+		session:
+			value.session === undefined || value.session === null ? null : asSession(value.session),
+		unavailable: asStop(value.unavailable ?? null),
 		deadline: value.deadline,
 		lastAttempt: value.lastAttempt,
 	};
 }
 
 function asSession(value: unknown): Session {
+	if (!isRecord(value) || !isRecord(value.model)) {
+		return fail("session");
+	}
+	const finish = value.finish ?? null;
+	const publicationContext = value.publicationContext ?? null;
 	if (
-		!isRecord(value) ||
 		!isDestination(value.destination) ||
-		!isRecord(value.model) ||
 		typeof value.system !== "string" ||
 		typeof value.input !== "string" ||
 		!Array.isArray(value.tools) ||
-		!isNullableString(value.finish) ||
+		!isNullableString(finish) ||
 		typeof value.nudge !== "string" ||
 		typeof value.accepted !== "boolean" ||
 		typeof value.fits !== "boolean" ||
 		typeof value.calls !== "number" ||
-		!isNullableString(value.publicationContext)
+		!isNullableString(publicationContext)
 	) {
 		return fail("session");
 	}
 	const { model } = value;
+	const reasoningEffort = model.reasoningEffort ?? null;
+	const temperature = model.temperature ?? null;
 	if (
 		!isProtocol(model.protocol) ||
 		typeof model.modelId !== "string" ||
-		!isNullableString(model.reasoningEffort) ||
+		!isNullableString(reasoningEffort) ||
 		typeof model.maxOutputTokens !== "number" ||
-		!(model.temperature === null || typeof model.temperature === "number")
+		!(temperature === null || typeof temperature === "number")
 	) {
 		return fail("session model");
 	}
@@ -261,19 +269,19 @@ function asSession(value: unknown): Session {
 		model: {
 			protocol: model.protocol,
 			modelId: model.modelId,
-			reasoningEffort: model.reasoningEffort,
+			reasoningEffort,
 			maxOutputTokens: model.maxOutputTokens,
-			temperature: model.temperature,
+			temperature,
 		},
 		system: value.system,
 		input: value.input,
 		tools: value.tools.map(asTool),
-		finish: value.finish,
+		finish,
 		nudge: value.nudge,
 		accepted: value.accepted,
 		fits: value.fits,
 		calls: value.calls,
-		publicationContext: value.publicationContext,
+		publicationContext,
 	};
 }
 
@@ -293,11 +301,11 @@ function asToolAnswer(value: unknown): ToolAnswer {
 	if (!isRecord(value) || typeof value.text !== "string" || typeof value.published !== "boolean") {
 		return fail("tool answer");
 	}
-	const { ending } = value;
+	const ending = value.ending ?? null;
 	if (!(ending === null || ending === "STORED" || ending === "RECOMPOSE" || ending === "STOPPED")) {
 		return fail("tool ending");
 	}
-	return { text: value.text, published: value.published, ending, stop: asStop(value.stop) };
+	return { text: value.text, published: value.published, ending, stop: asStop(value.stop ?? null) };
 }
 
 function asStop(value: unknown): Stop | null {

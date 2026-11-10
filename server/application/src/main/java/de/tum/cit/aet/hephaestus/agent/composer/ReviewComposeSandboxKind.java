@@ -59,7 +59,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
     private final TransactionTemplate transactions;
     private final Map<AgentRunFence, Decision> decisions = new ConcurrentHashMap<>();
 
-    ReviewComposeSandboxKind(
+    public ReviewComposeSandboxKind(
             ReviewJobClaimService claims,
             ReviewJobRepository jobs,
             ResultAdmissionService admission,
