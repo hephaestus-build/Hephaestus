@@ -333,6 +333,7 @@ export function readPage(text: string): PageRow[] {
 }
 
 export interface ChartRow {
+	readonly description: string;
 	readonly key: string;
 	readonly defaultValue: unknown;
 	readonly type: string;
@@ -377,6 +378,16 @@ export function chartRows(schema: unknown, defaults: unknown): ChartRow[] {
 		}
 		return { ...definition, ...node };
 	};
+	const descriptionOf = (node: Record<string, unknown>): string => {
+		if (typeof node.description === "string") {
+			return node.description;
+		}
+		if (!isRecord(node.additionalProperties)) {
+			return "";
+		}
+		const { description } = resolve(node.additionalProperties);
+		return typeof description === "string" ? `Each value: ${description}` : "";
+	};
 	const rows: ChartRow[] = [];
 	const walk = (
 		properties: Record<string, unknown>,
@@ -392,6 +403,7 @@ export function chartRows(schema: unknown, defaults: unknown): ChartRow[] {
 				if (node.if !== undefined) {
 					rows.push({
 						key,
+						description: "",
 						defaultValue: value,
 						type: "object",
 						required: Array.isArray(required) && required.includes(name),
@@ -405,30 +417,28 @@ export function chartRows(schema: unknown, defaults: unknown): ChartRow[] {
 			} else {
 				rows.push({
 					key,
+					description: descriptionOf(node),
 					defaultValue: value,
 					type: schemaType(node),
 					required: Array.isArray(required) && required.includes(name),
-					constraint:
-						typeof node.description === "string"
-							? node.description
-							: Object.entries(node)
-									.filter(([field]) =>
-										[
-											"enum",
-											"minimum",
-											"maximum",
-											"pattern",
-											"minItems",
-											"maxItems",
-											"additionalProperties",
-											"oneOf",
-											"if",
-											"then",
-											"else",
-										].includes(field),
-									)
-									.map(([field, constraint]) => `${field}: ${JSON.stringify(constraint)}`)
-									.join(". "),
+					constraint: Object.entries(node)
+						.filter(([field]) =>
+							[
+								"enum",
+								"minimum",
+								"maximum",
+								"pattern",
+								"minItems",
+								"maxItems",
+								"additionalProperties",
+								"oneOf",
+								"if",
+								"then",
+								"else",
+							].includes(field),
+						)
+						.map(([field, constraint]) => `${field}: ${JSON.stringify(constraint)}`)
+						.join(". "),
 				});
 			}
 		}
@@ -578,8 +588,10 @@ function helmLine(row: ChartRow): string {
 		/^(?:enum|minimum|maximum|pattern|minItems|maxItems|additionalProperties|oneOf|if|then|else):/u.test(
 			row.constraint,
 		) || row.constraint.startsWith("{");
-	const constraint = machine ? code(row.constraint) : escapeText(row.constraint || "—");
-	return `| ${code(row.key)} | ${row.type} | ${code(row.defaultValue === undefined ? "supplied by release or operator" : JSON.stringify(row.defaultValue))} | ${row.required ? "yes" : ""} | ${constraint} |`;
+	const constraint = machine ? code(row.constraint) : escapeText(row.constraint);
+	const details =
+		[escapeText(row.description), constraint].filter((part) => part !== "").join("<br />") || "—";
+	return `| ${code(row.key)} | ${row.type} | ${code(row.defaultValue === undefined ? "supplied by release or operator" : JSON.stringify(row.defaultValue))} | ${row.required ? "yes" : ""} | ${details} |`;
 }
 
 function environmentLine(row: Row): string {
@@ -678,6 +690,14 @@ export function renderReference(
 		"See [Kubernetes deployment](./kubernetes) for those requirements, Secret keys, profiles, and operator procedures.",
 		"The chart [values](https://github.com/hephaestus-build/Hephaestus/blob/main/deploy/chart/hephaestus/values.yaml) describe each group.",
 		"Helm validates the complete schema, including conditions on parent objects.",
+		"",
+		"The Constraints column gives units, parsers and schema bounds.",
+		"Use the format of that parser: [Kubernetes quantities](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-units-in-kubernetes), [Spring conversion](https://docs.spring.io/spring-boot/reference/features/external-config.html#features.external-config.typesafe-configuration-properties.conversion), [Spring sizes](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/util/unit/DataSize.html), [NATS configuration](https://docs.nats.io/reference/config/), [PostgreSQL settings](https://www.postgresql.org/docs/current/config-setting.html#CONFIG-SETTING-NAMES-VALUES), [pgBackRest retention](https://pgbackrest.org/configuration.html#section-repository/option-repo-retention-full), or [VictoriaMetrics retention](https://docs.victoriametrics.com/victoriametrics/#retention).",
+		"",
+		"When the chart renders them, it converts `nats.resources.requests.memory`, `nats.resources.limits.memory` and `worker.resources.limits.memory` to MiB for memory limits.",
+		"These values, Git-cache `sizeLimit` values and `worker.sandbox.reviewMemory` require whole Mi or Gi.",
+		"Automatic turn admission converts CPU requests to millicores. Use cores or millicores for those requests.",
+		"Other Kubernetes resource quantities are passed through as written.",
 		"",
 		"## Helm values",
 		"",

@@ -5,9 +5,9 @@
 | `migration.databasePool.maximumPoolSize` | integer | `2` | yes | `minimum: 1. maximum: 400` |
 | `migration.databasePool.minimumIdle` | integer | `1` | yes | `minimum: 0. maximum: 400` |
 | `migration.enabled` | boolean | `true` | yes | — |
-| `migration.resources.limits.cpu` | string | `"2"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `migration.resources.limits.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `migration.resources.limits.memory` | string | `"1536Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `migration.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `migration.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `migration.resources.requests.memory` | string | `"1536Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `migration.resources.limits.cpu` | string | `"2"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `migration.resources.limits.ephemeral-storage` | string | `"256Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `migration.resources.limits.memory` | string | `"1536Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `migration.resources.requests.cpu` | string | `"250m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `migration.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `migration.resources.requests.memory` | string | `"1536Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |

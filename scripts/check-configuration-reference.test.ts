@@ -40,12 +40,34 @@ await test("schema leaves include release pins absent from source defaults", () 
 	assert.deepEqual(rows, [
 		{
 			key: "images.server",
+			description: "",
 			defaultValue: undefined,
 			type: "string",
 			required: true,
 			constraint: 'pattern: "@sha256:"',
 		},
 	]);
+});
+await test("unit descriptions keep validation bounds and describe each map value", () => {
+	const rows = chartRows(
+		{
+			properties: {
+				timeout: {
+					type: "integer",
+					minimum: 1,
+					maximum: 60,
+					description: "Seconds, parsed as an integer.",
+				},
+				storage: { type: "object", additionalProperties: { $ref: "#/definitions/size" } },
+			},
+			definitions: { size: { type: "string", description: "Bytes, parsed by Spring DataSize." } },
+		},
+		{ timeout: 10, storage: {} },
+	);
+	const page = reference([], rows);
+	assert.match(page, /Seconds, parsed as an integer\./u);
+	assert.match(page, /minimum: 1\. maximum: 60/u);
+	assert.match(page, /Each value: Bytes, parsed by Spring DataSize\./u);
 });
 await test("application variables join placeholder and relaxed names to rendered consumers", () => {
 	const metadata = new Metadata([

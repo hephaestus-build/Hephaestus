@@ -27,13 +27,26 @@
 			"type": "string",
 			"pattern": "^(?:ghcr\\.io|docker\\.io)/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$"
 		},
-		"quantity": {
-			"description": "A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable.",
+		"cpuQuantity": {
+			"description": "Positive CPU as a Kubernetes Quantity. 1000m is one CPU.",
 			"type": "string",
 			"pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)(?:m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?$"
 		},
-		"duration": { "type": "string", "pattern": "^[0-9]+(?:ms|s|m|h|d)$" },
-		"dataSize": { "type": "string", "pattern": "^[0-9]+(?:B|KB|MB|GB|TB)$" },
+		"quantity": {
+			"description": "Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.",
+			"type": "string",
+			"pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)(?:m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?$"
+		},
+		"duration": {
+			"type": "string",
+			"pattern": "^[0-9]+(?:ms|s|m|h|d)$",
+			"description": "Time parsed by Spring Boot Duration. Use a nonnegative integer followed by ms, s, m, h or d; d is 24 hours."
+		},
+		"dataSize": {
+			"type": "string",
+			"pattern": "^[0-9]+(?:B|KB|MB|GB|TB)$",
+			"description": "Bytes parsed by Spring DataSize. Use an integer with B, KB, MB, GB or TB. These suffixes use powers of 1024; 1GB is 1073741824 bytes."
+		},
 		"text": { "type": "string", "maxLength": 2048 },
 		"stringList": {
 			"type": "array",
@@ -92,7 +105,9 @@
 			"additionalProperties": false,
 			"required": ["cpu", "memory", "ephemeral-storage"],
 			"properties": {
-				"cpu": { "$ref": "#/definitions/quantity" },
+				"cpu": {
+					"$ref": "#/definitions/cpuQuantity"
+				},
 				"memory": { "$ref": "#/definitions/quantity" },
 				"ephemeral-storage": { "$ref": "#/definitions/quantity" }
 			}
@@ -126,7 +141,7 @@
 			"required": ["sizeLimit"],
 			"properties": {
 				"sizeLimit": {
-					"description": "The size of this role's Git cache volume, in whole Mi or Gi. Above 80 % of it, the role deletes the Git mirrors that it used least recently.",
+					"description": "This role's Git cache volume, in whole Mi or Gi. Kubernetes reads this quantity as written. The chart converts it to bytes for the application's eviction threshold. Above 80 % of the limit, the role deletes the Git mirrors that it used least recently.",
 					"type": "string",
 					"pattern": "^[1-9][0-9]*(?:Mi|Gi)$"
 				}
@@ -332,27 +347,33 @@
 					"properties": {
 						"shared_buffers": {
 							"type": "string",
-							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$",
+							"description": "Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024."
 						},
 						"work_mem": {
 							"type": "string",
-							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$",
+							"description": "Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024."
 						},
 						"maintenance_work_mem": {
 							"type": "string",
-							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$",
+							"description": "Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024."
 						},
 						"autovacuum_work_mem": {
 							"type": "string",
-							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$",
+							"description": "Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024."
 						},
 						"effective_cache_size": {
 							"type": "string",
-							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$",
+							"description": "Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024."
 						},
 						"max_wal_size": {
 							"type": "string",
-							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$",
+							"description": "Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024."
 						},
 						"max_connections": {
 							"type": "integer",
@@ -438,7 +459,12 @@
 								}
 							}
 						},
-						"retentionFull": { "type": "integer", "minimum": 1, "maximum": 52 },
+						"retentionFull": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 52,
+							"description": "Number of full backups, parsed as an integer by pgBackRest repo1-retention-full."
+						},
 						"schedule": {
 							"type": "object",
 							"additionalProperties": false,
@@ -492,17 +518,27 @@
 			],
 			"properties": {
 				"bundled": { "type": "boolean" },
-				"maxPayloadBytes": { "type": "integer", "minimum": 1048576, "maximum": 67108864 },
+				"maxPayloadBytes": {
+					"type": "integer",
+					"minimum": 1048576,
+					"maximum": 67108864,
+					"description": "Bytes as a whole number, read by the NATS configuration parser for max_payload."
+				},
 				"jetstream": {
 					"type": "object",
 					"additionalProperties": false,
 					"required": ["maxMemory", "maxFileBytes"],
 					"properties": {
-						"maxMemory": { "type": "string", "pattern": "^[0-9]+[KMGT]?$" },
+						"maxMemory": {
+							"type": "string",
+							"pattern": "^[0-9]+[KMGT]?$",
+							"description": "Bytes in the NATS configuration format: a whole number, optionally followed by K, M, G or T. These suffixes use powers of 1000; 1G is 1000000000 bytes."
+						},
 						"maxFileBytes": {
 							"type": "integer",
 							"minimum": 1073741824,
-							"maximum": 1099511627776
+							"maximum": 1099511627776,
+							"description": "Bytes as a whole number, read by the NATS configuration parser for max_file."
 						}
 					}
 				},
@@ -629,7 +665,7 @@
 					"properties": {
 						"enabled": { "type": "boolean" },
 						"retention": {
-							"description": "How long VictoriaMetrics keeps samples, in days or weeks.",
+							"description": "Sample retention, parsed by VictoriaMetrics retentionPeriod. Use a positive integer followed by d for days or w for weeks.",
 							"type": "string",
 							"pattern": "^[1-9][0-9]*[dw]$"
 						},
@@ -696,7 +732,12 @@
 				},
 				"enabled": { "type": "boolean" },
 				"replicas": { "type": "integer", "minimum": 0, "maximum": 16 },
-				"drainTimeoutSeconds": { "type": "integer", "minimum": 0, "maximum": 86400 },
+				"drainTimeoutSeconds": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 86400,
+					"description": "Whole seconds. The chart emits a Spring Boot Duration for worker drain and an integer Kubernetes termination grace period."
+				},
 				"rolloutStrategy": { "enum": ["RollingUpdate", "Recreate"] },
 				"runtime": {
 					"description": "The sandbox nodes, as KubernetesSandboxProperties accepts them. Every value is optional.",
@@ -720,8 +761,16 @@
 							"additionalProperties": false,
 							"required": ["cpuMillis", "memoryMi"],
 							"properties": {
-								"cpuMillis": { "type": "integer", "minimum": 0 },
-								"memoryMi": { "type": "integer", "minimum": 0 }
+								"cpuMillis": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Whole millicores, read as an integer by chart arithmetic. 1000 millicores is one CPU."
+								},
+								"memoryMi": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Whole mebibytes, read as an integer by chart arithmetic. One mebibyte is 1048576 bytes."
+								}
 							}
 						},
 						"seccompProfile": {
@@ -746,7 +795,11 @@
 								}
 							}
 						},
-						"probeInterval": { "type": "string", "pattern": "^[1-9][0-9]*(?:m|h)$" }
+						"probeInterval": {
+							"type": "string",
+							"pattern": "^[1-9][0-9]*(?:m|h)$",
+							"description": "Time parsed by Spring Boot Duration. Use a positive integer followed by m for minutes or h for hours."
+						}
 					}
 				},
 				"gitCache": { "$ref": "#/definitions/cache" },
@@ -773,7 +826,7 @@
 							"pattern": "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"
 						},
 						"reviewMemory": {
-							"description": "The memory that the sandbox nodes give review Pods, in Mi or Gi. The reviews that run at once are this over one review Pod's request and its RuntimeClass overhead.",
+							"description": "Memory for review Pods, in whole Mi or Gi, parsed by chart memory conversion and Kubernetes Quantity. Concurrent reviews are this over one review Pod request and its RuntimeClass overhead.",
 							"type": "string",
 							"pattern": "^[1-9][0-9]*(?:Mi|Gi)$"
 						},
@@ -844,10 +897,15 @@
 				"gitCheckoutEnabled": { "type": "boolean" },
 				"durableConsumerName": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
 				"consumerInactiveThreshold": { "$ref": "#/definitions/duration" },
-				"llmUsageRetention": { "type": "string", "pattern": "^P[0-9]+D$" },
+				"llmUsageRetention": {
+					"type": "string",
+					"pattern": "^P[0-9]+D$",
+					"description": "Retention in whole days, parsed by Spring Boot Duration from ISO-8601 P followed by an integer and D, such as P400D."
+				},
 				"conversationRetention": {
 					"type": "string",
-					"pattern": "^P(1[5-9]|[2-9][0-9]|[1-9][0-9]{2,})D$"
+					"pattern": "^P(1[5-9]|[2-9][0-9]|[1-9][0-9]{2,})D$",
+					"description": "Retention of at least 15 whole days, parsed by Spring Boot Duration from ISO-8601 P followed by an integer and D, such as P400D."
 				},
 				"llmDisplayCurrency": { "enum": ["", "EUR"] },
 				"llmPrivateHosts": {
@@ -890,13 +948,23 @@
 					"required": ["runOnStartup", "timeframeDays", "syncCron", "cooldownMinutes"],
 					"properties": {
 						"runOnStartup": { "type": "boolean" },
-						"timeframeDays": { "type": "integer", "minimum": 1, "maximum": 365 },
+						"timeframeDays": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 365,
+							"description": "Whole days, bound to an application integer. This is the initial sync and reconciliation timeframe."
+						},
 						"syncCron": {
 							"description": "A Spring cron expression with six fields, seconds first.",
 							"type": "string",
 							"pattern": "^\\S+( \\S+){5}$"
 						},
-						"cooldownMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 }
+						"cooldownMinutes": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 1440,
+							"description": "Whole minutes, bound to an application integer. This is the minimum interval between syncs."
+						}
 					}
 				},
 				"credentialKey": {

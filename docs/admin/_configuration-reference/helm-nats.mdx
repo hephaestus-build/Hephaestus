@@ -6,13 +6,13 @@
 | `nats.external.cidr` | string | `""` | yes | `pattern: "^(?:\|[0-9]{1,3}(?:\\.[0-9]{1,3}){3}/[0-9]{1,2}\|[0-9a-fA-F:]+/[0-9]{1,3})$"` |
 | `nats.external.port` | integer | `4222` | yes | `minimum: 1. maximum: 65535` |
 | `nats.external.url` | string | `""` | yes | `pattern: "^(?:\|(?:nats\|tls)://[A-Za-z0-9.-]+(?::[0-9]{1,5})?)$"` |
-| `nats.jetstream.maxFileBytes` | integer | `17179869184` | yes | `minimum: 1073741824. maximum: 1099511627776` |
-| `nats.jetstream.maxMemory` | string | `"1G"` | yes | `pattern: "^[0-9]+[KMGT]?$"` |
-| `nats.maxPayloadBytes` | integer | `26279936` | yes | `minimum: 1048576. maximum: 67108864` |
+| `nats.jetstream.maxFileBytes` | integer | `17179869184` | yes | Bytes as a whole number, read by the NATS configuration parser for max_file.<br />`minimum: 1073741824. maximum: 1099511627776` |
+| `nats.jetstream.maxMemory` | string | `"1G"` | yes | Bytes in the NATS configuration format: a whole number, optionally followed by K, M, G or T. These suffixes use powers of 1000; 1G is 1000000000 bytes.<br />`pattern: "^[0-9]+[KMGT]?$"` |
+| `nats.maxPayloadBytes` | integer | `26279936` | yes | Bytes as a whole number, read by the NATS configuration parser for max_payload.<br />`minimum: 1048576. maximum: 67108864` |
 | `nats.persistence.storageClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
-| `nats.resources.limits.cpu` | string | `"1"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `nats.resources.limits.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `nats.resources.limits.memory` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `nats.resources.requests.cpu` | string | `"100m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `nats.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `nats.resources.requests.memory` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `nats.resources.limits.cpu` | string | `"1"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `nats.resources.limits.ephemeral-storage` | string | `"256Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `nats.resources.limits.memory` | string | `"1Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `nats.resources.requests.cpu` | string | `"100m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `nats.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `nats.resources.requests.memory` | string | `"1Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |

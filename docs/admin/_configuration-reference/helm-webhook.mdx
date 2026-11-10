@@ -3,15 +3,15 @@
 | Key | Type | Default | Required in object | Constraints |
 | --- | --- | --- | --- | --- |
 | `webhook.replicas` | integer | `1` | yes | `minimum: 0. maximum: 3` |
-| `webhook.resources.limits.cpu` | string | `"2"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `webhook.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `webhook.resources.limits.memory` | string | `"640Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `webhook.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `webhook.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `webhook.resources.requests.memory` | string | `"640Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webhook.resources.limits.cpu` | string | `"2"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `webhook.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `webhook.resources.limits.memory` | string | `"640Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `webhook.resources.requests.cpu` | string | `"250m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `webhook.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `webhook.resources.requests.memory` | string | `"640Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `webhook.stream.allowDestructiveLimitUpdates` | boolean | `false` | yes | — |
-| `webhook.stream.limitUpdateTimeout` | string | `"5m"` | yes | `pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
-| `webhook.stream.maxAge` | string | `"7d"` | yes | `pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
-| `webhook.stream.maxAgeByStream` | object | `{}` |  | `additionalProperties: {"$ref":"#/definitions/duration"}` |
-| `webhook.stream.maxBytes` | string | `"1GB"` | yes | `pattern: "^[0-9]+(?:B\|KB\|MB\|GB\|TB)$"` |
-| `webhook.stream.maxBytesGithub` | string | `"10GB"` | yes | `pattern: "^[0-9]+(?:B\|KB\|MB\|GB\|TB)$"` |
+| `webhook.stream.limitUpdateTimeout` | string | `"5m"` | yes | Time parsed by Spring Boot Duration. Use a nonnegative integer followed by ms, s, m, h or d; d is 24 hours.<br />`pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
+| `webhook.stream.maxAge` | string | `"7d"` | yes | Time parsed by Spring Boot Duration. Use a nonnegative integer followed by ms, s, m, h or d; d is 24 hours.<br />`pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
+| `webhook.stream.maxAgeByStream` | object | `{}` |  | Each value: Time parsed by Spring Boot Duration. Use a nonnegative integer followed by ms, s, m, h or d; d is 24 hours.<br />`additionalProperties: {"$ref":"#/definitions/duration"}` |
+| `webhook.stream.maxBytes` | string | `"1GB"` | yes | Bytes parsed by Spring DataSize. Use an integer with B, KB, MB, GB or TB. These suffixes use powers of 1024; 1GB is 1073741824 bytes.<br />`pattern: "^[0-9]+(?:B\|KB\|MB\|GB\|TB)$"` |
+| `webhook.stream.maxBytesGithub` | string | `"10GB"` | yes | Bytes parsed by Spring DataSize. Use an integer with B, KB, MB, GB or TB. These suffixes use powers of 1024; 1GB is 1073741824 bytes.<br />`pattern: "^[0-9]+(?:B\|KB\|MB\|GB\|TB)$"` |

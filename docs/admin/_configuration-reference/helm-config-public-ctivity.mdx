@@ -3,4 +3,4 @@
 | Key | Type | Default | Required in object | Constraints |
 | --- | --- | --- | --- | --- |
 | `config.publicActivity.enabled` | boolean | `false` | yes | — |
-| `config.publicActivity.repositoryVisibilityMaxAge` | string | `"48h"` | yes | `pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
+| `config.publicActivity.repositoryVisibilityMaxAge` | string | `"48h"` | yes | Time parsed by Spring Boot Duration. Use a nonnegative integer followed by ms, s, m, h or d; d is 24 hours.<br />`pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
