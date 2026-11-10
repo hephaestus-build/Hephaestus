@@ -54,7 +54,7 @@ import {
 
 export interface ToolsServerOptions {
 	address: ToolAddress;
-	/** The nonce that the worker wrote into this Pod's spec: `hello` returns it, and the loop compares it. */
+	/** The nonce that the server wrote into this Pod's spec: `hello` returns it, and the loop compares it. */
 	nonce: string;
 	/** The mutable directory inside a volume. Its parent belongs to the tools user; reset replaces this directory. */
 	workspace: string;
@@ -1523,7 +1523,7 @@ if (import.meta.main) {
 	checkAuthority();
 	const nonce = process.env.TOOLS_NONCE;
 	if (nonce === undefined || nonce === "") {
-		throw new Error("TOOLS_NONCE is required: the worker writes the Pod's nonce into its spec");
+		throw new Error("TOOLS_NONCE is required: the server writes the Pod's nonce into its spec");
 	}
 	const workspace = "/tmp/tools/workspace";
 	const scratch = path.join(workspace, ".scratch");

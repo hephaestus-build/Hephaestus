@@ -55,13 +55,13 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
                     """, nativeQuery = true)
     void enqueue(@Param("request") Request request);
 
-    /** PostgreSQL delivers the pool-id hint to every worker only after the admission transaction commits. */
+    /** PostgreSQL delivers the pool-id hint to every server only after the admission transaction commits. */
     @Query(value = "SELECT 1 FROM (SELECT pg_notify(:channel, :payload)) sent", nativeQuery = true)
     int notifyPool(@Param("channel") String channel, @Param("payload") String payload);
 
     /**
      * Whether a review's call waits: one that is not interactive and has a workspace. Uses database time and includes
-     * every workspace and worker in this endpoint pool.
+     * every workspace and server in this endpoint pool.
      */
     @Query(value = """
             SELECT EXISTS (SELECT 1 FROM llm_call_permit q WHERE q.pool_id=p.id
@@ -195,7 +195,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
         String getState();
     }
 
-    /** This worker's requests that still have a row: those that an admission round granted read ACTIVE. */
+    /** This server's requests that still have a row: those that an admission round granted read ACTIVE. */
     @Query(
             value =
                     "SELECT id AS \"id\",state AS \"state\" FROM llm_call_permit WHERE worker_id=:workerId AND id IN (:ids)",
@@ -220,7 +220,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
         Integer getBaselineFirstTokenMs();
     }
 
-    /** What every pool in use stands at, whichever worker holds its calls, for its gauges. */
+    /** What every pool in use stands at, whichever server holds its calls, for its gauges. */
     @Query(value = """
             SELECT p.slug AS "slug",p.learned_limit AS "learnedLimit",p.max_concurrent_calls AS "maxConcurrentCalls",
               p.baseline_first_token_ms AS "baselineFirstTokenMs",

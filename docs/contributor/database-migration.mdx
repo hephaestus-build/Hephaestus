@@ -261,12 +261,12 @@ as triggers, partitioning and partial-index predicates. Verify those through dat
 
 After the upgrade from the previous stable release, the driver runs the previous release in three ways:
 
-1. **Server and worker roles on the new schema.** The previous release starts while the candidate runs.
-   It runs both roles in one process, with the Docker sandbox and its own agent image.
+1. **Previous server on the new schema.** The previous release starts while the candidate runs.
+   It runs the server and its agent runtime in one process, with the Docker sandbox and its own agent image.
    The e2e profile validates every entity against the schema at start.
    The previous release then passes readiness and the authenticated reads, and creates a workspace.
-   Its worker claims a queued review through the native claim queries and writes the job back.
-2. **Server and worker roles on a partial schema.** An event trigger stops the candidate's migration of a copy at a DDL statement.
+   It claims a queued review through the native claim queries and writes the job back.
+2. **Previous server on a partial schema.** An event trigger stops the candidate's migration of a copy at a DDL statement.
    The migration stops after about half of the new change sets.
    The previous release passes the same checks on that copy, including the claim.
    Then the migration runs again and must complete.
@@ -291,7 +291,7 @@ If the fixture does not fit a partial schema, the error says so.
 
 The previous release creates the AI model, its price and the workspace binding through its own API.
 The model points at an endpoint that nothing answers.
-The worker claims the job, sets itself as its owner and starts it.
+The previous release claims the job, sets itself as its owner and starts it.
 The attempt then fails while it captures the reviewed source, which is the expected end.
 Conversation turns are not claimed.
 

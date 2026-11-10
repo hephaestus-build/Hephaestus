@@ -28,11 +28,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The conversation tools Pods of the installation, held in {@code conversation_tools_pod}. A pool of {@link #poolSize}
- * started Pods waits ahead. A turn attempt's first call that needs one binds one, on whichever worker the call reaches,
+ * started Pods waits ahead. A turn attempt's first call that needs one binds one, on whichever server the call reaches,
  * and that Pod serves the attempt for its whole life. Every bind is fenced on the attempt's live lease.
  *
  * <p>One rule removes Pods ({@link #reap}): a Pod whose attempt holds no live lease goes, and so do a pooled Pod past
- * {@link #POOL_LIFE} and a Pod that never started. A worker that stops removes nothing: another worker serves its
+ * {@link #POOL_LIFE} and a Pod that never started. A server that stops removes nothing: another server serves its
  * attempts' calls, with their Pods.
  */
 @WorkspaceAgnostic("Tools Pods are installation-wide; each bound row names the workspace of its turn")
@@ -58,7 +58,7 @@ public class ConversationToolsPods implements AutoCloseable {
      */
     static final Duration START_GRACE = Duration.ofMinutes(5);
 
-    /** How long a failed start keeps this worker from offering tools: one failure is no lasting fault. */
+    /** How long a failed start keeps this server from offering tools: one failure is no lasting fault. */
     private static final Duration START_FAILURE_HOLD = Duration.ofMinutes(1);
 
     private static final Duration POLL = Duration.ofMillis(500);
@@ -98,7 +98,7 @@ public class ConversationToolsPods implements AutoCloseable {
         this.meters = meters;
     }
 
-    /** Whether this worker can bind tools Pods: its runtime is ready, and its last start of one did not fail. */
+    /** Whether this server can bind tools Pods: its runtime is ready, and its last start of one did not fail. */
     public boolean available() {
         Long failed = lastStartFailed;
         return !closed && pods.ready() && (failed == null || System.nanoTime() - failed > START_FAILURE_HOLD.toNanos());
@@ -133,7 +133,7 @@ public class ConversationToolsPods implements AutoCloseable {
                         ready = true;
                         return started(pod);
                     }
-                    // Another call of the attempt starts it, maybe on another worker.
+                    // Another call of the attempt starts it, maybe on another server.
                     pause();
                     continue;
                 }
@@ -246,7 +246,7 @@ public class ConversationToolsPods implements AutoCloseable {
 
     /**
      * The one cleanup rule: removes the Pods that no attempt with a live lease holds, pooled Pods past their life, Pods
-     * that never started, and Jobs that no row names. Then fills the pool. Every worker runs it; each step is
+     * that never started, and Jobs that no row names. Then fills the pool. Every server runs it; each step is
      * idempotent.
      */
     public void reap() {
@@ -282,7 +282,7 @@ public class ConversationToolsPods implements AutoCloseable {
         refill();
     }
 
-    /** Fills the installation's pool in the background, one Pod at a time, while no other worker fills it. */
+    /** Fills the installation's pool in the background, one Pod at a time, while no other server fills it. */
     void refill() {
         if (closed || !pods.ready() || !refilling.compareAndSet(false, true)) {
             return;
@@ -342,7 +342,7 @@ public class ConversationToolsPods implements AutoCloseable {
         }
     }
 
-    /** Stops binding and filling. It removes no Pod: the attempts that hold them go on with another worker. */
+    /** Stops binding and filling. It removes no Pod: the attempts that hold them go on with another server. */
     @Override
     public void close() {
         closed = true;

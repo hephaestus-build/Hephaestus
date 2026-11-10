@@ -792,7 +792,7 @@ export type ConfigurationFact = {
 	explanation: string;
 	id: string;
 	requirement: "REQUIRED" | "RECOMMENDED" | "OPTIONAL";
-	roles: Array<"SERVER" | "WORKER" | "WEBHOOK">;
+	roles: Array<"SERVER" | "WEBHOOK">;
 	status: "SATISFIED" | "ACTION_REQUIRED" | "NOT_CONFIGURED" | "NOT_APPLICABLE";
 	subject: string;
 };
@@ -3156,7 +3156,7 @@ export type MentorTurn = {
 	status: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "STOPPED";
 	surface: "APP" | "SLACK";
 	/**
-	 * Why a queued turn has not started. FREE_HEPH: a worker may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.
+	 * Why a queued turn has not started. FREE_HEPH: a server may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.
 	 */
 	waitingFor?: "FREE_HEPH";
 };
@@ -6011,7 +6011,7 @@ export type RunningRelease = {
 	/**
 	 * the runtime roles this process booted with
 	 */
-	roles: Array<"SERVER" | "WORKER" | "WEBHOOK">;
+	roles: Array<"SERVER" | "WEBHOOK">;
 	/**
 	 * the version the deployment passed as <code>APP_VERSION</code>
 	 */

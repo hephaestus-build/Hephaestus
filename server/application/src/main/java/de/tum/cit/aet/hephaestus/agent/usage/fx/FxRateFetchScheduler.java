@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 /**
  * Keeps {@code fx_rate} current: one ECB fetch a day, plus a catch-up fetch at boot when nothing
  * usable is stored. {@link ConditionalOnServerRole} keeps this feature's only outbound dependency off
- * the worker and webhook tiers; {@link SchedulerLock} stops two server replicas from both fetching.
+ * the webhook tier; {@link SchedulerLock} stops two server replicas from both fetching.
  */
 @ConditionalOnServerRole
 @Component

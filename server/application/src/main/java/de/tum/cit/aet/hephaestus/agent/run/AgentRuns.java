@@ -53,6 +53,13 @@ public class AgentRuns {
         return capacity;
     }
 
+    /** The in-flight review work of the single server, including feedback composition. */
+    @Transactional(readOnly = true)
+    @WorkspaceAgnostic("Single-server shutdown counts leased reviews across workspaces")
+    public int leasedReviews() {
+        return runs.countLeased(AgentRunKind.REVIEW.name()) + runs.countLeased(AgentRunKind.REVIEW_COMPOSE.name());
+    }
+
     /** Queues a new run of a subject. Claimers hear of it after the transaction commits. */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef enqueue(

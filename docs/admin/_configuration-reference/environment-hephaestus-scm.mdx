@@ -2,4 +2,4 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
-| `HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS` | `hephaestus.scm.egress.private-hosts` | `default: (empty)` | `server`, `worker` | Host names, IP addresses or CIDR ranges of a Git provider on a private network. Only private addresses qualify: loopback, link-local and the known cloud metadata ranges stay blocked. A range wider than /16 (IPv4) or /48 (IPv6), outside the private ranges, or covering this server's own address stops startup. Empty allows public hosts only. |
+| `HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS` | `hephaestus.scm.egress.private-hosts` | `default: (empty)` | `server` | Host names, IP addresses or CIDR ranges of a Git provider on a private network. Only private addresses qualify: loopback, link-local and the known cloud metadata ranges stay blocked. A range wider than /16 (IPv4) or /48 (IPv6), outside the private ranges, or covering this server's own address stops startup. Empty allows public hosts only. |

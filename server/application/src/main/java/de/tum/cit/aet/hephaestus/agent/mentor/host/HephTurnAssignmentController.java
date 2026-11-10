@@ -1,7 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.AgentReviewDrain;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,32 +12,34 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Where the conversation loop pulls the turn attempts it runs, on any worker's sandbox gateway, with the loop's own
+ * Where the conversation loop pulls the turn attempts it runs, on any server's sandbox gateway, with the loop's own
  * credential. The loop pulls only while it has room for one more turn.
  */
 @RestController
 @RequestMapping("/internal/llm/turn-assignments")
 @PreAuthorize("isAuthenticated()")
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @Profile(HephTurnConfiguration.PROFILES)
 @WorkspaceAgnostic("The loop runs every workspace's turns; each assignment's credential binds its workspace")
 public class HephTurnAssignmentController {
 
     private final HephTurns turns;
+    private final AgentReviewDrain drain;
 
-    public HephTurnAssignmentController(HephTurns turns) {
+    public HephTurnAssignmentController(HephTurns turns, AgentReviewDrain drain) {
         this.turns = turns;
+        this.drain = drain;
     }
 
     /**
      * The next turn attempt, after a wait of up to {@link HephTurns#PULL_WAIT}: {@code 200} with the attempt,
-     * {@code 204} when none may start now, or {@code 503} when this worker stops or cannot claim, so the loop waits
-     * and pulls again, maybe from another worker.
+     * {@code 204} when none may start now, or {@code 503} when this server stops or cannot claim, so the loop waits
+     * and pulls again, maybe from another server.
      */
     @PostMapping
     public ResponseEntity<HephTurns.Assignment> pull() {
         try {
-            return turns.assign()
+            return drain.claim(turns::assign)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.noContent().build());
         } catch (RuntimeException unavailable) {

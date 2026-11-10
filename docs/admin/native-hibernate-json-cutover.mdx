@@ -22,8 +22,8 @@ Both audit consoles retain their String contracts.
 TEXT cannot identify whether an old value was a JSONB String or a structured JSON value.
 Use a verified backup to recover the previous schema and data.
 
-1. Schedule an outage for all runtime roles: `server`, `worker`, and `webhook`.
-2. Stop every replica of all three runtime roles.
+1. Schedule an outage for every runtime role of the release.
+2. Stop every replica of each runtime role.
 3. Stop external database writers and scheduled database maintenance.
 4. Confirm that no writer or old application process can restart during the migration.
 5. Create a complete database backup with the existing Liquibase history.
@@ -81,7 +81,7 @@ Authentication retention still removes old partitions.
 
 ## Recover the previous release
 
-1. Stop every replica of `server`, `worker`, and `webhook`.
+1. Stop every replica of each runtime role.
 2. Stop other database writers and scheduled database maintenance.
 3. Restore the verified database backup from before the cutover.
 4. Deploy the previous release to every runtime role.

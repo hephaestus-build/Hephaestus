@@ -2,10 +2,10 @@
  * The review runtime's diagnostics on stderr. Each line names one event of `pi-diagnostics.json`, with
  * fields of that vocabulary only: counts, flags and closed codes. A text that a tool, a
  * model, a provider or reviewed code wrote has no field to go in, and neither has a label, a slug, a
- * path or an id: such text can hold reviewed code, a credential or a person's words, and the worker
+ * path or an id: such text can hold reviewed code, a credential or a person's words, and the server
  * copies these lines into its own log. A practice and a turn are named by their positions.
  *
- * The worker keeps only lines that this vocabulary allows (`SandboxExits.java`), so a line that
+ * The server keeps only lines that this vocabulary allows (`SandboxExits.java`), so a line that
  * breaks it is dropped there too.
  */
 
@@ -60,7 +60,7 @@ function valueOf(type: FieldType, value: DiagnosticValue): string | undefined {
 }
 
 /**
- * Whether the worker keeps `line`: one event of the vocabulary, then fields of the vocabulary, each
+ * Whether the server keeps `line`: one event of the vocabulary, then fields of the vocabulary, each
  * once, each with a value its type allows. `SandboxExits.keeps` decides the same way.
  */
 export function isDiagnosticLine(line: string): boolean {

@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnEvidence;
 import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
 import de.tum.cit.aet.hephaestus.mentor.MentorContextPathBuilder;
@@ -41,7 +41,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * What a turn reads from this worker: its context, and the tools it calls with the turn's credential. A turn's
+ * What a turn reads from this server: its context, and the tools it calls with the turn's credential. A turn's
  * context documents are built once, when its host asks for the context, and the tools Pod stages that build, so one
  * turn sees one consistent picture. A link tool shows only the developer's own results and problems, and
  * {@code show_feedback} claims the feedback's conversation copy for the attempt. The build is dropped when the turn
@@ -49,12 +49,12 @@ import tools.jackson.databind.node.ObjectNode;
  * never ends here. A turn that reads after that gets a new build for the same question.
  */
 @Service
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @Profile(HephTurnConfiguration.PROFILES)
 public class HephTurnContexts {
 
     /**
-     * The situation of a turn that this worker cannot give a context folder, for example when no tools Pod can start.
+     * The situation of a turn that this server cannot give a context folder, for example when no tools Pod can start.
      * The turn has no read, bash or load tool, and without this line its instructions still send it to read files.
      */
     static final String NO_CONTEXT_FOLDER =
@@ -148,7 +148,7 @@ public class HephTurnContexts {
      * @param entries the Pi session entries before the turn, rendered by the path builder
      * @param prompt the turn's question as the loop passes it to {@code prompt()}
      * @param situation the turn's situation ({@link MentorSituation})
-     * @param contextFolder whether the workers serve read, bash and load_context
+     * @param contextFolder whether the servers serve read, bash and load_context
      * @param systemPrompt Heph's system prompt, which the loop gives the turn's session
      */
     public record Context(

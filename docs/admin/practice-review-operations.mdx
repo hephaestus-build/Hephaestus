@@ -19,9 +19,9 @@ The rendered Helm chart determines which configuration reaches each role.
 Agent execution alone does not enable repository collection.
 Each workspace enables practice review and selects its own coverage.
 
-1. Enable the agent runtime on both the submitting server and claiming worker.
+1. Enable the agent runtime on the server.
 2. Enable `GIT_CHECKOUT_ENABLED` for repository access.
-3. Give every server and worker container its own storage under `HEPHAESTUS_FABRIC_ROOT` for repository mirrors and attempt inputs.
+3. Give every server container its own storage under `HEPHAESTUS_FABRIC_ROOT` for repository mirrors and attempt inputs.
 4. Set campaign, request-rate, retry, and retention limits appropriate to the deployment's budget and governance policy.
 
 ### Quiet window
@@ -144,7 +144,7 @@ A handed-on attempt that the developer's AI choice, the budget or a missing mode
 A sandbox that cannot prepare its workspace runs again in a new attempt, within the same shared retry limit.
 This failure occurs before any model call, so it is a failure of the infrastructure, not of the review.
 A failure that repeats on every attempt uses all attempts of the retry limit, five by default, before the job fails.
-The worker log names it with its exit code.
+The server log names it with its exit code.
 
 After the last attempt, the job keeps the initializer's exit code and the last 20 lines of its log under `capture.initializationFailure`.
 Known credential formats in those lines are masked.
@@ -183,15 +183,13 @@ Before you change an environment variable:
 Unknown variables or variables that the deployment does not forward cannot configure the application.
 Repository mirrors and attempt folders are disposable container-local storage, not a shared evidence store.
 Each container keeps bare mirrors under its own `HEPHAESTUS_FABRIC_ROOT`, which defaults to `/data/git-repos`.
-The chart gives the server and worker their own repository-cache storage.
+The chart gives each server its own repository-cache storage.
 A missing mirror is cloned again on the next sync or review.
 
 Git runs in-process through JGit, with no `git` binary or second image.
-Commit ingestion uses the server role and its mirrors.
-Review preparation uses the worker role and its mirrors.
-A server with its worker role enabled uses one root for both.
+Commit ingestion and review preparation use the server's mirrors, under one root.
 Attempt folders use the same root.
-Sandbox inputs and results pass through the authenticated worker gateway.
+Sandbox inputs and results pass through the server's authenticated sandbox gateway.
 
 Preparation failures record the stage and a known failure type without exception text.
 File and database failure types remain visible when preparation wraps the cause.
@@ -208,7 +206,7 @@ Eligibility and retry limits are unchanged.
 Earlier failures without a retained cause cannot be classified retrospectively.
 
 PostgreSQL retains admitted results and their citation verification results.
-Delivery does not require the worker's source files.
+Delivery does not require the server's source files.
 [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion) defines the storage and cleanup contract.
 
 Source authorization is not a deployment switch.
@@ -222,7 +220,7 @@ For workspace model readiness, coverage, feedback mode, spend, and review activi
 
 ### Queue health
 
-A worker claims work that already started before fresh reviews.
+A server claims work that already started before fresh reviews.
 One kind is a review on a later attempt, such as one that a drain put back.
 The other is a review whose results were admitted and whose feedback is still open.
 Within each group, the oldest job comes first.
@@ -245,7 +243,7 @@ Use them for alerts instead of application logs.
   `server_unreachable` and `provider_unreachable`: the sandbox could not reach the server's gateway or the model provider.
 - **`agent.run.reaped{kind=review,outcome=attempts_exhausted}`** — reviews that failed because the holder of each attempt stopped renewing its lease.
 - **`agent.job.delivery.recovered`** — deliveries stopped by an executor crash and successfully retried.
-- **`agent.job.composition.stopped`** — destinations whose feedback the worker did not write, tagged by `cause` and `outcome`.
+- **`agent.job.composition.stopped`** — destinations whose feedback the server did not write, tagged by `cause` and `outcome`.
   `withheld` counts a recorded withholding, and `handed_on` counts an attempt handed on to compose again.
   `refused` counts a withholding that the server refused. The attempt is handed on to record it again.
   `unrecorded` counts a review whose runs ended before they confirmed each destination, so it closed as Partial.
@@ -269,13 +267,13 @@ Use them for alerts instead of application logs.
 
 1. Query `/actuator/health/readiness` on the [management listener](./monitoring.md#scrape-metrics), or `/readyz` on the application port, for aggregate readiness.
 
-An authorized response includes the **`practiceReview`** component.
-An enabled review worker reports `OUT_OF_SERVICE` with `GIT_CHECKOUT_DISABLED` when repository checkout is disabled.
+An authorized response includes the **`practiceReview`** component. It is not part of readiness.
+A server with the agent runtime reports `OUT_OF_SERVICE` with `GIT_CHECKOUT_DISABLED` when repository checkout is disabled.
 It reports `SOURCE_AUTHORIZATION_EXPIRED` when an automated-review source authorization has expired.
 
 Missing model assignments are workspace-specific.
 They stay visible under **Practices → Practice reviews → Reviews** and in the refusal counter.
-They do not remove the worker from service.
+They do not change the server's health.
 Gauges have periodic samples.
 Timers and counters record their corresponding events.
 Metric names in the instrumented code are authoritative for dashboards and alerts.
@@ -359,7 +357,7 @@ It never becomes a claim about the developer's work.
 
 #### Practice script metrics
 
-One metric counts practice script events on the worker:
+One metric counts practice script events on the server:
 
 - **`agent.review.practice_scripts`** — one count for each practice that the report of a review attempt records, tagged by `status`: `ok`, `withheld`, `failed`, `not_reached` or `not_finished`.
   It counts built-in scripts and practice scripts.
@@ -375,18 +373,18 @@ One metric counts practice script events on the worker:
 ### Log correlation
 
 The application emits one JSON object per log line.
-Worker logs use correlation keys under `mdc`.
+Server logs use correlation keys under `mdc`.
 Run the filter tools on a protected operator workstation.
 
 1. Filter the logs:
 
 ```bash
 # All log lines for one agent job
-kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --all-containers --tail=-1 \
+kubectl -n hephaestus logs -l app.kubernetes.io/component=server --all-containers --tail=-1 \
   | jq -cR 'fromjson? | select(.mdc."job.id" == "<job-uuid>")'
 
 # All errors for one workspace
-kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --all-containers --tail=-1 \
+kubectl -n hephaestus logs -l app.kubernetes.io/component=server --all-containers --tail=-1 \
   | jq -cR 'fromjson? | select(.mdc."workspace.id" == "<workspace-id>" and .level == "ERROR")'
 ```
 
@@ -428,7 +426,7 @@ Use the [review controls](./practice-review.mdx#approve-reject-and-retry) after 
 
 Payload expiry is independent of terminal job deletion and product review history.
 A row lifetime shorter than its payload lifetime is invalid.
-Treat every worker fabric root as sensitive storage.
+Treat every server fabric root as sensitive storage.
 
 The [durable retention](#scans-and-durable-retention) section owns default windows.
 The [data map](./dsms/personal-data-map.md) owns source-person erasure and physical custody.
@@ -465,9 +463,9 @@ These behaviors matter independently of configured capacity:
   Model-facing output limits do not bound capture storage.
   The captured worktree and Git metadata are read-only, with no repository credentials or upstream configuration.
   Reviews use an isolated internal Docker network.
-  The authenticated worker gateway must be reachable on it.
+  The server's authenticated sandbox gateway must be reachable on it.
 - **Repository preparation is bounded per snapshot and per walk.**
-  Server and worker roles use JGit for capture.
+  The server uses JGit for capture.
   This needs no sandbox admission and does not count against `SANDBOX_MAX_CONCURRENT`.
   `GIT_MAX_CONCURRENT_INGESTIONS` (default 2) caps captured commits that a container writes to PostgreSQL simultaneously.
   A checkout plus mirrored history over `GIT_MAX_SNAPSHOT_BYTES` (default 8 GiB) causes refusal of the whole repository.

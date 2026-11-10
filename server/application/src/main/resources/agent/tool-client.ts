@@ -125,7 +125,7 @@ export class ToolClient {
 	}
 
 	/**
-	 * Connects and says hello, within {@link LIMITS.silenceMs}. `nonce` is the one that the worker wrote into the tools
+	 * Connects and says hello, within {@link LIMITS.silenceMs}. `nonce` is the one that the server wrote into the tools
 	 * Pod's spec: the loop never sends it, so only that Pod's tools side can answer with it.
 	 */
 	static async open(address: ToolAddress, nonce: string): Promise<ToolClient> {
@@ -145,7 +145,7 @@ export class ToolClient {
 			if (text(reply.header, "nonce") !== nonce) {
 				throw new ToolProtocolError(
 					"nonce",
-					"the tools side is not the Pod that the worker started",
+					"the tools side is not the Pod that the server started",
 				);
 			}
 			const bootId = text(reply.header, "bootId");

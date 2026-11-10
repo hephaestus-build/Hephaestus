@@ -13,7 +13,7 @@ Fill in the recipient record below for each recipient before you enable it.
 | Component | What it receives | Role to assess |
 |---|---|---|
 | Your container host, PostgreSQL, NATS and the application roles | All application data | Own infrastructure needs no agreement. An externally operated host or database needs an Art. 28 assessment. |
-| Worker, review sandboxes, the conversation loop and tools Pods | AI work, temporary context and mounted evidence | Own infrastructure needs no agreement. Record each external worker operator, location, access and deletion acknowledgement. |
+| Server, review sandboxes, the conversation loop and tools Pods | AI work, temporary context and mounted evidence | Own infrastructure needs no agreement. Record each external server operator, location, access and deletion acknowledgement. |
 | Reverse proxy or Gateway, ACME endpoint, DNS provider | TLS traffic and domain-validation data | A DNS-only record carries no request data. A proxied record or CDN makes its provider a recipient of request data. |
 | GitHub, a GitLab instance | Sign-in identities and the source system's data | Assess whether the provider processes on your instructions or is a separate controller of its own service. |
 | Model providers configured for a workspace | Prompts and responses for practice review and Hephaestus, where the AI choice allows them | An external provider processes on your instructions and needs an agreement. An in-house model on your infrastructure does not. |
@@ -111,7 +111,7 @@ Amend this record, your Art. 30 record, and the privacy statement before deployi
 - SMTP email delivery becomes active. The chosen SMTP host becomes a recipient of personal data. An external relay needs an Art. 28 DPA.
 - Collecting container logs into a log store, or adding a recipient to one. Record the exact operator, role, region, retention and transfer path. Amend the notice and reassess the DPIA. An external processor needs an Art. 28 agreement.
 - The application adds external storage (S3, CDN) or serves a third-party font, script, image, or embed. This requires a recipient-role assessment, any applicable agreement and a privacy-statement entry.
-- Hephaestus gains internet access or the practice-review sandbox network posture expands beyond the governed worker gateway. This triggers a new DPIA assessment.
+- Hephaestus gains internet access or the practice-review sandbox network posture expands beyond the governed sandbox gateway of the server. This triggers a new DPIA assessment.
 - An existing processor receives a new source privacy class. Its region or provider retention changes. Product evidence gains an operator/research evaluation use. An existing DPA does not by itself authorize a new purpose or data category. Complete the [source governance gate](./item-source-governance.md).
 - Research benchmark runs start without the agreement that "Research benchmark runs" requires.
 - Research benchmark runs use data that is not pseudonymized.

@@ -546,7 +546,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 		await writeFile(
 			path.join(smoke, `host-smoke-k3s-${architecture}.json`),
 			JSON.stringify({
-				schemaVersion: 1,
+				schemaVersion: 2,
 				release: fixtureRelease,
 				commit: source,
 				testedAt: new Date("2026-10-15T10:00:00Z").toISOString(),
@@ -556,7 +556,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 					kernel: "6.14.0",
 					kubeletVersion: "v1.35.9+k3s1",
 				},
-				workers: 2,
+				servers: 1,
 				checks: {
 					install: true,
 					secondInstall: true,
@@ -1583,7 +1583,7 @@ void test(
 			{ ...valid, release: "v0.93.1" },
 			{ ...valid, host: { ...asRecord(valid.host, "host"), architecture: "amd64" } },
 			{ ...valid, checks: { ...asRecord(valid.checks, "checks"), isolation: false } },
-			{ ...valid, workers: "2" },
+			{ ...valid, servers: "1" },
 			{
 				schemaVersion: 1,
 				release,

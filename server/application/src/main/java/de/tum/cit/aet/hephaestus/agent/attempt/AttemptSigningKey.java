@@ -8,8 +8,8 @@ import java.security.interfaces.RSAPublicKey;
 import java.util.UUID;
 
 /**
- * The key that this worker signs its attempt tokens with. Its private half lives only in this process's memory, so a
- * restart rotates it. {@link AttemptKeyring} publishes its public half, and any worker can then verify the tokens.
+ * The key that this server signs its attempt tokens with. Its private half lives only in this process's memory, so a
+ * restart rotates it. {@link AttemptKeyring} publishes its public half, and any server can then verify the tokens.
  *
  * @param kid the token's {@code kid} header
  */

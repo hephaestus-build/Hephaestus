@@ -6,7 +6,7 @@ preempts. The values stay below the system classes (2000000000 and above).
 */}}
 {{- if .Values.priorityClasses.create }}
 {{- $tiers := list (dict "tier" "roles" "value" 100000 "preemption" "PreemptLowerPriority" "description" "Hephaestus roles, the conversation loop, PostgreSQL and NATS") }}
-{{- if .Values.worker.enabled }}
+{{- if .Values.sandbox.enabled }}
 {{- $tiers = append $tiers (dict "tier" "conversations" "value" 10000 "preemption" "PreemptLowerPriority" "description" "Hephaestus tools Pods of conversations") }}
 {{- $tiers = append $tiers (dict "tier" "reviews" "value" 1000 "preemption" "Never" "description" "Hephaestus review sandboxes and isolation probes") }}
 {{- end }}

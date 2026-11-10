@@ -1,4 +1,4 @@
-# One short-lived preview of a pull request. Bundled PostgreSQL and NATS, small volumes, no worker.
+# One short-lived preview of a pull request. Bundled PostgreSQL and NATS, small volumes, no sandboxes.
 # ADR 0035 owns what a preview may run and against what; this file sets only capacity.
 deploymentEnvironment: preview
 config:

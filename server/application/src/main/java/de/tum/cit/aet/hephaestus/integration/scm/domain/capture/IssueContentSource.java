@@ -2,12 +2,12 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCaptureContext.OUTPUT_PREFIX;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -39,7 +39,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 // Missing, tombstoned, or changed issues make capture unavailable; empty content could create false positives.
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class IssueContentSource {
 
     public static final SourceKind CORE = new SourceKind("scm.issue.core");

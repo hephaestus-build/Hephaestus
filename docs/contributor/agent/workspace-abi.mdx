@@ -10,7 +10,7 @@ description: Reserved paths, task envelope, and exit codes for the Pi sandbox wo
 This ABI covers the one-shot practice runner's container workspace at `/workspace/`.
 The conversation loop uses its own layout. See [Conversation runtime](../unified-pi-runtime.mdx).
 
-The worker renders one disposable folder for an owned execution attempt.
+The server renders one disposable folder for an owned execution attempt.
 The runtime contract is version 8. Practice inputs and candidates use script contract version 3.
 
 ## Folder layout
@@ -36,11 +36,11 @@ The runtime contract is version 8. Practice inputs and candidates use script con
 └── task.json                        # Owned runtime envelope.
 ```
 
-The conversation loop runs its compiled program from the agent image. No worker stages it.
-It reads the stored path, the situation and the system prompt of a turn from the worker (`GET context`).
+The conversation loop runs its compiled program from the agent image. No server stages it.
+It reads the stored path, the situation and the system prompt of a turn from the server (`GET context`).
 
 The conversation loop reads context documents and repositories from a [context folder](../practice-review-glossary.mdx#runtime-terms) ([Conversation runtime](../unified-pi-runtime.mdx#context-folder)).
-The worker serves the documents, and the loop reaches the rest in the turn's tools Pod.
+The server serves the documents, and the loop reaches the rest in the turn's tools Pod.
 That folder uses a layout similar to the job folder: documents under `inputs/context/` and repositories under `repos/`.
 The practice runner and the conversation loop execute on Node.
 See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).
@@ -94,7 +94,8 @@ A search receipt (`SEARCHED`, path `.`) records a grep for its `pattern` over th
 The grep had no file filter and ran to the end.
 The receipt has no line range, and it proves no file read.
 
-The loop searches the same files again in its own worker, and the receipt carries the checkout digest of the bytes that this search read.
+The loop searches the same files again in its own worker thread.
+The receipt carries the checkout digest of the bytes that this search read.
 The checkout digest is the SHA-256 of one line `<path>\0<SHA-256 of the file>\n` for each regular file outside `.git`, in the byte order of the paths.
 `checkoutDigest` in `pi-search-worker.ts` defines it.
 

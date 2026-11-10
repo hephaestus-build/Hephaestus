@@ -89,7 +89,7 @@ public class MentorTurn implements Persistable<UUID> {
 
     /** Why a queued turn has not started ({@link MentorTurnWaits}). */
     public enum WaitingFor {
-        /** A worker may start it, and every Heph slot of the deployment is taken. */
+        /** A server may start it, and every Heph slot of the deployment is taken. */
         FREE_HEPH,
     }
 
@@ -141,7 +141,7 @@ public class MentorTurn implements Persistable<UUID> {
     private String error;
 
     /**
-     * Why the attempt failed, for the operator: the host's reason and kind of failure, or why the worker ended the
+     * Why the attempt failed, for the operator: the host's reason and kind of failure, or why the server ended the
      * attempt itself. It names closed kinds only, never a host's, a provider's or an exception's text. {@code null}
      * unless the turn is {@code FAILED}.
      */
@@ -167,7 +167,7 @@ public class MentorTurn implements Persistable<UUID> {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    /** When this question entered its current queue wait, retained across worker and server restarts. */
+    /** When this question entered its current queue wait, retained across server restarts. */
     @Column(name = "queued_at", nullable = false)
     @ColumnDefault("now()")
     private Instant queuedAt;
@@ -180,7 +180,7 @@ public class MentorTurn implements Persistable<UUID> {
     @Column(name = "finished_at")
     private Instant finishedAt;
 
-    /** The items that the current attempt loaded into its context folder, on any worker. */
+    /** The items that the current attempt loaded into its context folder, on any server. */
     @Column(name = "tools_loads", nullable = false)
     @ColumnDefault("0")
     private int toolsLoads;

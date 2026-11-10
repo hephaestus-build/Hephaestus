@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.core.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerPropertiesConfiguration;
+import de.tum.cit.aet.hephaestus.agent.gateway.AgentShutdownConfiguration;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
@@ -29,10 +29,27 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
 
     @Test
     void shouldStopTheServerWithinItsGrace() throws IOException {
-        Duration stop = httpPhase().plus(IntegrationNatsConsumer.SHUTDOWN_WAIT).plus(MARGIN);
+        Duration stop = preStop("server.yaml")
+                .plus(httpPhase())
+                .plus(IntegrationNatsConsumer.SHUTDOWN_WAIT)
+                .plus(MARGIN);
 
-        assertThat(chartGrace("server.yaml"))
-                .isGreaterThanOrEqualTo(preStop("server.yaml").plus(stop));
+        assertThat(Duration.ofSeconds(Long.parseLong(serverGrace().group(2))))
+                .as("the server without sandboxes")
+                .isGreaterThanOrEqualTo(stop);
+    }
+
+    @Test
+    void shouldStopTheServerWithSandboxesWithinItsGraceForAnyDrain() throws IOException {
+        // With sandboxes the grace is the drain plus a constant, so it fits every drainTimeoutSeconds once the
+        // constant covers what the stop adds to the drain.
+        Duration beyondDrain = preStop("server.yaml")
+                .plus(AgentShutdownConfiguration.drainPhaseTimeout(Duration.ZERO))
+                .plus(httpPhase())
+                .plus(IntegrationNatsConsumer.SHUTDOWN_WAIT)
+                .plus(MARGIN);
+
+        assertThat(Duration.ofSeconds(Long.parseLong(serverGrace().group(1)))).isGreaterThanOrEqualTo(beyondDrain);
     }
 
     @Test
@@ -43,23 +60,17 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
                 .isGreaterThanOrEqualTo(preStop("webhook.yaml").plus(stop));
     }
 
-    @Test
-    void shouldStopTheWorkerWithinItsGraceForAnyDrain() throws IOException {
-        // The chart's grace is the drain plus a constant, so it fits every drainTimeoutSeconds once the constant
-        // covers what the stop adds to the drain.
-        Matcher grace = Pattern.compile("terminationGracePeriodSeconds: \\{\\{ add \\$drain (\\d+) }}")
-                .matcher(read("deploy/chart/hephaestus/templates/worker.yaml"));
+    /** The server's grace: group 1 is the constant added to the drain with sandboxes, group 2 the grace without. */
+    private static Matcher serverGrace() throws IOException {
+        Matcher grace = Pattern.compile("\\$grace := ternary \\(add \\$drain (\\d+)\\) (\\d+) \\$sandbox\\.enabled }}")
+                .matcher(read("deploy/chart/hephaestus/templates/server.yaml"));
         assertThat(grace.find())
-                .as("the worker grace is the drain plus a constant")
+                .as("the server grace is the drain plus a constant with sandboxes, else a constant")
                 .isTrue();
-        Duration beyondDrain = preStop("worker.yaml")
-                .plus(WorkerPropertiesConfiguration.drainPhaseTimeout(Duration.ZERO))
-                .plus(httpPhase())
-                .plus(MARGIN);
-        assertThat(Duration.ofSeconds(Long.parseLong(grace.group(1)))).isGreaterThanOrEqualTo(beyondDrain);
+        return grace;
     }
 
-    /** The timeout of each shutdown phase except the worker's drain: {@code SHUTDOWN_TIMEOUT}'s default. */
+    /** The timeout of each shutdown phase except the review drain: {@code SHUTDOWN_TIMEOUT}'s default. */
     private static Duration httpPhase() throws IOException {
         Matcher matcher = Pattern.compile("timeout-per-shutdown-phase: \\$\\{SHUTDOWN_TIMEOUT:([^}]+)}")
                 .matcher(read("server/application/src/main/resources/application.yml"));

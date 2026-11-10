@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
  * calendar days of today, this week and last week in their time zone, so no answer depends on date arithmetic.
  */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @Profile(HephTurnConfiguration.PROFILES)
 @RequiredArgsConstructor
 public class HephSituation {

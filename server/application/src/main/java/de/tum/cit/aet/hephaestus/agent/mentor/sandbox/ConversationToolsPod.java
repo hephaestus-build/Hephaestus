@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnDefault;
 
 /**
- * One conversation tools Pod of the installation. A row without a turn is pooled: any worker may bind it. A bound row
+ * One conversation tools Pod of the installation. A row without a turn is pooled: any server may bind it. A bound row
  * names the one turn attempt that the Pod serves for its whole life. The row is written before its Job is created, so
  * every Job of the kind has a row or is removed.
  */

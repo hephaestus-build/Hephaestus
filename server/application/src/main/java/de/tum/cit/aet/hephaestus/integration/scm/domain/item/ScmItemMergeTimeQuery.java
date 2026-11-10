@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemMergeTimeQuery;
@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Retained item identities scope actual provider merge facts without preparing a new capture. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ScmItemMergeTimeQuery implements ItemMergeTimeQuery {
     private final ScmItemAccess items;

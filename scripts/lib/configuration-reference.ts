@@ -16,7 +16,6 @@ const RESOURCES = "server/application/src/main/resources";
 export const APPLICATION_FILES = [
 	"application.yml",
 	"application-prod.yml",
-	"application-worker.yml",
 	"application-webhook.yml",
 ].map((file) => `${RESOURCES}/${file}`);
 const DEVELOPER_PROFILES = new Set(["local", "e2e", "playwright", "test"]);
@@ -712,8 +711,8 @@ export function renderReference(
 		"The Constraints column gives units, parsers and schema bounds.",
 		"Use the format of that parser: [Kubernetes quantities](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-units-in-kubernetes), [Spring conversion](https://docs.spring.io/spring-boot/reference/features/external-config.html#features.external-config.typesafe-configuration-properties.conversion), [Spring sizes](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/util/unit/DataSize.html), [NATS configuration](https://docs.nats.io/reference/config/), [PostgreSQL settings](https://www.postgresql.org/docs/current/config-setting.html#CONFIG-SETTING-NAMES-VALUES), [pgBackRest retention](https://pgbackrest.org/configuration.html#section-repository/option-repo-retention-full), or [VictoriaMetrics retention](https://docs.victoriametrics.com/victoriametrics/#retention).",
 		"",
-		"When the chart renders them, it converts `nats.resources.requests.memory`, `nats.resources.limits.memory` and `worker.resources.limits.memory` to MiB for memory limits.",
-		"These values, Git-cache `sizeLimit` values and `worker.sandbox.reviewMemory` require whole Mi or Gi.",
+		"When the chart renders them, it converts `nats.resources.requests.memory`, `nats.resources.limits.memory` and `server.resources.limits.memory` to MiB for memory limits.",
+		"These values, Git-cache `sizeLimit` values and `sandbox.reviewMemory` require whole Mi or Gi.",
 		"Automatic turn admission converts CPU requests to millicores. Use cores or millicores for those requests.",
 		"Other Kubernetes resource quantities are passed through as written.",
 		"",

@@ -15,9 +15,9 @@ A review can outlive every execution job that produced it.
 
 The server selects and persists a review before runtime execution.
 The review's sandbox claims its job through the PostgreSQL queue ([Agent runs § A review in its sandbox](./agent-runs.mdx#a-review-in-its-sandbox)).
-The server and the workers share no other channel.
+The servers share no other channel.
 The webhook role receives provider input and does not execute reviews.
-Only the worker owns sandbox access.
+Only a server with the agent runtime owns sandbox access.
 
 An ITEM review executes its assigned item.
 A SCAN review can own many bounded file jobs, with one active job at a time.
@@ -58,7 +58,7 @@ The [AI provider guide](/admin/ai-providers) owns model assignment, prices and c
 
 ## Admission and composition
 
-The worker submits candidates and trusted receipts for its owned attempt.
+The server submits candidates and trusted receipts for its owned attempt.
 The server returns allocated result and problem identities with verified citations.
 Composition can refer only to those admitted records.
 An ids-only admission response cannot authorize an invented problem reference.

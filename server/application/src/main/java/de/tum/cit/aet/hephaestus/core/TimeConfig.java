@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * The application {@link Clock}. Deliberately not gated on a runtime role: every role injects it, and
- * gating it fails context refresh on worker and webhook.
+ * gating it fails context refresh on the webhook role.
  */
 @Configuration
 @ReceiverComponent

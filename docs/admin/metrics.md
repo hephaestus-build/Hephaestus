@@ -71,7 +71,7 @@ ORDER BY c.workspace_id, p.slug, c.kind, c.change;
 | `agent_job_stage_duration_seconds` | Histogram | `stage`, `outcome` | Duration of one stage of a review attempt |
 
 `outcome` is one of `completed`, `failed`, `timed_out`, or `cancelled`. `phase` is one of `queue`,
-`execution`, or `total`. Identifiers, model and provider names, worker IDs, and exception text are not
+`execution`, or `total`. Identifiers, model and provider names, server IDs, and exception text are not
 labels. See [Practice Review Operations](./practice-review-operations.mdx) for queue health and the
 existing execution metric.
 
@@ -94,7 +94,7 @@ The stages do not add up to the attempt.
 An attempt that resumes a composition has a `composition` sample, but no `capture` and no `sandbox` sample.
 The `capture` and `sandbox` stages are also spans, `practice_review.<stage>`, under the attempt's `practice_review.execute` span.
 
-The runner admits results through two worker routes.
+The runner admits results through two server routes.
 Their durations are in `http_server_requests_seconds`:
 
 ```promql
@@ -151,7 +151,7 @@ The server registers each provider and outcome at zero when it starts.
 ## Feedback delivery metrics
 
 Each feedback row is one destination of one review: the work, the practice page or a conversation.
-The server role and the workers count each change into a settled state, when the change commits.
+The servers count each change into a settled state, when the change commits.
 
 | Prometheus name | Type | Labels | Meaning |
 | --- | --- | --- | --- |
@@ -210,18 +210,18 @@ count by (runtime_role, version) (application_build_info{job="hephaestus"})
 
 ## Conversation turn metrics
 
-Each claim of a conversation turn by a worker is one attempt.
+Each claim of a conversation turn by a server is one attempt.
 A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime-roles.mdx#conversation-turns)).
 
 | Prometheus name                            | Type      | Labels    | Meaning                                                                 |
 | ------------------------------------------ | --------- | --------- | ----------------------------------------------------------------------- |
-| `mentor_turn_started_total`                | Counter   | none      | Attempts that a worker handed to the conversation loop                  |
+| `mentor_turn_started_total`                | Counter   | none      | Attempts that a server handed to the conversation loop                  |
 | `mentor_turn_completed_total`              | Counter   | `outcome` | Attempts that ended                                                     |
 | `mentor_turn_retried_total`                | Counter   | none      | Turns that went back to the queue after a lease expiry                  |
-| `mentor_turn_queued`                       | Gauge     | none      | Turns that wait for a worker, sampled by the server every 30 seconds    |
+| `mentor_turn_queued`                       | Gauge     | none      | Turns that wait for a server, sampled by the server every 30 seconds    |
 | `mentor_turn_queue_wait_seconds`           | Histogram | none      | From a question to the start of its first attempt, also while an earlier question of its conversation runs |
 | `mentor_turn_tools_wait_seconds` | Histogram | `outcome` | From a tools-quota refusal until tools are ready or the attempt ends, including Pod start |
-| `llm_proxy_upstream_stalled_total`         | Counter   | `apiProtocol` | conversation model calls and streamed review model calls that the worker's LLM proxy cut after the first-byte or the idle bound |
+| `llm_proxy_upstream_stalled_total`         | Counter   | `apiProtocol` | conversation model calls and streamed review model calls that the server's LLM proxy cut after the first-byte or the idle bound |
 | `resilience4j_circuitbreaker_state`        | Gauge     | `name`, `state` | The provider breaker of each connection, named `llm-connection-<scope>-<connection id>`. `state="open"` is 1 while it refuses calls |
 | `resilience4j_circuitbreaker_not_permitted_calls_total` | Counter | `name`, `kind` | Model calls that a provider breaker refused |
 | `agent_run_reaped_total`                   | Counter   | `kind`, `outcome` | Expired run leases taken back, by kind, and whether the run was `requeued`, `continued` on a successor, or ended (`attempts_exhausted`, `deadline`, `not_started`) |
@@ -255,7 +255,7 @@ An attempt that ends before any part of an answer records no first-token time.
 `mentor_turn_cost_usd` has `_count`, `_sum` and `_max` series.
 An attempt records a cost only when it made a model call and each of its ended calls has a price.
 
-Workers record most of these series.
+Servers record most of these series.
 The server role records `lease_expired` outcomes, the run reaper's counters, the cost of an attempt that lost its lease, the Slack replies and the live streams.
 Thus, sum each series across all roles.
 
@@ -267,28 +267,28 @@ sum(increase(mentor_turn_completed_total{outcome=~"failed|lease_expired"}[1h]))
   / sum(increase(mentor_turn_completed_total[1h]))
 ```
 
-A high `lease_expired` share shows conversation loops that stop during turns, or turns whose calls reach no worker.
+A high `lease_expired` share shows conversation loops that stop during turns, or turns whose calls reach no server.
 A high `failed` share with no lease expiries shows one of these causes:
 
 - Admission declines turns.
 - Turns reach their deadline.
-- A worker cannot start a turn that it claimed.
+- A server cannot start a turn that it claimed.
 - Turns get an error from the model.
 
-The worker logs each failed attempt at `WARN` as `conversation turn <id> attempt <n> failed: <reason>; last failed model call: <kind> <status>`, or `none`.
+The server logs each failed attempt at `WARN` as `conversation turn <id> attempt <n> failed: <reason>; last failed model call: <kind> <status>`, or `none`.
 The reason tells which of these happened, for example `its conversation loop reported ERROR: model_error`.
 The conversation loop reports a kind of failure from a closed set, for example `model_error`, `context_overflow` or `upstream_stalled`.
-It does not report the error text of the model provider, a tool or the worker, or the messages of the conversation.
-A worker that ends an attempt itself names the class of the failure, for example `starting it failed: IllegalStateException`.
+It does not report the error text of the model provider, a tool or the server, or the messages of the conversation.
+A server that ends an attempt itself names the class of the failure, for example `starting it failed: IllegalStateException`.
 A lease call that ends an attempt after its deadline names `its conversation loop did not end it within PT30S after its deadline`.
 
-The worker logs each failed model call of a turn at `WARN` as `conversation model call failed`.
+The server logs each failed model call of a turn at `WARN` as `conversation model call failed`.
 The line has the turn id, the attempt, the kind of failure and the status that the provider or the proxy sent.
 It does not have the request or the response.
 It is the only `WARN` line for a failed model call of a conversation turn.
 A call that the end of its turn cancelled is not a failure.
 
-The turn row keeps the cause, so the cause stays after the worker stops:
+The turn row keeps the cause, so the cause stays after the server stops:
 
 | Column of `mentor_turn` | Holds |
 |---|---|
@@ -298,23 +298,23 @@ The turn row keeps the cause, so the cause stays after the worker stops:
 
 The model calls of an attempt are rows of `llm_usage_event`: `source_type` is `MENTOR_TURN`, `source_id` is the turn and `source_attempt` is the attempt.
 
-The conversation loop's end, the worker's own end and a lease that expires write the first three columns.
-A lease that expires writes no `failed_call`, because the server role, not the worker, ends the turn.
+The conversation loop's end, the server's own end and a lease that expires write the first three columns.
+A lease that expires writes no `failed_call`, because the run reaper ends the turn.
 The columns are empty for a turn that did not fail, and for a turn that admission declines.
 
 A turn that admission declines, for example because the budget is spent, is logged at `INFO` as `was declined at its start`.
 A turn whose second attempt loses its lease fails on the server role, which logs it at `INFO` as `Conversation turn lost its holder`.
 Its `failure_cause` is `its lease expired on its last attempt`.
 
-An increase in `mentor_turn_claim_failure_total` shows a worker that claims turns but cannot start them.
-The worker fails each turn that it cannot start, and claims the next one.
-A claim that fails answers the loop's pull with `503`. The loop then pulls again, maybe from another worker.
+An increase in `mentor_turn_claim_failure_total` shows a server that claims turns but cannot start them.
+The server fails each turn that it cannot start, and claims the next one.
+A claim that fails answers the loop's pull with `503`. The loop then pulls again, maybe from another server.
 [Runtime roles](./runtime-roles.mdx#the-conversation-loop) tells what the conversation loop does when it stops, and what happens to its turns.
 
 ## Call pool metrics
 
-Each worker reports the [call pools](./runtime-roles#call-pools) whose models it calls.
-A worker registers every series of a shared pool at start, so a rate starts from zero. It registers a model's own pool at that pool's first call.
+Each server reports the [call pools](./runtime-roles#call-pools) whose models it calls.
+A server registers every series of a shared pool at start, so a rate starts from zero. It registers a model's own pool at that pool's first call.
 
 The labels are `pool`, `band`, `reason`, `status` and `cause`.
 `pool` is the pool's slug. An instance model's own pool has the slug `own-model-<id>`.
@@ -329,26 +329,26 @@ No series names a workspace, a workspace's model, a job or a turn.
 
 | Prometheus name                            | Type      | Labels                     | Meaning |
 | ------------------------------------------ | --------- | -------------------------- | ------- |
-| `llm_pool_permits_active`                  | Gauge     | `pool`, `band`             | Permits that this worker holds. Sum over the workers for the pool's calls in flight |
+| `llm_pool_permits_active`                  | Gauge     | `pool`, `band`             | Permits that this server holds. Sum over the servers for the pool's calls in flight |
 | `llm_pool_permit_wait_seconds`             | Histogram | `pool`, `band`, `reason`   | How long a queued call waited for its permit. `reason=capacity` includes concurrency, rate, and cooldown admission |
 | `llm_pool_permit_abandoned_total`          | Counter   | `pool`, `band`, `reason`   | Calls whose attempt ended, or whose work deadline passed, while they waited |
-| `llm_pool_permits_granted_total`           | Counter   | `pool`, `band`             | Grants that this worker's calls received |
-| `llm_pool_limit`                           | Gauge     | `pool`                     | The calls in flight that the pool allows now: the learned limit under its ceiling. All workers read it from the database. Take the maximum over the workers. `workspace-models` is the sum of its pools |
-| `llm_pool_waiters`                         | Gauge     | `pool`, `band`             | Live calls that wait for the pool, by the band that each call asked for. All workers read it from the database. Take the maximum over the workers |
+| `llm_pool_permits_granted_total`           | Counter   | `pool`, `band`             | Grants that this server's calls received |
+| `llm_pool_limit`                           | Gauge     | `pool`                     | The calls in flight that the pool allows now: the learned limit under its ceiling. All servers read it from the database. Take the maximum over the servers. `workspace-models` is the sum of its pools |
+| `llm_pool_waiters`                         | Gauge     | `pool`, `band`             | Live calls that wait for the pool, by the band that each call asked for. All servers read it from the database. Take the maximum over the servers |
 | `llm_pool_limit_decreases_total`           | Counter   | `pool`, `cause`            | How often a provider's refusal (`refusal`), queue (`delay`) or stream without an answer (`unanswered`) lowered the limit |
 | `gen_ai_client_operation_time_to_first_chunk_seconds` | Histogram | `pool`, `band` | How long a served stream waited for its provider's first content event, from the request after the grant. A role, an error event or a comment is not content. The limit learns from the same samples. Buckets follow the GenAI semantic conventions, up to 327.68 seconds |
 | `gen_ai_client_operation_duration_seconds` | Histogram | `pool`, `band` | How long a call took from its pool's grant to its end, with the GenAI buckets. The wait for the grant is `llm_pool_permit_wait_seconds` |
 | `gen_ai_client_calls_total` | Counter | `pool`, `band`, `outcome` | Calls that reached their provider, by how they ended |
 | `gen_ai_client_tokens_total` | Counter | `pool`, `band`, `type` | Tokens that the provider reported. `type` is `input`, `output`, `cache_read`, or `cache_write`. `input` excludes the cached tokens |
-| `llm_pool_first_token_baseline`            | Gauge     | `pool`                     | The fastest first token that the pool knows, in milliseconds. All workers read it from the database. `workspace-models` is the largest of its pools |
+| `llm_pool_first_token_baseline`            | Gauge     | `pool`                     | The fastest first token that the pool knows, in milliseconds. All servers read it from the database. `workspace-models` is the largest of its pools |
 | `llm_pool_first_token_baseline_resets_total` | Counter | `pool`                     | How often a pool at its floor took a new baseline. A repeating rise means that the provider stays slow with no load from this instance |
 | `llm_pool_upstream_bucket_reached_total`   | Counter   | `pool`, `bucket`           | Served answers whose rate limit headers showed an empty bucket, which also pauses the pool. `bucket` is `requests`, `tokens`, `input_tokens`, or `output_tokens` |
 | `llm_pool_upstream_throttled_total`        | Counter   | `pool`, `status`           | Answers of the pool's provider that it serves too many calls |
 | `llm_pool_upstream_absorbed_total`         | Counter   | `pool`                     | Those answers that the caller never saw, because its call waited and asked again |
-| `llm_pool_cooldown_active`                 | Gauge     | `pool`                     | 1 while this worker knows the pool to be paused after a refusal. Take the maximum over the workers |
-| `llm_pool_self_fence_cancelled_total`      | Counter   | `pool`, `reason`           | Calls that a worker cancelled because it no longer held their permit. `reason` is `no_renewal`, `lease_lost`, `attempt_ended`, or `past_deadline` |
-| `llm_pool_permits_expired_total`           | Counter   | `pool`                     | Permits whose worker stopped renewing them while their call was in flight. The pool keeps their debit |
-| `llm_pool_lease_renewal_failures_total`    | Counter   | none                       | Failed renewals of a worker's permits |
+| `llm_pool_cooldown_active`                 | Gauge     | `pool`                     | 1 while this server knows the pool to be paused after a refusal. Take the maximum over the servers |
+| `llm_pool_self_fence_cancelled_total`      | Counter   | `pool`, `reason`           | Calls that a server cancelled because it no longer held their permit. `reason` is `no_renewal`, `lease_lost`, `attempt_ended`, or `past_deadline` |
+| `llm_pool_permits_expired_total`           | Counter   | `pool`                     | Permits whose server stopped renewing them while their call was in flight. The pool keeps their debit |
+| `llm_pool_lease_renewal_failures_total`    | Counter   | none                       | Failed renewals of a server's permits |
 
 Claim reservations do not add a second wait observation when the model call uses them.
 

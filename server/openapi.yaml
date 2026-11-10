@@ -8750,7 +8750,7 @@ paths:
   /workspaces/{workspaceSlug}/practices/reviews:
     get:
       description: "Reviews are ordered by when they were created, newest first unless\
-        \ sort is OLDEST. queueState keeps the reviews whose job waits for a worker,\
+        \ sort is OLDEST. queueState keeps the reviews whose job waits for a server,\
         \ is on hold for budget or runs now, as the queue counts them."
       operationId: listReviews
       parameters:
@@ -13575,7 +13575,6 @@ components:
             type: string
             enum:
             - SERVER
-            - WORKER
             - WEBHOOK
         status:
           type: string
@@ -17563,7 +17562,7 @@ components:
           - SLACK
         waitingFor:
           type: string
-          description: "Why a queued turn has not started. FREE_HEPH: a worker may\
+          description: "Why a queued turn has not started. FREE_HEPH: a server may\
             \ start it, and every conversation slot of the deployment is taken, so\
             \ it starts when one is free. Absent when the turn does not wait, waits\
             \ for an earlier question of its conversation, or waits for a reason that\
@@ -24253,7 +24252,6 @@ components:
             type: string
             enum:
             - SERVER
-            - WORKER
             - WEBHOOK
         version:
           type: string

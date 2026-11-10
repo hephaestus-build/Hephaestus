@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -15,10 +15,9 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 /** Everything the LLM proxy records or decides about a request's cost. */
-// Gated like the worker-only budget gate it depends on; an ungated bean here would fail the context
-// of every tier that runs with the worker role off.
+// Accounting depends on the budget gate, so both require the agent runtime.
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 public class ProxyAccounting {
 
     private static final Logger log = LoggerFactory.getLogger(ProxyAccounting.class);

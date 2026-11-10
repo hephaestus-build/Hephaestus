@@ -33,7 +33,6 @@ class BuildProfileGuardTest extends BaseUnitTest {
     @ValueSource(
             strings = {
                 "prod,specs", "prod,cds-training",
-                "prod,worker,specs", "prod,worker,cds-training",
                 "prod,webhook,specs", "prod,webhook,cds-training"
             })
     void shouldRejectProductionBuildProfileCombinations(String profiles) {
@@ -46,7 +45,7 @@ class BuildProfileGuardTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"prod", "prod,worker", "prod,webhook", "specs", "cds-training", "test"})
+    @ValueSource(strings = {"prod", "prod,webhook", "specs", "cds-training", "test"})
     void shouldAllowRuntimeAndArtifactProfilesSeparately(String profile) {
         runner.withPropertyValues("spring.profiles.active=" + profile)
                 .run(context -> assertThat(context).hasNotFailed());

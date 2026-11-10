@@ -188,8 +188,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
     private static final Path FABRIC_ROOT = temporaryDirectory("practice-script-live-fabric-");
 
     @DynamicPropertySource
-    static void workerRole(DynamicPropertyRegistry registry) {
-        registry.add("hephaestus.runtime.worker.enabled", () -> "true");
+    static void sandboxRuntime(DynamicPropertyRegistry registry) {
         registry.add("hephaestus.sandbox.gateway.port", () -> "8081");
         registry.add("hephaestus.sandbox.kubernetes.namespace", () -> "practice-script-live");
         registry.add("hephaestus.sandbox.kubernetes.pod-name", () -> "practice-script-live");

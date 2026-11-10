@@ -124,10 +124,11 @@ interface Worker {
 	readonly agentImage: string;
 }
 
-/** A role set of server and worker in one JVM, which claims queued reviews through the Docker sandbox backend. */
+/** The previous release's server and worker roles in one JVM, which claims queued reviews through the Docker sandbox backend. */
 function workerEnvironment(worker: Worker | undefined): string[] {
 	if (worker === undefined) {
-		// Exercise the server/database upgrade without optional worker infrastructure.
+		// Exercise the server/database upgrade without sandboxes: the previous release's worker role and the
+		// candidate's agent runtime stay off.
 		return ["--env", "HEPHAESTUS_RUNTIME_WORKER_ENABLED=false", "--env", "AGENT_ENABLED=false"];
 	}
 	const socket = "/var/run/docker.sock";

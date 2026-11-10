@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
@@ -46,11 +46,10 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Prepares a review attempt's sandbox: it captures the attempt's inputs, builds the spec of the runner that measures
  * them, and records their provenance before any provider call. Each write is fenced on the attempt's run, so a claim
- * that lost its run prepares nothing more. The worker's executor and a sandbox's own context prepare an attempt the
- * same way.
+ * that lost its run prepares nothing more. Every caller prepares an attempt the same way.
  */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 public class ReviewAttemptPreparation {
 

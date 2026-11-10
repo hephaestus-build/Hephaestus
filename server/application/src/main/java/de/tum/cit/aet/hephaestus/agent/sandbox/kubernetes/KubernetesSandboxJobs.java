@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Sandbox Pods as native {@code batch/v1} Jobs: one Job per conversation's tools Pod ({@link KubernetesPods#toolsPod})
- * and one per isolation probe Pod. The Job runs one Pod and replaces none. When its worker no longer bounds it, the control plane does: its deadline
+ * and one per isolation probe Pod. The Job runs one Pod and replaces none. When its server no longer bounds it, the control plane does: its deadline
  * stops it, also while its Pod waits for a node, which a Pod's own deadline does not count, and the TTL controller
  * deletes the finished Job with its Pod.
  *
@@ -39,7 +39,7 @@ public class KubernetesSandboxJobs {
     /** The label the Job controller gives each Pod of a Job: the Job's name. */
     static final String JOB_NAME = "batch.kubernetes.io/job-name";
 
-    /** How long the TTL controller keeps a finished Job, with its Pod, that its worker did not delete. */
+    /** How long the TTL controller keeps a finished Job, with its Pod, that its server did not delete. */
     static final Duration TTL_AFTER_FINISHED = Duration.ofMinutes(15);
 
     /** How long the Job controller may take to create the Pod of a new Job. Scheduling and the image come after. */
@@ -57,7 +57,7 @@ public class KubernetesSandboxJobs {
     private final KubernetesClient client;
     private final KubernetesWorker worker;
 
-    /** Whether the API refused this worker the events of the sandbox namespace: it stops asking. */
+    /** Whether the API refused this server the events of the sandbox namespace: it stops asking. */
     private final AtomicBoolean eventsDenied = new AtomicBoolean();
 
     public KubernetesSandboxJobs(KubernetesClient client, KubernetesWorker worker) {
@@ -65,7 +65,7 @@ public class KubernetesSandboxJobs {
         this.worker = worker;
     }
 
-    /** The worker whose sandbox Jobs these are. */
+    /** The server whose sandbox Jobs these are. */
     KubernetesWorker worker() {
         return worker;
     }
@@ -168,7 +168,7 @@ public class KubernetesSandboxJobs {
      * Throws when the Job controller reported that the sandbox quota refused this Job's Pod and no Pod of it exists: a
      * Pod that the controller created once room freed wins over its earlier refusal. The event names the Job by its
      * UID, so the event of an earlier Job of the same name does not count. Whether the quota can ever hold the Pod, the
-     * caller asks the quota ({@link KubernetesSandboxQuota#neverFits}). A worker that may not read the events stops
+     * caller asks the quota ({@link KubernetesSandboxQuota#neverFits}). A server that may not read the events stops
      * looking after one warning and leaves the wait to its timeout.
      */
     void requireRoom(String job) {
@@ -200,7 +200,7 @@ public class KubernetesSandboxJobs {
             }
         } catch (KubernetesClientException e) {
             if (e.getCode() == 403 && eventsDenied.compareAndSet(false, true)) {
-                log.warn("The worker may not read the events of the sandbox namespace, so a sandbox Job whose Pod the"
+                log.warn("The server may not read the events of the sandbox namespace, so a sandbox Job whose Pod the"
                         + " sandbox quota refuses waits for its timeout. Grant list on events there"
                         + " (docs/admin/kubernetes.mdx)");
             }
@@ -249,7 +249,7 @@ public class KubernetesSandboxJobs {
 
     /**
      * Deletes the Job, and its Pod before the Job goes ({@code Foreground}, ADR 0068 § The Heph loop), so that no
-     * replacement Pod starts; a Job that is already gone is no error. The worker stops a sandbox only this way: its
+     * replacement Pod starts; a Job that is already gone is no error. The server stops a sandbox only this way: its
      * Role grants no Pod delete or patch.
      */
     public void deleteWithPod(String job) {

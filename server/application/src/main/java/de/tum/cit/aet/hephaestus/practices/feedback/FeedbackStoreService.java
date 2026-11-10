@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackCompositionContextService;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
@@ -45,7 +45,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Transactional
 @RequiredArgsConstructor
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
     private final FeedbackRepository feedback;
     private final FeedbackOutcomes outcomes;

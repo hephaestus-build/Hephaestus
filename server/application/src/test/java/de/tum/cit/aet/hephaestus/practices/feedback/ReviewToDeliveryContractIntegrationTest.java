@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewSandboxRuns;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
@@ -63,8 +64,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.core.runtime.AgentRuntimeWithoutCluster;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.core.runtime.WorkerGraphWithoutCluster;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
@@ -211,7 +212,7 @@ import tools.jackson.databind.node.ObjectNode;
  * transport is scripted.
  */
 class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
-    private static final Duration KILLED_WORKER_LEASE = Duration.ofSeconds(5);
+    private static final Duration KILLED_SERVER_LEASE = Duration.ofSeconds(5);
     private static final String RECORD = "context/pull-request.md";
     private static final String QUOTE = "The export handler now catches the failure and returns without its cause.";
     private static final String SUMMARY = "Keep the failure cause when the export handler gives up.";
@@ -906,20 +907,20 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
-     * A worker process that holds an attempt with a staged practice, killed with no chance to clean up. While it renews
+     * A server process that holds an attempt with a staged practice, killed with no chance to clean up. While it renews
      * its lease, the server's lease check leaves the attempt alone; once it is dead, the lease runs out and the same
      * check gives the review a new attempt, with the staged practice kept. The in-process test above calls the
      * recovery itself; this one leaves it to the production sweep, on a lease that really expires.
      *
-     * <p>The worker leases for {@link #KILLED_WORKER_LEASE} instead of the production five minutes, so the lease ends
+     * <p>The killed server leases for {@link #KILLED_SERVER_LEASE} instead of the production five minutes, so the lease ends
      * within the test; the sweep and its renewal interval are the production ones.
      */
     @Test
     @Timeout(value = 8, unit = TimeUnit.MINUTES)
-    void shouldKeepStagedPracticesAndReclaimTheLeaseWhenTheWorkerProcessIsKilled() throws Exception {
+    void shouldKeepStagedPracticesAndReclaimTheLeaseWhenTheServerProcessIsKilled() throws Exception {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             UUID jobId = review.identity().jobId();
-            Path request = Files.createTempFile("lost-worker-request", ".json");
+            Path request = Files.createTempFile("lost-server-request", ".json");
             Files.write(request, mapper.writeValueAsBytes(request(review)));
             var postgres = PostgreSQLTestContainer.getInstance();
             var builder = new ProcessBuilder(
@@ -929,52 +930,53 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             "-Xmx768m",
                             "-cp",
                             System.getProperty("java.class.path"),
-                            LostWorker.class.getName(),
+                            LostServer.class.getName(),
                             jobId.toString(),
                             Long.toString(review.workspaceId()),
                             review.identity().runId().toString(),
                             request.toString(),
-                            Long.toString(KILLED_WORKER_LEASE.toSeconds()))
+                            Long.toString(KILLED_SERVER_LEASE.toSeconds()))
                     .redirectErrorStream(true);
-            builder.environment().put("LOST_WORKER_JDBC_URL", postgres.getJdbcUrl());
-            builder.environment().put("LOST_WORKER_JDBC_USER", postgres.getUsername());
-            builder.environment().put("LOST_WORKER_JDBC_PASSWORD", postgres.getPassword());
-            Process worker = builder.start();
+            builder.environment().put("LOST_SERVER_JDBC_URL", postgres.getJdbcUrl());
+            builder.environment().put("LOST_SERVER_JDBC_USER", postgres.getUsername());
+            builder.environment().put("LOST_SERVER_JDBC_PASSWORD", postgres.getPassword());
+            Process lost = builder.start();
             Duration renewEvery = agentRuns.capacity().leaseRenewal();
             try {
-                // A reader thread drains the output, so the worker never blocks on a full pipe and a stalled worker
+                // A reader thread drains the output, so the lost server never blocks on a full pipe and a stalled
+                // server
                 // fails the wait instead of hanging it.
                 var lines = new LinkedBlockingQueue<String>();
                 Thread.ofVirtual().start(() -> {
-                    try (var output = new BufferedReader(
-                            new InputStreamReader(worker.getInputStream(), StandardCharsets.UTF_8))) {
+                    try (var output =
+                            new BufferedReader(new InputStreamReader(lost.getInputStream(), StandardCharsets.UTF_8))) {
                         for (String line; (line = output.readLine()) != null; ) lines.add(line);
                     } catch (IOException ended) {
-                        // The worker was killed.
+                        // The server was killed.
                     }
                 });
-                awaitLine(lines, LostWorker.STAGED, Duration.ofMinutes(3));
-                awaitLine(lines, LostWorker.RENEWED, Duration.ofSeconds(30));
+                awaitLine(lines, LostServer.STAGED, Duration.ofMinutes(3));
+                awaitLine(lines, LostServer.RENEWED, Duration.ofSeconds(30));
                 Instant renewedOnce = leasedUntil(jobId);
-                awaitLine(lines, LostWorker.RENEWED, Duration.ofSeconds(30));
+                awaitLine(lines, LostServer.RENEWED, Duration.ofSeconds(30));
                 assertThat(leasedUntil(jobId))
-                        .as("the worker process renews its lease with the heartbeat's statement")
+                        .as("the server process renews its lease with the heartbeat's statement")
                         .isAfter(renewedOnce);
 
                 // Without its renewals the lease would run out and be taken within the sweep's quiet time after a
-                // start plus its one-interval cutoff; the attempt stays the worker's for longer than both.
+                // start plus its one-interval cutoff; the attempt stays the lost server's for longer than both.
                 Instant alive = Instant.now().plus(renewEvery.multipliedBy(2)).plusSeconds(5);
                 while (Instant.now().isBefore(alive)) {
                     reaper.reap();
-                    assertThat(worker.isAlive()).isTrue();
+                    assertThat(lost.isAlive()).isTrue();
                     assertThat(jobs.findById(jobId).orElseThrow().getStatus())
-                            .as("the attempt of a worker that renews its lease")
+                            .as("the attempt of a server that renews its lease")
                             .isEqualTo(ReviewJobStatus.RUNNING);
                     Thread.sleep(1000);
                 }
             } finally {
-                worker.destroyForcibly();
-                assertThat(worker.waitFor(30, TimeUnit.SECONDS)).isTrue();
+                lost.destroyForcibly();
+                assertThat(lost.waitFor(30, TimeUnit.SECONDS)).isTrue();
                 Files.deleteIfExists(request);
             }
 
@@ -984,12 +986,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .as("nothing in the killed process released its lease")
                     .isEqualTo("LEASED");
             assertThat(stagingStore.staged(review.workspaceId(), review.reviewId(), jobId))
-                    .as("the practice the worker staged before it died")
+                    .as("the practice the lost server staged before it died")
                     .singleElement()
                     .satisfies(staged -> assertThat(staged.attempt()).isZero());
 
             Instant deadline = Instant.now()
-                    .plus(KILLED_WORKER_LEASE)
+                    .plus(KILLED_SERVER_LEASE)
                     .plus(renewEvery.multipliedBy(2))
                     .plusSeconds(30);
             while (jobs.findById(jobId).orElseThrow().getStatus() == ReviewJobStatus.RUNNING
@@ -1031,7 +1033,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         return RuntimeJobTestData.save(transactions, jdbc, jobs, queued);
     }
 
-    /** Takes the worker's output lines until one holds {@code marker}; fails on its failure line or the deadline. */
+    /** Takes the lost server's output lines until one holds {@code marker}; fails on its failure line or the deadline. */
     private static void awaitLine(BlockingQueue<String> lines, String marker, Duration within)
             throws InterruptedException {
         Instant deadline = Instant.now().plus(within);
@@ -1039,20 +1041,21 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             String line = lines.poll(1, TimeUnit.SECONDS);
             if (line == null) continue;
             if (line.contains(marker)) return;
-            if (line.startsWith(LostWorker.FAILED)) throw new AssertionError(line);
+            if (line.startsWith(LostServer.FAILED)) throw new AssertionError(line);
         }
-        throw new AssertionError("The worker process did not print " + marker + " within " + within);
+        throw new AssertionError("The lost server process did not print " + marker + " within " + within);
     }
 
     /**
-     * A worker process: the application with only the worker role, on the test's database, without a cluster. It
-     * stages one practice for the claimed attempt through the worker's admission service, then renews the attempt's
-     * lease with the heartbeat's statement until it is killed. It does not run the review: no sandbox starts.
+     * A server process with agent jobs on, on the test's database, without a cluster. It stages one practice for the
+     * claimed attempt through its admission service, then renews the attempt's lease with the heartbeat's statement until
+     * it is killed. It does not run the review: no sandbox starts. The test profile keeps its schedules and startup sync
+     * off, so the test's own server does all the recovery.
      */
-    public static final class LostWorker {
-        static final String STAGED = "LOST-WORKER STAGED";
-        static final String RENEWED = "LOST-WORKER RENEWED";
-        static final String FAILED = "LOST-WORKER FAILED";
+    public static final class LostServer {
+        static final String STAGED = "LOST-SERVER STAGED";
+        static final String RENEWED = "LOST-SERVER RENEWED";
+        static final String FAILED = "LOST-SERVER FAILED";
 
         public static void main(String[] args) throws Exception {
             UUID jobId = UUID.fromString(args[0]);
@@ -1060,7 +1063,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             UUID runId = UUID.fromString(args[2]);
             byte[] request = Files.readAllBytes(Path.of(args[3]));
             long leaseSeconds = Long.parseLong(args[4]);
-            var configuration = BootstrapUtils.resolveTestContextBootstrapper(WorkerGraphWithoutCluster.class)
+            var configuration = BootstrapUtils.resolveTestContextBootstrapper(AgentRuntimeWithoutCluster.class)
                     .buildMergedContextConfiguration();
             new WebApplicationContextRunner()
                     .withInitializer(application -> {
@@ -1074,33 +1077,31 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             .forEach(customizer -> customizer.customizeContext(application, configuration)))
                     .withUserConfiguration(Application.class)
                     .withPropertyValues(
-                            "spring.profiles.active=worker",
+                            "spring.profiles.active=test",
                             "spring.config.import=classpath:application-test.yml",
                             "spring.main.lazy-initialization=false",
                             "spring.liquibase.enabled=false",
-                            "spring.datasource.url=" + System.getenv("LOST_WORKER_JDBC_URL"),
-                            "spring.datasource.username=" + System.getenv("LOST_WORKER_JDBC_USER"),
-                            "spring.datasource.password=" + System.getenv("LOST_WORKER_JDBC_PASSWORD"),
+                            "spring.datasource.url=" + System.getenv("LOST_SERVER_JDBC_URL"),
+                            "spring.datasource.username=" + System.getenv("LOST_SERVER_JDBC_USER"),
+                            "spring.datasource.password=" + System.getenv("LOST_SERVER_JDBC_PASSWORD"),
                             "spring.datasource.hikari.maximum-pool-size=4",
-                            "hephaestus.runtime.server.enabled=false",
-                            "hephaestus.runtime.worker.enabled=true",
+                            "hephaestus.runtime.server.enabled=true",
                             "hephaestus.runtime.webhook.enabled=false",
                             "hephaestus.agent.enabled=true",
-                            "hephaestus.worker.capacity.mentor-max=1",
                             "hephaestus.sync.nats.enabled=false",
-                            "hephaestus.sandbox.kubernetes.namespace=lost-worker-sandboxes",
-                            "hephaestus.sandbox.kubernetes.pod-name=lost-worker",
+                            "hephaestus.sandbox.kubernetes.namespace=lost-server-sandboxes",
+                            "hephaestus.sandbox.kubernetes.pod-name=lost-server",
                             "hephaestus.sandbox.kubernetes.pod-ip=127.0.0.1",
                             "server.port=0",
                             "management.server.port=0")
                     .run(application -> {
                         try {
                             var roles = RuntimeRole.enabled(application.getEnvironment());
-                            if (!roles.equals(List.of(RuntimeRole.WORKER))
-                                    || !application
-                                            .getBeansOfType(AgentRunReaper.class)
+                            if (!roles.equals(List.of(RuntimeRole.SERVER))
+                                    || application
+                                            .getBeansOfType(ReviewSandboxRuns.class)
                                             .isEmpty()) {
-                                System.out.println(FAILED + " not a worker-only process: " + roles);
+                                System.out.println(FAILED + " not a server with agent jobs: " + roles);
                                 return;
                             }
                             var identity = new ResultAdmissionService.AdmissionIdentity(jobId, workspaceId, 0, runId);

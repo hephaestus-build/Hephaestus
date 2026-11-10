@@ -1,5 +1,5 @@
 /**
- * Reusable streaming-proxy helpers — used today by the worker-side LLM proxy.
+ * Reusable streaming-proxy helpers — used today by the server's LLM proxy.
  */
 @org.springframework.modulith.NamedInterface("proxy")
 @org.jspecify.annotations.NullMarked

@@ -11,9 +11,9 @@ import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.domain.JavaParameterizedType;
 import com.tngtech.archunit.core.domain.JavaType;
 import com.tngtech.archunit.core.domain.JavaWildcardType;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.WebhookReceiverScope;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookPublishGate;
@@ -185,7 +185,7 @@ class WebhookReceiverScopeArchitectureTest extends HephaestusArchitectureTest {
             topLevel = topLevel.getEnclosingClass().orElseThrow();
         }
         return topLevel.isAnnotatedWith(ConditionalOnServerRole.class)
-                || topLevel.isAnnotatedWith(ConditionalOnWorkerRole.class);
+                || topLevel.isAnnotatedWith(ConditionalOnAgentRuntime.class);
     }
 
     private static boolean isPersistence(JavaClass target) {

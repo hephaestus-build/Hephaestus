@@ -16,7 +16,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.compress.archivers.tar.TarConstants;
 
 /**
- * The tar streams that the worker stages into a tools Pod. They keep a captured file's executable mode. The sandbox
+ * The tar streams that the server stages into a tools Pod. They keep a captured file's executable mode. The sandbox
  * runtime owns what staging means for the sandbox user: the staged folder is read-only to that user
  * ({@code ExecSandboxes}).
  */

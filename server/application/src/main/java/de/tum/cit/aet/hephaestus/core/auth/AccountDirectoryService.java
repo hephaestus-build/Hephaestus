@@ -21,7 +21,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** SCM and Outline capture permission checks use account state in capture-worker roles. */
+/** SCM and Outline capture permission checks use account state on the server role. */
 @Service
 @WorkspaceAgnostic("Account status and choices span all workspaces")
 @RequiredArgsConstructor

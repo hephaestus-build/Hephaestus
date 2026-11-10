@@ -424,7 +424,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
     /**
      * Tells the developer once that their question waits, when its turn has not run {@link #WAITING_NOTICE_AFTER} after
-     * it was asked. Without it, Slack shows nothing while earlier turns hold the worker's turn slots. The notice says
+     * it was asked. Without it, Slack shows nothing while earlier turns hold the server's turn slots. The notice says
      * that Hephaestus answers other questions only when the question waits for a free Hephaestus ({@link MentorTurnWaits}). It
      * goes once the turn runs or ends. A turn that already ran and waits again gets none: it did start. The notice
      * does not claim the reply: a claim before the turn runs would leave the reply with this server, and a restart

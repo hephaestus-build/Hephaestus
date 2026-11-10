@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
  * {@link #TTL}, and another replica can take it then.
  */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 class ScanCallLeases implements DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(ScanCallLeases.class);

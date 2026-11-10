@@ -1,4 +1,4 @@
-# A disposable cluster on one workstation. Bundled PostgreSQL and NATS, small volumes, no worker.
+# A disposable cluster on one workstation. Bundled PostgreSQL and NATS, small volumes, no sandboxes.
 deploymentEnvironment: dev
 config:
   releaseCheckEnabled: false

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
+import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeToolsPods;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
@@ -21,7 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
+import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -73,9 +74,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * Every endpoint that the conversation loop calls, over real HTTP through the worker's real gateway connector and its real
- * security chain, with a signed turn credential. A request without a body carries no {@code Content-Length}, as the
- * host's {@code fetch} sends it. The worker role is off in the test context, so the gateway runs as a small
+ * Every endpoint that the conversation loop calls, over real HTTP through the agent runtime's real gateway connector and
+ * its real security chain, with a signed turn credential. A request without a body carries no {@code Content-Length},
+ * as the host's {@code fetch} sends it. Agent jobs are off in the test context, so the gateway runs as a small
  * application of its own, wired from the test context's beans.
  */
 class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -98,7 +99,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private MeterRegistry metrics;
 
-    /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
+    /** This test's signing key: the agent runtime, which signs attempt tokens, is off in the test context. */
     private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
     private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(AttemptKeyFixtures.keyring(KEY));
@@ -148,7 +149,8 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         // No turn waits for this loop; which other tests left queued is not this test's to claim.
         HephTurns idle = mock(HephTurns.class);
         when(idle.assign()).thenReturn(Optional.empty());
-        var assignments = new HephTurnAssignmentController(idle);
+        var drain = AgentReviewDrainFixtures.started(beans);
+        var assignments = new HephTurnAssignmentController(idle, drain);
         var application = new SpringApplication(
                 GatewayApplication.class,
                 Class.forName("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"));
@@ -165,7 +167,9 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
             factory.registerSingleton("sandboxGatewaySessions", new SandboxGatewaySessions());
             factory.registerSingleton("conversationLoopProperties", new ConversationLoopProperties(LOOP_SECRET));
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
-            factory.registerSingleton("workerProperties", WorkerPropertiesFixtures.withDrain(Duration.ofMinutes(1)));
+            // The server's shared buckets, which the gateway's rate limit draws from.
+            factory.registerSingleton("bucketResolver", beans.getBean(BucketResolver.class));
+            factory.registerSingleton("agentReviewDrain", drain);
             factory.registerSingleton("agentControllerAdvice", new AgentControllerAdvice());
             factory.registerSingleton("globalControllerAdvice", new GlobalControllerAdvice());
         });
@@ -173,9 +177,8 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 "--server.port=0",
                 "--spring.main.banner-mode=off",
                 "--spring.mvc.problemdetails.enabled=true",
-                // The test JVM turns the worker role off; the gateway is a worker capability.
-                "--" + RuntimeRole.WORKER_PROPERTY + "=true",
-                "--" + RuntimeRole.SERVER_PROPERTY + "=false",
+                // The test profile turns agent jobs off; the gateway belongs to the agent runtime.
+                "--" + RuntimeRole.AGENT_ENABLED_PROPERTY + "=true",
                 "--hephaestus.sandbox.gateway.port=0");
         gatewayPort = gateway.getBean(SandboxGatewayConnector.class).port();
     }
@@ -185,7 +188,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         gateway.close();
     }
 
-    /** Each host endpoint, the body the host sends ({@code null} for none), and the status the worker answers. */
+    /** Each host endpoint, the body the host sends ({@code null} for none), and the status the gateway answers. */
     static Stream<Arguments> hostEndpoints() {
         return Stream.of(
                 Arguments.of("GET", "context", null, 200),
@@ -269,7 +272,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .header("Authorization", "Bearer " + credential());
     }
 
-    /** The signed credential the worker issues for this attempt of the turn, with five minutes of work left. */
+    /** The signed credential the agent runtime issues for this attempt of the turn, with five minutes of work left. */
     private String credential() {
         Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
         return issuer.issueForTurn(

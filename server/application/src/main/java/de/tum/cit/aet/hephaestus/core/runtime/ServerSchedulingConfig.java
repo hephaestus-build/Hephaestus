@@ -13,8 +13,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 /**
  * Activates Spring {@link EnableScheduling @EnableScheduling} only on the server-role pod.
  *
- * <p>This single switch silences every {@code @Scheduled} method on the worker and webhook
- * containers (which set {@code hephaestus.runtime.server.enabled=false}). It does nothing between
+ * <p>This single switch silences every {@code @Scheduled} method on the webhook container
+ * (which sets {@code hephaestus.runtime.server.enabled=false}). It does nothing between
  * two server replicas: a job with a cluster-wide effect holds a {@code @SchedulerLock}
  * ({@link ShedLockConfig}), claims its rows, or acts only on this process's memory.
  *
@@ -22,9 +22,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * boots with scheduling enabled.
  * Test and build-only profiles exercise or inspect the application without automatic background work.
  *
- * <p>Worker-side sandbox and evidence-store maintenance is registered independently by
- * {@code SandboxMaintenanceConfiguration} and {@code JobEvidenceMaintenanceConfiguration}. Worker-only
- * deployments do not enable this server-wide scheduler; the stalled-write watchdog has its own thread so sandbox cleanup cannot delay it.
+ * <p>Evidence-store maintenance is registered independently by
+ * {@code JobEvidenceMaintenanceConfiguration}; sandbox claims are reaped by their owner,
+ * the stalled-write watchdog has its own thread so sandbox cleanup cannot delay it.
  *
  * <p>On shutdown, closing the scheduler waits for running scheduled jobs
  * ({@code spring.task.scheduling.shutdown.await-termination}). A job has ended only when its

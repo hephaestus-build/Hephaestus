@@ -26,8 +26,6 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 @Tag("unit")
@@ -63,10 +61,7 @@ class FeedbackDeliveryRoleContextTest {
 
     @Test
     void shouldBootWebhookWithoutFeedbackPersistence() {
-        runner.withPropertyValues(
-                        RuntimeRole.SERVER_PROPERTY + "=false",
-                        RuntimeRole.WORKER_PROPERTY + "=false",
-                        RuntimeRole.WEBHOOK_PROPERTY + "=true")
+        runner.withPropertyValues(RuntimeRole.SERVER_PROPERTY + "=false", RuntimeRole.WEBHOOK_PROPERTY + "=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed().doesNotHaveBean(FeedbackRepository.class);
                     CAPTURE_HELPERS.forEach(type -> assertThat(context).doesNotHaveBean(type));
@@ -75,11 +70,8 @@ class FeedbackDeliveryRoleContextTest {
                 });
     }
 
-    @ParameterizedTest
-    @EnumSource(
-            value = RuntimeRole.class,
-            names = {"SERVER", "WORKER"})
-    void shouldCreateActualPreparationAndHistoryHelpersOnCaptureRoles(RuntimeRole role) {
+    @Test
+    void shouldCreateActualPreparationAndHistoryHelpersOnTheServer() {
         var dependencies = new LinkedHashSet<Class<?>>();
         var helpers = new LinkedHashSet<>(CAPTURE_HELPERS);
         helpers.addAll(SERVER_READ_HELPERS);
@@ -89,20 +81,12 @@ class FeedbackDeliveryRoleContextTest {
         ApplicationContextRunner configured = runner;
         for (Class<?> dependency : dependencies) configured = withMock(configured, dependency);
         configured
-                .withPropertyValues(
-                        RuntimeRole.SERVER_PROPERTY + "=" + (role == RuntimeRole.SERVER),
-                        RuntimeRole.WORKER_PROPERTY + "=" + (role == RuntimeRole.WORKER),
-                        RuntimeRole.WEBHOOK_PROPERTY + "=false")
+                .withPropertyValues(RuntimeRole.SERVER_PROPERTY + "=true", RuntimeRole.WEBHOOK_PROPERTY + "=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     CAPTURE_HELPERS.forEach(type -> assertThat(context).hasSingleBean(type));
-                    if (role == RuntimeRole.SERVER)
-                        assertThat(context).hasSingleBean(ConversationFeedbackTtlPurger.class);
-                    else assertThat(context).doesNotHaveBean(ConversationFeedbackTtlPurger.class);
-                    SERVER_READ_HELPERS.forEach(type -> {
-                        if (role == RuntimeRole.SERVER) assertThat(context).hasSingleBean(type);
-                        else assertThat(context).doesNotHaveBean(type);
-                    });
+                    assertThat(context).hasSingleBean(ConversationFeedbackTtlPurger.class);
+                    SERVER_READ_HELPERS.forEach(type -> assertThat(context).hasSingleBean(type));
                 });
     }
 

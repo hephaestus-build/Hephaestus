@@ -203,7 +203,7 @@ public final class SandboxLayout {
 
     /**
      * Exit code emitted by the Pi runner when the review staged what it could and left at least one practice without a
-     * result. It is a designed end, not a failure: the worker decides from what is staged whether another attempt
+     * result. It is a designed end, not a failure: the server decides from what is staged whether another attempt
      * continues the review.
      */
     public static final int EXIT_PARTIAL_REVIEW = 78;

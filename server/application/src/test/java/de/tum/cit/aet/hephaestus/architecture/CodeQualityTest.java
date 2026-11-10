@@ -17,7 +17,6 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaField;
 import com.tngtech.archunit.core.domain.JavaModifier;
-import com.tngtech.archunit.core.domain.JavaParameterizedType;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
@@ -25,8 +24,6 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAbsorptionContributor;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountErasureContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
@@ -464,7 +461,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // optional-bean break as the GitLab provider
                     "SecurityConfig", // InstalledClientRegistry is server-role only; the CORS configuration
                     // it contributes origins to is built on every runtime role
-                    "TurnContextFolder", // Context loaders are capture-role beans of each integration; a worker
+                    "TurnContextFolder", // Context loaders are optional beans of each integration; a server
                     // without one, or with Git mirrors off, still serves the folder's documents
                     "InstanceLlmSettingsService", // LlmSettingsAudit's sole impl is @ConditionalOnServerRole, but this
                     // service is also consumed by the ungated Workspace{Llm}Service pair
@@ -478,16 +475,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                         @Override
                         public void check(JavaField field, ConditionEvents events) {
                             String ownerName = field.getOwner().getSimpleName();
-                            // Capture beans run on workers too; server-only rendering is optional there.
-                            boolean optionalServerDependency =
-                                    field.getOwner().isAnnotatedWith(ConditionalOnCaptureRole.class)
-                                            && field.getType() instanceof JavaParameterizedType provider
-                                            && provider.getActualTypeArguments().size() == 1
-                                            && provider.getActualTypeArguments()
-                                                    .getFirst()
-                                                    .toErasure()
-                                                    .isAnnotatedWith(ConditionalOnServerRole.class);
-                            if (!knownCycleBreakers.contains(ownerName) && !optionalServerDependency) {
+                            if (!knownCycleBreakers.contains(ownerName)) {
                                 events.add(SimpleConditionEvent.violated(
                                         field,
                                         String.format(

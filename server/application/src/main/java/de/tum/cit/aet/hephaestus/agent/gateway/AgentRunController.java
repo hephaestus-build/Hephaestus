@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;
@@ -34,7 +34,7 @@ import tools.jackson.databind.JsonNode;
 @RestController
 @RequestMapping("/internal/agent/runs/{runId}")
 @PreAuthorize("isAuthenticated()")
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @Profile("!specs & !cds-training")
 @WorkspaceAgnostic("The sandbox token and the run's own row name the workspace, and the resolver checks both")
 public class AgentRunController {

@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.function.LongConsumer;
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 /** Commit-time pool hints. A dedicated connection listens without holding a connection from the application pool. */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 class LlmPoolNotifications implements DisposableBean {
     static final String CHANNEL = "llm_call_pool";
     private static final Logger log = LoggerFactory.getLogger(LlmPoolNotifications.class);

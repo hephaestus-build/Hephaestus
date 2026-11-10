@@ -179,7 +179,7 @@ class DatabaseMigrationTest {
     void shouldSelectTheRunModeOnlyWhenTheMigrateProfileIsActive() {
         assertThat(DatabaseMigration.requested(new String[] {"--spring.profiles.active=prod,migrate"}))
                 .isTrue();
-        assertThat(DatabaseMigration.requested(new String[] {"--spring.profiles.active=prod,worker"}))
+        assertThat(DatabaseMigration.requested(new String[] {"--spring.profiles.active=prod,webhook"}))
                 .isFalse();
         assertThat(DatabaseMigration.requested(new String[0])).isFalse();
     }

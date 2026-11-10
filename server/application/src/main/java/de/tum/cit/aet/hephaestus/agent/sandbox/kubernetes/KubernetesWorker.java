@@ -9,7 +9,7 @@ import org.jspecify.annotations.Nullable;
  * This worker as its sandboxes record it: the labels of every sandbox it creates, the address of its gateway, and what
  * the last isolation probe proved.
  *
- * <p>Every sandbox records the review ledger's id of the worker process that created it ({@code WorkerProperties}).
+ * <p>Every sandbox records an opaque identity of the server process that created it.
  * Any number of workers share the sandbox namespace on these terms.
  */
 public class KubernetesWorker {

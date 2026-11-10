@@ -17,7 +17,7 @@ This page lists the fields and the events.
 | `service.name`, `service.version`                 | `Hephaestus` and the release that the deployment names in `APP_VERSION`, the same values that traces carry. The chart sets `APP_VERSION` from `release.version` on every container of the server image, the migration Job included |
 | `service.environment`                             | `DEPLOYMENT_ENVIRONMENT`                                                                         |
 | `service.node.name`                               | The container ID, the same value as the `X-Hephaestus-Replica` response header                   |
-| `runtime.role`                                    | `server`, `worker` or `webhook`, or `all` for a local process that runs every role               |
+| `runtime.role`                                    | `server` or `webhook`, or `all` for a local process that runs every role               |
 | `context.event.name`                              | Stable name on structured application events. Do not parse the message to identify these events  |
 | `context.traceId`, `context.spanId`               | The active trace scope, when there is one                                                         |
 | `context.job.id`, `context.workspace.id`          | Thread-scoped context, when available                                                            |
@@ -75,7 +75,7 @@ Run production at `INFO`.
 `DEBUG` on framework, client or driver packages can write request content, provider responses and container settings that no guard above covers.
 
 The startup event `runtime.roles.configured` records `runtime.server.enabled`,
-`runtime.worker.enabled`, and `runtime.webhook.enabled` as booleans. It is informational when any
+and `runtime.webhook.enabled` as booleans. It is informational when any
 role is enabled and warns when all are disabled. A role configuration log is not a readiness probe.
 
 At the shared HTTP boundary, `integration.request.failed` identifies the request method, upstream
@@ -99,14 +99,14 @@ The record is a warning, except for `reason=featureDisabled`.
 That reason means that the repository switched its issues or its pull requests off, which is an expected state, so the record is informational.
 It also does not give the reconciliation job a warning. The sweep's summary counts these repositories.
 
-When the worker cannot read the quotas of the sandbox namespace, it logs `sandbox.quota.unreadable` as a warning, and reviews wait.
+When the server cannot read the quotas of the sandbox namespace, it logs `sandbox.quota.unreadable` as a warning, and reviews wait.
 When it can read them again, it logs `sandbox.quota.readable` with `duration.ms`, the time that reviews waited.
 A short gap also occurs when the watch of the namespace cache reconnects.
 
 When a review sandbox fails, the log records the size of its transcript as `sandbox.transcript.withheld`, not its content.
 The transcript holds what the run was asked, what it read and the provider errors that it saw.
 No log level writes it.
-For a next-day investigation, use the worker's bounded debug session transcripts ([retention decision](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-09-debug-transcripts)).
+For a next-day investigation, use the server's bounded debug session transcripts ([retention decision](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-09-debug-transcripts)).
 
 The formatter masks secret field names (for example `token`, `authorization`, `PRIVATE-TOKEN`, `X-Gitlab-Token` and `privateKey`) and known credential formats.
 These formats are bearer and basic credentials, GitHub, GitLab and Slack tokens (including `xoxe-` and `xapp-`), JWTs, credentials in a URL, and signed or token query parameters.
@@ -133,7 +133,7 @@ Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `review.id`, `
 | `event.name`         | Emitted when                  | `job.phase` | `job.outcome`                                   | `duration.ms`                 |
 | -------------------- | ----------------------------- | ----------- | ----------------------------------------------- | ----------------------------- |
 | `agent.job.queued`   | A new job transaction commits | `queue`     | `queued`                                        | `0`                           |
-| `agent.job.started`  | A worker starts a claimed job | `queue`     | `started`                                       | Creation to start             |
+| `agent.job.started`  | A server starts a claimed job | `queue`     | `started`                                       | Creation to start             |
 | `agent.job.terminal` | A terminal transition commits | `total`     | `completed`, `failed`, `timed_out`, `cancelled` | Creation to terminal emission |
 
 An attempt that fails before its sandbox starts logs `agent.job.preparation_failed` at `WARN`.
@@ -196,3 +196,10 @@ An error line can still quote a value in its `DETAIL`, for example the key of a 
 
 The chart does not expose values for these logging settings.
 The log collector of the chart does not read the PostgreSQL container.
+
+## Review drain deadline
+
+`agent.review.drain.expired` means the server reached its configured shutdown bound with leased reviews.
+`run.count` gives their count. The run reaper recovers leases after shutdown.
+If upgrades repeatedly reach this bound, increase `server.drainTimeoutSeconds` and the Helm timeout.
+[Graceful drain](./runtime-roles#graceful-drain) gives the shutdown order.

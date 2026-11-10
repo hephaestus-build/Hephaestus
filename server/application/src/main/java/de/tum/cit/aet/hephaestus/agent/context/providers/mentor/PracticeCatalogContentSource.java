@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeGuidanceRules;
 import de.tum.cit.aet.hephaestus.practices.spi.MentorPracticeQuery;
 import java.util.Comparator;
@@ -22,7 +22,7 @@ import tools.jackson.databind.node.ObjectNode;
  * {@value #MAX_CATALOG_CHARS} characters, and names every practice it left out in {@code omittedPractices}.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class PracticeCatalogContentSource implements ContentSource {
     public static final String OUTPUT_KEY = OUTPUT_PREFIX + "practice_catalog.json";

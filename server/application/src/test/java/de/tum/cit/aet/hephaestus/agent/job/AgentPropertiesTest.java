@@ -23,7 +23,7 @@ class AgentPropertiesTest extends BaseUnitTest {
     private static final Duration VALID_ROW_RETENTION = Duration.ofDays(90);
 
     private static AgentProperties props(Duration payloadRetention, Duration rowRetention) {
-        return new AgentProperties(false, payloadRetention, rowRetention);
+        return new AgentProperties(false, Duration.ZERO, payloadRetention, rowRetention);
     }
 
     static Stream<Arguments> invalidConfigurations() {

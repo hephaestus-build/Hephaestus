@@ -76,7 +76,7 @@ public class SandboxExits {
             "CreateContainerConfigError",
             "CreateContainerError");
 
-    /** The lines of a review's log that the worker keeps; any other line is dropped and only counted. */
+    /** The lines of a review's log that the server keeps; any other line is dropped and only counted. */
     private static final DiagnosticVocabulary DIAGNOSTICS = DiagnosticVocabulary.load();
 
     private static final Pattern DETAIL = Pattern.compile("[A-Za-z]{1,64}");
@@ -116,8 +116,8 @@ public class SandboxExits {
     }
 
     /**
-     * Records how the Pod {@code name} ended when its worker stops it, before the stop deletes it. A Pod that did not
-     * end and shows no failure of its own ends by the worker's deadline: {@code deadline_exceeded}, not {@code
+     * Records how the Pod {@code name} ended when its server stops it, before the stop deletes it. A Pod that did not
+     * end and shows no failure of its own ends by the server's deadline: {@code deadline_exceeded}, not {@code
      * completed} or {@code start_failed}.
      */
     public void recordStop(Kind kind, String name) {
@@ -167,7 +167,7 @@ public class SandboxExits {
         if (container != null) {
             event = event.addKeyValue("container.name", container);
             // Only a review's runtime lines. A Heph host's output can hold the conversation, a provider's answer or a
-            // credential, and the worker never copies it (docs/admin/runtime-roles.mdx); a tools Pod runs the
+            // credential, and the server never copies it (docs/admin/runtime-roles.mdx); a tools Pod runs the
             // model's commands; a container that never started wrote nothing.
             if (kind == Kind.REVIEW && exit.reason() != Reason.START_FAILED) {
                 Tail tail = stderrTail(pods.tail(name, container, TAIL_LINES_READ, TAIL_BYTES_READ));
@@ -260,7 +260,7 @@ public class SandboxExits {
         // that it does not name.
         if (phase == null || "Pending".equals(phase)) return new Exit(Reason.START_FAILED, null, null, null);
         if ("Failed".equals(phase) || "Unknown".equals(phase)) return new Exit(Reason.UNKNOWN, null, null, podReason);
-        // Every container that ended ended well. One that still runs is ended by its worker, as it should be.
+        // Every container that ended ended well. One that still runs is ended by its server, as it should be.
         return new Exit(Reason.COMPLETED, null, null, null);
     }
 

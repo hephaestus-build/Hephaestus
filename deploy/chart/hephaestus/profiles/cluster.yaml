@@ -3,7 +3,7 @@
 # cluster-scoped object, so the chart renders namespaced objects only. Sandboxes run on the cluster's
 # default runtime with hostUsers: false.
 #
-# The worker is on. The operator states worker.sandbox.namespace and networkPolicy.kubernetesApi, and
+# Sandboxes are on. The operator states sandbox.namespace and networkPolicy.kubernetesApi, and
 # the chart refuses to render without them (docs/admin/managed-cluster.mdx § Values).
 priorityClasses:
   # The admin bundle (deploy/platform/hephaestus-cluster-admin.yaml) creates these three.
@@ -17,12 +17,11 @@ server:
   resources:
     requests: { cpu: 500m, memory: 3072Mi }
     limits: { cpu: "4", memory: 3072Mi }
-worker:
+sandbox:
   enabled: true
-  sandbox:
-    # Sixteen reviews of 384 MiB at once, across the sandbox nodes.
-    reviewMemory: 6144Mi
-    # The agent-sandbox controller runs in the release namespace with Roles; the admin bundle grants
-    # it the one read-only ClusterRole that its caches need.
-    controller:
-      enabled: true
+  # Sixteen reviews of 384 MiB at once, across the sandbox nodes.
+  reviewMemory: 6144Mi
+  # The agent-sandbox controller runs in the release namespace with Roles; the admin bundle grants
+  # it the one read-only ClusterRole that its caches need.
+  controller:
+    enabled: true

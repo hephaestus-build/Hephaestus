@@ -40,7 +40,7 @@ Install and configure the following tools before you attempt a local build:
    [`.github/actions/setup-helm/action.yml`](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml)
    pins. That file is the one home of the version and its checksums. CI installs the same version.
    Verify it with `helm version`.
-5. **Kubernetes dev tools** – The host worker runs its sandboxes in k3d. Install the tools in [Kubernetes](#kubernetes) before you start `vp run dev`.
+5. **Kubernetes dev tools** – The host server runs its sandboxes in k3d. Install the tools in [Kubernetes](#kubernetes) before you start `vp run dev`.
 6. **NATS CLI (optional)** – Helpful when inspecting the webhook/sync event stream (NATS is disabled by default locally). The agent job queue runs on PostgreSQL and needs no NATS.
 
 If you push branches to the repository instead of a fork, also configure commit signing.
@@ -95,13 +95,13 @@ formatter with a different style would undo Spotless's Palantir formatting.
 
 For development stick to the `local` profile, which is the default. The other shipped profiles each
 have their own `application-<name>.yml` under `server/application/src/main/resources/` — `prod` and `specs`, plus
-the per-role and per-purpose overlays (`worker`, `webhook`, `e2e`, `cds-training`) documented where
+the per-role and per-purpose overlays (`webhook`, `e2e`, `cds-training`) documented where
 they are used.
 
 These are Spring profiles, not build profiles. Gradle’s `bootRun` passes `-Pprofiles=…` through to
 Spring. `vp run dev:server:e2e` uses that interface.
 
-`vp run dev` runs the server and worker roles in a host JVM against one shared k3d cluster.
+`vp run dev` runs the server role, with its sandboxes, in a host JVM against one shared k3d cluster.
 Each worktree uses its own sandbox namespace, derived from its port set, with its own ResourceQuota.
 Its review sandbox and tools Pods stay in that namespace.
 Five worktrees share the cluster. They do not each install a full chart release.
@@ -425,7 +425,7 @@ Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://gith
    **Continue with GitHub**.
 
 GitLab workspaces are created only on `GITLAB_DEFAULT_SERVER_URL`, falling back to
-`GITLAB_OAUTH_BASE_URL`. Set it consistently on the server and workers. Additional GitLab login
+`GITLAB_OAUTH_BASE_URL`. Set it consistently on every server. Additional GitLab login
 providers permit sign-in and identity linking. They do not permit syncing another GitLab instance.
 
 #### Super admin
@@ -456,10 +456,10 @@ If the `buildpacks/tap/pack` formula fails, use the `pack` release archive.
 
 The native stack (`vp run dev`) is the default inner loop.
 It reloads the webapp at once.
-The server and worker stay on the host, where your IDE can debug them.
-The worker runs its Pods in the shared cluster.
+The server stays on the host, where your IDE can debug it.
+It runs its Pods in the shared cluster.
 
-The dev launcher builds and pins the agent image, creates the worktree namespace, and applies the chart's sandbox quota, NetworkPolicy and worker RBAC there.
+The dev launcher builds and pins the agent image, creates the worktree namespace, and applies the chart's sandbox quota, NetworkPolicy and server RBAC there.
 It gives the JVM a namespace-scoped kubeconfig with short-lived credentials.
 No cluster credential reaches a sandbox.
 
@@ -476,7 +476,7 @@ A port set that belongs to another worktree stops startup instead of changing th
 Use the cluster before you push a change to one of these:
 
 - The Helm chart (`deploy/chart/`) or its script (`scripts/kubernetes-cluster.ts`).
-- The Kubernetes sandbox backend or the agent gateway of the worker.
+- The Kubernetes sandbox backend or the sandbox gateway of the server.
 - A runtime role, or a setting that a role binds at start.
 - The agent or PostgreSQL image.
 
@@ -495,10 +495,10 @@ In the cluster, follow the logs of a role with the `kubectl` command that `dev:k
 2. It builds the server, webapp, agent and PostgreSQL images, and pushes them to that registry.
 3. It creates the qualification namespaces, a Secret with generated values, and the certificates.
    It keeps them in `~/.hephaestus/kubernetes-cluster`, shared by the worktrees.
-   Each worktree generates its private host-worker kubeconfig at `.context/kubernetes-host/<namespace>/kubeconfig.json`.
+   Each worktree generates its private host-server kubeconfig at `.context/kubernetes-host/<namespace>/kubeconfig.json`.
 4. It turns on the Gateway provider of the Traefik that k3s ships, and creates the Gateway `cluster`.
-5. It installs the chart with the dev profile and two workers.
-   It waits until each worker has passed its isolation probe.
+5. It installs the chart with the dev profile and sandboxes on.
+   It waits until each server has passed its isolation probe.
 6. It sends a request to the webapp and the API through the Gateway.
    Then it prints the URL, `https://hephaestus.localhost`, and how to sign in.
 
@@ -550,7 +550,7 @@ They stay downgraded until a checkout with the newer pin runs again.
 
 | Command | Does |
 |---|---|
-| `vp run dev:kubernetes:down` | Drains the qualification workers and removes that release and its sandbox namespace. Keeps the shared cluster, host-loop namespaces, database volumes, Secrets and CA. The next `dev:kubernetes` installs the release again. |
+| `vp run dev:kubernetes:down` | Drains the qualification servers and removes that release and its sandbox namespace. Keeps the shared cluster, host-loop namespaces, database volumes, Secrets and CA. The next `dev:kubernetes` installs the release again. |
 | `vp run dev:kubernetes:reset` | Deletes the shared cluster, its data, the registry and the work folder with the CA. Refuses while host-loop namespaces exist: stop those JVMs and reset each worktree namespace first. The next run makes a new CA, so trust it again. |
 
 If Docker has no free address pool for the cluster network, the command stops before k3d starts.
@@ -563,7 +563,7 @@ The k3d job also serves the release through the same Gateway, and sends the same
 ### Webhook receiver
 
 The webhook receiver lives in the Java server (`integration.core.webhook` package). In local
-development the monolith default boots all three runtime roles (`server`, `worker`, `webhook`),
+development the monolith default boots both runtime roles (`server`, `webhook`),
 so `vp run dev:server` exposes the unified `/webhooks/{kind}` endpoint (kinds: `github` and
 `slack`) alongside the rest of the API. GitLab and Outline post to their connection routes.
 

@@ -281,11 +281,11 @@ await test("every profile installs from the same templates with only the operato
 		}
 		const values = install(profile, prepared, operator);
 		assert.equal(validate(values), true, `${name}: ${JSON.stringify(validate.errors)}`);
-		// The small and cluster profiles run reviews; the operator states the sandbox namespace and API endpoint.
+		// The small profile runs reviews; the operator states the sandbox namespace and API endpoint.
 		assert.equal(
-			at(values, ["worker", "enabled"]),
+			at(values, ["sandbox", "enabled"]),
 			name === "small.yaml" || name === "cluster.yaml",
-			`${name} worker`,
+			`${name} sandboxes`,
 		);
 	}
 });
@@ -339,12 +339,10 @@ await test("the schema refuses a value that it does not name, at every level", (
 await test("the schema refuses settings the chart does not own", () => {
 	const valid = install(prepared, operator);
 	assert.equal(validate(valid), true, JSON.stringify(validate.errors));
-	// Each database role runs at most its bound, and zero stops it for maintenance. Two workers by
-	// default: one keeps claiming while the other drains.
+	// Each database role runs at most its bound, and zero stops it for maintenance.
 	for (const [role, bound, fallback] of [
 		["server", 1, 1],
 		["webhook", 3, 1],
-		["worker", 16, 2],
 	] as const) {
 		assert.equal(at(defaults, [role, "replicas"]), fallback, `${role} default`);
 		for (const replicas of [0, bound]) {
@@ -354,33 +352,30 @@ await test("the schema refuses settings the chart does not own", () => {
 	}
 	for (const [label, change] of [
 		["a generic environment hatch", { server: { extraEnv: [{ name: "X", value: "y" }] } }],
-		["a pod spec hatch", { worker: { podSpec: { hostNetwork: true } } }],
+		["a pod spec hatch", { server: { podSpec: { hostNetwork: true } } }],
 		["a second server replica", { server: { replicas: 2 } }],
 		["a negative server count", { server: { replicas: -1 } }],
 		["a fourth webhook receiver", { webhook: { replicas: 4 } }],
 		["a negative webhook count", { webhook: { replicas: -1 } }],
 		["a fractional webhook count", { webhook: { replicas: 0.5 } }],
-		["a negative worker count", { worker: { replicas: -1 } }],
+		["the retired worker role", { worker: { replicas: 1 } }],
 		["an inline secret value", { secret: { name: "hephaestus", WEBHOOK_SECRET: "x" } }],
 		["an sslmode the chart does not offer", { postgresql: { external: { sslmode: "allow" } } }],
 		["a broker budget below one GiB", { nats: { jetstream: { maxFileBytes: 1024 } } }],
 		["network policy turned off", { networkPolicy: { enabled: false } }],
 		["no Gateway to attach to", { route: { parentRefs: [] } }],
 		["a Gateway the chart creates", { route: { gateway: { create: true } } }],
-		["a seventeenth worker", { worker: { replicas: 17 } }],
+		["a server rollout of an unknown kind", { server: { rolloutStrategy: "BlueGreen" } }],
 		["a class name beside classes the chart creates", { priorityClasses: { roles: "high" } }],
 		[
 			"existing classes without all three names",
 			{ priorityClasses: { create: false, roles: "high", conversations: "middle" } },
 		],
-		[
-			"a sandbox namespace that is no DNS label",
-			{ worker: { sandbox: { namespace: "Sandboxes" } } },
-		],
-		["a third sandbox namespace", { worker: { sandbox: { other: { quota: {} } } } }],
+		["a sandbox namespace that is no DNS label", { sandbox: { namespace: "Sandboxes" } }],
+		["a third sandbox namespace", { sandbox: { other: { quota: {} } } }],
 		["a git cache on a volume claim", { server: { gitCache: { size: "5Gi" } } }],
-		["a probe more often than every minute", { worker: { runtime: { probeInterval: "30s" } } }],
-		["a node selector of numbers", { worker: { runtime: { nodeSelector: { pool: 1 } } } }],
+		["a probe more often than every minute", { sandbox: { runtime: { probeInterval: "30s" } } }],
+		["a node selector of numbers", { sandbox: { runtime: { nodeSelector: { pool: 1 } } } }],
 		["a backup without its bucket's settings", { postgresql: { backup: { s3: null } } }],
 		["every pod of the Gateway namespace", { networkPolicy: { gateway: { podLabels: null } } }],
 		["a Gateway parent without a name", { route: { parentRefs: [{ name: "" }] } }],
@@ -427,11 +422,15 @@ await test("no template grants host or Docker access, or adds a migration owner"
 	// The server is the only role that runs Liquibase.
 	assert.doesNotMatch(source("server.yaml"), /SPRING_LIQUIBASE_ENABLED/u);
 	assert.match(source("webhook.yaml"), /SPRING_LIQUIBASE_ENABLED\n\s*value: "false"/u);
-	assert.match(source("worker.yaml"), /SPRING_PROFILES_ACTIVE\n\s*value: prod,worker/u);
-	// Roles stay split: the server and the webhook receiver never run the worker role.
-	for (const name of ["server.yaml", "webhook.yaml"]) {
-		assert.match(source(name), /HEPHAESTUS_RUNTIME_WORKER_ENABLED\n\s*value: "false"/u, name);
-	}
+	assert.match(source("server.yaml"), /SPRING_PROFILES_ACTIVE\n\s*value: prod\n/u);
+	// Roles stay split: the server never receives webhooks, and the receiver never serves the API or runs reviews.
+	assert.match(source("server.yaml"), /HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED\n\s*value: "false"/u);
+	assert.match(source("webhook.yaml"), /HEPHAESTUS_RUNTIME_SERVER_ENABLED\n\s*value: "false"/u);
+	// The server runs the agent runtime exactly when it runs the sandboxes.
+	assert.match(
+		source("server.yaml"),
+		/AGENT_ENABLED\n\s*value: \{\{ \$sandbox\.enabled \| quote \}\}/u,
+	);
 });
 
 await test("network policy is always rendered", () => {
@@ -509,19 +508,19 @@ await test("the webapp runs the non-root image as it is, with only /tmp writable
 });
 
 await test("sandbox identities and other roles do not receive an API token", () => {
-	// Only the worker and the agent-sandbox controller may hold an API token. Sandbox pods and every
-	// other role get none.
+	// No ServiceAccount mounts a token by default. Only the server Pod mounts one, and only with sandboxes.
 	for (const { name, source: text } of templates) {
 		const accounts = text.split(/^---$/mu).filter((part) => /^kind: ServiceAccount$/mu.test(part));
-		for (const account of accounts) {
-			if (
-				!account.includes(`"component" "worker"`) &&
-				!account.includes(`"component" "agent-sandbox-controller"`)
-			) {
-				assert.match(account, /automountServiceAccountToken: false/u, name);
-			}
+		for (const account of accounts.filter(
+			(value) => !value.includes(`"component" "agent-sandbox-controller"`),
+		)) {
+			assert.match(account, /automountServiceAccountToken: false/u, name);
 		}
 	}
+	assert.match(
+		source("server.yaml"),
+		/automountServiceAccountToken: \{\{ \$sandbox\.enabled \}\}/u,
+	);
 });
 
 await test("chart list inputs require arrays of non-empty strings without commas", () => {

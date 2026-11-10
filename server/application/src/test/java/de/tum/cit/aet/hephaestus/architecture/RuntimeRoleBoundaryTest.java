@@ -7,11 +7,10 @@ import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.properties.HasAnnotations;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
@@ -54,28 +53,8 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     "de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.workspace.WorkspaceStartupListener", RuntimeRole.SERVER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.agent.gateway.SandboxDispatchConfiguration",
-                    RuntimeRole.WORKER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxConfiguration",
-                    RuntimeRole.WORKER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxMaintenanceConfiguration",
-                    RuntimeRole.WORKER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration", RuntimeRole.WORKER_PROPERTY),
-            // Every worker hands conversation turns to the conversation loop and serves their calls behind its gateway.
-            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnConfiguration", RuntimeRole.WORKER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnAssignmentController",
-                    RuntimeRole.WORKER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnController", RuntimeRole.WORKER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnContexts", RuntimeRole.WORKER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenConfiguration", RuntimeRole.WORKER_PROPERTY),
-            // Admin surfaces and the services behind them are server-only: the worker and webhook pods do
-            // not load core.auth, so an admin controller mapped there is a route with no authentication
-            // layer under it.
+            // Admin surfaces and the services behind them are server-only: the webhook pod does not load
+            // core.auth, so an admin controller mapped there is a route with no authentication layer under it.
             Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionAdminController",
                     RuntimeRole.SERVER_PROPERTY),
@@ -88,7 +67,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // NOT listed: InstanceLlmSettingsService. It is deliberately ungated — the workspace-scoped
             // read of the instance policy goes through it too, and the gate belongs on the admin surface.
             Map.entry("de.tum.cit.aet.hephaestus.agent.usage.LlmUsageAdminController", RuntimeRole.SERVER_PROPERTY),
-            // Server-only so the worker and webhook pods never acquire an outbound dependency on
+            // Server-only so the webhook pod never acquires an outbound dependency on
             // ecb.europa.eu — this fetcher is the only egress the display-currency feature has.
             Map.entry("de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateFetchScheduler", RuntimeRole.SERVER_PROPERTY),
             // Email leaves the instance from the server role only: the adapter, the listeners that feed the outbox,
@@ -184,11 +163,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackService", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnQueueSampler", RuntimeRole.SERVER_PROPERTY),
-            // ADR 0006: the LLM proxy runs beside the sandbox on the WORKER, and only there.
-            Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxyController", RuntimeRole.WORKER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig", RuntimeRole.WORKER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting", RuntimeRole.WORKER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallLedger", RuntimeRole.WORKER_PROPERTY),
             // The config-audit viewer and retention sweep are server-only; the recorder deliberately is
             // not, because every role writes to the trail.
             Map.entry("de.tum.cit.aet.hephaestus.core.audit.ConfigAuditRetentionJob", RuntimeRole.SERVER_PROPERTY),
@@ -201,7 +175,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // doesn't cover it — pin it here. (The core.auth beans are covered by that structural test.)
             Map.entry(
                     "de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextFilter", RuntimeRole.SERVER_PROPERTY),
-            // Connection-management OAuth surface — server-only (the worker/webhook never run the OAuth
+            // Connection-management OAuth surface — server-only (the webhook never runs the OAuth
             // connect dance). Gating these is what unblocks those pods past HmacOAuthStateService.
             Map.entry(
                     "de.tum.cit.aet.hephaestus.integration.core.oauth.state.HmacOAuthStateService",
@@ -248,6 +222,37 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     RuntimeRole.SERVER_PROPERTY));
 
     /**
+     * The agent runtime: the sandboxes, their gateway, the LLM proxy (ADR 0006: it runs beside the sandboxes, on the
+     * server, and only there) and the conversation turns that every server hands to the conversation loop. Each runs
+     * only on a server with agent jobs on.
+     */
+    private static final List<String> EXPECTED_AGENT_RUNTIME = List.of(
+            "de.tum.cit.aet.hephaestus.agent.gateway.SandboxDispatchConfiguration",
+            "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxConfiguration",
+            "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxMaintenanceConfiguration",
+            "de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration",
+            "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnConfiguration",
+            "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnAssignmentController",
+            "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnController",
+            "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnContexts",
+            "de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenConfiguration",
+            "de.tum.cit.aet.hephaestus.agent.proxy.LlmProxyController",
+            "de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig",
+            "de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting",
+            "de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallLedger");
+
+    @Test
+    void expectedAgentRuntimeGatesArePresent() {
+        AllowlistEntries.assertEachNamesAClass("EXPECTED_AGENT_RUNTIME", EXPECTED_AGENT_RUNTIME, classes);
+        List<String> ungated = classes.stream()
+                .filter(c -> EXPECTED_AGENT_RUNTIME.contains(c.getFullName()))
+                .filter(c -> !c.isAnnotatedWith(ConditionalOnAgentRuntime.class))
+                .map(JavaClass::getFullName)
+                .toList();
+        assertThat(ungated).as("must be gated by @ConditionalOnAgentRuntime").isEmpty();
+    }
+
+    /**
      * Beans that must wire <em>unconditionally</em> (no {@code @ConditionalOnProperty}): Heph is
      * offered to every member of an active workspace, and whether it can answer is the workspace's
      * mentor model binding in the DB, not a capability flag.
@@ -278,21 +283,18 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     }
 
     /**
-     * A role gate is written once, as {@code @ConditionalOn{Server,Worker,Webhook}Role}, so its
-     * {@code matchIfMissing} default cannot be dropped on one bean. A further condition sits beside the
-     * composed annotation, since Boot requires every property condition on an element to match. The
-     * exceptions are the composed annotations themselves and the gates no composed annotation expresses:
-     * the sandbox gateway's rate-limit buckets exist only where the server role is off. Each exception must
-     * still carry an inline gate, so one that no longer needs exempting fails here.
+     * A role gate is written once, as {@code @ConditionalOnServerRole}, {@code @ConditionalOnWebhookRole} or
+     * {@code @ConditionalOnAgentRuntime}, so its default cannot be dropped on one bean. A further condition sits
+     * beside the composed annotation, since Boot requires every property condition on an element to match. The
+     * exceptions are the composed annotations themselves. Each exception must still carry an inline gate, so one that
+     * no longer needs exempting fails here.
      */
     @Test
     void runtimeRoleGatesUseTheComposedAnnotations() {
         Set<String> exceptions = Set.of(
                 ConditionalOnServerRole.class.getName(),
-                ConditionalOnWorkerRole.class.getName(),
                 ConditionalOnWebhookRole.class.getName(),
-                ConditionalOnCaptureRole.class.getName(),
-                "de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration.sandboxGatewayBucketResolver()");
+                ConditionalOnAgentRuntime.class.getName());
         List<String> gated = classes.stream()
                 .filter(c -> c.getFullName().startsWith("de.tum.cit.aet.hephaestus."))
                 .flatMap(c -> Stream.concat(
@@ -308,7 +310,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                 .as("Every exemption still carries an inline role gate; remove one that no longer does")
                 .containsAll(exceptions);
         assertThat(gated.stream().filter(element -> !exceptions.contains(element)))
-                .as("Gate on @ConditionalOnServerRole, @ConditionalOnWorkerRole or @ConditionalOnWebhookRole, not on "
+                .as("Gate on @ConditionalOnServerRole, @ConditionalOnWebhookRole or @ConditionalOnAgentRuntime, not on "
                         + "a property condition or expression naming a RuntimeRole property")
                 .isEmpty();
     }
@@ -329,7 +331,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     }
 
     @Test
-    void webhookPackageIsIsolatedFromServerWorkerConcerns() {
+    void webhookPackageIsIsolatedFromServerConcerns() {
         noClasses()
                 .that()
                 .resideInAPackage("de.tum.cit.aet.hephaestus.integration.core.webhook..")
@@ -346,7 +348,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     }
 
     /**
-     * Every ungated bean that injects a server-gated bean crash-loops the worker and webhook pods at
+     * Every ungated bean that injects a server-gated bean crash-loops the webhook pod at
      * context refresh. Full role-context tests must resolve those dependencies with
      * {@code hephaestus.runtime.server.enabled=false}. {@link java.time.Clock} is injected by beans that
      * must load on every role — the config-audit recorder among them — so gating its provider breaks both
@@ -368,7 +370,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
         assertThat(conditionalOnPropertyAnnotations(provider).findAny())
                 .as(
                         "%s provides the Clock bean and must NOT be runtime-role gated — ungated beans on every "
-                                + "role inject it, and gating it fails context refresh on worker/webhook",
+                                + "role inject it, and gating it fails context refresh on the webhook role",
                         provider.getName())
                 .isEmpty();
     }
@@ -398,7 +400,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
      */
     private static final List<String> CROSS_ROLE_AUTH_SPI_IMPLS = List.of(
             "de.tum.cit.aet.hephaestus.core.auth.AccountIdentityQueryService",
-            // Worker capture reads account choices and status through this neutral data-access port.
+            // Capture reads account choices and status through this neutral data-access port.
             "de.tum.cit.aet.hephaestus.core.auth.AccountDirectoryService",
             "de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService");
 
@@ -411,7 +413,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     void allAuthStereotypeBeansAreServerGated() {
         // The whole core.auth module is the user-facing web/auth surface — server-role only, EXCEPT the
         // cross-role SPI query impls (see CROSS_ROLE_AUTH_SPI_IMPLS). This is the real drift guard: any new
-        // auth stereotype bean added without @ConditionalOnServerRole would re-break the worker/webhook
+        // auth stereotype bean added without @ConditionalOnServerRole would re-break the webhook
         // pods (server.enabled=false). Repositories (interfaces, JPA-only) and @ConfigurationProperties
         // records are not stereotypes.
         List<String> ungated = classes.stream()
@@ -464,7 +466,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
 
     @Test
     void noBeanIsGatedOnTheRetiredSandboxEnabledFlag() {
-        // The Kubernetes sandbox is the worker role and Heph is always offered, so no capability flag may
+        // The Kubernetes sandbox is the agent runtime and Heph is always offered, so no capability flag may
         // gate either, through @ConditionalOnProperty or @ConditionalOnExpression.
         List<String> violations = classes.stream()
                 .filter(c -> c.getFullName().startsWith("de.tum.cit.aet.hephaestus."))

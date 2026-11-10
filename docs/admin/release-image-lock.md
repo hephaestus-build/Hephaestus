@@ -103,7 +103,7 @@ Do not reconstruct an old lock or resolve image tags.
 
 ## Runtime identity handoff
 
-The chart gives the server, worker and webhook Pods `APP_VERSION`, `HEPHAESTUS_RELEASE_COMMIT` and `HEPHAESTUS_IMAGE_APPLICATION_SERVER` from the verified release metadata.
+The chart gives the server and webhook Pods `APP_VERSION`, `HEPHAESTUS_RELEASE_COMMIT` and `HEPHAESTUS_IMAGE_APPLICATION_SERVER` from the verified release metadata.
 Each process reports these values, with its runtime roles, under `release` in `/actuator/info`.
 The chart's `deploymentEnvironment` value identifies the environment.
 This is deployment metadata from the verified lock, not a second signature verification or an observation of the container.

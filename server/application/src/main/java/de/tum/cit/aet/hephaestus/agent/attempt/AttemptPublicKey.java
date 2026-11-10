@@ -9,8 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * The public half of one worker's {@link AttemptSigningKey}. Its private half never leaves that worker's memory. The
- * row outlives its worker by the longest token life, so an attempt keeps its token when its worker goes.
+ * The public half of one server's {@link AttemptSigningKey}. Its private half never leaves that server's memory. The
+ * row outlives its server by the longest token life, so an attempt keeps its token when its server goes.
  */
 @Entity
 @Table(name = "attempt_public_key")

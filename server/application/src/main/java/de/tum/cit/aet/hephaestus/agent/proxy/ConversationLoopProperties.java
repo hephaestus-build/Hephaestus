@@ -7,11 +7,10 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Bound to {@code hephaestus.conversation-loop.*}: what a worker needs to hand turns to the conversation loop.
+ * Bound to {@code hephaestus.conversation-loop.*}: what a server needs to hand turns to the conversation loop.
  *
  * @param secret The credential of the conversation loop's assignment pulls, as 64 lowercase hexadecimal characters
- *     ({@code openssl rand -hex 32}). The worker and the loop read it; no other role does. The worker profile
- *     requires it; a local worker without it hands out no turn.
+ *     ({@code openssl rand -hex 32}). The server and the loop read it; no other role does. A server with agent jobs enabled refuses startup without it.
  */
 @ConfigurationProperties(prefix = "hephaestus.conversation-loop")
 public record ConversationLoopProperties(@Nullable String secret) {
@@ -29,7 +28,7 @@ public record ConversationLoopProperties(@Nullable String secret) {
         }
     }
 
-    /** Whether a worker can hand out turns: it has the loop's credential. */
+    /** Whether a server can hand out turns: it has the loop's credential. */
     public boolean configured() {
         return secret != null && !secret.isEmpty();
     }

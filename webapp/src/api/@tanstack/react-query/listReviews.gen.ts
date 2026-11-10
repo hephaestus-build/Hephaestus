@@ -13,7 +13,7 @@ export const listReviewsQueryKey = (options: Options<ListReviewsData>) =>
 /**
  * List practice reviews with result and feedback outcomes
  *
- * Reviews are ordered by when they were created, newest first unless sort is OLDEST. queueState keeps the reviews whose job waits for a worker, is on hold for budget or runs now, as the queue counts them.
+ * Reviews are ordered by when they were created, newest first unless sort is OLDEST. queueState keeps the reviews whose job waits for a server, is on hold for budget or runs now, as the queue counts them.
  */
 export const listReviewsOptions = (options: Options<ListReviewsData>) =>
 	queryOptions<
@@ -41,7 +41,7 @@ export const listReviewsInfiniteQueryKey = (
 /**
  * List practice reviews with result and feedback outcomes
  *
- * Reviews are ordered by when they were created, newest first unless sort is OLDEST. queueState keeps the reviews whose job waits for a worker, is on hold for budget or runs now, as the queue counts them.
+ * Reviews are ordered by when they were created, newest first unless sort is OLDEST. queueState keeps the reviews whose job waits for a server, is on hold for budget or runs now, as the queue counts them.
  */
 export const listReviewsInfiniteOptions = (options: Options<ListReviewsData>) => {
 	const opts = infiniteQueryOptions<

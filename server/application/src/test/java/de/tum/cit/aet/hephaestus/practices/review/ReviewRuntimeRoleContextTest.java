@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
@@ -34,6 +36,7 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryReposit
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -53,6 +56,7 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                             ResultPresentation.class,
                             ResultVisibilityPolicy.class,
                             ProductReferenceQuery.class)
+                    .withBean(EntityManagerFactory.class, () -> mock(EntityManagerFactory.class))
                     .withBean(Clock.class, Clock::systemUTC)
                     .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
                     .withBean(JsonMapper.class, () -> JsonMapper.builder().build()),
@@ -71,12 +75,14 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
             ProductItemRepository.class,
             RegisteredItemLabels.class,
             ItemDescriptorRegistry.class,
+            AccountReferenceService.class,
             ResultCommunicationRepository.class,
             FeedbackVisibilityService.class,
             FeedbackRepair.class,
             ReviewRepository.class,
             ReviewItemRepository.class,
             ReviewPracticeRepository.class,
+            ScanReportService.class,
             PracticeVersionRepository.class,
             ProductItemQuery.class,
             ReviewFreshness.class,
@@ -99,11 +105,8 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSupplyFrozenReadsOnTheWorkerWithoutTheServerCommandService() {
-        context.withPropertyValues(
-                        "hephaestus.runtime.server.enabled=false",
-                        "hephaestus.runtime.worker.enabled=true",
-                        "hephaestus.runtime.webhook.enabled=false")
+    void shouldSupplyFrozenReadsAndTheCommandServiceOnTheServer() {
+        context.withPropertyValues("hephaestus.runtime.server.enabled=true", "hephaestus.runtime.webhook.enabled=false")
                 .run(app -> {
                     assertThat(app).hasSingleBean(ReviewSnapshotQuery.class);
                     assertThat(app).hasSingleBean(ReviewStart.class);
@@ -113,34 +116,15 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                     assertThat(app).hasSingleBean(ResultPresentation.class);
                     assertThat(app).hasSingleBean(ResultVisibilityPolicy.class);
                     assertThat(app).hasSingleBean(ProductReferenceQuery.class);
+                    assertThat(app).hasSingleBean(PracticeReviewCoverageService.class);
                     assertThat(app).hasSingleBean(ResultAdmissionPolicy.class);
-                    assertThat(app).doesNotHaveBean(PracticeReviewCoverageService.class);
                     assertThat(app).doesNotHaveBean(ReviewServiceImpl.class);
                 });
     }
 
     @Test
-    void shouldSupplyFrozenReadsOnTheServerWithoutAWorker() {
-        context.withPropertyValues(
-                        "hephaestus.runtime.server.enabled=true",
-                        "hephaestus.runtime.worker.enabled=false",
-                        "hephaestus.runtime.webhook.enabled=false")
-                .run(app -> {
-                    assertThat(app).hasSingleBean(ReviewSnapshotQuery.class);
-                    assertThat(app).hasSingleBean(ReviewStart.class);
-                    assertThat(app).hasSingleBean(ReviewClosure.class);
-                    assertThat(app).hasSingleBean(ReviewOutcomeMeters.class);
-                    assertThat(app).hasSingleBean(PracticeReviewCoverageService.class);
-                    assertThat(app).hasSingleBean(ResultAdmissionPolicy.class);
-                });
-    }
-
-    @Test
     void shouldExcludeProductPreparationFromTheWebhookOnlyRole() {
-        context.withPropertyValues(
-                        "hephaestus.runtime.server.enabled=false",
-                        "hephaestus.runtime.worker.enabled=false",
-                        "hephaestus.runtime.webhook.enabled=true")
+        context.withPropertyValues("hephaestus.runtime.server.enabled=false", "hephaestus.runtime.webhook.enabled=true")
                 .run(app -> {
                     assertThat(app).doesNotHaveBean(PracticeReviewCoverageService.class);
                     assertThat(app).doesNotHaveBean(ResultAdmissionPolicy.class);

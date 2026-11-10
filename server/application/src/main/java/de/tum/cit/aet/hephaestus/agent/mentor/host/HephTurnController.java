@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
@@ -38,16 +38,16 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The endpoints the conversation loop calls for one turn attempt, on any worker's sandbox gateway, with the attempt's
+ * The endpoints the conversation loop calls for one turn attempt, on any server's sandbox gateway, with the attempt's
  * credential. Each acts only for the turn, developer and conversation the credential names, and only while the
- * attempt holds its live lease ({@link MentorLeaseLostException}); every worker reads that from the turn's row. A
+ * attempt holds its live lease ({@link MentorLeaseLostException}); every server reads that from the turn's row. A
  * stopped attempt, or one past its deadline, may only renew its lease and end ({@link HephTurns.StopException}). The
  * ledger classifies the entries that the end carries; the loop's word is not taken for that.
  */
 @RestController
 @RequestMapping("/internal/llm/turn/{turnId}")
 @PreAuthorize("isAuthenticated()")
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @Profile(HephTurnConfiguration.PROFILES)
 @WorkspaceAgnostic("The turn credential binds the workspace, the developer and the conversation of every call")
 public class HephTurnController {
@@ -221,7 +221,7 @@ public class HephTurnController {
         FAILED
     }
 
-    /** Why a failed attempt failed; the worker words it for the developer. */
+    /** Why a failed attempt failed; the server words it for the developer. */
     public enum FailureReason {
         ERROR,
         DEADLINE,
@@ -231,7 +231,7 @@ public class HephTurnController {
 
     /**
      * The kinds of failure a host names in {@link EndRequest#detail}, as {@code heph-host-protocol.ts}
-     * {@code FAILURE_DETAILS} lists them. The worker log takes no other detail: free text from a host can quote the
+     * {@code FAILURE_DETAILS} lists them. The server log takes no other detail: free text from a host can quote the
      * model provider, a tool or the developer.
      */
     static final Set<String> FAILURE_DETAILS = Set.of(

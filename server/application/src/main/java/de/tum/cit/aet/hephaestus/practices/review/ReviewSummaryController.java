@@ -81,7 +81,7 @@ public class ReviewSummaryController {
     @Operation(
             summary = "List practice reviews with result and feedback outcomes",
             description = "Reviews are ordered by when they were created, newest first unless sort is OLDEST."
-                    + " queueState keeps the reviews whose job waits for a worker, is on hold for budget or runs"
+                    + " queueState keeps the reviews whose job waits for a server, is on hold for budget or runs"
                     + " now, as the queue counts them.",
             operationId = "listReviews")
     @ApiResponse(responseCode = "200", description = "Paginated review summaries returned")

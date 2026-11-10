@@ -84,11 +84,11 @@ A **GitHub App** reads the repositories, receives their webhooks, and posts feed
 
 ## 5. Connect an AI provider
 
-Practice review needs a running worker and a model that the workspace can run on.
+Practice review needs a running server and a model that the workspace can run on.
 The job queue runs on PostgreSQL, so practice review needs no NATS setup.
 
-1. Turn on the worker, reviews, and repository checkouts in the [chart values](./helm-chart#integration-values).
-   On Kubernetes, the `small.yaml` profile turns on the worker.
+1. Turn on the server, reviews, and repository checkouts in the [chart values](./helm-chart#integration-values).
+   On Kubernetes, the `small.yaml` profile turns on the server.
 2. Run the install command again with your site values.
 3. Connect the provider, then price, enable, and share a model, as [The staged flow](./ai-providers#1-the-staged-flow-and-why-it-is-staged) describes.
 4. As a workspace admin, assign the model to **Practice reviews** on the workspace's **AI models** page.

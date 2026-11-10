@@ -33,26 +33,26 @@ export function hostAddress(hosts: string): string {
 	throw new Error("k3d supplied no IPv4 address for host.k3d.internal");
 }
 
-/** Only worker/sandbox literal defaults; the host retains its API, database and local profile. */
-export function hostWorkerEnvironment(rendered: string): Record<string, string> {
+/** Only the server's agent and sandbox literal defaults; the host retains its API, database and local profile. */
+export function hostServerEnvironment(rendered: string): Record<string, string> {
 	const deployment = parseAllDocuments(rendered)
 		.map((document) => document.toJS() as unknown)
 		.filter(isRecord)
 		.find(
 			(resource) =>
 				resource.kind === "Deployment" &&
-				asRecord(resource.metadata, "metadata").name === `${RELEASE}-worker`,
+				asRecord(resource.metadata, "metadata").name === `${RELEASE}-server`,
 		);
 	if (deployment === undefined) {
-		throw new Error("The chart returned no worker Deployment");
+		throw new Error("The chart returned no server Deployment");
 	}
 	const template = asRecord(asRecord(deployment.spec, "deployment").template, "template");
 	const container = asRecord(
 		asArray(asRecord(template.spec, "Pod").containers, "containers")[0],
-		"worker",
+		"server",
 	);
 	return Object.fromEntries(
-		asArray(container.env, "worker environment")
+		asArray(container.env, "server environment")
 			.map((entry) => asRecord(entry, "variable"))
 			.filter(
 				(entry) =>
@@ -108,12 +108,9 @@ export function hostValues(namespace: string, address: string): Record<string, u
 			api: { address, port: 6443 },
 		}),
 		conversationLoop: { replicas: 1, turns: 1 },
-		worker: {
-			enabled: true,
-			replicas: 1,
-			rolloutStrategy: "Recreate",
-			sandbox: { namespace, reviewMemory: oneReviewMemory() },
-		},
+		// One host process: the quota holds the isolation probe of one server, not of a rollout's two.
+		server: { replicas: 1, rolloutStrategy: "Recreate", drainTimeoutSeconds: 0 },
+		sandbox: { enabled: true, namespace, reviewMemory: oneReviewMemory() },
 	};
 }
 
@@ -182,7 +179,7 @@ export function hostResources(
 		loop.length !== 3
 	) {
 		throw new Error(
-			"The chart no longer supplies the expected sandbox quota, policies, worker authority and conversation loop",
+			"The chart no longer supplies the expected sandbox quota, policies, server authority and conversation loop",
 		);
 	}
 	// The gateway runs on the host here. The other rules keep the chart's selectors.
@@ -192,7 +189,7 @@ export function hostResources(
 	};
 	for (const resource of sandbox) {
 		if (resource.kind === "RoleBinding") {
-			resource.subjects = [{ kind: "ServiceAccount", name: "host-worker", namespace }];
+			resource.subjects = [{ kind: "ServiceAccount", name: "host-server", namespace }];
 		}
 		if (
 			resource.kind === "NetworkPolicy" &&
@@ -207,20 +204,20 @@ export function hostResources(
 		if (resource.kind === "NetworkPolicy") {
 			const spec = asRecord(resource.spec, "loop policy");
 			const egress = asArray(spec.egress, "loop egress");
-			const workers = egress.filter((rule) =>
+			const servers = egress.filter((rule) =>
 				asArray(asRecord(rule, "rule").to, "peers").some((peer) => {
 					const selector = asRecord(peer, "peer").podSelector;
 					return (
 						isRecord(selector) &&
 						isRecord(selector.matchLabels) &&
-						selector.matchLabels["app.kubernetes.io/component"] === "worker"
+						selector.matchLabels["app.kubernetes.io/component"] === "server"
 					);
 				}),
 			);
-			if (workers.length !== 1) {
-				throw new Error("The chart's loop policy no longer names the workers' gateway once");
+			if (servers.length !== 1) {
+				throw new Error("The chart's loop policy no longer names the server's gateway once");
 			}
-			spec.egress = egress.map((rule) => (rule === workers[0] ? gateway : rule));
+			spec.egress = egress.map((rule) => (rule === servers[0] ? gateway : rule));
 		}
 		if (resource.kind === "Deployment") {
 			const template = asRecord(asRecord(resource.spec, "loop").template, "loop template");
@@ -248,7 +245,7 @@ export function hostResources(
 		{
 			apiVersion: "v1",
 			kind: "ServiceAccount",
-			metadata: { name: "host-worker", namespace },
+			metadata: { name: "host-server", namespace },
 			automountServiceAccountToken: false,
 		},
 		...sandbox,
@@ -278,7 +275,7 @@ export async function credentials(admin: string, namespace: string): Promise<voi
 				namespace,
 				"create",
 				"token",
-				"host-worker",
+				"host-server",
 				"--duration=1h",
 				"-o",
 				"json",
@@ -407,14 +404,14 @@ export async function prepareHost(): Promise<NodeJS.ProcessEnv> {
 			clusters: asArray(source.clusters, "clusters"),
 			contexts: [
 				{
-					name: "host-worker",
-					context: { cluster: "k3d-hephaestus", user: "host-worker", namespace: ports.namespace },
+					name: "host-server",
+					context: { cluster: "k3d-hephaestus", user: "host-server", namespace: ports.namespace },
 				},
 			],
-			"current-context": "host-worker",
+			"current-context": "host-server",
 			users: [
 				{
-					name: "host-worker",
+					name: "host-server",
 					user: {
 						exec: {
 							apiVersion: "client.authentication.k8s.io/v1beta1",
@@ -436,7 +433,7 @@ export async function prepareHost(): Promise<NodeJS.ProcessEnv> {
 	await chmod(kubeconfig, 0o600);
 	return {
 		...env,
-		...hostWorkerEnvironment(rendered),
+		...hostServerEnvironment(rendered),
 		KUBECONFIG: kubeconfig,
 		SERVER_PORT: String(ports.server),
 		SANDBOX_API_PORT: String(ports.gateway),

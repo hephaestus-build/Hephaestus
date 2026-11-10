@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
+import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
@@ -28,8 +29,8 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxModelProxy;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
@@ -152,10 +153,11 @@ public final class ComposeRunGateway implements AutoCloseable {
                 GatewayApplication.class,
                 classNamed("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"),
                 classNamed("de.tum.cit.aet.hephaestus.agent.gateway.AgentGatewayErrors"));
+        var drain = AgentReviewDrainFixtures.started(context);
         application.addInitializers(gatewayContext -> {
             var factory = gatewayContext.getBeanFactory();
             factory.registerSingleton("reviewComposeSandboxKind", kind);
-            factory.registerSingleton("agentNextController", new AgentNextController(sandboxes, List.of(kind)));
+            factory.registerSingleton("agentNextController", new AgentNextController(sandboxes, List.of(kind), drain));
             factory.registerSingleton(
                     "agentRunController", new AgentRunController(runs, sandboxes, transactions, List.of(kind)));
             factory.registerSingleton("compositionController", new CompositionController(kind, sessions));
@@ -177,15 +179,16 @@ public final class ComposeRunGateway implements AutoCloseable {
             factory.registerSingleton(
                     "conversationLoopProperties", new ConversationLoopProperties("0123456789abcdef".repeat(4)));
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
-            factory.registerSingleton("workerProperties", WorkerPropertiesFixtures.withDrain(Duration.ofMinutes(1)));
+            // The server's shared buckets, which the gateway's rate limit draws from.
+            factory.registerSingleton("bucketResolver", context.getBean(BucketResolver.class));
+            factory.registerSingleton("agentReviewDrain", drain);
             factory.registerSingleton("globalControllerAdvice", new GlobalControllerAdvice());
         });
         gateway = application.run(
                 "--server.port=0",
                 "--spring.main.banner-mode=off",
                 "--spring.mvc.problemdetails.enabled=true",
-                "--" + RuntimeRole.WORKER_PROPERTY + "=true",
-                "--" + RuntimeRole.SERVER_PROPERTY + "=false",
+                "--" + RuntimeRole.AGENT_ENABLED_PROPERTY + "=true",
                 "--hephaestus.sandbox.gateway.port=0");
         port = gateway.getBean(SandboxGatewayConnector.class).port();
         // The isolated test context has no scheduler; composition waits for the outbox's provider readback.

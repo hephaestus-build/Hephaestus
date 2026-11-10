@@ -986,7 +986,7 @@ set -- -f "$profiles/small.yaml"
 # older release, and only a deployed release has a revision to return to.
 helm upgrade --install hephaestus "$HERE/chart-$VERSION/hephaestus" -n "$NAMESPACE" \
 	"$@" -f "$HERE/k3s-values.yaml" -f "$HERE/site.yaml" \
-	${ROLLBACK:+"$ROLLBACK"} --wait=watcher --wait-for-jobs --timeout 20m ||
+	${ROLLBACK:+"$ROLLBACK"} --wait=watcher --wait-for-jobs --timeout 30m ||
 	die "Hephaestus $VERSION did not become ready. Follow https://docs.hephaestus.build/admin/kubernetes#a-first-install-fails before you run this command again"
 if [ "$oauth_changed" = true ]; then
 	# Startup seeds a missing provider. An existing provider keeps its database credential.

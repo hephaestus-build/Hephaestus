@@ -73,27 +73,27 @@ type ToolResultMessage = Extract<PiMessage, { role: "toolResult" }>;
 /** A conversation is compacted by Pi past this many tokens, when the model's window allows it. */
 const MENTOR_WORKING_TOKENS = 49_152;
 
-/** How often the partial answer may reach the worker. */
+/** How often the partial answer may reach the server. */
 const PARTIAL_INTERVAL_MS = 250;
 
 const REQUEST_TIMEOUT_MS = 60_000;
-/** The longest a command runs, in seconds: the worker's bound, which also never passes the turn's deadline. */
+/** The longest a command runs, in seconds: the server's bound, which also never passes the turn's deadline. */
 const EXEC_TIMEOUT_SECONDS = 60;
 
 /**
- * The codes the worker's LLM proxy starts an error message with when the provider sent nothing for its idle bound, or
+ * The codes the server's LLM proxy starts an error message with when the provider sent nothing for its idle bound, or
  * when the provider's breaker refuses calls (`LlmProxyService`). Retrying cannot help, so the turn fails.
  */
 const PROVIDER_UNAVAILABLE = ["upstream_stalled", "upstream_paused"] as const;
 
 /**
  * The most model calls one turn makes, retries included. An answer takes a handful. A turn that keeps calling loops on
- * a tool or a failing call, and it would keep one of the worker's few turn slots, and every question queued behind it,
+ * a tool or a failing call, and it would keep one of the server's few turn slots, and every question queued behind it,
  * until its deadline.
  */
 const MAX_TURN_MODEL_CALLS = 40;
 
-/** Waits before each repeat of a context read or an end that the worker did not answer or answered with a 5xx. */
+/** Waits before each repeat of a context read or an end that the server did not answer or answered with a 5xx. */
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
 /** Pi requires a type for a custom message; the cache breakpoint finds the situation by its `<situation>` text. */
@@ -164,7 +164,7 @@ function log(...parts: unknown[]) {
 	process.stderr.write(`[heph-host ${new Date().toISOString()}] ${line}\n`);
 }
 
-/** The cause of a failure because the worker answered that this attempt no longer holds its lease (`409`). */
+/** The cause of a failure because the server answered that this attempt no longer holds its lease (`409`). */
 const LEASE_LOST = Symbol("lease lost");
 
 /** The attempt lost its lease: stop working on it, say nothing more. */
@@ -176,7 +176,7 @@ export function isLeaseLost(error: unknown): boolean {
 	return error instanceof Error && error.cause === LEASE_LOST;
 }
 
-/** The cause of a failure because the worker refused a request body over its size bound (`413`). */
+/** The cause of a failure because the server refused a request body over its size bound (`413`). */
 const TOO_LARGE = Symbol("too large");
 
 export function tooLarge(message: string): Error {
@@ -187,10 +187,10 @@ export function isTooLarge(error: unknown): boolean {
 	return error instanceof Error && error.cause === TOO_LARGE;
 }
 
-/** The worker's answer to a link: admitted, or refused with the worker's reason when it gave one. */
+/** The server's answer to a link: admitted, or refused with the server's reason when it gave one. */
 export type LinkAnswer = { admitted: true } | { admitted: false; reason: string | null };
 
-/** What a turn reads from and writes to its worker, with the turn's credential. */
+/** What a turn reads from and writes to its server, with the turn's credential. */
 export interface TurnApi {
 	context: () => Promise<TurnContext>;
 	/** Reads one page of a file in the tools Pod; a refusal is an answer, not a failure. */
@@ -199,7 +199,7 @@ export interface TurnApi {
 	exec: (request: SandboxExecRequest, signal: AbortSignal) => Promise<SandboxExecAnswer>;
 	/** Stages one item, such as a repository, into the turn's context folder. */
 	load: (request: SandboxLoadRequest, signal: AbortSignal) => Promise<SandboxLoadAnswer>;
-	/** Asks the worker to admit one id for a tool that shows feedback (`LINK_TOOLS`). */
+	/** Asks the server to admit one id for a tool that shows feedback (`LINK_TOOLS`). */
 	link: (tool: LinkToolName, id: string, signal: AbortSignal) => Promise<LinkAnswer>;
 	search: (query: Record<string, unknown>, signal: AbortSignal) => Promise<unknown>;
 	partial: (update: PartialUpdate) => Promise<void>;
@@ -208,7 +208,7 @@ export interface TurnApi {
 	end: (end: TurnEnd) => Promise<void>;
 }
 
-/** The worker answered a turn request with this status. The message stays what a tool tells the model. */
+/** The server answered a turn request with this status. The message stays what a tool tells the model. */
 export class WorkerStatusError extends Error {
 	override name = "WorkerStatusError";
 	readonly status: number;
@@ -267,8 +267,8 @@ function failureKind(failure: unknown): FailureDetail {
 }
 
 /**
- * What the log says of a failure: its closed kind, and the worker's HTTP status when the worker answered. Its message,
- * name and stack are left out: each is text that a multi-line message, such as the worker's answer, can write into.
+ * What the log says of a failure: its closed kind, and the server's HTTP status when the server answered. Its message,
+ * name and stack are left out: each is text that a multi-line message, such as the server's answer, can write into.
  */
 export function failureSummary(failure: unknown): string {
 	const status =
@@ -300,7 +300,7 @@ export function declaredSize(headers: Headers): number | null {
 	return Number.isSafeInteger(size) ? size : null;
 }
 
-/** A load's archive as the worker sends it: what the model reads about it in a header, then the archive's bytes. */
+/** A load's archive as the server sends it: what the model reads about it in a header, then the archive's bytes. */
 async function loadedArchive(response: Response, what: string): Promise<LoadedArchive> {
 	const { headers, body } = response;
 	const about = loadAbout(headers.get("hephaestus-load"));
@@ -308,7 +308,7 @@ async function loadedArchive(response: Response, what: string): Promise<LoadedAr
 	const sha256 = headers.get("hephaestus-load-sha256") ?? "";
 	if (about === null || size === null || !/^[0-9a-f]{64}$/u.test(sha256) || body === null) {
 		await body?.cancel();
-		throw new Error(`the worker sent a malformed ${what} answer`);
+		throw new Error(`the server sent a malformed ${what} answer`);
 	}
 	const stream = body;
 	async function* bytes() {
@@ -329,14 +329,14 @@ async function loadedArchive(response: Response, what: string): Promise<LoadedAr
 /** The most bytes of a turn's documents that the host holds: they are JSON documents of one turn, never a checkout. */
 const MAX_DOCUMENTS_BYTES = 32 * 1024 * 1024;
 
-/** Why a `409` of a turn endpoint stops the attempt: the worker's word, or a lost lease. */
+/** Why a `409` of a turn endpoint stops the attempt: the server's word, or a lost lease. */
 async function stopOf(response: Response): Promise<StopReason> {
 	const problem: unknown = await response.json().catch(() => null);
 	const stop = isRecord(problem) ? problem.stop : undefined;
 	return stop === "developer" || stop === "deadline" ? stop : "lease";
 }
 
-/** How long a call waits before it repeats a `401`: a worker that just started may not know the issuer's key yet. */
+/** How long a call waits before it repeats a `401`: a server that just started may not know the issuer's key yet. */
 const UNKNOWN_KEY_DELAY_MS = 5000;
 
 /**
@@ -394,9 +394,9 @@ export function httpTurnApi(
 		}
 		if (response.status === 413) {
 			await response.body?.cancel();
-			throw tooLarge(`${path} of turn ${turnId} is larger than the worker accepts`);
+			throw tooLarge(`${path} of turn ${turnId} is larger than the server accepts`);
 		}
-		// A limit of the gateway passes as a worker's 5xx does: the end of a turn must not lose its answer to one.
+		// A limit of the gateway passes as a server's 5xx does: the end of a turn must not lose its answer to one.
 		if (response.status === 429 || response.status >= 500) {
 			const detail = await response.text();
 			throw new WorkerStatusError(
@@ -408,7 +408,7 @@ export function httpTurnApi(
 		return response;
 	}
 
-	/** Tools wait within the turn's cancellation and worker deadline; a shorter request timeout would abandon a live tool call. */
+	/** Tools wait within the turn's cancellation and server deadline; a shorter request timeout would abandon a live tool call. */
 	async function sandbox<T>(
 		endpoint: string,
 		request: object,
@@ -418,13 +418,13 @@ export function httpTurnApi(
 		const what = `sandbox/${endpoint}`;
 		const answer = parse(await json(await call("POST", what, request, signal, null), what));
 		if (answer === null) {
-			throw new Error(`the worker sent a malformed ${what} answer`);
+			throw new Error(`the server sent a malformed ${what} answer`);
 		}
 		return answer;
 	}
 
 	/**
-	 * A call that is safe to repeat, repeated once for each retry delay while the worker does not answer it or answers
+	 * A call that is safe to repeat, repeated once for each retry delay while the server does not answer it or answers
 	 * with a 429 or a 5xx.
 	 */
 	async function repeated<T>(what: string, send: () => Promise<T>): Promise<T> {
@@ -446,7 +446,7 @@ export function httpTurnApi(
 			const what = "sandbox/bind";
 			const answer = asBindAnswer(await json(await call("POST", what, {}, signal, null), what));
 			if (answer === null) {
-				throw new Error(`the worker sent a malformed ${what} answer`);
+				throw new Error(`the server sent a malformed ${what} answer`);
 			}
 			return answer;
 		},
@@ -462,7 +462,7 @@ export function httpTurnApi(
 			const size = declaredSize(response.headers);
 			if (size === null || size > MAX_DOCUMENTS_BYTES) {
 				await response.body?.cancel();
-				throw new Error(`the worker sent a ${what} archive without a size within its bound`);
+				throw new Error(`the server sent a ${what} archive without a size within its bound`);
 			}
 			return Buffer.from(await response.arrayBuffer());
 		},
@@ -473,7 +473,7 @@ export function httpTurnApi(
 			if (response.headers.get("content-type")?.startsWith("application/json") === true) {
 				const answer = asLoadAnswer(await json(response, what));
 				if (answer === null || answer.ok) {
-					throw new Error(`the worker sent a malformed ${what} answer`);
+					throw new Error(`the server sent a malformed ${what} answer`);
 				}
 				return answer;
 			}
@@ -519,7 +519,7 @@ export function httpTurnApi(
 			return json(await call("POST", "search", query, signal), "search_conversation");
 		},
 		async partial(update) {
-			// The first partial answer times the attempt's first token on the worker.
+			// The first partial answer times the attempt's first token on the server.
 			const path = sentPartial ? "partial" : "partial?first=true";
 			await ok(await call("PUT", path, update), "reporting the partial answer");
 			sentPartial = true;
@@ -545,7 +545,7 @@ export function httpTurnApi(
 	};
 }
 
-/** The worker's context, checked where it crosses into the host. */
+/** The server's context, checked where it crosses into the host. */
 function asTurnContext(value: unknown): TurnContext {
 	if (
 		!isRecord(value) ||
@@ -558,7 +558,7 @@ function asTurnContext(value: unknown): TurnContext {
 		typeof value.model.apiProtocol !== "string" ||
 		typeof value.model.modelId !== "string"
 	) {
-		throw new Error("the worker sent a malformed turn context");
+		throw new Error("the server sent a malformed turn context");
 	}
 	const { model } = value;
 	const entries: unknown[] = value.entries;
@@ -596,7 +596,7 @@ function asFileEntries(entries: readonly unknown[]): FileEntry[] {
 	const valid: FileEntry[] = [];
 	for (const entry of entries) {
 		if (!isFileEntry(entry)) {
-			throw new Error("the worker sent a malformed session entry");
+			throw new Error("the server sent a malformed session entry");
 		}
 		valid.push(entry);
 	}
@@ -612,7 +612,7 @@ export type ModelFactory = (
 ) => Promise<{ modelRuntime: ModelRuntime; model: HostModel }>;
 
 /**
- * The `hephaestus` provider on the worker's LLM proxy, registered per turn: each turn's runtime carries that turn's
+ * The `hephaestus` provider on the server's LLM proxy, registered per turn: each turn's runtime carries that turn's
  * credential and no other. The proxy bills the attempt the credential names.
  */
 export function proxyModels(proxyUrl: string, agentDir: string): ModelFactory {
@@ -861,7 +861,7 @@ function withStatus(output: string, status: string): string {
 	return output === "" ? status : `${output}\n\n${status}`;
 }
 
-/** `read`, `bash` and `load_context`: Pi's contracts, run by the worker in the tools Pod. */
+/** `read`, `bash` and `load_context`: Pi's contracts, run by the server in the tools Pod. */
 function contextFolderTools(
 	api: TurnApi,
 	signalOf: (signal: AbortSignal | undefined) => AbortSignal,
@@ -994,7 +994,7 @@ function turnTools(api: TurnApi, turnSignal: AbortSignal, contextFolder: boolean
 				if (linkedId === "" || text === "") {
 					throw new Error(`${name}: ${idKey} and text are required`);
 				}
-				// The worker decides what a reply may show: nothing is shown or reported as shown until it admits this id,
+				// The server decides what a reply may show: nothing is shown or reported as shown until it admits this id,
 				// and a refusal fails the call.
 				const answer = await api.link(name, linkedId, signalOf(signal));
 				if (turnSignal.aborted) {
@@ -1249,7 +1249,7 @@ function contextNote(
 }
 
 /**
- * The entries with every `read`, `bash` and `load_context` result replaced by its note: an end that the worker
+ * The entries with every `read`, `bash` and `load_context` result replaced by its note: an end that the server
  * refuses for its size is sent again with them. The next turn then reads the notes, which the turn after it would
  * write anyway.
  */
@@ -1269,7 +1269,7 @@ function withContextNotes(entries: readonly SessionEntry[]): SessionEntry[] {
 }
 
 /**
- * What the worker reads of an assistant message in progress: its text and the feedback it showed. Reasoning, usage and
+ * What the server reads of an assistant message in progress: its text and the feedback it showed. Reasoning, usage and
  * the other tool calls stay on the host.
  */
 function partialMessage(message: AssistantMessage): PartialMessage {
@@ -1297,7 +1297,7 @@ interface PartialStream {
 	observe: (event: AgentSessionEvent) => void;
 	/** The turn is over: no later event changes the partial answer, and the snapshot not yet sent is dropped. */
 	stop: () => void;
-	/** Waits for the snapshot in flight, so none reaches the worker after the end. */
+	/** Waits for the snapshot in flight, so none reaches the server after the end. */
 	settled: () => Promise<void>;
 }
 
@@ -1423,7 +1423,7 @@ export function partialStream(
 		}
 	}
 
-	/** The snapshot to send next, or null if the worker has the newest one or the stream stopped. */
+	/** The snapshot to send next, or null if the server has the newest one or the stream stopped. */
 	function take(): PartialSnapshot | null {
 		if (!dirty || closed) {
 			return null;
@@ -1519,7 +1519,7 @@ export function partialStream(
 }
 
 /**
- * Why a turn stops: the worker's stop command, a provider the worker's proxy found unavailable, or a turn past its
+ * Why a turn stops: the server's stop command, a provider the server's proxy found unavailable, or a turn past its
  * model calls.
  */
 type HaltReason = StopReason | "stalled" | "calls";
@@ -1528,7 +1528,7 @@ interface TurnState {
 	readonly attempt: number;
 	readonly controller: AbortController;
 	stopReason: HaltReason | null;
-	/** The proxy's code for an unavailable provider, for the worker log. */
+	/** The proxy's code for an unavailable provider, for the server log. */
 	stallDetail: (typeof PROVIDER_UNAVAILABLE)[number] | null;
 	session: AgentSession | null;
 }
@@ -1558,7 +1558,7 @@ export interface HostOptions {
 	leaseIntervalMs?: number;
 }
 
-/** A third of the worker's lease, so two renewals may fail before the lease ends. */
+/** A third of the server's lease, so two renewals may fail before the lease ends. */
 const LEASE_INTERVAL_MS = 5000;
 
 export interface HephHost {
@@ -1572,7 +1572,7 @@ export interface HephHost {
 }
 
 /**
- * The loop's turns. Turns of different conversations run at once; the workers never hand out two of one. A later
+ * The loop's turns. Turns of different conversations run at once; the servers never hand out two of one. A later
  * attempt of a turn replaces the attempt that runs here: that one lost its lease, so it is stopped and says nothing
  * more, and the later one starts when it settled.
  */
@@ -1598,7 +1598,7 @@ export function createHephHost(options: HostOptions): HephHost {
 		};
 		turns.set(turnId, state);
 		const api = options.turnApi(turnId, token, (reason) => stop(turnId, attempt, reason));
-		// The lease is the only claim on the turn: a loop that stops renewing it lets the worker take the turn back.
+		// The lease is the only claim on the turn: a loop that stops renewing it lets the server take the turn back.
 		const renewals = setInterval(() => {
 			void api.lease();
 		}, options.leaseIntervalMs ?? LEASE_INTERVAL_MS);
@@ -1648,11 +1648,11 @@ export function createHephHost(options: HostOptions): HephHost {
 					: withoutOmitted(appended.manager.getEntries().slice(appended.stored));
 			const entries = outcome === "FAILED" ? summariesOf(turnEntries) : turnEntries;
 			if (outcome === "FAILED") {
-				// A thrown failure's summary is its kind, which is `detail`, with the worker's status when it answered.
+				// A thrown failure's summary is its kind, which is `detail`, with the server's status when it answered.
 				const said = failure === undefined ? (detail ?? "host_error") : failureSummary(failure);
 				log(`turn ${turnId} attempt ${state.attempt} failed (${reason ?? "ERROR"}): ${said}`);
 			}
-			// An end without a detail sends `null`, as the worker reads it.
+			// An end without a detail sends `null`, as the server reads it.
 			const ending: TurnEnd = { outcome, entries, reason, detail: detail ?? null };
 			try {
 				await api.end(ending);
@@ -1783,7 +1783,7 @@ export function createHephHost(options: HostOptions): HephHost {
 		} catch (error) {
 			// A stop that a call learned of failed that call too: the turn still ends, as stopped. A lost lease is no stop.
 			if (state.stopReason === "lease" || (isLeaseLost(error) && !stopped(state))) {
-				// Also the answer to a repeated end whose earlier try the worker stored.
+				// Also the answer to a repeated end whose earlier try the server stored.
 				log(`turn ${turnId} is no longer this attempt's to end; abandoning it`);
 				return;
 			}
@@ -1836,8 +1836,8 @@ async function endQuietly(turnId: string, ending: () => Promise<void>): Promise<
 }
 
 /**
- * `failure`, when a thrown failure ended the turn, goes to the host's log as its `failureSummary` (kind and worker
- * status), not to the worker.
+ * `failure`, when a thrown failure ended the turn, goes to the host's log as its `failureSummary` (kind and server
+ * status), not to the server.
  */
 type Ending = (
 	outcome: TurnEnd["outcome"],
@@ -1877,7 +1877,7 @@ function unanswered(entries: readonly SessionEntry[]): FailureDetail | null {
 	if (last?.type !== "message" || last.message.role !== "assistant") {
 		return "no_answer";
 	}
-	// The provider's error message stays out: it can quote the request. The worker's proxy logs the call's status.
+	// The provider's error message stays out: it can quote the request. The server's proxy logs the call's status.
 	const { stopReason } = last.message;
 	if (stopReason === "error") {
 		return "model_error";
@@ -1904,7 +1904,7 @@ function hasWords(message: AssistantMessage): boolean {
 }
 
 /**
- * Whether this turn's messages before `last` showed the developer an answer and then only feedback that the worker
+ * Whether this turn's messages before `last` showed the developer an answer and then only feedback that the server
  * admitted: words, or the `text` of an admitted link call, with no other tool and no refused link after them.
  */
 function answeredBeforeLinks(entries: readonly SessionEntry[], last: SessionEntry): boolean {
@@ -1931,15 +1931,15 @@ function answeredBeforeLinks(entries: readonly SessionEntry[], last: SessionEntr
 	return false;
 }
 
-/** How long the loop waits after each failed pull in a row: the gateway Service can have no ready worker for a while. */
+/** How long the loop waits after each failed pull in a row: the gateway Service can have no ready server for a while. */
 const PULL_DELAYS_MS = [500, 1000, 2000, 4000];
 
-/** A pull waits on the worker for up to 20 seconds; this bounds a pull that never ends. */
+/** A pull waits on the server for up to 20 seconds; this bounds a pull that never ends. */
 const PULL_TIMEOUT_MS = 60_000;
 
 /**
- * Pulls turn attempts from the workers' gateway and runs each on `host`, while it has room for `turns`, until `signal`
- * aborts. A pull that started ends first: the worker claimed its turn already, and an answer the loop drops costs the
+ * Pulls turn attempts from the servers' gateway and runs each on `host`, while it has room for `turns`, until `signal`
+ * aborts. A pull that started ends first: the server claimed its turn already, and an answer the loop drops costs the
  * turn its lease. `beat` runs at each pull, so the liveness probe sees the loop work.
  */
 export async function pullTurns(
@@ -1990,7 +1990,7 @@ export async function pullTurns(
 		if (response.status === 204) {
 			failures = 0;
 		} else {
-			// 503: that worker stops; 401: that worker does not know the loop's credential yet, or it is wrong.
+			// 503: that server stops; 401: that server does not know the loop's credential yet, or it is wrong.
 			await failed(response.status);
 		}
 	}

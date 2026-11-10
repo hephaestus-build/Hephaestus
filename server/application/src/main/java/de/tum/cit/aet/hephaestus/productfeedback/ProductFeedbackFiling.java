@@ -17,7 +17,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * One report's way to GitHub: its state, route and reason, the draft, the frozen destination and the issue it became.
- * Sweepers claim rows with a lease; every write checks the attempt it was claimed under, so a stale worker's result is
+ * Sweepers claim rows with a lease; every write checks the attempt it was claimed under, so a stale server's result is
  * dropped. The row is deleted with its report.
  */
 @Entity

@@ -15,7 +15,7 @@ networkPolicy:
   gateway:
     namespace: capacity-bench-20261030
     podLabels: { app.kubernetes.io/name: capacity-replay }
-  workerGatewayPorts: [8080]
+  modelGatewayPorts: [8080]
   kubernetesApi:
     # Replace the documentation address with the qualified API /32 and export the same value
     # as BENCH_KUBERNETES_API_CIDR for the post-renderer.
@@ -26,10 +26,8 @@ postgresql:
     existingSecret: capacity-bench-db-tls
 server:
   replicas: 0
-worker:
-  replicas: 0
-  sandbox:
-    namespace: capacity-bench-20261030-sandboxes
+sandbox:
+  namespace: capacity-bench-20261030-sandboxes
 webhook:
   replicas: 0
 webapp:

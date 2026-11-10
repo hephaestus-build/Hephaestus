@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.runtime.worker;
+package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -19,20 +19,20 @@ import org.springframework.context.support.DefaultLifecycleProcessor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * The drain is the worker's only drain setting: the drain phase waits for it, whatever
+ * The drain is the server's only drain setting: the drain phase waits for it, whatever
  * {@code spring.lifecycle.timeout-per-shutdown-phase} says, and every other phase keeps that setting. A drain phase
  * timeout below the drain would let Spring close the database under a review that is still draining.
  */
-class WorkerShutdownTimeoutTest extends BaseUnitTest {
+class AgentShutdownTimeoutTest extends BaseUnitTest {
 
     private static final long DRAIN_MS = 300;
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(LifecycleAutoConfiguration.class))
-            .withUserConfiguration(WorkerPropertiesConfiguration.class, Phases.class)
+            .withUserConfiguration(AgentShutdownConfiguration.class, Phases.class)
             .withPropertyValues(
-                    RuntimeRole.WORKER_PROPERTY + "=true",
-                    "hephaestus.worker.drain.timeout=" + DRAIN_MS + "ms",
+                    RuntimeRole.AGENT_ENABLED_PROPERTY + "=true",
+                    "hephaestus.agent.drain-timeout=" + DRAIN_MS + "ms",
                     "spring.lifecycle.timeout-per-shutdown-phase=50ms");
 
     @Test
@@ -52,14 +52,14 @@ class WorkerShutdownTimeoutTest extends BaseUnitTest {
     void shouldGiveOnlyTheDrainPhaseTheDrainPlusTheMargin() {
         Duration drain = Duration.ofHours(2);
 
-        runner.withPropertyValues("hephaestus.worker.drain.timeout=" + drain).run(context -> {
+        runner.withPropertyValues("hephaestus.agent.drain-timeout=" + drain).run(context -> {
             DefaultLifecycleProcessor processor = context.getBean(
                     AbstractApplicationContext.LIFECYCLE_PROCESSOR_BEAN_NAME, DefaultLifecycleProcessor.class);
 
-            assertThat(shutdownTimeout(processor, WorkerPropertiesConfiguration.DRAIN_PHASE))
-                    .isEqualTo(drain.plus(WorkerPropertiesConfiguration.SHUTDOWN_MARGIN)
-                            .toMillis());
-            assertThat(shutdownTimeout(processor, WorkerPropertiesConfiguration.DRAIN_PHASE - 1))
+            assertThat(shutdownTimeout(processor, AgentShutdownConfiguration.DRAIN_PHASE))
+                    .isEqualTo(
+                            AgentShutdownConfiguration.drainPhaseTimeout(drain).toMillis());
+            assertThat(shutdownTimeout(processor, AgentShutdownConfiguration.DRAIN_PHASE - 1))
                     .as("every other phase keeps the configured timeout")
                     .isEqualTo(50L);
         });
@@ -79,7 +79,7 @@ class WorkerShutdownTimeoutTest extends BaseUnitTest {
 
         @Bean
         SmartLifecycle drain() {
-            return new Recording(WorkerPropertiesConfiguration.DRAIN_PHASE) {
+            return new Recording(AgentShutdownConfiguration.DRAIN_PHASE) {
                 @Override
                 public void stop(Runnable callback) {
                     stop();
@@ -98,7 +98,7 @@ class WorkerShutdownTimeoutTest extends BaseUnitTest {
 
         @Bean
         SmartLifecycle laterPhase() {
-            return new Recording(WorkerPropertiesConfiguration.DRAIN_PHASE - 1) {
+            return new Recording(AgentShutdownConfiguration.DRAIN_PHASE - 1) {
                 @Override
                 public void stop() {
                     drainFinishedWhenLaterPhaseStopped.set(drainFinished.get());

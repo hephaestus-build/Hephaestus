@@ -1,6 +1,6 @@
-{{- $loop := and .Values.worker.enabled (gt (int (include "hephaestus.conversationTurns" .)) 0) }}
-{{- $replicas := dict "worker" .Values.worker.replicas "conversation-loop" .Values.conversationLoop.replicas }}
-{{- range $component, $enabled := dict "postgresql" .Values.postgresql.bundled "nats" .Values.nats.bundled "server" true "worker" .Values.worker.enabled "conversation-loop" $loop }}
+{{- $loop := and .Values.sandbox.enabled (gt (int (include "hephaestus.conversationTurns" .)) 0) }}
+{{- $replicas := dict "server" .Values.server.replicas "conversation-loop" .Values.conversationLoop.replicas }}
+{{- range $component, $enabled := dict "postgresql" .Values.postgresql.bundled "nats" .Values.nats.bundled "server" true "conversation-loop" $loop }}
 {{- if $enabled }}
 ---
 apiVersion: policy/v1
@@ -10,7 +10,7 @@ metadata:
   labels:
     {{- include "hephaestus.labels" (dict "root" $ "component" $component) | nindent 4 }}
 spec:
-  {{- if gt (int (get $replicas $component)) 1 }}
+  {{- if gt (int (get $replicas $component | default 1)) 1 }}
   maxUnavailable: 1
   {{- else }}
   # A singleton stops voluntary eviction until the operator starts planned maintenance.

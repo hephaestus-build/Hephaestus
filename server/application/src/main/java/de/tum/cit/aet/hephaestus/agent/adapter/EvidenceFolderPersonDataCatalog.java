@@ -612,7 +612,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         return !isSuppressed(identities, jdbc);
     }
 
-    /** A durable original receipt can vouch for retained inputs independently of the mounted worker store. */
+    /** A durable original receipt can vouch for retained inputs independently of the mounted server store. */
     public boolean vouchesForOriginalCopy(UUID copyId, UUID jobId, long workspaceId, int attempt) {
         return vouchingReceipt(jdbc, copyId, jobId, workspaceId, attempt, false) != null;
     }
@@ -873,7 +873,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         return Math.max(requested, deleted);
     }
 
-    /** Queue removal in the workspace transaction; workers can acknowledge only after it commits. */
+    /** Queue removal in the workspace transaction; servers can acknowledge only after it commits. */
     @Override
     public void deleteWorkspaceData(Long workspaceId) {
         jdbc.update("""
@@ -978,7 +978,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         throw new IllegalStateException("A mounted evidence store has not acknowledged removal");
     }
 
-    /** Worker polling also serves a resumed request after the owning volume returns. */
+    /** Server polling also serves a resumed request after the owning volume returns. */
     public void removeLocalRequests() {
         if (!Files.exists(layout.root().resolve(".person-evidence-store-id"))) return;
         String owner = storeId().toString();

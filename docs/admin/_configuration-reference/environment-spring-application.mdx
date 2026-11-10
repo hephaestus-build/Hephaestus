@@ -2,4 +2,4 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
-| `APP_VERSION` | `spring.application.version`<br />`logging.structured.ecs.service.version` | `default: 0.0.0-development; default: ${spring.application.version}` | `server`, `webhook`, `worker`, `migration` | Version that the application reports in its logs, traces and release card. The deployment sets it from the release. Each log record names this version as its service version. |
+| `APP_VERSION` | `spring.application.version`<br />`logging.structured.ecs.service.version` | `default: 0.0.0-development; default: ${spring.application.version}` | `server`, `webhook`, `migration` | Version that the application reports in its logs, traces and release card. The deployment sets it from the release. Each log record names this version as its service version. |

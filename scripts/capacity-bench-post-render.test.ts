@@ -70,28 +70,27 @@ await test("the test overlay retains role resources and database settings while 
 	assert.equal(asRecord(spring.datasource, "datasource").url, `jdbc:\${DATABASE_URL}`);
 });
 
-await test("only the server role keeps the production NATS consumer on", () => {
-	const worker = structuredClone(deployment);
-	worker.metadata.name = "bench-worker";
-	worker.spec.template.metadata.labels["app.kubernetes.io/component"] = "worker";
-	const result = render([deployment, worker]);
+await test("the server keeps the production NATS consumer on, and another role keeps the chart's settings", () => {
+	const webhook = structuredClone(deployment);
+	webhook.metadata.name = "bench-webhook";
+	webhook.spec.template.metadata.labels["app.kubernetes.io/component"] = "webhook";
+	const result = render([deployment, webhook]);
 	assert.equal(result.status, 0, result.stderr);
-	const natsEnabled = (index: number) => {
+	const applicationJson = (index: number) => {
 		const resource = asRecord(parseAllDocuments(result.stdout)[index]?.toJSON(), "deployment");
 		const pod = asRecord(
 			asRecord(asRecord(resource.spec, "spec").template, "template").spec,
 			"pod",
 		);
 		const env = asArray(asRecord(asArray(pod.containers, "containers")[0], "container").env, "env");
-		const json = env
+		return env
 			.map((row) => asRecord(row, "env"))
-			.find((row) => row.name === "SPRING_APPLICATION_JSON");
-		const explicit = asRecord(parseJson(String(json?.value)), "properties");
-		const sync = asRecord(asRecord(explicit.hephaestus, "hephaestus").sync, "sync");
-		return asRecord(sync.nats, "nats").enabled;
+			.find((row) => row.name === "SPRING_APPLICATION_JSON")?.value;
 	};
-	assert.equal(natsEnabled(0), true);
-	assert.equal(natsEnabled(1), false);
+	const explicit = asRecord(parseJson(String(applicationJson(0))), "properties");
+	const sync = asRecord(asRecord(explicit.hephaestus, "hephaestus").sync, "sync");
+	assert.equal(asRecord(sync.nats, "nats").enabled, true);
+	assert.equal(applicationJson(1), undefined);
 });
 
 await test("the overlay removes public routes and Internet egress but keeps the database path", () => {

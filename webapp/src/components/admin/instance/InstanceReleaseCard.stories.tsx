@@ -193,14 +193,14 @@ export const DevelopmentBuild: Story = {
 				version: "0.0.0-development",
 				channel: "DEVELOPMENT",
 				environment: "local",
-				roles: ["SERVER", "WORKER", "WEBHOOK"],
+				roles: ["SERVER", "WEBHOOK"],
 			},
 		}),
 	},
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Show deployment identity" }));
 		await expect(canvas.getAllByText("not reported")).toHaveLength(2);
-		await expect(canvas.getByText("server, worker, webhook")).toBeVisible();
+		await expect(canvas.getByText("server, webhook")).toBeVisible();
 	},
 };
 

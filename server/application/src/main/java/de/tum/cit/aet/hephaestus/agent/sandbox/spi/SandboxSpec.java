@@ -15,7 +15,7 @@ import org.jspecify.annotations.Nullable;
  * Complete specification for a sandboxed practice review attempt.
  *
  * <p>Domain-agnostic — the sandbox manager never interprets the contents of the inputs or of the result. The inputs
- * fill the sandbox's {@code /workspace} through the worker's gateway; the result comes back the same way, from
+ * fill the sandbox's {@code /workspace} through the server's gateway; the result comes back the same way, from
  * {@code SandboxLayout.OUTPUT_PATH}.
  *
  * @param attempt the claimed job's attempt count; null when the caller holds no claim on the job

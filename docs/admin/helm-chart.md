@@ -23,10 +23,10 @@ Hephaestus supports the chart on a cluster with these items:
   Upgrade a cluster at an older minor, for example 1.30 or 1.33, before Hephaestus runs on it.
   [ADR 0060](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0060-the-kubernetes-floor-follows-upstream-support.md) gives the reason.
 - A network plugin that enforces NetworkPolicy for egress and for ingress, also on traffic to a Service address.
-  The worker's isolation probe stops the worker on a plugin that does not ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)).
+  The server's isolation probe stops the server on a plugin that does not ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)).
 - A Gateway API controller for `HTTPRoute` `v1` with the two features in [Gateway routes](#gateway-routes).
 - A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL and NATS.
-- With the worker enabled, the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller with its extensions, at the version that the release pins ([Sandbox templates](./sandboxes#sandbox-templates)).
+- With the server enabled, the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller with its extensions, at the version that the release pins ([Sandbox templates](./sandboxes#sandbox-templates)).
 
 CI installs and upgrades the chart on Kubernetes 1.35 and on the latest minor version, 1.37, on `amd64`.
 1.35 is the lowest version that the chart takes.
@@ -36,8 +36,8 @@ A nightly run repeats them on `main`, and it also runs 1.35 on `arm64`.
 
 One more run uses Kubernetes 1.35, three nodes, Calico for network policy, and an external PostgreSQL.
 The merge queue and the nightly run include it.
-Each run starts two workers with the `dev.yaml` profile, and each worker passes its isolation probe on that cluster.
-In the merge queue, the 1.35 run on `amd64` uses `small.yaml` instead, with one worker, on a runner of 16 GiB.
+Each run starts two servers with the `dev.yaml` profile, and each server passes its isolation probe on that cluster.
+In the merge queue, the 1.35 run on `amd64` uses `small.yaml` instead, with one server, on a runner of 16 GiB.
 
 Each upgrade must keep the PostgreSQL and NATS Pods: only a change to their own image or settings restarts them.
 On the latest minor version, the `amd64` run also backs up to an S3 server and restores to a point in time.
@@ -61,29 +61,28 @@ Hephaestus assumes that Slack's clock and the server's clock differ by less than
 | `migration` | Job, one for each Helm revision | The server image in its migrate run mode. It applies the release's database migrations and exits. |
 | `webhook` | Deployment, 1 to 3 replicas, or 0 while stopped | Webhook role, as in [Runtime roles](./runtime-roles). |
 | `webapp` | Deployment | The SPA, from the non-root webapp image. |
-| `worker` | Deployment, 2 replicas by default, optional | Worker role: practice reviews and conversations, in sandboxes ([Worker](./sandboxes#worker)). |
 | `postgresql` | StatefulSet, optional | The release PostgreSQL image, with `pg_partman` and pgBackRest. |
 | `postgresql-backup` | CronJobs, optional | Full and differential pgBackRest backups ([Backup and restore](./backup-restore#back-up-the-database)). |
 | `nats` | StatefulSet, optional | One NATS JetStream server. |
 | `route` | HTTPRoute | `/`, `/api`, `/webhooks`, and Slack interactivity. |
-| `priority` | PriorityClasses, cluster-wide | The priorities of the role Pods and of the sandboxes ([Worker § Priorities](./sandboxes#priorities)). |
+| `priority` | PriorityClasses, cluster-wide | The priorities of the role Pods and of the sandboxes ([Server § Priorities](./sandboxes#priorities)). |
 
 The PriorityClasses are the only cluster-wide objects of the chart.
 The account that installs the chart therefore needs permission to create PriorityClasses.
 Their names contain the release's namespace and name, so two releases never share one.
-On a shared cluster that does not allow this, use classes that exist ([Worker § Priorities](./sandboxes#priorities)).
+On a shared cluster that does not allow this, use classes that exist ([Server § Priorities](./sandboxes#priorities)).
 
 The migration Job is the only migration owner.
 No role runs Liquibase: each new Pod waits for the schema before it starts, for up to 10 minutes, while the previous release serves.
 The Job is a plain part of the release and not a Helm hook, because a hook would run before the bundled PostgreSQL exists.
 [Runtime roles](./runtime-roles) describes the run mode and the wait.
 
-The server has one replica and the `Recreate` update strategy.
-Servers do not yet process provider events in order across replicas.
-Two server versions never serve the same schema at the same time.
+The server has at most one replica and uses `Recreate`.
+JetStream replay fences belong to one process, so two servers can process a replay and a live event for the same item at once.
+A rolling update is refused until the provider-event inbox supplies ordering across replicas.
+Two server versions never serve the schema at the same time.
 
-The `Recreate` strategy applies only to the server.
-The worker also connects to the database, and its rollout does not wait for the server.
+The server also runs the sandboxes when `sandbox.enabled` is on.
 The webhook role has no database.
 [Database maintenance](./maintenance#database-maintenance) gives the order of the roles for a change of the database or of a schema that needs every role stopped.
 
@@ -104,19 +103,19 @@ If a change of profile changes a volume size, read [Change a volume size](./upgr
 
 `small.yaml` supports a node of 4 vCPU, at least 16 GiB of memory, and 150 GiB of disk.
 A node of 32 GiB gives more headroom.
-Its one worker runs five reviews at a time. Its one conversation loop runs up to 31 resident conversation turns, and 29 with backups on.
+Its one server runs five reviews at a time. Its one conversation loop runs up to 31 resident conversation turns, and 29 with backups on.
 A chart test adds up what that node holds during an upgrade, with backups on:
 
 | Part | Memory | CPU requests | Disk |
 | --- | --- | --- | --- |
-| Server, webhook role, worker, conversation loop, webapp, PostgreSQL with pgBackRest, NATS | 9.2 GiB | 1.35 | The volumes of PostgreSQL and NATS, and bounded caches |
+| Server, webhook role, server, conversation loop, webapp, PostgreSQL with pgBackRest, NATS | 9.2 GiB | 1.35 | The volumes of PostgreSQL and NATS, and bounded caches |
 | An upgrade: the new webhook, webapp and conversation loop Pods, the migration Job, the stanza Job and one backup | 3.7 GiB | 0.85 | The new Pods' caches |
 | The sandbox quotas: five reviews, one isolation probe and ten tools Pods, including up to two warm Pods | 4.0 GiB | 0.60 | The disk requests of the sandbox Pods ([Sandbox sizes](./sandboxes#sandbox-sizes)) |
 | Total, against the node less platform reservations and the hard eviction floor | 16.9 GiB of 30.25 GiB | 2.80 of 3.5 | 69.5 GiB of the 110 GiB left beside images and review workspaces |
 
-The worker uses `Recreate` in the `small` profile.
-The old worker drains before its replacement starts, so reviews and conversations pause during each upgrade.
-The server also uses `Recreate`. The webhook role keeps its rolling update.
+The server uses `Recreate` in the `small` profile.
+The old server drains before its replacement starts, so reviews and conversations pause during each upgrade.
+The webhook role keeps its rolling update.
 Measure the deployment outage against the 99.5% availability budget.
 
 `conversationLoop.turns: auto` uses the CPU declaration in the chart's `turn-admission.json`.
@@ -147,20 +146,20 @@ NATS also requests its full memory limit. The chart sets its `GOMEMLIMIT` to 80 
 | Role | Measured | Request | Limit |
 | --- | --- | --- | --- |
 | Server | 1.5 GiB | 2.5 GiB | 2.5 GiB |
-| Worker | 0.8 to 1.4 GiB | 2 GiB | 2 GiB |
+| Server | 0.8 to 1.4 GiB | 2 GiB | 2 GiB |
 | Webhook role | 0.6 GiB | 640 MiB | 640 MiB |
 | PostgreSQL, at rest in the earlier staging capture | 0.7 GiB | 2 GiB | 2 GiB |
 | pgBackRest | Not measured | 512 MiB | 512 MiB |
 | NATS | About 100 MiB at rest, and up to its soft limit in a catch-up | 1 GiB | 1 GiB |
 
-The server's and the worker's caches have a bound of 10 GiB each.
-Thus, the node does not run out of disk and evict a draining worker.
+The server's and the server's caches have a bound of 10 GiB each.
+Thus, the node does not run out of disk and evict a draining server.
 Use `small.yaml` on a node of 16 GiB too.
-Its worker uses `Recreate`, so the old worker stops before its replacement starts.
-The worker runs five reviews at a time, and the conversation loop the same resident turns as on a larger node.
+Its server uses `Recreate`, so the old server stops before its replacement starts.
+The server runs five reviews at a time, and the conversation loop the same resident turns as on a larger node.
 
-A second worker does not fit in 16 GiB beside the first.
-Thus, the upgrade stops reviews and conversation turns for the drain, the new worker's start and its isolation probe.
+A second server does not fit in 16 GiB beside the first.
+Thus, the upgrade stops reviews and conversation turns for the drain, the new server's start and its isolation probe.
 The webhook role keeps its rolling update: it receives provider deliveries during an upgrade.
 
 A chart test adds up what one node of 16 GiB holds, with backups on:
@@ -169,7 +168,7 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 | --- | --- | --- |
 | Steady: every role, the conversation loop, one backup, five reviews, eight active tools Pods and two pooled tools Pods | 13.1 GiB of 13.9 GiB | 1.95 of 3.5 |
 | The same, with the isolation probe | 13.8 GiB | — |
-| An upgrade. The old worker is gone. The webhook, webapp and conversation loop surge, with the migration and stanza Jobs, the new worker's probe, and the pooled tools Pods | 13.3 GiB of 13.9 GiB | 2.60 of 3.5 |
+| An upgrade. The old server is gone. The webhook, webapp and conversation loop surge, with the migration and stanza Jobs, the new server's probe, and the pooled tools Pods | 13.3 GiB of 13.9 GiB | 2.60 of 3.5 |
 
 The table counts requests.
 Its node budget uses the recorded Node capacity of 16 372 036 KiB, less the current platform reservations and hard eviction floor.
@@ -185,13 +184,13 @@ Its request figures precede the PostgreSQL memory-request change:
 
 - At rest, the release requests 10.3 GiB of 15.6 GiB.
   It uses about 5.9 GiB on the host.
-  The server uses 2.0 GiB and the worker 1.3 GiB.
+  The server uses 2.0 GiB and the server 1.3 GiB.
   The webhook role uses 0.8 GiB, PostgreSQL 0.7 GiB and NATS 60 MiB.
-- An upgrade that recreated the worker and restarted PostgreSQL stopped reviews for about 4 minutes, with the isolation probe. The webhook role kept receiving.
+- An upgrade that recreated the server and restarted PostgreSQL stopped reviews for about 4 minutes, with the isolation probe. The webhook role kept receiving.
 - A point-in-time restore of a database of 1.8 GB took 152 s. The release served again 5 minutes 41 seconds after the restore started.
 - The peak during a review and a conversation turn is not measured yet.
 
-For a cluster with several nodes, start from `cluster.yaml`, and set the workers, their reviews, their quota and the external services in your own values file.
+For a cluster with several nodes, start from `cluster.yaml`, and set the servers, their reviews, their quota and the external services in your own values file.
 
 [ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md) owns what a preview can run.
 The preview profile sets only capacity.
@@ -336,27 +335,27 @@ The chart then opens only these paths:
 | From | To | Port |
 | --- | --- | --- |
 | `networkPolicy.gateway` pods | `server`, `webhook`, `webapp` | 8080 |
-| `server`, `worker` | PostgreSQL | 5432, or the external port |
+| `server`, `server` | PostgreSQL | 5432, or the external port |
 | `server`, `webhook` | NATS | 4222, or the external port |
-| `server`, `worker` | `networkPolicy.externalEgress` | 443 |
+| `server`, `server` | `networkPolicy.externalEgress` | 443 |
 | `server`, if `config.email.host` is set | `networkPolicy.externalEgress` | `config.email.port` |
-| `worker` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
-| `worker`, if `networkPolicy.workerGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.workerGatewayPorts` |
-| `server`, `worker`, for each item of `networkPolicy.modelEndpoints` | Its `cidr` | Its `ports` |
-| Review sandboxes | `worker` | 8081, the sandbox gateway |
-| `conversation-loop` | `worker` | 8081, the sandbox gateway |
+| `server` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
+| `server`, if `networkPolicy.workerGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.workerGatewayPorts` |
+| `server`, `server`, for each item of `networkPolicy.modelEndpoints` | Its `cidr` | Its `ports` |
+| Review sandboxes | `server` | 8081, the sandbox gateway |
+| `conversation-loop` | `server` | 8081, the sandbox gateway |
 | `conversation-loop` | Tools Pods | 7100, the tools port |
 | PostgreSQL and the backup Jobs, with backups on | `postgresql.backup.s3`, or `networkPolicy.externalEgress` | `postgresql.backup.s3.port` |
 | The backup Jobs, with backups on | PostgreSQL | 8432, the pgBackRest TLS server |
 | All pods | `networkPolicy.dns` pods | 53 |
 | `networkPolicy.metrics` pods | All application roles | 9090 |
-| `server`, `worker`, `webhook`, if `config.tracing.otlpEnabled` and `networkPolicy.traceCollector` are set | `networkPolicy.traceCollector` pods | The port of `config.tracing.otlpEndpoint` |
+| `server`, `server`, `webhook`, if `config.tracing.otlpEnabled` and `networkPolicy.traceCollector` are set | `networkPolicy.traceCollector` pods | The port of `config.tracing.otlpEndpoint` |
 
 Sandboxes are in the sandbox namespace, where every pod also starts with no ingress and no egress.
 A tools Pod admits only the ingress from the conversation loop, and gets no egress.
 
 A model endpoint that this cluster's own Gateway serves resolves to a public address, but the connection ends at a Gateway Pod.
-That private address is outside `networkPolicy.externalEgress`, so the worker cannot reach the endpoint.
+That private address is outside `networkPolicy.externalEgress`, so the server cannot reach the endpoint.
 Set `networkPolicy.workerGatewayPorts` to the container ports of the Gateway Pods, for example `[8443, 8000]` for the Traefik of the one-host platform.
 
 `networkPolicy.gateway` must name the namespace and at least one pod label of the Gateway data plane.
@@ -378,8 +377,8 @@ The connections to PostgreSQL use TLS ([PostgreSQL TLS Secret](./kubernetes#post
 These internal channels send plain text:
 
 - The connections from the server and the webhook role to the bundled NATS.
-- The connection from the worker to the server.
-- The connections from sandboxes to the worker gateway.
+- The connection from the server to the server.
+- The connections from sandboxes to the server gateway.
 
 The bundled PostgreSQL still accepts a connection without TLS.
 The roles never use one, and network policy admits only the roles.
@@ -396,7 +395,7 @@ Use a network plugin that encrypts traffic between nodes, for example WireGuard 
 | JetStream volume | `max_file` plus 25 % | Derived from `nats.jetstream.maxFileBytes` |
 | Webhook streams | Age and size for each stream, and one start that may delete stored messages to apply a smaller bound | `webhook.stream.*` |
 | Server Git mirrors | `emptyDir` size limit on the node | `server.gitCache.sizeLimit` |
-| Worker Git mirrors | `emptyDir` size limit on the node, per worker | `worker.gitCache.sizeLimit` |
+| Server Git mirrors | `emptyDir` size limit on the node, per server | `server.gitCache.sizeLimit` |
 | AI spend ledger | Retention | `config.llmUsageRetention` |
 | Conversations, feedback and practice results | Retention | `config.feedbackRetention` |
 | Temporary files | `emptyDir` size limit | Fixed in the templates |
@@ -425,7 +424,7 @@ A higher limit cannot recover deleted messages.
 The server updates expiry only on durables it uses. Review orphan durables separately before you change or delete them.
 
 The Git mirrors are caches.
-A restarted server or worker clones them again, so they use node storage and no volume claim.
+A restarted server or server clones them again, so they use node storage and no volume claim.
 The node needs that much free ephemeral storage, and the container limits include it.
 
 The same volume holds review checkouts and the archives that wait for their sandbox.
@@ -448,7 +447,7 @@ Each pod meets the Kubernetes Restricted Pod Security Standard:
 - A non-root user, `RuntimeDefault` seccomp, and no privilege escalation.
 - All capabilities dropped and a read-only root filesystem.
 - No host path, host network, or container runtime socket.
-- No service account token, except on the worker. Its Role reaches only the sandbox namespace.
+- No service account token, except on the server. Its Role reaches only the sandbox namespace.
 
 The webapp runs as user and group 101 and listens on port 8080.
 Its only writable path is a 16 MiB volume at `/tmp/hephaestus-webapp`.
@@ -481,7 +480,7 @@ No Hephaestus process logs in as a superuser.
 | --- | --- | --- | --- |
 | The administrator | Only you, for administration, and the step of the migration Job that sets up the roles. The bundled PostgreSQL creates it at its first start. | Everything. | `DATABASE_ADMIN_USERNAME`, `DATABASE_ADMIN_PASSWORD`, with the bundled PostgreSQL only |
 | `hephaestus_owner` | The migration Job | It owns the database and every schema object, and runs the migrations. It is not a superuser, and it cannot create roles or replicate. | `DATABASE_OWNER_PASSWORD` |
-| `hephaestus_app` | The server and the worker | It reads and writes the rows of the application tables. It owns nothing, and it cannot change the schema or read the role catalog. Row-level security applies to it. | `DATABASE_APP_PASSWORD` |
+| `hephaestus_app` | The server and the server | It reads and writes the rows of the application tables. It owns nothing, and it cannot change the schema or read the role catalog. Row-level security applies to it. | `DATABASE_APP_PASSWORD` |
 | `hephaestus_monitor` | The PostgreSQL exporter | It reads statistics only, as a member of `pg_monitor` ([Database metrics](./monitoring#turn-on-database-metrics)). | `DATABASE_MONITOR_PASSWORD` |
 
 Neither `hephaestus_owner` nor `hephaestus_app` has the `BYPASSRLS` attribute.
@@ -538,7 +537,7 @@ It also stops if the Secret holds `DATABASE_USERNAME` or `DATABASE_PASSWORD`, th
 
 The chart runs the conversation loop as the Deployment `<release>-conversation-loop` in the release namespace.
 It runs every conversation turn of the installation.
-The chart renders it only with `worker.enabled=true`, and only when `conversationLoop.turns` resolves to more than 0.
+The chart renders it only with `sandbox.enabled=true`, and only when `conversationLoop.turns` resolves to more than 0.
 [Runtime roles § The conversation loop](./runtime-roles#the-conversation-loop) tells how it gets its turns.
 
 | Value | Default | Effect |
@@ -553,13 +552,13 @@ The chart gives the loop Pod these settings:
 - The PriorityClass of the roles.
 - No service account token, the Restricted security settings and a read-only root file system.
 - One `emptyDir` of 256 MiB at `/tmp/heph-loop`.
-- The Secret key `HEPHAESTUS_CONVERSATION_LOOP_SECRET`. Only the worker and the loop read it.
+- The Secret key `HEPHAESTUS_CONVERSATION_LOOP_SECRET`. Only the server and the loop read it.
 - A rolling update with one surge replica and none unavailable, and a grace period of 960 seconds.
 - Preferred anti-affinity across nodes. On one node, the replicas share the node.
-- A PodDisruptionBudget, as for the worker: above one replica, at most one is unavailable.
+- A PodDisruptionBudget, as for the server: above one replica, at most one is unavailable.
 
 The policy `<release>-conversation-loop` gives the loop no ingress.
-It permits egress only to the gateway port of the worker Pods and to TCP port 7100 of tools Pods in the sandbox namespace.
+It permits egress only to the gateway port of the server Pods and to TCP port 7100 of tools Pods in the sandbox namespace.
 
 When a loop Pod fails, its turns stop renewing their leases.
 Each turn starts again as a retry about 95 seconds after its last renewal, when a loop pulls it.
@@ -571,7 +570,7 @@ The developer sees the answer start again.
 - NATS JetStream runs as one server with one replica of each stream. A lost NATS volume loses the provider deliveries that the server had not processed ([Storage and retention](#storage-and-retention)).
 - PostgreSQL runs as one instance. A lost node stops the release until PostgreSQL runs again. A lost volume needs a [restore](./backup-restore#restore).
 - The server runs as one replica until the server processes provider events in order across replicas.
-- The worker records the isolation tier in its log and metrics, not with each review. A record for each review needs a schema change.
+- The server records the isolation tier in its log and metrics, not with each review. A record for each review needs a schema change.
 - The kubelet enforces sandbox disk limits by eviction after it measures the use, not when a process writes.
   A sandbox can pass its limit until the next measurement, for some seconds.
   Only file system project quotas (`LocalStorageCapacityIsolationFSQuotaMonitoring`) refuse the write itself.
@@ -580,6 +579,6 @@ The developer sees the answer start again.
 ## What CI does not show
 
 A successful install in CI does not show that your cluster isolates sandboxes.
-The worker's isolation probe checks that on your cluster, at each start and on its schedule.
+The server's isolation probe checks that on your cluster, at each start and on its schedule.
 CI does not qualify your Gateway controller.
 Check its two `HTTPRoute` features, its body limit and its idle timeout yourself, and rehearse a [restore](./backup-restore#restore) on your own cluster.

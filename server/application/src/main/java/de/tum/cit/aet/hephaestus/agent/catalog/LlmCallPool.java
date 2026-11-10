@@ -22,7 +22,7 @@ import org.hibernate.generator.EventType;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The capacity that the models in it share at one provider endpoint, for example one GPU gateway. Every worker counts
+ * The capacity that the models in it share at one provider endpoint, for example one GPU gateway. Every server counts
  * the calls in flight to its models against one limit, whichever workspace makes them. Every model is in a pool: the
  * database gives each model its own, and an instance admin can move models into a shared one. GLOBAL (not
  * tenant-scoped): the rows hold capacity only, and only the instance admin edits them, also a workspace model's.
@@ -39,7 +39,7 @@ import org.jspecify.annotations.Nullable;
 @NoArgsConstructor
 @ToString
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-// Writes only changed columns, so an admin's edit never overwrites the cooldown a worker set meanwhile.
+// Writes only changed columns, so an admin's edit never overwrites the cooldown a server set meanwhile.
 @DynamicUpdate
 public class LlmCallPool {
 
@@ -60,7 +60,7 @@ public class LlmCallPool {
     @Column(name = "max_concurrent_calls")
     private Integer maxConcurrentCalls;
 
-    /** What {@link LlmCallLimit} learned from the provider. The database sets the first value and workers change it. */
+    /** What {@link LlmCallLimit} learned from the provider. The database sets the first value and servers change it. */
     @ColumnDefault("4")
     @Generated(event = EventType.INSERT)
     @Column(name = "learned_limit", nullable = false, insertable = false, updatable = false)

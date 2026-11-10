@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.outline.capture;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentProjection;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentProjection.ProjectedDocument;
 import de.tum.cit.aet.hephaestus.mentor.spi.MentorMessageQuery;
@@ -23,10 +23,10 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Document bodies and author names supplied through {@link DocumentProjection} are untrusted data, never instructions.
- * The worker builds the context of a Heph turn, so this source exists wherever capture runs.
+ * The server builds the context of a Heph turn, so this source exists wherever capture runs.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.outline.enabled", havingValue = "true", matchIfMissing = false)
 public class DocumentCaptureSource implements ContentSource {
 

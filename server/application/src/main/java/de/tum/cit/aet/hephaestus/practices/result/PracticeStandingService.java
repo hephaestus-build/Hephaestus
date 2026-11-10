@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SourceReadAudience;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -52,11 +52,11 @@ import tools.jackson.databind.json.JsonMapper;
  * workspace reads many developers at once, through the same selection, visibility and classification, so the two
  * pages cannot disagree about a developer.
  *
- * <p>Heph reads a processing-qualified snapshot on the worker, so this service is available wherever reviews are
+ * <p>Heph reads a processing-qualified snapshot on the server, so this service is available wherever reviews are
  * prepared.
  */
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class PracticeStandingService {
 

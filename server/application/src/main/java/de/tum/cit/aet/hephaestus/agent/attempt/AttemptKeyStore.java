@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.attempt;
 import java.time.Duration;
 import java.util.Map;
 
-/** Where workers publish the public halves of their signing keys. */
+/** Where servers publish the public halves of their signing keys. */
 public interface AttemptKeyStore {
 
     /** Publishes a key, or extends a key that is published already. */

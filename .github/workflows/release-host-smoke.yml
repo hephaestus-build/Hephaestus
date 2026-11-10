@@ -2,7 +2,7 @@ name: Release / Host smoke
 
 # The one-host install of docs/admin/kubernetes.mdx § Install on one host (k3s) on a clean runner of
 # each supported architecture: the release's signed k3s bundle, unpacked and run with k3s-install.sh
-# as the docs run it. It then checks the migration Job and every role, each worker's isolation probe and
+# as the docs run it. It then checks the migration Job and every role, each server's isolation probe and
 # its reviews, the configured shutdown budget, and requests through the Gateway, and it runs the
 # installer a second time and an upgrade.
 # Let's Encrypt cannot reach a runner, so a local CA issues the Gateway certificate in its place.
@@ -128,7 +128,6 @@ jobs:
           kubectl -n hephaestus describe pods || true
           kubectl -n hephaestus get jobs -o wide || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=migration --tail=200 --prefix || true
-          kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --tail=300 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
           kubectl -n traefik logs -l app.kubernetes.io/name=traefik --tail=200 --prefix || true
           kubectl -n cert-manager logs -l app.kubernetes.io/instance=cert-manager --tail=200 --prefix || true

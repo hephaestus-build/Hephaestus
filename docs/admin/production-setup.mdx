@@ -196,17 +196,16 @@ A workspace admin cannot approve a new operator by entering its URL.
 | Variable                                         | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED`         | Enables Outline beans for connect, sync, webhook, and content projection. Every bean requires it. Defaults to **off**. Without it, there is no admin surface, sync, or webhook verification.                                                                                                                                                                                                                                                                                                                                          |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | Comma-separated publicly routable HTTPS origins approved by the instance operator, such as `https://wiki.example.com`. Empty by default. No paths, queries, fragments, credentials, or private/site-local addresses are permitted. An invalid entry fails startup. All server, worker, and webhook roles need the same value. After a change, restart all roles. An origin removal blocks its connections, API sync, webhook collection, evidence projection, and identity linking. Its mirror remains until workspace disconnection. |
+| `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | Comma-separated publicly routable HTTPS origins approved by the instance operator, such as `https://wiki.example.com`. Empty by default. No paths, queries, fragments, credentials, or private/site-local addresses are permitted. An invalid entry fails startup. The server and webhook roles need the same value. After a change, restart all roles. An origin removal blocks its connections, API sync, webhook collection, evidence projection, and identity linking. Its mirror remains until workspace disconnection. |
 | `OUTLINE_OAUTH_BASE_URL`                         | Outline instance for account linking, such as `https://wiki.example.com`. **Required whenever `OUTLINE_OAUTH_CLIENT_ID` is set**. Self-hosted Outline has no default origin. If blank or invalid, the provider seed is skipped. The reason appears at `ERROR` with the variable name. The app still boots, but has no linking button.                                                                                                                                                                                                 |
 | `OUTLINE_OAUTH_CLIENT_ID`                        | Outline OAuth app client ID (redirect `https://<host>/api/login/oauth2/code/outline`)                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `OUTLINE_OAUTH_CLIENT_SECRET`                    | Outline OAuth app client secret                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `OUTLINE_OAUTH_DISPLAY_NAME`                     | Label shown on the account-linking button (defaults to `Outline`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
-Set `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` on **all three** roles.
+Set `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` on **both** roles.
 The charts pass the same value to each:
 
-- **application-server:** connect/admin API, collection registration, reconcile scheduler, and webhook-subscription registrar.
-- **application-worker:** assembles agent context.
+- **application-server:** connect/admin API, collection registration, reconcile scheduler, webhook-subscription registrar, and agent context.
   The Outline content source has no runtime-role gate.
   Without the flag, reviews that require wiki evidence decline, and conversation turns omit wiki context.
 - **webhook-server:** without the flag, no Outline delivery endpoint registers.
@@ -287,8 +286,8 @@ For a GitLab practice-review rollout, enable this bundle together:
 | `GITLAB_OAUTH_CLIENT_SECRET`      | GitLab OAuth application client secret                                                                                                                                                                                                                                                                                                                                                                                |
 | `GITLAB_OAUTH_BASE_URL`           | GitLab instance for login. Defaults to `https://gitlab.com`. For self-hosted GitLab, set the instance URL, such as `https://gitlab.lrz.de`.                                                                                                                                                                                                                                                                           |
 | `GITLAB_OAUTH_DISPLAY_NAME`       | Login-button label, default `GitLab`. Example: `gitlab.lrz.de`.                                                                                                                                                                                                                                                                                                                                                       |
-| `GITLAB_DEFAULT_SERVER_URL`       | The one GitLab instance for workspace creation, sync, and checkout, not login. Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every worker the same value.                                                                                                                                                                                                                                    |
-| `GITLAB_ENABLED`                  | Enables GitLab on the application server and every worker. The webhook receiver does not read it. Without it, a worker cannot check out merge requests. Each claimed GitLab review fails preparation with `SCM Git preparation is unavailable`. It stops before any result.                                                                                                                                           |
+| `GITLAB_DEFAULT_SERVER_URL`       | The one GitLab instance for workspace creation, sync, and checkout, not login. Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every server the same value.                                                                                                                                                                                                                                    |
+| `GITLAB_ENABLED`                  | Enables GitLab on the application server and every server. The webhook receiver does not read it. Without it, a server cannot check out merge requests. Each claimed GitLab review fails preparation with `SCM Git preparation is unavailable`. It stops before any result.                                                                                                                                           |
 | `HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS` | A Git provider on your own network, as comma-separated host names, IP addresses, or CIDR ranges. Empty by default. [A Git provider on a private network](./private-network#admit-a-git-provider-on-a-private-network) has the rules. |
 | `WEBHOOK_SECRET`                  | Instance-wide secret for GitHub webhook verification. GitLab does not use it. Each GitLab group hook that Hephaestus registers posts to its own connection endpoint with a signed route credential. See `WEBHOOK_ROUTING_SECRET`. |
 | `WEBHOOK_ROUTING_SECRET`          | Signs each Hephaestus-registered GitLab group hook token. Each hook can deliver only for its registered GitLab connection. Requires at least 32 characters. Must differ from `WEBHOOK_SECRET` and every encryption key. Give the application server and webhook receiver the same value. Required for every production deployment, including GitHub-only instances. The chart and readiness checks reject absent values. |
@@ -378,21 +377,20 @@ Slack revocation alerts and Outline expiry information stay unchanged.
 - Checks for a quiet workspace.
 
 Two deployment-topology facts belong here.
-The **worker runtime role** (`hephaestus.runtime.worker.enabled`), not `AGENT_ENABLED`, activates Kubernetes sandbox work.
-Only the worker launches sandbox Pods, for queued reviews and for the tools Pods of conversations.
-`application-server` disables its worker role and uses connected workers.
+`AGENT_ENABLED` on the server role activates Kubernetes sandbox work. The chart sets it from `sandbox.enabled`.
+Only a server with it launches sandbox Pods, for queued reviews and for the tools Pods of conversations.
 
-The runtime role decides whether a process uses NATS: the server and webhook roles do, the worker role does not.
+The server and webhook roles both use NATS.
 Production startup refuses a server or webhook role without NATS, as [Runtime roles](./runtime-roles#boot-log) describes.
 
-One conversation loop runs all conversation turns of the installation, as a Deployment beside the workers.
+One conversation loop runs all conversation turns of the installation, as a Deployment beside the servers.
 [Runtime Roles](./runtime-roles.mdx#the-conversation-loop) gives its lifecycle, and [Helm chart reference § Conversation loop](./helm-chart#conversation-loop) gives its values.
 The application server needs no memory for Conversation runtimes.
 [Runtime Roles](./runtime-roles.mdx#conversation-turns) explains dispatch and capacity.
 
 ### Instance-wide LLM settings
 
-Every sandbox uses the LLM proxy on its worker, whether for Hephaestus or queued practice reviews.
+Every sandbox uses the LLM proxy on its server, whether for Hephaestus or queued practice reviews.
 That proxy is its only path to a provider key.
 Keys are never injected directly.
 There is no separate intelligence service to configure.
@@ -408,20 +406,20 @@ Each defaults to off or its standard value:
 | -------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HEPHAESTUS_LLM_DISPLAY_CURRENCY`      | *(empty)*                | Shows converted spend **alongside** USD. Empty disables the second currency. Only `EUR` is supported. Other values, even valid codes such as `GBP`, fail startup with an explanation of accepted values. An unsupported currency cannot silently appear as a missing feature. |
 | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` | `false`                  | Permits saved and connected `http://localhost` provider base URLs. **Never set in production.** It exposes host-local services to workspace-admin "provider" requests through SSRF. Private, link-local, and CGNAT checks remain unconditional.                               |
-| `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` | *(empty)* | Model endpoints on your own network, as comma-separated host names, IP addresses, or CIDR ranges. Set the same value on the server and the worker. Only private addresses qualify. Loopback, link-local, and the cloud metadata ranges listed there stay refused. A range wider than `/16` (IPv4) or `/48` (IPv6), outside the private ranges, or covering the server's own address stops startup. [Model endpoints on your own network](./ai-providers#model-endpoints-on-your-own-network). |
+| `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` | *(empty)* | Model endpoints on your own network, as comma-separated host names, IP addresses, or CIDR ranges. Set the same value on every server. Only private addresses qualify. Loopback, link-local, and the cloud metadata ranges listed there stay refused. A range wider than `/16` (IPv4) or `/48` (IPv6), outside the private ranges, or covering the server's own address stops startup. [Model endpoints on your own network](./ai-providers#model-endpoints-on-your-own-network). |
 | `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP` | `false` | Permits `http://` base URLs for the hosts in `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS`. Every other host still needs HTTPS. |
 | `HEPHAESTUS_LLM_FX_DAILY_URL`          | ECB daily reference feed | Override only on an air-gapped instance with an internal mirror of the ECB file.                                                                                                                                                                                              |
 
 Conversation turns run in the conversation loop, for both the webapp and Slack DMs.
 The application server keeps the conversation store and makes a first admission check when a question arrives.
-The worker admits the turn again, with the budget check, and builds the turn's context.
-With its worker role disabled, it creates no sandbox backend.
-A turn waits in the queue until a worker has free capacity.
+A server with `AGENT_ENABLED` admits the turn again, with the budget check, and builds the turn's context.
+Without `AGENT_ENABLED`, a server creates no sandbox backend.
+A turn waits in the queue until a server has free capacity.
 
 [Runtime roles](./runtime-roles.mdx#conversation-turns) owns dispatch, leases, drain, and the conversation loop.
 The proxy resolves each model's upstream base URL, auth header, and key from its bound connection.
 No process-level configuration needs to fix those values.
-In split-pod deployments, worker and app pods use the same provider catalog.
+All server pods use the same provider catalog.
 No LLM credentials pass between pods.
 
 Each conversation turn reads the model and route of the workspace's Hephaestus binding when it starts.
@@ -452,7 +450,7 @@ To stop *all* AI work, change the workspace status or feature switches, not its 
 Once confirmed monthly spend reaches the cap, that purse's verdict becomes **EXHAUSTED**.
 New funded agent jobs are refused at submission.
 Queued jobs have another check immediately before claim.
-Conversation turns are refused when a worker claims them, before the conversation loop runs them.
+Conversation turns are refused when a server claims them, before the conversation loop runs them.
 Work resumes automatically next UTC calendar month, or about a minute after a cap increase or removal.
 The pause appears on both workspace **AI usage** and **AI models** pages.
 
@@ -612,7 +610,7 @@ For authenticated relays, keep authentication and certificate verification enabl
 Connection, read, and write timeouts default to 5 s, 10 s, and 10 s respectively.
 A relay that stops answering cannot leave a socket operation waiting indefinitely.
 Only `application-server` reads these variables.
-Workers and webhook roles never send email.
+Webhook roles never send email.
 
 A university or corporate relay usually requires port `587`, STARTTLS, and a service account, with a daily recipient cap.
 The defaults fit that model.

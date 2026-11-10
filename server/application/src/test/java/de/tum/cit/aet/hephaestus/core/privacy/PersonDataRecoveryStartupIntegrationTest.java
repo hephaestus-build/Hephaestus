@@ -38,7 +38,6 @@ class PersonDataRecoveryStartupIntegrationTest extends BaseIntegrationTest {
         manifest.toFile().deleteOnExit();
         registry.add("hephaestus.privacy.recovery-manifest", manifest::toString);
         registry.add(RuntimeRole.SERVER_PROPERTY, () -> "true");
-        registry.add(RuntimeRole.WORKER_PROPERTY, () -> "false");
         registry.add(RuntimeRole.WEBHOOK_PROPERTY, () -> "false");
     }
 

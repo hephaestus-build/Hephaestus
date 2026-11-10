@@ -73,7 +73,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
 
     @Override
     public List<String> runtimeFlags() {
-        // The loop starts no process: its tools run on the other sides of the Pod (ADR 0068). A worker runs codemode,
+        // The loop starts no process: its tools run on the other sides of the Pod (ADR 0068). A server runs codemode,
         // and the loop's own proof of a search.
         return Stream.concat(
                         BASE_RUNTIME_FLAGS.stream(),

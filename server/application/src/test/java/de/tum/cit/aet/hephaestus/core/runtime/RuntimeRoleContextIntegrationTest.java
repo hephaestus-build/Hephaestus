@@ -115,18 +115,35 @@ class RuntimeRoleContextIntegrationTest {
         }
     }
 
+    /** The processes a release runs: the server, with or without agent jobs, and the webhook receiver. */
+    enum Deployment {
+        SERVER(RuntimeRole.SERVER, false),
+        SERVER_WITH_AGENTS(RuntimeRole.SERVER, true),
+        WEBHOOK(RuntimeRole.WEBHOOK, false);
+
+        final RuntimeRole role;
+        final boolean agents;
+
+        Deployment(RuntimeRole role, boolean agents) {
+            this.role = role;
+            this.agents = agents;
+        }
+    }
+
     @ParameterizedTest
-    @EnumSource(RuntimeRole.class)
-    void shouldResolveEveryApplicationBeanWhenOnlyOneRuntimeRoleIsEnabled(RuntimeRole role) {
+    @EnumSource(Deployment.class)
+    void shouldResolveEveryApplicationBeanForEachDeployment(Deployment process) {
+        RuntimeRole role = process.role;
+        boolean agents = process.agents;
         var database = PostgreSQLTestContainer.createMigratedDatabase(
-                "runtime_role_" + role.name().toLowerCase(Locale.ROOT));
+                "runtime_role_" + process.name().toLowerCase(Locale.ROOT));
         var properties = Arrays.stream(RuntimeRole.values())
                 .map(candidate -> candidate.property() + "=" + (candidate == role))
                 .toArray(String[]::new);
         // A valid positive pool setting must not make the database-free receiver create a DataSource.
         int maximum = role == RuntimeRole.SERVER ? 16 : 24;
         var configuration = BootstrapUtils.resolveTestContextBootstrapper(
-                        role == RuntimeRole.WORKER ? WorkerGraphWithoutCluster.class : getClass())
+                        agents ? AgentRuntimeWithoutCluster.class : getClass())
                 .buildMergedContextConfiguration();
         var runner = new WebApplicationContextRunner()
                 .withInitializer(application -> {
@@ -162,20 +179,20 @@ class RuntimeRoleContextIntegrationTest {
                         "spring.datasource.url=" + database.jdbcUrl(),
                         "spring.datasource.username=" + database.username(),
                         "spring.datasource.password=" + database.password(),
-                        "hephaestus.agent.enabled=" + (role == RuntimeRole.WORKER),
-                        "hephaestus.worker.capacity.mentor-max=1",
-                        "hephaestus.sync.nats.enabled=" + (role != RuntimeRole.WORKER),
+                        "hephaestus.agent.enabled=" + agents,
+                        "hephaestus.sync.nats.enabled=true",
                         "hephaestus.sync.nats.server=" + NatsTestContainer.getServerUrl(),
                         "hephaestus.sync.nats.username=",
                         "hephaestus.sync.nats.password=",
                         "hephaestus.integration.slack.enabled=true",
                         "hephaestus.integration.outline.enabled=true")
                 .withPropertyValues(properties);
-        if (role == RuntimeRole.WORKER) {
-            // Resolve the real worker graph; this role test has no cluster and starts no sandbox.
+        if (agents) {
+            // Resolve the real agent runtime graph; this test has no cluster and starts no sandbox.
             runner = runner.withPropertyValues(
+                    "hephaestus.conversation-loop.secret=" + "a".repeat(64),
                     "hephaestus.sandbox.kubernetes.namespace=role-test-sandboxes",
-                    "hephaestus.sandbox.kubernetes.pod-name=role-test-worker",
+                    "hephaestus.sandbox.kubernetes.pod-name=role-test-server",
                     "hephaestus.sandbox.kubernetes.pod-ip=127.0.0.1");
         }
         runner.run(application -> {
@@ -215,7 +232,7 @@ class RuntimeRoleContextIntegrationTest {
                 assertThat(application).doesNotHaveBean(SlackWorkspaceContentEraser.class);
                 assertThat(application).doesNotHaveBean(SlackWorkspacePurgeAdapter.class);
             }
-            if (role == RuntimeRole.WORKER) {
+            if (agents) {
                 assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
                 assertThat(application).hasSingleBean(SandboxDispatcher.class);
             } else {
@@ -284,7 +301,7 @@ class RuntimeRoleContextIntegrationTest {
 
     /**
      * Slack Events stay with the webhook role, which publishes them. Interactivity belongs to the server role, which
-     * commits a button's consent change before it answers Slack. A worker verifies neither and needs no signing secret.
+     * commits a button's consent change before it answers Slack.
      */
     private static void assertSlackIngressOwnership(AssertableWebApplicationContext application, RuntimeRole role)
             throws Exception {
@@ -301,11 +318,6 @@ class RuntimeRoleContextIntegrationTest {
                 assertThat(application).hasSingleBean(SlackWebhookSignatureVerifier.class);
                 assertThat(application).doesNotHaveBean(SlackInteractivityController.class);
                 assertThat(application).doesNotHaveBean(SlackInteractivityHandler.class);
-            }
-            case WORKER -> {
-                assertThat(application).doesNotHaveBean(SlackSignatureVerifier.class);
-                assertThat(application).doesNotHaveBean(SlackWebhookSignatureVerifier.class);
-                assertThat(application).doesNotHaveBean(SlackInteractivityController.class);
             }
         }
     }

@@ -13,7 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** Checks attempt tokens that any live worker's {@link AttemptTokenIssuer} signed. */
+/** Checks attempt tokens that any live server's {@link AttemptTokenIssuer} signed. */
 public class AttemptTokenVerifier {
 
     private static final String EXPECTED_ALG = "RS256";

@@ -28,7 +28,7 @@ function fact(
 
 const satisfied = [
 	fact("database.url", "spring.datasource.url", "database", {
-		roles: ["SERVER", "WORKER", "WEBHOOK"],
+		roles: ["SERVER", "WEBHOOK"],
 		explanation: "A PostgreSQL JDBC URL is required.",
 	}),
 	fact("external.base-url", "hephaestus.host-url", "external-url", {
@@ -57,7 +57,7 @@ const notApplicable = fact(
 	"hephaestus.llm.egress.allow-loopback",
 	"llm-proxy",
 	{
-		roles: ["WORKER"],
+		roles: ["SERVER"],
 		status: "NOT_APPLICABLE",
 		explanation: "Loopback LLM provider egress must be disabled in production.",
 	},

@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
@@ -22,7 +22,7 @@ import tools.jackson.databind.ObjectMapper;
  * conversation's id, the main conversation or one Heph thread, and the request's {@code threadId} is the turn's.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class PreparedConversationFeedbackContentSource implements ContentSource {
     public static final String OUTPUT_KEY = OUTPUT_PREFIX + "prepared_conversation_feedback.json";

@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.weeklydigest;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasis;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
@@ -50,7 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
  * never gain one.
  */
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class WeeklyDigestFacts {
 

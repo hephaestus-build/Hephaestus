@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Conversation tools Pods as Jobs in the sandbox namespace. Each runs the tools program of tool protocol v1 on TCP,
- * with a fresh nonce in its spec, and its host dials it at the Pod address. The worker only creates, lists and deletes
+ * with a fresh nonce in its spec, and its host dials it at the Pod address. The server only creates, lists and deletes
  * them: it has no {@code pods/exec}.
  */
 public class KubernetesToolsPods implements ToolsPods {
@@ -180,7 +180,7 @@ public class KubernetesToolsPods implements ToolsPods {
         }
     }
 
-    /** The tools Jobs of the installation, whichever worker created them. */
+    /** The tools Jobs of the installation, whichever server created them. */
     @Override
     public List<Listed> list() {
         Instant now = clock.instant();

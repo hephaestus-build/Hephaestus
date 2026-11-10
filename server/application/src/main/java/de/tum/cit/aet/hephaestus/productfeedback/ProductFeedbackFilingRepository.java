@@ -38,8 +38,8 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     Optional<UUID> claimableDraft(@Param("now") Instant now);
 
     /**
-     * A report whose draft answer, or lack of one, waits for the server to route it. One that no worker took or finished
-     * by {@code expired} routes without a draft, so a stopped worker role cannot hold a report back.
+     * A report whose draft answer, or lack of one, waits for the server to route it. One that no server took or finished
+     * by {@code expired} routes without a draft, so a server without agent jobs cannot hold a report back.
      */
     @Query(value = """
                     SELECT feedback_id FROM product_feedback_filing

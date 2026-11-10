@@ -2054,9 +2054,9 @@ export async function runReviewJob(): Promise<void> {
 	const SERVER_UNREACHABLE_EXIT = 75;
 	// The server interprets exit 76 as provider failure without a recorded result and retries the review.
 	const PROVIDER_UNREACHABLE_EXIT = 76;
-	// The server answered staging or admission with its own error: the worker ends the attempt, with no retry.
+	// The server answered staging or admission with its own error and ends the attempt, with no retry.
 	const SERVER_ERROR_EXIT = 77;
-	// The review staged what it could and left at least one practice without a result. The worker decides from what is
+	// The review staged what it could and left at least one practice without a result. The server decides from what is
 	// staged whether another attempt continues it; the code only tells this designed end from a failure.
 	const PARTIAL_REVIEW_EXIT = 78;
 	// A side of the Pod stopped or never started before anything was staged: the failure says nothing about the work,

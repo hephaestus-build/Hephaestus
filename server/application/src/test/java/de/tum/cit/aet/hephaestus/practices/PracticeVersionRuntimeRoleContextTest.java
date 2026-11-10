@@ -42,11 +42,10 @@ class PracticeVersionRuntimeRoleContextTest extends BaseUnitTest {
             .withBean(GitProviderRegistry.class, () -> mock(GitProviderRegistry.class));
 
     @ParameterizedTest
-    @ValueSource(strings = {"server", "worker", "webhook"})
+    @ValueSource(strings = {"server", "webhook"})
     void shouldReadDefinitionsInEachRuntimeRoleAndResolveCreatorsOnTheServer(String role) {
         context.withPropertyValues(
                         "hephaestus.runtime.server.enabled=" + role.equals("server"),
-                        "hephaestus.runtime.worker.enabled=" + role.equals("worker"),
                         "hephaestus.runtime.webhook.enabled=" + role.equals("webhook"))
                 .run(app -> {
                     assertThat(app).hasNotFailed();

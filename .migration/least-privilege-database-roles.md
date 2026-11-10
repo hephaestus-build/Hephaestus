@@ -3,7 +3,7 @@
 Before 1.0, the server, the worker, the migration Job and the bundled PostgreSQL shared one login: the PostgreSQL superuser in `DATABASE_USERNAME` and `DATABASE_PASSWORD`.
 Now each purpose has its own role ([Database roles](https://docs.hephaestus.build/admin/kubernetes#database-roles)):
 
-- The server and the worker log in as `hephaestus_app`, with `DATABASE_APP_PASSWORD`. It reads and writes rows only.
+- The server logs in as `hephaestus_app`, with `DATABASE_APP_PASSWORD`. It reads and writes rows only.
 - The migration Job logs in as `hephaestus_owner`, with `DATABASE_OWNER_PASSWORD`. It owns the database and its schema objects.
 - The administrator of the bundled PostgreSQL moves to `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD`. No Hephaestus process logs in with it.
 
@@ -34,7 +34,7 @@ The steps use the namespace `hephaestus` and the Secret `hephaestus-app`.
 4. Do phases 3 and 4 with the new release.
    The migration Job sets up the roles, moves the schema objects and migrates as `hephaestus_owner`.
    With the bundled PostgreSQL, PostgreSQL restarts once, because it reads its administrator from the new keys.
-5. Check that the server and the worker connect as `hephaestus_app`:
+5. Check that the server connects as `hephaestus_app`:
 
    ```bash
    kubectl -n hephaestus exec hephaestus-postgresql-0 -c postgresql -- \
@@ -45,7 +45,7 @@ The steps use the namespace `hephaestus` and the Secret `hephaestus-app`.
 6. Update your copy of the keys outside the cluster: `DATABASE_ADMIN_USERNAME` replaces `DATABASE_USERNAME` ([Copy the keys from the Secret](https://docs.hephaestus.build/admin/secret-custody#copy-the-keys-from-the-secret)).
 7. With an external PostgreSQL, remove the old login when nothing else uses it.
 
-If you start the application image outside the chart, give the migrate run mode the login of `hephaestus_owner`, and the server and worker the login of `hephaestus_app`.
+If you start the application image outside the chart, give the migrate run mode the login of `hephaestus_owner`, and the server the login of `hephaestus_app`.
 Before each migration that changes a password, run `files/database-roles.sh` as the administrator.
 
 To go back to the previous release, put `DATABASE_USERNAME` and `DATABASE_PASSWORD` back with the administrator's values.

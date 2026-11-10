@@ -18,20 +18,10 @@ import org.springframework.mock.env.MockEnvironment;
 class RuntimeRoleStartupLoggerTest {
 
     @ParameterizedTest
-    @CsvSource({
-        "true,true,true",
-        "true,true,false",
-        "true,false,true",
-        "false,true,true",
-        "true,false,false",
-        "false,true,false",
-        "false,false,true",
-        "false,false,false"
-    })
-    void shouldReportActualRoleFlagsAndWarnOnlyWhenAllAreDisabled(boolean server, boolean worker, boolean webhook) {
+    @CsvSource({"true,true", "true,false", "false,true", "false,false"})
+    void shouldReportActualRoleFlagsAndWarnOnlyWhenAllAreDisabled(boolean server, boolean webhook) {
         MockEnvironment environment = new MockEnvironment()
                 .withProperty(RuntimeRole.SERVER_PROPERTY, Boolean.toString(server))
-                .withProperty(RuntimeRole.WORKER_PROPERTY, Boolean.toString(worker))
                 .withProperty(RuntimeRole.WEBHOOK_PROPERTY, Boolean.toString(webhook));
         Logger logger = (Logger) LoggerFactory.getLogger(RuntimeRoleStartupLogger.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -42,21 +32,19 @@ class RuntimeRoleStartupLoggerTest {
 
             assertThat(appender.list).hasSize(1);
             ILoggingEvent event = appender.list.getFirst();
-            assertThat(event.getLevel()).isEqualTo(server || worker || webhook ? Level.INFO : Level.WARN);
+            assertThat(event.getLevel()).isEqualTo(server || webhook ? Level.INFO : Level.WARN);
             var fields =
                     event.getKeyValuePairs().stream().collect(Collectors.toMap(pair -> pair.key, pair -> pair.value));
             assertThat(fields)
                     .containsExactlyInAnyOrderEntriesOf(Map.of(
                             "event.name", "runtime.roles.configured",
                             "runtime.server.enabled", server,
-                            "runtime.worker.enabled", worker,
                             "runtime.webhook.enabled", webhook));
-            if (!server && !worker && !webhook) {
+            if (!server && !webhook) {
                 assertThat(event.getFormattedMessage())
                         .contains(
                                 "All runtime roles disabled",
                                 RuntimeRole.SERVER_PROPERTY,
-                                RuntimeRole.WORKER_PROPERTY,
                                 RuntimeRole.WEBHOOK_PROPERTY);
             }
         } finally {

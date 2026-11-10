@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 /**
  * Verifies Slack's v0 request signatures with the app signing secret. The webhook role verifies Events API deliveries
  * before it publishes them; the server role verifies interactivity requests, whose consent changes it commits before
- * Slack is acknowledged. A worker-only process verifies neither and needs no signing secret.
+ * Slack is acknowledged.
  */
 @Component
 @Conditional(SlackSignatureVerifier.ServerOrWebhookRole.class)

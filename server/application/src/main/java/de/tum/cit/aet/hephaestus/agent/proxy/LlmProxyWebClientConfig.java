@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import java.time.Duration;
@@ -26,13 +26,13 @@ import reactor.netty.resources.LoopResources;
  * exemptions mean.
  */
 @Configuration
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 class LlmProxyWebClientConfig {
 
     @Bean(destroyMethod = "dispose")
     ConnectionProvider llmProxyConnectionProvider() {
         return ConnectionProvider.builder("llm-proxy-pool")
-                // Admission already bounds calls across workers. A second per-host limit would queue admitted
+                // Admission already bounds calls across servers. A second per-host limit would queue admitted
                 // calls outside that accounting and turn local saturation into a provider failure.
                 .maxConnections(Integer.MAX_VALUE)
                 // The default pending count doubles the maximum, which would overflow.

@@ -22,7 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
@@ -53,11 +53,11 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The server side of a review's measurement in its own sandbox: the {@code REVIEW} run kind. Its claim starts the job;
- * the first request of the run prepares the attempt, as a worker prepared a review Job, and serves the runner that
+ * the first request of the run prepares the attempt and serves the runner that
  * measures it. The attempt's inputs and its gateway session live until its run ends.
  */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @Profile("!specs & !cds-training")
 public class ReviewSandboxRuns implements SandboxRunKind {

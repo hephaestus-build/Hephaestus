@@ -3,11 +3,10 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxClaims;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
@@ -18,6 +17,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.UUID;
 import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,12 +30,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
 /**
- * The worker's Kubernetes runtime: review Jobs, a conversation host, and turn Pods.
- * The client uses the worker Pod's service account, or the host dev launcher's namespace-scoped kubeconfig.
+ * The server's Kubernetes runtime: review Jobs, a conversation host, and turn Pods.
+ * The client uses the server Pod's service account, or the host dev launcher's namespace-scoped kubeconfig.
  */
 @Configuration(proxyBeanMethods = false)
 @Profile("!specs & !cds-training")
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @EnableConfigurationProperties({SandboxProperties.class, KubernetesSandboxProperties.class, AgentSandboxProperties.class
 })
 public class KubernetesSandboxConfiguration {
@@ -69,15 +69,13 @@ public class KubernetesSandboxConfiguration {
 
     @Bean
     public KubernetesWorker kubernetesWorker(
-            KubernetesSandboxProperties properties,
-            WorkerProperties workerProperties,
-            SandboxGatewayProperties gatewayProperties) {
+            KubernetesSandboxProperties properties, SandboxGatewayProperties gatewayProperties) {
         // The chart's NetworkPolicy names the port, so a port that the web server chooses at start cannot work here.
         if (gatewayProperties.port() == 0) {
             throw new IllegalStateException(
                     "The Kubernetes sandbox runtime needs a fixed sandbox gateway port (SANDBOX_API_PORT)");
         }
-        return new KubernetesWorker(properties, workerProperties.resolvedWorkerId(), gatewayProperties.port());
+        return new KubernetesWorker(properties, UUID.randomUUID().toString(), gatewayProperties.port());
     }
 
     /** The claims of agent-sandbox sandboxes, which their owner in {@code agent.sandbox.claim} writes through. */
@@ -164,7 +162,7 @@ public class KubernetesSandboxConfiguration {
     }
 
     /**
-     * Readiness: down while the worker does not watch the sandbox namespace or the
+     * Readiness: down while the server does not watch the sandbox namespace or the
      * isolation probe failed. The details give the isolation tier of the latest probe.
      */
     @Bean

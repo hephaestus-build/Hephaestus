@@ -143,7 +143,7 @@ By default, a provider base URL must resolve to a public address.
 An admin who configures a provider must not be able to send requests into your private network.
 To keep model calls inside your network, for example to vLLM or Ollama on your own GPUs, allow the endpoint explicitly.
 
-Set `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` on the server and on the worker to a comma-separated list.
+Set `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` on the server and on the server to a comma-separated list.
 On Kubernetes, set `config.llmPrivateHosts` ([A model endpoint on a private network](./private-network#admit-a-model-endpoint-on-a-private-network)).
 Each entry is one of these:
 
@@ -177,7 +177,7 @@ These rules apply:
 - A range stops startup if it is wider than `/16` for IPv4 or `/48` for IPv6, for example `10.0.0.0/8` or `fd00::/8`.
   List the network that the model server is in.
 - A range stops startup if it is inside a metadata range of the previous table, because it would never connect.
-- A range stops startup if it covers an address of the server or worker itself.
+- A range stops startup if it covers an address of the server itself.
   Such a range admits the services of this deployment, such as PostgreSQL, NATS, and the server.
   On Kubernetes, it covers the address of the Pod, but not the whole Pod range or the Service range.
   Thus, never list a range that covers the Pod or Service range of the cluster.
@@ -315,7 +315,7 @@ For vLLM or SGLang, set the server's default chat template arguments so that `en
 **Symptom:** Hephaestus shows no text for a long time and then the whole answer at once.
 Or a Hephaestus answer fails after 2 minutes with no text, but the provider's log shows a complete answer.
 
-The worker's LLM proxy fails a conversation model call whose stream sends no byte for 2 minutes.
+The server's LLM proxy fails a conversation model call whose stream sends no byte for 2 minutes.
 It also fails a call whose provider sends no response headers for 5 minutes ([Runtime roles](./runtime-roles.mdx#lease-retry-and-deadline)).
 A gateway that buffers the whole answer sends nothing until the answer is complete.
 Configure every proxy between Hephaestus and the model to stream:
@@ -531,7 +531,7 @@ They never see an upstream model ID, base URL, or credential.
 
 Every model has a call pool. You do not create it or set a number for it.
 The pool learns how many calls in flight the provider serves.
-The pool applies this limit across all workers and workspaces.
+The pool applies this limit across all servers and workspaces.
 When the provider refuses calls, queues them, or stops answering, all callers of that model wait, and their calls continue.
 
 A model server on your own GPUs, such as vLLM, queues calls by default. The pool reads this queue from the time to the first token.

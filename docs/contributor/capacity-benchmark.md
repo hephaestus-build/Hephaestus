@@ -140,7 +140,7 @@ It opens one event subscription per identity and waits for terminal turn events 
 It records arrival scheduling, request send, first turn event, first answer text and completion.
 The existing polling driver remains a diagnostic path; its extra HTTP requests affect CPU measurements.
 
-Set the worker's admission and its chart-derived sandbox quota together in the isolated release.
+Set the server's admission and its chart-derived sandbox quota together in the isolated release.
 Keep sandbox requests and limits unchanged.
 For each limit, use 40, 80 and 120 users with three turns and 30-second think time.
 Set the fake to 3-second first token, 500 output tokens and the recorded stream speed.

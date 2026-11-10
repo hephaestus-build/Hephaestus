@@ -8,7 +8,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The text that Pi 1.0's {@code read} and {@code bash} tools give the model, made from what a sandbox command returns.
- * The sandbox sends at most one page, so this worker and the Heph host never hold a whole file or a whole output. The
+ * The sandbox sends at most one page, so this server and the Heph host never hold a whole file or a whole output. The
  * limits, the notices and their wording are Pi's ({@code pi-coding-agent/dist/core/tools/truncate.js}, {@code read.js},
  * {@code bash.js}): the model was trained on them.
  */

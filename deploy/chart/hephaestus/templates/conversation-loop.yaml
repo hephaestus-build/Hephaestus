@@ -1,16 +1,16 @@
 {{- /*
 The conversation loop runs every conversation turn of the installation, one Pi session for each turn
-(ADR 0068 § The Heph loop). It pulls turn assignments from the workers' gateway and dials the tools
-Pods. Conversations need workers, so the loop runs only with them, and only when turns may run.
+(ADR 0068 § The Heph loop). It pulls turn assignments from the servers' gateway and dials the tools
+Pods. It runs only with the sandboxes, and only when turns may run.
 */}}
 {{- $turns := int (include "hephaestus.conversationTurns" .) }}
-{{- if and .Values.worker.enabled (gt $turns 0) }}
+{{- if and .Values.sandbox.enabled (gt $turns 0) }}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "conversation-loop") }}
 {{- $loop := .Values.conversationLoop }}
 {{- $port := include "hephaestus.gatewayPort" . | int }}
 {{- $sandboxes := include "hephaestus.sandboxNamespace" (dict "root" .) }}
 {{- $scratch := "/tmp/heph-loop" }}
-# The loop listens on no port. It reaches the workers' gateway and the tools port of tools Pods, and
+# The loop listens on no port. It reaches the servers' gateway and the tools port of tools Pods, and
 # nothing else. The release's DNS policy resolves the gateway's name.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -25,7 +25,7 @@ spec:
   policyTypes: ["Ingress", "Egress"]
   egress:
     - to:
-        {{- include "hephaestus.componentPeer" (dict "root" . "component" "worker") | nindent 8 }}
+        {{- include "hephaestus.componentPeer" (dict "root" . "component" "server") | nindent 8 }}
       ports:
         - port: {{ $port }}
           protocol: TCP
@@ -118,7 +118,7 @@ spec:
             - name: LLM_PROXY_URL
               value: {{ printf "http://%s.%s.svc:%d/internal/llm" (include "hephaestus.name" (dict "root" . "component" "sandbox-gateway")) .Release.Namespace $port | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_CONVERSATION_LOOP_SECRET") | nindent 12 }}
-            # Each replica runs at most this many turns. The workers keep the same cap for the installation.
+            # Each replica runs at most this many turns. The servers keep the same cap for the installation.
             - name: HEPHAESTUS_MENTOR_TURN_CAPACITY
               value: {{ $turns | quote }}
             - name: HOME

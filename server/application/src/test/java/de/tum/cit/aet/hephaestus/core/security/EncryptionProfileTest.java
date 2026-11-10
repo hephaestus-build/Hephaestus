@@ -28,7 +28,7 @@ class EncryptionProfileTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"prod", "prod,worker", "prod,webhook"})
+    @ValueSource(strings = {"prod", "prod,webhook"})
     void shouldRequireSystemEncryptionWhenProductionIsActive(String profile) {
         runner.withPropertyValues("spring.profiles.active=" + profile)
                 .withUserConfiguration(SystemEncryptionKey.class, EncryptedStringConverter.class)
@@ -41,7 +41,7 @@ class EncryptionProfileTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"prod", "prod,worker", "prod,webhook"})
+    @ValueSource(strings = {"prod", "prod,webhook"})
     void shouldRequireCredentialEncryptionWhenProductionIsActive(String profile) {
         runner.withPropertyValues("spring.profiles.active=" + profile)
                 .withBean(ObjectMapper.class, ObjectMapper::new)

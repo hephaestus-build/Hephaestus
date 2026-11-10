@@ -1,6 +1,6 @@
 /**
  * Runtime-role property keys used by {@code @ConditionalOnProperty} gates across the codebase to
- * select server-only, worker-only, or webhook-only bean clusters. See ADR 0005 (baseline) and
+ * select server-only or webhook-only bean clusters. See ADR 0005 (baseline) and
  * ADR 0008 (webhook role).
  */
 @org.springframework.modulith.NamedInterface("runtime")

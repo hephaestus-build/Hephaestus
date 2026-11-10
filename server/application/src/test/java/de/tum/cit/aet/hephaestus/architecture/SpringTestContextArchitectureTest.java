@@ -368,7 +368,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "agent.job.ReviewJobEventListenerIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "practices.review.ReviewEndToEndIntegrationTest",
-            "core.runtime.WorkerGraphWithoutCluster",
+            "core.runtime.AgentRuntimeWithoutCluster",
             "workspace.ManualRepositoryAuthorityIntegrationTest",
             "workspace.WorkspaceRepositoryCoverageIntegrationTest",
             "agent.adapter.EvidenceDeliveryAuthorizationIntegrationTest",

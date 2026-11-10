@@ -23,7 +23,7 @@ public record MentorTurnDTO(
 
         @Schema(
                 description =
-                        "Why a queued turn has not started. FREE_HEPH: a worker may start it, and every conversation"
+                        "Why a queued turn has not started. FREE_HEPH: a server may start it, and every conversation"
                                 + " slot of the deployment is taken, so it starts when one is free. Absent when the turn does"
                                 + " not wait, waits for an earlier question of its conversation, or waits for a reason that"
                                 + " the server does not know, such as a server without a configured conversation turn capacity.")

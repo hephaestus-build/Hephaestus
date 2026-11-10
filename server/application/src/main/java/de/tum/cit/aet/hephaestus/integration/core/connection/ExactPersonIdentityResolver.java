@@ -5,8 +5,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderPersonLookup;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,7 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /** Exact provider-key closure, including disabled links. Cached actor ids are never ownership proof. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @WorkspaceAgnostic("Verified person requests intentionally span all workspaces")
 public class ExactPersonIdentityResolver implements PersonIdentityResolver {
 

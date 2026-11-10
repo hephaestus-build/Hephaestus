@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -30,14 +30,14 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The turn's context folder ({@link TurnContextFolder}), with the turn's credential, while the attempt runs on this
- * worker. The host serves {@code read}, {@code bash} and {@code load_context} itself: it reads the turn's documents
+ * server. The host serves {@code read}, {@code bash} and {@code load_context} itself: it reads the turn's documents
  * here, binds the attempt's tools Pod here and dials it, and puts what it loads there. Each JSON answer is the result
  * or a refusal with {@code ok: false} that the model reads.
  */
 @RestController
 @RequestMapping("/internal/llm/turn/{turnId}/sandbox")
 @PreAuthorize("isAuthenticated()")
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @Profile(HephTurnConfiguration.PROFILES)
 @WorkspaceAgnostic("The turn credential binds the workspace, the developer and the conversation of every call")
 public class HephTurnSandboxController {

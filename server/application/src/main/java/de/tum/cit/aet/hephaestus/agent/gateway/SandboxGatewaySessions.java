@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,7 +36,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 public class SandboxGatewaySessions {
     private static final Logger log = LoggerFactory.getLogger(SandboxGatewaySessions.class);
 

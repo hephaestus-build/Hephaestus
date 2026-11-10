@@ -1,7 +1,5 @@
 hephaestus:
   runtime:
-    worker:
-      enabled: false
     webhook:
       enabled: false
   agent:

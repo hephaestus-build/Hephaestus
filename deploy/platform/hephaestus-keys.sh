@@ -180,7 +180,7 @@ if [ -n "$ROTATE" ]; then
 	HEPHAESTUS_CONVERSATION_LOOP_SECRET)
 		add HEPHAESTUS_CONVERSATION_LOOP_SECRET "$(random -hex 32)"
 		# The loop pulls no turn until both restarted; its turns that run go on with their own credentials.
-		roles="worker conversation-loop"
+		roles="server conversation-loop"
 		;;
 	WEBHOOK_ROUTING_SECRET)
 		has WEBHOOK_ROUTING_SECRET || die "the Secret has no WEBHOOK_ROUTING_SECRET to rotate: run this without --rotate first"

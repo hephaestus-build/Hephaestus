@@ -268,8 +268,11 @@ class KubernetesSandboxLiveTest {
                 agentImage,
                 managementPort == null ? 9090 : Integer.parseInt(managementPort));
         long probing = System.nanoTime();
-        probe.prove();
+        probe.proveAtStart();
         log.info("TIMING isolation probe: {} ms", millis(probing));
+        assertThat(Objects.requireNonNull(worker.proof()).passed())
+                .as("the cluster holds the sandbox boundary")
+                .isTrue();
     }
 
     @AfterAll

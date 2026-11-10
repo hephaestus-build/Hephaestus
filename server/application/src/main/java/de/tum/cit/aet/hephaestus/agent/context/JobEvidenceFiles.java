@@ -398,7 +398,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     /**
      * The checkout digest of each staged directory, by its target, for the capture to record before the sandbox
-     * starts. It is the digest that the agent's search worker computes over the bytes it searched ({@code
+     * starts. It is the digest that the agent's search server computes over the bytes it searched ({@code
      * checkoutDigest} in {@code pi-search-worker.ts}): the SHA-256 of one line {@code <path>\0<SHA-256 of the
      * file>\n} for each regular file outside {@code .git}, in the byte order of the paths. A command in the sandbox can
      * change the sandbox's copy, so admission counts a search only where the two agree. A directory with more bytes
@@ -763,7 +763,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
      * Keeps the native session transcripts of an admitted upload beside the attempt folder for a day. Only while the
      * job is still owned as the attempt that was launched, only by the runtime that holds that attempt's lease, and only
      * for its READY receipt in this store. A receipt that cannot index every copied dependency keeps a summary the
-     * worker rebuilds itself, marked METADATA_ONLY. Never throws into the upload, and never changes the job's status.
+     * server rebuilds itself, marked METADATA_ONLY. Never throws into the upload, and never changes the job's status.
      */
     private void keepTranscript(LaunchedAttempt launched, Map<String, byte[]> files) {
         var traces = new TreeMap<String, byte[]>();
@@ -1154,7 +1154,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
         private TraceSummary() {}
 
-        /** The sessions as the worker states them, or null when the manifest is absent, oversize or unreadable. */
+        /** The sessions as the server states them, or null when the manifest is absent, oversize or unreadable. */
         static @Nullable ArrayNode of(byte @Nullable [] manifest) {
             if (manifest == null || manifest.length > MAX_MANIFEST_BYTES) return null;
             JsonNode root;

@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * The conversation tools Pods of the installation. Every bind is fenced on the turn's live lease, on the database
- * clock, so any worker can bind, and an attempt that lost its lease binds nothing.
+ * clock, so any server can bind, and an attempt that lost its lease binds nothing.
  */
 @Repository
 @WorkspaceAgnostic("Tools Pods are installation-wide; a bound row is fenced on its turn's run and names its workspace")
@@ -68,7 +68,7 @@ public interface ConversationToolsPodRepository extends JpaRepository<Conversati
     Optional<ConversationToolsPod> findBound(@Param("turnId") UUID turnId, @Param("attempt") int attempt);
 
     /**
-     * Binds the oldest ready pooled Pod that is younger than {@code poolLifeSeconds} to the attempt. Two workers that
+     * Binds the oldest ready pooled Pod that is younger than {@code poolLifeSeconds} to the attempt. Two servers that
      * bind at once take different Pods.
      *
      * @return the Pod's name, or empty when the pool has no ready Pod, the attempt holds one, or it lost its lease
@@ -106,7 +106,7 @@ public interface ConversationToolsPodRepository extends JpaRepository<Conversati
             """, nativeQuery = true)
     long countPooled(@Param("poolLifeSeconds") long poolLifeSeconds);
 
-    /** One worker refills the pool at a time: it holds this lock until its transaction ends. */
+    /** One server refills the pool at a time: it holds this lock until its transaction ends. */
     @Query(
             value = "SELECT pg_try_advisory_xact_lock(hashtextextended('conversation-tools-pool', 0))",
             nativeQuery = true)

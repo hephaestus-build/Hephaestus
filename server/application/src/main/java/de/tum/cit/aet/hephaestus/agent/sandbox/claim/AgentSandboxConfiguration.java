@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -16,12 +16,12 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The sandbox owner where the sandbox namespace's Kubernetes client is: today the worker role. The server role takes
- * it when the worker folds into the server (ADR 0079 § Runtime components).
+ * The sandbox owner where the sandbox namespace's Kubernetes client is: a server with sandboxes (ADR 0079 § Runtime
+ * components).
  */
 @Configuration(proxyBeanMethods = false)
 @Profile("!specs & !cds-training")
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 public class AgentSandboxConfiguration {
 
     @Bean
@@ -56,7 +56,7 @@ public class AgentSandboxConfiguration {
     }
 
     /**
-     * Its own scheduler thread: the worker role does not enable {@code @Scheduled}. The reaper ticks as often as a
+     * Its own scheduler thread, so it never waits behind a {@code @Scheduled} task. The reaper ticks as often as a
      * holder renews its lease, the capacity home's one period for taking work back.
      */
     @Bean

@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerPropertiesConfiguration;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
@@ -63,10 +62,8 @@ class SandboxRuntimeSelectionTest {
                     Config.KUBERNETES_TRYNAMESPACE_PATH_SYSTEM_PROPERTY + "=false",
                     Config.KUBERNETES_MASTER_SYSTEM_PROPERTY + "=https://127.0.0.1:9",
                     Config.KUBERNETES_REQUEST_RETRY_BACKOFFLIMIT_SYSTEM_PROPERTY + "=0")
-            .withUserConfiguration(
-                    SandboxRuntimeConfiguration.class,
-                    KubernetesSandboxConfiguration.class,
-                    WorkerPropertiesConfiguration.class)
+            .withPropertyValues("hephaestus.agent.enabled=true")
+            .withUserConfiguration(SandboxRuntimeConfiguration.class, KubernetesSandboxConfiguration.class)
             .withBean(
                     SandboxGatewayProperties.class,
                     () -> new SandboxGatewayProperties(8081, 4_194_304, 120, 1000, 4096))
@@ -168,8 +165,8 @@ class SandboxRuntimeSelectionTest {
     }
 
     @Test
-    void shouldLeaveEverySandboxRuntimeOffOutsideTheWorkerRole() {
-        runner.withPropertyValues(RuntimeRole.WORKER_PROPERTY + "=false").run(context -> {
+    void shouldLeaveEverySandboxRuntimeOffWithoutTheAgentRuntime() {
+        runner.withPropertyValues(RuntimeRole.SERVER_PROPERTY + "=false").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(KubernetesClient.class).doesNotHaveBean(KubernetesSandboxJobs.class);
         });

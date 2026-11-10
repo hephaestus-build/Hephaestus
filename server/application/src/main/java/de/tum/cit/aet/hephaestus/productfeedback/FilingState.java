@@ -2,11 +2,11 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 
 /** Where a report is on its way to GitHub. {@link FilingLifecycle} owns which moves are allowed. */
 enum FilingState {
-    /** Waits for the worker to draft it. */
+    /** Waits for the server to draft it. */
     DRAFT_QUEUED,
-    /** A worker holds the lease and drafts it. */
+    /** A server holds the lease and drafts it. */
     DRAFTING,
-    /** The worker handed back the model's answer, or that none came; the server validates and routes it. */
+    /** The server handed back the model's answer, or that none came; the server validates and routes it. */
     ANSWERED,
     /** A public report waits for its hold to end; the reporter can still keep it private or edit it. */
     HELD,

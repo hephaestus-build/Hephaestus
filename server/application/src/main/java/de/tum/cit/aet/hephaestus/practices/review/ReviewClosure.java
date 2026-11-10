@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompleted;
@@ -15,19 +15,17 @@ import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /** The end of a review and its children, inside the caller's locked transaction. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 class ReviewClosure {
     private final ReviewItemRepository memberships;
     private final ReviewPracticeRepository assignments;
-    // A worker can replace an item review. Only the server ends a scan and has its report service.
-    private final ObjectProvider<ScanReportService> reports;
+    private final ScanReportService reports;
     private final ReviewOutcomeMeters outcomes;
     private final ApplicationEventPublisher events;
 
@@ -36,7 +34,7 @@ class ReviewClosure {
         closeMembers(review, at);
         long workspace = review.getWorkspaceId();
         var id = review.getId();
-        if (review.getKind() == ReviewKind.SCAN) reports.getObject().freeze(workspace, id);
+        if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspace, id);
         outcomes.ended(review);
         if ((status == ReviewStatus.COMPLETE || status == ReviewStatus.PARTIAL)
                 && memberships.existsByWorkspaceIdAndReviewIdAndStateInAndResultIdIsNotNull(

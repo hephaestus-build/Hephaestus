@@ -10,7 +10,7 @@ import {
 	hostPorts,
 	hostResources,
 	hostValues,
-	hostWorkerEnvironment,
+	hostServerEnvironment,
 } from "./dev-kubernetes.ts";
 import { asArray, asRecord } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
@@ -87,7 +87,7 @@ await test("host sandboxes keep the chart's quotas and authority, and only the c
 			"-f",
 			values,
 		]);
-		const env = hostWorkerEnvironment(rendered);
+		const env = hostServerEnvironment(rendered);
 		assert.equal(env.AGENT_ENABLED, "true");
 		assert.equal(env.SANDBOX_MAX_CONCURRENT, "1");
 		assert.equal(env.HEPHAESTUS_MENTOR_TURN_CAPACITY, "1");
@@ -162,7 +162,7 @@ await test("host sandboxes keep the chart's quotas and authority, and only the c
 		assert.equal(hard.services, "0");
 		const binding = resources.find((resource) => resource.kind === "RoleBinding");
 		assert.deepEqual(binding?.subjects, [
-			{ kind: "ServiceAccount", name: "host-worker", namespace },
+			{ kind: "ServiceAccount", name: "host-server", namespace },
 		]);
 		assert.deepEqual(
 			resources

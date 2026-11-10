@@ -18,7 +18,6 @@ import java.util.Objects;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
-import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 class ProductReferenceQueryTest extends BaseUnitTest {
     @Mock
@@ -39,8 +38,7 @@ class ProductReferenceQueryTest extends BaseUnitTest {
         when(rows.items(1L, List.of(2L))).thenReturn(List.of(stored));
         var label = new ItemLabel(2L, nativeLabel, "Explain the change", "pull request", number, null, null, provider);
         when(labels.labels(1L, List.of(item))).thenReturn(Map.of(2L, label));
-        var references = new ProductReferenceQuery(
-                rows, new StaticListableBeanFactory().getBeanProvider(AccountReferenceService.class), labels, catalog);
+        var references = new ProductReferenceQuery(rows, mock(AccountReferenceService.class), labels, catalog);
         var result = Objects.requireNonNull(references.items(1L, List.of(2L)).get(2L));
         assertThat(result.label()).isEqualTo(nativeLabel);
         assertThat(result.title()).isEqualTo("Explain the change");

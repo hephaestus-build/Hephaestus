@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackQueryRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousPracticePageFeedback;
@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @RequiredArgsConstructor
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class PracticePageSupportReader {
     private static final Duration LOOKBACK = Duration.ofDays(90);
     private final PreviousPracticePageFeedback previous;

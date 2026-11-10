@@ -142,9 +142,9 @@ function renderOneHost(extra: Record<string, unknown> = {}, siteValues?: unknown
 	}
 }
 
-/** The egress rules of the worker's own NetworkPolicy. */
-const workerEgress = (resources: Record<string, unknown>[]) => {
-	const policy = named(resources, "NetworkPolicy", "hephaestus-worker");
+/** The egress rules of the server's own NetworkPolicy. */
+const serverEgress = (resources: Record<string, unknown>[]) => {
+	const policy = named(resources, "NetworkPolicy", "hephaestus-server");
 	assert.ok(policy && isRecord(policy.spec) && Array.isArray(policy.spec.egress));
 	return policy.spec.egress.filter(isRecord);
 };
@@ -162,15 +162,16 @@ await test("the one-host values bind the release to the platform, with reviews o
 		/postgresql:\/\/hephaestus-postgresql\.hephaestus\.svc:5432\/hephaestus\?sslmode=verify-full/u,
 	);
 	assert.match(read("k3s-certificates.yaml"), /- hephaestus-postgresql\.hephaestus\.svc\n/u);
-	const worker = named(resources, "Deployment", "hephaestus-worker");
-	assert.ok(worker, "the worker runs");
-	assert.match(JSON.stringify(worker), /"name":"GIT_CHECKOUT_ENABLED","value":"true"/u);
-	assert.ok(!JSON.stringify(workerEgress(resources)).includes('"traefik"'));
+	const server = named(resources, "Deployment", "hephaestus-server");
+	assert.ok(server, "the server runs");
+	assert.match(JSON.stringify(server), /"name":"AGENT_ENABLED","value":"true"/u);
+	assert.match(JSON.stringify(server), /"name":"GIT_CHECKOUT_ENABLED","value":"true"/u);
+	assert.ok(!JSON.stringify(serverEgress(resources)).includes('"traefik"'));
 });
 
-await test("workerGatewayPorts lets the worker reach the Gateway Pods on those ports only", () => {
-	const { resources } = renderOneHost({ workerGatewayPorts: [8443] });
-	const rules = workerEgress(resources).filter((rule) =>
+await test("modelGatewayPorts lets the server reach the Gateway Pods on those ports only", () => {
+	const { resources } = renderOneHost({ modelGatewayPorts: [8443] });
+	const rules = serverEgress(resources).filter((rule) =>
 		JSON.stringify(rule).includes('"traefik"'),
 	);
 	assert.deepEqual(
@@ -1786,7 +1787,6 @@ await test("the one-host sandboxes run on gVisor from one pinned release, which 
 	assert.ok(runtimeClass && isRecord(runtimeClass.metadata));
 	assert.equal(runtimeClass.handler, handler);
 	const values: unknown = parse(read("k3s-values.yaml"));
-	assert.ok(isRecord(values) && isRecord(values.worker) && isRecord(values.worker.sandbox));
-	assert.ok(isRecord(values.worker.sandbox.templates));
-	assert.equal(values.worker.sandbox.templates.runtimeClassName, runtimeClass.metadata.name);
+	assert.ok(isRecord(values) && isRecord(values.sandbox) && isRecord(values.sandbox.templates));
+	assert.equal(values.sandbox.templates.runtimeClassName, runtimeClass.metadata.name);
 });

@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import java.nio.charset.StandardCharsets;
@@ -28,7 +28,7 @@ import tools.jackson.databind.node.ObjectNode;
  * mislabels this attempt's decision as an earlier one in the turns that follow.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class CompositionToolTrace {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;

@@ -32,10 +32,11 @@ public final class ConfigurationReadinessEvaluator {
 
     public List<ConfigurationFactDTO> evaluateDeployment() {
         BooleanSetting serverRole = booleanSetting(RuntimeRole.SERVER_PROPERTY, true);
-        BooleanSetting workerRole = booleanSetting(RuntimeRole.WORKER_PROPERTY, true);
         BooleanSetting webhookRole = booleanSetting(RuntimeRole.WEBHOOK_PROPERTY, true);
         boolean server = serverRole.value();
-        boolean worker = workerRole.value();
+        BooleanSetting agentJobs = booleanSetting(RuntimeRole.AGENT_ENABLED_PROPERTY, false);
+        // The server runs the agent sandboxes when agent jobs are on.
+        boolean agents = server && agentJobs.valid() && agentJobs.value();
         boolean webhook = webhookRole.value();
         List<ConfigurationFactDTO> facts = new ArrayList<>();
 
@@ -46,17 +47,17 @@ public final class ConfigurationReadinessEvaluator {
                 allRoles(),
                 ConfigurationRequirement.REQUIRED,
                 true,
-                serverRole.valid() && workerRole.valid() && webhookRole.valid() && (server || worker || webhook),
+                serverRole.valid() && webhookRole.valid() && (server || webhook),
                 "At least one runtime role must be enabled.",
                 "runtime-roles");
         // The webhook receiver holds no database and no stored secrets (ADR 0066).
-        boolean database = server || worker;
-        addDatabaseFacts(facts, roles(RuntimeRole.SERVER, RuntimeRole.WORKER), database);
+        boolean database = server;
+        addDatabaseFacts(facts, roles(RuntimeRole.SERVER), database);
         add(
                 facts,
                 "security.credential-encryption",
                 "hephaestus.security.credential-encryption-key",
-                roles(RuntimeRole.SERVER, RuntimeRole.WORKER),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.REQUIRED,
                 database,
                 this::validEncryptionKey,
@@ -66,7 +67,7 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "security.value-encryption",
                 "hephaestus.security.encryption-key",
-                roles(RuntimeRole.SERVER, RuntimeRole.WORKER),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.REQUIRED,
                 database,
                 this::validEncryptionKey,
@@ -122,7 +123,7 @@ public final class ConfigurationReadinessEvaluator {
                 ConfigurationRequirement.REQUIRED,
                 true,
                 validNatsRoleContract(server, webhook),
-                "NATS must be enabled for ingestion in the server and webhook roles. NATS must be disabled on a worker-only process.",
+                "NATS must be enabled for ingestion in the server and webhook roles.",
                 "nats");
         add(
                 facts,
@@ -148,9 +149,9 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "llm.proxy-egress",
                 "hephaestus.llm.egress.allow-loopback",
-                roles(RuntimeRole.WORKER),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.REQUIRED,
-                worker,
+                agents,
                 validFalse("hephaestus.llm.egress.allow-loopback", false),
                 "Loopback LLM provider egress must be disabled in production.",
                 "llm-proxy");
@@ -158,11 +159,11 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "agent.image-contract",
                 "hephaestus.agent.image.reference",
-                roles(RuntimeRole.WORKER),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.REQUIRED,
-                worker,
+                agents,
                 this::validAgentImage,
-                "The worker image contract requires digest enforcement and a digest-pinned agent image.",
+                "The agent image contract requires digest enforcement and a digest-pinned agent image.",
                 "agent-image");
         // Email is on exactly when a relay host is set; the sender address is then the one thing that
         // can still be missing, and its absence leaves every notification withheld as NOT_CONFIGURED.
@@ -411,7 +412,7 @@ public final class ConfigurationReadinessEvaluator {
     }
 
     private static List<RuntimeRole> allRoles() {
-        return List.of(RuntimeRole.SERVER, RuntimeRole.WORKER, RuntimeRole.WEBHOOK);
+        return List.of(RuntimeRole.SERVER, RuntimeRole.WEBHOOK);
     }
 
     private static List<RuntimeRole> roles(RuntimeRole... roles) {

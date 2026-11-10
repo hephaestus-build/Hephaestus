@@ -403,7 +403,7 @@ await test("a change that the CI cluster jobs exercise gets the cluster reminder
 	);
 	assert.ok(globs.includes("deploy/chart/**"));
 	for (const file of [
-		"deploy/chart/hephaestus/templates/worker.yaml",
+		"deploy/chart/hephaestus/templates/sandbox.yaml",
 		"scripts/kubernetes-cluster.ts",
 		"server/application/src/main/resources/application-prod.yml",
 	]) {

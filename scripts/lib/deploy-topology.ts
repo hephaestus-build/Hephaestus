@@ -13,7 +13,7 @@ export const topologyImage = (name: string): string =>
 export const applicationImage = topologyImage("application-server");
 
 /** Synthetic names and pins. These values never contact a registry, API server or Secret. */
-export function renderDeployTopology(root = REPO_ROOT, workerEnabled = true): string {
+export function renderDeployTopology(root = REPO_ROOT, sandboxEnabled = true): string {
 	const schema = asRecord(
 		readJsonFileSync(path.join(root, CHART, "values.schema.json")),
 		"chart schema",
@@ -50,7 +50,7 @@ export function renderDeployTopology(root = REPO_ROOT, workerEnabled = true): st
 			// postgres_exporter, a pinned upstream image of its own.
 			metrics: { enabled: true },
 		},
-		worker: { enabled: workerEnabled, sandbox: { namespace: "hephaestus-sandboxes" } },
+		sandbox: { enabled: sandboxEnabled, namespace: "hephaestus-sandboxes" },
 		// The monitoring stack runs the upstream images that the release pins.
 		observability: { stack: { enabled: true, alertmanager: { configSecret: "alertmanager" } } },
 	};

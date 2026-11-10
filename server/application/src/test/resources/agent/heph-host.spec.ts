@@ -781,7 +781,7 @@ void test("a failed, timed out or silent command reads as Pi's bash words it, an
 		{
 			ok: false,
 			error: "UNAVAILABLE",
-			detail: "This worker cannot run the context folder now. Do not retry.",
+			detail: "This server cannot run the context folder now. Do not retry.",
 		},
 	];
 	const api = worker.api();
@@ -837,7 +837,7 @@ void test("a failed, timed out or silent command reads as Pi's bash words it, an
 		{ text: "fatal: bad revision 'nope'\n\nCommand exited with code 128", isError: true },
 		{ text: "partial\n\nCommand timed out after 5 seconds", isError: true },
 		{ text: "(no output)", isError: false },
-		{ text: "This worker cannot run the context folder now. Do not retry.", isError: true },
+		{ text: "This server cannot run the context folder now. Do not retry.", isError: true },
 		{ text: "Invalid timeout: must be a finite number of seconds", isError: true },
 		{ text: "File not found: inputs/context/nothing.json", isError: true },
 		{ text: "NOT_VISIBLE: Hephaestus cannot read repos/github.com/other/x.", isError: true },

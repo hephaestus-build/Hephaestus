@@ -2,5 +2,5 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
-| `GIT_CHECKOUT_ENABLED` | `hephaestus.git.enabled` | `default: false` | `server`, `worker` | Keeps local Git mirrors of monitored repositories, which practice reviews read code from. Turn it on wherever agent jobs run. Without it, the practice review health check reports out of service. |
-| `GIT_MAX_CACHE_BYTES` | `hephaestus.git.max-cache-bytes` | `default: 10737418240` | `server`, `worker` | The most disk that Git mirrors, review checkouts and staged archives may use on this process's volume. Set it to the size of that volume. Above 80 % of it, Hephaestus deletes the mirrors it used least recently. A deleted mirror costs one full fetch at its next capture. |
+| `GIT_CHECKOUT_ENABLED` | `hephaestus.git.enabled` | `default: false` | `server` | Keeps local Git mirrors of monitored repositories, which practice reviews read code from. Turn it on wherever agent jobs run. Without it, the practice review health check reports out of service. |
+| `GIT_MAX_CACHE_BYTES` | `hephaestus.git.max-cache-bytes` | `default: 10737418240` | `server` | The most disk that Git mirrors, review checkouts and staged archives may use on this process's volume. Set it to the size of that volume. Above 80 % of it, Hephaestus deletes the mirrors it used least recently. A deleted mirror costs one full fetch at its next capture. |

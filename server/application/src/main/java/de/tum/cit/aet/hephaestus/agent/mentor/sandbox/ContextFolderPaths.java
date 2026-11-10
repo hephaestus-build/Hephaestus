@@ -48,7 +48,7 @@ final class ContextFolderPaths {
         return Optional.of(String.join("/", segments));
     }
 
-    /** Whether the worker serves the path from the turn's memory: {@code INDEX.md}, {@code FIELDS.md} and the documents. */
+    /** Whether the server serves the path from the turn's memory: {@code INDEX.md}, {@code FIELDS.md} and the documents. */
     static boolean document(String relative) {
         return relative.equals(ContextFolderIndex.PATH)
                 || relative.equals(ContextFolderIndex.FIELDS_PATH)

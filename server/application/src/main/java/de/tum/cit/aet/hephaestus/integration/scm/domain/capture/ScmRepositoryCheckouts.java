@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckoutException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckouts;
@@ -35,7 +35,7 @@ import org.springframework.stereotype.Component;
  * connection is held while Git fetches.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ScmRepositoryCheckouts implements RepositoryCheckouts {
     static final String NOT_VISIBLE = "Repository is not visible to this workspace";

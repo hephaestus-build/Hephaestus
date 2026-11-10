@@ -6,13 +6,13 @@ import org.apache.tomcat.util.threads.VirtualThreadExecutor;
 import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
 
 /**
- * The Tomcat connector that sandboxes reach the worker on, and the port it listens on. Port {@code 0} binds a free
+ * The Tomcat connector that sandboxes reach the server on, and the port it listens on. Port {@code 0} binds a free
  * port when the web server starts, as {@code server.port=0} does for the application connector; {@link #port()} then
  * reports the port that was bound.
  *
  * <p>Boot's connector customizers do not reach an additional connector, so this one states its own settings. A model
  * call holds its request thread until its stream ends, so a platform pool would bound the calls of all attempts on
- * this worker. Virtual threads leave {@code maxConnections} and the gateway's body budget as the bounds. Tomcat's blocking socket reads and writes
+ * this server. Virtual threads leave {@code maxConnections} and the gateway's body budget as the bounds. Tomcat's blocking socket reads and writes
  * pin their carrier on Java 21, so the chart sets {@code jdk.virtualThreadScheduler.maxPoolSize} above that bound.
  */
 public final class SandboxGatewayConnector {

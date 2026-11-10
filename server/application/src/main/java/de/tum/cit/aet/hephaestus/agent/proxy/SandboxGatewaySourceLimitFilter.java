@@ -24,12 +24,12 @@ import tools.jackson.databind.ObjectMapper;
  * logged: a log line for each refusal would be the flood itself.
  *
  * <p>The buckets stay in this process in every role. A shared store would cost a database row lock before the caller
- * proves anything, and this is flood protection for one worker, not a quota. They are limiter state, not a cache of a
+ * proves anything, and this is flood protection for one server, not a quota. They are limiter state, not a cache of a
  * slow read.
  */
 final class SandboxGatewaySourceLimitFilter extends OncePerRequestFilter {
 
-    /** Far above the sandboxes of one worker; bounds what a pathological stream of peers can hold. */
+    /** Far above the sandboxes of one server; bounds what a pathological stream of peers can hold. */
     private static final int MAX_SOURCES = 10_000;
 
     private final Bandwidth bandwidth;

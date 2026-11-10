@@ -226,19 +226,16 @@ A missing or invalid manifest, an unknown provider instance, or an incomplete er
    Restrict access to the recovery operators.
    Do not put it in Helm values, a ConfigMap, a command-line argument or shared logs.
    Only its mounted path goes in configuration.
-3. If restored receipts name mounted evidence stores, make their original volumes available for cleanup.
-   Use one isolated maintenance worker only for evidence deletion.
-   A maintenance worker can run with `HEPHAESTUS_AGENT_ENABLED=false`, `HEPHAESTUS_RUNTIME_SERVER_ENABLED=false` and `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false`.
-   This permits its deletion poll without claiming reviews.
-   It claims a conversation turn only when a conversation loop pulls one from it.
-   Do not let a conversation loop reach it.
+3. If restored receipts name mounted evidence stores, make their original volumes available to the server for cleanup.
+   Start the server with `AGENT_ENABLED=false` (`sandbox.enabled=false` in the chart) while it deletes evidence.
+   It then runs its deletion poll, and it claims no review and runs no conversation turn.
    Keep provider egress denied.
    An unavailable store keeps recovery blocked.
    Follow [An evidence store is offline](./production-operations-runbook#an-evidence-store-is-offline).
 4. Complete the broker recovery checks before you start the server.
 5. Start the server with `erasure-recovery` added to its normal active profiles.
    Set `HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST` to the mounted path.
-   Set `HEPHAESTUS_RUNTIME_WORKER_ENABLED=false` and `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false`.
+   Set `AGENT_ENABLED=false` and `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false`.
 6. Wait for server startup to complete.
    If it stops, keep the other Deployments stopped, correct the private input or unfinished erasure, and retry.
    Do not remove the recovery profile to bypass the failure.
@@ -322,7 +319,7 @@ jq -n --arg container "$server_container" --arg secret "$erasure_secret" '
       env: [
         {name: "SPRING_PROFILES_ACTIVE", value: "prod,erasure-recovery"},
         {name: "HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST", value: "/var/run/hephaestus/erasure-recovery/manifest.json"},
-        {name: "HEPHAESTUS_RUNTIME_WORKER_ENABLED", value: "false"},
+        {name: "AGENT_ENABLED", value: "false"},
         {name: "HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED", value: "false"}],
       volumeMounts: [{name: "erasure-recovery", mountPath: "/var/run/hephaestus/erasure-recovery", readOnly: true}]}],
     volumes: [{name: "erasure-recovery", secret: {secretName: $secret, defaultMode: 288}}]

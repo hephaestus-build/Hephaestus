@@ -2,8 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackLedgerRecorder;
@@ -61,7 +61,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 @Transactional
 @RequiredArgsConstructor
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class FeedbackPreparationStore implements PreparedReviewQuery {
     private static final String PREPARATION_RECEIPTS = "feedbackPreparationReceipts";
     private static final int MAX_REVIEW_CHECK_BYTES = 65_536;

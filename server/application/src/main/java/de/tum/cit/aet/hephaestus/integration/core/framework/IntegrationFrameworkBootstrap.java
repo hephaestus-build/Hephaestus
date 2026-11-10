@@ -29,7 +29,7 @@ import org.springframework.stereotype.Component;
 /**
  * Startup-time validation that every declared {@link Capability} has its required
  * per-kind SPI beans wired. Throws so misconfigurations surface immediately, not at
- * the first request. Gated to the application-server runtime role since worker pods
+ * the first request. Gated to the application-server runtime role since webhook pods
  * intentionally wire only a subset of SPI beans.
  *
  * <p>Also the single place the review contract is enforced, via {@link ReviewContractValidator}; violations

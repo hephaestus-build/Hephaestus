@@ -56,7 +56,7 @@ It can capture evidence only for images that its run published.
 
 ## Run outline
 
-The run uses stage names and static worker names:
+The run uses stage names and static server names:
 
 ```text
 Changes
@@ -78,15 +78,15 @@ Server package, Image advisories and Pinned upstream images are independent top-
 The package supplies the artifact to its consumers before their stages can start.
 
 A path-filtered stage can be skipped.
-A selected stage shows its workers directly, including static names for skipped workers.
+A selected stage shows its servers directly, including static names for skipped servers.
 The tooling gates and the two halves of the tooling tests remain three jobs.
-Each worker keeps its isolated cancel callback, named `Stop the merge group early`.
+Each server keeps its isolated cancel callback, named `Stop the merge group early`.
 
-The removed placeholder entries allocated no runner. Combining workflow linters saves one runner job when lint is selected. Folding chart lint into the latest k3s worker saves one runner job when Kubernetes is selected. The checks remain the same.
+The removed placeholder entries allocated no runner. Combining workflow linters saves one runner job when lint is selected. Folding chart lint into the latest k3s server saves one runner job when Kubernetes is selected. The checks remain the same.
 
 GitHub displays every job of a [reused workflow](https://docs.github.com/en/actions/concepts/workflows-and-actions/reusing-workflow-configurations).
 A skipped job remains a [skipped check](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions).
-We use one stage workflow per group and [YAML step aliases](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases) to share worker steps without a second workflow level.
+We use one stage workflow per group and [YAML step aliases](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases) to share server steps without a second workflow level.
 The image signing steps stay in `reusable-docker-build.yml`, which is part of the signature identity.
 
 `CI Status Gate` keeps its required context name.
@@ -157,7 +157,7 @@ optional framework adapters: a previously investigated class can fail for a diff
 an update. Unfamiliar diagnostics and archive failures also remain visible. The reporting pipe cannot
 change the image build's exit status.
 
-The quality workers in `ci-quality-gates.yml` share native YAML step aliases. Job-level conditions omit unchanged
+The quality servers in `ci-quality-gates.yml` share native YAML step aliases. Job-level conditions omit unchanged
 legs before a runner is allocated. In a pull request, selected legs do not cancel each other on failure.
 In a merge group, a failed leg cancels the run: [Fail fast in the merge queue](#fail-fast-in-the-merge-queue).
 
@@ -456,11 +456,11 @@ Two rules end a failed merge group early and free its runners.
 Pull requests keep independent legs running after failure.
 The shared Security scan is a prerequisite on every event, so its failure blocks dependent work.
 
-**A failed worker cancels the run.**
-Each build, test and quality worker has a dependent cancel job that runs if the worker fails in a merge group.
-That job needs only its worker, so it starts without waiting for other workers in the workflow.
-Each worker has a static name in its stage workflow.
-Shared step sequences use YAML aliases, so each skipped worker still has a readable name.
+**A failed server cancels the run.**
+Each build, test and quality server has a dependent cancel job that runs if the server fails in a merge group.
+That job needs only its server, so it starts without waiting for other servers in the workflow.
+Each server has a static name in its stage workflow.
+Shared step sequences use YAML aliases, so each skipped server still has a readable name.
 Every cancel job is named `Stop the merge group early`.
 
 - The gate waits for every stage, and none of its prerequisite lists include cancel jobs.
@@ -489,14 +489,14 @@ The image advisory snapshot and pinned upstream image scan remain independent of
 **Never force-cancel a merge-group run.**
 A force-cancel skips the `always()` jobs, so `CI Status Gate` never reports.
 The queue then keeps the entry with no verdict until its check timeout.
-Use only the graceful `gh run cancel` command in the isolated cancel workers.
+Use only the graceful `gh run cancel` command in the isolated cancel servers.
 
 **Only the cancel jobs can write to Actions.**
 The `actions: write` permission also lets a job dispatch workflows, rerun runs and delete caches.
 Reusable-workflow callers forward this permission as a ceiling to their stage workflows.
 A call job sets a permission ceiling.
-Each build and test worker sets its own narrower permissions.
-Only each isolated cancel worker receives a token that can cancel runs.
+Each build and test server sets its own narrower permissions.
+Only each isolated cancel server receives a token that can cancel runs.
 
 That job runs on `ubuntu-slim`, with no checkout and no action, so no other code holds the token.
 Each workflow keeps `permissions: {}` at the top level.
@@ -552,7 +552,7 @@ Close it after triage.
    A custom rule needs the record that this setting stops, so the job would fail.
 
 The reconciler applies one Helm chart.
-The chart's [migration Job](/admin/runtime-roles#database-migrations) applies the schema. The server and worker roles wait until the database holds their change sets. The webhook role does not wait. Helm does not enforce a stopped cutover: [Recover a stopped cutover](/admin/pull-based-deployment#recover-a-stopped-cutover) gives that procedure.
+The chart's [migration Job](/admin/runtime-roles#database-migrations) applies the schema. The server roles wait until the database holds their change sets. The webhook role does not wait. Helm does not enforce a stopped cutover: [Recover a stopped cutover](/admin/pull-based-deployment#recover-a-stopped-cutover) gives that procedure.
 The [one-host platform](/admin/k3s) owns ports 80 and 443.
 
 ## The `preview` label
@@ -1104,11 +1104,11 @@ Right after a merge, that run is still building, so the pull request builds ever
   [Fail fast in the merge queue](#fail-fast-in-the-merge-queue).
 - The unit and the architecture tier run in separate jobs, `Unit` and `Architecture`.
   The unit tier runs in two test JVMs, which is the cap that `org.gradle.workers.max` sets.
-  In one job, its JVMs would share those two workers with the architecture tier.
+  In one job, its JVMs would share those two servers with the architecture tier.
   `Architecture` also runs `vp run test:server:selection`.
 - `Integration` has the `review` shard and numbered shards. [Integration shards](#integration-shards) says how the classes are split.
   Each shard runs in its own JVM and Testcontainers database. The static shard jobs run independently. No matrix cancels a sibling.
-  A failed merge-group worker calls the isolated cancel helper. `CI Status Gate` requires the aggregate result.
+  A failed merge-group server calls the isolated cancel helper. `CI Status Gate` requires the aggregate result.
   Locally the tier runs whole. The weekly [server profiles](#server-profiles) run the same shards.
 - Pull requests build `linux/amd64`. Merge groups, pushes to `main`, dispatches, and every run on
   the Version PR's branch build `linux/amd64` and `linux/arm64`. Both lists take the same build,
@@ -1137,7 +1137,7 @@ Right after a merge, that run is still building, so the pull request builds ever
 - Before its vulnerability scans, each image build job removes the same unused SDKs and logs the free space.
   Trivy copies each image layer to a temporary file after the builds have filled the root volume.
   Thus, `scripts/prepare-image-scan-runner.ts` gives the scans' temporary files the volume with the most free space.
-- A pull request that matches the `kubernetes` filter runs the latest k3s on amd64. Its worker first lints the chart and validates its schemas.
+- A pull request that matches the `kubernetes` filter runs the latest k3s on amd64. Its server first lints the chart and validates its schemas.
   The merge queue also runs the lowest supported minor on amd64 and `kind 1.35 Calico`.
   Only the nightly run adds the lowest supported minor on arm64.
   Runners limit the merge queue, so the queue does not wait for an arm64 runner.
@@ -1145,7 +1145,7 @@ Right after a merge, that run is still building, so the pull request builds ever
   node, because with them no sandbox Pod with `hostUsers: false` can start. It tests the commit that `main` receives, so a pull request does not repeat
   them. A dispatch runs the same legs as the queue.
   On the latest minor on amd64, outside a merge group, the k3s leg also runs `kubernetes-cluster.ts turn-roll`.
-  In this drill, a conversation turn runs `bash` in its tools Pod while the workers roll, and then the loop.
+  In this drill, a conversation turn runs `bash` in its tools Pod while the servers roll, and then the loop.
   The turn must end DONE on its first attempt, with the same tools Pod.
   The fake model provider of the [capacity benchmark](./capacity-benchmark.md) scripts the turn.
   arm64 runs only the lowest minor, the minor of the arm64 host.
