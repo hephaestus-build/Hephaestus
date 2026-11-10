@@ -8,6 +8,7 @@ import com.auth0.jwt.algorithms.Algorithm;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
@@ -62,10 +63,13 @@ class AttemptKeyringTest extends BaseUnitTest {
         assertThat(store.keys).hasSize(1);
     }
 
-    /** The store is read on a timer, never for a request: a flood of forged kids costs the database nothing. */
+    /** A flood of forged kids costs the store one read per interval, however many requests it sends. */
     @Test
-    void shouldRefuseAForgedKidWithoutReadingTheStore() {
-        workerB.refresh();
+    void shouldReadTheStoreAtMostOncePerIntervalForForgedKids() {
+        var clock = MutableClock.atFixedInstant();
+        var replica = new AttemptKeyring(AttemptSigningKey.generate(), store, clock);
+        var verifier = new AttemptTokenVerifier(replica, new SimpleMeterRegistry());
+        replica.refresh();
         int reads = store.reads;
         AttemptSigningKey forger = AttemptSigningKey.generate();
         String forged = JWT.create()
@@ -75,10 +79,29 @@ class AttemptKeyringTest extends BaseUnitTest {
                 .sign(Algorithm.RSA256(forger.publicKey(), forger.privateKey()));
 
         for (int request = 0; request < 100; request++) {
-            assertThatThrownBy(() -> verifierB.verify(forged)).isInstanceOf(AttemptTokenInvalidException.class);
+            assertThatThrownBy(() -> verifier.verify(forged)).isInstanceOf(AttemptTokenInvalidException.class);
         }
+        assertThat(store.reads).isEqualTo(reads + 1);
 
-        assertThat(store.reads).isEqualTo(reads);
+        clock.advance(AttemptKeyring.UNKNOWN_KID_RELOAD);
+        for (int request = 0; request < 100; request++) {
+            assertThatThrownBy(() -> verifier.verify(forged)).isInstanceOf(AttemptTokenInvalidException.class);
+        }
+        assertThat(store.reads).isEqualTo(reads + 2);
+    }
+
+    /**
+     * A sandbox's call can reach any replica: a token of a replica that has just started verifies on another one before
+     * that replica's next timed refresh.
+     */
+    @Test
+    void shouldVerifyATokenOfAReplicaThatStartedAfterTheLastRefresh() {
+        workerB.refresh();
+        UUID review = UUID.randomUUID();
+
+        String token = reviewToken(review);
+
+        assertThat(verifierB.verify(token).id()).isEqualTo(review);
     }
 
     /** A published kid does not help a forger: the signature still has to match that worker's key. */
