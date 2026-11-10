@@ -2736,7 +2736,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
-        void shouldListOnlyTheWorkspacesOwnFacetsAndRefuseAnotherWorkspacesToANonMember() {
+        void shouldListOnlyTheWorkspacesOwnFacetsAndAnswerNotFoundForAnotherWorkspaceToANonMember() {
             Workspace other = createWorkspace(
                     "activity-facets-other",
                     "Other",
@@ -2753,7 +2753,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden()
+                    .isNotFound()
                     .expectBody(Void.class);
         }
 

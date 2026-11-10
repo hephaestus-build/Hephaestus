@@ -76,11 +76,11 @@ class SyncProgressControllerIntegrationTest extends AbstractWorkspaceIntegration
     @Test
     @WithMentorUser
     @DisplayName("someone outside the workspace reads nothing")
-    void outsiderIsRefused() {
+    void shouldAnswerNotFoundWhenCallerIsOutsideTheWorkspace() {
         persistUser("mentor");
         activeJob(otherWorkspace);
 
-        request(otherWorkspace).expectStatus().isForbidden();
+        request(otherWorkspace).expectStatus().isNotFound();
     }
 
     private Workspace workspaceOwnedBy(String owner, String slug) {

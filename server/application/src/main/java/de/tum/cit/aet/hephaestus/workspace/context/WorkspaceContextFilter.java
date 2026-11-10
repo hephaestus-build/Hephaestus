@@ -197,8 +197,10 @@ public class WorkspaceContextFilter implements Filter {
                 if (viewed == null && SecurityUtils.getCurrentAccountId().isEmpty()) {
                     sendWorkspaceUnauthorizedError(httpResponse, slug);
                 } else {
+                    // A non-member gets the answer for a workspace that does not exist, as GitHub and GitLab
+                    // do, so a signed-in account cannot learn which workspaces exist.
                     log.debug("Denied workspace access: reason=notMember, workspaceSlug={}", safeSlug);
-                    sendMembershipForbiddenError(httpResponse, slug);
+                    sendWorkspaceNotFoundError(httpResponse, slug);
                 }
                 return;
             }
@@ -339,15 +341,6 @@ public class WorkspaceContextFilter implements Filter {
                         "workspaceSlug",
                         "The workspace path must contain a lowercase slug with at most 64" + " characters."));
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        response.getWriter().write(objectMapper.writeValueAsString(RequestReference.name(problem, response)));
-    }
-
-    private void sendMembershipForbiddenError(HttpServletResponse response, String slug) throws IOException {
-        ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
-        problem.setTitle("Membership required");
-        problem.setDetail("To access this resource, you must be a member of workspace " + slug + ".");
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(RequestReference.name(problem, response)));
     }

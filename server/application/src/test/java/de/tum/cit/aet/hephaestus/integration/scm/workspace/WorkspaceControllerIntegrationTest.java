@@ -694,14 +694,19 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
         Workspace administered = seedActiveGitLabWorkspace("selection-administered", 7403L);
         ensureMembership(administered, mentor, Membership.WorkspaceRole.ADMIN);
 
-        for (Workspace refused : List.of(foreign, joined)) {
+        // A non-member cannot tell the workspace exists; a member without the role is refused.
+        for (Map.Entry<Workspace, HttpStatus> refusal : Map.of(
+                        foreign, HttpStatus.NOT_FOUND, joined, HttpStatus.FORBIDDEN)
+                .entrySet()) {
+            Workspace refused = refusal.getKey();
+            HttpStatus expected = refusal.getValue();
             webTestClient
                     .get()
                     .uri("/workspaces/{workspaceSlug}/repositories/selection", refused.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden()
+                    .isEqualTo(expected)
                     .expectBody(Void.class);
             webTestClient
                     .patch()
@@ -711,7 +716,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                     .bodyValue(Map.of("repositorySelection", "SELECTED"))
                     .exchange()
                     .expectStatus()
-                    .isForbidden()
+                    .isEqualTo(expected)
                     .expectBody(Void.class);
             assertThat(workspaceRepository
                             .findById(refused.getId())
@@ -1557,12 +1562,32 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     @WithMentorUser
-    void updateFeaturesRequiresWorkspaceAdmin() {
+    void shouldAnswerNotFoundWhenNonMemberUpdatesFeatures() {
         persistUser("mentor");
 
         User owner = persistUser("feature-auth-owner");
         Workspace workspace = createWorkspace("feature-auth", "Auth", "auth", AccountType.ORG, owner);
         // Mentor is intentionally NOT added as a workspace member
+
+        webTestClient
+                .patch()
+                .uri("/workspaces/{workspaceSlug}/features", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateWorkspaceFeaturesRequestDTO(true, null, null))
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    @WithMentorUser
+    void shouldRefuseAMemberWithoutTheAdminRoleWhenTheyUpdateFeatures() {
+        User mentor = persistUser("mentor");
+        User owner = persistUser("feature-member-owner");
+        Workspace workspace = createWorkspace("feature-member", "Member", "feature-member", AccountType.ORG, owner);
+        ensureMembership(workspace, mentor, Membership.WorkspaceRole.MEMBER);
 
         webTestClient
                 .patch()

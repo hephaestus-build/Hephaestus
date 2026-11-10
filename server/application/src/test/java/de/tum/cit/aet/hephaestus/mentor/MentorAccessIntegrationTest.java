@@ -101,21 +101,21 @@ class MentorAccessIntegrationTest extends AbstractWorkspaceIntegrationTest {
         ensureMembership(own, member, WorkspaceRole.MEMBER);
 
         ask(MEMBER, own).expectStatus().isOk().expectBody(Void.class);
-        ask(MEMBER, foreign).expectStatus().isForbidden().expectBody(Void.class);
-        conversation(MEMBER, foreign).expectStatus().isForbidden().expectBody(Void.class);
+        ask(MEMBER, foreign).expectStatus().isNotFound().expectBody(Void.class);
+        conversation(MEMBER, foreign).expectStatus().isNotFound().expectBody(Void.class);
         assertThat(conversationRepository.findMain(foreign.getId(), accountId(member)))
                 .isEmpty();
     }
 
     @Test
-    void shouldRefuseHephWhenAWorkspacePublicActivityEnabledAndTheReaderIsNoMember() {
+    void shouldAnswerNotFoundWhenAWorkspacePublicActivityEnabledAndTheReaderIsNoMember() {
         Workspace workspace = workspace("mentor-access-public");
         workspace.setPublicActivityEnabled(true);
         workspaces.save(workspace);
 
-        // The workspace filter admits a public read; only membership stops the signed-in reader.
-        conversation(MEMBER, workspace).expectStatus().isForbidden().expectBody(Void.class);
-        ask(MEMBER, workspace).expectStatus().isForbidden().expectBody(Void.class);
+        // A public workspace does not admit a signed-in non-member: the filter answers as for a missing workspace.
+        conversation(MEMBER, workspace).expectStatus().isNotFound().expectBody(Void.class);
+        ask(MEMBER, workspace).expectStatus().isNotFound().expectBody(Void.class);
         client.get()
                 .uri("/workspaces/{slug}/mentor/entries", workspace.getWorkspaceSlug())
                 .exchange()

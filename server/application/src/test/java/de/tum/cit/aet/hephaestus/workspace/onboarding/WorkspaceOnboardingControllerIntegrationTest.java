@@ -149,7 +149,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
     }
 
     @Test
-    void shouldRequireMembershipEvenForAnAuthenticatedReaderOfAPublicWorkspace() {
+    void shouldAnswerNotFoundToAnAuthenticatedNonMemberReaderOfAPublicWorkspace() {
         persistUser("testuser");
         var workspace = createWorkspace(
                 "onboarding-public", "Public", "public", AccountType.ORG, persistUser("unrelated-owner"));
@@ -158,7 +158,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .headers(headers -> headers.setBearerAuth(MEMBER))
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
         client.put()
                 .uri("/workspaces/{slug}/onboarding/me/ai-choice", workspace.getWorkspaceSlug())
@@ -167,7 +167,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(Map.of("choice", "NO_AI"))
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
     }
 

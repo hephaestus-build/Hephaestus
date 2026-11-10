@@ -210,7 +210,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
 
     @Test
     @WithMentorUser
-    void aWorkspaceAdminIsForbiddenInAnotherWorkspaceButStillAdmittedInTheirOwn() {
+    void shouldNotFindAnotherWorkspaceButStillAdmitTheAdminOfTheirOwn() {
         // A genuine (non-superadmin) workspace ADMIN — app_admin JWT authority is a separate,
         // instance-wide elevation (see WithAdminUser's javadoc); this proves the ordinary
         // membership-scoped path independent of that bypass.
@@ -232,7 +232,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
 
         webTestClient

@@ -70,7 +70,7 @@ class WorkspaceLlmSettingsControllerIntegrationTest extends AbstractWorkspaceInt
 
     @Test
     @WithMentorUser
-    void aWorkspaceAdminIsForbiddenInAnotherWorkspaceButStillAdmittedInTheirOwn() {
+    void shouldNotFindAnotherWorkspaceButStillAdmitTheAdminOfTheirOwn() {
         // A genuine (non-superadmin) workspace ADMIN: @WithAdminUser carries the instance-wide
         // app_admin elevation, which would admit this call for the wrong reason.
         User admin = persistUser("mentor");
@@ -90,7 +90,7 @@ class WorkspaceLlmSettingsControllerIntegrationTest extends AbstractWorkspaceInt
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
 
         webTestClient

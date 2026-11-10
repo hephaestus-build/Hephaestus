@@ -383,7 +383,7 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
     @Test
     @WithMentorUser
     @DisplayName("an admin of another workspace cannot configure this workspace's agents")
-    void aWorkspaceAdminWithNoMembershipHereIsForbidden() {
+    void aWorkspaceAdminWithNoMembershipHereGetsNotFound() {
         // A genuine (non-superadmin) workspace ADMIN. @WithAdminUser would carry the instance-wide
         // app_admin elevation and pass this call for the wrong reason.
         User admin = persistUser("mentor");
@@ -399,7 +399,7 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
 
         webTestClient

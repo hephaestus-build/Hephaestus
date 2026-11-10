@@ -492,7 +492,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     @WithMentorUser
-    void workspaceAdminCannotReadAnotherWorkspacesReport() {
+    void shouldAnswerNotFoundWhenWorkspaceAdminReadsAnotherWorkspacesReport() {
         User admin = persistUser("mentor");
         Workspace ownWorkspace =
                 createWorkspace("usage-own-admin", "Usage own admin", "usage-own-admin-org", AccountType.ORG, admin);
@@ -510,7 +510,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
 
         webTestClient
@@ -723,7 +723,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
      */
     @Test
     @WithMentorUser
-    void workspaceAdminCannotSetAnotherWorkspacesCap() {
+    void shouldAnswerNotFoundWhenWorkspaceAdminSetsAnotherWorkspacesCap() {
         User admin = persistUser("mentor");
         Workspace ownWorkspace =
                 createWorkspace("budget-own-admin", "Budget own admin", "budget-own-admin-org", AccountType.ORG, admin);
@@ -745,7 +745,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("monthlyBudgetUsd", "999.00"))
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
 
         assertThat(workspaceRepository

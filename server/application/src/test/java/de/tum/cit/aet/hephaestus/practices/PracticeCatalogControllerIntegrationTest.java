@@ -277,7 +277,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
     @Test
     @WithMentorUser
-    void shouldRefuseAdminDefinitionReadsForANonmember() {
+    void shouldAnswerNotFoundWhenNonmemberReadsAdminDefinitions() {
         persistUser("mentor");
         var owner = persistUser("wire-owner");
         var workspace = createWorkspace("wire-private", "Private", "wire-private-org", AccountType.ORG, owner);
@@ -286,7 +286,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
     }
 
