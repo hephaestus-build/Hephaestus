@@ -1,6 +1,0 @@
-### `hephaestus.runtime`
-
-| Variable | Setting | Application default | Containers | Description |
-| --- | --- | --- | --- | --- |
-| `HEPHAESTUS_RUNTIME_SERVER_ENABLED` | `hephaestus.runtime.server.enabled` | `default: true` | `webhook` | Runs the server role, which serves the API, syncs provider work, runs the agent sandboxes and delivers feedback. Turn it off in a webhook-only container. |
-| `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED` | `hephaestus.runtime.webhook.enabled` | `default: true` | `server`, `webhook` | Runs the webhook role, which receives provider webhooks and publishes them to NATS JetStream. Under the prod profile, this role needs NATS. |

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { appendFileSync, readFileSync, readdirSync, statSync } from "node:fs";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -8,11 +8,9 @@ import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
-	deliveryDifference,
 	partialMigration,
 	preservationSql,
 	type PreservedPeopleIds,
-	type StoredDelivery,
 } from "./lib/release-upgrade-fingerprint.ts";
 import { parseVersion } from "./lib/release-version.ts";
 import { researchConsentFields } from "./lib/research-consent.ts";
@@ -52,7 +50,6 @@ const PREVIOUS_RELEASE_WORKSPACE_SLUG = "upgrade-previous-fixture";
 // A copy of the seeded database that the partial migration runs on.
 const PARTIAL_DATABASE = "hephaestus_partial";
 const MIGRATION_STOP_MESSAGE = "the upgrade test stops the migration here";
-const WEBHOOK_SECRET = "upgrade-test-webhook-secret";
 const QUEUED_REVIEW_JOB = "00000000-0000-0000-0000-000000978041";
 const HTTP_TIMEOUT_MS = 30_000;
 const READINESS_TIMEOUT_MS = 2000;
@@ -182,8 +179,6 @@ function startApplication(
 		"--env",
 		"HEPHAESTUS_SYNC_NATS_ENABLED=false",
 		...workerEnvironment(worker),
-		"--env",
-		"HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false",
 		"--env",
 		"HEPHAESTUS_WORKSPACE_INIT_DEFAULT=false",
 		"--env",
@@ -933,190 +928,6 @@ async function assertPartialMigration(
 	console.log("The candidate's migration completed when it ran again.");
 }
 
-function startWebhookReceiver(name: string, image: string, database: string): number {
-	docker(
-		"run",
-		"--detach",
-		"--name",
-		name,
-		"--network",
-		network,
-		"--publish",
-		"127.0.0.1::8080",
-		"--env",
-		"SPRING_PROFILES_ACTIVE=e2e,webhook",
-		...databaseEnvironment(database),
-		"--env",
-		"HEPHAESTUS_SYNC_NATS_SERVER=nats://nats:4222",
-		"--env",
-		`WEBHOOK_SECRET=${WEBHOOK_SECRET}`,
-		// The defaults reserve more broker storage than a runner has. A stream must hold four maximal payloads.
-		"--env",
-		"HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES=128MB",
-		"--env",
-		"HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB=128MB",
-		"--env",
-		"HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET=512MB",
-		"--env",
-		"HEPHAESTUS_SECURITY_ENCRYPTION_KEY=upgradeTestEncryptionKey01234567",
-		image,
-	);
-	return publishedPort(name);
-}
-
-/**
- * One delivery for each provider on the shared receiver path. GitLab and Outline deliver only on a route credential
- * that the server issues for a stored connection.
- */
-const WEBHOOK_DELIVERIES = [
-	{
-		stream: "github",
-		body: JSON.stringify({
-			action: "opened",
-			repository: { name: "upgrade-repository", owner: { login: WORKSPACE_SLUG } },
-		}),
-		headers: (delivery: string, body: string): Record<string, string> => ({
-			"x-github-event": "issues",
-			"x-github-delivery": delivery,
-			"x-hub-signature-256": `sha256=${createHmac("sha256", WEBHOOK_SECRET).update(body).digest("hex")}`,
-		}),
-	},
-] as const;
-
-/**
- * The webhook receivers of both releases publish the same deliveries. Apart from the delivery id, each pair of stream
- * messages must have the same subject and body, and the candidate must keep every header of the previous release. It
- * may add one. Each release tests its own receiver against its own consumer, so the server of either release reads
- * the messages of the other receiver, unless the candidate's server needs a header it added. In a rolling upgrade the
- * previous receiver keeps running on the candidate's schema, so it starts there. A release that stops every role
- * never runs it on that schema, so it starts on the pre-upgrade database copy instead.
- */
-async function assertWebhookContract(): Promise<void> {
-	const nats = `${runId}-nats`;
-	const receivers = [`${runId}-webhook-previous`, `${runId}-webhook-candidate`] as const;
-	const release = asArray(
-		asRecord(
-			parseJson(readFileSync(new URL("../security/release-images.json", import.meta.url), "utf8")),
-			"release-images.json",
-		).upstream,
-		"release-images.json upstream",
-	)
-		.map((entry) => asRecord(entry, "release image"))
-		.find((entry) => entry.name === "nats");
-	if (release === undefined) {
-		throw new Error("security/release-images.json pins no nats image");
-	}
-	const [{ connect }, { jetstreamManager }] = await Promise.all([
-		import("@nats-io/transport-node"),
-		import("@nats-io/jetstream"),
-	]);
-	const natsImage = `${asString(release.repository, "nats repository")}:${asString(release.tag, "nats tag")}@${asString(release.digest, "nats digest")}`;
-	try {
-		docker(
-			"run",
-			"--detach",
-			"--name",
-			nats,
-			"--network",
-			network,
-			"--network-alias",
-			"nats",
-			"--publish",
-			"127.0.0.1::4222",
-			natsImage,
-			"nats-server",
-			"--jetstream",
-		);
-		// In stream order: the previous receiver publishes first.
-		const targets = [
-			{
-				name: receivers[0],
-				port: startWebhookReceiver(
-					receivers[0],
-					previousImage,
-					stopEveryRole.length === 0 ? "hephaestus" : PARTIAL_DATABASE,
-				),
-			},
-			{
-				name: receivers[1],
-				port: startWebhookReceiver(receivers[1], candidateImage, "hephaestus"),
-			},
-		].map((target) => ({ ...target, delivery: randomUUID() }));
-		await Promise.all(
-			targets.map(async ({ name, port }) =>
-				waitUntilReady(name, port, ["/readyz", "/actuator/health/readiness"]),
-			),
-		);
-		for (const delivery of WEBHOOK_DELIVERIES) {
-			for (const target of targets) {
-				const response = await fetchWithTimeout(
-					`http://127.0.0.1:${target.port}/webhooks/${delivery.stream}`,
-					{
-						method: "POST",
-						headers: {
-							"content-type": "application/json",
-							...delivery.headers(target.delivery, delivery.body),
-						},
-						body: delivery.body,
-					},
-				);
-				const answer = await response.text();
-				if (response.status !== 202 || !answer.includes('"ok"')) {
-					throw new Error(
-						`${target.name} answered a ${delivery.stream} delivery with ${response.status}: ${answer}`,
-					);
-				}
-			}
-		}
-		const port = publishedPort(nats, "4222/tcp");
-		const connection = await connect({ servers: `127.0.0.1:${port}` });
-		try {
-			const manager = await jetstreamManager(connection);
-			for (const delivery of WEBHOOK_DELIVERIES) {
-				const [previous, candidate] = await Promise.all(
-					targets.map(async ({ delivery: id }, index): Promise<StoredDelivery> => {
-						const message = await manager.streams.getMessage(delivery.stream, {
-							seq: index + 1,
-						});
-						if (message === null) {
-							throw new Error(`The ${delivery.stream} stream has no message ${index + 1}`);
-						}
-						return {
-							subject: message.subject,
-							headers: message.header
-								.keys()
-								.toSorted()
-								.map((key) => `${key}: ${message.header.get(key).replaceAll(id, "<delivery>")}`),
-							body: message.string(),
-						};
-					}),
-				);
-				if (previous === undefined || candidate === undefined) {
-					throw new Error(`The ${delivery.stream} stream lacks a delivery`);
-				}
-				const difference = deliveryDifference(previous, candidate);
-				if (difference !== undefined) {
-					throw new Error(
-						`The server of the previous release cannot read the candidate's ${delivery.stream} delivery: ${difference}.\n- previous: ${JSON.stringify(previous)}\n- candidate: ${JSON.stringify(candidate)}`,
-					);
-				}
-				console.log(
-					`Webhook NATS protocol passed (${previousVersion} receiver -> candidate, ${delivery.stream}): ${JSON.stringify(candidate)}.`,
-				);
-			}
-		} finally {
-			await connection.close();
-		}
-	} catch (error) {
-		for (const name of [...receivers, nats]) {
-			printLogs(name);
-		}
-		throw error;
-	} finally {
-		spawnSync("docker", ["rm", "--force", ...receivers, nats], { stdio: "ignore" });
-	}
-}
-
 try {
 	docker("network", "create", network);
 	docker(
@@ -1231,7 +1042,6 @@ try {
 			`Previous application/schema boot coverage is off for this release, because it stops every role: ${stopEveryRole.join("; ")}`,
 		);
 	}
-	await assertWebhookContract();
 	await assertPartialMigration(
 		PARTIAL_DATABASE,
 		previousChanges,

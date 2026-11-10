@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookPublishGate;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.ProjectedKeys;
@@ -19,7 +19,7 @@ import tools.jackson.databind.JsonNode;
  * is missing or unreadable fails the delivery, so nothing is published and Slack retries it.
  */
 @Component
-@ConditionalOnWebhookRole
+@ConditionalOnServerRole
 @ConditionalOnProperty(
         name = {"hephaestus.integration.slack.enabled", "hephaestus.sync.nats.enabled"},
         havingValue = "true")

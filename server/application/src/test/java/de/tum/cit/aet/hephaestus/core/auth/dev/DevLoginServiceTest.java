@@ -75,9 +75,9 @@ class DevLoginServiceTest extends BaseUnitTest {
 
     @Test
     void enabledUnderProd_failsClosedAtConstruction() {
-        // Boot expands the webhook-server/worker-node group aliases to include `prod`; assert the guard
-        // fires on that expanded active-profile set (acceptsProfiles catches it; a string-split wouldn't).
-        assertThatThrownBy(() -> service(true, "prod", "webhook"))
+        // `prod` beside another active profile still fails closed (acceptsProfiles catches it; a string-split
+        // wouldn't).
+        assertThatThrownBy(() -> service(true, "prod", "migrate"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("prod");
         assertThatThrownBy(() -> service(true, "prod")).isInstanceOf(IllegalStateException.class);

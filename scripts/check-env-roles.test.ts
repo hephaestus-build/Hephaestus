@@ -62,17 +62,17 @@ function changeEnvironment(
 	}
 	return documents.map((document) => stringify(document)).join("---\n");
 }
-await test("the Helm topology supplies three application containers and every scoped setting to its role", () => {
+await test("the Helm topology supplies two application containers and every scoped setting to its role", () => {
 	const result = check(rendered);
 	assert.deepEqual(result.failures, []);
-	assert.equal(result.applicationContainers.length, 3);
-	for (const role of ["server", "webhook", "migration"]) {
+	assert.equal(result.applicationContainers.length, 2);
+	for (const role of ["server", "migration"]) {
 		assert.ok(result.applicationContainers.some((name) => name.endsWith(`:${role}`)));
 	}
 });
-await test("a webhook receiver cannot receive the server-only mail setting", () => {
+await test("the migration cannot receive the server-only mail setting", () => {
 	assert.ok(
-		check(changeEnvironment("webhook", "SPRING_MAIL_HOST", "relay.example.com")).failures.some(
+		check(changeEnvironment("migration", "SPRING_MAIL_HOST", "relay.example.com")).failures.some(
 			(failure) => failure.includes("disables the server role"),
 		),
 	);
@@ -83,13 +83,6 @@ await test("an omitted GitLab switch is rejected on the server", () => {
 			(failure) =>
 				failure.includes("GITLAB_ENABLED") &&
 				failure.includes("no application container running the server role"),
-		),
-	);
-});
-await test("the webhook and server must share the same routing credential source", () => {
-	assert.ok(
-		check(changeEnvironment("webhook", "WEBHOOK_ROUTING_SECRET", "different-source")).failures.some(
-			(failure) => failure.includes("disagree on WEBHOOK_ROUTING_SECRET"),
 		),
 	);
 });
@@ -120,24 +113,9 @@ await test("hidden or duplicate environment sources are rejected", () => {
 
 await test("containers may set different role flags and health paths", () => {
 	assert.deepEqual(
-		check(changeEnvironment("webhook", "THC_PATH", "/different-health")).failures,
+		check(changeEnvironment("migration", "THC_PATH", "/different-health")).failures,
 		[],
 	);
-});
-await test("different Secret keys or optional flags cannot describe one routing credential", () => {
-	for (const changed of [
-		rendered.replace("key: WEBHOOK_ROUTING_SECRET", "key: OTHER_KEY"),
-		rendered.replace(
-			"key: WEBHOOK_ROUTING_SECRET",
-			"key: WEBHOOK_ROUTING_SECRET\n                optional: true",
-		),
-	]) {
-		assert.ok(
-			check(changed).failures.some((failure) =>
-				failure.includes("disagree on WEBHOOK_ROUTING_SECRET"),
-			),
-		);
-	}
 });
 await test("a setting scoped to a deleted application path fails loudly", () => {
 	const result = analyse(
@@ -153,12 +131,7 @@ await test("a setting scoped to a deleted application path fails loudly", () => 
 	);
 });
 await test("required settings fail even when every reader omits them", () => {
-	const missing = changeEnvironment(
-		"webhook",
-		"WEBHOOK_ROUTING_SECRET",
-		undefined,
-		changeEnvironment("server", "WEBHOOK_ROUTING_SECRET"),
-	);
+	const missing = changeEnvironment("server", "WEBHOOK_ROUTING_SECRET");
 	assert.ok(check(missing).failures.some((failure) => failure.includes("WEBHOOK_ROUTING_SECRET")));
 	const stale = analyse(
 		application.replaceAll("reference:", "removed-reference:"),
@@ -169,18 +142,14 @@ await test("required settings fail even when every reader omits them", () => {
 });
 await test("profiles disable only their named roles and malformed overlays fail closed", async () => {
 	assert.deepEqual(
-		[
-			...readDisabledRoles(
-				"hephaestus:\n  runtime:\n    webhook: {enabled: false}\n    server: {enabled: true}\n",
-			),
-		],
-		["webhook"],
+		[...readDisabledRoles("hephaestus:\n  runtime:\n    server: {enabled: false}\n")],
+		["server"],
 	);
 	const root = await mkdtemp(path.join(tmpdir(), "helm-role-profile-"));
 	try {
 		const resources = path.join(root, "server/application/src/main/resources");
 		await mkdir(resources, { recursive: true });
-		await writeFile(path.join(resources, "application-webhook.yml"), "hephaestus: [broken");
+		await writeFile(path.join(resources, "application-migrate.yml"), "hephaestus: [broken");
 		await assert.rejects(readProfileRoles(root));
 	} finally {
 		await rm(root, { recursive: true, force: true });
@@ -224,7 +193,7 @@ await test("nested defaults assign ownership to both variables", () => {
 await test("the render without sandboxes still checks every role", () => {
 	const result = check(renderDeployTopology(REPO_ROOT, false));
 	assert.deepEqual(result.failures, []);
-	assert.equal(result.applicationContainers.length, 3);
+	assert.equal(result.applicationContainers.length, 2);
 	// The server keeps its role and only loses the agent runtime: no gateway setting reaches it.
 	assert.equal(result.delivered.has("SANDBOX_API_PORT"), false);
 });

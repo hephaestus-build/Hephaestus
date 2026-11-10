@@ -13,9 +13,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 /**
  * Activates Spring {@link EnableScheduling @EnableScheduling} only on the server-role pod.
  *
- * <p>This single switch silences every {@code @Scheduled} method on the webhook container
- * (which sets {@code hephaestus.runtime.server.enabled=false}). It does nothing between
- * two server replicas: a job with a cluster-wide effect holds a {@code @SchedulerLock}
+ * <p>This single switch silences every {@code @Scheduled} method in a context that sets
+ * {@code hephaestus.runtime.server.enabled=false}. It does nothing between two server replicas: a job with a cluster-wide effect holds a {@code @SchedulerLock}
  * ({@link ShedLockConfig}), claims its rows, or acts only on this process's memory.
  *
  * <p>{@code matchIfMissing=true} preserves ADR 0005's DX invariant: zero env vars → full monolith

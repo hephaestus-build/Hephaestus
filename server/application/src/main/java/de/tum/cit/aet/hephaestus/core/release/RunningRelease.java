@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.core.release;
 
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.release.ReleaseStatusDTO.RunningReleaseDTO;
-import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -22,7 +21,6 @@ import org.springframework.stereotype.Component;
  * {@code application_build_info}, so a query can tell which release produced a series.
  */
 @Component
-@ReceiverComponent
 public class RunningRelease implements InfoContributor, MeterBinder {
     /** {@code IMAGE_TAG} as a lock renders it; nine digits per part keeps {@code Version.parse} within int. */
     static final Pattern RELEASE_VERSION =

@@ -255,7 +255,7 @@ To see the disk use, read the volume.
 On GitHub deliveries, blocks took about 5 % of their size in a test.
 A stream from an earlier release needs no recreation:
 
-1. The webhook role turns compression on when it starts after the upgrade.
+1. The server turns compression on when it starts after the upgrade.
 2. The broker applies it to new blocks after its next restart.
    Run `kubectl -n hephaestus rollout restart statefulset/hephaestus-nats` at a quiet time.
    Or wait for the next upgrade of the broker.
@@ -544,6 +544,5 @@ A restart preserves the JetStream volume but interrupts active deliveries.
 
 ## Where these settings live
 
-Stream bounds are read by beans that only exist on the **webhook** runtime role. Setting them on the
-`application-server` container configures nothing at all — see [Runtime Roles](./runtime-roles.mdx).
-The chart puts them on the webhook role. `gate:env` checks the rendered configuration.
+The server's receiver reads the stream bounds ([Runtime Roles](./runtime-roles.mdx)).
+The chart puts them on the server. `gate:env` checks the rendered configuration.

@@ -16,7 +16,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const APPLICATION_YML = "server/application/src/main/resources/application.yml";
 
 /** The runtime roles a container can be given. A scope claiming any other name does not compile. */
-const ROLES = ["server", "webhook"] as const;
+const ROLES = ["server"] as const;
 type Role = (typeof ROLES)[number];
 
 interface RoleScope {
@@ -62,26 +62,6 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 		why: "SandboxGatewayRateLimitFilter is installed by LlmProxySecurityConfig, which is gated on @ConditionalOnAgentRuntime: the server role with hephaestus.agent.enabled",
 	},
 	{
-		path: "hephaestus.webhook.stream",
-		role: "webhook",
-		why: "WebhookJetStreamBootstrap and WebhookStreamMonitor are contributed by WebhookProducerBeans, which WebhookConfiguration gates on hephaestus.runtime.webhook.enabled",
-	},
-	{
-		path: "hephaestus.webhook.publish",
-		role: "webhook",
-		why: "the publish deadline and JetStreamPublisher are webhook-role beans",
-	},
-	{
-		path: "hephaestus.webhook.shutdown",
-		role: "webhook",
-		why: "WebhookGracefulShutdown is a webhook-role bean",
-	},
-	{
-		path: "hephaestus.webhook.http",
-		role: "webhook",
-		why: "WebhookPayloadSizeFilter is registered by WebhookHttpConfiguration, which is @ConditionalOnWebhookRole",
-	},
-	{
 		path: "hephaestus.integration.consumer",
 		role: "server",
 		why: "IntegrationNatsConsumer and IntegrationConsumerHealthIndicator are gated on hephaestus.runtime.server.enabled",
@@ -89,7 +69,7 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 	{
 		path: "spring.mail",
 		role: "server",
-		why: "EmailAdapter, the outbox executor and every notification listener are @ConditionalOnServerRole; the webhook role never opens the relay",
+		why: "EmailAdapter, the outbox executor and every notification listener are @ConditionalOnServerRole",
 	},
 	{
 		path: "hephaestus.email",
@@ -101,7 +81,6 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 /** Every role has a flag, so a new role cannot be scoped without saying which variable turns it off. */
 const ROLE_FLAGS: Record<Role, string> = {
 	server: "HEPHAESTUS_RUNTIME_SERVER_ENABLED",
-	webhook: "HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED",
 };
 
 /**
@@ -119,7 +98,6 @@ const APPLICATION_IMAGE = applicationImage;
 const PER_CONTAINER = new Map<string, string>([
 	["SPRING_PROFILES_ACTIVE", "the profile list is how a container selects the slice it boots"],
 	[ROLE_FLAGS.server, "the role flags are the split itself"],
-	[ROLE_FLAGS.webhook, "the role flags are the split itself"],
 	[
 		"SPRING_LIQUIBASE_ENABLED",
 		"only the migrate run mode migrates; a role that sets it says it does not",
@@ -198,18 +176,18 @@ const REQUIRED_SETTINGS: readonly RequiredSetting[] = [
 	{
 		variable: "WEBHOOK_ROUTING_SECRET",
 		path: "hephaestus.webhook.routing.secret",
-		readBy: ["server", "webhook"],
+		readBy: ["server"],
 		why:
-			"the server signs each GitLab connection's hook credential with it and the webhook receiver " +
-			"verifies that credential with it; a server without it registers no GitLab hook, and a receiver " +
-			"without it turns every connection hook away",
+			"the server signs each GitLab connection's hook credential with it and its receiver verifies " +
+			"that credential with it; without it the server registers no GitLab hook and turns every " +
+			"connection hook away",
 	},
 ];
 
 /** `application-<profile>.yml` turns roles off too, so a service's profiles decide as much as its env. */
 const PROFILE_YML = (profile: string): string =>
 	`server/application/src/main/resources/application-${profile}.yml`;
-const PROFILES = ["prod", "webhook", "migrate", "local", "e2e"];
+const PROFILES = ["prod", "migrate", "local", "e2e"];
 
 /**
  * Profile name to the roles that profile's overlay switches off. The names are whatever the overlays
@@ -219,7 +197,7 @@ const PROFILES = ["prod", "webhook", "migrate", "local", "e2e"];
 export type ProfileRoles = ReadonlyMap<string, ReadonlySet<string>>;
 
 /**
- * Which roles each shipped profile overlay switches off. The gate is weaker without it — a webhook
+ * Which roles each shipped profile overlay switches off. The gate is weaker without it — a server
  * variable on a container that disables the role through a profile rather than through its own
  * environment passes — so the shipped-topology test has to build it the same way the CLI does.
  */

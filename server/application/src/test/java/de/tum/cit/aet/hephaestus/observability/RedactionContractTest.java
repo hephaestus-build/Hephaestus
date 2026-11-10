@@ -295,7 +295,7 @@ class RedactionContractTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"application.yml, -1, server", "application.yml, 1, all", "application-webhook.yml, 0, webhook"})
+    @CsvSource({"application.yml, -1, server", "application.yml, 1, all"})
     void shouldNameTheRuntimeRoleOfEveryProfile(String file, int document, String role) throws IOException {
         JsonNode json = new ObjectMapper()
                 .readTree(encode(shippedEnvironment(file, document), event -> event.setMessage("ready")));

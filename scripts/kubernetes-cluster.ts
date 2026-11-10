@@ -1781,7 +1781,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		"check",
 	]);
 
-	const paused = ["--set", "migration.enabled=false,server.replicas=0,webhook.replicas=0"];
+	const paused = ["--set", "migration.enabled=false,server.replicas=0"];
 	await install(work, [...backupOn, ...paused]);
 	await kubectl(["-n", NAMESPACE, "scale", `statefulset/${RELEASE}-postgresql`, "--replicas=0"]);
 	await kubectl([
@@ -1791,7 +1791,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		"--for=delete",
 		"pod",
 		"-l",
-		"app.kubernetes.io/component in (postgresql,server,webhook)",
+		"app.kubernetes.io/component in (postgresql,server)",
 		"--timeout=5m",
 	]);
 	const claim = `data-${RELEASE}-postgresql-0`;
@@ -2598,7 +2598,7 @@ async function gatewayAnswer(
 
 /**
  * The routes of docs/admin/helm-chart.md § Gateway routes, through Traefik: the redirect to HTTPS,
- * the webapp, the server behind the `/api` rewrite, and the webhook role, over TLS that the
+ * the webapp, the server behind the `/api` rewrite, and the webhook path, over TLS that the
  * certificate of the Gateway's listener carries.
  */
 async function gatewayRequests(
@@ -2637,7 +2637,7 @@ async function gatewayRequests(
 			url: `${origin}/api/auth/client/configuration?clientId=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`,
 			passes: (answer: { code: number }) => answer.code === 200,
 		},
-		// The webhook role answers a GET without a delivery; a status of 500 or more is the Gateway's.
+		// The receiver answers a GET without a delivery; a status of 500 or more is the Gateway's.
 		{
 			url: `${origin}/webhooks/github`,
 			passes: (answer: { code: number }) => answer.code > 0 && answer.code < 500,

@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookIngestPipeline;
@@ -24,11 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
  * {@link GitLabRouteCredential} for exactly the connection, key and route named in the URL; nothing is read from the
  * database, so a verified delivery is published durably before any admission decision. {@code X-Gitlab-Instance} is
  * compared with the signed origin only to turn away a mismatch: it never selects a route.
- *
- * <p>Active only on the webhook runtime role.
  */
 @RestController
-@ConditionalOnWebhookRole
+@ConditionalOnServerRole
 public class GitLabConnectionWebhookController {
 
     public static final String PATH_PREFIX = "/webhooks/gitlab/connections/";

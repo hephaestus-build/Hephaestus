@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
 import java.security.MessageDigest;
@@ -32,11 +32,11 @@ import tools.jackson.databind.ObjectMapper;
  * SHA-256 of the raw body (distinct events differ at least in {@code createdAt}). The
  * {@code "outline-"} vendor prefix guarantees cross-vendor uniqueness on the shared window.
  *
- * <p>Webhook-role only: subjects are derived on ingest. The consumer side parses them back with
+ * <p>Subjects are derived on ingest. The consumer side parses them back with
  * {@link OutlineSubjectParser}, which stays ungated because the server role needs it.
  */
 @Component
-@ConditionalOnWebhookRole
+@ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.outline.enabled", havingValue = "true", matchIfMissing = false)
 public class OutlineSubjectKeyDeriver implements SubjectKeyDeriver {
 

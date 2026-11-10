@@ -40,7 +40,7 @@ class RunningReleaseTest {
 
     @Test
     void shouldOmitIdentityAndListOnlyEnabledRolesAndContributeToActuatorInfo() {
-        var environment = new MockEnvironment().withProperty("hephaestus.runtime.webhook.enabled", "false");
+        var environment = new MockEnvironment();
         var running =
                 new RunningRelease("0.0.0-development", new ReleaseProperties("", "", true, "local"), environment);
         assertThat(running.get().commit()).isNull();

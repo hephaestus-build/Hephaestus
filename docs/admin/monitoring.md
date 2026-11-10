@@ -61,7 +61,7 @@ rule_files:
   - hephaestus-alerts.yml
 ```
 
-Each pod of the server, the webhook role and the worker is then one target.
+Each server Pod is then one target.
 The `app.kubernetes.io/component` label of the pod gives `runtime_role`.
 Set `networkPolicy.metrics` to the namespace and the pod labels of this Prometheus ([Network policy](./helm-chart.md#network-policy)).
 With the Prometheus Operator, a PodMonitor must give the same labels.
@@ -353,7 +353,7 @@ It sends the records to a log store that you operate, such as Loki or VictoriaLo
 The [OpenTelemetry Collector Helm chart](https://github.com/open-telemetry/opentelemetry-helm-charts/tree/main/charts/opentelemetry-collector) runs one as a DaemonSet.
 Hephaestus ships no collector and names no destination.
 
-Read only the server, worker, webhook and migration Pods, and NATS.
+Read only the server and migration Pods, and NATS.
 Their records hold no content.
 
 Do not read the webapp, PostgreSQL or any Pod of the sandbox namespace:
@@ -448,7 +448,7 @@ The chart ships no collector and no trace store. To send traces to your own Open
 
 3. Upgrade the release. Then find a request's trace in your trace store by the `X-Request-Id` that the server returned.
 
-The chart sets the variables above on the server, worker and webhook from `config.tracing.otlpEnabled`, `config.tracing.otlpEndpoint` and `config.tracing.samplingProbability`.
+The chart sets the variables above on the server from `config.tracing.otlpEnabled`, `config.tracing.otlpEndpoint` and `config.tracing.samplingProbability`.
 By default, the chart's network policy admits no collector inside the cluster.
 Set `networkPolicy.traceCollector` to the namespace and pod labels of that collector ([Network policy](./helm-chart.md#network-policy)).
 The roles can then reach it on the port that `config.tracing.otlpEndpoint` names.
@@ -475,8 +475,8 @@ Sandbox proxy requests propagate the execution trace's sampling decision. A `gen
 the HTTP outcome and the token usage that the provider reported, as `gen_ai.usage.input_tokens` and
 `gen_ai.usage.output_tokens`.
 
-A provider event crosses the message broker between the webhook role and the server.
-The webhook role writes the trace context of its request into the message, as the W3C `traceparent` header.
+A provider event crosses the message broker between the server's receiver and its consumer.
+The receiver writes the trace context of its request into the message, as the W3C `traceparent` header.
 The server continues that trace in a consumer span, `process <stream>`, around the handler.
 The handler's provider calls are child spans of it.
 Thus, one trace shows the webhook request, the handling of the event, and the calls that the handling made.
@@ -550,6 +550,6 @@ A trace ID proves that correlation context was present, not that a collector rec
 ## Check that it worked
 
 1. In Prometheus, run the query `up{job="hephaestus"}`.
-   It returns `1` for each Pod of the server, the webhook role and the worker.
+   It returns `1` for each server Pod.
 2. Check that your notification route receives `HephaestusWatchdog`.
    It fires while the monitoring works.

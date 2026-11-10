@@ -184,10 +184,10 @@ nats:
     cidr: ""
     port: 4222
 
-# server.replicas and webhook.replicas set 0 only to stop the database roles for maintenance.
+# server.replicas sets 0 only to stop the server for maintenance; the release then receives no provider deliveries.
 # docs/admin/upgrade.mdx and docs/admin/maintenance.md.
 #
-# The JVM roles (server, webhook) request all of their memory limit: the buildpack sizes the
+# The JVM Pods request all of their memory limit: the buildpack sizes the
 # heap from the limit, so a node that has only the request cannot hold what the JVM grows to. Each
 # size is a measured resident set plus headroom (docs/admin/helm-chart.md § Profiles).
 server:
@@ -226,9 +226,8 @@ migration:
     requests: { cpu: 250m, memory: 1536Mi, ephemeral-storage: 64Mi }
     limits: { cpu: "2", memory: 1536Mi, ephemeral-storage: 256Mi }
 
+# The JetStream streams that the server's receiver bounds.
 webhook:
-  # 1 to 3, or 0 to stop it. While it is 0 the release receives no provider deliveries.
-  replicas: 1
   stream:
     # Consumers acknowledge within seconds, so the age holds the stream in steady state. Keep the age
     # times the daily GitHub volume within maxBytesByStream.github (webhook ingestion operations).
@@ -244,9 +243,6 @@ webhook:
     # How long the receiver's start waits for one such limit update. A bound that sheds messages
     # deletes them before the broker answers, so a large stream on a slow disk can need more.
     limitUpdateTimeout: 5m
-  resources:
-    requests: { cpu: 250m, memory: 640Mi, ephemeral-storage: 256Mi }
-    limits: { cpu: "2", memory: 640Mi, ephemeral-storage: 1Gi }
 
 webapp:
   replicas: 1

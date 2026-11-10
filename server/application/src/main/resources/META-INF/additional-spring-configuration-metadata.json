@@ -113,13 +113,7 @@
     {
       "name": "hephaestus.runtime.server.enabled",
       "type": "java.lang.Boolean",
-      "description": "Runs the server role, which serves the API, syncs provider work, runs the agent sandboxes and delivers feedback. Turn it off in a webhook-only container.",
-      "sourceType": "de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole"
-    },
-    {
-      "name": "hephaestus.runtime.webhook.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Runs the webhook role, which receives provider webhooks and publishes them to NATS JetStream. Under the prod profile, this role needs NATS.",
+      "description": "Runs the server role, which serves the API, syncs provider work, runs the agent sandboxes and delivers feedback. Only build-time contexts turn it off.",
       "sourceType": "de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole"
     },
     {
@@ -153,7 +147,7 @@
     {
       "name": "hephaestus.integration.slack.signing-secret",
       "type": "java.lang.String",
-      "description": "Signing secret of the Slack app, which verifies inbound Events API and interactivity requests. Required when the Slack integration is on, or the server and webhook roles do not start.",
+      "description": "Signing secret of the Slack app, which verifies inbound Events API and interactivity requests. Required when the Slack integration is on, or the server does not start.",
       "sourceType": "de.tum.cit.aet.hephaestus.integration.slack.events.SlackSignatureVerifier"
     },
     {

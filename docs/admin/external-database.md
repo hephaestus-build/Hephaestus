@@ -87,7 +87,7 @@ For a `tls://` broker, Hephaestus verifies the certificate chain and the broker'
 The certificate must name the host in `nats.external.url`.
 For each advertised address, the destination broker's certificate must name that address.
 
-The bundled broker stays inside the release namespace, and network policy admits only the server and the webhook role.
+The bundled broker stays inside the release namespace, and network policy admits only the server.
 The application has no setting for the stream replica count.
 A three-server JetStream cluster therefore keeps one replica of each stream.
 

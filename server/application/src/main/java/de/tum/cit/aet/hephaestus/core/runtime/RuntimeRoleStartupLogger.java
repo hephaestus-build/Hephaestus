@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
  * idle. Reads property values directly to avoid coupling to any role-conditional bean.
  */
 @Component
-@ReceiverComponent
 public class RuntimeRoleStartupLogger {
 
     private static final Logger log = LoggerFactory.getLogger(RuntimeRoleStartupLogger.class);
@@ -31,14 +30,11 @@ public class RuntimeRoleStartupLogger {
 
         var event = enabled.isEmpty() ? log.atWarn() : log.atInfo();
         event = event.addKeyValue("event.name", "runtime.roles.configured")
-                .addKeyValue("runtime.server.enabled", enabled.contains(RuntimeRole.SERVER))
-                .addKeyValue("runtime.webhook.enabled", enabled.contains(RuntimeRole.WEBHOOK));
+                .addKeyValue("runtime.server.enabled", enabled.contains(RuntimeRole.SERVER));
         if (enabled.isEmpty()) {
             event.log(
-                    "All runtime roles disabled — this JVM will accept no work. Set at least one of "
-                            + "{}=true or {}=true.",
-                    RuntimeRole.SERVER_PROPERTY,
-                    RuntimeRole.WEBHOOK_PROPERTY);
+                    "The server role is disabled — this JVM will accept no work. Set {}=true.",
+                    RuntimeRole.SERVER_PROPERTY);
             return;
         }
         event.log("Runtime roles enabled: {}", enabled);

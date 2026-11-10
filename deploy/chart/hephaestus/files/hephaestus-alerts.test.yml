@@ -251,11 +251,11 @@ tests:
   - name: a stale or never refreshed poll age fires, a fresh one does not
     interval: 1m
     input_series:
-      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
         values: "200x5"
-      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
+      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab"}'
         values: "NaN NaN NaN NaN NaN NaN"
-      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
         values: "30x5"
     alert_rule_test:
       - eval_time: 1m
@@ -267,8 +267,8 @@ tests:
           - exp_labels:
               severity: warning
               job: hephaestus
-              instance: webhook:9090
-              runtime_role: webhook
+              instance: server:9090
+              runtime_role: server
               stream: github
             exp_annotations:
               summary: Webhook stream gauges are stale or have never been refreshed
@@ -276,8 +276,8 @@ tests:
           - exp_labels:
               severity: warning
               job: hephaestus
-              instance: webhook:9090
-              runtime_role: webhook
+              instance: server:9090
+              runtime_role: server
               stream: gitlab
             exp_annotations:
               summary: Webhook stream gauges are stale or have never been refreshed
@@ -286,11 +286,11 @@ tests:
   - name: a receiver without poll age fires, a receiver with poll age does not
     interval: 1m
     input_series:
-      - series: 'up{job="hephaestus",instance="webhook-a:9090",runtime_role="webhook"}'
+      - series: 'up{job="hephaestus",instance="server-a:9090",runtime_role="server"}'
         values: "1x10"
-      - series: 'up{job="hephaestus",instance="webhook-b:9090",runtime_role="webhook"}'
+      - series: 'up{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
         values: "1x10"
-      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="webhook-b:9090",runtime_role="webhook",stream="github"}'
+      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="server-b:9090",runtime_role="server",stream="github"}'
         values: "10x10"
     alert_rule_test:
       - eval_time: 4m
@@ -302,8 +302,8 @@ tests:
           - exp_labels:
               severity: warning
               job: hephaestus
-              instance: webhook-a:9090
-              runtime_role: webhook
+              instance: server-a:9090
+              runtime_role: server
             exp_annotations:
               summary: A scraped webhook receiver exports no stream poll age
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -311,11 +311,11 @@ tests:
   - name: a backlog above 50 for 15 minutes fires, a small or emptied backlog does not
     interval: 1m
     input_series:
-      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
         values: "60x20"
-      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
+      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab"}'
         values: "60x5 0 60x14"
-      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
         values: "40x20"
     alert_rule_test:
       - eval_time: 10m
@@ -334,23 +334,23 @@ tests:
   - name: a stream that sheds before its age bound fires; one at its bound that keeps the promise, and a young one, do not
     interval: 1m
     input_series:
-      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
         values: "432000x180"
-      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
         values: "604800x180"
-      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
         values: "1x180"
-      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
+      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab"}'
         values: "600000x180"
-      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
+      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab"}'
         values: "604800x180"
-      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
+      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab"}'
         values: "0.97x180"
-      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
         values: "3600x180"
-      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
         values: "259200x180"
-      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
         values: "0.01x180"
     alert_rule_test:
       - eval_time: 30m
@@ -369,13 +369,13 @@ tests:
   - name: a stream older than its age bound fires; one inside its bound does not
     interval: 1m
     input_series:
-      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
         values: "500000x180"
-      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
         values: "259200x180"
-      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
         values: "600000x180"
-      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
         values: "604800x180"
     alert_rule_test:
       - eval_time: 30m
@@ -394,9 +394,9 @@ tests:
   - name: a quiet stream that keeps undelivered events fires, a stream that drains does not
     interval: 1m
     input_series:
-      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
         values: "3x480"
-      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
         values: "200x60 0 200x60 0 200x60 0 200x60 0 200x60 0 200x60 0 200x60 0 200x60"
     alert_rule_test:
       - eval_time: 3h
@@ -415,9 +415,9 @@ tests:
   - name: a receiver that keeps refusing deliveries for memory fires, one that stops does not
     interval: 1m
     input_series:
-      - series: 'webhook_rejected_total{job="hephaestus",instance="webhook:9090",provider="github",reason="busy"}'
+      - series: 'webhook_rejected_total{job="hephaestus",instance="server:9090",provider="github",reason="busy"}'
         values: "0+1x20"
-      - series: 'webhook_rejected_total{job="hephaestus",instance="webhook:9090",provider="github",reason="payload-too-large"}'
+      - series: 'webhook_rejected_total{job="hephaestus",instance="server:9090",provider="github",reason="payload-too-large"}'
         values: "0+1x20"
     alert_rule_test:
       - eval_time: 5m
@@ -435,9 +435,9 @@ tests:
   - name: continued publish failures fire, successful publishes do not
     interval: 1m
     input_series:
-      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",outcome="failure"}'
+      - series: 'webhook_publish_total{job="hephaestus",instance="server:9090",outcome="failure"}'
         values: "0+1x20"
-      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",outcome="success"}'
+      - series: 'webhook_publish_total{job="hephaestus",instance="server:9090",outcome="success"}'
         values: "0+50x20"
     alert_rule_test:
       - eval_time: 5m
@@ -455,9 +455,9 @@ tests:
   - name: successful publishes alone do not fire
     interval: 1m
     input_series:
-      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",outcome="failure"}'
+      - series: 'webhook_publish_total{job="hephaestus",instance="server:9090",outcome="failure"}'
         values: "4x20"
-      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",outcome="success"}'
+      - series: 'webhook_publish_total{job="hephaestus",instance="server:9090",outcome="success"}'
         values: "0+50x20"
     alert_rule_test:
       - eval_time: 15m
@@ -1165,9 +1165,9 @@ tests:
       - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1"}'
         values: "0+100x65"
       # A quiet process: 5 acquires a minute, all slow.
-      - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="webhook:9090",runtime_role="webhook",pool="HikariPool-1",le="0.05"}'
+      - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1",le="0.05"}'
         values: "0x65"
-      - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="webhook:9090",runtime_role="webhook",pool="HikariPool-1"}'
+      - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1"}'
         values: "0+5x65"
     alert_rule_test:
       - eval_time: 10m
@@ -1251,7 +1251,7 @@ tests:
     input_series:
       - series: 'github_webhook_redelivery_total{job="hephaestus",namespace="quiet",instance="server:9090",runtime_role="server",outcome="requested"}'
         values: "0 0 0 0 0 0 0 0 0 0 10x60"
-      - series: 'webhook_publish_total{job="hephaestus",namespace="quiet",instance="webhook:9090",runtime_role="webhook",stream="github",outcome="success"}'
+      - series: 'webhook_publish_total{job="hephaestus",namespace="quiet",instance="server:9090",runtime_role="server",stream="github",outcome="success"}'
         values: "0+1x70"
     alert_rule_test:
       - eval_time: 5m
@@ -1272,11 +1272,11 @@ tests:
     input_series:
       - series: 'github_webhook_redelivery_total{job="hephaestus",namespace="quiet",instance="server:9090",runtime_role="server",outcome="requested"}'
         values: "0 0 0 0 0 0 0 0 0 0 10x60"
-      - series: 'webhook_publish_total{job="hephaestus",namespace="quiet",instance="webhook:9090",runtime_role="webhook",stream="github",outcome="success"}'
+      - series: 'webhook_publish_total{job="hephaestus",namespace="quiet",instance="server:9090",runtime_role="server",stream="github",outcome="success"}'
         values: "0+1x70"
       - series: 'github_webhook_redelivery_total{job="hephaestus",namespace="busy",instance="server:9090",runtime_role="server",outcome="requested"}'
         values: "0x70"
-      - series: 'webhook_publish_total{job="hephaestus",namespace="busy",instance="webhook:9090",runtime_role="webhook",stream="github",outcome="success"}'
+      - series: 'webhook_publish_total{job="hephaestus",namespace="busy",instance="server:9090",runtime_role="server",stream="github",outcome="success"}'
         values: "0+100x70"
     alert_rule_test:
       - eval_time: 30m
@@ -1294,9 +1294,9 @@ tests:
     input_series:
       - series: 'github_webhook_redelivery_total{job="hephaestus",instance="server:9090",runtime_role="server",outcome="requested"}'
         values: "0 0 0 0 0 0 0 0 0 0 10x60"
-      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github",outcome="success"}'
+      - series: 'webhook_publish_total{job="hephaestus",instance="server:9090",runtime_role="server",stream="github",outcome="success"}'
         values: "0+100x70"
-      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab",outcome="success"}'
+      - series: 'webhook_publish_total{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab",outcome="success"}'
         values: "0x70"
     alert_rule_test:
       - eval_time: 30m
@@ -1308,7 +1308,7 @@ tests:
     input_series:
       - series: 'github_webhook_redelivery_total{job="hephaestus",instance="server:9090",runtime_role="server",outcome="requested"}'
         values: "0 0 0 0 0 0 0 0 0 0 1x60"
-      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github",outcome="success"}'
+      - series: 'webhook_publish_total{job="hephaestus",instance="server:9090",runtime_role="server",stream="github",outcome="success"}'
         values: "0 0 0 0 0 1 1 1 1 1 2x60"
     alert_rule_test:
       - eval_time: 30m
@@ -1351,33 +1351,33 @@ tests:
         alertname: HephaestusWalArchiveFailing
         exp_alerts: []
 
-  - name: the Hephaestus receiver with no available replica is down, one with an unavailable replica beside an available one is unready, a stopped one and cert-manager's webhook are quiet
+  - name: the Hephaestus server with no available replica is down, one with an unavailable replica beside an available one is unready, a stopped one and cert-manager's webhook are quiet
     interval: 1m
     input_series:
-      - series: 'kube_deployment_status_replicas_available{namespace="hephaestus",deployment="hephaestus-webhook"}'
+      - series: 'kube_deployment_status_replicas_available{namespace="hephaestus",deployment="hephaestus-server"}'
         values: "0x20"
-      - series: 'kube_deployment_status_replicas_unavailable{namespace="hephaestus",deployment="hephaestus-webhook"}'
+      - series: 'kube_deployment_status_replicas_unavailable{namespace="hephaestus",deployment="hephaestus-server"}'
         values: "1x20"
-      - series: 'kube_deployment_spec_replicas{namespace="hephaestus",deployment="hephaestus-webhook"}'
+      - series: 'kube_deployment_spec_replicas{namespace="hephaestus",deployment="hephaestus-server"}'
         values: "1x20"
-      - series: 'kube_deployment_labels{namespace="hephaestus",deployment="hephaestus-webhook",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="webhook"}'
+      - series: 'kube_deployment_labels{namespace="hephaestus",deployment="hephaestus-server",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="server"}'
         values: "1x20"
-      - series: 'kube_deployment_status_replicas_available{namespace="hephaestus",deployment="staging-webhook"}'
+      - series: 'kube_deployment_status_replicas_available{namespace="hephaestus",deployment="staging-server"}'
         values: "1x20"
-      - series: 'kube_deployment_status_replicas_unavailable{namespace="hephaestus",deployment="staging-webhook"}'
+      - series: 'kube_deployment_status_replicas_unavailable{namespace="hephaestus",deployment="staging-server"}'
         values: "1x20"
-      - series: 'kube_deployment_spec_replicas{namespace="hephaestus",deployment="staging-webhook"}'
+      - series: 'kube_deployment_spec_replicas{namespace="hephaestus",deployment="staging-server"}'
         values: "2x20"
-      - series: 'kube_deployment_labels{namespace="hephaestus",deployment="staging-webhook",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="webhook"}'
+      - series: 'kube_deployment_labels{namespace="hephaestus",deployment="staging-server",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="server"}'
         values: "1x20"
-      # webhook.replicas=0 for database maintenance.
-      - series: 'kube_deployment_status_replicas_available{namespace="maintenance",deployment="hephaestus-webhook"}'
+      # server.replicas=0 for maintenance.
+      - series: 'kube_deployment_status_replicas_available{namespace="maintenance",deployment="hephaestus-server"}'
         values: "0x20"
-      - series: 'kube_deployment_status_replicas_unavailable{namespace="maintenance",deployment="hephaestus-webhook"}'
+      - series: 'kube_deployment_status_replicas_unavailable{namespace="maintenance",deployment="hephaestus-server"}'
         values: "0x20"
-      - series: 'kube_deployment_spec_replicas{namespace="maintenance",deployment="hephaestus-webhook"}'
+      - series: 'kube_deployment_spec_replicas{namespace="maintenance",deployment="hephaestus-server"}'
         values: "0x20"
-      - series: 'kube_deployment_labels{namespace="maintenance",deployment="hephaestus-webhook",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="webhook"}'
+      - series: 'kube_deployment_labels{namespace="maintenance",deployment="hephaestus-server",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="server"}'
         values: "1x20"
       # Another application's webhook, without the chart's labels.
       - series: 'kube_deployment_status_replicas_available{namespace="cert-manager",deployment="cert-manager-webhook"}'
@@ -1390,30 +1390,30 @@ tests:
         values: "1x20"
     alert_rule_test:
       - eval_time: 3m
-        alertname: HephaestusWebhookReceiverDown
+        alertname: HephaestusServerDown
         exp_alerts: []
       - eval_time: 6m
-        alertname: HephaestusWebhookReceiverDown
+        alertname: HephaestusServerDown
         exp_alerts:
           - exp_labels:
               severity: critical
               namespace: hephaestus
-              deployment: hephaestus-webhook
+              deployment: hephaestus-server
             exp_annotations:
-              summary: No webhook receiver of the release is available, so provider deliveries fail
+              summary: No server of the release is available, so the API and provider deliveries fail
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 10m
-        alertname: HephaestusWebhookReceiverUnready
+        alertname: HephaestusServerUnready
         exp_alerts: []
       - eval_time: 16m
-        alertname: HephaestusWebhookReceiverUnready
+        alertname: HephaestusServerUnready
         exp_alerts:
           - exp_labels:
               severity: warning
               namespace: hephaestus
-              deployment: staging-webhook
+              deployment: staging-server
             exp_annotations:
-              summary: A webhook receiver replica stayed unavailable for 15 minutes while another serves
+              summary: A server replica stayed unavailable for 15 minutes while another serves
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # time() starts at 0, so a value is a time in seconds from the start of the test, and a negative value is before it.

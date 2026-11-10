@@ -26,8 +26,8 @@ import tools.jackson.databind.ObjectMapper;
 
 class ScmCaptureRoleContextTest extends BaseUnitTest {
     @ParameterizedTest
-    @CsvSource({"true,false,1", "false,true,0"})
-    void shouldRegisterSourcesOnlyWhereReviewInputsArePrepared(boolean server, boolean webhook, int expected) {
+    @CsvSource({"true,1", "false,0"})
+    void shouldRegisterSourcesOnlyWhereReviewInputsArePrepared(boolean server, int expected) {
         new ApplicationContextRunner()
                 .withUserConfiguration(
                         ScmItemService.class,
@@ -53,8 +53,7 @@ class ScmCaptureRoleContextTest extends BaseUnitTest {
                 .withBean(PersonDataWriteFence.class, () -> mock(PersonDataWriteFence.class))
                 .withBean(PersonDataCopyRecorder.class, () -> mock(PersonDataCopyRecorder.class))
                 .withBean(PersonProcessingSuppression.class, () -> mock(PersonProcessingSuppression.class))
-                .withPropertyValues(
-                        RuntimeRole.SERVER_PROPERTY + "=" + server, RuntimeRole.WEBHOOK_PROPERTY + "=" + webhook)
+                .withPropertyValues(RuntimeRole.SERVER_PROPERTY + "=" + server)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBeansOfType(ItemSource.class)).hasSize(expected);

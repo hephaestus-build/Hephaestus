@@ -125,29 +125,6 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "hephaestus.name" (dict "root" . "component" "webhook") }}
-  labels:
-    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "webhook") | nindent 6 }}
-  policyTypes: ["Ingress", "Egress"]
-  ingress:
-    - from:
-        {{- include "hephaestus.peer" $gateway | nindent 8 }}
-      ports:
-        - port: http
-          protocol: TCP
-    {{- include "hephaestus.policy.metricsIngress" (dict "root" . "port" "management") | nindent 4 }}
-  # The receiver verifies and publishes. It reaches no database and calls no provider.
-  egress:
-    {{- include "hephaestus.policy.natsEgress" . | nindent 4 }}
-    {{- include "hephaestus.policy.traceEgress" . | nindent 4 }}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
   name: {{ include "hephaestus.name" (dict "root" . "component" "migration") }}
   labels:
     {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
@@ -270,9 +247,7 @@ spec:
   policyTypes: ["Ingress"]
   ingress:
     - from:
-        {{- range $component := list "server" "webhook" }}
-        {{- include "hephaestus.componentPeer" (dict "root" $root "component" $component) | nindent 8 }}
-        {{- end }}
+        {{- include "hephaestus.componentPeer" (dict "root" $root "component" "server") | nindent 8 }}
       ports:
         - port: 4222
           protocol: TCP

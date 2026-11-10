@@ -32,33 +32,6 @@ export function preservationSql(preserved: PreservedPeopleIds): string {
      ) fixture ORDER BY kind,value;`;
 }
 
-/** A webhook delivery as the receiver of one release stored it in JetStream, with the delivery id replaced. */
-export interface StoredDelivery {
-	readonly subject: string;
-	/** `name: value` lines. */
-	readonly headers: readonly string[];
-	readonly body: string;
-}
-
-/**
- * Why the server of the previous release could not read what the candidate's receiver publishes, or `undefined`. The
- * subject and the body must be equal. The candidate may add a header, but must keep each header of the previous
- * release with its value.
- */
-export function deliveryDifference(
-	previous: StoredDelivery,
-	candidate: StoredDelivery,
-): string | undefined {
-	if (previous.subject !== candidate.subject) {
-		return `subject ${previous.subject} became ${candidate.subject}`;
-	}
-	if (previous.body !== candidate.body) {
-		return "the body changed";
-	}
-	const missing = previous.headers.filter((header) => !candidate.headers.includes(header));
-	return missing.length === 0 ? undefined : `headers removed or changed: ${missing.join(", ")}`;
-}
-
 /** How a migration that an event trigger was to stop after `applied` of `pending` new change sets ended. */
 export type PartialMigration =
 	| { readonly kind: "stopped"; readonly reached: number }

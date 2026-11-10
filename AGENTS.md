@@ -77,9 +77,8 @@ State which entries applied:
 
 - **Integrations.** GitHub, GitLab, Slack and Outline each have an adapter. A provider-shaped
   feature needs a decision per adapter, even if the decision is "not supported here".
-- **Runtime roles.** Gate a bean that exists in one role on that role.
+- **Runtime roles.** Gate a server-only bean on the server role, and an agent-job bean on the agent runtime.
   Its consumers must tolerate its absence (`server/AGENTS.md` § Things that bite).
-  Production runs the webhook role in its own container.
 - **Wire contract.** Anything crossing HTTP is a DTO in `server/openapi.yaml` and the generated clients.
   The clients live in `webapp/src/api/**` and `extension/src/api/**`.
   Change the controller.
@@ -105,10 +104,10 @@ State which entries applied:
 
 ## How it works
 
-One JAR boots in three runtime roles selected by `hephaestus.runtime.*`.
-See ADR 0005, ADR 0008, and `docs/admin/runtime-roles.mdx`.
-The webhook role receives provider events and publishes them to NATS JetStream.
-The server consumes them, syncs the work, runs practice reviews in sandboxed containers, and delivers the resulting feedback.
+One JAR boots as the server, or runs the migration and exits.
+See ADR 0005 and `docs/admin/runtime-roles.mdx`.
+The server receives provider events and publishes them to NATS JetStream.
+It consumes them, syncs the work, runs practice reviews in sandboxed containers, and delivers the resulting feedback.
 
 The SPA talks to the server only through the generated client.
 `docs/contributor/system-design.mdx` has the diagrams.

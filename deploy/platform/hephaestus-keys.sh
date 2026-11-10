@@ -190,9 +190,8 @@ if [ -n "$ROTATE" ]; then
 			die "WEBHOOK_ROUTING_PREVIOUS_SECRET is set, so a rotation would drop it and stop the hooks that it signed: retire it first, as the Retire the previous routing secret section of Secret custody describes"
 		add WEBHOOK_ROUTING_PREVIOUS_SECRET "$(value_of WEBHOOK_ROUTING_SECRET)"
 		add WEBHOOK_ROUTING_SECRET "$(random -hex 32)"
-		# The webhook role first: a server that already signs with the new value must not register
-		# a hook that a webhook role with the old values refuses.
-		roles="webhook server"
+		# The server both signs hooks and verifies their deliveries, so it reads both values at its start.
+		roles=server
 		;;
 	*) die "--rotate takes HEPHAESTUS_AUTH_STATE_COOKIE_KEY, HEPHAESTUS_CONVERSATION_LOOP_SECRET or WEBHOOK_ROUTING_SECRET: the Rotate a value section of Secret custody gives the procedure for $ROTATE" ;;
 	esac
@@ -214,8 +213,8 @@ if [ -n "$ROTATE" ]; then
 		kubectl -n "$NAMESPACE" rollout restart "$deployment" >/dev/null ||
 			die "the Secret has the new value, but these did not restart:$remaining. Restart them with kubectl -n $NAMESPACE rollout restart, and do not run --rotate again"
 		remaining=${remaining#" $deployment"}
-		# A restart returns before the new pods run. The webhook pods that still run read only the old
-		# routing value, so the server must not sign a hook with the new one until they are replaced.
+		# A restart returns before the new pods run. Wait for them, so each restart ends with every pod on the new
+		# values.
 		kubectl -n "$NAMESPACE" rollout status "$deployment" --timeout=10m >/dev/null ||
 			die "$deployment restarted, but it is not ready after 10 minutes. Check it with kubectl -n $NAMESPACE rollout status $deployment${remaining:+, then restart what did not restart yet:$remaining}. Do not run --rotate again"
 		echo "Restarted $deployment"

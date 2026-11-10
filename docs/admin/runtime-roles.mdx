@@ -1,66 +1,47 @@
 ---
 title: Runtime roles
-description: The two roles one Hephaestus image boots into, and why the webhook role runs in its own container.
+description: The server role that one Hephaestus image boots into, and the migrate run mode.
 page_type: reference
 ---
 
-Hephaestus ships **one JAR** that boots in either runtime role.
-The same artifact can run as an application server or webhook receiver.
-It can also run both together as a monolith.
-Two boolean properties control the roles:
+Hephaestus ships **one JAR**. It boots as the server, or it runs the migration and exits.
+One boolean property controls the server role:
 
-| Role    | Property                             | Default |
-| ------- | ------------------------------------ | ------- |
-| Server  | `hephaestus.runtime.server.enabled`  | `true`  |
-| Webhook | `hephaestus.runtime.webhook.enabled` | `true`  |
+| Role   | Property                            | Default |
+| ------ | ----------------------------------- | ------- |
+| Server | `hephaestus.runtime.server.enabled` | `true`  |
 
-Both properties default to on, which starts the monolith role set.
-The server serves the API, syncs provider work, delivers feedback, and runs the agent sandboxes and their gateway.
-There is no separate worker role: practice reviews and conversation turns need a server with agent jobs on (`AGENT_ENABLED`).
+The server serves the API, receives provider webhooks, syncs provider work, delivers feedback, and runs the agent sandboxes and their gateway.
+There is no separate worker role and no separate webhook role.
+Practice reviews and conversation turns need a server with agent jobs on (`AGENT_ENABLED`).
 With agent jobs on, the server runs the agent runtime: the sandboxes, their gateway, the LLM proxy, the review executor and the conversation turns.
 The chart's `sandbox.enabled` sets `AGENT_ENABLED`.
 
 ## Boot log
 
-On startup, the JVM logs the enabled roles:
+On startup, the JVM logs the role:
 
 ```text
-INFO  RuntimeRoleStartupLogger : Runtime roles enabled: [SERVER, WEBHOOK]
+INFO  RuntimeRoleStartupLogger : Runtime roles enabled: [SERVER]
 ```
 
-Under `prod`, disabling all roles prevents startup. Disabling NATS for a server or webhook role
-also prevents startup. The warning for a JVM with no roles is a non-production diagnostic, not a
-production recovery mode. The startup event also records `event.name=runtime.roles.configured` and
-the two `runtime.*.enabled` booleans.
+Under `prod`, a disabled server role prevents startup. Disabling NATS for the server also prevents startup.
+The warning for a JVM without the server role is a non-production diagnostic, not a production recovery mode.
+The startup event also records `event.name=runtime.roles.configured` and the `runtime.server.enabled` boolean.
 
-## Monolith vs split-pod
+## Reception during a restart
 
-Use the monolith when you are a single contributor who runs locally.
-
-The [Helm chart](./kubernetes) runs the server and the webhook role in separate Pods.
+The server receives provider webhooks on `/webhooks/**`.
+The [Helm chart](./kubernetes) runs it in one Deployment.
 The server creates sandbox Pods and sandbox claims through its Kubernetes service account, when `sandbox.enabled` is on.
-No application role needs a Docker socket.
+No application Pod needs a Docker socket.
 
-Split the webhook receiver out when:
-
-- You want to deploy app-server changes without dropping inbound GitHub/GitLab events. The webhook pod runs the JetStream publisher in isolation. Redeploys of the app pod do not touch the inbound HTTP surface.
-
-## Per-role overlays
-
-The webhook role has a Spring profile YAML that turns off the server flag and removes its beans:
-
-- `application-webhook.yml`: `runtime.server=false`.
-  It enables sync NATS and disables the agent job queue.
-  Webhook pods never claim jobs.
-  The webhook role has no database.
-  It loads only the receiver.
-  It needs no database settings and no encryption keys.
-  It starts and accepts deliveries while PostgreSQL is down.
-  It reaches only NATS.
-  Outline deliveries verify against a secret derived from `WEBHOOK_ROUTING_SECRET`.
-  Slack consent comes from a NATS key-value bucket that the server writes ([ADR 0066](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0066-the-webhook-receiver-has-no-database.md)).
-- No `application-server.yml` exists.
-  The monolith default *is* the server profile.
+While no server is available, providers cannot deliver.
+A `RollingUpdate` server starts the new Pod before the old one stops, so an upgrade keeps reception.
+A `Recreate` server stops reception for the time of the restart.
+GitHub deliveries that fail in that time are redelivered (`GitHubWebhookRedelivery`).
+Slack retries a failed event.
+The routine sync repairs the lifecycle facts of GitLab and Outline.
 
 ## Sandbox gateway
 
@@ -124,9 +105,8 @@ Give it the login of `hephaestus_owner`, which owns the schema.
 Give the server roles the login of `hephaestus_app`, which reads and writes rows only.
 [Database roles](./helm-chart#database-roles) describes both roles.
 
-Under the `prod` profile, no role migrates at start.
-The server waits until the database holds every change set of its release.
-The webhook role reads no database and does not wait.
+Under the `prod` profile, the server does not migrate at start.
+It waits until the database holds every change set of its release.
 The wait reads the migration history and writes nothing.
 A schema that is ahead of the role is correct: during a rollout, the previous release runs against the new schema.
 
@@ -206,58 +186,40 @@ To mount legal overrides, see [Legal Pages](./legal-pages).
 
 ## Configuration cheatsheet
 
-Each cell shows the value a pod uses when the operator sets **no** environment variable for it.
-It uses the profile overlay's value if the overlay specifies one.
-Otherwise, it uses the base default.
+Each cell shows the value the server uses when the operator sets **no** environment variable for it.
 
-| Property                                                | Server  | Webhook   | Set by                                                 |
-| ------------------------------------------------------- | ------- | --------- | ------------------------------------------------------ |
-| `hephaestus.runtime.server.enabled`                     | true    | **false** | profile overlay                                        |
-| `hephaestus.runtime.webhook.enabled`                    | true    | true      | profile overlay                                        |
-| `hephaestus.workspace.init-default`                     | false   | false     | `prod` profile                                         |
-| `hephaestus.git.enabled`                                | false   | false     | env default                                            |
-| `hephaestus.sync.nats.enabled`                          | true    | **true**  | `prod` profile / profile overlay                       |
-| `hephaestus.agent.enabled`                              | false   | false     | env default                                            |
-| `hephaestus.integration.outline.allowed-origins`        | empty   | empty     | env default                                            |
-| `hephaestus.sandbox.gateway.port`                       | 8081    | —         | env default (`SANDBOX_API_PORT`)                       |
-| `hephaestus.sandbox.gateway.requests-per-minute`        | 680     | —         | env default (`SANDBOX_API_REQUESTS_PER_MINUTE`)        |
-| `hephaestus.sandbox.gateway.max-request-bytes`          | 4194304 | —         | env default (`SANDBOX_API_MAX_REQUEST_BYTES`)          |
-| `hephaestus.sandbox.gateway.source-requests-per-minute` | 12000   | —         | env default (`SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE`) |
-| `hephaestus.sandbox.gateway.max-connections`            | 4096    | —         | env default (`SANDBOX_API_MAX_CONNECTIONS`)            |
-| Needs user-auth wiring                                  | yes     | no        | role gating                                            |
+| Property                                                | Server  | Set by                                                 |
+| ------------------------------------------------------- | ------- | ------------------------------------------------------ |
+| `hephaestus.runtime.server.enabled`                     | true    | env default                                            |
+| `hephaestus.workspace.init-default`                     | false   | `prod` profile                                         |
+| `hephaestus.git.enabled`                                | false   | env default                                            |
+| `hephaestus.sync.nats.enabled`                          | true    | `prod` profile                                         |
+| `hephaestus.agent.enabled`                              | false   | env default                                            |
+| `hephaestus.integration.outline.allowed-origins`        | empty   | env default                                            |
+| `hephaestus.sandbox.gateway.port`                       | 8081    | env default (`SANDBOX_API_PORT`)                       |
+| `hephaestus.sandbox.gateway.requests-per-minute`        | 680     | env default (`SANDBOX_API_REQUESTS_PER_MINUTE`)        |
+| `hephaestus.sandbox.gateway.max-request-bytes`          | 4194304 | env default (`SANDBOX_API_MAX_REQUEST_BYTES`)          |
+| `hephaestus.sandbox.gateway.source-requests-per-minute` | 12000   | env default (`SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE`) |
+| `hephaestus.sandbox.gateway.max-connections`            | 4096    | env default (`SANDBOX_API_MAX_CONNECTIONS`)            |
 
-Bold cells show values that the role's profile overlay specifies, not the base defaults.
-The `webhook` overlay turns off the server role. The monolith, with no overlay, runs both.
-
-The server enforces Outline origin approval: it controls connections, sync, the change events it consumes, and the
-evidence it projects. The webhook role reads no connection, so it does not need the allowlist.
+The server enforces Outline origin approval: it controls connections, sync, the change events it receives and
+consumes, and the evidence it projects.
 The chart gives the server the configured allowlist. After a change, restart the server.
 
-Identical rows across the columns are **not** role-specific.
-They are instance-wide defaults, shown per role because operators ask per role.
-`init-default` is `false` in the `prod` profile for all roles.
-These properties do not change with the active overlay:
-
-- `git.enabled` (`GIT_CHECKOUT_ENABLED`).
-- `agent.enabled` (`AGENT_ENABLED`).
-- `integration.outline.allowed-origins`.
-
-The two environment-variable flags default to `false` on **all** roles until the operator sets them.
+`init-default` is `false` in the `prod` profile.
+`GIT_CHECKOUT_ENABLED` and `AGENT_ENABLED` default to `false` until the operator sets them.
 No profile turns on work automatically.
 
-`Needs user-auth wiring` is **not** in that group.
 User authentication exists only with the server role.
 `hephaestus.runtime.server.enabled=false` removes it.
 
 No Spring property `hephaestus.sandbox.enabled` exists, and an architecture test forbids one.
 Kubernetes sandbox work belongs to the server role with agent jobs on.
 The chart's `sandbox.enabled` sets `AGENT_ENABLED` and the sandbox settings of the server.
-The webhook role opens no gateway. Its five `sandbox.gateway` cells therefore show `—`.
 
 Git needs no such row.
 It runs in-process through JGit in the server.
 It uses the server's mirrors under `hephaestus.fabric.root`, one root for commit ingestion and review preparation.
-The webhook role has no Git.
 
 A review's sandbox also writes the review's feedback, in a later run of the same sandbox.
 These model calls take the same proxy path and rules as the review's other calls, so they need no new egress.
@@ -265,12 +227,10 @@ These model calls take the same proxy path and rules as the review's other calls
 The server removes orphaned sandbox resources at startup and then at a fixed interval.
 API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or startup sync-job recovery.
 
-The server serves the API on port 8080. Every role has a separate private
-management listener on port **9090**, including a single-JVM topology. Management does not run on
-`SERVER_PORT`. See [Set up monitoring](./monitoring#scrape-metrics) for network restrictions.
+The server has a separate private management listener on port **9090**.
+Management does not run on `SERVER_PORT`. See [Set up monitoring](./monitoring#scrape-metrics) for network restrictions.
 
-The runtime role decides `sync.nats.enabled`. No setting changes it.
-The server role consumes from NATS, and the webhook role publishes to it.
+The server publishes provider deliveries to NATS and consumes them from it. No setting changes `sync.nats.enabled`.
 
 `hephaestus.agent.enabled` (`AGENT_ENABLED`) controls submission and execution.
 Server maintenance runs independently of this flag:
@@ -887,6 +847,6 @@ The full design rationale lives in the architecture decision records, which are 
 repository rather than on this site:
 
 - [**ADR 0005**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0005-two-role-runtime-via-conditional-on-property.md) — original two-role design.
-- [**ADR 0008**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) — webhook role rationale.
+- [**ADR 0008**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) — the former webhook role. The server now receives provider webhooks.
 - [**ADR 0009**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — server substrate. Its WSS control channel is superseded by ADR 0068.
 - [**ADR 0025**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md) — agent job queue moved off NATS onto PostgreSQL.

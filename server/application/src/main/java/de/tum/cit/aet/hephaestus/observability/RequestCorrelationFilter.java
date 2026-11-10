@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.observability;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
@@ -29,7 +28,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
-@ReceiverComponent
 public class RequestCorrelationFilter extends OncePerRequestFilter {
 
     private final @Nullable Tracer tracer;

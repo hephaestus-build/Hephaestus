@@ -133,9 +133,9 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusStreamPollStale
         expr: >-
-          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"} > 180
-          or webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
-          != webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
+          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="server"} > 180
+          or webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="server"}
+          != webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="server"}
         for: 2m
         labels:
           severity: warning
@@ -144,9 +144,9 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusStreamPollMissing
         expr: >-
-          up{job="hephaestus",runtime_role="webhook"} == 1
+          up{job="hephaestus",runtime_role="server"} == 1
           unless on (job, instance)
-          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
+          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="server"}
         for: 5m
         labels:
           severity: warning
@@ -154,7 +154,7 @@ groups:
           summary: A scraped webhook receiver exports no stream poll age
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusStreamBacklog
-        expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="webhook"}) > 50
+        expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="server"}) > 50
         for: 15m
         labels:
           severity: warning
@@ -163,8 +163,8 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookStreamPastAgeBound
         expr: >-
-          max by (stream) (webhook_stream_oldest_message_age_seconds{job="hephaestus",runtime_role="webhook"})
-          > 1.1 * max by (stream) (webhook_stream_age_bound_seconds{job="hephaestus",runtime_role="webhook"})
+          max by (stream) (webhook_stream_oldest_message_age_seconds{job="hephaestus",runtime_role="server"})
+          > 1.1 * max by (stream) (webhook_stream_age_bound_seconds{job="hephaestus",runtime_role="server"})
         for: 1h
         labels:
           severity: warning
@@ -186,7 +186,7 @@ groups:
           summary: More than 10 % of a provider's events kept waiting over 5 minutes for 15 minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusStreamConsumerStopped
-        expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="webhook"}) > 0
+        expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="server"}) > 0
         for: 6h
         labels:
           severity: warning
@@ -195,9 +195,9 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookRetentionBelowAgeBound
         expr: >-
-          max by (stream) (webhook_stream_oldest_message_age_seconds{job="hephaestus",runtime_role="webhook"})
-          < 0.9 * max by (stream) (webhook_stream_age_bound_seconds{job="hephaestus",runtime_role="webhook"})
-          and max by (stream) (webhook_stream_bytes_utilization{job="hephaestus",runtime_role="webhook"}) > 0.9
+          max by (stream) (webhook_stream_oldest_message_age_seconds{job="hephaestus",runtime_role="server"})
+          < 0.9 * max by (stream) (webhook_stream_age_bound_seconds{job="hephaestus",runtime_role="server"})
+          and max by (stream) (webhook_stream_bytes_utilization{job="hephaestus",runtime_role="server"}) > 0.9
         for: 1h
         labels:
           severity: warning
@@ -615,7 +615,7 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # Kubernetes and cluster metrics: kube-state-metrics, the kubelet, node-exporter and cert-manager.
-  # The PVC and CronJob names are those that the chart gives a release. The webhook rules select the
+  # The PVC and CronJob names are those that the chart gives a release. The server rules select the
   # Deployment by the chart's labels, which kube-state-metrics exports only when they are allowed. Add a namespace matcher to
   # limit a rule to the release namespace.
   # Service level objectives. The API objectives are multi-window burn-rate alerts over a 30-day budget: a fast
@@ -904,29 +904,29 @@ groups:
         annotations:
           summary: The kernel killed a container for its memory
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusWebhookReceiverDown
+      - alert: HephaestusServerDown
         expr: >-
           kube_deployment_status_replicas_available == 0
           and on (namespace, deployment) kube_deployment_spec_replicas > 0
           and on (namespace, deployment)
-          kube_deployment_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="webhook"}
+          kube_deployment_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="server"}
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: No webhook receiver of the release is available, so provider deliveries fail
+          summary: No server of the release is available, so the API and provider deliveries fail
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusWebhookReceiverUnready
+      - alert: HephaestusServerUnready
         expr: >-
           kube_deployment_status_replicas_unavailable > 0
           and on (namespace, deployment) kube_deployment_status_replicas_available > 0
           and on (namespace, deployment)
-          kube_deployment_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="webhook"}
+          kube_deployment_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="server"}
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: A webhook receiver replica stayed unavailable for 15 minutes while another serves
+          summary: A server replica stayed unavailable for 15 minutes while another serves
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A release name longer than 34 characters truncates and hashes the CronJob names, which the name match then
       # misses. The label match finds those CronJobs when kube-state-metrics exports their labels.

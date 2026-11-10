@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.VerificationResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.WebhookRequest;
@@ -29,12 +29,10 @@ import org.springframework.web.bind.annotation.RestController;
  * gets {@code 410}, and an unreadable projection {@code 503}. Outline retries neither and counts every non-2xx answer
  * toward disabling the subscription, so a {@code 503} is lost, not retried. Any other delivery is published with its
  * route in {@link #HEADER_ROUTE}; the server drops it unless the subscription the body names registered that route.
- *
- * <p>Active only on the webhook runtime role.
  */
 @Hidden
 @RestController
-@ConditionalOnWebhookRole
+@ConditionalOnServerRole
 @ConditionalOnProperty(
         name = {"hephaestus.integration.outline.enabled", "hephaestus.sync.nats.enabled"},
         havingValue = "true")

@@ -13,11 +13,9 @@ import { isRecord, parseJson } from "./json.ts";
 export const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
 export const REFERENCE_PAGE = "docs/admin/configuration-reference.mdx";
 const RESOURCES = "server/application/src/main/resources";
-export const APPLICATION_FILES = [
-	"application.yml",
-	"application-prod.yml",
-	"application-webhook.yml",
-].map((file) => `${RESOURCES}/${file}`);
+export const APPLICATION_FILES = ["application.yml", "application-prod.yml"].map(
+	(file) => `${RESOURCES}/${file}`,
+);
 const DEVELOPER_PROFILES = new Set(["local", "e2e", "playwright", "test"]);
 export interface Placeholder {
 	readonly name: string;

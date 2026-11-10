@@ -28,8 +28,6 @@ server:
   replicas: 0
 sandbox:
   namespace: capacity-bench-20261030-sandboxes
-webhook:
-  replicas: 0
 webapp:
   replicas: 1
 config:

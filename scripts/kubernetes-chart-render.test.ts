@@ -385,7 +385,6 @@ const controllerOwned = (resource: Resource) =>
 const imageOf = {
 	"conversation-loop": "agent-pi",
 	server: "application-server",
-	webhook: "application-server",
 	webapp: "webapp",
 	postgresql: "postgres",
 	nats: "nats",
@@ -403,7 +402,6 @@ for (const name of profiles) {
 			...(bundled(name) ? ["nats", "postgresql"] : []),
 			"server",
 			"webapp",
-			"webhook",
 		]);
 		for (const [component, image] of Object.entries(imageOf)) {
 			if (!components.includes(component)) {
@@ -414,21 +412,14 @@ for (const name of profiles) {
 			}
 		}
 		const server = workload(resources, "server");
-		const webhook = workload(resources, "webhook");
 		assert.equal(envValue(server, "SPRING_PROFILES_ACTIVE"), "prod");
-		assert.equal(envValue(server, "HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED"), "false");
-		assert.equal(env(server, "HEPHAESTUS_RUNTIME_WORKER_ENABLED"), undefined);
+		assert.equal(env(server, "HEPHAESTUS_RUNTIME_SERVER_ENABLED"), undefined);
 		assert.equal(env(server, "SPRING_LIQUIBASE_ENABLED"), undefined, "the server owns migrations");
 		assert.equal(get(server, "spec", "replicas"), 1);
 		// The single-node profile cannot hold two servers; every other profile rolls without a gap.
 		assert.equal(get(server, "spec", "strategy", "type"), "Recreate");
 		assert.equal(envValue(server, "AGENT_ENABLED"), String(runsReviews(name)));
-		assert.equal(envValue(webhook, "SPRING_PROFILES_ACTIVE"), "prod,webhook");
-		assert.equal(envValue(webhook, "HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED"), "true");
-		assert.equal(envValue(webhook, "HEPHAESTUS_RUNTIME_SERVER_ENABLED"), "false");
-		assert.equal(env(webhook, "HEPHAESTUS_RUNTIME_WORKER_ENABLED"), undefined);
-		assert.equal(envValue(webhook, "SPRING_LIQUIBASE_ENABLED"), "false");
-		for (const role of [server, webhook]) {
+		for (const role of [server]) {
 			assert.equal(envValue(role, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images["agent-pi"]);
 			assert.equal(
 				envValue(role, "HEPHAESTUS_IMAGE_APPLICATION_SERVER"),
@@ -528,7 +519,7 @@ for (const name of profiles) {
 		const resources = rendered(layersFor(name));
 		const budget = maxFileBytes[name];
 		assert.equal(
-			envValue(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET"),
+			envValue(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET"),
 			String(budget),
 		);
 		// The git mirrors are caches on node storage: no role claims a volume of its own.
@@ -883,7 +874,7 @@ await test("the monitoring stack scrapes this release, evaluates its rules and n
 			},
 		},
 	};
-	for (const component of ["server", "webhook"]) {
+	for (const component of ["server"]) {
 		const policy = resources.find(
 			(resource) =>
 				kindOf(resource) === "NetworkPolicy" &&
@@ -1023,12 +1014,9 @@ await test("the route attaches to the platform Gateway and strips only /api", ()
 	};
 	const filters = (candidate: unknown) => list(get(candidate, "filters"));
 	const backends = (candidate: unknown) => get(candidate, "backendRefs");
-	assert.equal(rules.length, 4);
-	assert.deepEqual(backends(rule("Exact", "/webhooks/slack/interactivity")), [
-		{ name: "heph-server", port: 8080 },
-	]);
+	assert.equal(rules.length, 3);
 	assert.deepEqual(backends(rule("PathPrefix", "/webhooks")), [
-		{ name: "heph-webhook", port: 8080 },
+		{ name: "heph-server", port: 8080 },
 	]);
 	assert.deepEqual(backends(rule("PathPrefix", "/api")), [{ name: "heph-server", port: 8080 }]);
 	assert.deepEqual(backends(rule("PathPrefix", "/")), [{ name: "heph-webapp", port: 8080 }]);
@@ -1116,7 +1104,6 @@ for (const name of ["small", "external"] as const) {
 		};
 		for (const [component, port] of [
 			["server", "http"],
-			["webhook", "http"],
 			["webapp", "http"],
 		] as const) {
 			const ingress = list(get(policy(component), "spec", "ingress"));
@@ -1155,7 +1142,6 @@ for (const name of ["small", "external"] as const) {
 				"conversation-loop",
 			);
 		}
-		const webhookEgress = list(get(policy("webhook"), "spec", "egress"));
 		const serverEgress = list(get(policy("server"), "spec", "egress"));
 		if (name === "external") {
 			assert.ok(
@@ -1165,19 +1151,15 @@ for (const name of ["small", "external"] as const) {
 						get(rule, "ports", 0, "port") === 5432,
 				),
 			);
-			for (const egress of [serverEgress, webhookEgress]) {
-				assert.ok(
-					egress.some(
-						(rule) =>
-							get(rule, "to", 0, "ipBlock", "cidr") === "10.0.13.0/24" &&
-							get(rule, "ports", 0, "port") === 4222,
-					),
-				);
-			}
+			assert.ok(
+				serverEgress.some(
+					(rule) =>
+						get(rule, "to", 0, "ipBlock", "cidr") === "10.0.13.0/24" &&
+						get(rule, "ports", 0, "port") === 4222,
+				),
+			);
 		}
-		// The receiver reaches the broker only (ADR 0066). The server adds the database and internet
-		// HTTPS, which never includes private ranges.
-		assert.equal(webhookEgress.length, 1);
+		// Internet HTTPS never includes private ranges.
 		const internet = serverEgress.filter(
 			(rule) => get(rule, "to", 0, "ipBlock", "cidr") === "0.0.0.0/0",
 		);
@@ -1187,23 +1169,23 @@ for (const name of ["small", "external"] as const) {
 	});
 }
 
+const serverOf = (layers: readonly Layer[]) => workload(rendered(layers), "server");
+
 await test("admin assurance follows the operator's value and defaults to on", () => {
-	const server = (layers: readonly Layer[]) => workload(rendered(layers), "server");
-	assert.equal(envValue(server(layersFor("small")), "HEPHAESTUS_AUTH_ASSURANCE_ENFORCED"), "true");
 	assert.equal(
-		envValue(server(layersFor("preview")), "HEPHAESTUS_AUTH_ASSURANCE_ENFORCED"),
+		envValue(serverOf(layersFor("small")), "HEPHAESTUS_AUTH_ASSURANCE_ENFORCED"),
+		"true",
+	);
+	assert.equal(
+		envValue(serverOf(layersFor("preview")), "HEPHAESTUS_AUTH_ASSURANCE_ENFORCED"),
 		"true",
 	);
 	assert.equal(
 		envValue(
-			server([...layersFor("small"), { config: { auth: { assuranceEnforced: false } } }]),
+			serverOf([...layersFor("small"), { config: { auth: { assuranceEnforced: false } } }]),
 			"HEPHAESTUS_AUTH_ASSURANCE_ENFORCED",
 		),
 		"false",
-	);
-	assert.equal(
-		env(workload(rendered(layersFor("small")), "webhook"), "HEPHAESTUS_AUTH_ASSURANCE_ENFORCED"),
-		undefined,
 	);
 });
 
@@ -1292,7 +1274,7 @@ const grants = (role: unknown) =>
 for (const name of ["small", "external"] as const) {
 	await test(`${name}: stream bounds and thirty-day durable expiry reach their runtime roles`, () => {
 		const resources = rendered(layersFor(name));
-		const receiver = workload(resources, "webhook");
+		const receiver = workload(resources, "server");
 		for (const [provider, ageKey, bytesKey, bytes] of [
 			["github", "MAX_AGE", "MAXBYTESBYSTREAM_GITHUB", "6442450944B"],
 			["gitlab", "MAX_AGE", "MAX_BYTES", "536870912B"],
@@ -1321,7 +1303,7 @@ for (const name of ["small", "external"] as const) {
 await test("per-stream ages accept a site override and reject an unknown provider", () => {
 	const receiver = workload(
 		rendered([...layersFor("small"), { webhook: { stream: { maxAgeByStream: { slack: "9d" } } } }]),
-		"webhook",
+		"server",
 	);
 	assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK"), "9d");
 	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), undefined);
@@ -1338,11 +1320,11 @@ await test("an existing installation can keep its broker budget and volume when 
 		{ nats: { jetstream: { maxFileBytes: 17_179_869_184 } } },
 	]);
 	assert.equal(
-		envValue(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET"),
+		envValue(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET"),
 		"17179869184",
 	);
 	assert.equal(
-		envValue(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB"),
+		envValue(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB"),
 		"6442450944B",
 	);
 	assert.equal(
@@ -1364,7 +1346,7 @@ await test("an existing installation can keep its broker budget and volume when 
 
 await test("a release can apply a stream limit that deletes stored messages only when its operator turns it on", () => {
 	// The migration that shortens an existing stream's age needs one start with this flag.
-	const defaults = workload(rendered(layersFor("small")), "webhook");
+	const defaults = workload(rendered(layersFor("small")), "server");
 	assert.equal(
 		envValue(defaults, "HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES"),
 		"false",
@@ -1376,7 +1358,7 @@ await test("a release can apply a stream limit that deletes stored messages only
 			...layersFor("small"),
 			{ webhook: { stream: { allowDestructiveLimitUpdates: true, limitUpdateTimeout: "30m" } } },
 		]),
-		"webhook",
+		"server",
 	);
 	assert.equal(
 		envValue(migrating, "HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES"),
@@ -2135,7 +2117,7 @@ await test("a restore stops PostgreSQL and the database roles, suspends the back
 		...enabled,
 		{ postgresql: { backup: { restore: { enabled: true, time } } } },
 	]);
-	for (const component of ["postgresql", "server", "webhook"]) {
+	for (const component of ["postgresql", "server"]) {
 		assert.equal(get(workload(restoring, component), "spec", "replicas"), 0, component);
 	}
 	const jobs = restoring.filter((resource) =>
@@ -2173,7 +2155,7 @@ await test("a restore stops PostgreSQL and the database roles, suspends the back
 
 	// Ending the restore starts the release again with its backups.
 	const running = rendered(enabled);
-	for (const component of ["postgresql", "server", "webhook"]) {
+	for (const component of ["postgresql", "server"]) {
 		assert.equal(get(workload(running, component), "spec", "replicas"), 1, component);
 	}
 	for (const job of running.filter((resource) => kindOf(resource) === "CronJob")) {
@@ -2285,13 +2267,6 @@ const serverCapacity = (reviewCount: number) => {
 	};
 };
 
-await test("the webhook role's heap is sized from what that role loads", () => {
-	const webhook = workload(rendered(layersFor("small")), "webhook");
-	assert.equal(envValue(webhook, "BPL_JVM_THREAD_COUNT"), "80");
-	assert.equal(envValue(webhook, "BPL_JVM_LOADED_CLASS_COUNT"), "18000");
-	assert.equal(envValue(webhook, "JAVA_TOOL_OPTIONS"), "-XX:ReservedCodeCacheSize=64M");
-});
-
 await test("what the server holds for its reviews follows the reviews that the sandbox nodes hold", () => {
 	// The buildpack's 250 threads of the server, and 8 more per review.
 	assert.deepEqual(serverCapacity(1), {
@@ -2330,7 +2305,7 @@ await test("the server runs the reviews that the sandbox nodes hold, and the quo
 
 await test("the small profile keeps personal content inside the transport-buffer horizon", () => {
 	// The application's 72 hours hold for Slack and Outline: erasure cannot reach inside a broker stream.
-	const receiver = workload(rendered(layersFor("small")), "webhook");
+	const receiver = workload(rendered(layersFor("small")), "server");
 	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK"), undefined);
 	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), undefined);
 });
@@ -2380,8 +2355,6 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 	for (const name of profiles) {
 		const resources = rendered(withSandboxes(name));
 		assert.equal(envValue(workload(resources, "server"), "AGENT_ENABLED"), "true", name);
-		assert.equal(env(workload(resources, "webhook"), "AGENT_ENABLED"), undefined, name);
-		assert.equal(env(workload(resources, "webhook"), "GIT_CHECKOUT_ENABLED"), undefined, name);
 		// Without git checkout the server reports practice reviews out of service.
 		assert.equal(envValue(workload(resources, "server"), "GIT_CHECKOUT_ENABLED"), "true", name);
 		// The server evicts mirrors against the volume that the kubelet bounds, so the two sizes are one value.
@@ -2436,11 +2409,11 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 			server: envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
 		};
 	};
-	// The loop's request, with the one more replica of its rollout, comes out of the 32.
-	assert.deepEqual(capacities(layersFor("small")), everywhere("31"));
+	// The roles' requests, with the loop's one more replica of its rollout, leave room for all 32.
+	assert.deepEqual(capacities(layersFor("small")), everywhere("32"));
 	assert.deepEqual(
 		capacities([...layersFor("small"), { conversationLoop: { turns: "auto" } }]),
-		everywhere("31"),
+		everywhere("32"),
 	);
 	assert.deepEqual(
 		capacities([...layersFor("small"), { conversationLoop: { turns: 5 } }]),
@@ -2448,7 +2421,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 	);
 	assert.deepEqual(
 		capacities([...layersFor("small"), { sandbox: { reviewMemory: memoryFor(15) } }]),
-		everywhere("21"),
+		everywhere("26"),
 	);
 	// A larger server request comes out of the turns. One review keeps room for a few.
 	assert.deepEqual(
@@ -2459,7 +2432,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 				sandbox: { reviewMemory: memoryFor(1) },
 			},
 		]),
-		everywhere("9"),
+		everywhere("14"),
 	);
 	// So does a larger loop, with the one more replica of its rollout.
 	assert.deepEqual(
@@ -2467,7 +2440,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 			...layersFor("small"),
 			{ conversationLoop: { resources: { requests: { cpu: "500m" } } } },
 		]),
-		everywhere("15"),
+		everywhere("20"),
 	);
 	const exhausted = render([
 		...layersFor("small"),
@@ -2604,7 +2577,7 @@ await test("the server's operator settings reach the server alone", () => {
 			"15",
 		],
 	);
-	for (const workloadRole of ["server", "webhook"]) {
+	for (const workloadRole of ["server"]) {
 		for (const retired of [
 			"MONITORING_RUN_ON_STARTUP",
 			"MONITORING_TIMEFRAME",
@@ -2612,11 +2585,6 @@ await test("the server's operator settings reach the server alone", () => {
 			"MONITORING_SYNC_COOLDOWN_IN_MINUTES",
 		]) {
 			assert.equal(env(workload(resources, workloadRole), retired), undefined, workloadRole);
-		}
-	}
-	for (const role of ["webhook"]) {
-		for (const name of settings) {
-			assert.equal(env(workload(resources, role), name), undefined, `${role} ${name}`);
 		}
 	}
 });
@@ -2793,10 +2761,10 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	disk += amount(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage"));
 	assert.equal(get(workload(resources, "server"), "spec", "replicas"), 1);
 	assert.equal(get(workload(resources, "conversation-loop"), "spec", "replicas"), 1);
-	// The backup's request comes out of the turns too.
+	// With the backup's request beside them, the turns still reach their cap.
 	assert.equal(
 		Number(envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY")),
-		29,
+		32,
 	);
 	assert.ok(cpu <= node.cpu, `${cpu.toFixed(2)} CPU requested, ${node.cpu} on the node`);
 	assert.ok(
@@ -2971,7 +2939,7 @@ await test("each tier's quota counts the RuntimeClass overhead of every sandbox 
 const strategy = (name: (typeof profiles)[number], component: string) =>
 	get(workload(rendered(layersFor(name)), component), "spec", "strategy");
 
-await test("one server version drains before its replacement, while the webhook keeps receiving", () => {
+await test("one server version drains before its replacement", () => {
 	for (const profileName of profiles) {
 		assert.deepEqual(strategy(profileName, "server"), { type: "Recreate" });
 	}
@@ -2984,10 +2952,6 @@ await test("one server version drains before its replacement, while the webhook 
 	assert.match(rolling.stderr, /rolloutStrategy/u);
 	const idle = render([...layersFor("small"), { sandbox: { enabled: false } }]);
 	assert.equal(idle.ok, true, idle.stderr);
-	assert.deepEqual(strategy("small", "webhook"), {
-		type: "RollingUpdate",
-		rollingUpdate: { maxUnavailable: 0, maxSurge: 1 },
-	});
 });
 
 interface Budget {
@@ -3058,7 +3022,7 @@ await test("the small profile on 16 GiB runs its reviews and Heph turns, and an 
 				(sandboxGib.pooledTurns + Math.min(turns, sandboxPods.activeToolsPods)) * sandboxGib.turn) *
 			2 ** 30,
 	});
-	assert.equal(turns, 29);
+	assert.equal(turns, 32);
 	assert.equal(reviewSlots, 5);
 	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
 	assert.ok(
@@ -3067,7 +3031,7 @@ await test("the small profile on 16 GiB runs its reviews and Heph turns, and an 
 	);
 	// The isolation probe may wait for room then: a probe whose Pods cannot start keeps the last proof.
 	const probing = sum(steady, sandboxes(sandboxGib.probe, sandboxPods.probe.pods));
-	// An upgrade: the old server is gone (Recreate), the webhook, webapp and conversation loop surge, and the
+	// An upgrade: the old server is gone (Recreate), the webapp and conversation loop surge, and the
 	// migration and stanza Jobs run. The new server must pass its probe at its start, beside the installation's
 	// pooled tools Pods.
 	const jobs = resources
@@ -3249,7 +3213,6 @@ await test("every container of the application image names the release that it r
 	assert.deepEqual(identities.map(({ component }) => String(component)).toSorted(byCodePoint), [
 		"migration",
 		"server",
-		"webhook",
 	]);
 	for (const entry of identities) {
 		assert.deepEqual(
@@ -3338,7 +3301,7 @@ await test("every revision migrates the database once, in a Job that only reache
 
 await test("the JVM roles request the memory that they may use", () => {
 	const resources = rendered([...layersFor("small"), sandboxLayer]);
-	for (const component of ["server", "webhook"]) {
+	for (const component of ["server"]) {
 		const resourcesOf = get(container(workload(resources, component)), "resources");
 		assert.equal(
 			get(resourcesOf, "requests", "memory"),
@@ -3609,28 +3572,8 @@ await test("every role verifies an external PostgreSQL with the CA alone", () =>
 	assertCaOnly(role, "server");
 });
 
-await test("the internet-facing webhook role holds only the secrets of its own work", () => {
+await test("the database admits only the roles that hold its login", () => {
 	const resources = rendered([...layersFor("small"), sandboxLayer]);
-	const webhook = workload(resources, "webhook");
-	const secrets = list(get(container(webhook), "env"))
-		.map((variable) => get(variable, "valueFrom", "secretKeyRef", "key"))
-		.filter((key) => key !== undefined);
-	assert.deepEqual(
-		new Set(secrets),
-		new Set([
-			"HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET",
-			"NATS_PASSWORD",
-			"NATS_USERNAME",
-			"WEBHOOK_ROUTING_PREVIOUS_SECRET",
-			"WEBHOOK_ROUTING_SECRET",
-			"WEBHOOK_SECRET",
-		]),
-	);
-	assert.equal(env(webhook, "DATABASE_URL"), undefined);
-	assert.deepEqual(
-		list(get(podSpec(webhook), "volumes")).filter((volume) => get(volume, "secret") !== undefined),
-		[],
-	);
 	// The database admits only the roles that hold its login.
 	const database = resources.find(
 		(resource) => kindOf(resource) === "NetworkPolicy" && nameOf(resource).endsWith("postgresql"),
@@ -3642,20 +3585,20 @@ await test("the internet-facing webhook role holds only the secrets of its own w
 		),
 	);
 	assert.ok(admitted.has("server"));
-	assert.ok(!admitted.has("webhook"));
+	assert.ok(!admitted.has("webapp"));
 });
 
-await test("replica counts stop the database roles, start the server alone, and restore the release", () => {
-	const roles = ["server", "webhook"] as const;
-	const counts = (resources: Resource[]) =>
-		roles.map((component) => get(workload(resources, component), "spec", "replicas"));
+await test("replica counts stop the server and restore the release", () => {
+	const counts = (resources: Resource[]) => [
+		get(workload(resources, "server"), "spec", "replicas"),
+	];
 	const enabled = [...layersFor("small"), sandboxLayer];
 	const running = rendered(enabled);
-	assert.deepEqual(counts(running), [1, 1]);
+	assert.deepEqual(counts(running), [1]);
 
 	// Stopped: the objects stay, so the server keeps its Deployment, its policies and the sandbox namespace's.
-	const stopped = rendered([...enabled, { server: { replicas: 0 }, webhook: { replicas: 0 } }]);
-	assert.deepEqual(counts(stopped), [0, 0]);
+	const stopped = rendered([...enabled, { server: { replicas: 0 } }]);
+	assert.deepEqual(counts(stopped), [0]);
 	assert.deepEqual(
 		stopped.map((resource) => `${String(kindOf(resource))}/${nameOf(resource)}`),
 		running.map((resource) => `${String(kindOf(resource))}/${nameOf(resource)}`),
@@ -3665,12 +3608,8 @@ await test("replica counts stop the database roles, start the server alone, and 
 		assert.equal(get(workload(stopped, component), "spec", "replicas"), 1, component);
 	}
 
-	// The server migrates alone before the roles that read its schema start again.
-	const migrating = rendered([...enabled, { webhook: { replicas: 0 } }]);
-	assert.deepEqual(counts(migrating), [1, 0]);
-
 	// Restoring the prior counts renders the release as it was.
-	const restored = rendered([...enabled, { server: { replicas: 1 }, webhook: { replicas: 1 } }]);
+	const restored = rendered([...enabled, { server: { replicas: 1 } }]);
 	assert.deepEqual(restored, running);
 
 	// Without sandboxes the chart writes nothing into the sandbox namespace.
@@ -3794,16 +3733,6 @@ await test("values that the chart does not accept fail the render", () => {
 			/server[./]replicas/u,
 		],
 		[
-			"a fourth webhook receiver",
-			withSandbox({ webhook: { replicas: 4 } }),
-			/webhook[./]replicas/u,
-		],
-		[
-			"a negative webhook count",
-			withSandbox({ webhook: { replicas: -1 } }),
-			/webhook[./]replicas/u,
-		],
-		[
 			"a server rollout of an unknown kind",
 			withSandbox({ server: { rolloutStrategy: "BlueGreen" } }),
 			/server[./]rolloutStrategy/u,
@@ -3890,89 +3819,17 @@ await test("a private CA reaches the roles that call a Git provider, and is off 
 		...layersFor("small"),
 		{ config: { privateCa: { existingSecret: "corp-ca", key: "bundle.pem" } } },
 	]);
-	for (const component of ["server", "webhook"]) {
+	for (const component of ["server"]) {
 		const role = workload(resources, component);
-		const calls = component !== "webhook";
-		assert.equal(envValue(role, "SSL_CERT_FILE"), calls ? caFile : undefined, component);
+		assert.equal(envValue(role, "SSL_CERT_FILE"), caFile, component);
 		const volumes = list(get(role, "spec", "template", "spec", "volumes"));
 		const volume = volumes.find((candidate) => get(candidate, "name") === "private-ca");
-		assert.equal(get(volume, "secret", "secretName"), calls ? "corp-ca" : undefined, component);
-		assert.equal(
-			get(list(get(volume, "secret", "items"))[0], "key"),
-			calls ? "bundle.pem" : undefined,
-		);
+		assert.equal(get(volume, "secret", "secretName"), "corp-ca", component);
+		assert.equal(get(list(get(volume, "secret", "items"))[0], "key"), "bundle.pem");
 	}
 	const defaults = rendered(layersFor("small"));
-	for (const component of ["server", "webhook"]) {
+	for (const component of ["server"]) {
 		assert.equal(envValue(workload(defaults, component), "SSL_CERT_FILE"), undefined, component);
-	}
-});
-
-await test("the webhook trusts an external TLS broker only with a configured CA bundle", () => {
-	const externalBroker = { url: "tls://broker.example.test:4222", cidr: "10.0.13.0/24" };
-	const bundle = { existingSecret: "broker-ca", key: "bundle.pem" };
-	const expectedBundle = {
-		env: "/etc/hephaestus/private-ca/ca.crt",
-		volumes: [
-			{
-				name: "private-ca",
-				secret: {
-					secretName: "broker-ca",
-					items: [{ key: "bundle.pem", path: "ca.crt" }],
-					defaultMode: 292,
-				},
-			},
-		],
-		mounts: [{ name: "private-ca", mountPath: "/etc/hephaestus/private-ca", readOnly: true }],
-	};
-	const noBundle = { env: undefined, volumes: [], mounts: [] };
-	for (const scenario of [
-		{
-			label: "external TLS",
-			nats: { bundled: false, external: externalBroker },
-			privateCa: bundle,
-			expected: expectedBundle,
-		},
-		{
-			label: "plain broker",
-			nats: {
-				bundled: false,
-				external: { ...externalBroker, url: "nats://broker.example.test:4222" },
-			},
-			privateCa: bundle,
-			expected: noBundle,
-		},
-		{
-			label: "bundled broker",
-			nats: { bundled: true, external: externalBroker },
-			privateCa: bundle,
-			expected: noBundle,
-		},
-		{
-			label: "no private CA",
-			nats: { bundled: false, external: externalBroker },
-			privateCa: { existingSecret: "", key: "ca.crt" },
-			expected: noBundle,
-		},
-	]) {
-		const resources = rendered([
-			...layersFor("small"),
-			{ nats: scenario.nats, config: { privateCa: scenario.privateCa } },
-		]);
-		const receiver = workload(resources, "webhook");
-		assert.deepEqual(
-			{
-				env: envValue(receiver, "SSL_CERT_FILE"),
-				volumes: list(get(receiver, "spec", "template", "spec", "volumes")).filter(
-					(volume) => get(volume, "name") === "private-ca",
-				),
-				mounts: list(get(container(receiver), "volumeMounts")).filter(
-					(mount) => get(mount, "name") === "private-ca",
-				),
-			},
-			scenario.expected,
-			scenario.label,
-		);
 	}
 });
 
@@ -3999,7 +3856,7 @@ await test("the migration knows the configured GitLab, which a connection withou
 	);
 });
 
-await test("a Git provider on a private network reaches the server, never the webhook role", () => {
+await test("a Git provider on a private network reaches the server", () => {
 	const endpoint = { cidr: "10.30.0.0/16", ports: [443] };
 	const resources = rendered([
 		...layersFor("small"),
@@ -4012,11 +3869,10 @@ await test("a Git provider on a private network reaches the server, never the we
 		to: [{ ipBlock: { cidr: endpoint.cidr } }],
 		ports: [{ port: 443, protocol: "TCP" }],
 	};
-	for (const component of ["server", "webhook"]) {
-		const calls = component !== "webhook";
+	for (const component of ["server"]) {
 		assert.equal(
 			envValue(workload(resources, component), "HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS"),
-			calls ? "gitlab.corp.example" : undefined,
+			"gitlab.corp.example",
 			component,
 		);
 		const policy = resources.find(
@@ -4031,7 +3887,7 @@ await test("a Git provider on a private network reaches the server, never the we
 		const egress = list(get(policy, "spec", "egress"));
 		assert.equal(
 			egress.some((candidate) => isDeepStrictEqual(candidate, rule)),
-			calls,
+			true,
 			component,
 		);
 	}
@@ -4053,18 +3909,14 @@ await test("a model endpoint on a private network reaches the server, never the 
 		to: [{ ipBlock: { cidr: endpoint.cidr } }],
 		ports: [{ port: 8000, protocol: "TCP" }],
 	};
-	for (const component of ["server", "webhook"]) {
+	for (const component of ["server"]) {
 		const role = workload(resources, component);
-		const calls = component !== "webhook";
 		assert.equal(
 			envValue(role, "HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS"),
-			calls ? "vllm.lab.example,10.20.0.0/16" : undefined,
+			"vllm.lab.example,10.20.0.0/16",
 			component,
 		);
-		assert.equal(
-			envValue(role, "HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP"),
-			calls ? "true" : undefined,
-		);
+		assert.equal(envValue(role, "HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP"), "true");
 		const policy = resources.find(
 			(resource) =>
 				kindOf(resource) === "NetworkPolicy" &&
@@ -4077,7 +3929,7 @@ await test("a model endpoint on a private network reaches the server, never the 
 		const egress = list(get(policy, "spec", "egress"));
 		assert.equal(
 			egress.some((candidate) => isDeepStrictEqual(candidate, rule)),
-			calls,
+			true,
 			component,
 		);
 	}
@@ -4125,7 +3977,7 @@ await test("traces reach an in-cluster collector on the endpoint's port, only wh
 				list(get(policy, "spec", "egress")).some((egress) => isDeepStrictEqual(egress, rule)),
 			)
 			.map((policy) =>
-				["server", "webhook"].find((component) =>
+				["server"].find((component) =>
 					isDeepStrictEqual(
 						get(policy, "spec", "podSelector", "matchLabels"),
 						get(workload(resources, component), "spec", "selector", "matchLabels"),
@@ -4134,7 +3986,7 @@ await test("traces reach an in-cluster collector on the endpoint's port, only wh
 			)
 			.toSorted((left = "", right = "") => left.localeCompare(right));
 	};
-	const exporters = ["server", "webhook"];
+	const exporters = ["server"];
 	for (const [endpoint, port] of [
 		["http://otel-collector.observability.svc:4318/v1/traces", 4318],
 		["http://otel-collector.observability.svc:04318/v1/traces", 4318],
@@ -4228,7 +4080,6 @@ await test("a restore clone starts PostgreSQL alone before lockdown and migratio
 		reviews,
 		{
 			server: { replicas: 0 },
-			webhook: { replicas: 0 },
 			migration: { enabled: false },
 		},
 	]);
@@ -4248,7 +4099,7 @@ await test("a restore clone starts PostgreSQL alone before lockdown and migratio
 		),
 		1,
 	);
-	for (const component of ["server", "webhook"]) {
+	for (const component of ["server"]) {
 		assert.equal(
 			get(
 				resources.find(
@@ -4329,10 +4180,6 @@ await test("small PostgreSQL overrides the image calculator and gives each datab
 		assert.equal(envValue(role, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"), maximum);
 		assert.equal(envValue(role, "SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE"), minimum);
 	}
-	assert.equal(
-		envValue(workload(resources, "webhook"), "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"),
-		undefined,
-	);
 });
 
 const maxConnections = (layers: readonly Layer[]) => {
@@ -4363,7 +4210,6 @@ await test("restore configuration preserves max_connections while application ro
 	const paused = {
 		migration: { enabled: false },
 		server: { replicas: 0 },
-		webhook: { replicas: 0 },
 	};
 	assert.equal(maxConnections([...base, paused]), "max_connections=100");
 	const preserved = {
@@ -4432,13 +4278,13 @@ await test("disruption budgets protect singleton roles and select only their own
 			prepared,
 			operator,
 			sandboxLayer,
-			{ conversationLoop: { replicas }, webhook: { replicas: 2 } },
+			{ conversationLoop: { replicas } },
 		]);
 		const budgets = resources.filter((resource) => kindOf(resource) === "PodDisruptionBudget");
-		assert.equal(budgets.length, 5);
+		assert.equal(budgets.length, 4);
 		// The loops leave one Pod at a time where they have more than one; the one server stays.
 		const several = (component: string) => component === "conversation-loop" && replicas > 1;
-		for (const component of ["postgresql", "nats", "server", "conversation-loop", "webhook"]) {
+		for (const component of ["postgresql", "nats", "server", "conversation-loop"]) {
 			const budget = budgets.find((resource) => componentOf(resource) === component);
 			assert.ok(budget, component);
 			const spec = get(budget, "spec");
@@ -4650,7 +4496,7 @@ await test("chart list inputs keep their order in environment bindings for each 
 			envValue(server, "HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS"),
 			populated ? origins.join(",") : "",
 		);
-		for (const component of ["server", "webhook"]) {
+		for (const component of ["server"]) {
 			assert.equal(
 				envValue(workload(resources, component), "HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS"),
 				populated ? origins.join(",") : "",
@@ -4751,7 +4597,7 @@ await test("each sandbox kind has a cold-start template of one container, behind
 	assert.equal(get(podSpec(holder), "automountServiceAccountToken"), false);
 });
 
-await test("each provider's byte override reaches the webhook role through the map", () => {
+await test("each provider's byte override reaches the server through the map", () => {
 	const bounds = { github: "7GB", gitlab: "2GB", slack: "1GB", outline: "1GB" };
 	const resources = rendered([
 		...layersFor("small"),
@@ -4762,15 +4608,9 @@ await test("each provider's byte override reaches the webhook role through the m
 	]);
 	for (const [provider, bound] of Object.entries(bounds)) {
 		const name = `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_${provider.toUpperCase()}`;
-		assert.equal(envValue(workload(resources, "webhook"), name), bound, provider);
-		for (const role of ["server"]) {
-			assert.equal(env(workload(resources, role), name), undefined, `${role} ${provider}`);
-		}
+		assert.equal(envValue(workload(resources, "server"), name), bound, provider);
 	}
-	assert.equal(
-		env(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"),
-		undefined,
-	);
+	assert.equal(env(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"), undefined);
 });
 
 /** Kinds that have no namespace: a release without cluster-admin cannot create any of them. */

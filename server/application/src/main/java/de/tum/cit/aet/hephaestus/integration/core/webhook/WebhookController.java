@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -18,11 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
  * GitLab and Outline deliver only to their connection's own route. Slack interactivity stays on {@code /webhooks/slack/interactivity} because
  * Slack configures it as a separate Request URL, and it is served by the server role, which
  * commits the consent change before the ACK; the edge routes that one path there.
- *
- * <p>Active only on the webhook runtime role.
  */
 @RestController
-@ConditionalOnWebhookRole
+@ConditionalOnServerRole
 public class WebhookController {
 
     private final WebhookIngestPipeline pipeline;

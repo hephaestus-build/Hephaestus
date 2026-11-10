@@ -5,20 +5,16 @@ import java.util.List;
 import org.springframework.core.env.Environment;
 
 /**
- * The slices of one JAR a container can boot, and the flag that switches each off. Every role defaults
- * to on, so a JAR started with no flags is the single-JVM monolith; a production container turns off
- * the role it does not run (ADR 0005, ADR 0008). Beans gate on {@link ConditionalOnServerRole} or
- * {@link ConditionalOnWebhookRole}. The server also runs the agent sandboxes and their gateway.
+ * The role a container boots, and the flag that switches it off. The server is the only role: it receives provider
+ * deliveries, serves the API, and runs the agent sandboxes and their gateway (ADR 0005). Beans gate on
+ * {@link ConditionalOnServerRole}.
  */
 public enum RuntimeRole {
-    SERVER(RuntimeRole.SERVER_PROPERTY),
-    WEBHOOK(RuntimeRole.WEBHOOK_PROPERTY);
+    SERVER(RuntimeRole.SERVER_PROPERTY);
 
     public static final String PROPERTY_PREFIX = "hephaestus.runtime";
 
     public static final String SERVER_PROPERTY = PROPERTY_PREFIX + ".server.enabled";
-
-    public static final String WEBHOOK_PROPERTY = PROPERTY_PREFIX + ".webhook.enabled";
 
     /** Enables agent jobs and the LLM proxy on the server, off when unset. */
     public static final String AGENT_ENABLED_PROPERTY = "hephaestus.agent.enabled";

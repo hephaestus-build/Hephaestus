@@ -111,7 +111,6 @@ It retains keys for the largest live or configured `hephaestus.webhook.stream.ma
 A withheld limit reduction can leave the live bound longer than the configured one.
 An unavailable or unbounded stream keeps the keys and records a cleanup failure.
 Disabled NATS skips cleanup.
-The server and webhook roles must use the same stream retention configuration.
 The broker rejects replay after the original event has expired.
 Cleanup failure leaves keys in place and increments `integration_consumer_inbox_retention_failures_total`.
 [Alert response](../admin/production-operations-runbook#alert-response) owns the operator response.

@@ -1,16 +1,13 @@
 package de.tum.cit.aet.hephaestus.core;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * The application {@link Clock}. Deliberately not gated on a runtime role: every role injects it, and
- * gating it fails context refresh on the webhook role.
+ * The application {@link Clock}. Deliberately not gated on the runtime role: beans that every context needs inject it.
  */
 @Configuration
-@ReceiverComponent
 public class TimeConfig {
 
     @Bean

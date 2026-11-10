@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.release;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -21,7 +20,6 @@ import org.springframework.validation.annotation.Validated;
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.release")
-@ReceiverComponent
 public record ReleaseProperties(
         @Pattern(regexp = "|[a-f0-9]{40}", message = "must be empty or a full lowercase commit SHA") @DefaultValue("")
         String commit,

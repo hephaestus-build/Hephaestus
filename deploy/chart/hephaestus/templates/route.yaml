@@ -25,17 +25,7 @@ spec:
     - {{ .Values.host | quote }}
   # The most specific match wins, so the order below is for the reader only.
   rules:
-    # Slack interactivity commits a consent change on the server before Slack is acknowledged.
-    - matches:
-        - path:
-            type: Exact
-            value: /webhooks/slack/interactivity
-      filters:
-        - {{ toJson $hsts }}
-      backendRefs:
-        - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
-          port: 8080
-    # The receiver owns the full /webhooks/{kind} path. It is never rewritten.
+    # The server's receiver owns the full /webhooks/{kind} path. It is never rewritten.
     - matches:
         - path:
             type: PathPrefix
@@ -43,7 +33,7 @@ spec:
       filters:
         - {{ toJson $hsts }}
       backendRefs:
-        - name: {{ include "hephaestus.name" (dict "root" . "component" "webhook") }}
+        - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
           port: 8080
     # The server serves the API without the /api prefix. The auth
     # layer adds the prefix back to the browser-facing OAuth URLs.

@@ -251,7 +251,7 @@ This is the complete set Hephaestus consumes.
 GitHub's [event reference](https://docs.github.com/en/webhooks/webhook-events-and-payloads) lists each webhook type's permissions and availability.
 
 **A subscription without a consumer still has a cost.**
-The webhook role stores every delivery in its queue before a consumer check.
+The receiver stores every delivery in its queue before a consumer check.
 The bounded queue removes the oldest delivery first.
 A high-volume event family can remove pull-request and review deliveries that the queue needs to hold.
 For example, `workflow_job` alone can outnumber `pull_request` a hundredfold.
@@ -434,7 +434,7 @@ GitHub deliveries do **not** follow redirects.
 A redirect loses every event even if the URL works in a browser.
 
 1. Keep TLS verification enabled.
-2. Route `/webhooks/github` to the webhook runtime role.
+2. Route `/webhooks/github` to the server.
 
 Each environment needs its own GitHub App because an App has one webhook URL.
 
@@ -511,7 +511,7 @@ Leave the receiver's `WEBHOOK_SECRET` unchanged.
    For failures, use [delivery triage](#failed-deliveries-and-redelivery) and:
 
    ```bash
-   kubectl -n hephaestus logs -f deployment/hephaestus-webhook
+   kubectl -n hephaestus logs -f deployment/hephaestus-server
    ```
 
 8. On the **dedicated test App**, change the secret in **GitHub's App settings only**.

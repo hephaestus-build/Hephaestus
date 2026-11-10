@@ -106,7 +106,7 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
 
     @Test
     void shouldSupplyFrozenReadsAndTheCommandServiceOnTheServer() {
-        context.withPropertyValues("hephaestus.runtime.server.enabled=true", "hephaestus.runtime.webhook.enabled=false")
+        context.withPropertyValues("hephaestus.runtime.server.enabled=true")
                 .run(app -> {
                     assertThat(app).hasSingleBean(ReviewSnapshotQuery.class);
                     assertThat(app).hasSingleBean(ReviewStart.class);
@@ -122,20 +122,4 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                 });
     }
 
-    @Test
-    void shouldExcludeProductPreparationFromTheWebhookOnlyRole() {
-        context.withPropertyValues("hephaestus.runtime.server.enabled=false", "hephaestus.runtime.webhook.enabled=true")
-                .run(app -> {
-                    assertThat(app).doesNotHaveBean(PracticeReviewCoverageService.class);
-                    assertThat(app).doesNotHaveBean(ResultAdmissionPolicy.class);
-                    assertThat(app).doesNotHaveBean(ReviewSnapshotQuery.class);
-                    assertThat(app).doesNotHaveBean(ReviewStart.class);
-                    assertThat(app).doesNotHaveBean(ReviewClosure.class);
-                    assertThat(app).doesNotHaveBean(ReviewOutcomeMeters.class);
-                    assertThat(app).doesNotHaveBean(ResultViewQuery.class);
-                    assertThat(app).doesNotHaveBean(ResultPresentation.class);
-                    assertThat(app).doesNotHaveBean(ResultVisibilityPolicy.class);
-                    assertThat(app).doesNotHaveBean(ProductReferenceQuery.class);
-                });
-    }
 }

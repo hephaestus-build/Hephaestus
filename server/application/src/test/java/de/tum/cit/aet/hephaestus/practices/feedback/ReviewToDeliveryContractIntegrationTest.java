@@ -1086,7 +1086,6 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             "spring.datasource.password=" + System.getenv("LOST_SERVER_JDBC_PASSWORD"),
                             "spring.datasource.hikari.maximum-pool-size=4",
                             "hephaestus.runtime.server.enabled=true",
-                            "hephaestus.runtime.webhook.enabled=false",
                             "hephaestus.agent.enabled=true",
                             "hephaestus.sync.nats.enabled=false",
                             "hephaestus.sandbox.kubernetes.namespace=lost-server-sandboxes",

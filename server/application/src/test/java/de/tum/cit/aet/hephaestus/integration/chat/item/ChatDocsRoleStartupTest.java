@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.outline.OutlinePersonSourceIdentityContributor;
 import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentPermission;
 import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentProjector;
-import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentSelector;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.item.DocumentItemSource;
 import de.tum.cit.aet.hephaestus.integration.slack.capture.ConversationCaptureSource;
@@ -35,45 +34,6 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 class ChatDocsRoleStartupTest extends BaseUnitTest {
-    @Test
-    void shouldKeepDescriptorsAndOmitCaptureBeansWhenOnlyTheWebhookRoleStarts() {
-        new ApplicationContextRunner()
-                .withUserConfiguration(
-                        ThreadItemDescriptor.class,
-                        DocumentItemDescriptor.class,
-                        ThreadItemSource.class,
-                        DocumentItemSource.class,
-                        ThreadCaptureSource.class,
-                        SlackConversationProjector.class,
-                        OutlineDocumentProjector.class,
-                        OutlineDocumentSelector.class,
-                        OutlineDocumentPermission.class,
-                        OutlinePersonSourceIdentityContributor.class,
-                        ConversationCaptureSource.class,
-                        SlackPersonErasureService.class)
-                .withPropertyValues(
-                        "hephaestus.runtime.server.enabled=false",
-                        "hephaestus.runtime.webhook.enabled=true",
-                        "hephaestus.integration.slack.enabled=true",
-                        "hephaestus.integration.outline.enabled=true")
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context)
-                            .hasSingleBean(ThreadItemDescriptor.class)
-                            .hasSingleBean(DocumentItemDescriptor.class);
-                    assertThat(context)
-                            .doesNotHaveBean(ThreadItemSource.class)
-                            .doesNotHaveBean(DocumentItemSource.class)
-                            .doesNotHaveBean(ThreadCaptureSource.class)
-                            .doesNotHaveBean(SlackConversationProjector.class)
-                            .doesNotHaveBean(OutlineDocumentProjector.class)
-                            .doesNotHaveBean(OutlineDocumentSelector.class)
-                            .doesNotHaveBean(OutlineDocumentPermission.class)
-                            .doesNotHaveBean(OutlinePersonSourceIdentityContributor.class)
-                            .doesNotHaveBean(ConversationCaptureSource.class)
-                            .doesNotHaveBean(SlackPersonErasureService.class);
-                });
-    }
 
     @Test
     void shouldPublishCaptureAndErasureWhenTheServerRoleStarts() {
@@ -120,7 +80,6 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                         SlackPersonErasureService.class)
                 .withPropertyValues(
                         "hephaestus.runtime.server.enabled=true",
-                        "hephaestus.runtime.webhook.enabled=false",
                         "hephaestus.integration.slack.enabled=true",
                         "hephaestus.integration.outline.enabled=true")
                 .withBean(SlackThreadRepository.class, () -> mock(SlackThreadRepository.class))

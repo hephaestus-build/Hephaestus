@@ -212,7 +212,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         registry.add("hephaestus.sync.run-on-startup", () -> "true");
         // Production receives webhooks in its own container; this test publishes to the stream
         // itself.
-        registry.add("hephaestus.runtime.webhook.enabled", () -> "false");
     }
 
     /** The test profile's executor drops connect-time initialization; these tests run it. */

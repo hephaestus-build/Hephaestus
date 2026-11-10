@@ -126,14 +126,14 @@ The initial `ping` returns `200` even with a wrong secret, so it does not prove 
 
 ## Data appears only after a sync
 
-**Cause:** No provider webhook reaches the webhook role.
+**Cause:** No provider webhook reaches the server's `/webhooks` path.
 Without it, updates wait for the scheduled sync.
 
 **Fix:**
 
 1. Check that the provider webhook exists.
    [Connect GitHub](./github-integration) and [Manage workspace integrations](./integrations) give the setup of each provider.
-2. Check that its deliveries reach the webhook role.
+2. Check that its deliveries reach the server's `/webhooks` path.
 
 **Check:** A change to a pull request appears in the workspace without a wait for the scheduled sync.
 
@@ -144,7 +144,7 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
 
 **Fix:**
 
-1. Read `webhook.publish.reason` in the log records of the webhook role.
+1. Read `webhook.publish.reason` in the log records of the server.
 2. Check broker readiness, stream bounds, and volume space, as [Webhook ingestion operations](./webhook-ingestion-operations) describes.
 3. After the repair, recover the failed deliveries, as [Which providers deliver again](./webhook-ingestion-operations#which-providers-deliver-again) describes.
 

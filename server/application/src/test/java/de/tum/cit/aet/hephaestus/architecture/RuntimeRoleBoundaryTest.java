@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaAnnotation;
@@ -9,7 +8,6 @@ import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.properties.HasAnnotations;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import java.time.Clock;
 import java.util.List;
@@ -31,30 +29,25 @@ import org.springframework.stereotype.Component;
 /**
  * Pins the {@code hephaestus.runtime.*} gates: every role defaults to on, a bean gates through the
  * composed role annotations, and the beans each role must or must not load carry the right gate.
- * See ADR 0005 and ADR 0008.
+ * See ADR 0005.
  */
 class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
 
-    /**
-     * Single property-gated config per role. Controllers inside {@code integration.webhook} are
-     * implicitly gated via {@code @ConditionalOnBean(JetStreamPublisher.class)} — they auto-load
-     * iff {@link de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookConfiguration} loads, so
-     * listing them here would just duplicate the WebhookConfiguration gate.
-     */
+    /** Beans whose server-role gate is load-bearing. */
     private static final Map<String, String> EXPECTED_GATES = Map.ofEntries(
             Map.entry(
                     "de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookConfiguration",
-                    RuntimeRole.WEBHOOK_PROPERTY),
+                    RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.workspace.WorkspaceStartupListener", RuntimeRole.SERVER_PROPERTY),
-            // Admin surfaces and the services behind them are server-only: the webhook pod does not load
-            // core.auth, so an admin controller mapped there is a route with no authentication layer under it.
+            // Admin surfaces and the services behind them are server-only: a context without the server role does
+            // not load core.auth, so an admin controller mapped there is a route with no authentication layer under it.
             Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionAdminController",
                     RuntimeRole.SERVER_PROPERTY),
@@ -67,8 +60,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // NOT listed: InstanceLlmSettingsService. It is deliberately ungated — the workspace-scoped
             // read of the instance policy goes through it too, and the gate belongs on the admin surface.
             Map.entry("de.tum.cit.aet.hephaestus.agent.usage.LlmUsageAdminController", RuntimeRole.SERVER_PROPERTY),
-            // Server-only so the webhook pod never acquires an outbound dependency on
-            // ecb.europa.eu — this fetcher is the only egress the display-currency feature has.
+            // This fetcher is the only egress the display-currency feature has.
             Map.entry("de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateFetchScheduler", RuntimeRole.SERVER_PROPERTY),
             // Email leaves the instance from the server role only: the adapter, the listeners that feed the outbox,
             // the redelivery sweep and the admin verification surface all boot with it.
@@ -175,8 +167,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // doesn't cover it — pin it here. (The core.auth beans are covered by that structural test.)
             Map.entry(
                     "de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextFilter", RuntimeRole.SERVER_PROPERTY),
-            // Connection-management OAuth surface — server-only (the webhook never runs the OAuth
-            // connect dance). Gating these is what unblocks those pods past HmacOAuthStateService.
+            // Connection-management OAuth surface — server-only.
             Map.entry(
                     "de.tum.cit.aet.hephaestus.integration.core.oauth.state.HmacOAuthStateService",
                     RuntimeRole.SERVER_PROPERTY),
@@ -283,18 +274,15 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     }
 
     /**
-     * A role gate is written once, as {@code @ConditionalOnServerRole}, {@code @ConditionalOnWebhookRole} or
-     * {@code @ConditionalOnAgentRuntime}, so its default cannot be dropped on one bean. A further condition sits
+     * A role gate is written once, as {@code @ConditionalOnServerRole} or {@code @ConditionalOnAgentRuntime}, so its default cannot be dropped on one bean. A further condition sits
      * beside the composed annotation, since Boot requires every property condition on an element to match. The
      * exceptions are the composed annotations themselves. Each exception must still carry an inline gate, so one that
      * no longer needs exempting fails here.
      */
     @Test
     void runtimeRoleGatesUseTheComposedAnnotations() {
-        Set<String> exceptions = Set.of(
-                ConditionalOnServerRole.class.getName(),
-                ConditionalOnWebhookRole.class.getName(),
-                ConditionalOnAgentRuntime.class.getName());
+        Set<String> exceptions =
+                Set.of(ConditionalOnServerRole.class.getName(), ConditionalOnAgentRuntime.class.getName());
         List<String> gated = classes.stream()
                 .filter(c -> c.getFullName().startsWith("de.tum.cit.aet.hephaestus."))
                 .flatMap(c -> Stream.concat(
@@ -310,7 +298,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                 .as("Every exemption still carries an inline role gate; remove one that no longer does")
                 .containsAll(exceptions);
         assertThat(gated.stream().filter(element -> !exceptions.contains(element)))
-                .as("Gate on @ConditionalOnServerRole, @ConditionalOnWebhookRole or @ConditionalOnAgentRuntime, not on "
+                .as("Gate on @ConditionalOnServerRole or @ConditionalOnAgentRuntime, not on "
                         + "a property condition or expression naming a RuntimeRole property")
                 .isEmpty();
     }
@@ -325,31 +313,12 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
 
         assertThat(hosts)
                 .as("@EnableScheduling (direct or meta-annotated) must appear on exactly one class"
-                        + " (ServerSchedulingConfig); any other @Scheduled host relies on its absence on the"
-                        + " webhook role to no-op silently — keep that invariant load-bearing.")
+                        + " (ServerSchedulingConfig), so a context without the server role runs no @Scheduled method.")
                 .containsExactly("de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig");
     }
 
-    @Test
-    void webhookPackageIsIsolatedFromServerConcerns() {
-        noClasses()
-                .that()
-                .resideInAPackage("de.tum.cit.aet.hephaestus.integration.core.webhook..")
-                .should()
-                .dependOnClassesThat()
-                .resideInAnyPackage(
-                        "de.tum.cit.aet.hephaestus.workspace..",
-                        "de.tum.cit.aet.hephaestus.activity..",
-                        "de.tum.cit.aet.hephaestus.agent..")
-                .because("webhook receiver is a pure publish-only role; depending on workspace/activity/agent would"
-                        + " re-introduce the wiring leaks runtime testing already exposed (ObjectProvider cascade,"
-                        + " etc.) and break role isolation")
-                .check(classes);
-    }
-
     /**
-     * Every ungated bean that injects a server-gated bean crash-loops the webhook pod at
-     * context refresh. Full role-context tests must resolve those dependencies with
+     * Every ungated bean that injects a server-gated bean fails a context without the server role at refresh. Full role-context tests must resolve those dependencies with
      * {@code hephaestus.runtime.server.enabled=false}. {@link java.time.Clock} is injected by beans that
      * must load on every role — the config-audit recorder among them — so gating its provider breaks both
      * pods with the whole suite green.
@@ -370,7 +339,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
         assertThat(conditionalOnPropertyAnnotations(provider).findAny())
                 .as(
                         "%s provides the Clock bean and must NOT be runtime-role gated — ungated beans on every "
-                                + "role inject it, and gating it fails context refresh on the webhook role",
+                                + "context inject it, and gating it fails a context without the server role",
                         provider.getName())
                 .isEmpty();
     }
@@ -413,8 +382,8 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     void allAuthStereotypeBeansAreServerGated() {
         // The whole core.auth module is the user-facing web/auth surface — server-role only, EXCEPT the
         // cross-role SPI query impls (see CROSS_ROLE_AUTH_SPI_IMPLS). This is the real drift guard: any new
-        // auth stereotype bean added without @ConditionalOnServerRole would re-break the webhook
-        // pods (server.enabled=false). Repositories (interfaces, JPA-only) and @ConfigurationProperties
+        // auth stereotype bean added without @ConditionalOnServerRole would break a context with
+        // server.enabled=false. Repositories (interfaces, JPA-only) and @ConfigurationProperties
         // records are not stereotypes.
         List<String> ungated = classes.stream()
                 .filter(c -> c.getPackageName().startsWith("de.tum.cit.aet.hephaestus.core.auth"))

@@ -49,7 +49,7 @@ await test("release upgrade runs the server topology without optional infrastruc
 	// The previous release turns its worker role off, and the candidate its agent runtime.
 	assert.match(upgradeDrill, /"HEPHAESTUS_RUNTIME_WORKER_ENABLED=false"/u);
 	assert.match(upgradeDrill, /"AGENT_ENABLED=false"/u);
-	assert.match(upgradeDrill, /"HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false"/u);
+	assert.doesNotMatch(upgradeDrill, /HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED/u);
 	assert.match(upgradeDrill, /"HEPHAESTUS_SYNC_NATS_ENABLED=false"/u);
 	assert.doesNotMatch(upgradeDrill, /"NATS_ENABLED=false"/u);
 });

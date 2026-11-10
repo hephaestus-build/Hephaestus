@@ -61,7 +61,6 @@ if (has("deployment")) {
 	const role = /component=([\\w-]+)/.exec(args.join(" "))[1];
 	const deployments = state.deployments ?? {
 		server: ["server"],
-		webhook: ["webhook"],
 		"conversation-loop": ["conversation-loop"],
 	};
 	for (const name of deployments[role] ?? []) {
@@ -676,7 +675,7 @@ const restarts = (argv: string) =>
 		.filter((line) => line.includes('"rollout"') && line.includes('"restart"'))
 		.map((line) => /deployment\.apps\/hephaestus-(?<role>[\w-]+)/u.exec(line)?.groups?.role ?? "");
 
-/** Each rollout command in order, as "restart webhook" or "status webhook". */
+/** Each rollout command in order, as "restart server" or "status server". */
 const rollouts = (argv: string) =>
 	argv
 		.split("\n")
@@ -743,7 +742,7 @@ await test(
 );
 
 await test(
-	"--rotate keeps the routing secret as the previous one, and restarts both roles that read it",
+	"--rotate keeps the routing secret as the previous one, and restarts the server that reads it",
 	{ skip },
 	() => {
 		const first = run();
@@ -760,8 +759,8 @@ await test(
 		assert.notEqual(result.secret.WEBHOOK_ROUTING_SECRET, first.secret.WEBHOOK_ROUTING_SECRET);
 		assert.deepEqual(
 			rollouts(result.argv),
-			["restart webhook", "status webhook", "restart server", "status server"],
-			"the server restarts only once the webhook pods hold both values",
+			["restart server", "status server"],
+			"the server restarts and is ready again",
 		);
 		assert.deepEqual(
 			withoutRouting(result.secret),
@@ -786,15 +785,14 @@ await test(
 		assert.deepEqual(again.secret, result.secret);
 		assert.deepEqual(restarts(again.argv), []);
 
-		// Webhook pods that never become ready keep the server on the old value, and the run says so.
+		// A server that never becomes ready fails the run, and the run says so.
 		const stuck = run({
-			cluster: { secret: encoded(first.secret), unready: ["webhook"] },
+			cluster: { secret: encoded(first.secret), unready: ["server"] },
 			args: ["--rotate", "WEBHOOK_ROUTING_SECRET"],
 		});
 		assert.notEqual(stuck.status, 0);
-		assert.deepEqual(restarts(stuck.argv), ["webhook"], "the server does not restart");
-		assert.match(stuck.output, /hephaestus-webhook restarted, but it is not ready/u);
-		assert.match(stuck.output, /did not restart yet: deployment\.apps\/hephaestus-server\./u);
+		assert.deepEqual(restarts(stuck.argv), ["server"]);
+		assert.match(stuck.output, /hephaestus-server restarted, but it is not ready/u);
 	},
 );
 

@@ -32,12 +32,10 @@ public final class ConfigurationReadinessEvaluator {
 
     public List<ConfigurationFactDTO> evaluateDeployment() {
         BooleanSetting serverRole = booleanSetting(RuntimeRole.SERVER_PROPERTY, true);
-        BooleanSetting webhookRole = booleanSetting(RuntimeRole.WEBHOOK_PROPERTY, true);
         boolean server = serverRole.value();
         BooleanSetting agentJobs = booleanSetting(RuntimeRole.AGENT_ENABLED_PROPERTY, false);
         // The server runs the agent sandboxes when agent jobs are on.
         boolean agents = server && agentJobs.valid() && agentJobs.value();
-        boolean webhook = webhookRole.value();
         List<ConfigurationFactDTO> facts = new ArrayList<>();
 
         add(
@@ -47,10 +45,9 @@ public final class ConfigurationReadinessEvaluator {
                 allRoles(),
                 ConfigurationRequirement.REQUIRED,
                 true,
-                serverRole.valid() && webhookRole.valid() && (server || webhook),
-                "At least one runtime role must be enabled.",
+                serverRole.valid() && server,
+                "The server role must be enabled.",
                 "runtime-roles");
-        // The webhook receiver holds no database and no stored secrets (ADR 0066).
         boolean database = server;
         addDatabaseFacts(facts, roles(RuntimeRole.SERVER), database);
         add(
@@ -98,9 +95,9 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "webhook.shared-secret",
                 "hephaestus.webhook.secret",
-                roles(RuntimeRole.SERVER, RuntimeRole.WEBHOOK),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.REQUIRED,
-                server || webhook,
+                server,
                 this::validWebhookSecret,
                 "A webhook secret of at least 32 printable ASCII characters is required.",
                 "webhooks");
@@ -108,9 +105,9 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "webhook.routing-secret",
                 "hephaestus.webhook.routing.secret",
-                roles(RuntimeRole.SERVER, RuntimeRole.WEBHOOK),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.REQUIRED,
-                server || webhook,
+                server,
                 value -> validWebhookSecret(value) && !Objects.equals(value, property("hephaestus.webhook.secret")),
                 "A routing secret is required to register and verify GitLab group hooks and Outline subscriptions. "
                         + "It must have at least 32 printable ASCII characters and differ from the webhook secret.",
@@ -122,16 +119,16 @@ public final class ConfigurationReadinessEvaluator {
                 allRoles(),
                 ConfigurationRequirement.REQUIRED,
                 true,
-                validNatsRoleContract(server, webhook),
-                "NATS must be enabled for ingestion in the server and webhook roles.",
+                validNatsRoleContract(server),
+                "NATS must be enabled for ingestion in the server role.",
                 "nats");
         add(
                 facts,
                 "nats.server",
                 "hephaestus.sync.nats.server",
-                roles(RuntimeRole.SERVER, RuntimeRole.WEBHOOK),
+                roles(RuntimeRole.SERVER),
                 ConfigurationRequirement.REQUIRED,
-                server || webhook,
+                server,
                 this::validNatsUri,
                 "An explicit nats:// or tls:// server URI is required.",
                 "nats");
@@ -342,9 +339,9 @@ public final class ConfigurationReadinessEvaluator {
         return setting.valid() && !setting.value();
     }
 
-    private boolean validNatsRoleContract(boolean server, boolean webhook) {
+    private boolean validNatsRoleContract(boolean server) {
         BooleanSetting nats = booleanSetting("hephaestus.sync.nats.enabled", false);
-        return nats.valid() && nats.value() == (server || webhook);
+        return nats.valid() && nats.value() == server;
     }
 
     private boolean validEncryptionKey(@Nullable String value) {
@@ -412,7 +409,7 @@ public final class ConfigurationReadinessEvaluator {
     }
 
     private static List<RuntimeRole> allRoles() {
-        return List.of(RuntimeRole.SERVER, RuntimeRole.WEBHOOK);
+        return List.of(RuntimeRole.SERVER);
     }
 
     private static List<RuntimeRole> roles(RuntimeRole... roles) {

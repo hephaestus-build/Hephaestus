@@ -792,13 +792,8 @@
 		"webhook": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["replicas", "stream", "resources"],
+			"required": ["stream"],
 			"properties": {
-				"replicas": {
-					"type": "integer",
-					"minimum": 0,
-					"maximum": 3
-				},
 				"stream": {
 					"type": "object",
 					"additionalProperties": false,
@@ -835,9 +830,6 @@
 							"$ref": "#/definitions/duration"
 						}
 					}
-				},
-				"resources": {
-					"$ref": "#/definitions/resources"
 				}
 			}
 		},

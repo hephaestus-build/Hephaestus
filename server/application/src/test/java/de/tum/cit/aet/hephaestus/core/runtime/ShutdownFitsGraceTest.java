@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.convert.DurationStyle;
 
 /**
- * Each role stops within the grace that Kubernetes gives it: the preStop pause, every shutdown phase at
+ * The server stops within the grace that Kubernetes gives it: the preStop pause, every shutdown phase at
  * its timeout, the waits that run after the phases, and a margin for JPA, Hikari and the JVM's exit. The grace values
  * live in the chart, the phases in the code and {@code application.yml}; this test keeps them
  * together.
@@ -31,6 +31,7 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
     void shouldStopTheServerWithinItsGrace() throws IOException {
         Duration stop = preStop("server.yaml")
                 .plus(httpPhase())
+                .plus(applicationDuration("drain-timeout"))
                 .plus(IntegrationNatsConsumer.SHUTDOWN_WAIT)
                 .plus(MARGIN);
 
@@ -46,18 +47,11 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
         Duration beyondDrain = preStop("server.yaml")
                 .plus(AgentShutdownConfiguration.drainPhaseTimeout(Duration.ZERO))
                 .plus(httpPhase())
+                .plus(applicationDuration("drain-timeout"))
                 .plus(IntegrationNatsConsumer.SHUTDOWN_WAIT)
                 .plus(MARGIN);
 
         assertThat(Duration.ofSeconds(Long.parseLong(serverGrace().group(1)))).isGreaterThanOrEqualTo(beyondDrain);
-    }
-
-    @Test
-    void shouldStopTheWebhookReceiverWithinItsGrace() throws IOException {
-        Duration stop = httpPhase().plus(applicationDuration("drain-timeout")).plus(MARGIN);
-
-        assertThat(chartGrace("webhook.yaml"))
-                .isGreaterThanOrEqualTo(preStop("webhook.yaml").plus(stop));
     }
 
     /** The server's grace: group 1 is the constant added to the drain with sandboxes, group 2 the grace without. */
@@ -93,13 +87,6 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
         Matcher matcher = Pattern.compile("preStop:\\s+sleep:\\s+seconds: (\\d+)")
                 .matcher(read("deploy/chart/hephaestus/templates/_helpers.tpl"));
         assertThat(matcher.find()).isTrue();
-        return Duration.ofSeconds(Long.parseLong(matcher.group(1)));
-    }
-
-    private static Duration chartGrace(String template) throws IOException {
-        Matcher matcher = Pattern.compile("terminationGracePeriodSeconds: (\\d+)")
-                .matcher(read("deploy/chart/hephaestus/templates/" + template));
-        assertThat(matcher.find()).as(template).isTrue();
         return Duration.ofSeconds(Long.parseLong(matcher.group(1)));
     }
 

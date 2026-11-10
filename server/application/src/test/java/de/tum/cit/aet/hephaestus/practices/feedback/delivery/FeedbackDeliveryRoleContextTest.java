@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackMarkListener;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPreparationStore;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicHistory;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackReadService;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackStoreService;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousPracticePageFeedback;
@@ -60,17 +59,6 @@ class FeedbackDeliveryRoleContextTest {
             .withUserConfiguration(SERVER_READ_HELPERS.toArray(Class<?>[]::new));
 
     @Test
-    void shouldBootWebhookWithoutFeedbackPersistence() {
-        runner.withPropertyValues(RuntimeRole.SERVER_PROPERTY + "=false", RuntimeRole.WEBHOOK_PROPERTY + "=true")
-                .run(context -> {
-                    assertThat(context).hasNotFailed().doesNotHaveBean(FeedbackRepository.class);
-                    CAPTURE_HELPERS.forEach(type -> assertThat(context).doesNotHaveBean(type));
-                    assertThat(context).doesNotHaveBean(ConversationFeedbackTtlPurger.class);
-                    SERVER_READ_HELPERS.forEach(type -> assertThat(context).doesNotHaveBean(type));
-                });
-    }
-
-    @Test
     void shouldCreateActualPreparationAndHistoryHelpersOnTheServer() {
         var dependencies = new LinkedHashSet<Class<?>>();
         var helpers = new LinkedHashSet<>(CAPTURE_HELPERS);
@@ -80,14 +68,12 @@ class FeedbackDeliveryRoleContextTest {
                 .forEach(dependencies::add));
         ApplicationContextRunner configured = runner;
         for (Class<?> dependency : dependencies) configured = withMock(configured, dependency);
-        configured
-                .withPropertyValues(RuntimeRole.SERVER_PROPERTY + "=true", RuntimeRole.WEBHOOK_PROPERTY + "=false")
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    CAPTURE_HELPERS.forEach(type -> assertThat(context).hasSingleBean(type));
-                    assertThat(context).hasSingleBean(ConversationFeedbackTtlPurger.class);
-                    SERVER_READ_HELPERS.forEach(type -> assertThat(context).hasSingleBean(type));
-                });
+        configured.withPropertyValues(RuntimeRole.SERVER_PROPERTY + "=true").run(context -> {
+            assertThat(context).hasNotFailed();
+            CAPTURE_HELPERS.forEach(type -> assertThat(context).hasSingleBean(type));
+            assertThat(context).hasSingleBean(ConversationFeedbackTtlPurger.class);
+            SERVER_READ_HELPERS.forEach(type -> assertThat(context).hasSingleBean(type));
+        });
     }
 
     private static <T> ApplicationContextRunner withMock(ApplicationContextRunner context, Class<T> type) {

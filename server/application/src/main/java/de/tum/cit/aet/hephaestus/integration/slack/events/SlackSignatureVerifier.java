@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
-import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -10,35 +8,17 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.AnyNestedCondition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
 /**
- * Verifies Slack's v0 request signatures with the app signing secret. The webhook role verifies Events API deliveries
- * before it publishes them; the server role verifies interactivity requests, whose consent changes it commits before
- * Slack is acknowledged.
+ * Verifies Slack's v0 request signatures with the app signing secret: Events API deliveries before they are published,
+ * and interactivity requests, whose consent changes commit before Slack is acknowledged.
  */
 @Component
-@Conditional(SlackSignatureVerifier.ServerOrWebhookRole.class)
+@ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
-@ReceiverComponent
 public class SlackSignatureVerifier {
-
-    /** Matches when either role runs in this process; the two role annotations on one class would require both. */
-    static final class ServerOrWebhookRole extends AnyNestedCondition {
-
-        ServerOrWebhookRole() {
-            super(ConfigurationPhase.PARSE_CONFIGURATION);
-        }
-
-        @ConditionalOnServerRole
-        static final class ServerRole {}
-
-        @ConditionalOnWebhookRole
-        static final class WebhookRole {}
-    }
 
     private static final long MAX_SKEW_SECONDS = 300;
     private static final String HMAC_ALG = "HmacSHA256";

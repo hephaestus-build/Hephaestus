@@ -99,7 +99,7 @@ The new Pods wait for the migrated schema, and the previous release serves until
 The timeout is longer than the 10 minutes that a new Pod waits for the schema.
 
 The server uses `Recreate` and stops before its new version starts.
-The webhook role rolls. In the single-node profile, the server drains and stops before its replacement starts.
+In the single-node profile, the server drains and stops before its replacement starts.
 The replacement proves the cluster with the isolation probe before it claims work.
 
 An old server drains for up to `server.drainTimeoutSeconds`, and Kubernetes no longer counts it while it stops.
@@ -129,11 +129,11 @@ After phase 1, take and verify the final restore point while all roles are stopp
 Verify the new release's chart before you use it.
 Each phase is a separate `helm upgrade` with that phase's chart, profile and site values:
 
-| Phase | Chart | `migration.enabled` | `server.replicas` | `webhook.replicas` | Before the next phase |
-| --- | --- | --- | --- | --- | --- |
-| 1. Stop every role | Current release | `false` | 0 | 0 | Every old role Pod, including terminating Pods, and its sandbox Pods and Jobs are gone. |
-| 2. Migrate | New release | `true` | 0 | 0 | The migration Job of this revision completed successfully. |
-| 3. Start the new roles | New release | `true` | Recorded count | Recorded count | Readiness, authenticated reads, a practice review and a conversation pass. |
+| Phase | Chart | `migration.enabled` | `server.replicas` | Before the next phase |
+| --- | --- | --- | --- | --- |
+| 1. Stop every role | Current release | `false` | 0 | Every old role Pod, including terminating Pods, and its sandbox Pods and Jobs are gone. |
+| 2. Migrate | New release | `true` | 0 | The migration Job of this revision completed successfully. |
+| 3. Start the new roles | New release | `true` | Recorded count | Readiness, authenticated reads, a practice review and a conversation pass. |
 
 Keep PostgreSQL and NATS running throughout these phases.
 Use `server.replicas=0`, not `sandbox.enabled=false`, to stop the server.
@@ -321,7 +321,7 @@ A rollback adds the older release again.
 
 The time is when the server first started that release, not when its images were pulled.
 The history names no person.
-Each server and webhook server reports its own identity in `/actuator/info` only.
+Each server reports its own identity in `/actuator/info` only.
 
 ## Release-specific procedures
 

@@ -96,6 +96,7 @@ The migration guide owns each change. This table gives the names.
 | Site file | `server.conversationTurns` | `conversationLoop.turns`, a count for the whole installation | *Stop every role for the conversation loop* |
 | Site file | `worker.enabled`, `worker.sandbox.*`, `worker.runtime`, `worker.sandboxGateway.maxConnections`, `networkPolicy.workerGatewayPorts`, and the worker's drain, pool, git cache and resources | `sandbox.enabled`, `sandbox.*`, `sandbox.runtime`, `sandbox.gateway.maxConnections`, `networkPolicy.modelGatewayPorts`, and the same settings under `server` | *Move the worker values to the server and the sandboxes* |
 | Site file | `worker.replicas`, `worker.rolloutStrategy` | No key. `server.replicas` counts the servers. | *Move the worker values to the server and the sandboxes* |
+| Site file | `webhook.replicas`, `webhook.resources` | None: the server receives provider webhooks | *Route provider webhooks to the server* |
 | Profile | `small-16gib` in `HEPHAESTUS_CHART_PROFILE` and `profiles/small-16gib.yaml` | `small` and `profiles/small.yaml` | *Use the small profile on every single-node install* |
 | Server settings | `hephaestus.agent.max-retries` | `hephaestus.agent.capacity.review-retries`. `AGENT_MAX_RETRIES` still works. | *Stop every role before moving review leases to agent runs* |
 | Secret | `DATABASE_USERNAME`, `DATABASE_PASSWORD` | `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD` for the bundled PostgreSQL, and the new `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` | *Give each database purpose its own login* |
@@ -191,8 +192,8 @@ Each step names the page that owns it.
    - The pre-pull DaemonSet is ready on every sandbox node: `kubectl --namespace hephaestus rollout status daemonset/hephaestus-agent-image`.
      It keeps the agent image on each node, because a cold pull takes longer than the start of a sandbox.
 10. Start the new roles.
-    Do phase 3 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the recorded replica counts.
-    A server claims no work until its isolation probe passes.
+    Do phase 3 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the recorded server count. 1.0 has no worker and no webhook role.
+    A server starts no sandbox until its isolation probe passes.
     The gate needs a running server, because a sandbox must reach the gateway.
     Thus, run the gate for each template now, as [Sandbox templates](./sandboxes#sandbox-templates) describes.
     If it fails, fix the policy enforcement of the network plugin before you go on.

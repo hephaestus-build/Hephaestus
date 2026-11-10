@@ -12,7 +12,6 @@ Each one stops the roles that the work affects, and starts them again afterwards
 
 PodDisruptionBudgets block voluntary eviction of the bundled PostgreSQL and NATS Pods, the server and a singleton conversation loop.
 With two or more servers, at most one server can be unavailable. The same applies to the conversation loop.
-The webhook budget applies only above one replica and keeps at least one receiver available.
 Each budget selects one role in one release. Sandbox Pods have no budget.
 
 These budgets do not prevent pressure eviction or OOM, and they do not provide high availability on one node.
@@ -40,14 +39,12 @@ Keep PostgreSQL and NATS running until the servers have drained:
 
    Check the sandbox namespace: `kubectl --namespace hephaestus-sandboxes get pods`. Expect no Pods.
    Do not proceed while server Pods or sandbox Pods remain.
-5. Stop the receiver: `kubectl --namespace hephaestus scale deployment/hephaestus-webhook --replicas=0`.
-   Verify that both roles have stopped: `kubectl --namespace hephaestus wait --for=delete pod -l 'app.kubernetes.io/instance=hephaestus,app.kubernetes.io/component in (server,webhook)' --timeout=5m`.
-6. List the release's budgets: `kubectl --namespace hephaestus get pdb -l app.kubernetes.io/instance=hephaestus`.
+5. List the release's budgets: `kubectl --namespace hephaestus get pdb -l app.kubernetes.io/instance=hephaestus`.
    Remove only these budgets for this maintenance: `kubectl --namespace hephaestus delete pdb -l app.kubernetes.io/instance=hephaestus`.
-7. Drain the node: `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data --timeout=10m`.
+6. Drain the node: `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data --timeout=10m`.
    The emptyDir data is disposable sandbox and cache data. Persistent volumes remain.
    If another workload's budget blocks the drain, follow its maintenance procedure.
-8. Complete the host work and uncordon the node: `kubectl uncordon <node>`.
+7. Complete the host work and uncordon the node: `kubectl uncordon <node>`.
    Reapply the verified release with its saved values and replica counts through [Upgrades](./upgrade#upgrade-a-schema-compatible-release).
    This restores the budgets. Verify that the roles and budgets are ready before you resume reconciliation.
 
@@ -58,8 +55,8 @@ After a reboot or an interrupted drain, fenced attempts retry through durable re
 ## Database maintenance
 
 Use this procedure when the release notes require it, before you change PostgreSQL itself, or before you change the CA in its TLS Secret.
-The server is the database role.
-The webhook role has no database, so it keeps receiving deliveries into NATS JetStream through every phase.
+The server is the database role and receives provider deliveries. Reception stops during these phases.
+GitHub redelivers failed deliveries, Slack retries them, and the routine sync repairs GitLab and Outline.
 Each phase is one `helm upgrade` with the replica counts of that phase:
 
 | Phase | `server.replicas` | Before the next phase |
@@ -67,7 +64,7 @@ Each phase is one `helm upgrade` with the replica counts of that phase:
 | 1. Stop the writers | 0 | The old server Pods and their sandbox Pods are gone. |
 | 2. Change the database | 0 | PostgreSQL is ready and accepts connections. |
 | 3. Migrate | 0 | The migration Job of the revision completed. |
-| 4. Restore | The prior count | The server is ready and consumes the deliveries received meanwhile. |
+| 4. Restore | The prior count | The server is ready and receives provider deliveries. |
 
 Phase 1 uses the verified chart and the values of the current release, with only the server count changed.
 After the servers stop, remove the remaining sandbox workloads as in step 4 of [Planned node maintenance](#planned-node-maintenance) before phase 2.
@@ -83,7 +80,7 @@ A count of 0 is a desired state.
 Check on the cluster that the pods stopped, that the sandbox Pods and Jobs are gone, and that the migrations completed before the next phase.
 Set `server.replicas=0` to stop the servers.
 `sandbox.enabled=false` removes the sandbox objects.
-A change of NATS itself stops reception: while NATS is down, the receiver answers deliveries with `503`, and each provider decides whether it retries.
+A change of NATS itself stops reception: while NATS is down, the server answers deliveries with `503`, and each provider decides whether it retries.
 
 ## Check that it worked
 

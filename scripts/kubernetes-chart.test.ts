@@ -340,10 +340,7 @@ await test("the schema refuses settings the chart does not own", () => {
 	const valid = install(prepared, operator);
 	assert.equal(validate(valid), true, JSON.stringify(validate.errors));
 	// Each database role runs at most its bound, and zero stops it for maintenance.
-	for (const [role, bound, fallback] of [
-		["server", 1, 1],
-		["webhook", 3, 1],
-	] as const) {
+	for (const [role, bound, fallback] of [["server", 1, 1]] as const) {
 		assert.equal(at(defaults, [role, "replicas"]), fallback, `${role} default`);
 		for (const replicas of [0, bound]) {
 			const change = { [role]: { replicas } };
@@ -355,9 +352,7 @@ await test("the schema refuses settings the chart does not own", () => {
 		["a pod spec hatch", { server: { podSpec: { hostNetwork: true } } }],
 		["a second server replica", { server: { replicas: 2 } }],
 		["a negative server count", { server: { replicas: -1 } }],
-		["a fourth webhook receiver", { webhook: { replicas: 4 } }],
-		["a negative webhook count", { webhook: { replicas: -1 } }],
-		["a fractional webhook count", { webhook: { replicas: 0.5 } }],
+		["a fractional server count", { server: { replicas: 0.5 } }],
 		["the retired worker role", { worker: { replicas: 1 } }],
 		["an inline secret value", { secret: { name: "hephaestus", WEBHOOK_SECRET: "x" } }],
 		["an sslmode the chart does not offer", { postgresql: { external: { sslmode: "allow" } } }],
@@ -380,7 +375,7 @@ await test("the schema refuses settings the chart does not own", () => {
 		["every pod of the Gateway namespace", { networkPolicy: { gateway: { podLabels: null } } }],
 		["a Gateway parent without a name", { route: { parentRefs: [{ name: "" }] } }],
 		["a zero CPU limit", { server: { resources: { limits: { cpu: "0" } } } }],
-		["a zero memory request", { webhook: { resources: { requests: { memory: "0Mi" } } } }],
+		["a zero memory request", { server: { resources: { requests: { memory: "0Mi" } } } }],
 		[
 			"a zero ephemeral-storage limit",
 			{ webapp: { resources: { limits: { "ephemeral-storage": "0.0" } } } },
@@ -421,11 +416,9 @@ await test("no template grants host or Docker access, or adds a migration owner"
 	assert.doesNotMatch(source("postgresql-backup.yaml"), /application-server|SPRING_/u);
 	// The server is the only role that runs Liquibase.
 	assert.doesNotMatch(source("server.yaml"), /SPRING_LIQUIBASE_ENABLED/u);
-	assert.match(source("webhook.yaml"), /SPRING_LIQUIBASE_ENABLED\n\s*value: "false"/u);
 	assert.match(source("server.yaml"), /SPRING_PROFILES_ACTIVE\n\s*value: prod\n/u);
-	// Roles stay split: the server never receives webhooks, and the receiver never serves the API or runs reviews.
-	assert.match(source("server.yaml"), /HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED\n\s*value: "false"/u);
-	assert.match(source("webhook.yaml"), /HEPHAESTUS_RUNTIME_SERVER_ENABLED\n\s*value: "false"/u);
+	// The server receives provider deliveries itself: no role flag splits it.
+	assert.doesNotMatch(source("server.yaml"), /HEPHAESTUS_RUNTIME_\w+_ENABLED/u);
 	// The server runs the agent runtime exactly when it runs the sandboxes.
 	assert.match(
 		source("server.yaml"),
@@ -457,8 +450,7 @@ await test("the route strips only /api and keeps every webhook path whole", () =
 		assert.equal(found.length, 1, `${type} ${value}`);
 		return found[0] ?? "";
 	};
-	assert.deepEqual(backendOf(rule("Exact", "/webhooks/slack/interactivity")), ["server", "8080"]);
-	assert.deepEqual(backendOf(rule("PathPrefix", "/webhooks")), ["webhook", "8080"]);
+	assert.deepEqual(backendOf(rule("PathPrefix", "/webhooks")), ["server", "8080"]);
 	assert.deepEqual(backendOf(rule("PathPrefix", "/api")), ["server", "8080"]);
 	assert.deepEqual(backendOf(rule("PathPrefix", "/")), ["webapp", "8080"]);
 	assert.match(
@@ -466,7 +458,6 @@ await test("the route strips only /api and keeps every webhook path whole", () =
 		/type: URLRewrite\n\s*urlRewrite:\n\s*path:\n\s*type: ReplacePrefixMatch\n\s*replacePrefixMatch: \/\n/u,
 	);
 	for (const [type, value] of [
-		["Exact", "/webhooks/slack/interactivity"],
 		["PathPrefix", "/webhooks"],
 		["PathPrefix", "/"],
 	] as const) {

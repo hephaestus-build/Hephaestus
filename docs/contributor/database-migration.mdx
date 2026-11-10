@@ -259,7 +259,7 @@ as triggers, partitioning and partial-index predicates. Verify those through dat
 
 ### Previous release on the new schema
 
-After the upgrade from the previous stable release, the driver runs the previous release in three ways:
+After the upgrade from the previous stable release, the driver runs the previous release in two ways:
 
 1. **Previous server on the new schema.** The previous release starts while the candidate runs.
    It runs the server and its agent runtime in one process, with the Docker sandbox and its own agent image.
@@ -272,16 +272,6 @@ After the upgrade from the previous stable release, the driver runs the previous
    Then the migration runs again and must complete.
    If no later change set runs DDL, the migration completes.
    The log then says that no partial schema exists.
-3. **Webhook role.** The webhook receivers of both releases publish the same GitHub and GitLab delivery to NATS.
-   Apart from the delivery id, the two stream messages must have the same subject and body.
-   The candidate must keep each header of the previous release with its value. It can add a header.
-
-The webhook receiver reads no database (ADR 0066).
-Its risk is the NATS contract with the server of the other release: the message headers and the key-value buckets that the server projects.
-Each release tests its own receiver against its own consumer.
-Thus, the server of the previous release reads the messages of the candidate's receiver.
-The test does not prove that the candidate's server reads a message without a header that the candidate added.
-
 Hibernate does not validate native queries, such as the claim queries of the review queue.
 Thus, the driver queues one review the way the candidate's enqueue path writes it.
 The review comes from the candidate's `practice-native/result-parent.sql` fixture.

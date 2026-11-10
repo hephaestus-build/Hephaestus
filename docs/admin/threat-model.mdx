@@ -39,7 +39,7 @@ Hephaestus must meet these security objectives:
 ```mermaid
 flowchart LR
 accTitle: Hephaestus security data flow
-accDescr: The diagram separates independently controlled systems, the operator edge, the Hephaestus application and data plane, and untrusted sandbox execution. Users and providers cross the edge into application and webhook roles. Verified events enter JetStream, services access PostgreSQL, sandboxes exchange inputs, results and model requests with the server's sandbox gateway, and the server fetches repository mirrors from the SCM provider in-process.
+accDescr: The diagram separates independently controlled systems, the operator edge, the Hephaestus application and data plane, and untrusted sandbox execution. Users and providers cross the edge into the application server, whose receiver verifies webhook events. Verified events enter JetStream, services access PostgreSQL, sandboxes exchange inputs, results and model requests with the server's sandbox gateway, and the server fetches repository mirrors from the SCM provider in-process.
 
   subgraph INTERNET[Independently controlled systems]
     U[Browser / member]
@@ -54,7 +54,7 @@ accDescr: The diagram separates independently controlled systems, the operator e
 
   subgraph PLANE[Operator-managed application and data plane]
     A[Application server]
-    W[Webhook role]
+    W[Webhook receiver in the server]
     I[Integration consumer]
     L[LLM proxy]
     N[(NATS JetStream)]
@@ -89,7 +89,6 @@ The [chart topology](./overview#architecture-and-network) shows the Pods and the
 [Network egress](./network-egress) lists every outbound destination.
 
 Only the server role creates sandbox Jobs and Pods in the release's restricted sandbox namespace, and only with `sandbox.enabled`.
-The webhook role has no sandbox RBAC.
 No application role mounts a container daemon socket.
 
 A deny-all NetworkPolicy covers that namespace.
@@ -139,7 +138,7 @@ Each table links threats to enforcement, verification, and residual risk.
 | WH-2 — oversized input or queue overload         | Require a declared request size within the configured limit and fail startup when the broker cannot accept that size.                                            | [`WebhookPayloadSizeFilter`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/webhook/WebhookPayloadSizeFilter.java), [`WebhookPayloadCapacityCheck`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/webhook/WebhookPayloadCapacityCheck.java) | [`WebhookPayloadSizeFilterTest`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/test/java/de/tum/cit/aet/hephaestus/integration/core/webhook/WebhookPayloadSizeFilterTest.java), [`WebhookPayloadCapacityCheckTest`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/test/java/de/tum/cit/aet/hephaestus/integration/core/webhook/WebhookPayloadCapacityCheckTest.java)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Volumetric filtering and rate limiting remain edge responsibilities.                                                                                                                                                                                   |
 | WH-3 — acknowledged loss or duplicate processing | Events selected for durable processing return success only after JetStream accepts them. Per-kind stable keys use provider delivery identifiers where available. | [`WebhookIngestPipeline`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/webhook/WebhookIngestPipeline.java)                                                                                                                                                                                                                       | [`WebhookIngestPipelineTest`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/test/java/de/tum/cit/aet/hephaestus/integration/core/webhook/WebhookIngestPipelineTest.java), [`WebhookIngestionCannotFailSilentlyTest`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/test/java/de/tum/cit/aet/hephaestus/integration/core/webhook/WebhookIngestionCannotFailSilentlyTest.java)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Protocol challenges and deliberately filtered events respond without publishing. Deduplication expires with broker retention, so consumers must tolerate redelivery.                                                                                   |
 
-1. Route only `/webhooks/**` to a separately exposed webhook role.
+1. Route `/webhooks/**` to the server without rewriting the path.
 2. Operate its capacity and retry signals as [Webhook Ingestion Operations](./webhook-ingestion-operations) describes.
 
 ### Boundary 2: LLM agent sandbox

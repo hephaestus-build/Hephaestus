@@ -42,7 +42,6 @@ import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionPurge
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspacePurgeAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackWebhookSignatureVerifier;
-import de.tum.cit.aet.hephaestus.observability.ProblemRequestIdAdvice;
 import de.tum.cit.aet.hephaestus.practices.result.ResultAdmissionPolicy;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
@@ -74,7 +73,6 @@ import java.util.Objects;
 import java.util.Set;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -99,7 +97,7 @@ class RuntimeRoleContextIntegrationTest {
     private static final String SLACK_INTERACTIVITY = "/webhooks/slack/interactivity";
 
     /**
-     * The webhook role creates its JetStream streams on the shared NATS container at startup. Left there, they
+     * The receiver creates its JetStream streams on the shared NATS container at startup. Left there, they
      * make a later test that creates a stream of the same name with its own configuration fail.
      */
     @AfterEach
@@ -115,17 +113,14 @@ class RuntimeRoleContextIntegrationTest {
         }
     }
 
-    /** The processes a release runs: the server, with or without agent jobs, and the webhook receiver. */
+    /** The processes a release runs: the server, with or without agent jobs. */
     enum Deployment {
-        SERVER(RuntimeRole.SERVER, false),
-        SERVER_WITH_AGENTS(RuntimeRole.SERVER, true),
-        WEBHOOK(RuntimeRole.WEBHOOK, false);
+        SERVER(false),
+        SERVER_WITH_AGENTS(true);
 
-        final RuntimeRole role;
         final boolean agents;
 
-        Deployment(RuntimeRole role, boolean agents) {
-            this.role = role;
+        Deployment(boolean agents) {
             this.agents = agents;
         }
     }
@@ -133,15 +128,10 @@ class RuntimeRoleContextIntegrationTest {
     @ParameterizedTest
     @EnumSource(Deployment.class)
     void shouldResolveEveryApplicationBeanForEachDeployment(Deployment process) {
-        RuntimeRole role = process.role;
         boolean agents = process.agents;
         var database = PostgreSQLTestContainer.createMigratedDatabase(
                 "runtime_role_" + process.name().toLowerCase(Locale.ROOT));
-        var properties = Arrays.stream(RuntimeRole.values())
-                .map(candidate -> candidate.property() + "=" + (candidate == role))
-                .toArray(String[]::new);
-        // A valid positive pool setting must not make the database-free receiver create a DataSource.
-        int maximum = role == RuntimeRole.SERVER ? 16 : 24;
+        int maximum = 16;
         var configuration = BootstrapUtils.resolveTestContextBootstrapper(
                         agents ? AgentRuntimeWithoutCluster.class : getClass())
                 .buildMergedContextConfiguration();
@@ -162,17 +152,12 @@ class RuntimeRoleContextIntegrationTest {
                                         Integer.toString(maximum),
                                         "SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE",
                                         "2"))))
-                // SpringApplication applies this from spring.factories; a webhook-only context scans only the receiver.
-                .withInitializer(new WebhookReceiverScope.Initializer())
                 .withInitializer(application -> configuration
                         .getContextCustomizers()
                         .forEach(customizer -> customizer.customizeContext(application, configuration)))
                 .withUserConfiguration(Application.class)
                 .withPropertyValues(
-                        "spring.profiles.active="
-                                + (role == RuntimeRole.SERVER
-                                        ? "default"
-                                        : role.name().toLowerCase(Locale.ROOT)),
+                        "spring.profiles.active=default",
                         "spring.config.import=classpath:application-test.yml",
                         "spring.main.allow-bean-definition-overriding=false",
                         "spring.main.lazy-initialization=false",
@@ -185,8 +170,8 @@ class RuntimeRoleContextIntegrationTest {
                         "hephaestus.sync.nats.username=",
                         "hephaestus.sync.nats.password=",
                         "hephaestus.integration.slack.enabled=true",
-                        "hephaestus.integration.outline.enabled=true")
-                .withPropertyValues(properties);
+                        "hephaestus.integration.outline.enabled=true",
+                        RuntimeRole.SERVER_PROPERTY + "=true");
         if (agents) {
             // Resolve the real agent runtime graph; this test has no cluster and starts no sandbox.
             runner = runner.withPropertyValues(
@@ -197,87 +182,51 @@ class RuntimeRoleContextIntegrationTest {
         }
         runner.run(application -> {
             assertThat(application).hasNotFailed();
-            assertThat(RuntimeRole.enabled(application.getEnvironment())).containsExactly(role);
-            assertThat(application.getBeansOfType(ScmRepositoryItemLifecycle.class))
-                    .hasSize(role == RuntimeRole.SERVER ? 1 : 0);
-            if (role == RuntimeRole.SERVER) {
-                assertThat(application).hasSingleBean(AgentRunReaper.class);
-                assertThat(application).hasSingleBean(ReviewJobCompletionService.class);
-                assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
-                        .isNotEmpty();
-                assertThat(application).hasSingleBean(AccountReferenceService.class);
-                assertThat(application).hasSingleBean(ResearchParticipationQuery.class);
-                assertThat(application).hasSingleBean(MonitoredRepositoryQuery.class);
-                assertThat(application).hasSingleBean(PracticeReviewCoverageService.class);
-                assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
-                assertThat(application).hasSingleBean(GitHubLifecycleListener.class);
-                assertThat(application).hasSingleBean(GitHubInstallationReconciler.class);
-                assertThat(application).hasSingleBean(GitHubWorkspaceProvisioningAdapter.class);
-                assertThat(application).hasSingleBean(SlackRetentionPurger.class);
-                assertThat(application).hasSingleBean(SlackWorkspaceContentEraser.class);
-                assertThat(application).hasSingleBean(SlackWorkspacePurgeAdapter.class);
-            } else {
-                assertThat(application).doesNotHaveBean(AgentRunReaper.class);
-                assertThat(application).doesNotHaveBean(ReviewJobCompletionService.class);
-                assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
-                        .isEmpty();
-                assertThat(application).doesNotHaveBean(AccountReferenceService.class);
-                assertThat(application).doesNotHaveBean(ResearchParticipationQuery.class);
-                assertThat(application).doesNotHaveBean(MonitoredRepositoryQuery.class);
-                assertThat(application).doesNotHaveBean(PracticeReviewCoverageService.class);
-                assertThat(application).doesNotHaveBean(GitHubLifecycleListener.class);
-                assertThat(application).doesNotHaveBean(GitHubInstallationReconciler.class);
-                assertThat(application).doesNotHaveBean(GitHubWorkspaceProvisioningAdapter.class);
-                assertThat(application).doesNotHaveBean(SlackRetentionPurger.class);
-                assertThat(application).doesNotHaveBean(SlackWorkspaceContentEraser.class);
-                assertThat(application).doesNotHaveBean(SlackWorkspacePurgeAdapter.class);
-            }
+            assertThat(RuntimeRole.enabled(application.getEnvironment())).containsExactly(RuntimeRole.SERVER);
+            assertThat(application).hasSingleBean(ScmRepositoryItemLifecycle.class);
+            assertThat(application).hasSingleBean(AgentRunReaper.class);
+            assertThat(application).hasSingleBean(ReviewJobCompletionService.class);
+            assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
+                    .isNotEmpty();
+            assertThat(application).hasSingleBean(AccountReferenceService.class);
+            assertThat(application).hasSingleBean(ResearchParticipationQuery.class);
+            assertThat(application).hasSingleBean(MonitoredRepositoryQuery.class);
+            assertThat(application).hasSingleBean(PracticeReviewCoverageService.class);
+            assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
+            assertThat(application).hasSingleBean(GitHubLifecycleListener.class);
+            assertThat(application).hasSingleBean(GitHubInstallationReconciler.class);
+            assertThat(application).hasSingleBean(GitHubWorkspaceProvisioningAdapter.class);
+            assertThat(application).hasSingleBean(SlackRetentionPurger.class);
+            assertThat(application).hasSingleBean(SlackWorkspaceContentEraser.class);
+            assertThat(application).hasSingleBean(SlackWorkspacePurgeAdapter.class);
             if (agents) {
                 assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
                 assertThat(application).hasSingleBean(SandboxDispatcher.class);
             } else {
                 assertThat(application).doesNotHaveBean(SandboxDispatcher.class);
             }
-            if (role == RuntimeRole.WEBHOOK) {
-                assertThat(application).hasSingleBean(JetStreamPublisher.class);
-                // A webhook problem names its request, as the server's do.
-                assertThat(application).hasSingleBean(ProblemRequestIdAdvice.class);
-                assertThat(application).doesNotHaveBean(ResultAdmissionPolicy.class);
-                assertThat(application).doesNotHaveBean(ResultMarkService.class);
-                assertThat(application).doesNotHaveBean(CitedSourceAccess.class);
-                assertThat(application).doesNotHaveBean(EvidenceDeliveryAuthorization.class);
-                assertThat(application).doesNotHaveBean(ReviewStart.class);
-            } else {
-                assertThat(application).doesNotHaveBean(JetStreamPublisher.class);
-                assertThat(application).hasSingleBean(ResultMarkService.class);
-                assertThat(application).hasSingleBean(CitedSourceAccess.class);
-                assertThat(application).hasSingleBean(EvidenceDeliveryAuthorization.class);
-                // A claim replaces a queued review through the review's own start service, with the real ledger.
-                assertThat(application).hasSingleBean(ReviewStart.class);
-            }
-            assertDatabaseConnections(application, role, database, maximum);
-            assertSlackIngressOwnership(application, role);
+            assertThat(application).hasSingleBean(JetStreamPublisher.class);
+            assertThat(application).hasSingleBean(ResultMarkService.class);
+            assertThat(application).hasSingleBean(CitedSourceAccess.class);
+            assertThat(application).hasSingleBean(EvidenceDeliveryAuthorization.class);
+            // A claim replaces a queued review through the review's own start service, with the real ledger.
+            assertThat(application).hasSingleBean(ReviewStart.class);
+            assertDatabaseConnections(application, database, maximum);
+            assertSlackIngress(application);
         });
     }
 
-    /** Count live connections while the role holds its entire configured pool; the receiver must hold none. */
+    /** Count live connections while the server holds its entire configured pool. */
     private static void assertDatabaseConnections(
-            AssertableWebApplicationContext application,
-            RuntimeRole role,
-            PostgreSQLTestContainer.TestDatabase database,
-            int maximum)
+            AssertableWebApplicationContext application, PostgreSQLTestContainer.TestDatabase database, int maximum)
             throws SQLException {
         var borrowed = new ArrayList<java.sql.Connection>();
         try {
-            if (role == RuntimeRole.WEBHOOK) {
-                assertThat(application).doesNotHaveBean(DataSource.class);
-            } else {
-                var pool = application.getBean(HikariDataSource.class);
-                assertThat(pool.getMaximumPoolSize()).isEqualTo(maximum);
-                assertThat(pool.getMinimumIdle()).isEqualTo(2);
-                for (int i = 0; i < maximum; i++) {
-                    borrowed.add(pool.getConnection());
-                }
+            var pool = application.getBean(HikariDataSource.class);
+            assertThat(pool.getMaximumPoolSize()).isEqualTo(maximum);
+            assertThat(pool.getMinimumIdle()).isEqualTo(2);
+            for (int i = 0; i < maximum; i++) {
+                borrowed.add(pool.getConnection());
             }
             try (var observer =
                             DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
@@ -285,13 +234,9 @@ class RuntimeRoleContextIntegrationTest {
                     var result = statement.executeQuery("SELECT count(*) FROM pg_stat_activity "
                             + "WHERE datname=current_database() AND pid<>pg_backend_pid()")) {
                 assertThat(result.next()).isTrue();
-                if (role == RuntimeRole.WEBHOOK) {
-                    assertThat(result.getInt(1)).isZero();
-                } else {
-                    // The lazy ledger listener and the evidence erasure listener are the dedicated connections
-                    // outside Hikari.
-                    assertThat(result.getInt(1)).isBetween(maximum, maximum + 2);
-                }
+                // The lazy ledger listener and the evidence erasure listener are the dedicated connections outside
+                // Hikari.
+                assertThat(result.getInt(1)).isBetween(maximum, maximum + 2);
             }
         } finally {
             for (var connection : borrowed) {
@@ -301,30 +246,19 @@ class RuntimeRoleContextIntegrationTest {
     }
 
     /**
-     * Slack Events stay with the webhook role, which publishes them. Interactivity belongs to the server role, which
-     * commits a button's consent change before it answers Slack.
+     * The server receives Slack Events and publishes them, and answers interactivity, committing a button's consent
+     * change before it answers Slack.
      */
-    private static void assertSlackIngressOwnership(AssertableWebApplicationContext application, RuntimeRole role)
-            throws Exception {
-        switch (role) {
-            case SERVER -> {
-                assertThat(application).hasSingleBean(SlackSignatureVerifier.class);
-                assertThat(application).hasSingleBean(SlackInteractivityController.class);
-                assertThat(application).hasSingleBean(SlackInteractivityHandler.class);
-                assertThat(application).doesNotHaveBean(SlackWebhookSignatureVerifier.class);
-                assertSignedInteractivityIsAnswered(application);
-            }
-            case WEBHOOK -> {
-                assertThat(application).hasSingleBean(SlackSignatureVerifier.class);
-                assertThat(application).hasSingleBean(SlackWebhookSignatureVerifier.class);
-                assertThat(application).doesNotHaveBean(SlackInteractivityController.class);
-                assertThat(application).doesNotHaveBean(SlackInteractivityHandler.class);
-            }
-        }
+    private static void assertSlackIngress(AssertableWebApplicationContext application) throws Exception {
+        assertThat(application).hasSingleBean(SlackSignatureVerifier.class);
+        assertThat(application).hasSingleBean(SlackWebhookSignatureVerifier.class);
+        assertThat(application).hasSingleBean(SlackInteractivityController.class);
+        assertThat(application).hasSingleBean(SlackInteractivityHandler.class);
+        assertSignedInteractivityIsAnswered(application);
     }
 
     /**
-     * A button press through what the server-only context registers for the path, in the servlet order: the payload
+     * A button press through what the server registers for the path, in the servlet order: the payload
      * bound, the raw-body cache, the security chain, then the controller's signature check and the real handler. The
      * press names a team no workspace is connected to, so the handler looks it up in the migrated database, finds
      * nothing to change and the request is answered 200.
@@ -333,7 +267,8 @@ class RuntimeRoleContextIntegrationTest {
             throws Exception {
         List<Filter> guards = Arrays.stream(application.getBeanNamesForType(FilterRegistrationBean.class))
                 .<FilterRegistrationBean<?>>map(name -> (FilterRegistrationBean<?>) application.getBean(name))
-                .filter(registration -> registration.getUrlPatterns().contains(SLACK_INTERACTIVITY))
+                .filter(registration -> registration.getUrlPatterns().contains(SLACK_INTERACTIVITY)
+                        || registration.getUrlPatterns().contains("/webhooks/*"))
                 .sorted(Comparator.comparingInt(registration -> registration.getOrder()))
                 .map(registration -> Objects.requireNonNull(registration.getFilter()))
                 .toList();

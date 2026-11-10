@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
-import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
@@ -69,7 +68,6 @@ import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @EnableMethodSecurity(prePostEnabled = true)
-@ReceiverComponent
 public class SecurityConfig {
 
     private final CorsProperties corsProperties;
@@ -189,8 +187,7 @@ public class SecurityConfig {
      * token at the controller layer for webhooks, or no auth at all for health and info — and must NOT be processed by
      * the user-facing OAuth2 resource server.
      *
-     * <p>Always present, so a dev / webhook pod can
-     * boot without the resource-server JWT decoder configured.
+     * <p>Always present, so a context can boot without the resource-server JWT decoder configured.
      */
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE + 4)
@@ -227,8 +224,8 @@ public class SecurityConfig {
      *
      * <p>Decoder present (the native-auth {@link de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder},
      * ADR 0017) → wire the OAuth2 resource server with the full native-auth rules (security headers,
-     * auth rate limiting, the public auth-discovery permit list). Absent (webhook pod that excludes
-     * the OAuth2 autoconfig, or the {@code specs} profile that boots without a decoder) → deny everything.
+     * auth rate limiting, the public auth-discovery permit list). Absent (the {@code specs} profile
+     * that boots without a decoder) → deny everything.
      * The {@code hephaestus.dev.trigger-enabled} carve-out applies in both modes.
      */
     @Bean
