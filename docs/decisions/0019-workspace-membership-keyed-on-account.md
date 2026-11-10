@@ -1,6 +1,6 @@
 # ADR 0019: Workspace membership is keyed on `Account`, not the SCM `User`
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md)
 **Date:** 2026-06-09
 **Authors:** Hephaestus maintainers
 **Finishes:** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md) (the `workspace_membership.user_id → account_id` rename it specifies but never implemented)

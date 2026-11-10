@@ -235,6 +235,7 @@
 	"docs/decisions/0084-every-statement-on-workspace-data-binds-its-workspace.md",
 	"docs/decisions/0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md",
 	"docs/decisions/0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md",
+	"docs/decisions/0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",
