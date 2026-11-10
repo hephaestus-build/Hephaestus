@@ -15122,6 +15122,29 @@ components:
       required:
       - displayName
       - id
+    FeedbackAnswer:
+      type: object
+      description: "A developer's answer to feedback: the resolution, and the explanation\
+        \ only for a disagreement"
+      properties:
+        comment:
+          type:
+          - string
+          - "null"
+          description: Only for a disagreement
+        createdAt:
+          type: string
+          format: date-time
+        resolution:
+          type: string
+          enum:
+          - ADDRESSED
+          - DISAGREE
+          - NOT_APPLICABLE
+      required:
+      - comment
+      - createdAt
+      - resolution
     FeedbackBasis:
       type: object
       properties:
@@ -22821,6 +22844,14 @@ components:
     ReviewFeedbackDetail:
       type: object
       properties:
+        answer:
+          anyOf:
+          - $ref: "#/components/schemas/FeedbackAnswer"
+            description: "The developer's current answer; absent when there is none,\
+              \ or only a rating"
+          - type: "null"
+          description: "The developer's current answer; absent when there is none,\
+            \ or only a rating"
         basis:
           type: array
           items:
@@ -22896,10 +22927,6 @@ components:
           - string
           - "null"
           format: uuid
-        response:
-          anyOf:
-          - $ref: "#/components/schemas/FeedbackResponse"
-          - type: "null"
         resultCount:
           type: integer
           format: int32
@@ -22973,6 +23000,7 @@ components:
         withdrawn:
           type: boolean
       required:
+      - answer
       - basis
       - body
       - bodyPreview
@@ -22991,7 +23019,6 @@ components:
       - item
       - location
       - replacesId
-      - response
       - resultCount
       - reviewId
       - sends

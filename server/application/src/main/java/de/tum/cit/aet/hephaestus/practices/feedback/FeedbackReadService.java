@@ -5,9 +5,9 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.dto.FeedbackDecisionDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackAnswerDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackCheckDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackCopyDTO;
-import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackSendDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackDetailDTO;
@@ -108,7 +108,7 @@ public class FeedbackReadService {
                 decisionHistory(workspaceId, id),
                 responses
                         .findCurrent(workspaceId, id)
-                        .map(FeedbackResponseDTO::from)
+                        .map(FeedbackAnswerDTO::of)
                         .orElse(null),
                 checks(row),
                 readable ? digests.current(workspaceId, id) : null);

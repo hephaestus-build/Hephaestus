@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.assertj.core.api.InstanceOfAssertFactories;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -64,10 +66,72 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
                 .isEmpty()
                 .jsonPath("$.contentDigest")
                 .isEmpty()
-                .jsonPath("$.response")
+                .jsonPath("$.answer")
                 .isEmpty()
                 .jsonPath("$.basis")
                 .isArray();
+    }
+
+    /** A rating, and every note but a disagreement's explanation, stay the developer's alone (ADR 0047). */
+    @Test
+    @WithAdminUser
+    void shouldShowAnAdminTheAnswerAndOnlyADisagreementsExplanation() {
+        var addressed = answered(FeedbackResolution.ADDRESSED, FeedbackUsefulness.HELPFUL, "Fixed it, thanks.");
+        var notApplicable = answered(FeedbackResolution.NOT_APPLICABLE, null, "This file is generated.");
+        var disagreed = answered(FeedbackResolution.DISAGREE, FeedbackUsefulness.UNHELPFUL, "The rule allows this.");
+        var ratedOnly = answered(null, FeedbackUsefulness.HELPFUL, "Private note.");
+
+        answer(addressed)
+                .jsonPath("$.answer.resolution")
+                .isEqualTo("ADDRESSED")
+                .jsonPath("$.answer.createdAt")
+                .exists()
+                .jsonPath("$.answer.comment")
+                .isEmpty()
+                .jsonPath("$.answer.usefulness")
+                .doesNotExist()
+                .jsonPath("$.response")
+                .doesNotExist();
+        answer(notApplicable)
+                .jsonPath("$.answer.resolution")
+                .isEqualTo("NOT_APPLICABLE")
+                .jsonPath("$.answer.comment")
+                .isEmpty()
+                .jsonPath("$.answer.usefulness")
+                .doesNotExist();
+        answer(disagreed)
+                .jsonPath("$.answer.resolution")
+                .isEqualTo("DISAGREE")
+                .jsonPath("$.answer.comment")
+                .isEqualTo("The rule allows this.")
+                .jsonPath("$.answer.usefulness")
+                .doesNotExist();
+        answer(ratedOnly).jsonPath("$.answer").isEmpty();
+    }
+
+    private Feedback answered(
+            @Nullable FeedbackResolution resolution, @Nullable FeedbackUsefulness usefulness, String comment) {
+        var parent = piece(FeedbackDestination.PRACTICE_PAGE, FeedbackState.DELIVERED, AT);
+        responses.saveAndFlush(FeedbackResponse.builder()
+                .id(UUID.randomUUID())
+                .workspaceId(workspace.getId())
+                .feedbackId(parent.getId())
+                .resolution(resolution)
+                .usefulness(usefulness)
+                .comment(comment)
+                .createdAt(AT)
+                .build());
+        return parent;
+    }
+
+    private WebTestClient.BodyContentSpec answer(Feedback parent) {
+        return client.get()
+                .uri(route() + "/" + parent.getId())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody();
     }
 
     @Test

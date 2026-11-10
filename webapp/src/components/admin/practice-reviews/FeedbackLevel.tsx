@@ -56,10 +56,6 @@ import {
 	type WithdrawalCorrection,
 	withdrawalCorrection,
 } from "@/components/practice-vocabulary/feedback-send-defs";
-import {
-	UNKNOWN_USEFULNESS_DEF,
-	FEEDBACK_USEFULNESS_DEFS,
-} from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import { WITHHOLDING_REASON_DEFS } from "@/components/practice-vocabulary/withholding-defs";
 import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -657,23 +653,20 @@ function attemptsLabel(count: number): string {
 }
 
 function responseEvent(feedback: FeedbackRecord): SheetEvent | undefined {
-	const { response } = feedback;
+	const { answer: response } = feedback;
 	const answer = developerAnswer(response);
 	if (answer === undefined || response === null) {
 		return undefined;
 	}
-	const { resolution, usefulness, comment } = response;
+	const { resolution, comment } = response;
 	const facts = [
-		resolution !== null && resolution !== "DISAGREE"
-			? definitionFor(FEEDBACK_RESOLUTION_DEFS, resolution).label
-			: undefined,
-		usefulness === null
+		resolution === "DISAGREE"
 			? undefined
-			: definitionFor(FEEDBACK_USEFULNESS_DEFS, usefulness, UNKNOWN_USEFULNESS_DEF).label,
+			: definitionFor(FEEDBACK_RESOLUTION_DEFS, resolution).label,
 	].filter(hasText);
 	return {
 		key: "response",
-		at: response.createdAt ?? undefined,
+		at: response.createdAt,
 		title: DEVELOPER_ANSWER_DEFS[answer].label,
 		by: developerLabel(feedback.developer),
 		detail: (

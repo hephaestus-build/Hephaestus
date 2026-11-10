@@ -340,7 +340,9 @@ export const Delivered: Story = {
 		);
 		await expect(events.queryByText("Done")).toBeNull();
 		events.getByText("Answered");
-		events.getByText("Helpful");
+		events.getByText("Addressed");
+		// A rating stays the developer's: the server never sends it to an admin.
+		await expect(events.queryByText("Helpful")).toBeNull();
 		// Where it went, by provider: once, among What it is.
 		panel.getByText(/^Comment on GitHub pull request/u);
 		await expect(panel.queryByRole("button", { name: "Reject feedback" })).not.toBeInTheDocument();
@@ -447,7 +449,7 @@ export const ClearedResponse: Story = {
 		feedback: ready({
 			...longFeedbackDetail,
 			disagreedAt: null,
-			response: { resolution: null, usefulness: null, comment: null, createdAt: null },
+			answer: null,
 		}),
 	},
 	play: async () => {
@@ -520,7 +522,7 @@ export const WithheldAfterTheWorkChanged: Story = {
 				externalUrl: null,
 			})),
 			sends: [],
-			response: null,
+			answer: null,
 		}),
 	},
 	play: async () => {
@@ -969,7 +971,7 @@ export const PartlyDeliveredCheckAvailable: Story = {
 		feedback: ready({
 			...partlyUnknownOnWork({ action: "POST", state: "DONE", attemptCount: 8 }),
 			disagreedAt: null,
-			response: null,
+			answer: null,
 		}),
 	},
 	play: async () => {
@@ -989,7 +991,7 @@ export const PartlyDeliveredCheckInProgress: Story = {
 		feedback: ready({
 			...partlyUnknownOnWork({ action: "POST", state: "PENDING", attemptCount: 8 }),
 			disagreedAt: null,
-			response: null,
+			answer: null,
 		}),
 	},
 	play: async () => {

@@ -60,8 +60,11 @@ public record ReviewFeedbackDetailDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<FeedbackSendDTO> sends,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<FeedbackDecisionDTO> decisions,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        FeedbackResponseDTO response,
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "The developer's current answer; absent when there is none, or only a rating")
+        @Nullable
+        FeedbackAnswerDTO answer,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<FeedbackCheckDTO> checks,
 
