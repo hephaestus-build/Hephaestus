@@ -29,7 +29,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSync
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser.RepositoryOwnerAndName;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
-import de.tum.cit.aet.hephaestus.integration.scm.github.common.GraphQlConnectionOverflowDetector;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.EmbeddedCommentsDTO;
@@ -123,7 +122,7 @@ public class GitHubIssueSyncService {
     /**
      * Synchronizes issues for a repository with incremental sync support.
      * <p>
-     * When {@code lastSyncTimestamp} is provided and incremental sync is enabled,
+     * When {@code lastSyncTimestamp} is provided,
      * only issues updated after that timestamp are fetched using GitHub's filterBy.since parameter.
      * <p>
      * When {@code syncTargetId} is provided, the pagination cursor is persisted after
@@ -141,7 +140,7 @@ public class GitHubIssueSyncService {
      * @param repositoryId      the repository ID to sync issues for
      * @param syncTargetId      the sync target ID for cursor persistence (null to disable)
      * @param initialCursor     the cursor to resume from (null to start from beginning)
-     * @param lastSyncTimestamp the timestamp of the last sync for incremental sync (null for full sync)
+     * @param lastSyncTimestamp the timestamp of the last sync for incremental sync (null for the initial sync timeframe)
      * @return sync result containing status and count of issues synced
      */
     public SyncResult syncForRepository(
@@ -171,30 +170,24 @@ public class GitHubIssueSyncService {
         HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
         Duration timeout = syncProperties.graphqlTimeout();
 
-        // Determine the 'since' parameter for incremental sync
-        // Apply safety buffer to handle clock skew between server and GitHub
-        OffsetDateTime sinceDateTime = null;
-        boolean isIncrementalSync = false;
-        if (syncProperties.incrementalSyncEnabled()) {
-            if (lastSyncTimestamp != null) {
-                // Subtract buffer to ensure items updated just before recorded timestamp are still fetched
-                Instant bufferedTimestamp = lastSyncTimestamp.minus(syncProperties.incrementalSyncBuffer());
-                sinceDateTime = bufferedTimestamp.atOffset(ZoneOffset.UTC);
-                log.info(
-                        "Starting incremental issue sync: repoName={}, since={}, buffer={}",
-                        safeNameWithOwner,
-                        sinceDateTime,
-                        syncProperties.incrementalSyncBuffer());
-            } else {
-                // First sync - use configured timeframe as fallback to limit initial data fetch
-                sinceDateTime = OffsetDateTime.now(ZoneOffset.UTC).minusDays(syncSchedulerProperties.timeframeDays());
-                log.info(
-                        "Starting first issue sync with timeframe fallback: repoName={}, timeframeDays={}, since={}",
-                        safeNameWithOwner,
-                        syncSchedulerProperties.timeframeDays(),
-                        sinceDateTime);
-            }
-            isIncrementalSync = true;
+        OffsetDateTime sinceDateTime;
+        if (lastSyncTimestamp != null) {
+            // The overlap includes updates whose provider clock is behind the recorded watermark.
+            sinceDateTime = lastSyncTimestamp
+                    .minus(syncProperties.incrementalSyncBuffer())
+                    .atOffset(ZoneOffset.UTC);
+            log.info(
+                    "Starting incremental issue sync: repoName={}, since={}, buffer={}",
+                    safeNameWithOwner,
+                    sinceDateTime,
+                    syncProperties.incrementalSyncBuffer());
+        } else {
+            sinceDateTime = OffsetDateTime.now(ZoneOffset.UTC).minusDays(syncSchedulerProperties.timeframeDays());
+            log.info(
+                    "Starting first issue sync with timeframe fallback: repoName={}, timeframeDays={}, since={}",
+                    safeNameWithOwner,
+                    syncSchedulerProperties.timeframeDays(),
+                    sinceDateTime);
         }
 
         // P0 optimization: probe totalCount before running the expensive full query.
@@ -202,7 +195,7 @@ public class GitHubIssueSyncService {
         // embedded data (comments, assignees, labels). In our audit, 119 of 122
         // incremental issue syncs returned 0 issues — wasting ~7,000 points per run.
         // This lightweight probe costs ~1 point and lets us skip the expensive query entirely.
-        if (isIncrementalSync && sinceDateTime != null && initialCursor == null) {
+        if (initialCursor == null) {
             int updatedCount = probeIssueCount(client, ownerAndName, sinceDateTime, timeout, safeNameWithOwner);
             if (updatedCount == 0) {
                 log.info(
@@ -212,25 +205,19 @@ public class GitHubIssueSyncService {
                 return SyncResult.completed(0);
             }
             log.info(
-                    "Issue count probe found {} updated issues, proceeding with full sync: repoName={}",
+                    "Issue count probe found {} updated issues, reading issue pages: repoName={}",
                     updatedCount,
                     safeNameWithOwner);
         }
 
         int totalIssuesSynced = 0;
-        // Raw nodes received across all pages — the apples-to-apples count for issues.totalCount.
-        // (totalIssuesSynced is post-filter: it omits skipped/unparseable nodes, so it would
-        // report a phantom gap even on a fully-paginated sync.)
-        int issuesReceived = 0;
         int totalCommentsSynced = 0;
-        int reportedTotalCount = -1;
         List<IssueWithCommentCursor> issuesNeedingCommentPagination = new ArrayList<>();
         String cursor = initialCursor;
         boolean hasMore = true;
         int pageCount = 0;
         int retryAttempt = 0;
         boolean resuming = initialCursor != null;
-        final boolean incrementalSync = isIncrementalSync;
         SyncResult.Status abortReason = null; // null means completed successfully
 
         if (initialCursor != null) {
@@ -252,13 +239,12 @@ public class GitHubIssueSyncService {
             }
 
             try {
-                // Build the GraphQL request with optional 'since' parameter for incremental sync.
+                // Every page keeps the same time bound, including a resumed cursor.
                 // Use Mono.defer() to wrap the entire execute() call so retries cover body streaming.
                 // This is CRITICAL: WebClient ExchangeFilterFunction retries only cover the HTTP exchange,
                 // not body consumption. PrematureCloseException occurs DURING body streaming.
                 final String currentCursor = cursor;
                 final int currentPage = pageCount;
-                final OffsetDateTime sinceDt = sinceDateTime;
 
                 Instant observedAt = Instant.now();
                 ClientGraphQlResponse response = Mono.defer(() -> {
@@ -270,13 +256,8 @@ public class GitHubIssueSyncService {
                                             adaptPageSize(
                                                     ISSUE_SYNC_PAGE_SIZE,
                                                     graphQlClientProvider.getRateLimitRemaining(scopeId)))
-                                    .variable("after", currentCursor);
-
-                            // Add 'since' parameter for incremental sync (filters by updatedAt >= since)
-                            if (sinceDt != null) {
-                                requestBuilder = requestBuilder.variable("since", sinceDt.toString());
-                            }
-
+                                    .variable("after", currentCursor)
+                                    .variable("since", sinceDateTime.toString());
                             return requestBuilder.execute();
                         })
                         .retryWhen(Retry.backoff(TRANSPORT_MAX_RETRIES, TRANSPORT_INITIAL_BACKOFF)
@@ -338,12 +319,6 @@ public class GitHubIssueSyncService {
                         || connection.getNodes().isEmpty()) {
                     break;
                 }
-
-                if (reportedTotalCount < 0) {
-                    reportedTotalCount = connection.getTotalCount();
-                }
-
-                issuesReceived += connection.getNodes().size();
 
                 // Process the page within its own transaction to keep transactions short
                 final Long repoId = repositoryId;
@@ -477,15 +452,6 @@ public class GitHubIssueSyncService {
             }
         }
 
-        // Full-sync only; compare raw issue nodes received (not the post-filter count) vs totalCount.
-        // hasMore stays true on every early break (error/rate-limit, page cap, empty/null page) and is
-        // false only after clean exhaustion — so it is the complete early-stop signal.
-        if (reportedTotalCount >= 0 && !incrementalSync) {
-            boolean stoppedEarly = abortReason != null || hasMore;
-            GraphQlConnectionOverflowDetector.checkPaginated(
-                    "issues", issuesReceived, reportedTotalCount, stoppedEarly, safeNameWithOwner);
-        }
-
         SyncResult.Status commentReads = SyncResult.Status.COMPLETED;
         // Fetch remaining comments for issues with >10 comments (using cursor for efficient continuation)
         // Each call to syncRemainingComments handles its own transactions
@@ -513,14 +479,13 @@ public class GitHubIssueSyncService {
         SyncResult.Status finalStatus = abortReason != null ? abortReason : commentReads;
 
         log.info(
-                "Completed issue sync: repoName={}, issueCount={}, commentCount={}, issuesWithCommentPagination={}, scopeId={}, resumed={}, incremental={}, status={}",
+                "Completed issue sync: repoName={}, issueCount={}, commentCount={}, issuesWithCommentPagination={}, scopeId={}, resumed={}, status={}",
                 safeNameWithOwner,
                 totalIssuesSynced,
                 totalCommentsSynced,
                 issuesNeedingCommentPagination.size(),
                 scopeId,
                 resuming,
-                incrementalSync,
                 finalStatus);
         return new SyncResult(finalStatus, totalIssuesSynced);
     }
@@ -614,8 +579,7 @@ public class GitHubIssueSyncService {
      * Uses the GetRepositoryIssueCount query which costs ~1 rate limit point (vs ~59 for the
      * full GetRepositoryIssues query). Returns the totalCount of issues matching the filter.
      * <p>
-     * If the probe fails for any reason, returns -1 to signal the caller should proceed with
-     * the full sync (fail-open behavior to avoid skipping data).
+     * If the probe fails, returns -1 so the caller reads pages with the same update bound instead of skipping data.
      *
      * @param client           the GraphQL client
      * @param ownerAndName     the parsed repository owner and name
@@ -649,7 +613,7 @@ public class GitHubIssueSyncService {
 
             if (response == null || !response.isValid()) {
                 log.warn(
-                        "Issue count probe returned invalid response, falling back to full sync: repoName={}",
+                        "Issue count probe returned invalid response, continuing with the issue page query: repoName={}",
                         safeNameWithOwner);
                 return -1;
             }
@@ -657,16 +621,16 @@ public class GitHubIssueSyncService {
             Integer totalCount = response.field("repository.issues.totalCount").toEntity(Integer.class);
             if (totalCount == null) {
                 log.warn(
-                        "Issue count probe returned null totalCount, falling back to full sync: repoName={}",
+                        "Issue count probe returned null totalCount, continuing with the issue page query: repoName={}",
                         safeNameWithOwner);
                 return -1;
             }
 
             return totalCount;
         } catch (Exception e) {
-            // Fail-open: if the probe itself fails, proceed with the full sync
+            // Fail-open: if the probe itself fails, read the issue pages with the same time bound
             log.warn(
-                    "Issue count probe failed, falling back to full sync: repoName={}, error={}",
+                    "Issue count probe failed, continuing with the issue page query: repoName={}, error={}",
                     safeNameWithOwner,
                     e.getClass().getSimpleName());
             return -1;

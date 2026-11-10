@@ -52,11 +52,6 @@
       "description": "Delay between pagination requests that keeps the load on the GitHub API low. Accepts duration format: 200ms, PT0.2S."
     },
     {
-      "name": "hephaestus.integration.github.sync.incremental-sync-enabled",
-      "type": "java.lang.Boolean",
-      "description": "Whether to use incremental sync based on last sync timestamp"
-    },
-    {
       "name": "hephaestus.sync.cooldown-minutes",
       "type": "java.lang.Integer",
       "description": "Minimum minutes between consecutive sync operations"

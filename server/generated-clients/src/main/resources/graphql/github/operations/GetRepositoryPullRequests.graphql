@@ -8,7 +8,6 @@ query GetRepositoryPullRequests(
     $name: String!
     $first: Int!
     $after: String
-    $states: [PullRequestState!]
 ) {
     rateLimit {
         cost
@@ -17,7 +16,7 @@ query GetRepositoryPullRequests(
         resetAt
     }
     repository(owner: $owner, name: $name) {
-        pullRequests(first: $first, after: $after, states: $states, orderBy: { field: UPDATED_AT, direction: DESC }) {
+        pullRequests(first: $first, after: $after, orderBy: { field: UPDATED_AT, direction: DESC }) {
             pageInfo {
                 hasNextPage
                 endCursor
