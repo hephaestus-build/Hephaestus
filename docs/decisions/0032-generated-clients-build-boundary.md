@@ -1,9 +1,8 @@
 # ADR 0032: Generated clients have an independent build boundary
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0043](0043-gradle-java-build.md)
 **Date:** 2026-08-25
 **Authors:** Server foundations
-**Amended by:** [ADR 0043](0043-gradle-java-build.md)
 
 ## Context
 

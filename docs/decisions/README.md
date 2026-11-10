@@ -106,15 +106,15 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0029](0029-measurement-intervention-seam-and-channel-levels.md) | Separate measurement from intervention and derive level from channel | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
 | [0030](0030-agent-runtime-is-typescript-on-bun.md) | The agent runtime is TypeScript on Bun, with no Node in the sandbox | Superseded by [0036](0036-agent-runtime-runs-on-node-24.md) |
 | [0031](0031-agent-image-follows-the-deployments-own-tag.md) | The agent image reference follows the deployment's own image tag | Superseded by [0034](0034-signed-release-image-lock.md) |
-| [0032](0032-generated-clients-build-boundary.md) | Generated clients have an independent build boundary | Accepted |
+| [0032](0032-generated-clients-build-boundary.md) | Generated clients have an independent build boundary | Superseded by [0043](0043-gradle-java-build.md) |
 | [0033](0033-bun-is-the-javascript-runtime-and-package-manager.md) | Bun is the JavaScript runtime and package manager | Superseded by [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) |
 | [0034](0034-signed-release-image-lock.md) | Production consumes one signed release image lock | Accepted |
 | [0035](0035-pull-request-previews-are-label-gated.md) | Pull request previews are label-gated and driven from the default branch | Accepted |
 | [0036](0036-agent-runtime-runs-on-node-24.md) | Agent runtime runs on Node.js 24 with bounded resources | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
-| [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) | Node.js 24 and pnpm 12 are the JavaScript toolchain | Accepted |
+| [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) | Node.js 24 and pnpm 12 are the JavaScript toolchain | Superseded by [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) |
 | [0038](0038-postgresql-18-release-baseline.md) | PostgreSQL 18 is the only supported major version | Accepted |
 | [0039](0039-git-and-postgresql-own-evidence.md) | Git owns repository evidence; PostgreSQL owns captured payloads and references | Accepted |
-| [0040](0040-vite-plus-is-the-command-surface.md) | Vite+ is the command surface; pnpm stays the package manager | Accepted |
+| [0040](0040-vite-plus-is-the-command-surface.md) | Vite+ is the command surface; pnpm stays the package manager | Superseded by [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) |
 | [0041](0041-compose-1x-kubernetes-2.md) | Compose for 1.x; Kubernetes only for 2.0 | Accepted |
 | [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Accepted |
 | [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
@@ -162,6 +162,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) | An observation has one of four outcomes, holds one current claim while its sources stay unchanged, and standing reads the newest decision | Accepted |
 | [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) | A practice review stages, seals, then composes, and each stage records why it stops | Accepted |
 | [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) | A person signs in through an instance login provider and is one account in every workspace | Accepted |
+| [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) | Pinned Node.js and pnpm install the repository, and Vite+ runs every command | Accepted |
 | [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) | Each module owns its aggregates, declares its dependencies, and changes a lifecycle only through the aggregate | Accepted |
 | [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
 
