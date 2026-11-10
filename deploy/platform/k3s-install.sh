@@ -336,7 +336,7 @@ render_site() {
 	else
 		printf '# networkPolicy.kubernetesApi: the installer reads it from the cluster\n'
 	fi
-	printf 'config:\n  gitCheckoutEnabled: true\n'
+	if [ -n "$GITHUB_CLIENT_ID$BOOTSTRAP_ADMINS" ]; then printf 'config:\n'; fi
 	if [ -n "$GITHUB_CLIENT_ID" ]; then printf '  github:\n    oauthClientId: %s\n' "$GITHUB_CLIENT_ID"; fi
 	if [ -n "$BOOTSTRAP_ADMINS" ]; then
 		printf '  auth:\n    bootstrapAdmins:\n'

@@ -30,14 +30,12 @@ nats:
   bundled: true
   jetstream:
     maxFileBytes: 8589934592
-# The small-installation replay and durable-expiry policy is independent of general chart defaults.
+# The small-installation replay policy is independent of general chart defaults.
 webhook:
   stream:
     maxAge: 7d
     maxBytesGithub: 6442450944B
     maxBytes: 536870912B
-config:
-  consumerInactiveThreshold: 30d
 server:
   databasePool: { maximumPoolSize: 16, minimumIdle: 2 }
   gitCache:

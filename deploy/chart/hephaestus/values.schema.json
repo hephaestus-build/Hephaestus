@@ -867,9 +867,6 @@
 			"required": [
 				"releaseCheckEnabled",
 				"commitIdentityResolutionEnabled",
-				"gitCheckoutEnabled",
-				"durableConsumerName",
-				"consumerInactiveThreshold",
 				"llmUsageRetention",
 				"conversationRetention",
 				"llmDisplayCurrency",
@@ -894,9 +891,6 @@
 			"properties": {
 				"releaseCheckEnabled": { "type": "boolean" },
 				"commitIdentityResolutionEnabled": { "type": "boolean" },
-				"gitCheckoutEnabled": { "type": "boolean" },
-				"durableConsumerName": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
-				"consumerInactiveThreshold": { "$ref": "#/definitions/duration" },
 				"llmUsageRetention": {
 					"type": "string",
 					"pattern": "^P[0-9]+D$",

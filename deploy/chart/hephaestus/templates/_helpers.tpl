@@ -327,8 +327,6 @@ fails every pod, so each role is owed the lock's digest. */}}
 {{- define "hephaestus.env.ingestion" -}}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "NATS_USERNAME") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "NATS_PASSWORD") }}
-- name: NATS_DURABLE_CONSUMER_NAME
-  value: {{ .Values.config.durableConsumerName | quote }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "WEBHOOK_SECRET") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "WEBHOOK_ROUTING_SECRET") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "WEBHOOK_ROUTING_PREVIOUS_SECRET" "optional" true) }}
@@ -348,7 +346,7 @@ fails every pod, so each role is owed the lock's digest. */}}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "GH_APP_PRIVATE_KEY" "optional" true) }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "GH_AUTH_TOKEN" "optional" true) }}
 - name: GIT_CHECKOUT_ENABLED
-  value: {{ .Values.config.gitCheckoutEnabled | quote }}
+  value: "true"
 - name: GITLAB_ENABLED
   value: {{ .Values.config.gitlab.enabled | quote }}
 - name: GITLAB_DEFAULT_SERVER_URL

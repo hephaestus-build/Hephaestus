@@ -389,11 +389,6 @@ config:
   releaseCheckEnabled: true
   # Corrects commit links from GitHub's own answer. docs/admin/production-operations-runbook.mdx has the steps.
   commitIdentityResolutionEnabled: false
-  # A practice review reads the repository at its revision. With false, a worker reports itself out of
-  # service (GIT_CHECKOUT_DISABLED) and never becomes ready.
-  gitCheckoutEnabled: true
-  durableConsumerName: hephaestus
-  consumerInactiveThreshold: 30d
   llmUsageRetention: P400D
   # Age at which every conversation entry with Hephaestus is erased. docs/admin/data-retention.mdx.
   conversationRetention: P400D

@@ -34,7 +34,3 @@ worker:
     # gVisor from k3s-containerd.toml.tmpl and k3s-runtimeclass.yaml.
     templates:
       runtimeClassName: gvisor
-
-# Reviews check out the repository they review. The chart's default is off.
-config:
-  gitCheckoutEnabled: true

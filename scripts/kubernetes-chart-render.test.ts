@@ -1195,10 +1195,6 @@ for (const name of ["small", "external"] as const) {
 			envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES"),
 			"false",
 		);
-		assert.equal(
-			envValue(workload(resources, "server"), "HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD"),
-			"30d",
-		);
 	});
 }
 
@@ -2253,6 +2249,24 @@ await test("the small profile keeps personal content inside the transport-buffer
 	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), undefined);
 });
 
+await test("the broker consumer policy comes from the application defaults, not the chart", () => {
+	for (const name of profiles) {
+		const resources = rendered(withWorker(name));
+		for (const role of ["server", "worker", "webhook"]) {
+			for (const variable of [
+				"NATS_DURABLE_CONSUMER_NAME",
+				"HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD",
+			]) {
+				assert.equal(
+					env(workload(resources, role), variable),
+					undefined,
+					`${name} ${role} ${variable}`,
+				);
+			}
+		}
+	}
+});
+
 /** One turn count for the server, every worker and each of the loop's replicas. */
 const everywhere = (count: string) => ({ worker: count, loop: [count], server: count });
 
@@ -2265,10 +2279,14 @@ await test("practice reviews run exactly when a worker runs, with the installati
 		const resources = rendered(withWorker(name));
 		for (const role of ["server", "worker"]) {
 			assert.equal(envValue(workload(resources, role), "AGENT_ENABLED"), "true", `${name} ${role}`);
+			assert.equal(
+				envValue(workload(resources, role), "GIT_CHECKOUT_ENABLED"),
+				"true",
+				`${name} ${role}`,
+			);
 		}
 		assert.equal(env(workload(resources, "webhook"), "AGENT_ENABLED"), undefined, name);
-		// A worker without git checkout reports itself out of service, so its Deployment never rolls out.
-		assert.equal(envValue(workload(resources, "worker"), "GIT_CHECKOUT_ENABLED"), "true", name);
+		assert.equal(env(workload(resources, "webhook"), "GIT_CHECKOUT_ENABLED"), undefined, name);
 		// Each role evicts mirrors against the volume that the kubelet bounds, so the two sizes are one value.
 		for (const role of ["server", "worker"]) {
 			const cache = list(get(podSpec(workload(resources, role)), "volumes")).find(
