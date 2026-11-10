@@ -505,15 +505,30 @@ sudo -v || die "this script needs sudo rights"
 # An immutable release can be reapplied, but a different release can run one-way migrations.
 # Stop, restore-point verification and migration are separate operator phases, not a rollout.
 # --platform-only leaves the release alone, so it needs no such guard.
+# A first install that failed was never deployed, so this run may retry the same release. It
+# keeps that install's Jobs and Pods for diagnosis instead of rolling it back.
+ROLLBACK=
 if [ "$RELEASE" = true ] && { command -v k3s >/dev/null 2>&1 || [ -f "$HERE/kubeconfig" ] || sudo test -f /etc/rancher/k3s/k3s.yaml; }; then
+	refuse="release changes and failed or pending releases require Stopped schema upgrades: https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades; keep roles stopped after a migration failure; restore the matching backup before returning to the old release"
 	releases=$(sudo "$(command -v helm)" --kubeconfig /etc/rancher/k3s/k3s.yaml \
 		list --namespace "$NAMESPACE" --filter '^hephaestus$' --output json) ||
 		die "cannot read the installed release; restore cluster access before retrying; do not run an older release against a changed database"
-	printf '%s\n' "$releases" | jq -e --arg version "$VERSION" '
-		type == "array" and (length == 0 or (length == 1 and
-			.[0].status == "deployed" and .[0].chart == ("hephaestus-" + $version) and
-			.[0].app_version == $version))
-	' >/dev/null 2>&1 || die "release changes and failed or pending releases require Stopped schema upgrades: https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades; keep roles stopped after a migration failure; restore the matching backup before returning to the old release"
+	status=$(printf '%s\n' "$releases" | jq -er --arg version "$VERSION" '
+		if type == "array" and length == 0 then "none"
+		elif type == "array" and length == 1 and (.[0].status == "deployed" or .[0].status == "failed") and
+			.[0].chart == ("hephaestus-" + $version) and .[0].app_version == $version then .[0].status
+		else empty end
+	' 2>/dev/null) || die "$refuse"
+	case $status in
+	deployed) ROLLBACK=--rollback-on-failure ;;
+	failed)
+		history=$(sudo "$(command -v helm)" --kubeconfig /etc/rancher/k3s/k3s.yaml \
+			history hephaestus --namespace "$NAMESPACE" --output json) ||
+			die "cannot read the installed release; restore cluster access before retrying; do not run an older release against a changed database"
+		printf '%s\n' "$history" | jq -e 'type == "array" and length > 0 and all(.[]; .status == "failed")' >/dev/null 2>&1 ||
+			die "$refuse"
+		;;
+	esac
 fi
 
 K3S_INSTALLED=false
@@ -829,10 +844,12 @@ mv "$TEMP/chart/hephaestus" "$HERE/chart-$VERSION/hephaestus"
 say "Installing the release"
 profiles="$HERE/chart-$VERSION/hephaestus/profiles"
 set -- -f "$profiles/small.yaml"
-# The guard permits only a first install or the same immutable release. Rollback cannot start an older release.
+# The guard permits only a first install or the same immutable release. Rollback cannot start an
+# older release, and only a deployed release has a revision to return to.
 helm upgrade --install hephaestus "$HERE/chart-$VERSION/hephaestus" -n "$NAMESPACE" \
 	"$@" -f "$HERE/k3s-values.yaml" -f "$HERE/site.yaml" \
-	--rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
+	${ROLLBACK:+"$ROLLBACK"} --wait=watcher --wait-for-jobs --timeout 20m ||
+	die "Hephaestus $VERSION did not become ready. Follow https://docs.hephaestus.build/admin/kubernetes#a-first-install-fails before you run this command again"
 if [ "$oauth_changed" = true ]; then
 	# Startup seeds a missing provider. An existing provider keeps its database credential.
 	kubectl -n "$NAMESPACE" rollout restart deployment/hephaestus-server >/dev/null

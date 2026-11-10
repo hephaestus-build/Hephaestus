@@ -2279,10 +2279,10 @@ The [k3s uninstall reference](https://docs.k3s.io/installation/uninstall) owns t
 
 ### A first install fails
 
-A failed manual install keeps its Helm revision and resources when you omit `--rollback-on-failure`.
-The one-host installer currently uses automatic rollback.
-If its first install fails, Helm can remove the release resources before you inspect them.
-A missing Pod does not prove that no Pod ran.
+A failed first install keeps its Helm revision, Jobs and Pods when it runs without `--rollback-on-failure`.
+The one-host installer does not use automatic rollback on a first install.
+When the install fails, the installer stops and links to this section.
+After the diagnosis, run the installer again with the same release. It retries the failed install.
 
 For a one-host installation, first select the kubeconfig in the installer's release directory.
 For the default directory:
