@@ -169,6 +169,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private ApplicationContext context;
 
     @Autowired
+    private ReviewStart reviewStart;
+
+    @Autowired
     private AgentRuns agentRuns;
 
     /** The jobs each test worker holds, by the worker's name. */
@@ -1084,6 +1087,34 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(3);
         assertThat(requeued.spentAttempts()).as("a drain spends no retry").isEqualTo(2);
         assertThat(RuntimeJobTestData.runState(jdbc, requeued)).isEqualTo("QUEUED");
+    }
+
+    @Test
+    @DisplayName("a requeued review reads queued until its next claim starts it, and keeps the time it first started")
+    void shouldQueueTheReviewWithItsJobAndKeepItsFirstStartWhenTheNextClaimStartsIt() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 0);
+        ReviewJob job = jobRepository.findById(jobId).orElseThrow();
+        jdbc.update(
+                "UPDATE review SET status='RUNNING',checks=checks||jsonb_build_object('startedAt','2026-01-01T00:00:00Z')"
+                        + " WHERE workspace_id=? AND id=?",
+                job.getWorkspaceId(),
+                job.getReviewId());
+
+        assertThat(drain(jobId)).isTrue();
+
+        assertThat(reviewState(job)).isEqualTo("QUEUED/2026-01-01T00:00:00Z");
+        Boolean started =
+                transactionTemplate.execute(status -> reviewStart.start(job.getWorkspaceId(), job.getReviewId()));
+        assertThat(started).isTrue();
+        assertThat(reviewState(job)).isEqualTo("RUNNING/2026-01-01T00:00:00Z");
+    }
+
+    private @Nullable String reviewState(ReviewJob job) {
+        return jdbc.queryForObject(
+                "SELECT status||'/'||(checks->>'startedAt') FROM review WHERE workspace_id=? AND id=?",
+                String.class,
+                job.getWorkspaceId(),
+                job.getReviewId());
     }
 
     @Test

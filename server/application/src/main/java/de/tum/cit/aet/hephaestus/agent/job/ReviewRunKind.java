@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
@@ -64,6 +65,7 @@ public class ReviewRunKind implements AgentRunHandler {
     private final ReviewJobAssignments assignments;
     private final JobEvidenceFiles files;
     private final ObjectMapper mapper;
+    private final ReviewStart reviewStart;
     private final Counter compositionUnconfirmed;
 
     ReviewRunKind(
@@ -74,6 +76,7 @@ public class ReviewRunKind implements AgentRunHandler {
             ReviewJobAssignments assignments,
             JobEvidenceFiles files,
             ObjectMapper mapper,
+            ReviewStart reviewStart,
             MeterRegistry meters) {
         this.jobs = jobs;
         this.runs = runs;
@@ -82,6 +85,7 @@ public class ReviewRunKind implements AgentRunHandler {
         this.assignments = assignments;
         this.files = files;
         this.mapper = mapper;
+        this.reviewStart = reviewStart;
         this.compositionUnconfirmed = Counter.builder(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED)
                 .description("Admitted reviews whose attempts all ended before they confirmed each destination")
                 .tag("cause", "retries_exhausted")
@@ -136,10 +140,11 @@ public class ReviewRunKind implements AgentRunHandler {
         return capacity.reviewRetries() + WITHHOLD_ATTEMPTS;
     }
 
-    /** The copy fence before any job row, as every recovery and admission takes them. */
+    /** The copy fence, then the review, then its job, as every recovery, claim and admission takes them. */
     @Override
     public void lock(AgentRunRef run) {
         files.holdCopyAdmission();
+        jobs.lockParentByRun(run.id(), run.workspaceId());
         jobs.lockByRun(run.id(), run.workspaceId());
     }
 
@@ -164,6 +169,7 @@ public class ReviewRunKind implements AgentRunHandler {
             return false;
         }
         jobs.requeueRunning(job.getId(), lost.runId(), job.getAttempt());
+        reviewStart.requeue(job.getWorkspaceId(), job.getReviewId());
         log.info("Review attempt lost its lease and is queued again: jobId={}", job.getId());
         return true;
     }
@@ -207,10 +213,12 @@ public class ReviewRunKind implements AgentRunHandler {
     public boolean requeue(
             UUID jobId, AgentRunFence fence, AgentRuns.Charge charge, Duration delay, @Nullable AgentRunHold hold) {
         files.holdCopyAdmission();
+        jobs.lockParentOfJob(jobId);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return false;
         settle(job);
         if (jobs.requeueRunning(jobId, fence.runId(), attempt(fence.epoch())) == 0) return false;
+        reviewStart.requeue(job.getWorkspaceId(), job.getReviewId());
         Duration wait = charge == AgentRuns.Charge.SPEND ? AgentRuns.backoff(job.spentAttempts() + 1) : delay;
         if (!runs.requeue(fence, charge, wait, hold))
             throw new IllegalStateException("The attempt's run moved under its lock");
@@ -227,6 +235,7 @@ public class ReviewRunKind implements AgentRunHandler {
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<AgentRunRef> continueToCompose(UUID jobId, AgentRunFence fence) {
         files.holdCopyAdmission();
+        jobs.lockParentOfJob(jobId);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return Optional.empty();
         settle(job);
@@ -235,6 +244,7 @@ public class ReviewRunKind implements AgentRunHandler {
         AgentRunRef composing = runs.continueAs(ended, fence.epoch(), AgentRunKind.REVIEW_COMPOSE);
         if (jobs.queueOnNextRun(jobId, fence.runId(), attempt(fence.epoch()), composing.id()) == 0)
             throw new IllegalStateException("The attempt's job moved under its lock");
+        reviewStart.requeue(job.getWorkspaceId(), job.getReviewId());
         runs.retire(ended);
         return Optional.of(composing);
     }

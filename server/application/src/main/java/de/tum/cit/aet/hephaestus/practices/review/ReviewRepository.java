@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.practices.review.report.ScanMembershipQueries;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
@@ -145,7 +144,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQue
     @Query("SELECT r FROM Review r WHERE r.id = :id AND r.workspaceId = :workspaceId")
     Optional<Review> lockByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
-    /** Filters on the status that a scan reports ({@link ReviewShownStatus}), as its row shows it. */
+    /** Filters on the stored status of a scan, as its row shows it. */
     @Query(
             value = "SELECT q.* FROM review q WHERE " + SCANS_WHERE + " ORDER BY q.created_at DESC,q.id DESC",
             countQuery = "SELECT count(*) FROM review q WHERE " + SCANS_WHERE,
@@ -159,7 +158,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQue
 
     String SCANS_WHERE = "q.workspace_id=:workspaceId AND q.kind=:kind"
             + " AND (CAST(:repositoryItemId AS bigint) IS NULL OR q.item_id=:repositoryItemId)"
-            + " AND (CAST(:status AS varchar) IS NULL OR " + ReviewShownStatus.SQL + "=:status)";
+            + " AND (CAST(:status AS varchar) IS NULL OR q.status=:status)";
 
     Optional<Review> findFirstByWorkspaceIdAndKindAndStatusInOrderByCreatedAtAsc(
             long workspaceId, ReviewKind kind, Collection<ReviewStatus> statuses);

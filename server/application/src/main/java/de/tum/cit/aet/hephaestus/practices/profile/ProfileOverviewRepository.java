@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.profile;
 
 import de.tum.cit.aet.hephaestus.practices.model.Result;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -29,8 +28,8 @@ public interface ProfileOverviewRepository extends Repository<Result, UUID> {
      * account yet. The requester does not own a review; the subject that selection froze on its listed item does.
      */
     @Query(value = """
-        SELECT q.id AS reviewId,q.item_id AS itemId,q.ordered_at AS orderedAt,""" + ReviewShownStatus.SQL + """
-         AS status FROM review q WHERE q.workspace_id=:ws AND q.kind='ITEM' AND q.status IN ('QUEUED','RUNNING')
+        SELECT q.id AS reviewId,q.item_id AS itemId,q.ordered_at AS orderedAt,q.status AS status
+        FROM review q WHERE q.workspace_id=:ws AND q.kind='ITEM' AND q.status IN ('QUEUED','RUNNING')
           AND NOT q.cancel_requested
           AND EXISTS(SELECT 1 FROM review_item m WHERE m.workspace_id=q.workspace_id AND m.review_id=q.id
             AND m.state='LISTED' AND m.detail->>'developerId'=CAST(:account AS text))

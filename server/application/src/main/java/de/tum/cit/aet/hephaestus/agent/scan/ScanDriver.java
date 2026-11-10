@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueue;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewScanReuse;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewScanStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ScanExecutionSnapshot;
@@ -40,6 +41,7 @@ public class ScanDriver {
     private final ReviewScanStore scans;
     private final ReviewScanReuse reuse;
     private final ReviewService reviews;
+    private final ReviewStart starts;
     private final ScanService inventory;
     private final ScanBudget budget;
     private final ReviewQueue queue;
@@ -170,6 +172,8 @@ public class ScanDriver {
                     review,
                     item,
                     selected.stream().map(assignment -> assignment.id()).toList());
+            // Between two files nothing of the scan runs: it waits, as its next job does, until a claim starts it.
+            starts.requeue(review.workspaceId(), review.id());
         } catch (ReviewJobStateConflictException changed) {
             close(state, ReviewStatus.PARTIAL, ReviewStopReason.MODEL_CHANGED);
         }

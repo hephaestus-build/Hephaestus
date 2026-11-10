@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import java.time.Instant;
 import java.util.List;
@@ -46,7 +45,7 @@ public interface ReviewOverviewRepository extends Repository<Review, UUID> {
     List<MarkedCount> incorrect(long ws, Instant from, Instant to);
 
     @Query(
-            value = "SELECT " + ReviewShownStatus.SQL + " AS status,count(*) AS count FROM review q"
+            value = "SELECT q.status AS status,count(*) AS count FROM review q"
                     + " WHERE q.workspace_id=:ws AND q.created_at>=:from AND q.created_at<:to GROUP BY 1",
             nativeQuery = true)
     List<StatusCount> statuses(long ws, Instant from, Instant to);

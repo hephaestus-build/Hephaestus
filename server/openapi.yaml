@@ -7476,6 +7476,7 @@ paths:
           type: array
           items:
             type: string
+            description: Where the review stands.
             enum:
             - QUEUED
             - RUNNING
@@ -8801,6 +8802,7 @@ paths:
           type: array
           items:
             type: string
+            description: Where the review stands.
             enum:
             - QUEUED
             - RUNNING
@@ -10397,6 +10399,7 @@ paths:
         required: false
         schema:
           type: string
+          description: Where the review stands.
           enum:
           - QUEUED
           - RUNNING
@@ -20754,6 +20757,7 @@ components:
           type:
           - string
           - "null"
+          description: Where the review stands.
           enum:
           - QUEUED
           - RUNNING
@@ -22040,6 +22044,7 @@ components:
           - type: "null"
         status:
           type: string
+          description: Where the review stands.
           enum:
           - QUEUED
           - RUNNING
@@ -22453,6 +22458,7 @@ components:
           - type: "null"
         status:
           type: string
+          description: Where the review stands.
           enum:
           - QUEUED
           - RUNNING
@@ -23604,6 +23610,7 @@ components:
           - BACKFILL
         status:
           type: string
+          description: Where the review stands.
           enum:
           - QUEUED
           - RUNNING
@@ -24181,6 +24188,7 @@ components:
           - type: "null"
         status:
           type: string
+          description: Where the review stands.
           enum:
           - QUEUED
           - RUNNING
@@ -24777,6 +24785,7 @@ components:
           format: date-time
         status:
           type: string
+          description: Where the review stands.
           enum:
           - QUEUED
           - RUNNING
@@ -25143,6 +25152,7 @@ components:
           format: date-time
         status:
           type: string
+          description: Where the review stands.
           enum:
           - QUEUED
           - RUNNING

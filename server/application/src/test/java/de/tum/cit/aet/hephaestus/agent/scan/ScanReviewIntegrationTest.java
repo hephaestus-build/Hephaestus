@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewScanReuse;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewScanStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingFact;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingFacts;
@@ -194,6 +195,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
                 scans,
                 mock(ReviewScanReuse.class),
                 reviews,
+                mock(ReviewStart.class),
                 mock(ScanService.class),
                 budget,
                 queue,

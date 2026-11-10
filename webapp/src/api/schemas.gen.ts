@@ -11806,6 +11806,7 @@ export const ProfileReviewRefSchema = {
                 'string',
                 'null'
             ],
+            description: 'Where the review stands.',
             enum: [
                 'QUEUED',
                 'RUNNING',
@@ -13625,6 +13626,7 @@ export const ReviewSchema = {
         },
         status: {
             type: 'string',
+            description: 'Where the review stands.',
             enum: [
                 'QUEUED',
                 'RUNNING',
@@ -14211,6 +14213,7 @@ export const ReviewDetailSchema = {
         },
         status: {
             type: 'string',
+            description: 'Where the review stands.',
             enum: [
                 'QUEUED',
                 'RUNNING',
@@ -15799,6 +15802,7 @@ export const ReviewRefSchema = {
         },
         status: {
             type: 'string',
+            description: 'Where the review stands.',
             enum: [
                 'QUEUED',
                 'RUNNING',
@@ -16622,6 +16626,7 @@ export const ReviewSummarySchema = {
         },
         status: {
             type: 'string',
+            description: 'Where the review stands.',
             enum: [
                 'QUEUED',
                 'RUNNING',
@@ -17447,6 +17452,7 @@ export const ScanDetailSchema = {
         },
         status: {
             type: 'string',
+            description: 'Where the review stands.',
             enum: [
                 'QUEUED',
                 'RUNNING',
@@ -17955,6 +17961,7 @@ export const ScanSummarySchema = {
         },
         status: {
             type: 'string',
+            description: 'Where the review stands.',
             enum: [
                 'QUEUED',
                 'RUNNING',

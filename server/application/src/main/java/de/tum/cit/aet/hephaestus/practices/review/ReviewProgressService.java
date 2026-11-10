@@ -19,8 +19,7 @@ public class ReviewProgressService {
     private final ReviewItemRepository items;
 
     /**
-     * @param shown each review's shown status ({@link de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus});
-     *     a review that is neither queued nor running gets no progress
+     * @param shown each review's status; a review that is neither queued nor running gets no progress
      * @return progress keyed by review id; a review whose practices are not listed yet is absent
      */
     public Map<UUID, ReviewProgressDTO> progress(long workspaceId, Map<UUID, ReviewStatus> shown) {

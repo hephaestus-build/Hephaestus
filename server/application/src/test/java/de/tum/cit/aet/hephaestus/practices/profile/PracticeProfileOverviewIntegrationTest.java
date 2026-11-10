@@ -17,6 +17,8 @@ import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -77,30 +79,34 @@ class PracticeProfileOverviewIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(0);
     }
 
-    @Test
-    void shouldReportTheReadersReviewAsQueuedWhileItsJobWaitsForAWorker() {
-        var waiting = data.result(scenario, ResultOutcome.MET, Instant.now());
-        data.activeJob(waiting, "QUEUED", null);
-        // The stored status turns Running when a review is handed to the queue, before a worker claims it.
-        jdbc.sql("UPDATE review SET status='RUNNING',stop_reason=NULL,completed_at=NULL WHERE id=:id")
-                .param("id", waiting.getReviewId())
-                .update();
+    @ParameterizedTest
+    @EnumSource(ReviewStatus.class)
+    void shouldReportEachPersistedStateInTheReadersOverviewListAndDetail(ReviewStatus status) {
+        var review = data.result(scenario, ResultOutcome.MET, Instant.now());
+        data.reviewStatus(review, status);
 
         get("/practice-profile/overview")
                 .expectStatus()
                 .isOk()
                 .expectBody()
                 .jsonPath("$.latestReview.status")
-                .isEqualTo("QUEUED");
-        get("/practice-profile/reviews?status=QUEUED")
+                .isEqualTo(status.name());
+        get("/practice-profile/reviews?status=" + status)
                 .expectStatus()
                 .isOk()
                 .expectBody()
                 .jsonPath("$.content[0].review.id")
-                .isEqualTo(waiting.getReviewId().toString())
+                .isEqualTo(review.getReviewId().toString())
                 .jsonPath("$.content[0].review.status")
-                .isEqualTo("QUEUED");
-        get("/practice-profile/reviews?status=RUNNING")
+                .isEqualTo(status.name());
+        get("/practice-profile/reviews/" + review.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.review.status")
+                .isEqualTo(status.name());
+        var excluded = status == ReviewStatus.QUEUED ? ReviewStatus.RUNNING : ReviewStatus.QUEUED;
+        get("/practice-profile/reviews?status=" + excluded)
                 .expectStatus()
                 .isOk()
                 .expectBody()
@@ -159,6 +165,22 @@ class PracticeProfileOverviewIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(Long.toString(scenario.item().getId()))
                 .jsonPath("$.latestReview")
                 .isEmpty();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ReviewStatus.class,
+            names = {"QUEUED", "RUNNING"})
+    void shouldReportThePersistedStateOfAReviewInFlight(ReviewStatus status) {
+        var review = data.activeReview(scenario, reader, status, Instant.now(), null);
+        get("/practice-profile/overview")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.activeReview.reviewId")
+                .isEqualTo(review.getId().toString())
+                .jsonPath("$.activeReview.status")
+                .isEqualTo(status.name());
     }
 
     @Test

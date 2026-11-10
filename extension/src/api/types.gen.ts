@@ -4289,6 +4289,9 @@ export type ProfileReviewRef = {
     item: ItemRef;
     progress: ReviewProgress | null;
     reviewId: string;
+    /**
+     * Where the review stands.
+     */
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED' | null;
 };
 
@@ -4799,6 +4802,9 @@ export type Review = {
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
     startedBy: ItemEvent | null;
+    /**
+     * Where the review stands.
+     */
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
     stopReason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | 'NO_SANDBOX_ROOM' | 'COMPOSITION_UNCONFIRMED' | null;
 };
@@ -4889,6 +4895,9 @@ export type ReviewDetail = {
     runtime: ReviewRuntime | null;
     stageTiming: Array<ReviewStageTiming>;
     startedBy: ItemEvent | null;
+    /**
+     * Where the review stands.
+     */
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
     stopReason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | 'NO_SANDBOX_ROOM' | 'COMPOSITION_UNCONFIRMED' | null;
     usage: ReviewUsage;
@@ -5163,6 +5172,9 @@ export type ReviewRef = {
     itemVersion: string | null;
     kind: 'ITEM' | 'SCAN';
     origin: 'EVENT' | 'REQUEST' | 'SCHEDULE' | 'BACKFILL';
+    /**
+     * Where the review stands.
+     */
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
 };
 
@@ -5298,6 +5310,9 @@ export type ReviewSummary = {
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
     startedBy: ItemEvent | null;
+    /**
+     * Where the review stands.
+     */
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
     stopReason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | 'NO_SANDBOX_ROOM' | 'COMPOSITION_UNCONFIRMED' | null;
 };
@@ -5507,6 +5522,9 @@ export type ScanDetail = {
     repository: ItemRef;
     requestedBy: AccountRef | null;
     startedAt: string | null;
+    /**
+     * Where the review stands.
+     */
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
     stopReason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | 'NO_SANDBOX_ROOM' | 'COMPOSITION_UNCONFIRMED' | null;
 };
@@ -5594,6 +5612,9 @@ export type ScanSummary = {
     repository: ItemRef;
     requestedBy: AccountRef | null;
     startedAt: string | null;
+    /**
+     * Where the review stands.
+     */
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
     stopReason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | 'NO_SANDBOX_ROOM' | 'COMPOSITION_UNCONFIRMED' | null;
 };
@@ -14707,6 +14728,9 @@ export type ListScansData = {
     };
     query?: {
         repositoryItemId?: string;
+        /**
+         * Where the review stands.
+         */
         status?: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
         page?: number;
         size?: number;
