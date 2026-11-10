@@ -12,6 +12,7 @@ import {
 	useNavigate,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { useAccountDangerZone } from "@/hooks/use-account-danger-zone";
 import { usePasskeySettings } from "@/hooks/use-passkey-settings";
 import { toast } from "@/lib/toast";
 import type { Route as RootRoute } from "@/routes/__root";
@@ -97,6 +98,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 function RouteComponent() {
 	const passkeys = usePasskeySettings();
+	const dangerZoneProps = useAccountDangerZone({ onAccountDeleted: openSignInAfterDeletion });
 	const queryClient = useQueryClient();
 	const { linkAccount, isAppAdmin, linkedProviders } = useAuth();
 	const userSettingsQueryKey = getUserSettingsQueryKey();
@@ -583,7 +585,7 @@ function RouteComponent() {
 			showSlackPreferencesSection={slackAvailable}
 			slackPreferencesProps={slackPreferencesProps}
 			sessionsProps={{ state: sessionsState }}
-			onAccountDeleted={openSignInAfterDeletion}
+			dangerZoneProps={dangerZoneProps}
 		/>
 	);
 }

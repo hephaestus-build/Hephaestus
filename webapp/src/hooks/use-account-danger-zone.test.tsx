@@ -12,7 +12,14 @@ import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 
-import { DangerZoneSection } from "./DangerZoneSection";
+import { DangerZoneSection } from "@/components/settings/DangerZoneSection";
+
+import { useAccountDangerZone } from "./use-account-danger-zone";
+
+/** The settings page's wiring of the Danger zone: the hook reads and writes, the section shows. */
+function DangerZone({ onAccountDeleted }: { onAccountDeleted: () => void }) {
+	return <DangerZoneSection {...useAccountDangerZone({ onAccountDeleted })} />;
+}
 
 function renderWithClient(node: ReactNode) {
 	const queryClient = new QueryClient({
@@ -25,7 +32,7 @@ function renderWithClient(node: ReactNode) {
 	);
 }
 
-describe("DangerZoneSection — data export", () => {
+describe("useAccountDangerZone — data export", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 	});
@@ -34,7 +41,7 @@ describe("DangerZoneSection — data export", () => {
 		// `shouldAdvanceTime` lets MSW's promise-based responses keep resolving while we still
 		// control the 2s `refetchInterval` poll deterministically (no real wall-clock wait).
 		vi.useFakeTimers({ shouldAdvanceTime: true });
-		renderWithClient(<DangerZoneSection onAccountDeleted={vi.fn()} />);
+		renderWithClient(<DangerZone onAccountDeleted={vi.fn()} />);
 
 		fireEvent.click(screen.getByRole("button", { name: /Request export/u }));
 
@@ -54,9 +61,9 @@ function openDeleteDialog() {
 	fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
 }
 
-describe("DangerZoneSection — account deletion", () => {
+describe("useAccountDangerZone — account deletion", () => {
 	it("keeps deletion disabled until the exact confirmation phrase is typed", async () => {
-		renderWithClient(<DangerZoneSection onAccountDeleted={vi.fn()} />);
+		renderWithClient(<DangerZone onAccountDeleted={vi.fn()} />);
 		openDeleteDialog();
 
 		const dialog = await screen.findByRole("alertdialog");
@@ -85,7 +92,7 @@ describe("DangerZoneSection — account deletion", () => {
 			}),
 		);
 
-		renderWithClient(<DangerZoneSection onAccountDeleted={onAccountDeleted} />);
+		renderWithClient(<DangerZone onAccountDeleted={onAccountDeleted} />);
 		openDeleteDialog();
 
 		const dialog = await screen.findByRole("alertdialog");
@@ -114,7 +121,7 @@ describe("DangerZoneSection — account deletion", () => {
 			}),
 		);
 
-		renderWithClient(<DangerZoneSection onAccountDeleted={onAccountDeleted} />);
+		renderWithClient(<DangerZone onAccountDeleted={onAccountDeleted} />);
 		openDeleteDialog();
 
 		const dialog = await screen.findByRole("alertdialog");

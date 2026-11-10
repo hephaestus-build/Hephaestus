@@ -8,7 +8,7 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { storySessions } from "@/stories/sessions-story-mock-data";
 
 import type { AiChoiceSectionProps } from "./AiChoiceSection";
-import { SettingsPage } from "./SettingsPage";
+import { SettingsPage, type SettingsPageProps } from "./SettingsPage";
 
 const meta = {
 	component: SettingsPage,
@@ -100,6 +100,11 @@ const defaultAiChoiceProps = {
 	onSave: fn(),
 } satisfies AiChoiceSectionProps;
 
+const dangerZoneProps = {
+	dataExport: { state: "idle", downloading: false, onRequest: fn(), onDownload: fn() },
+	deletion: { available: true, deleting: false, onDelete: fn() },
+} satisfies SettingsPageProps["dangerZoneProps"];
+
 const defaultSlackPreferencesProps = {
 	workspaces: [
 		{
@@ -135,7 +140,7 @@ export const Default: Story = {
 		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
-		onAccountDeleted: fn(),
+		dangerZoneProps,
 		isLoading: false,
 	},
 	play: async ({ canvas }) => {
@@ -191,7 +196,7 @@ export const AllTogglesDisabled: Story = {
 		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
-		onAccountDeleted: fn(),
+		dangerZoneProps,
 		isLoading: false,
 	},
 };
@@ -212,7 +217,7 @@ export const Loading: Story = {
 		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
-		onAccountDeleted: fn(),
+		dangerZoneProps,
 		isLoading: true,
 	},
 	play: async ({ canvas }) => {
@@ -272,7 +277,7 @@ export const ResearchHidden: Story = {
 		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
-		onAccountDeleted: fn(),
+		dangerZoneProps,
 		isLoading: false,
 	},
 	play: async ({ canvas }) => {

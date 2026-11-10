@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 import { AiChoiceSection, type AiChoiceSectionProps } from "./AiChoiceSection";
-import { DangerZoneSection } from "./DangerZoneSection";
+import { DangerZoneSection, type DangerZoneSectionProps } from "./DangerZoneSection";
 import {
 	EmailPreferencesSection,
 	hasEmailPreferences,
@@ -55,7 +55,7 @@ export interface SettingsPageProps {
 	slackPreferencesProps: SlackPreferencesSectionProps;
 	showSlackPreferencesSection?: boolean;
 	sessionsProps: SessionsSectionProps;
-	onAccountDeleted: () => void | Promise<void>;
+	dangerZoneProps: DangerZoneSectionProps;
 	isLoading?: boolean;
 	settingsError?: boolean;
 	onRetrySettings?: () => void;
@@ -75,7 +75,7 @@ export function SettingsPage({
 	slackPreferencesProps,
 	showSlackPreferencesSection = true,
 	sessionsProps,
-	onAccountDeleted,
+	dangerZoneProps,
 	isLoading = false,
 	settingsError = false,
 	onRetrySettings,
@@ -214,7 +214,7 @@ export function SettingsPage({
 
 				<Separator />
 				<div id="danger-zone" className="scroll-mt-20">
-					<DangerZoneSection onAccountDeleted={onAccountDeleted} />
+					<DangerZoneSection {...dangerZoneProps} />
 				</div>
 			</div>
 		</PageLayout>
