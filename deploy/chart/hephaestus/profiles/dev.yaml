@@ -15,7 +15,8 @@ nats:
 webhook:
   stream:
     maxBytes: 256MB
-    maxBytesGithub: 1GB
+    maxBytesByStream:
+      github: 1GB
   resources:
     requests: { cpu: 100m, memory: 1536Mi, ephemeral-storage: 128Mi }
     limits: { cpu: "1", memory: 1536Mi, ephemeral-storage: 512Mi }

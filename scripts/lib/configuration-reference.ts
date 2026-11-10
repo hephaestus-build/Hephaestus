@@ -184,6 +184,10 @@ const canonical = (name: string): string => name.replaceAll(/[-_]/gu, "").toLowe
 /** Relaxed binding from the environment: `_` stands for `.` and `-` alike. */
 const relaxed = (name: string): string => name.replaceAll(/[-_.]/gu, "").toLowerCase();
 
+/** A map whose values Spring binds from one environment variable each. */
+const SCALAR_MAP =
+	/^java\.util\.Map<java\.lang\.String,\s*(?:java\.lang\.\w+|java\.time\.Duration|org\.springframework\.util\.unit\.DataSize)>$/u;
+
 export class Metadata {
 	readonly #byCanonical = new Map<string, MetadataProperty>();
 	readonly #byRelaxed = new Map<string, MetadataProperty[]>();
@@ -232,7 +236,21 @@ export class Metadata {
 	/** The property a container variable binds through relaxed binding, when exactly one matches. */
 	relaxedProperty(variable: string): MetadataProperty | undefined {
 		const matches = this.#byRelaxed.get(relaxed(variable)) ?? [];
-		return matches.length === 1 ? matches[0] : undefined;
+		if (matches.length > 0) {
+			return matches.length === 1 ? matches[0] : undefined;
+		}
+		const environmentName = variable.toUpperCase();
+		const entries = [...this.#byCanonical.values()].flatMap((property) => {
+			if (property.type === undefined || !SCALAR_MAP.test(property.type)) {
+				return [];
+			}
+			const prefix = `${property.name.replaceAll("-", "").replaceAll(".", "_").toUpperCase()}_`;
+			const key = environmentName.startsWith(prefix) ? environmentName.slice(prefix.length) : "";
+			return /^[A-Z0-9]+$/u.test(key)
+				? [{ ...property, name: `${property.name}[${key.toLowerCase()}]` }]
+				: [];
+		});
+		return entries.length === 1 ? entries[0] : undefined;
 	}
 }
 

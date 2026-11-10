@@ -220,12 +220,13 @@ webhook:
   replicas: 1
   stream:
     # Consumers acknowledge within seconds, so the age holds the stream in steady state. Keep the age
-    # times the daily GitHub volume within maxBytesGithub (webhook ingestion operations).
+    # times the daily GitHub volume within maxBytesByStream.github (webhook ingestion operations).
     maxAge: 7d
     # Empty keeps application defaults, including the shorter Slack and Outline retention.
     maxAgeByStream: {}
     maxBytes: 1GB
-    maxBytesGithub: 10GB
+    maxBytesByStream:
+      github: 10GB
     # Set true for one release to apply a limit that deletes stored messages, such as a shorter
     # maxAge on a stream that already holds older deliveries; then set it back to false.
     allowDestructiveLimitUpdates: false

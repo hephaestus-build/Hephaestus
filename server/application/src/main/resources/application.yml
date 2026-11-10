@@ -806,7 +806,7 @@ hephaestus:
             max-bytes: ${HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES:1GB}
             max-bytes-by-stream:
                 # github carries the traffic; the others are a rounding error next to it.
-                github: ${HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB:10GB}
+                github: ${HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB:10GB}
             # What the broker may hold for all four streams together; startup refuses to run if their
             # bounds sum above it. Must match the broker's own max_file and stay under the free space
             # on the JetStream volume — docs/admin/webhook-ingestion-operations explains why.

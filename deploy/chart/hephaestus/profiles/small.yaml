@@ -34,7 +34,8 @@ nats:
 webhook:
   stream:
     maxAge: 7d
-    maxBytesGithub: 6442450944B
+    maxBytesByStream:
+      github: 6442450944B
     maxBytes: 536870912B
 server:
   databasePool: { maximumPoolSize: 16, minimumIdle: 2 }

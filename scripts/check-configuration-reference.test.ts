@@ -222,3 +222,80 @@ await test("the page keeps its anchors, imports every part, and every row reads 
 		sources.values.length,
 	);
 });
+
+await test("native environment map entries join the map metadata to their rendered consumer", () => {
+	const result = join(
+		{
+			bindings: [],
+			values: [],
+			containers: [
+				{
+					name: "Deployment/example-webhook:webhook",
+					image: applicationImage,
+					mounts: [],
+					environment: new Map(
+						["GITHUB", "GITLAB", "SLACK", "OUTLINE"].map((provider) => [
+							`HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_${provider}`,
+							"1GB",
+						]),
+					),
+				},
+			],
+		},
+		new Metadata([
+			{
+				name: "hephaestus.webhook.stream.max-bytes-by-stream",
+				type: "java.util.Map<java.lang.String,org.springframework.util.unit.DataSize>",
+				description: "Storage bounds keyed by stream name.",
+			},
+		]),
+	);
+	assert.deepEqual(result.unbound, []);
+	assert.deepEqual(
+		result.rows.map(({ settings }) => settings),
+		["github", "gitlab", "outline", "slack"].map((provider) => [
+			`hephaestus.webhook.stream.max-bytes-by-stream[${provider}]`,
+		]),
+	);
+	assert.equal(
+		result.rows.every(
+			({ services, description }) =>
+				services.length === 1 &&
+				services[0] === "webhook" &&
+				description === "Storage bounds keyed by stream name.",
+		),
+		true,
+	);
+});
+
+await test("native map names retain their canonical field boundary and reject misspellings", () => {
+	const metadata = new Metadata([
+		{
+			name: "hephaestus.webhook.stream.max-age-by-stream",
+			type: "java.util.Map<java.lang.String,java.time.Duration>",
+		},
+		{ name: "hephaestus.webhook.stream.max-bytes", type: "org.springframework.util.unit.DataSize" },
+		{
+			name: "hephaestus.webhook.stream.max-bytes-by-stream",
+			type: "java.util.Map<java.lang.String,org.springframework.util.unit.DataSize>",
+		},
+		{
+			name: "hephaestus.auth.login-providers",
+			type: "java.util.Map<java.lang.String,de.tum.cit.aet.hephaestus.core.auth.AuthProperties$LoginProviderSeed>",
+		},
+	]);
+	assert.equal(
+		metadata.relaxedProperty("HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK")?.name,
+		"hephaestus.webhook.stream.max-age-by-stream[slack]",
+	);
+	assert.equal(
+		metadata.relaxedProperty("HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE_BY_STREAM_SLACK"),
+		undefined,
+	);
+	assert.equal(metadata.relaxedProperty("HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"), undefined);
+	assert.equal(metadata.relaxedProperty("HEPHAESTUS_AUTH_LOGINPROVIDERS_GITHUB"), undefined);
+	assert.equal(
+		metadata.relaxedProperty("HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREM_SLACK"),
+		undefined,
+	);
+});

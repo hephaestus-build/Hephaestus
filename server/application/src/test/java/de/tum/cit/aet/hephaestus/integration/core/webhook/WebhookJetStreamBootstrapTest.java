@@ -54,7 +54,7 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
     void shouldKeepPersonalContentInsideItsHorizonOnTheSmallProfile() throws Exception {
         var configurations = createdConfigurations(Map.of(
                 "HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE", "7d",
-                "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB", "6442450944B",
+                "HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB", "6442450944B",
                 "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES", "536870912B",
                 "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET", "8589934592"));
 
@@ -78,6 +78,31 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
                         tuple("gitlab", Duration.ofDays(7), GIBIBYTE),
                         tuple("slack", Duration.ofDays(3), GIBIBYTE),
                         tuple("outline", Duration.ofDays(3), GIBIBYTE));
+    }
+
+    @Test
+    void shouldBindEveryProvidersByteOverrideThroughTheNativeMap() throws Exception {
+        var configurations = createdConfigurations(Map.of(
+                "HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB", "7GB",
+                "HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITLAB", "2GB",
+                "HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_SLACK", "1GB",
+                "HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_OUTLINE", "1GB",
+                "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET", "17179869184"));
+        assertThat(configurations)
+                .extracting(StreamConfiguration::getName, StreamConfiguration::getMaxBytes)
+                .containsExactlyInAnyOrder(
+                        tuple("github", 7 * GIBIBYTE),
+                        tuple("gitlab", 2 * GIBIBYTE),
+                        tuple("slack", GIBIBYTE),
+                        tuple("outline", GIBIBYTE));
+    }
+
+    @Test
+    void shouldNotReadTheRetiredGithubByteVariable() throws Exception {
+        assertThat(createdConfigurations(Map.of("HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB", "1GB")))
+                .filteredOn(configuration -> configuration.getName().equals("github"))
+                .extracting(StreamConfiguration::getMaxBytes)
+                .containsExactly(10 * GIBIBYTE);
     }
 
     private static List<StreamConfiguration> createdConfigurations(Map<String, Object> environmentVariables)

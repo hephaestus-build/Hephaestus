@@ -1174,7 +1174,7 @@ for (const name of ["small", "external"] as const) {
 		const resources = rendered(layersFor(name));
 		const receiver = workload(resources, "webhook");
 		for (const [provider, ageKey, bytesKey, bytes] of [
-			["github", "MAX_AGE", "MAX_BYTES_GITHUB", "6442450944B"],
+			["github", "MAX_AGE", "MAXBYTESBYSTREAM_GITHUB", "6442450944B"],
 			["gitlab", "MAX_AGE", "MAX_BYTES", "536870912B"],
 			["slack", "MAX_AGE", "MAX_BYTES", "536870912B"],
 			["outline", "MAX_AGE", "MAX_BYTES", "536870912B"],
@@ -1222,7 +1222,7 @@ await test("an existing installation can keep its broker budget and volume when 
 		"17179869184",
 	);
 	assert.equal(
-		envValue(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"),
+		envValue(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB"),
 		"6442450944B",
 	);
 	assert.equal(
@@ -4681,4 +4681,26 @@ await test("each sandbox kind has a cold-start template of one container, behind
 		get(list(get(templates[0], "spec", "podTemplate", "spec", "containers"))[0], "image"),
 	);
 	assert.equal(get(podSpec(holder), "automountServiceAccountToken"), false);
+});
+
+await test("each provider's byte override reaches the webhook role through the map", () => {
+	const bounds = { github: "7GB", gitlab: "2GB", slack: "1GB", outline: "1GB" };
+	const resources = rendered([
+		...layersFor("small"),
+		{
+			webhook: { stream: { maxBytesByStream: bounds } },
+			nats: { jetstream: { maxFileBytes: 17_179_869_184 } },
+		},
+	]);
+	for (const [provider, bound] of Object.entries(bounds)) {
+		const name = `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_${provider.toUpperCase()}`;
+		assert.equal(envValue(workload(resources, "webhook"), name), bound, provider);
+		for (const role of ["server", "worker"]) {
+			assert.equal(env(workload(resources, role), name), undefined, `${role} ${provider}`);
+		}
+	}
+	assert.equal(
+		env(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"),
+		undefined,
+	);
 });
