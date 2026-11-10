@@ -46,6 +46,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
@@ -74,6 +75,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -128,6 +130,9 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private MentorTurnCompletion completion;
+
+    @Autowired
+    private MentorTurnProgress progress;
 
     @Autowired
     private MeterRegistry metrics;
@@ -390,7 +395,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         turns.stop(workspace.getId(), turn.getId());
 
         call("PUT", "partial", turn.getAttempt(), """
-                        {"activity":"writing","tool":null,"messages":[]}""")
+                        {"sequence":1,"baseSequence":0,"prefix":0,"suffix":0,"text":"{}"}""")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.type")
                         .value(ProblemType.MENTOR_TURN_STOPPED.uri().toString()))
@@ -418,7 +423,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         .principal(late)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"activity":"writing","tool":null,"messages":[]}"""))
+                                {"sequence":1,"baseSequence":0,"prefix":0,"suffix":0,"text":"{}"}"""))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.stop").value("deadline"));
         direct.perform(post(TURN_PATH + "end", turn.getId())
@@ -742,6 +747,62 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         + " failed: its conversation loop reported ERROR: unrecognized")
                 .doesNotContain(key)
                 .doesNotContain(quoted);
+    }
+
+    /**
+     * The loop makes each change of its partial answer, so any worker forwards it: here a whole snapshot, then a change
+     * made from it, rebuild the answer for every reader.
+     */
+    @Test
+    void shouldForwardTheLoopsChangesSoReadersRebuildTheWholeAnswer() throws Exception {
+        String first = "{\"activity\":\"writing\",\"messages\":[{\"content\":[{\"type\":\"text\",\"text\":\"Pin\"}]}]}";
+        String next = first.replace("\"Pin\"", "\"Pin the image\"");
+        int prefix = first.indexOf("Pin") + 3;
+        int suffix = first.length() - prefix;
+
+        call("PUT", "partial", turn.getAttempt(), update(10, 0, 0, 0, first)).andExpect(status().isNoContent());
+        call("PUT", "partial", turn.getAttempt(), update(11, 10, prefix, suffix, " the image"))
+                .andExpect(status().isNoContent());
+
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> assertThat(progress.snapshot(reloaded()))
+                        .isEqualTo(JsonMapper.shared().readTree(next)));
+    }
+
+    @Test
+    void shouldRefuseAPartialAnswerThatCouldBeNoChangeOfItsAttempt() throws Exception {
+        call("PUT", "partial", turn.getAttempt(), update(0, 0, 0, 0, "{}")).andExpect(status().isBadRequest());
+        call("PUT", "partial", turn.getAttempt(), update(5, 5, 0, 0, "x")).andExpect(status().isBadRequest());
+    }
+
+    /** The loop stops sending an answer that readers would drop; both sides hold the one limit. */
+    @Test
+    void shouldStopThePartialAnswerAtTheLengthReadersKeep() throws Exception {
+        String protocol =
+                new ClassPathResource("agent/heph-host-protocol.js").getContentAsString(StandardCharsets.UTF_8);
+        Matcher limit = Pattern.compile("MAX_PARTIAL_CHARS = ([0-9 *]+);").matcher(protocol);
+        assertThat(limit.find())
+                .as("heph-host-protocol.js declares MAX_PARTIAL_CHARS")
+                .isTrue();
+        long chars = 1;
+        Matcher factor = Pattern.compile("[0-9]+").matcher(limit.group(1));
+        while (factor.find()) {
+            chars *= Long.parseLong(factor.group());
+        }
+
+        assertThat(chars).isEqualTo(MentorTurnProgress.MAX_SNAPSHOT_CHARS);
+    }
+
+    private static String update(long sequence, long base, int prefix, int suffix, String text) {
+        return JsonMapper.shared()
+                .createObjectNode()
+                .put("sequence", sequence)
+                .put("baseSequence", base)
+                .put("prefix", prefix)
+                .put("suffix", suffix)
+                .put("text", text)
+                .toString();
     }
 
     /** The worker logs exactly the kinds of failure the host names; a kind only one side knows is lost. */

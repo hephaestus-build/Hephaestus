@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
+import de.tum.cit.aet.hephaestus.mentor.MentorPartialUpdates;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
@@ -237,7 +238,11 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                 .containsEntry("conversation_id", kept.getId())
                 .containsEntry("kept", true);
         assertThatThrownBy(() -> turns.updatePartial(
-                        shared.getId(), slackTurn, slackAttempt, slackLease, JsonNodeFactory.instance.objectNode()))
+                        shared.getId(),
+                        slackTurn,
+                        slackAttempt,
+                        slackLease,
+                        MentorPartialUpdates.whole(JsonNodeFactory.instance.objectNode())))
                 .as("the host of the absorbed attempt lost its lease")
                 .isInstanceOf(MentorLeaseLostException.class);
         assertThatThrownBy(() -> turns.end(

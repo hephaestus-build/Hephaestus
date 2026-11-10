@@ -43,6 +43,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
+import de.tum.cit.aet.hephaestus.mentor.MentorPartialUpdates;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
@@ -254,7 +255,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                snapshot);
+                MentorPartialUpdates.whole(snapshot));
         Awaitility.await()
                 .atMost(10, TimeUnit.SECONDS)
                 .until(() -> snapshot.equals(progress.snapshot(turns.require(workspace.getId(), turn.getId()))));

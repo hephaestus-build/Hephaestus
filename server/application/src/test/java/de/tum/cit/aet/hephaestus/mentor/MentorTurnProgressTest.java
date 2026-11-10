@@ -5,7 +5,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
-import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -18,47 +17,39 @@ class MentorTurnProgressTest {
 
     private static final long WORKSPACE = 7;
     private static final UUID CONVERSATION = UUID.randomUUID();
-    private static final Instant START = Instant.parse("2026-10-31T20:00:00Z");
 
     private final JsonMapper mapper = JsonMapper.shared();
-    private final MentorTurnProgress sender = new MentorTurnProgress(mapper);
     private final MentorTurnProgress reader = new MentorTurnProgress(mapper);
     private final UUID turnId = UUID.randomUUID();
     private final MentorTurn turn = running(turnId, 1);
 
     @Test
     void shouldRebuildEachPartialAnswerFromChangesAfterTheFirstWholeSnapshot() {
-        List<MentorLedgerEvents.ProgressChanged> first = send(answer("Pin"), START);
-        List<MentorLedgerEvents.ProgressChanged> second = send(answer("Pin the image"), START.plusMillis(250));
+        MentorTurnProgress.Update first = whole(1, answer("Pin"));
+        MentorTurnProgress.Update second = change(2, 1, answer("Pin"), answer("Pin the image"));
 
-        assertThat(deliver(first)).isTrue();
-        assertThat(deliver(second)).isTrue();
+        assertThat(deliver(send(first))).isTrue();
+        assertThat(deliver(send(second))).isTrue();
 
         assertThat(reader.snapshot(turn)).isEqualTo(mapper.readTree(answer("Pin the image")));
-        assertThat(decode(second).baseSequence())
-                .as("the second update is a change")
-                .isNotZero();
-        assertThat(decode(second).text().length())
-                .isLessThan(answer("Pin the image").length());
+        assertThat(decode(send(second)).text()).isEqualTo(" the image");
     }
 
     @Test
     void shouldShowNothingAfterAMissedFrameUntilTheNextWholeSnapshot() {
-        send(answer("Pin"), START);
-        List<MentorLedgerEvents.ProgressChanged> change = send(answer("Pin the"), START.plusMillis(250));
-        List<MentorLedgerEvents.ProgressChanged> whole =
-                send(answer("Pin the image"), START.plus(MentorTurnProgress.Stream.FULL_EVERY));
-
-        assertThat(deliver(change)).as("a change without its base").isFalse();
+        // The whole snapshot 1 was missed.
+        assertThat(deliver(send(change(2, 1, answer("Pin"), answer("Pin the")))))
+                .as("a change without its base")
+                .isFalse();
         assertThat(reader.snapshot(turn)).isNull();
-        assertThat(deliver(whole)).isTrue();
+        assertThat(deliver(send(whole(3, answer("Pin the image"))))).isTrue();
         assertThat(reader.snapshot(turn)).isEqualTo(mapper.readTree(answer("Pin the image")));
     }
 
     @Test
     void shouldCarryALargeAnswerInFramesBelowTheNotificationLimit() {
         String text = "Ein Absatz mit Umlauten äöü und 🙂. ".repeat(2_000);
-        List<MentorLedgerEvents.ProgressChanged> frames = send(answer(text), START);
+        List<MentorLedgerEvents.ProgressChanged> frames = send(whole(1, answer(text)));
 
         assertThat(frames).hasSizeGreaterThan(1);
         assertThat(frames)
@@ -71,16 +62,8 @@ class MentorTurnProgressTest {
     }
 
     @Test
-    void shouldNeverSplitASurrogatePairInAChange() {
-        assertThat(deliver(send(answer("Fertig 🙂"), START))).isTrue();
-        assertThat(deliver(send(answer("Fertig 🙃"), START.plusMillis(250)))).isTrue();
-
-        assertThat(reader.snapshot(turn)).isEqualTo(mapper.readTree(answer("Fertig 🙃")));
-    }
-
-    @Test
     void shouldDropFramesOutOfOrderAndKeepNoAnswerOfAnotherAttempt() {
-        List<MentorLedgerEvents.ProgressChanged> frames = send(answer("x".repeat(20_000)), START);
+        List<MentorLedgerEvents.ProgressChanged> frames = send(whole(1, answer("x".repeat(20_000))));
         assertThat(frames).hasSizeGreaterThan(2);
 
         assertThat(deliver(List.of(frames.get(0), frames.get(2), frames.get(1))))
@@ -92,33 +75,52 @@ class MentorTurnProgressTest {
                 .isNull();
     }
 
+    /** One connection receives frames in commit order, so a whole snapshot is the newest whatever its sequence. */
     @Test
-    void shouldTakeAWholeSnapshotFromAProcessWhoseClockRunsBehind() {
-        assertThat(deliver(send(answer("Pin"), START))).isTrue();
-        MentorTurnProgress behind = new MentorTurnProgress(mapper);
-        List<MentorLedgerEvents.ProgressChanged> whole = behind.frames(
-                WORKSPACE,
-                CONVERSATION,
-                turnId,
-                MentorTurn.Surface.APP,
-                1,
-                behind.next(WORKSPACE, turnId, 1, answer("Pin it"), START.minusSeconds(60))
-                        .orElseThrow());
+    void shouldTakeAWholeSnapshotWhateverItsSequence() {
+        assertThat(deliver(send(whole(1_000, answer("Pin"))))).isTrue();
 
-        assertThat(deliver(whole)).isTrue();
+        assertThat(deliver(send(whole(5, answer("Pin it"))))).isTrue();
+
         assertThat(reader.snapshot(turn)).isEqualTo(mapper.readTree(answer("Pin it")));
     }
 
     @Test
-    void shouldSendNoPartialAnswerThatNoReaderWouldKeep() {
-        String tooLong = answer("x".repeat(MentorTurnProgress.MAX_SNAPSHOT_CHARS));
+    void shouldTakeOnlyAnUpdateThatCouldBeOneOfItsAttempts() {
+        assertThat(MentorTurnProgress.wellFormed(whole(1, answer("Pin")))).isTrue();
+        assertThat(MentorTurnProgress.wellFormed(change(2, 1, answer("Pin"), answer("Pin it"))))
+                .isTrue();
 
-        assertThat(sender.next(WORKSPACE, turnId, 1, tooLong, START)).isEmpty();
+        assertThat(MentorTurnProgress.wellFormed(new MentorTurnProgress.Update(0, 0, 0, 0, "{}")))
+                .as("no sequence")
+                .isFalse();
+        assertThat(MentorTurnProgress.wellFormed(new MentorTurnProgress.Update(2, 2, 0, 0, "x")))
+                .as("a base that is not before it")
+                .isFalse();
+        assertThat(MentorTurnProgress.wellFormed(new MentorTurnProgress.Update(2, 1, -1, 0, "x")))
+                .as("a negative prefix")
+                .isFalse();
+        assertThat(MentorTurnProgress.wellFormed(new MentorTurnProgress.Update(2, 0, 3, 0, "x")))
+                .as("a whole snapshot that keeps part of another")
+                .isFalse();
+        assertThat(MentorTurnProgress.wellFormed(new MentorTurnProgress.Update(2, 1, 0, 0, null)))
+                .as("no text")
+                .isFalse();
+        assertThat(MentorTurnProgress.wellFormed(whole(1, answer("x".repeat(MentorTurnProgress.MAX_SNAPSHOT_CHARS)))))
+                .as("a whole snapshot that no reader would keep")
+                .isFalse();
+    }
+
+    @Test
+    void shouldSendNoUpdateLargerThanReadersTake() {
+        String larger = "x".repeat(MentorTurnProgress.MAX_UPDATE_BYTES + 1);
+
+        assertThat(send(new MentorTurnProgress.Update(2, 1, 0, 0, larger))).isEmpty();
     }
 
     @Test
     void shouldForgetTheAnswerOnceTheTurnNoLongerRuns() {
-        assertThat(deliver(send(answer("Pin"), START))).isTrue();
+        assertThat(deliver(send(whole(1, answer("Pin"))))).isTrue();
 
         reader.changed(new MentorLedgerEvents.TurnChanged(
                 WORKSPACE, CONVERSATION, turnId, MentorTurn.Status.DONE, MentorTurn.Surface.APP, 1));
@@ -129,7 +131,7 @@ class MentorTurnProgressTest {
     /** The end of a stopped turn, on any worker, reads what readers may have seen. */
     @Test
     void shouldKeepTheAnswerOfAStoppedTurnUntilItEnds() {
-        assertThat(deliver(send(answer("Pin"), START))).isTrue();
+        assertThat(deliver(send(whole(1, answer("Pin"))))).isTrue();
 
         reader.changed(new MentorLedgerEvents.TurnChanged(
                 WORKSPACE, CONVERSATION, turnId, MentorTurn.Status.STOPPED, MentorTurn.Surface.APP, 1));
@@ -140,14 +142,27 @@ class MentorTurnProgressTest {
         assertThat(reader.snapshot(WORKSPACE, turnId, 1)).isNull();
     }
 
-    private List<MentorLedgerEvents.ProgressChanged> send(String text, Instant now) {
-        return sender.frames(
-                WORKSPACE,
-                CONVERSATION,
-                turnId,
-                MentorTurn.Surface.APP,
-                1,
-                sender.next(WORKSPACE, turnId, 1, text, now).orElseThrow());
+    private List<MentorLedgerEvents.ProgressChanged> send(MentorTurnProgress.Update update) {
+        return reader.frames(WORKSPACE, CONVERSATION, turnId, MentorTurn.Surface.APP, 1, update);
+    }
+
+    private static MentorTurnProgress.Update whole(long sequence, String text) {
+        return new MentorTurnProgress.Update(sequence, 0, 0, 0, text);
+    }
+
+    /** The change from {@code previous} to {@code next}, as the loop makes it. */
+    private static MentorTurnProgress.Update change(long sequence, long base, String previous, String next) {
+        int prefix = 0;
+        while (prefix < Math.min(previous.length(), next.length()) && previous.charAt(prefix) == next.charAt(prefix)) {
+            prefix++;
+        }
+        int suffix = 0;
+        while (suffix < Math.min(previous.length(), next.length()) - prefix
+                && previous.charAt(previous.length() - 1 - suffix) == next.charAt(next.length() - 1 - suffix)) {
+            suffix++;
+        }
+        return new MentorTurnProgress.Update(
+                sequence, base, prefix, suffix, next.substring(prefix, next.length() - suffix));
     }
 
     /** Whether the frames completed an update that readers learn of. */

@@ -49,6 +49,7 @@ import {
 	isSessionEntry,
 	ran,
 	runTurn,
+	partialReader,
 	SITUATION,
 } from "./heph-host-worker.ts";
 
@@ -460,13 +461,14 @@ void test("a slow partial answer write holds back only the newest snapshot, and 
 	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	const intervalMs = 5;
 	const writes: { tool: string | null; done: PromiseWithResolvers<undefined> }[] = [];
+	const read = partialReader();
 	let inFlight = 0;
 	let mostInFlight = 0;
 	const api: TurnApi = {
 		...fakeWorker(contextOf([], "question")).api(),
-		partial: async (snapshot) => {
+		partial: async (update) => {
 			const done = Promise.withResolvers<undefined>();
-			writes.push({ tool: snapshot.tool, done });
+			writes.push({ tool: read(update).tool, done });
 			inFlight += 1;
 			mostInFlight = Math.max(mostInFlight, inFlight);
 			await done.promise;
@@ -2343,10 +2345,11 @@ void test("a deadline that the worker answers a lease renewal with ends the turn
 
 void test("an unchanged partial answer is sent again, and no more once the stream stopped", async () => {
 	const sent: PartialSnapshot[] = [];
+	const read = partialReader();
 	const api: TurnApi = {
 		...fakeWorker(contextOf([], "question")).api(),
-		partial: async (snapshot) => {
-			sent.push(snapshot);
+		partial: async (update) => {
+			sent.push(read(update));
 		},
 	};
 	const partials = partialStream(api, 5, 40);

@@ -229,7 +229,7 @@ RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions 
 RUN node --input-type=module -e 'await import("/opt/pi-sdk/driver.js")'
 ENTRYPOINT ["node", "/opt/pi-sdk/driver.js"]
 
-LABEL hephaestus.agent.runtime-contract=15
+LABEL hephaestus.agent.runtime-contract=16
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 

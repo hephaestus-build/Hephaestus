@@ -611,7 +611,7 @@ All paths start with `/internal/llm/turn/{turnId}/`.
 | `POST show-feedback` | Claims the copy of one piece of prepared conversation feedback for the attempt (`{feedbackId}`). A refused claim gets `422` ([Delivery of shown feedback](#delivery-of-shown-feedback)). |
 | `POST search` | Full-text search in the conversation tree. |
 | `POST sandbox/document`, `sandbox/bind`, `sandbox/discard`, `sandbox/load`, and `GET sandbox/documents` | The worker's half of `read`, `bash` and `load_context` ([Context folder](#context-folder)). |
-| `PUT partial` | The partial answer and the stage. The partial answer has the text and the `link_result`, `link_problem`, and `show_feedback` calls of each assistant message of the turn so far. The last message can be unfinished. The gateway rate limit does not apply. A lost snapshot is not sent again. |
+| `PUT partial` | One change of the partial answer: a sequence, the sequence of its base, and the text between a kept prefix and suffix (`PartialUpdate`). The loop makes the change from its own previous snapshot, so any worker forwards it. The snapshot is the stage, and the text and the `link_result`, `link_problem`, and `show_feedback` calls of each assistant message of the turn so far. The last message can be unfinished. The gateway rate limit does not apply. A malformed change gets 400. A lost change is not sent again. |
 | `POST end` | Ends the turn with `DONE`, `STOPPED`, or `FAILED`, with the Pi entries that the turn appended ([Limits](#limits)). A failed end carries a `detail`, a kind of failure for the worker log ([How a turn fails](#how-a-turn-fails)). The end first waits up to 10 seconds for the proxy to record the attempt's model calls (`ProxyCallsInFlight`). An end without an answer cancels them first. |
 
 An end larger than the gateway's request bound gets `413`.
@@ -657,8 +657,11 @@ An end without an answer cancels the attempt's calls in flight (`ProxyCallsInFli
 
 A partial answer is one lease read and its `NOTIFY` frames, in one short transaction (`MentorTurnService.updatePartial`).
 It writes no row.
-Each frame carries a change from the previous snapshot. A whole snapshot follows at least every 2 seconds.
-Each process that listens to the ledger rebuilds the snapshot in memory (`MentorTurnProgress`).
+
+The loop is the attempt's one writer, so it makes each change from its previous snapshot, and a whole snapshot at least every 2 seconds.
+A worker keeps nothing of a partial answer: it checks the change and the lease, and sends the change as frames.
+Thus, consecutive changes that reach different workers still apply.
+Each process that listens to the ledger rebuilds the snapshot in memory (`MentorTurnProgress`). A change applies only to the snapshot it was made from.
 A process that starts, reconnects or misses a frame shows the partial answer again from the next whole snapshot.
 
 The end of the attempt stores the answer once. Thus, the write-ahead log of a streamed answer stays near the size of the answer.

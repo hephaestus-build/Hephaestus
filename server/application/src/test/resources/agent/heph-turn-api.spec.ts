@@ -10,7 +10,7 @@ import test from "node:test";
 import {
 	isRecord,
 	type PartialMessage,
-	type PartialSnapshot,
+	type PartialUpdate,
 	type StopReason,
 } from "../../../main/resources/agent/heph-host-protocol.ts";
 import {
@@ -19,6 +19,7 @@ import {
 	isLeaseLost,
 	isTooLarge,
 	WorkerStatusError,
+	partialUpdates,
 } from "../../../main/resources/agent/heph-host.ts";
 
 function contract(name: string): unknown {
@@ -99,6 +100,15 @@ async function fakeWorker(answers: Answer[], unknownKeyDelayMs = 0) {
 	};
 }
 
+/** A whole partial answer of nothing written yet, as one update. */
+const WHOLE: PartialUpdate = {
+	sequence: 1,
+	baseSequence: 0,
+	prefix: 0,
+	suffix: 0,
+	text: JSON.stringify({ activity: "thinking", tool: null, stage: "Thinking…", messages: [] }),
+};
+
 function recordOf(value: unknown): Record<string, unknown> {
 	assert.ok(isRecord(value));
 	return value;
@@ -162,18 +172,25 @@ void test("the host sends its partial answer, searches, document reads and end i
 		const read = recordOf(contract("sandbox-document.request.json"));
 		const end = recordOf(contract("end.request.json"));
 		const deadline = recordOf(contract("end-deadline.request.json"));
-		assert.ok(isPartialMessages(partial.messages));
+		// The worker binds the update; its text is the whole snapshot, as the loop's encoder writes it.
+		const snapshot = recordOf(JSON.parse(String(partial.text)));
+		assert.ok(isPartialMessages(snapshot.messages));
 		assert.ok(isList(end.entries));
 		assert.ok(typeof read.path === "string" && typeof read.offset === "number");
 		assert.ok(typeof read.limit === "number");
 		const { signal } = new AbortController();
 
-		await worker.api.partial({
-			activity: "writing",
-			tool: null,
-			stage: String(partial.stage),
-			messages: partial.messages,
-		});
+		await worker.api.partial(
+			partialUpdates()(
+				JSON.stringify({
+					activity: "writing",
+					tool: null,
+					stage: String(snapshot.stage),
+					messages: snapshot.messages,
+				}),
+				Number(partial.sequence),
+			),
+		);
 		await worker.api.search(search, signal);
 		assert.deepEqual(
 			await worker.api.read({ path: read.path, offset: read.offset, limit: read.limit }, signal),
@@ -221,10 +238,7 @@ void test("the host reads the context the worker serves", async () => {
 void test("a 409 without a stop means the attempt lost its lease, on every call", async () => {
 	const worker = await fakeWorker([{ status: 409 }, { status: 409 }, { status: 409 }]);
 	try {
-		await assert.rejects(
-			worker.api.partial({ activity: "thinking", tool: null, stage: "Thinking…", messages: [] }),
-			isLeaseLost,
-		);
+		await assert.rejects(worker.api.partial(WHOLE), isLeaseLost);
 		await assert.rejects(
 			worker.api.end({ outcome: "DONE", entries: [], reason: null, detail: null }),
 			isLeaseLost,
@@ -293,16 +307,10 @@ void test("a 401 is sent once more after a wait, and a second 401 fails the call
 
 void test("only the first partial answer the worker took is marked first", async () => {
 	const worker = await fakeWorker([{ status: 503 }, { status: 204 }, { status: 204 }]);
-	const snapshot: PartialSnapshot = {
-		activity: "thinking",
-		tool: null,
-		stage: "Thinking…",
-		messages: [],
-	};
 	try {
-		await assert.rejects(worker.api.partial(snapshot));
-		await worker.api.partial(snapshot);
-		await worker.api.partial(snapshot);
+		await assert.rejects(worker.api.partial(WHOLE));
+		await worker.api.partial(WHOLE);
+		await worker.api.partial(WHOLE);
 
 		assert.deepEqual(
 			worker.received.map(({ method, path }) => `${method} ${path}`),
@@ -504,9 +512,7 @@ void test("a gateway limit does not end a turn: a refused context read and end a
 void test("a partial answer the worker did not answer is not sent again", async () => {
 	const worker = await fakeWorker([{ status: 503 }]);
 	try {
-		await assert.rejects(
-			worker.api.partial({ activity: "thinking", tool: null, stage: "Thinking…", messages: [] }),
-		);
+		await assert.rejects(worker.api.partial(WHOLE));
 
 		assert.equal(worker.received.length, 1);
 	} finally {
