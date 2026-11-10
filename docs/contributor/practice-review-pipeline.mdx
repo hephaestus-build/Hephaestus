@@ -697,7 +697,11 @@ A work-state refusal does not erase the result.
 Practice-page and conversation feedback retain their own visibility checks.
 
 A public piece keeps the publication context of the history read that it was composed from.
-The history read issues the context and the history page from one snapshot.
+The history read issues the context first and then reads the history page, in the transaction that holds the attempt.
+Thus, feedback delivered between the two reads can be on the page but not in the context.
+The fences then withhold the piece as Public history changed.
+The context never covers feedback that the page did not show.
+
 A new copy write needs two facts about the same work and the same developer.
 First, the context of other reviews' feedback is still current.
 Second, no write of another review has an unknown outcome.

@@ -50,7 +50,10 @@ public class ReviewHistoryContentSource {
                 .distinct()
                 .toList();
         if (itemIds.size() != 1) throw new IllegalArgumentException("Public history requires one item");
-        // Issued from the same snapshot as the bounded page; it also covers entries that the page cannot show.
+        // Issued before the page is read, and covering entries that the bounded page cannot show. Feedback that
+        // another review delivers between the two reads is then on the page but not in the context, so the
+        // preparation and write fences refuse the context as changed history; read the other way round, the context
+        // could vouch for an entry that the composer never saw.
         String publicationContext = viewers.isEmpty()
                 ? null
                 : feedback.publicationContext(job.getWorkspaceId(), itemIds.getFirst(), job.getReviewId(), viewers);

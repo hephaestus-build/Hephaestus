@@ -95,6 +95,9 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -597,7 +600,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
     }
 
     @Test
-    void shouldReturnTheHistoryPageAndItsContextFromTheServicesOneSnapshot() throws Exception {
+    void shouldRefuseTheIssuedContextWhenFeedbackIsDeliveredBetweenTheContextAndThePage() throws Exception {
         var other = sibling(developerId, itemId, FeedbackCopyState.WRITE_STARTED);
         String before = contextFor(reviewId, itemId);
         var issued = new CountDownLatch(1);
@@ -667,22 +670,32 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
             });
             committed.countDown();
             var response = read.get(20, TimeUnit.SECONDS);
-            // The real service's snapshot predates the receipt; a fresh read outside it sees the receipt.
+            // The context was issued before the delivery and the page read after it, so the context is stale and
+            // never vouches for the delivered feedback: the fence refuses it as changed history.
             assertThat(response.publicationContext()).isEqualTo(before);
             assertThat(page)
                     .filteredOn(entry -> entry.feedbackId().equals(other.getId()))
                     .singleElement()
-                    .satisfies(entry -> assertThat(entry.deliveredAt()).isNull());
-            assertThat(response.history().feedback()).isEmpty();
-            assertThat(history.forItem(workspace.getId(), itemId, developerId, 100))
-                    .filteredOn(entry -> entry.feedbackId().equals(other.getId()))
-                    .singleElement()
                     .satisfies(entry -> assertThat(entry.deliveredAt()).isNotNull());
-            assertThat(contextFor(reviewId, itemId)).isNotEqualTo(before);
+            assertThat(history.publicationRefusal(
+                            workspace.getId(), itemId, reviewId, developerId, response.publicationContext()))
+                    .contains(FeedbackStopReason.PUBLIC_HISTORY_CHANGED);
         } finally {
             committed.countDown();
             read.get(20, TimeUnit.SECONDS);
         }
+    }
+
+    @Test
+    void shouldHoldOneConnectionWhenItReadsThePublicHistoryOfALockedAttempt() {
+        var job = ownedAdmittedJob();
+        var transactions = new PhysicalTransactions(transactionManager);
+
+        admissionService(job, history, transactions)
+                .publicFeedbackHistory(new ResultAdmissionService.AdmissionIdentity(
+                        job.getId(), workspace.getId(), 0, job.getRunId()));
+
+        assertThat(transactions.mostAtOnce()).isOne();
     }
 
     @ParameterizedTest
@@ -1059,6 +1072,11 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
 
     /** The production service and its own history snapshot; only ownership and late-copy custody are stand-ins. */
     private ResultAdmissionService admissionService(ReviewJob job, FeedbackHistoryQuery query) {
+        return admissionService(job, query, transactionManager);
+    }
+
+    private ResultAdmissionService admissionService(
+            ReviewJob job, FeedbackHistoryQuery query, PlatformTransactionManager manager) {
         var jobs = mock(ReviewJobRepository.class);
         when(jobs.databaseNow()).thenAnswer(call -> Instant.now());
         when(jobs.findByIdAndWorkspaceId(job.getId(), workspace.getId())).thenReturn(Optional.of(job));
@@ -1102,7 +1120,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 files,
                 source,
                 mapper,
-                transactionManager,
+                manager,
                 mock(FeedbackCompositionService.class),
                 mock(ReviewWriteGuard.class),
                 mock(PracticeResultStaging.class),
@@ -1115,6 +1133,51 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(interrupted);
+        }
+    }
+
+    /** Counts the physical transactions, and so the pooled connections, that one thread holds at once. */
+    private static final class PhysicalTransactions implements PlatformTransactionManager {
+        private final PlatformTransactionManager delegate;
+        private final ThreadLocal<Integer> open = ThreadLocal.withInitial(() -> 0);
+        private final AtomicInteger most = new AtomicInteger();
+
+        PhysicalTransactions(PlatformTransactionManager delegate) {
+            this.delegate = delegate;
+        }
+
+        int mostAtOnce() {
+            return most.get();
+        }
+
+        @Override
+        public TransactionStatus getTransaction(@Nullable TransactionDefinition definition) {
+            TransactionStatus status = delegate.getTransaction(definition);
+            if (status.isNewTransaction()) {
+                open.set(open.get() + 1);
+                most.accumulateAndGet(open.get(), Math::max);
+            }
+            return status;
+        }
+
+        @Override
+        public void commit(TransactionStatus status) {
+            boolean physical = status.isNewTransaction();
+            try {
+                delegate.commit(status);
+            } finally {
+                if (physical) open.set(open.get() - 1);
+            }
+        }
+
+        @Override
+        public void rollback(TransactionStatus status) {
+            boolean physical = status.isNewTransaction();
+            try {
+                delegate.rollback(status);
+            } finally {
+                if (physical) open.set(open.get() - 1);
+            }
         }
     }
 }
