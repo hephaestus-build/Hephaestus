@@ -197,11 +197,10 @@ export const SESSION_CANDIDATE = {
 	evidence: {},
 };
 
-export function directProgram(before = ""): string {
-	return `import { definePracticeScript } from "@hephaestus/practice-scripts";
-import { generateText, step } from "@hephaestus/practice-scripts/models";
+function candidateProgram(before: string, imports: string, meta: Record<string, unknown>): string {
+	return `${imports}
 export default definePracticeScript({
-	meta: { models: { chat: "optional" } },
+	meta: ${JSON.stringify(meta)},
 	async run(ctx) {
 		let note = "none";
 		${before}
@@ -224,7 +223,27 @@ export default definePracticeScript({
 `;
 }
 
-export function stagePractices(cwd: string, practices: readonly StagedPractice[]): void {
+export function publicProgram(before = ""): string {
+	return candidateProgram(
+		before,
+		'import { definePracticeScript } from "@hephaestus/practice-scripts";',
+		{},
+	);
+}
+
+export function privateModelProgram(before: string): string {
+	return candidateProgram(
+		before,
+		'import { definePracticeScript, generateText, step } from "../lib/core/practice-script.ts";',
+		{ models: { chat: "optional" } },
+	);
+}
+
+export function stagePractices(
+	cwd: string,
+	practices: readonly StagedPractice[],
+	practiceScripts = PRACTICES_DIR,
+): void {
 	stageGoldenWorkspace(
 		cwd,
 		SUPPORTED_SCHEMA_VERSION,
@@ -232,16 +251,17 @@ export function stagePractices(cwd: string, practices: readonly StagedPractice[]
 			new URL("../../../main/resources/agent/pi-orchestrator.md", import.meta.url),
 			"utf8",
 		),
+		practiceScripts,
 	);
 	const write = (file: string, text: string) => {
 		mkdirSync(nodePath.dirname(nodePath.join(cwd, file)), { recursive: true });
 		writeFileSync(nodePath.join(cwd, file), text);
 	};
 	write("package.json", '{"type":"module"}\n');
-	symlinkSync(LIB, nodePath.join(cwd, nodePath.dirname(PRACTICES_DIR), "lib"));
+	symlinkSync(LIB, nodePath.join(cwd, nodePath.dirname(practiceScripts), "lib"));
 	symlinkSync(
 		nodePath.resolve(LIB, "../kits"),
-		nodePath.join(cwd, nodePath.dirname(PRACTICES_DIR), "kits"),
+		nodePath.join(cwd, nodePath.dirname(practiceScripts), "kits"),
 	);
 	write(
 		"catalog/practices/index.json",
@@ -261,7 +281,7 @@ export function stagePractices(cwd: string, practices: readonly StagedPractice[]
 		write(`catalog/practices/${slug}.md`, AUTHENTICATION_PRACTICE);
 		if (inputs) {
 			write(
-				`${PRACTICES_DIR}/${slug}.inputs.json`,
+				`${practiceScripts}/${slug}.inputs.json`,
 				JSON.stringify({
 					...GOLDEN_INPUTS,
 					kind: itemKind,
@@ -274,7 +294,7 @@ export function stagePractices(cwd: string, practices: readonly StagedPractice[]
 			);
 		}
 		if (program !== undefined) {
-			write(`${PRACTICES_DIR}/${slug}.ts`, program);
+			write(`${practiceScripts}/${slug}.ts`, program);
 		}
 	}
 }

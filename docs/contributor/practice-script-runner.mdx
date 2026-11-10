@@ -37,7 +37,11 @@ The `exports` map in `docker/agents/practice-scripts/package.json` is the one ho
 
 A map alone does not enforce the boundary, because a relative path still reaches any file.
 Thus, `lib/core/script-imports.ts` resolves each import of a script through the map and refuses anything else.
-This boundary is a contract. It is not a security boundary: the process permissions and the host's reads are.
+This boundary is a contract. It is not a security boundary.
+
+A script can still load a private module, for example through `process.getBuiltinModule`.
+The sandbox container and the host's IPC checks are the boundary.
+The host binds no model slot to a stored script, and it accepts only the reads that it receipts.
 
 A new public name needs at least 3 scripts that use it. Until then, the helper stays in its script.
 Promoting a helper is additive. Demoting a helper is a breaking change.
@@ -193,21 +197,16 @@ node --test --test-update-snapshots docker/agents/practice-scripts/corpus.test.t
 
 A snapshot proves what a script sends, not that a review judges better.
 
-## Models and limits
+## Review limits
 
-`meta.models` declares required or optional chat, decision, embedding and reranking slots.
-The `agent()` helper chooses forced tool calls only for models that support them.
-Opus 5.5 and Sonnet 5.5 use automatic tool choice, including through an OpenAI-compatible gateway.
-After a text-only turn, the helper gives at most two submission reminders within its original step budget.
+Scripts prepare evidence and call `ctx.review`.
+The workspace configures the review model and its budget.
+The public script context exposes neither model calls nor budget controls.
+Keep `meta` empty.
 
-A required missing model stops the script.
-An optional model remains absent and the script must handle that state.
-The frozen method records every slot, including absent bindings, without executing code to discover dependencies.
-
-The child process calls models through the host.
-It has no job token or provider secret.
-The host checks the account ceiling, declared needs, request fields and budget.
-A failed or unreported call retains its reservation rather than claiming free work.
+The host refuses nonempty metadata before it binds a model.
+The child process has no job token or provider secret.
+A failed or unreported provider call keeps its reservation.
 
 Summary length is at most 160 UTF-16 code units. Candidate output is at most 131,072 UTF-8 bytes.
 A result has at most 50 problems. A problem has at most 20 citations.

@@ -86,7 +86,8 @@ The runner assigns any remainder in catalog order.
 A practice cannot spend another practice's reservation.
 Unused reservations remain unused.
 Each model request is capped at the practice's remaining output tokens.
-The direct model account stays shared across all practice scripts in the review attempt.
+
+Public practice scripts prepare evidence and open reviews. They make no direct model calls.
 
 Higher concurrency can cover more practices before the deadline when model response time limits progress.
 It also increases peak memory use and simultaneous model requests.
@@ -103,8 +104,7 @@ The model proxy also holds each review attempt to twice that budget for all its 
 Past it, the proxy refuses the attempt's next model call with `403`.
 
 A practice script that calls `ctx.review()` opens review sessions, and their calls count against the budget of that practice.
-The direct model calls of practice scripts have their own limits for each review attempt: a token limit and a search unit limit.
-[Cost and limits](./ai-providers.mdx#cost-and-limits) owns their settings and defaults.
+[Cost and limits](./ai-providers.mdx#cost-and-limits) owns model usage and prices.
 [Practice scripts](#practice-scripts) tells you how to read what each practice script did.
 
 The defaults cap excessive work at several times a set's normal use.
@@ -265,7 +265,6 @@ Use them for alerts instead of application logs.
 - **`llm.budget.blocked`** with `surface="model_call"` — model calls of a running job that the LLM proxy refused at a cap, tagged by `cap`.
   `instance` names the shared-model budget, and `byo` names the provider cap.
   An admin raises it.
-  `practice_script_attempt` names the [direct model token limit or search unit limit of the attempt](./ai-providers.mdx#cost-and-limits).
   These exclude issue opening and closing.
 - **`practice.review.refused`** — refused reviews, tagged by `phase` (`submission` or `execution`) and `reason`.
   Submission refusals cannot establish the item version (`VERSION_UNAVAILABLE` or `SOURCE_NOT_READY`).
@@ -325,8 +324,7 @@ The [glossary](/contributor/practice-review-glossary#admission-reasons) owns thi
 
 | The line starts with                          | What it means                                                                                                                                                                                                                                                                                                                               | What to do                                                                                                                                                                                                                                 |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **… returned a candidate observation**        | The script ran to its end and returned a valid candidate observation. The line can say how: from its code alone, with its models, through the review, or with its models and the review.                                                                                                                                                    | Nothing. If the line links **Check the decision model**, or the model that it names, a model caused calls that were not rated. Open its row and check it.                                                                                  |
-| **… did not run**                             | The review had no model that the script requires. Either no model is assigned for the reviewed developer's AI choice, or the assigned model does not meet the rule in [Privacy](./ai-providers.mdx#privacy). The line names the model, such as `no decision model was set for this review`. The practice has no observation in this review. | Select **Assign a decision model**, or the link for the model that the line names. Assign a model for that tier. If the review ran on an In-house model, assign an In-house model.                                                         |
+| **… returned a candidate observation**        | The script ran to its end and returned a valid candidate observation. The line can say how: from its code alone or through the review.                                                                                                                                                    | Nothing.                                                                                  |
 | **… stopped without a candidate observation** | The script stopped. The line gives the reason, such as `it raised an error`, `it ran out of time`, `what it returned is not a candidate observation`, or `it is not a script the review can run`. The practice has no observation in this review.                                                                                           | For a script error, select **Edit the script**. The review's section shows the first line of the error. To reproduce it, [run the script on the same change](./practice-scripts.mdx#test-a-script-locally). For time or budget, see below. |
 | **The review ended before … started**         | The attempt ran out of time or budget, or was cancelled, before it reached this practice.                                                                                                                                                                                                                                                   | Same as for a script that ran out of time.                                                                                                                                                                                                 |
 | **… did not finish**                          | The review's report does not name the script, for example because the container stopped.                                                                                                                                                                                                                                                    | Same as for a script that ran out of time. If it continues, read the container logs that the job record keeps.                                                                                                                             |
@@ -368,11 +366,13 @@ It has one row for each practice of the review:
 | **Script calls**  | The decision, embedding and reranking calls that the proxy recorded for the script. A script that did not run, or that uses no such model, shows a dash.                                                                                                                                                                                                                                       |
 | **Time**          | How long the script ran, such as `4.2 s` or `2 min 5 s`. A run shorter than 0.1 seconds shows `< 0.1 s`. A script that did not run, was not reached, or did not finish shows a dash.                                                                                                                                                                                                           |
 
+A stored script declares and calls no decision, embedding or reranking model, so **Script models** and **Script calls** stay empty for it.
+
 The section shows no cost.
 Its note says `Spend is on AI usage.`
 **AI usage** shows the cost of models for practice scripts, by practice.
 **Technical** on the review's sheet shows the review's **Model** with an icon for its tier.
-Its **Review model calls** and token counts include the review sessions that scripts open with `ctx.review()`, and the direct chat calls of the scripts.
+Its **Review model calls** and token counts include the review sessions that scripts open with `ctx.review()`.
 They do not include the decision, embedding and reranking calls.
 Its **Cost** includes them: it is what the review's attempts and its practice scripts' models cost together.
 
@@ -387,7 +387,7 @@ The column **In a script** gives the name that a script and the review input use
 | Reason        | In a script   | What it means                                                                                                                                                                | What to do                                                                                                           |
 | ------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | model missing | `unavailable` | No model of that slot was available to the script.                                                                                                                           | Assign the model. **Check the decision model**, or the link for the model that the row names, opens its row.         |
-| limit reached | `budget`      | A token limit cannot hold the call, or the shared-model budget or the provider cap is spent. For `agent`, no `submit` call came within `maxSteps`.                           | Raise the limit that was spent. The list below tells who raises each limit, and where.                               |
+| limit reached | `budget`      | A token limit cannot hold the call, or the shared-model budget or the provider cap is spent.                           | Raise the limit that was spent. The list below tells who raises each limit, and where.                               |
 | too slow      | `deadline`    | The script's deadline passed before the model answered, for example because the model was slow or had to load first. A call that the script aborted also has this reason.    | Ask the operator of the model's host to keep the model loaded, or assign a faster model.                             |
 | too large     | `too-large`   | The call held more entries than one call can send, or the script found an item too large to send. The host refuses a call with too many entries before it reaches the model. | Ask the script's author to send fewer entries in one call. [Limits](./practice-scripts.mdx#limits) gives the limits. |
 | wrong format  | `off-format`  | The model's answer did not have the expected shape.                                                                                                                          | The model is not suitable for this purpose. Choose another model.                                                    |
@@ -400,10 +400,6 @@ The limitations that a script gives to `ctx.review()` reach only the review sess
 
 A token limit, a budget or a cap stops calls in one of these places:
 
-- **The `maxSteps` of `agent`.**
-  The script's author raises it in the script, or makes the script send less.
-- **The direct model token limit or the direct model search unit limit of the attempt.**
-  An operator changes them with the settings in [Cost and limits](./ai-providers.mdx#cost-and-limits).
 - **The shared-model budget.**
   Only an instance admin raises it on **Instance administration → AI usage** with **Change budget**.
 - **The provider cap of the workspace's own provider.**
@@ -434,7 +430,7 @@ Two metrics count practice script events on the worker:
   A value above 0 means that the agent image does not send the practice of each call.
   Run the agent image of the server's release.
 
-[Queue health](#queue-health) lists `llm.budget.blocked` with `surface="model_call"`, which also counts the direct model calls that a budget, a cap or the direct model limit of the attempt refused.
+[Queue health](#queue-health) lists `llm.budget.blocked` with `surface="model_call"`, which counts the model calls that a budget or a cap refused.
 
 ### Log correlation
 

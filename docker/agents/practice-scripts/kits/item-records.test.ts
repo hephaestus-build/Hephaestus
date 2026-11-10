@@ -5,8 +5,8 @@ import { test } from "node:test";
 
 import { z } from "zod";
 
-import { threadRecordSchema } from "./chat/index.ts";
-import { documentRecordSchema } from "./docs/index.ts";
+import { threadRecordSchema } from "./chat/records.ts";
+import { documentRecordSchema } from "./docs/records.ts";
 import {
 	fileRecordSchema,
 	issueRecordSchema,

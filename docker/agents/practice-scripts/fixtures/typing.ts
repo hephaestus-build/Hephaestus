@@ -1,6 +1,6 @@
-import { definePracticeScript } from "@hephaestus/practice-scripts/models";
 // Compiled, never run: the slot types follow `meta.models`.
 import type { Experimental_DecisionModel, LanguageModel } from "ai";
+import { definePracticeScript } from "../lib/core/practice-script.ts";
 
 import { scm } from "@hephaestus/practice-scripts/scm";
 

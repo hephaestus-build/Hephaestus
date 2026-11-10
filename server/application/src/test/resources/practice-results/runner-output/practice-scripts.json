@@ -34,16 +34,9 @@
 			"practiceSlug": "ui-scope",
 			"program": {
 				"kind": "custom",
-				"digest": "e9d7022ff0d92ade1c01a0628c455e478411ecd8a4dc40dd7d099a4c1e758ed4"
+				"digest": "639ba97d22e254439a69de7acaf2a4079bf878f40259687d6d4562784a1921bf"
 			},
-			"models": [
-				{
-					"slot": "chat",
-					"need": "optional",
-					"bound": false,
-					"failures": {}
-				}
-			],
+			"models": [],
 			"status": "ok",
 			"stopReason": null,
 			"calls": {

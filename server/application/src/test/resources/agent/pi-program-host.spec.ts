@@ -13,7 +13,7 @@ import {
 import { PRACTICES_DIR } from "./golden-review-workspace.ts";
 import {
 	capturedLines,
-	directProgram,
+	publicProgram,
 	field,
 	readJsonFile,
 	runRunner,
@@ -84,7 +84,7 @@ const digestOf = (cwd: string, slug: string) =>
 
 const main = await run(
 	[
-		{ slug: "a-direct", program: directProgram() },
+		{ slug: "a-direct", program: publicProgram() },
 		{ slug: "b-builtin" },
 		{ slug: "c-invalid-meta", program: INVALID_META_PROGRAM },
 		{ slug: "d-silent", program: REVIEWING_PROGRAM },
@@ -136,7 +136,7 @@ void test("a custom program that returns a result directly opens no session, and
 		{
 			practiceSlug: "a-direct",
 			program: { kind: "custom", digest: digestOf(main.cwd, "a-direct") },
-			models: [{ slot: "chat", need: "optional", bound: false, failures: {} }],
+			models: [],
 			status: "ok",
 			stopReason: null,
 			calls: noCalls,

@@ -1,4 +1,10 @@
 import { definePracticeScript } from "@hephaestus/practice-scripts";
+// @ts-expect-error The chat record schema is private.
+import { threadRecordSchema } from "@hephaestus/practice-scripts/chat";
+// @ts-expect-error The document record schema is private.
+import { documentRecordSchema } from "@hephaestus/practice-scripts/docs";
+// @ts-expect-error Direct model helpers are private.
+import * as models from "@hephaestus/practice-scripts/models";
 
 /** What the public API does not offer. `tsc` fails if one of these starts to compile. */
 export default definePracticeScript({
@@ -18,3 +24,5 @@ export default definePracticeScript({
 		return reviewed;
 	},
 });
+
+void [models, threadRecordSchema, documentRecordSchema];

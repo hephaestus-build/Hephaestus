@@ -133,16 +133,15 @@ A failure to read is never a statement about the work.
 You can still call `ctx.review` after such a failure. The result's coverage then names what your script could not read.
 A partial read or a cut search can support Not met, but not Met or Does not apply.
 
-## Ask assigned models
+## Use the review model
 
-Declare required or optional chat, decision, embedding and reranking models under meta.models.
-If a required model is unavailable, the practice stops. The runtime records its reason.
-Handle an absent optional model explicitly.
-The host brokers model calls through typed IPC without giving the script credentials.
+Keep `meta` empty. A stored script with any metadata field is invalid.
+Prepare evidence and call `ctx.review` to open the review.
+The script context exposes no model slots or direct model helpers.
 
-Calls follow the developer's account-wide AI choice and the review's stricter model tier.
-The complete frozen method records all model slots, including absent bindings.
-The [model guide](./ai-providers.mdx#models-for-practice-scripts) owns assignment and cost controls.
+The review follows the developer's account-wide AI choice and its stricter model tier.
+Configure the review model and budget in the workspace.
+The [model guide](./ai-providers.mdx#models-for-practice-scripts) owns model settings and cost controls.
 
 ## Test a script locally
 
@@ -178,7 +177,7 @@ Use the [operator migration entry](https://github.com/hephaestus-build/Hephaestu
 ## Limits
 
 Each script uses the attempt's deadline. No separate time is reserved before review.
-Direct model calls share token and search-unit limits for that attempt.
+The host owns provider calls and their budget reservations.
 Failed or unreported calls retain their reservation.
 The [cost guide](./ai-providers.mdx#cost-and-limits) owns the configured values and HTTP 402 behavior.
 The [runner contract](/contributor/practice-script-runner) owns proof size and citation limits.

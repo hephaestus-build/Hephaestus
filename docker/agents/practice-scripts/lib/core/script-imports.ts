@@ -25,25 +25,33 @@ function publicEntries(): ReadonlyMap<string, string> {
 	);
 }
 
-const isScript = (parentURL: string | undefined) =>
-	parentURL?.startsWith("file:") === true &&
-	path.basename(path.dirname(fileURLToPath(parentURL))) === "practices";
+/**
+ * The folder that the server stages stored scripts in (`SandboxLayout`, pinned by `SandboxLayoutSyncTest`).
+ * The import guard and the metadata refusal apply only there. Tests stage private toolkit programs elsewhere.
+ */
+const SCRIPT_FOLDER = "practices";
 
-/** Resolve a practice script's imports through the export map. Files in a `practices` folder are scripts. */
+export const isPracticeScriptPath = (file: string): boolean =>
+	path.basename(path.dirname(file)) === SCRIPT_FOLDER;
+
+const isScript = (parentURL: string | undefined) =>
+	parentURL?.startsWith("file:") === true && isPracticeScriptPath(fileURLToPath(parentURL));
+
+/** Resolve a stored script's imports through the export map. Other modules resolve as usual. */
 export function guardScriptImports(): void {
 	const entries = publicEntries();
 	registerHooks({
 		resolve(specifier, context, nextResolve) {
+			const url = entries.get(specifier);
+			if (url !== undefined) {
+				return nextResolve(url, context);
+			}
 			if (!isScript(context.parentURL)) {
 				return nextResolve(specifier, context);
 			}
-			const url = entries.get(specifier);
-			if (url === undefined) {
-				throw new Error(
-					`A practice script can import only ${[...entries.keys()].join(", ")}, not ${specifier}. Rewrite the script for this API.`,
-				);
-			}
-			return nextResolve(url, context);
+			throw new Error(
+				`A practice script can import only ${[...entries.keys()].join(", ")}, not ${specifier}. Rewrite the script for this API.`,
+			);
 		},
 	});
 }

@@ -51,3 +51,12 @@ A script failure creates no claim about the work.
 ## Revisit trigger
 
 Revisit when a shipped script requires a capability that its domain kit and governed host cannot express.
+
+## Update — 2026-11-10: public scripts declare no models
+
+This update supersedes "Model access follows declared slots" in the decision above for stored scripts.
+A stored script keeps `meta` empty, prepares evidence, and calls `ctx.review`.
+The host refuses a stored script with any metadata field as an invalid program before it binds a model.
+The public toolkit has no direct-model entry, so a stored script makes no direct model call.
+Review sessions follow the developer's AI ceiling.
+Declared slots remain only for the toolkit's private test programs.

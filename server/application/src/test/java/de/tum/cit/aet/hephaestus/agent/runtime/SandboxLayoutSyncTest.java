@@ -58,6 +58,15 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
                         .collect(Collectors.toSet()));
     }
 
+    @Test
+    void shouldGuardScriptsInTheFolderTheServerStagesThemIn() throws IOException {
+        String imports = Files.readString(
+                repoFile("docker/agents/practice-scripts/lib/core/script-imports.ts"), StandardCharsets.UTF_8);
+
+        assertThat(SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX)
+                .endsWith("/" + constant(imports, "SCRIPT_FOLDER").replace("\"", "") + "/");
+    }
+
     /** The initializer of a {@code const} declaration, as written. */
     private static String constant(String source, String name) {
         var declaration = Pattern.compile("\\bconst " + name + " = ([^;\\n]+);").matcher(source);

@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { executionReportSchema } from "../../../../../../docker/agents/practice-scripts/lib/core/contract.ts";
 import {
 	capturedLines,
-	directProgram,
+	publicProgram,
 	SESSION_CANDIDATE,
 	field,
 	practiceIndexOf,
@@ -120,7 +120,7 @@ for (const ownership of ["opening", "native-read", "sibling-only", "claimed-only
 		for (const earlier of ["sibling", "native"] as const) {
 			const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-evidence-")));
 			try {
-				const program = directProgram(`await ctx.evidence.record("change.json");`).replace(
+				const program = publicProgram(`await ctx.evidence.record("change.json");`).replace(
 					'consulted: ["scm.pull-request.core"]',
 					'consulted: ["scm.pull-request.core", "scm.pull-request.diff"]',
 				);

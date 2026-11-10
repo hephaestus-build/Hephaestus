@@ -5,7 +5,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { EvidenceReader, noReceipts } from "../../lib/core/evidence-reader.ts";
 import { programContext } from "../../lib/core/program-context.ts";
-import { docs, documentRecordSchema } from "./index.ts";
+import { docs } from "./index.ts";
+import { documentRecordSchema } from "./records.ts";
 
 const metadata = {
 	id: "9223372036854775807",

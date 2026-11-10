@@ -7,8 +7,7 @@
 		".": "./lib/api.ts",
 		"./scm": "./kits/scm/api.ts",
 		"./chat": "./kits/chat/index.ts",
-		"./docs": "./kits/docs/index.ts",
-		"./models": "./lib/api-models.ts"
+		"./docs": "./kits/docs/index.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "4.0.92",

@@ -29,7 +29,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.PracticeCatalogInjector;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeScriptInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
-import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptKindTotal;
 import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptRunRecorderFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
@@ -39,7 +38,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRun;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRunRepository;
-import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
@@ -59,7 +57,6 @@ import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
-import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -112,7 +109,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -170,12 +166,12 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private PracticeVersionService runtimePracticeVersions;
 
-    private static final Path EVERY_SLOT = Path.of(
-                    "..", "..", "docker", "agents", "practice-scripts", "fixtures", "every-slot.ts")
+    private static final Path PUBLIC_SCRIPT = Path.of(
+                    "..", "..", "docker", "agents", "practice-scripts", "fixtures", "builtin-like.ts")
             .toAbsolutePath()
             .normalize();
 
-    private static final String SLUG = "every-slot";
+    private static final String SLUG = "builtin-like";
 
     private static final String TITLE = "Add the login service";
 
@@ -311,20 +307,13 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     @Timeout(value = 20, unit = TimeUnit.MINUTES)
-    void shouldServeEveryBoundSlotAndTheReviewThroughTheProxyAndAdmitWithOneJobToken() throws Exception {
+    void shouldRunAPublicScriptReviewThroughTheProxyAndAdmitWithOneJobToken() throws Exception {
         LiveLlmCredentials chat = LiveLlmCredentials.fromEnv();
-        @Nullable String embeddingModel = variable("HEPHAESTUS_LIVE_EMBEDDING_MODEL");
-        @Nullable String rerankingModel = variable("HEPHAESTUS_LIVE_RERANKING_MODEL");
-        @Nullable String decisionBase = variable("HEPHAESTUS_LIVE_DECISION_BASE_URL");
-        @Nullable String decisionKey = variable("HEPHAESTUS_LIVE_DECISION_API_KEY");
-        @Nullable String decisionModel = variable("HEPHAESTUS_LIVE_DECISION_MODEL");
-
         User developer = persistUser("practice-script-live-developer");
         Workspace workspace = workspace(developer);
         WorkspaceContext context =
                 WorkspaceContext.fromWorkspace(workspace, Set.of(Membership.WorkspaceRole.ADMIN), null);
         WorkspaceContextHolder.setContext(context);
-        EnumSet<ModelKind> boundKinds = EnumSet.noneOf(ModelKind.class);
         bind(
                 context,
                 AgentPurpose.PRACTICE_REVIEW,
@@ -342,58 +331,14 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                         List.of(Map.of("role", "user", "content", "Hi")),
                         "max_tokens",
                         1));
-        if (embeddingModel != null) {
-            bind(
-                    context,
-                    AgentPurpose.PRACTICE_EMBEDDING,
-                    LlmApiProtocol.OPENAI_EMBEDDINGS,
-                    chat.baseUrl(),
-                    chat.apiKey(),
-                    embeddingModel);
-            boundKinds.add(ModelKind.EMBEDDING);
-            warmUps.put("embeddings", Map.of("model", embeddingModel, "input", List.of("Hi")));
-        }
-        if (rerankingModel != null) {
-            bind(
-                    context,
-                    AgentPurpose.PRACTICE_RERANKING,
-                    LlmApiProtocol.COHERE_RERANK,
-                    chat.baseUrl(),
-                    chat.apiKey(),
-                    rerankingModel);
-            boundKinds.add(ModelKind.RERANKING);
-            warmUps.put("rerank", Map.of("model", rerankingModel, "query", "Hi", "documents", List.of("Hi")));
-        }
-        // As live.test.ts binds it: a decision endpoint when one is named, else the chat model through its logprobs.
-        if (decisionBase != null && decisionKey != null && decisionModel != null) {
-            bind(
-                    context,
-                    AgentPurpose.PRACTICE_DECISION,
-                    LlmApiProtocol.OPENAI_DECISIONS,
-                    decisionBase,
-                    decisionKey,
-                    decisionModel);
-        } else {
-            bind(
-                    context,
-                    AgentPurpose.PRACTICE_DECISION,
-                    LlmApiProtocol.OPENAI_COMPLETIONS,
-                    chat.baseUrl(),
-                    chat.apiKey(),
-                    chat.model());
-        }
-        boundKinds.add(ModelKind.DECISION);
-        EnumSet<ModelKind> called = EnumSet.copyOf(boundKinds);
-        called.add(ModelKind.CHAT);
-
         Path workDir = temporaryDirectory("practice-script-live-").toRealPath();
         root = workDir;
-        Practice practice = practice(workspace, Files.readString(EVERY_SLOT));
+        Practice practice = practice(workspace, Files.readString(PUBLIC_SCRIPT));
         LiveRunnerWorkspace.stageCartChange(workDir);
         ReviewJob job = capture(runningJob(workspace, practice, accountId(developer)), workDir, developer, workspace);
         ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
         Map<ModelKind, FrozenModel> frozen = snapshot.practiceScriptModels();
-        assertThat(frozen.keySet()).isEqualTo(called);
+        assertThat(frozen.keySet()).containsExactly(ModelKind.CHAT);
         Instant workDeadline = Instant.now().plus(Duration.ofSeconds(LiveRunnerWorkspace.TIMEOUT_SECONDS + 300L));
         String jobToken = jwtIssuer.issueForReview(
                 job.getId(),
@@ -434,9 +379,6 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
             Files.createDirectories(target.getParent());
             Files.write(target, entry.getValue());
         }
-        Files.copy(
-                EVERY_SLOT.resolveSibling("comment-kinds.ts"),
-                workDir.resolve(SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX + "comment-kinds.ts"));
         LiveRunnerWorkspace.stageTask(
                 workDir,
                 "Review merge request #1 in test/fixture against " + SLUG + ".",
@@ -495,21 +437,14 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         assertThat(calls.path("review").asInt())
                 .as("one review session: %s", report)
                 .isEqualTo(1);
-        for (ModelKind kind : called) {
+        for (ModelKind kind : ModelKind.values()) {
             assertThat(calls.path(kind.name().toLowerCase(Locale.ROOT)).asInt())
-                    .as("%s was called: %s", kind, report)
-                    .isPositive();
+                    .as("no direct %s model call: %s", kind, report)
+                    .isZero();
         }
-        for (JsonNode slot : Objects.requireNonNull(run.getModels())) {
-            assertThat(slot.path("failures").isEmpty())
-                    .as("every bound slot answered every call: %s", report)
-                    .isTrue();
-        }
-
-        Map<ModelKind, PracticeScriptKindTotal> usage =
-                jobRepository.sumPracticeScriptUsageByKind(context.id(), job.getId(), job.getAttempt()).stream()
-                        .collect(Collectors.toMap(PracticeScriptKindTotal::modelKind, Function.identity()));
-        assertThat(usage.keySet()).isEqualTo(called);
+        assertThat(Objects.requireNonNull(run.getModels()).isEmpty()).isTrue();
+        assertThat(jobRepository.sumPracticeScriptUsageByKind(context.id(), job.getId(), job.getAttempt()))
+                .isEmpty();
 
         lifecycle.cancel(context.id(), job.getId());
 
@@ -517,27 +452,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 .filter(event -> event.getSourceId().equals(job.getId()))
                 .filter(event -> event.getSourceType() != UsageSourceType.REVIEW_JOB)
                 .collect(Collectors.toMap(LlmUsageEvent::getSourceType, Function.identity()));
-        assertThat(ledger.keySet())
-                .containsExactlyInAnyOrderElementsOf(
-                        boundKinds.stream().map(ScriptUsage::ledgerSourceType).toList());
-        for (ModelKind kind : boundKinds) {
-            LlmUsageEvent row = Objects.requireNonNull(ledger.get(ScriptUsage.ledgerSourceType(kind)));
-            PracticeScriptKindTotal counted = Objects.requireNonNull(usage.get(kind));
-            assertThat(counted.inputTokens()).as("%s input tokens", kind).isPositive();
-            assertThat(row.getModel())
-                    .isEqualTo(Objects.requireNonNull(frozen.get(kind)).upstreamModelId());
-            assertThat((long) row.getTotalCalls()).isEqualTo(counted.calls());
-            assertThat(row.getInputTokens()).isEqualTo(counted.inputTokens());
-            assertThat(row.getSourceAttempt()).isEqualTo(job.getAttempt());
-            assertThat(row.getPricingState())
-                    .as("%s pricing of %s", kind, counted)
-                    .isEqualTo(UsagePricingState.PRICED);
-        }
-    }
-
-    private static @Nullable String variable(String name) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() ? null : value;
+        assertThat(ledger).isEmpty();
     }
 
     private Workspace workspace(User developer) {

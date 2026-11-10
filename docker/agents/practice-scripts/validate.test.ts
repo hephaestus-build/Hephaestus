@@ -108,16 +108,27 @@ void test("v2 and mismatched assignment inputs are refused before script executi
 		assert.deepEqual(result.reviews, []);
 	}
 });
-void test("a required unbound model withholds and a missing candidate fails", async (t) => {
-	for (const [source, status] of [
-		['export default {meta:{models:{chat:"required"}},run:async ctx=>ctx.review()};', "withheld"],
-		["export default {meta:{},run:async()=>undefined};", "failed"],
+void test("nonempty metadata and a missing candidate fail validation", async (t) => {
+	for (const [source, stopReason] of [
+		[
+			'export default {meta:{models:{chat:"required"}},run:async ctx=>ctx.review()};',
+			"invalid-program",
+		],
+		[
+			'export default {meta:{models:{chat:"optional"}},run:async ctx=>ctx.review()};',
+			"invalid-program",
+		],
+		["export default {meta:{},run:async()=>undefined};", undefined],
 	] as const) {
 		const { root, args } = await workspace(t, source);
 		const exit = run(args);
 		assert.equal(exit.status, 1);
 		const result = await report(root);
-		assert.equal(result.status, status);
+		assert.equal(result.status, "failed");
+		if (stopReason !== undefined) {
+			assert.equal(result.stopReason, stopReason);
+			assert.deepEqual(result.reviews, []);
+		}
 	}
 });
 void test("missing inputs and unknown options are command errors", () => {

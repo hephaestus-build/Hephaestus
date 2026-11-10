@@ -91,6 +91,7 @@ export function stageGoldenWorkspace(
 	cwd: string,
 	schemaVersion: number,
 	orchestrator: string,
+	practiceScripts = PRACTICES_DIR,
 ): void {
 	const write = (file: string, text: string) => {
 		mkdirSync(nodePath.dirname(nodePath.join(cwd, file)), { recursive: true });
@@ -127,7 +128,7 @@ export function stageGoldenWorkspace(
 			},
 		]),
 	);
-	write(`${PRACTICES_DIR}/test-practice.inputs.json`, JSON.stringify(GOLDEN_INPUTS));
+	write(`${practiceScripts}/test-practice.inputs.json`, JSON.stringify(GOLDEN_INPUTS));
 	write(
 		"evidence/manifest.json",
 		JSON.stringify({
@@ -169,7 +170,7 @@ export function stageGoldenWorkspace(
 			manifest: "evidence/manifest.json",
 			practiceIndex: "catalog/practices/index.json",
 			preparedFeedback: "history/prepared.json",
-			practiceScripts: PRACTICES_DIR,
+			practiceScripts,
 			prompt: "Review the practice.",
 			repositoryFullName: "group/repo",
 			pullRequestNumber: 3,

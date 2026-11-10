@@ -1,4 +1,5 @@
 import type { Facts, Omission, ReviewLead, EvidenceLocation } from "@hephaestus/practice-scripts";
+import { languageOf, scm, type DiffFile } from "@hephaestus/practice-scripts/scm";
 import {
 	definePracticeScript,
 	agent,
@@ -12,8 +13,7 @@ import {
 	z,
 	type QuestionSet,
 	type PracticeScriptContext,
-} from "@hephaestus/practice-scripts/models";
-import { languageOf, scm, type DiffFile } from "@hephaestus/practice-scripts/scm";
+} from "../lib/core/practice-script.ts";
 
 export const LABELS = {
 	untrackedTodo: "A TODO without a tracking reference.",
@@ -241,7 +241,7 @@ interface AddedComment {
 
 const AROUND = 6;
 
-function addedComments(change: ReadonlyMap<string, DiffFile>): AddedComment[] {
+export function addedComments(change: ReadonlyMap<string, DiffFile>): AddedComment[] {
 	const found: AddedComment[] = [];
 	for (const [path, file] of change) {
 		const language = languageOf(path);
@@ -286,7 +286,7 @@ function addedComments(change: ReadonlyMap<string, DiffFile>): AddedComment[] {
 	return found;
 }
 
-const commentKinds: QuestionSet<AddedComment> = {
+export const commentKinds: QuestionSet<AddedComment> = {
 	name: "comment kind",
 	noun: "added code comment with the code around it",
 	question: "What kind of comment is it, judged against the code around it?",
