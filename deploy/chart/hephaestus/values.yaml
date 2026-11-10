@@ -351,6 +351,17 @@ worker:
     # can never take a review's room.
     quota:
       enabled: true
+    # The agent-sandbox controller in the release namespace, for a cluster whose admins grant it the
+    # read-only ClusterRole of the admin bundle (docs/admin/managed-cluster.mdx). Off: the cluster runs
+    # the controller of k3s-agent-sandbox.yaml.
+    controller:
+      enabled: false
+      # A platform pin, like the controller of k3s-agent-sandbox.yaml, which it equals: a chart test
+      # compares them, and scan-platform-images.ts checks that file's pin.
+      image: registry.k8s.io/agent-sandbox/agent-sandbox-controller:v1.0.10@sha256:594f4853913bca2b336d0267fe0978445f1aaa5837ed23797e48e745c8d6b610
+      resources:
+        requests: { cpu: 10m, memory: 64Mi, ephemeral-storage: 64Mi }
+        limits: { cpu: "1", memory: 256Mi, ephemeral-storage: 128Mi }
     # The Pod of each sandbox kind (docs/admin/sandboxes.md § Sandbox templates): the agent loop,
     # its tools and the workspace in one container. The workspace counts as ephemeral storage, and the
     # loop starts faster with at least one CPU as its limit.

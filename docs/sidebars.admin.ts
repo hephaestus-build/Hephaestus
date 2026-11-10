@@ -10,6 +10,7 @@ const sidebars: SidebarsConfig = {
 			items: [
 				{ type: "doc", id: "kubernetes", label: "Install on Kubernetes" },
 				"k3s",
+				{ type: "doc", id: "managed-cluster", label: "Managed cluster without cluster-admin" },
 				"first-steps",
 				{ type: "doc", id: "install", label: "Install Hephaestus" },
 				"pull-based-deployment",

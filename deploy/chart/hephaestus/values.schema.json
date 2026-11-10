@@ -840,6 +840,21 @@
 							"pattern": "^[1-9][0-9]*(?:Mi|Gi)$"
 						},
 						"quota": { "$ref": "#/definitions/sandboxQuota" },
+						"controller": {
+							"description": "The agent-sandbox controller in the release namespace, for a cluster whose admins grant it the read-only ClusterRole of the admin bundle.",
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["enabled", "image", "resources"],
+							"properties": {
+								"enabled": { "type": "boolean" },
+								"image": {
+									"description": "The controller image of k3s-agent-sandbox.yaml, by digest. A chart test keeps the two equal.",
+									"type": "string",
+									"pattern": "^registry\\.k8s\\.io/agent-sandbox/agent-sandbox-controller:[^@]+@sha256:[a-f0-9]{64}$"
+								},
+								"resources": { "$ref": "#/definitions/resources" }
+							}
+						},
 						"templates": {
 							"description": "The SandboxTemplates of the sandbox kinds.",
 							"type": "object",

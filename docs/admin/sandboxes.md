@@ -303,6 +303,8 @@ CI restores the policies afterward. A gate that passes without the policies cann
 
 Add an address that a sandbox must reach with `--reach <name>=<host>:<port>`, and one that it must not reach with `--forbid <name>=<host>:<port>`.
 The gate names each address in its output.
+The gate reads the cluster DNS Service `kube-system/kube-dns`.
+On a distribution that names it otherwise, give it with `--dns <namespace>/<name>`, for example `--dns kube-system/rke2-coredns-rke2-coredns` on RKE2.
 
 ```bash
 node scripts/sandbox-isolation.ts --namespace hephaestus-sandboxes --template hephaestus-sandbox-review \

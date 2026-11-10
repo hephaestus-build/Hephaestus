@@ -128,6 +128,7 @@
 	"docs/admin/liquibase-baseline-runbook.md",
 	"docs/admin/log-records.md",
 	"docs/admin/maintenance.md",
+	"docs/admin/managed-cluster.mdx",
 	"docs/admin/metrics.md",
 	"docs/admin/monitoring.md",
 	"docs/admin/native-hibernate-json-cutover.mdx",

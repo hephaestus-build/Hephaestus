@@ -1,0 +1,214 @@
+---
+title: Install on a managed cluster without cluster-admin
+description: Give the cluster's admins one bundle and a short list, check your access with the preflight, and install the chart with the cluster profile.
+page_type: how-to
+---
+
+This procedure installs Hephaestus on a Kubernetes cluster that other people administer, for example a Rancher-managed RKE2 cluster.
+You have kubectl access to two namespaces, but you are not a cluster-admin.
+The cluster's admins apply the cluster-scoped objects of the release, the admin bundle.
+You install everything else with the Helm chart and the `cluster.yaml` profile.
+
+The release runs the agent-sandbox controller in its own namespace.
+Every write right of the controller is in a Role of the chart.
+The controller version of the release, v1.0.10, has no option that limits what it reads to one namespace.
+Thus, the admin bundle grants it one ClusterRole that reads these kinds in all namespaces, and writes none of them.
+The kinds are Pods, Services, NetworkPolicies, and the four agent-sandbox kinds.
+
+The controller can then read the specs of the Pods and Services of other namespaces, including their environment values.
+The built-in `admin` role of the release namespace can impersonate the controller's ServiceAccount.
+Thus, each user with `admin` in the release namespace can read these specs too.
+The admins must accept that before they apply the bundle.
+
+## Before you start
+
+The cluster needs these items.
+Send this list to the admins.
+The preflight in [Install](#install) checks each item that your access can read.
+
+1. A cluster that the chart supports, Kubernetes 1.35 or later. [Supported clusters](./helm-chart#supported-clusters) gives the full requirements.
+2. A network plugin that enforces NetworkPolicy for egress as well as ingress. RKE2's default, Canal, does.
+3. The Gateway API with a controller, and a Gateway listener that accepts HTTPRoutes from the release namespace.
+   It serves the public host name of the release with TLS.
+4. Sandbox nodes that meet the [sandbox prerequisites](./sandboxes#sandbox-prerequisites).
+   They need user namespace support (Linux 6.3 or later, containerd 2.0 or later) and encrypted node storage.
+5. A StorageClass for ReadWriteOnce volumes, as the default class or by name, with about 50 GiB for PostgreSQL and NATS.
+   An [external PostgreSQL](./external-database) replaces the PostgreSQL volume.
+6. Egress on port 443 from the release namespace to the Git providers and the model APIs that the workspaces use.
+7. Image pulls from `ghcr.io`, `docker.io` and `registry.k8s.io` on every node.
+8. No other agent-sandbox controller on the cluster.
+   A second controller would also act on the release's sandboxes.
+
+Get the release files of the version that you install:
+
+- The chart, which you [verify](./kubernetes#verify-the-release-chart).
+- The k3s bundle `hephaestus-k3s-X.Y.Z.tar.gz` with its signature, which you verify as [Get the release files](./k3s#1-get-the-release-files) shows.
+  It holds the admin bundle, `hephaestus-cluster-admin.yaml`.
+- A checkout of the release's Git tag, from which you run the preflight with Node.js.
+
+## Admin handoff
+
+Give the admins `hephaestus-cluster-admin.yaml` from the verified bundle, and these steps.
+The admins repeat step 3 for each release.
+
+1. Create the release namespace and the sandbox namespace with the Restricted Pod Security level:
+
+   ```bash
+   kubectl create namespace hephaestus
+   kubectl create namespace hephaestus-sandboxes
+   kubectl label namespace hephaestus hephaestus-sandboxes pod-security.kubernetes.io/enforce=restricted
+   ```
+
+   The admin bundle grants the controller of the release `hephaestus` in the namespace `hephaestus`.
+   For another namespace, do not edit the signed bundle.
+   Apply it, delete its ClusterRoleBinding, and bind the ClusterRole to the ServiceAccount `hephaestus-agent-sandbox-controller` of that namespace:
+
+   ```bash
+   kubectl delete clusterrolebinding hephaestus-agent-sandbox-read
+   kubectl create clusterrolebinding hephaestus-agent-sandbox-read \
+     --clusterrole hephaestus-agent-sandbox-read --serviceaccount <namespace>:hephaestus-agent-sandbox-controller
+   ```
+
+2. Grant the operator the built-in `admin` ClusterRole in both namespaces with a RoleBinding.
+   Also grant the two Roles below with RoleBindings to the operator.
+   `admin` does not cover HTTPRoutes, ResourceQuotas or the agent-sandbox kinds.
+   The chart creates Roles that use these rights.
+   Kubernetes lets a user create a Role only with the rights that the user holds.
+   The quota rule changes only the three quotas of the release, so the admins keep their own quotas.
+
+   ```yaml
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: Role
+   metadata: { name: hephaestus-operator, namespace: hephaestus }
+   rules:
+     - apiGroups: [gateway.networking.k8s.io]
+       resources: [httproutes]
+       verbs: [get, list, watch, create, update, patch, delete]
+   ---
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: Role
+   metadata: { name: hephaestus-operator, namespace: hephaestus-sandboxes }
+   rules:
+     - apiGroups: [""]
+       resources: [resourcequotas]
+       verbs: [get, list, watch, create]
+     - apiGroups: [""]
+       resources: [resourcequotas]
+       resourceNames:
+         - hephaestus-sandbox-quota
+         - hephaestus-sandbox-quota-reviews
+         - hephaestus-sandbox-quota-conversations
+       verbs: [update, patch, delete]
+     - apiGroups: [agents.x-k8s.io]
+       resources: [sandboxes, sandboxes/status, sandboxes/finalizers]
+       verbs: [get, list, watch, create, update, patch, delete]
+     - apiGroups: [extensions.agents.x-k8s.io]
+       resources:
+         - sandboxclaims
+         - sandboxclaims/status
+         - sandboxclaims/finalizers
+         - sandboxtemplates
+         - sandboxtemplates/finalizers
+         - sandboxwarmpools
+         - sandboxwarmpools/status
+         - sandboxwarmpools/finalizers
+       verbs: [get, list, watch, create, update, patch, delete]
+   ```
+
+   With `observability.stack.enabled` or alert rules, the operator also needs the Prometheus Operator kinds that they use. The preflight names them.
+
+3. Apply the admin bundle:
+
+   ```bash
+   kubectl apply --server-side -f hephaestus-cluster-admin.yaml
+   ```
+
+   It holds the four agent-sandbox CRDs, the three PriorityClasses of the release, and the read-only ClusterRole `hephaestus-agent-sandbox-read` with its ClusterRoleBinding.
+   It holds nothing else.
+
+4. Tell the operator these facts:
+   - The name, namespace and listener of the Gateway, and the Pod labels of its data plane.
+   - The address and port of the Kubernetes API as the network plugin sees it, from `kubectl get endpointslices --namespace default --selector kubernetes.io/service-name=kubernetes`.
+   - The name of the cluster DNS Service. On RKE2 it is `kube-system/rke2-coredns-rke2-coredns`.
+   - The StorageClass, if it is not the default class.
+
+## Install
+
+1. Write your values file, `site.yaml`, as [Install](./kubernetes#install) describes for `host`, `trustedProxies`, the Secrets and the login provider.
+   Add the facts from the admins:
+
+   ```yaml title="values.yaml"
+   route:
+     parentRefs:
+       - name: cluster-gateway
+         namespace: gateway-system
+         sectionName: https
+   networkPolicy:
+     gateway:
+       namespace: gateway-system
+       podLabels:
+         app.kubernetes.io/name: gateway
+     kubernetesApi:
+       cidr: 192.168.10.11/32
+       port: 6443
+   worker:
+     sandbox:
+       namespace: hephaestus-sandboxes
+   ```
+
+   `kubernetesApi` is an address from the EndpointSlice, a server node on port 6443, not the address of the `kubernetes` Service.
+   The network plugin applies the policy after it translates the Service address.
+   Use `/128` for an IPv6 address.
+   A cluster with three server nodes has three addresses: set a CIDR that holds all of them.
+
+2. Run the preflight from the checkout of the release tag:
+
+   ```bash
+   node scripts/cluster-preflight.ts --namespace hephaestus --values site.yaml
+   ```
+
+   It renders the chart with `profiles/cluster.yaml` and your values, and checks the cluster with your own access.
+   It does not change the cluster.
+
+   Each `missing:` line names one item that the install needs. Forward it to the admins as it is.
+   Each `unverified:` line names a fact that your access cannot read. Ask the admins to confirm it.
+   The preflight fails while one `missing:` line remains.
+
+   The preflight checks the controller's read-only ClusterRole as the controller's ServiceAccount, with `kubectl auth can-i --as`.
+   Without the right to impersonate that account, it compares the ClusterRole and its binding with the admin bundle instead.
+
+3. Install the verified chart with the cluster profile and your values:
+
+   ```bash
+   helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
+     -f "chart-$VERSION/hephaestus/profiles/cluster.yaml" -f site.yaml \
+     --wait=watcher --wait-for-jobs --timeout 20m
+   ```
+
+   The profile runs two workers with 16 reviews at a time across the sandbox nodes, and the agent-sandbox controller in the release namespace.
+   It names the PriorityClasses of the admin bundle, so the chart creates no cluster-scoped object.
+   It gives the server 3 GiB of memory, for the peak that a staging bench measured.
+
+## Check that it worked
+
+1. Run the preflight again after the install, with `--installed`:
+
+   ```bash
+   node scripts/cluster-preflight.ts --namespace hephaestus --values site.yaml --installed
+   ```
+
+   The workers are ready only when their isolation probe passes on the real nodes: user namespaces, NetworkPolicy enforcement and the gateway path.
+   If a worker is not ready, its log names the probe item that failed.
+
+2. Run the sandbox isolation gate against the review template, with the cluster's DNS Service:
+
+   ```bash
+   node scripts/sandbox-isolation.ts --namespace hephaestus-sandboxes --template hephaestus-sandbox-review \
+     --gateway "$(kubectl -n hephaestus get service hephaestus-sandbox-gateway -o jsonpath='{.spec.clusterIP}'):8081" \
+     --dns kube-system/rke2-coredns-rke2-coredns
+   ```
+
+   It needs the rights of step 2 of the admin handoff and `create` on `pods/exec` in the sandbox namespace.
+   It also reads the `kubernetes` Service and its EndpointSlices in `default`, and the DNS Service.
+
+3. Open the public host name, sign in, and request a review of one pull request.
