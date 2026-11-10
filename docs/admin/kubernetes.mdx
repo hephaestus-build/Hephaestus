@@ -1022,7 +1022,7 @@ The bundle holds these files:
 | `k3s-install.sh` | The installer. It is a POSIX shell script, and it needs no Node.js and no checkout of the repository. |
 | `hephaestus-keys.sh` | Creates or completes the release Secret. The installer runs it. [Create the Secret](#create-the-secret) uses it on another cluster. |
 | `k3s-wait-condition.sh` | Waits until a cert-manager resource reports a condition as true, also while the resource has no status yet. The installer runs it. |
-| `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
+| `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. The installer adds a listener for each [extra host name](#extra-host-names). |
 | `k3s-agent-sandbox.yaml` | The agent-sandbox controller and its resource definitions, with its pin. It goes to the k3s manifests directory. |
 | `k3s-containerd.toml.tmpl` | The containerd configuration of k3s with gVisor as the `runsc` runtime, and the pin of the gVisor release. |
 | `k3s-runtimeclass.yaml` | The RuntimeClass `gvisor` of the sandbox templates. It goes to the k3s manifests directory. |
@@ -1283,6 +1283,7 @@ On a repeat run, select certificates explicitly:
 
 This check prevents a repeat run from replacing wildcard TLS with an implicit apex-only certificate.
 `--render-certificates` previews the selected manifest without host changes and needs no repeat-install choice.
+`--render-platform` prints the `k3s-platform.yaml` that the run would install, and stops without host changes.
 `--render-site` prints the `site.yaml` that a first install would write, and stops without host changes.
 It leaves out the Kubernetes API endpoint, which only the running cluster knows.
 
@@ -1299,6 +1300,58 @@ Then pass `--certificates ./saved-certificates.yaml`. This preserves the existin
 A new `GITHUB_OAUTH_CLIENT_SECRET` updates the Kubernetes Secret and restarts the server to seed a missing login provider.
 An existing login provider keeps its database value, including after a restart.
 Use [Login provider secrets](./secret-custody#login-provider-secrets) to rotate the credential used for sign-in.
+
+### Extra host names
+
+`--extra-host NAME` adds one more host name to the Gateway `traefik/traefik-gateway`.
+Use it for an alias or for a redirect from an old host name. Repeat it for each name.
+
+For each name, the installer adds an HTTPS listener whose name and host name are `NAME`.
+cert-manager issues the certificate `traefik/NAME-tls` through the HTTP-01 challenge of the `gateway` issuer.
+It uses that issuer also when the main host uses a DNS-01 issuer.
+The redirect from HTTP to HTTPS covers each name.
+The installer waits up to 10 minutes for each certificate.
+
+The route of the chart serves only `host`.
+To serve an extra name, attach your own HTTPRoute to its listener.
+`--extra-host` does not work with `--certificates`. Put the certificates of extra names in that file yourself.
+With `--workspace-subdomains`, an extra name cannot be a workspace host of `host`.
+
+1. Point a DNS record of the name to this host. The installer stops when the name does not resolve.
+2. Give `--extra-host NAME` on each run of the installer, also with `--platform-only` and `--check-platform`.
+3. Attach your route to the listener with `sectionName: NAME`. This example redirects an old host name to `host`:
+
+   ```yaml
+   apiVersion: gateway.networking.k8s.io/v1
+   kind: HTTPRoute
+   metadata:
+     name: old-host-redirect
+     namespace: traefik
+   spec:
+     parentRefs:
+       - name: traefik-gateway
+         namespace: traefik
+         sectionName: old.example.com
+     hostnames:
+       - old.example.com
+     rules:
+       - filters:
+           - type: RequestRedirect
+             requestRedirect:
+               hostname: hephaestus.example.com
+               statusCode: 301
+   ```
+
+To remove a name, do these steps:
+
+1. Delete your route of the name.
+2. Run the installer again without `--extra-host NAME`.
+3. Delete the certificate and the Secret of the name:
+
+   ```bash
+   kubectl --namespace traefik delete certificate NAME-tls --ignore-not-found
+   kubectl --namespace traefik delete secret NAME-tls --ignore-not-found
+   ```
 
 ### Certificate renewal
 
@@ -1351,7 +1404,7 @@ It waits until the agent-sandbox controller is ready and cert-manager has issued
 It compares each installed platform file byte for byte with its source, and the installed k3s with the pin.
 It names each file that differs or is missing, and each flag of the k3s service, because a flag overrides `config.yaml`.
 It stops with an error when one item differs, and when it cannot read the `ExecStart` of the k3s service.
-It renders the certificates file with your options, as the installer does.
+It renders `k3s-platform.yaml` and the certificates file with your options, as the installer does.
 Other files, such as your own manifests in the k3s manifests directory, are yours, and the check does not read them.
 
 The check shows the keys of `/etc/rancher/k3s/config.yaml.d/50-node.yaml`, which is yours. A key other than `node-ip` and `node-name` in it is a difference.
