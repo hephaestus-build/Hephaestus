@@ -1,8 +1,9 @@
 # ADR 0006: LLM proxy stays on the coordinator (BYO trust model)
 
-**Status:** Accepted (amended 2026-07-20 #1368 — proxy follows the worker gate; 2026-07-28 #1400 — governed provider catalog; 2026-09-03 #1719 — Decision superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — Heph host credential and admission, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-11-09 — superseded in part by [ADR 0079](0079-one-agent-system.md))
+**Status:** Accepted
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
+**Amended by:** [ADR 0041](0041-compose-1x-kubernetes-2.md), [ADR 0057](0057-one-heph-conversation-per-developer.md), [ADR 0079](0079-one-agent-system.md)
 
 ## Context
 

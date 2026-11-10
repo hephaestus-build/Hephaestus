@@ -1,6 +1,6 @@
 # ADR 0049: The browser extension shows its report in the page and confirms changes in its own window
 
-**Status:** Accepted (amended 2026-10-12 — a not met result names its problems)
+**Status:** Accepted
 **Date:** 2026-09-27
 **Authors:** Felix T.J. Dietrich
 

@@ -1,7 +1,8 @@
 # ADR 0012: Cross-instance identity safety on sync paths
 
-**Status:** Accepted (amended 2026-09-17 — definitive-404 removal narrowed by [ADR 0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md))
+**Status:** Accepted
 **Date:** 2026-05-25
+**Amended by:** [ADR 0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md)
 
 ## Context
 

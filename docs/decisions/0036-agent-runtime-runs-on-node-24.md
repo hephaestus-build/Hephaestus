@@ -1,11 +1,8 @@
 # ADR 0036: Agent runtime runs on Node.js 24 with bounded resources
 
-## Status
-
-Accepted (amended 2026-09-17 — the image installs the SDK with pnpm; 2026-10-09 — each practice script runs in its own process; 2026-10-09 — Heph host replaces the mentor runner, [ADR 0057](0057-one-heph-conversation-per-developer.md)). Supersedes
-[ADR 0030](0030-agent-runtime-is-typescript-on-bun.md) for the sandbox image. Repository tooling is
-governed by [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md), which superseded
-[ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md).
+**Status:** Accepted
+**Supersedes:** [ADR 0030](0030-agent-runtime-is-typescript-on-bun.md) for the sandbox image.
+**Amended by:** [ADR 0057](0057-one-heph-conversation-per-developer.md)
 
 ## Context
 

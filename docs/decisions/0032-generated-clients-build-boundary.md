@@ -1,8 +1,9 @@
 # ADR 0032: Generated clients have an independent build boundary
 
-**Status:** Ownership boundary accepted; Maven mechanism superseded by [ADR 0043](0043-gradle-java-build.md)
+**Status:** Accepted
 **Date:** 2026-08-25
 **Authors:** Server foundations
+**Amended by:** [ADR 0043](0043-gradle-java-build.md)
 
 ## Context
 

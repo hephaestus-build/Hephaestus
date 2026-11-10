@@ -1,6 +1,6 @@
 # ADR 0010: Hand-roll OAuth state for outbound per-workspace integrations
 
-**Status:** Accepted (amended 2026-05-30 — PKCE primitive removed)
+**Status:** Accepted
 **Date:** 2026-05-25
 **Authors:** Integration framework polish (#1198)
 

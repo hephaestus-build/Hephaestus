@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-10-09
 **Authors:** Felix T.J. Dietrich
-**Supersedes in part:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md). Its *Update — 2026-10-09* lists the parts.
+**Amends:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md). Its *Update — 2026-10-09* lists the parts.
 
 ## Context
 

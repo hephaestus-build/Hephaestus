@@ -7,6 +7,7 @@
 **Authors:** Valentin Grüner
 **Builds on:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md) (no score, no rank),
 [ADR 0047](0047-the-practice-profile-has-one-reader.md) (the Practice profile has one reader)
+**Amended by:** [ADR 0065](0065-standing-counts-the-newest-observation-of-each-item.md)
 
 ## Context
 

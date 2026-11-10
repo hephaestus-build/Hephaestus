@@ -5,6 +5,7 @@
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** [ADR 0056](0056-one-practice-model-for-items-and-scans.md). Its item, version and current-claim model stays.
+**Amended by:** [ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md)
 
 ## Context
 

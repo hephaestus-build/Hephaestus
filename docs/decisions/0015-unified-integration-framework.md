@@ -1,6 +1,6 @@
 # ADR 0015: Unified integration framework — package layout and SPI surface
 
-**Status:** Accepted (amended 2026-05-27 for Phase 1-4 restructure; 2026-09-17 — names and paths corrected)
+**Status:** Accepted
 **Date:** 2026-05-26
 **Authors:** Felix T.J. Dietrich
 

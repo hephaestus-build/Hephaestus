@@ -1,10 +1,11 @@
 # ADR 0063: Each practice is staged when it ends, and the review seals once
 
-**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md), amended 2026-11-09 — [the review run kinds](#update--2026-11-09-the-review-run-kinds-are-review-and-review_compose))
+**Status:** Accepted
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) for the sandbox Job, and [ADR 0061](0061-review-seals-then-feedback-composes.md) for the seal.
+**Amended by:** [ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md), [ADR 0079](0079-one-agent-system.md)
 
 ## Context
 

@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
+**Amended by:** [ADR 0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md)
 
 ## Context
 

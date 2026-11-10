@@ -1,7 +1,8 @@
 # ADR 0044: Email is a notification transport, delivered through the event publication registry
 
-**Status:** Accepted. The 1.0 cutover removes the survey invitation records and survey email requests described below. The email transport decision remains in effect. Superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
+**Status:** Accepted
 **Date:** 2026-09-12
+**Amended by:** [ADR 0079](0079-one-agent-system.md)
 
 ## Context
 
@@ -143,3 +144,9 @@ Each email is an `email` action in the `agent_action` outbox, with an idempotenc
 Email is at most once: an `UNCERTAIN` action is never sent again.
 The event publication registry is no longer the record of an email delivery.
 The `notification` module, the one SMTP gateway, Silent Mode and the templates stay.
+
+## Update — 2026-11-10: the 1.0 cutover removes the survey records
+
+The 1.0 cutover removes the survey invitation records and the survey email requests that this ADR describes.
+The email transport decision stays in effect.
+This note was the status line until the status became one word.

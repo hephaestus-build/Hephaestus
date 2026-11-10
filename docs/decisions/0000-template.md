@@ -1,12 +1,13 @@
-# ADR NNNN: `<Title>`
+# ADR NNNN: `<The decision, as a sentence>`
 
-**Status:** `<Proposed | Accepted | Superseded by NNNN>`
+**Status:** `<Proposed | Accepted | Superseded by [NNNN](NNNN-file.md) | Deprecated>`
 **Date:** YYYY-MM-DD
 **Authors:** `<name>`
+**Supersedes:** `<links, if any>`
 
 ## Context
 
-Why are we making this decision now? What forces are at play?
+The forces and the real constraint, in a few sentences.
 
 ## Decision drivers
 
@@ -14,19 +15,31 @@ Why are we making this decision now? What forces are at play?
 
 ## Considered options
 
-1. ...
+1. **Option.** What it costs.
 2. ...
 
 ## Decision
 
-What we chose, in 1–2 sentences.
+The rules that a reviewer can check against a diff.
 
 ## Consequences
 
-What follows: positive, neutral, and negative outcomes; what becomes
-easier or harder.
+- Good: ...
+- Bad: ...
+
+## Confirmation
+
+The test, ArchUnit rule or CI gate that fails when the code breaks the decision.
+If nothing checks it, write `Not enforced.` and say what review catches it.
 
 ## Revisit trigger
 
-The specific signal that would invalidate this decision and require
-re-opening it.
+The signal that reopens the decision.
+
+## Sources
+
+- [Source](https://example.org): what it changes in this decision.
+
+## Already priced and declined
+
+Only in an ADR that supersedes others: the rejected options of the old ADRs, one line each, with a link.

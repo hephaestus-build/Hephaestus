@@ -1,6 +1,6 @@
 # ADR 0002: Rename Java base package to `de.tum.cit.aet.hephaestus`
 
-**Status:** Accepted (amended 2026-09-17 — deploy domain moved, package kept)
+**Status:** Accepted
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 

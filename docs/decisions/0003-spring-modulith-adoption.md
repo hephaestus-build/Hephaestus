@@ -1,6 +1,6 @@
 # ADR 0003: Spring Modulith 2.0 adoption with two empirical shared kernels
 
-**Status:** Accepted (amended 2026-09-17 — kernel and named-interface names corrected)
+**Status:** Accepted
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 

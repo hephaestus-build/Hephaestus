@@ -1,10 +1,11 @@
 # ADR 0070: 1.0 is a cutover release
 
-**Status:** Accepted (amended 2026-10-28 — lease recovery requeues the claimed reviews; amended 2026-11-03 — F-2 removes the legacy feedback link resolver). Amended on 2026-11-09 by [ADR 0079](0079-one-agent-system.md). Amended 2026-11-10 — the webhook role stops in the cutover too.
+**Status:** Accepted
 **Date:** 2026-10-28
 **Authors:** Felix T.J. Dietrich
 **Amends:** ADR 0058 (§ Supported deployment, § Notice and removal, gate 10), ADR 0041, ADR 0042 and ADR 0005.
 **Relates to:** ADR 0068 (§ Order, decision D) and ADR 0069.
+**Amended by:** [ADR 0079](0079-one-agent-system.md)
 
 ## Context
 

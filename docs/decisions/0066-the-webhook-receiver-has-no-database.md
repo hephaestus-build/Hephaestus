@@ -1,6 +1,6 @@
 # ADR 0066: The webhook receiver has no database
 
-**Status:** Accepted. Superseded 2026-11-10 by [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md).
+**Status:** Superseded by [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md)
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 

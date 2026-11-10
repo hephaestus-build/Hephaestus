@@ -1,10 +1,10 @@
 # ADR 0018: pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions)
 
-**Status:** Accepted (PostgreSQL version superseded by [ADR 0038](0038-postgresql-18-release-baseline.md); amended 2026-09-17 — image name and changeset location; 2026-10-25 — `pg_stat_statements` preloaded)
+**Status:** Accepted
 **Date:** 2026-06-09
 **Authors:** Felix T.J. Dietrich
 **Supersedes (partition sub-decision only):** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
-**PostgreSQL version superseded by:** [ADR 0038](0038-postgresql-18-release-baseline.md)
+**Amended by:** [ADR 0038](0038-postgresql-18-release-baseline.md)
 
 ## Context
 
