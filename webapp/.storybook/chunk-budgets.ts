@@ -2,11 +2,15 @@ import { gzipSync } from "node:zlib";
 
 import type { Plugin } from "vite";
 
-// These are monolithic upstream tools, not code shipped to application users. Keep narrow
-// budgets so a dependency update must explain growth; everything else retains Vite's 500kB limit.
+// These are monolithic upstream tools in the Storybook preview only, never code shipped to
+// application users. Keep narrow budgets so growth must explain itself; everything else retains
+// Vite's 500kB limit. Rolldown groups modules by the stories that import them: once component
+// stories stopped importing MSW and TanStack Query, the shared libraries that preview decorators
+// also use joined the runtime chunk, and Storybook's docs internals formed a chunk of their own.
 const TOOL_BUDGETS = [
-	{ module: "/node_modules/storybook/dist/preview/runtime.js", bytes: 1_186_100, gzip: 339_000 },
+	{ module: "/node_modules/storybook/dist/preview/runtime.js", bytes: 1_300_000, gzip: 372_000 },
 	{ module: "/node_modules/axe-core/axe.js", bytes: 672_000, gzip: 190_000 },
+	{ module: "/node_modules/@storybook/addon-docs/dist/blocks.js", bytes: 536_000, gzip: 175_000 },
 ];
 
 export function checkChunkBudget(code: string, moduleIds: string[]) {
