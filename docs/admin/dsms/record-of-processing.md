@@ -1,4 +1,8 @@
-# Hephaestus — Record of Processing Activities (Art. 30 GDPR)
+---
+title: Record of Processing Activities (Art. 30 GDPR)
+description: A template for the Art. 30 GDPR record of a deployment, with the pages that describe what Hephaestus does for each element.
+page_type: reference
+---
 
 This page is a template for the Art. 30 record of a Hephaestus deployment.
 Each section maps to one Art. 30 element.

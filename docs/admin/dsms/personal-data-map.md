@@ -1,9 +1,8 @@
 ---
 title: Personal-data map and erasure verification
 description: The authoritative map from personal-data stores to export, retention, and erasure controls.
+page_type: reference
 ---
-
-# Personal-data map and erasure verification
 
 This inventory maps each personal-data store to its removal control and executable evidence. Before a store or derived copy receives personal data, complete these steps:
 

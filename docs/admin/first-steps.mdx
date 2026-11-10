@@ -1,21 +1,27 @@
 ---
-id: first-steps
 title: First steps
-description: Configure the login provider and the first admin, then connect data and run the first practice review.
+description: Configure the login provider and the first admin, then connect GitHub and an AI provider, and run the first practice review.
+page_type: tutorial
 ---
 
-These steps configure the Helm chart on [Kubernetes](./kubernetes).
-Steps 1 and 2 set values before the first start, so the install pages link to them.
-Steps 3 to 7 follow the first start.
+At the end of this tutorial, your instance has a first admin, a workspace with GitHub data, and a first practice review that you approved.
+The steps configure the Helm chart on [Kubernetes](./kubernetes).
+Stages 1 and 2 set values before the first start, so the install pages link to them.
+Stages 3 to 6 follow the first start.
+
+## Before you start
+
+- An instance that you install with the Helm chart, as [Install Hephaestus](./install) describes.
+- The host name of the instance.
+- A GitHub organization in which you can create and install apps.
+- An account at an AI provider, with an API key.
+
+This tutorial uses GitHub for sign-in and for repository data.
 
 ## 1. Configure a login provider
 
-One enabled GitHub or GitLab login provider is enough. Slack and Outline are for account linking,
-not sign-in. The steps below configure GitHub. For GitLab, use the
-[GitLab rollout bundle](./production-setup#gitlab-rollout-bundle).
-
 GitHub login needs a plain **OAuth App**.
-This is *not* the GitHub App for data access: see [GitHub integration](./github-integration).
+This is *not* the GitHub App for data access, which stage 4 creates.
 Without a login provider, the instance boots but shows **no sign-in button**.
 
 1. Open [github.com/settings/developers](https://github.com/settings/developers), or your organization's equivalent settings.
@@ -25,11 +31,8 @@ Without a login provider, the instance boots but shows **no sign-in button**.
    The string must include `/api` and have no trailing slash.
 5. If the GitHub settings page offers an image upload, use [`external-app-icon-1024.png`](/img/brand/external-app-icon-1024.png) as the application logo.
 6. Create a client secret.
-7. Store the client ID and the client secret:
-
-   | Deployment | Client ID | Client secret |
-   | --- | --- | --- |
-   | Kubernetes | `config.github.oauthClientId` in `site.yaml` | `GITHUB_OAUTH_CLIENT_SECRET` in the [Secret](./kubernetes#create-the-secret) |
+7. Set the client ID as `config.github.oauthClientId` in `site.yaml`.
+8. Put the client secret as `GITHUB_OAUTH_CLIENT_SECRET` in the [Secret](./kubernetes#create-the-secret).
 
 ## 2. Name the first admin
 
@@ -66,95 +69,56 @@ After the first start:
    The page never shows a setting's value.
 
 5. Leave optional settings until you want them.
-6. Create your first workspace.
-7. Connect it to GitHub.
 
 ## 4. Connect repository data
 
-A new instance starts in **Silent mode**. Sync and reviews can run, but outbound feedback is blocked.
-Turning silent mode off does not replay feedback withheld while it was on.
-See [Instance administration](./instance-admin#silent-mode).
-
-1. Check the deployment and integrations.
-2. Open **Instance administration → Instance settings**.
-3. Turn silent mode off.
-
-For GitLab workspaces, use [Integrations](./integrations#gitlab). For GitHub:
-
 Login alone syncs nothing.
-Data flow requires two things.
-Both have procedures in
-[GitHub integration](./github-integration):
+A **GitHub App** reads the repositories, receives their webhooks, and posts feedback with its own identity.
 
-1. **Repository access** — use a **PAT** in the workspace UI for the simplest setup.
-   A **GitHub App** is necessary to post AI-review feedback to GitHub and offers better rate limits.
-2. **Webhooks** — Hephaestus does **not** auto-register GitHub webhooks (unlike GitLab).
-   Configure the webhook on your GitHub App **or** create an org/repo webhook manually,
-   pointing at `https://<your hostname>/webhooks/github` with your `WEBHOOK_SECRET`. Without
-   it the instance only sees changes on the hourly sync poll, and nothing warns you.
+1. Create the GitHub App, as [GitHub App mode](./github-integration#github-app-mode) describes.
+   Its webhook points at `https://<your hostname>/webhooks/github` with your `WEBHOOK_SECRET`.
+2. Install the App on your organization, and set its chart values and Secret keys, as [Install and configure](./github-integration#install-and-configure) describes.
+3. Open **Instance administration → GitHub installations**.
+4. Select **Adopt** for the installation.
+   Hephaestus creates the workspace with you as its owner and starts the first sync.
 
-## 5. Optional integrations
+## 5. Connect an AI provider
 
-All optional integrations are off by default.
-[Integration settings](./production-setup) describes the settings of each.
-On Kubernetes, [Integration values](./helm-chart#integration-values) names the chart values and the Secret keys of each.
-
-1. Enable the desired integrations.
-2. Run the install command again: the `helm upgrade --install` command of [Install](./kubernetes#install) step 6 with your site values.
-
-| Add-on             | What it gives you                                                                                             | Where                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| GitLab             | GitLab login, workspaces, and sync (webhooks auto-register here)                                              | [GitLab bundle](./production-setup#gitlab-rollout-bundle)     |
-| Slack              | Hephaestus in Slack DMs, channel ingestion                                                                          | [Slack app setup](./production-setup#slack-app-configuration) |
-| Outline            | Wiki as a content source for reviews                                                                          | [Outline integration](./production-setup#outline-integration) |
-| AI practice review | Automated PR feedback from the coding agent                                                                   | [Practice review](./practice-review#first-successful-review)               |
-| Email              | Optional invitations, summaries, weekly digest notes, and connection alerts. Configure `SPRING_MAIL_*` and `HEPHAESTUS_EMAIL_FROM` | [Email setup](./production-setup#email)                       |
-| An AI provider     | The model everything AI runs on — required by the row above                                                   | [Connect an AI Provider](./ai-providers)                      |
-
-AI practice review requires a running worker and a model that the workspace can run on.
-On Kubernetes, the `small.yaml` profile enables the worker.
-Enable reviews and repository checkouts through the [chart values](./helm-chart#integration-values).
-
+Practice review needs a running worker and a model that the workspace can run on.
 The job queue runs on PostgreSQL, so practice review needs no NATS setup.
 
-[Connect an AI Provider](./ai-providers) explains model setup.
-It covers provider connection registration, tests, model prices, model shares, and an assignment to the **practice reviews** purpose.
-No reviews run until setup is complete.
+1. Turn on the worker, reviews, and repository checkouts in the [chart values](./kubernetes#integration-values).
+   On Kubernetes, the `small.yaml` profile turns on the worker.
+2. Run the install command again with your site values.
+3. Connect the provider, then price, enable, and share a model, as [The staged flow](./ai-providers#1-the-staged-flow-and-why-it-is-staged) describes.
+4. As a workspace admin, assign the model to **Practice reviews** on the workspace's **AI models** page.
+   The row shows the model and does not read **Not ready**.
 
-If the worker runs but no model is assigned, reviews do not run.
-Hephaestus records each review opportunity with the reason **No AI model is assigned to practice review.**
-The reason is visible under **Practices → Practice reviews → Reviews**.
-A workspace without an assigned model is a normal state.
+## 6. Run the first practice review
 
-### Chrome extension
-
-The optional [Chrome extension](./browser-extension) shows practice reviews on GitHub or GitLab work pages.
-The guide explains how to allow sign-in and distribute the extension to users.
-
-## 6. Legal pages (public instances)
-
-:::caution[CAUTION: Public instances need legal pages]
-`/imprint` and `/privacy` serve a red "not configured" fallback until you provide your own.
-For operators in Germany that is a § 5 DDG / Art. 13 GDPR obligation **before** opening the
-instance to users. See [Legal Pages](./legal-pages).
-:::
-
-## 7. First practice review
-
-Before this procedure, GitHub must be connected (step 4).
-A model must also be assigned to practice reviews ([Connect an AI
-Provider](./ai-providers)).
-The procedure runs one review and lets you read its feedback before anyone else can:
+A new instance starts in **Silent mode**.
+Sync and reviews can run, but outbound feedback is blocked.
+The procedure runs one review and lets you read its feedback before anyone else can.
 
 1. Open **Practices → Review settings → How much**.
 2. Set the **Workspace default** to **Approve first**.
    Each piece of feedback waits for your approval.
 3. Follow [First successful review](./practice-review#first-successful-review).
-4. When the review finishes, open **Practices → Practice reviews**. Its feedback is listed under
-   **Needs you**, awaiting approval. Nothing reaches the pull or merge request before you approve it.
+4. When the review finishes, open **Practices → Practice reviews**.
+   Its feedback is listed under **Needs you**, awaiting approval.
+   Nothing reaches the pull request before you approve it.
 5. Open the feedback.
 6. Read it.
 7. Read the problems behind it.
-8. Approve or reject the feedback.
+8. Open **Instance administration → Instance settings**.
+9. Turn silent mode off.
+   Turning silent mode off does not replay feedback withheld while it was on.
+   [Silent mode](./instance-admin#silent-mode) describes the switch.
+10. Approve or reject the feedback.
 
-9. Once the feedback reads as you want, widen coverage or increase feedback mode as [Practice review](./practice-review) describes.
+## Next steps
+
+- [Integration settings](./production-setup): turn on GitLab, Slack, Outline, or email.
+- [Publish the legal pages](./legal-pages): a public instance needs its own imprint and privacy notice before it admits users.
+- [Set up the Chrome extension](./browser-extension): show practice reviews on GitHub or GitLab work pages.
+- [Run practice reviews](./practice-review): widen review scope or raise the feedback mode.

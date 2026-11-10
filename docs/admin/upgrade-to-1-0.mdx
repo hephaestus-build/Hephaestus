@@ -36,7 +36,7 @@ Do not size nodes for 1.0 from this page.
 Each upgrade still requires a verified recovery point.
 If you have no verified recovery point, stop before the migration.
 
-## Prerequisites
+## Prepare before the maintenance window
 
 Complete these items before the maintenance window.
 The window then holds only the cutover.
@@ -201,15 +201,8 @@ The migration entry of a stopped change can give its own rollback notes.
 
 ## Reach the database baseline from 0.x
 
-A release before 1.0.0-rc.1 must first reach that database baseline.
-Use its [versioned upgrade instructions](https://github.com/hephaestus-build/Hephaestus/blob/v1.0.0-rc.1/docs/admin/upgrade-to-1-0.mdx).
-
-For a Compose installation, first upgrade to `0.95.0`.
-Use [Move from Compose to the Helm chart](./compose-to-kubernetes) to move that version.
-Apply `0.95.1` and install its reconciler tooling before the chart-only upgrade.
-The versioned instructions own the stopped cutover to the database baseline.
+A release before 1.0.0-rc.1 must first reach that database baseline, as [Prepare an older database for the current release](./liquibase-baseline-runbook) describes.
 Then follow the cutover above.
-1.0 supports only the [Helm chart](./compatibility-policy#supported-deployment).
 
 ## Check that it worked
 
@@ -218,7 +211,7 @@ Then follow the cutover above.
 3. Resolve each item under **Action required**.
 4. Verify an authenticated read through the public gateway.
 5. Check `sandbox_isolation_passed` of each worker and that `HephaestusSandboxIsolationFailed` does not fire.
-6. Run one practice review in **Approve first** mode, as [First steps § 7](./first-steps#7-first-practice-review) describes.
+6. Run one practice review in **Approve first** mode, as [First steps § 6](./first-steps#6-run-the-first-practice-review) describes.
    Watch it end with a result.
 7. Ask one question in Hephaestus and verify that the answer completes.
 8. Read the dashboards **Overview** and **Reviews and feedback**, as [Dashboards](./monitoring#open-the-dashboards) describes.

@@ -1,4 +1,8 @@
-# Hephaestus — Art. 28 Processor Checklist
+---
+title: Art. 28 Processor Checklist
+description: The recipients of personal data in a deployment, and the Art. 28 GDPR evidence to record for each one before you turn it on.
+page_type: reference
+---
 
 Use this checklist to record each recipient of personal data in your deployment and its role under the GDPR.
 Hephaestus does not establish any of these relationships for you.

@@ -145,6 +145,7 @@
 	"docs/admin/product-feedback.mdx",
 	"docs/admin/production-operations-runbook.mdx",
 	"docs/admin/production-setup.mdx",
+	"docs/admin/public-activity.mdx",
 	"docs/admin/pull-based-deployment.mdx",
 	"docs/admin/release-image-lock.md",
 	"docs/admin/runtime-roles.mdx",

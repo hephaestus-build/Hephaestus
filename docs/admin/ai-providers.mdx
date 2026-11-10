@@ -1,7 +1,7 @@
 ---
-id: ai-providers
-title: Connect an AI Provider
+title: Connect an AI provider
 description: Register an AI provider. Test it. Price and share its models. Understand each field and failed probe.
+page_type: how-to
 ---
 
 Hephaestus ships with **no** provider, model, or key.
@@ -609,6 +609,14 @@ The UI shows the title.
 | 409    | `llm-model-upstream-id-conflict` | Two catalog entries would use the same upstream id on one connection. This is refused because price selection would be nondeterministic. A `NO_CHARGE` copy could silently replace a `PRICED` model for billing. |
 | 409    | `agent-binding-slot-mismatch`    | A model's declared tier does not match the assignment row. The body's `declaredTier` names the model tier, which the UI uses to explain the refusal. An undeclared model has no `declaredTier`, only the detail. |
 | 404    | *Resource not found*             | Unknown connection or model id.                                                                                                                                                                                  |
+
+## Check that it worked
+
+1. As a workspace admin, open the workspace's **Administration → AI models** page.
+2. Find the row of each purpose that you assigned.
+   The row shows the model and does not read **Not ready**.
+3. For **Practice reviews**, request a review of eligible work.
+   Under **Practices → Practice reviews → Reviews**, the review does not record **No AI model is assigned to practice review.**
 
 ## Next
 

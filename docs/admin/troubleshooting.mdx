@@ -1,48 +1,245 @@
 ---
-id: troubleshooting
 title: Troubleshooting
-description: Identify and recover from failures in a self-hosted Helm deployment.
+description: Find the cause of a failure in a self-hosted Helm deployment from what you see, fix it, and check the fix.
+page_type: troubleshooting
 ---
 
-Start with [Kubernetes troubleshooting](./kubernetes#troubleshooting).
-Inspect the affected Pod's events and logs in the deployment namespace.
-Do not print Secret objects or credentials while collecting diagnostics.
+This page covers a self-hosted deployment on the Helm chart.
+Before you change anything, collect the release version, the Helm history of the release, and the events and logs of the affected Pod.
+Do not print Secret objects or credentials while you collect diagnostics.
+[Kubernetes troubleshooting](./kubernetes#troubleshooting) covers a failed first install and other symptoms of the chart.
 
-## Startup and sign-in
+## Startup fails: `server.tomcat.remoteip.internal-proxies is unset while forward-headers-strategy=native in prod`
 
-| Symptom                                                       | Check and recovery                                                                                                                                                                              |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Startup fails at `ProxyTrustGuard`.                           | Set `trustedProxies` to the real ingress addresses. [Gateway routes](./helm-chart#gateway-routes) gives the requirements.                                                                       |
-| Startup reports an encryption-key error.                      | Restore the original key for an existing database. Do not generate a replacement key for data encrypted with the old one. [Secret custody](./secret-custody) owns key recovery.                 |
-| The login page has no sign-in button.                         | Configure a complete GitHub or GitLab login provider. [First steps](./first-steps#1-configure-a-login-provider) owns the initial setup. Change an existing provider in instance administration. |
-| Sign-in succeeds but the user is not an admin.                | Check `config.auth.bootstrapAdmins` against the provider's stable account identifier. [Instance admin](./instance-admin#bootstrap-and-recovery) owns recovery.                                  |
-| Helm reports `failed` or a Pod waits for a pending changeset. | Check the migration Job. A Helm failure does not prove that the Job stopped. Follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover).                             |
-| Every path returns `404`. | Check the route conditions: `kubectl --namespace hephaestus describe httproute`. For `NotAllowedByListeners`, see [Gateway routes](./helm-chart#gateway-routes). |
-| The browser reports a certificate error.                      | Check DNS, the Gateway certificate and the cert-manager Certificate status. [Certificate renewal](./k3s#certificate-renewal) gives the one-host checks.                                  |
+**Cause:** `trustedProxies` is blank.
+The server does not start in production with a blank value.
 
-## Provider events
+**Fix:**
 
-| Symptom                                                         | Check and recovery                                                                                                                                                               |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub deliveries return `401`.                                 | Compare the configured webhook secret through a protected process. It must match the release Secret. Do not put either value in logs.                                            |
-| Data appears only after a sync.                                 | Check that the provider webhook exists and reaches the webhook role. [Integrations](./integrations) links the provider-specific setup.                                           |
-| Deliveries return `503` and `webhook.publish` records failures. | Inspect `webhook.publish.reason`, broker readiness, stream bounds and volume space. [Webhook ingestion operations](./webhook-ingestion-operations) owns recovery and redelivery. |
+1. Find the addresses of the Gateway Pods, as [Gateway routes](./kubernetes#gateway-routes) describes.
+2. Set `trustedProxies` to a Tomcat regular expression for the Pod network that holds them.
+3. Run `helm upgrade` with your site values.
 
-## Practice reviews
+**Check:** The server Pod becomes ready.
 
-| Symptom                                                      | Check and recovery                                                                                                                                                                                            |
-| --- | --- |
-| Reviews record `No AI model is assigned to practice review.` | Assign an enabled model to practice reviews. [Connect an AI provider](./ai-providers) gives the steps.                                                                                                        |
-| Sandboxes do not start or the worker is unready. | Inspect the worker isolation-probe result and sandbox Pod events. Verify the chart service account, namespace, quota, and NetworkPolicy. See [Sandboxes](./sandboxes#worker). |
-| A sandbox Pod is refused or cannot start.                    | Inspect its events and the worker log. Check admission policy, quota, image pulls and [sandbox prerequisites](./sandboxes#sandbox-prerequisites).                                                            |
-| A worker or sandbox ends with `OOMKilled`.                   | Compare its peak memory and limit under the qualified workload. [Sizing](./sizing) owns the resource budget.                                                                                                  |
-| Reviews wait past their deadline.                            | Read queue depth and oldest age, then check the model and `worker.sandbox.reviewMemory`. [Sizing](./sizing) owns capacity. [Practice review operations](./practice-review-operations#queue-health) owns queue diagnostics. |
-| Script runs end with `Practice script stopped without a result: it ran out of time.` | The model provider is slow or limits the rate of calls. [Practice review operations](./practice-review-operations) lists the reasons. Raise the provider limits or use a faster model before you raise concurrency. |
+## Startup fails: `An encryption key is required in production`
 
-## Disk and storage
+**Cause:** The release Secret has no `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`.
+A server with the `prod` profile does not start without it.
 
-Check PostgreSQL data and WAL, JetStream, repository caches and the container runtime separately.
-The kubelet owns image garbage collection.
-Do not prune volumes to recover space.
-A broker that could not write its metadata can need a restart after space is restored. Follow [Recovering a wedged broker](./webhook-ingestion-operations#recovering-a-wedged-broker).
-Use [Backup and restore](./backup-restore) when data or a volume is lost.
+**Fix:**
+
+1. Restore the exact value of the key from your off-host copy, as [System key](./secret-custody#system-key) describes.
+   Do not make a new key for an existing database.
+   The server cannot read the values that the old key sealed.
+2. Restart every role, as [Restart a role](./secret-custody#restart-a-role) describes.
+
+**Check:** The server Pod becomes ready, and you can sign in.
+
+## The login page has no sign-in button
+
+**Cause:** No complete GitHub or GitLab login provider is configured.
+
+**Fix:**
+
+1. On a new instance, configure the OAuth App, as [First steps](./first-steps#1-configure-a-login-provider) describes.
+2. To change an existing provider, open **Instance administration → Login providers**.
+
+**Check:** The login page offers **Continue with GitHub** or the button of your GitLab provider.
+
+## Sign-in succeeds, but the account has no instance-admin navigation
+
+**Cause:** `config.auth.bootstrapAdmins` does not name the account by the provider's stable account identifier.
+Hephaestus promotes an account only when it signs in.
+
+**Fix:**
+
+1. Compare each entry of `config.auth.bootstrapAdmins` with the account, as [First steps](./first-steps#2-name-the-first-admin) describes.
+2. Correct the entry, and run `helm upgrade` with your site values.
+3. Sign in again.
+4. If no admin exists and the entry is correct, follow [Bootstrap and recovery](./instance-admin#bootstrap-and-recovery).
+
+**Check:** After sign-in, the sidebar shows **Instance administration**.
+
+## Helm reports `failed`, or a Pod waits for a pending change set
+
+**Cause:** The migration Job has not finished the schema change.
+A Helm failure does not prove that the Job stopped.
+
+**Fix:**
+
+1. Read the log of the migration Job:
+
+   ```bash
+   kubectl --namespace hephaestus logs job/<migration-job>
+   ```
+
+   Replace `<migration-job>` with the Job name of the Helm revision.
+
+2. Follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover).
+
+**Check:** The migration Job completes, and the Pod of each role becomes ready.
+
+## Every path returns `404`
+
+**Cause:** The listener of the Gateway does not allow routes from the release namespace.
+
+**Fix:**
+
+1. Read the route conditions:
+
+   ```bash
+   kubectl --namespace hephaestus describe httproute
+   ```
+
+2. If the conditions show `Accepted=False NotAllowedByListeners`, set `allowedRoutes.namespaces` on the listener, as [Gateway routes](./kubernetes#gateway-routes) shows.
+
+**Check:** The route conditions show `Accepted=True` and `ResolvedRefs=True`.
+
+## The browser reports a certificate error
+
+**Cause:** The Gateway does not serve a valid certificate for the host name.
+
+**Fix:**
+
+1. Check that the DNS record of the host name points to the Gateway.
+2. Check the Gateway certificate and the status of its cert-manager Certificate.
+3. On one host, follow [Certificate renewal](./kubernetes#certificate-renewal).
+
+**Check:** The browser opens `https://<your hostname>` without a certificate error.
+
+## GitHub deliveries return `401`
+
+**Cause:** The secret of the GitHub webhook does not match `WEBHOOK_SECRET` in the release Secret, or a proxy changes the body or the signature header.
+
+**Fix:**
+
+1. Compare the configured webhook secret through a protected process.
+   Do not put either value in logs.
+2. Set the secret of the App or of the manual webhook to the value of `WEBHOOK_SECRET`.
+3. Make sure that each proxy keeps the body and the `X-Hub-Signature-256` header.
+4. Deliver the rejected event again, as [Failed deliveries and redelivery](./github-integration#failed-deliveries-and-redelivery) describes.
+
+**Check:** **Recent deliveries** on GitHub shows `2xx` for a real event.
+The initial `ping` returns `200` even with a wrong secret, so it does not prove the fix.
+
+## Data appears only after a sync
+
+**Cause:** No provider webhook reaches the webhook role.
+Without it, updates wait for the scheduled sync.
+
+**Fix:**
+
+1. Check that the provider webhook exists.
+   [Connect GitHub](./github-integration) and [Manage workspace integrations](./integrations) give the setup of each provider.
+2. Check that its deliveries reach the webhook role.
+
+**Check:** A change to a pull request appears in the workspace without a wait for the scheduled sync.
+
+## Deliveries return `503`
+
+**Cause:** The broker did not acknowledge the delivery in time.
+Each `503` has a log record with `event.name=webhook.publish.failed`.
+
+**Fix:**
+
+1. Read `webhook.publish.reason` in the log records of the webhook role.
+2. Check broker readiness, stream bounds, and volume space, as [Webhook ingestion operations](./webhook-ingestion-operations) describes.
+3. After the repair, recover the failed deliveries, as [Which providers deliver again](./webhook-ingestion-operations#which-providers-deliver-again) describes.
+
+**Check:** The `webhook.publish` meter records no new `outcome=failure`.
+
+## Reviews record `No AI model is assigned to practice review.`
+
+**Cause:** No enabled model is assigned to **Practice reviews** in the workspace.
+
+**Fix:**
+
+1. Assign an enabled model to practice reviews, as [Connect an AI provider](./ai-providers) describes.
+
+**Check:** On the workspace's **AI models** page, the **Practice reviews** row shows the model and does not read **Not ready**.
+
+## A worker stays unready
+
+**Cause:** The worker cannot watch its sandbox namespace, or its isolation probe failed.
+
+**Fix:**
+
+1. Read the probe result and the isolation tier in the worker log:
+
+   ```bash
+   kubectl --namespace <release namespace> logs deployment/<release>-worker
+   ```
+
+2. Find the row of [Other symptoms](./kubernetes#other-symptoms) that matches the log, and do its fix.
+3. Check the chart service account, the namespace, the quota, and NetworkPolicy, as [Sandbox prerequisites](./kubernetes#sandbox-prerequisites) describes.
+
+**Check:** The worker Pod becomes ready.
+
+## A sandbox Pod is refused or cannot start
+
+**Cause:** Admission policy, a quota, an image pull, or a missing [sandbox prerequisite](./kubernetes#sandbox-prerequisites) stops the Pod.
+
+**Fix:**
+
+1. Read the events of the sandbox Pod.
+2. Read the worker log.
+3. Correct the admission policy, the quota, the image pull, or the prerequisite that the events name.
+
+**Check:** New sandbox Pods start, and reviews leave the queue.
+
+## A worker or sandbox ends with `OOMKilled`
+
+**Cause:** Its memory limit is lower than its peak memory under the workload.
+
+**Fix:**
+
+1. Compare its peak memory with its limit under the qualified workload.
+2. Change the resource budget, as [Sizing and scaling](./sizing) describes.
+
+**Check:** The Pod runs the same workload without an `OOMKilled` status.
+
+## Reviews wait past their deadline
+
+**Cause:** The reviews have no capacity: the model is slow, or the sandbox quota holds too few reviews.
+
+**Fix:**
+
+1. Read queue depth and oldest age, as [Queue health](./practice-review-operations#queue-health) describes.
+2. Check the model provider.
+3. Check `worker.sandbox.reviewMemory` against [Sizing and scaling](./sizing).
+
+**Check:** Queue depth and oldest age go down.
+
+## Script runs end with `Practice script stopped without a result: it ran out of time.`
+
+**Cause:** The model provider is slow or limits the rate of calls.
+
+**Fix:**
+
+1. Read the stop reasons in [Practice review operations](./practice-review-operations).
+2. Raise the provider limits, or use a faster model.
+3. Raise concurrency only after steps 1 and 2.
+
+**Check:** New script runs end with a result.
+
+## A volume or a node disk is full
+
+**Cause:** PostgreSQL data and WAL, JetStream, repository caches, or the container runtime use the space.
+
+**Fix:**
+
+1. Measure each of these stores separately.
+2. Do not prune volumes to recover space.
+   The kubelet owns image garbage collection.
+3. If the PostgreSQL volume is full, read the log of the latest backup Job.
+   A failed WAL archive keeps the WAL on the volume.
+4. After you restore space, a broker that could not write its metadata can need a restart.
+   Follow [Recovering a wedged broker](./webhook-ingestion-operations#recovering-a-wedged-broker).
+5. If data or a volume is lost, use [Backup and restore](./backup-restore).
+
+**Check:** Each Pod of the release is ready:
+
+```bash
+kubectl --namespace hephaestus get pods
+```

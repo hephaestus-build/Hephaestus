@@ -1,7 +1,7 @@
 ---
-id: native-hibernate-json-cutover
 title: Native Hibernate JSON cutover
 description: Stop all runtime roles before the audit text migration and use a verified backup for recovery.
+page_type: how-to
 ---
 
 This release stores five String fields as PostgreSQL `text`:
@@ -60,12 +60,9 @@ Do not mark the migration as complete manually.
    ```
 
 3. Confirm that Liquibase completed the migration and released its changelog lock.
-4. Confirm TEXT types on all five columns, authentication partitions, and the configured pg_partman template.
-5. Confirm that partition maintenance can create a future authentication partition.
-6. Only after the migration completes, deploy the same new release to every runtime role through the normal deployment procedure.
-7. Restart the runtime roles together after the migration completes.
-8. Restore scheduled database maintenance and other database writers.
-9. Check readiness and authorized audit reads.
+4. Only after the migration completes, deploy the same new release to every runtime role through the normal deployment procedure.
+5. Restart the runtime roles together after the migration completes.
+6. Restore scheduled database maintenance and other database writers.
 
 The migration uses native `ALTER COLUMN TYPE` operations.
 It does not update audit rows or disable audit guards.
@@ -73,11 +70,14 @@ Authentication redaction and configuration erasure remain available.
 Configuration retention still permits deletion after 365 days.
 Authentication retention still removes old partitions.
 
-## Check person-data exports
+## Check that it worked
 
-The [release migration entry](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns the person-data export change.
-Check consumers that read the affected fields.
-Parse a String as JSON only where the consumer requires that structure.
+1. Confirm TEXT types on all five columns, authentication partitions, and the configured pg_partman template.
+2. Confirm that partition maintenance can create a future authentication partition.
+3. Check readiness and authorized audit reads.
+4. Check the consumers of person-data exports that read the affected fields.
+   The [release migration entry](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns the person-data export change.
+   Parse a String as JSON only where the consumer requires that structure.
 
 ## Recover the previous release
 

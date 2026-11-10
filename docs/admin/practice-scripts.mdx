@@ -1,10 +1,8 @@
 ---
-id: practice-scripts
 title: Write a practice script
 description: Write and test a practice script that returns one candidate for admission.
+page_type: how-to
 ---
-
-# Write a practice script
 
 A practice script returns one evidence-bounded candidate for one assigned item.
 It can decide from captured records or ask the review model to decide.
@@ -160,9 +158,12 @@ Include both ITEM and SCAN cases when the practice supports scans.
 Test a refused read and an unavailable required model as operational failures.
 Never assert that a missing required source produces Could not determine.
 
-## Read execution
+## Check that it worked
 
-Practice scripts in a review shows status, model calls, coverage and the first safe error line.
+1. Request a review of eligible work, as [First successful review](./practice-review#first-successful-review) describes.
+2. Open the review, then open **Practice scripts**.
+   It shows the status of the script, its model calls, its coverage and the first safe error line.
+
 Withheld means the script or candidate was refused with a recorded reason.
 Not reached means execution did not reach that practice before the review stopped.
 Result admission and feedback delivery remain separate facts.

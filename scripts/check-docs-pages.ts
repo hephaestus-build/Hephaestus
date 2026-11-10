@@ -270,16 +270,16 @@ async function pagesOf(directory: string): Promise<string[]> {
 	});
 	return (
 		entries
-			// A leading `_` marks a partial that pages import; Docusaurus does not publish it.
-			.filter(
-				(entry) => entry.isFile() && /\.mdx?$/u.test(entry.name) && !entry.name.startsWith("_"),
-			)
+			.filter((entry) => entry.isFile() && /\.mdx?$/u.test(entry.name))
 			.map((entry) =>
 				path
 					.relative(repositoryRoot, path.join(entry.parentPath, entry.name))
 					.split(path.sep)
 					.join("/"),
 			)
+			// A leading `_` on a file or a directory marks a partial that pages import; Docusaurus
+			// does not publish it.
+			.filter((file) => !file.split("/").some((segment) => segment.startsWith("_")))
 			.toSorted()
 	);
 }

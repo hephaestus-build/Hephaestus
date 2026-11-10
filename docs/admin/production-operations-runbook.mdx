@@ -1,10 +1,8 @@
 ---
-id: production-operations-runbook
 title: Production operations runbook
 description: Safe deployment, incident containment, external feedback removal, and PostgreSQL × JetStream recovery.
+page_type: how-to
 ---
-
-# Production operations runbook
 
 This runbook is for the **instance operator**.
 
@@ -60,6 +58,15 @@ The UI handles the preconditions below.
 **Restored settings can contain silent mode off**.
 The default does not override an explicit decision to turn silent mode off.
 Turning silent mode off affects all workspaces and never flushes suppressed feedback.
+
+## Check that it worked
+
+After a first response, check that silent mode holds:
+
+1. Open **Instance administration → Instance settings**.
+   Silent mode is on.
+2. Read `GET /api/admin/settings`.
+   The response has `silentModeEngaged=true`.
 
 ## Silent deployment checklist
 

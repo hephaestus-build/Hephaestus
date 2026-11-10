@@ -1,7 +1,7 @@
 ---
-id: pull-based-deployment
-title: Pull-Based Deployment
+title: Deploy from a release channel
 description: Reconcile a host to a signed release or commit channel without inbound deployment access.
+page_type: how-to
 ---
 
 A host polls a **channel** naming a release or commit, verifies its signature, and applies
@@ -83,7 +83,7 @@ The run's title still names the requested commit. The channel and the deployment
 If the lookup fails, the requested commit continues through the existing promotion checks.
 Manual promotions never do this lookup.
 
-## Requirements
+## Before you start
 
 Install `git`, `jq`, Cosign, the GitHub CLI and the Node.js version pinned in `package.json#devEngines.runtime`.
 Verify downloaded tools against their published checksums.
@@ -480,11 +480,17 @@ It does not fetch host metrics.
 The textfile collector and authenticated monitoring access belong to the host, not the public application.
 A matching frontend version does not establish server, worker, webhook, database, NATS, or integration readiness.
 
-1. On **each** participating host, confirm a fresh successful reconciliation.
-2. Confirm the expected release/channel commit.
+## Check that it worked
+
+Do these steps on **each** participating host.
+
+1. Read the metrics file that `HEPHAESTUS_METRICS_FILE` names.
+   Confirm a fresh successful reconciliation: `hephaestus_deploy_reconcile_success` is `1`.
+2. Confirm that `hephaestus_deploy_info` names the expected release and channel commit.
 3. Inspect Pod and Job readiness.
 4. Inspect service logs.
-5. Do not expose management endpoints to replace operator verification with the public version check.
+
+Do not expose management endpoints to replace this check with the public version check.
 
 ## What it will not do
 

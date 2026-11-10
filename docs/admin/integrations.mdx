@@ -1,7 +1,7 @@
 ---
-id: integrations
 title: Manage workspace integrations
 description: Connect repositories, Slack channels, and Outline collections without losing their mirrored data.
+page_type: how-to
 ---
 
 This page is for workspace admins. Instance operators configure provider apps and deployment settings
@@ -203,6 +203,14 @@ An owner's role is always set in Hephaestus. To let the provider set it, give th
 A role set in Hephaestus does not keep the membership.
 If the provider no longer lists the person, they leave the workspace at the next sync.
 If they come back, their role comes from the provider again.
+
+## Check that it worked
+
+1. Open the page of the integration under **Administration → Integrations**.
+2. Open its resource sync table.
+   No resource shows a last error.
+   If one does, follow [Read sync errors](#read-sync-errors).
+3. For Slack, check that the page shows **Connected**.
 
 ## Read sync errors
 

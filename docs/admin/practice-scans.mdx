@@ -1,10 +1,8 @@
 ---
-id: practice-scans
 title: Scan a repository
 description: Start a default-branch scan, read its evidence boundary and export its report.
+page_type: how-to
 ---
-
-# Scan a repository
 
 A scan checks supported workspace practices against files on a monitored repository's default branch.
 GitHub and GitLab support scans. Slack and Outline do not.
@@ -56,6 +54,12 @@ A different branch is refused. The branch cannot move within this scan.
 Only one scan per workspace can be active.
 A repeated request with the same identity and body returns the same scan.
 A changed body with that identity is a conflict, not a second scan.
+
+## Check that it worked
+
+1. In workspace administration, open **Practices → Scans**.
+   The page lists the new scan.
+2. When the scan ends, open its report from the list.
 
 ## Read the report
 
@@ -149,9 +153,8 @@ A partial terminal export states that execution did not complete.
 Each visible problem becomes one SARIF result. Coverage totals remain separate.
 Marks and erasure can exclude proof without rewriting close-time totals.
 
-Raw scan proof expires with the feedback retention, 400 days by default ([Data retention](./data-retention)).
+Raw scan proof expires with the feedback retention period that [Data retention](./data-retention) gives.
 Expired proof pages and SARIF exports are unavailable, while aggregate reports remain readable.
-[Data retention](./data-retention) owns the retention periods.
 
 ## Cost and limits
 

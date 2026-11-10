@@ -88,7 +88,7 @@ const sidebars: SidebarsConfig = {
 				{
 					type: "category",
 					label: "Data-protection documentation",
-					link: { type: "doc", id: "dsms/dsms" },
+					link: { type: "doc", id: "dsms/README" },
 					items: [
 						{
 							type: "doc",

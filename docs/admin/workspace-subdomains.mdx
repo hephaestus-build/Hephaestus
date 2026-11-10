@@ -1,7 +1,8 @@
 ---
-id: workspace-subdomains
-title: Workspace subdomains
+title: Turn on workspace subdomains
+description: Give each workspace its own host name under a base domain. Configure the server, DNS, TLS, and the OAuth callbacks.
 sidebar_position: 18
+page_type: how-to
 ---
 
 Workspace subdomains give each workspace an address such as `https://ls1intum.hephaestus.build`.
@@ -101,20 +102,13 @@ For a test certificate, select a test issuer. The installer's `--staging` flag c
 
 On an existing install, update `site.yaml` yourself and prepare the wildcard certificate before the chart upgrade.
 The installer preserves an existing `site.yaml`.
-To turn workspace hosts off, set `workspaceSubdomains.enabled: false` and upgrade.
-Keep the DNS records and certificate while other services need them.
 
-### Check and turn off
+### Apply the configuration
 
 1. Check the apex and wildcard DNS records.
 2. Check that the certificate covers both names.
 3. Apply `site.yaml` with the verified chart package.
-4. Open the apex and a workspace hostname. Both must serve the web app over HTTPS.
-5. If a Pod fails to become ready, inspect its events and logs.
-
-To turn workspace hostnames off, set `workspaceSubdomains.enabled: false` and upgrade with the same site values.
-Keep the DNS records and certificate while other services need them.
-The apex workspace links then serve the web app without a tenant redirect.
+4. If a Pod fails to become ready, inspect its events and logs.
 
 ### Check the same-site precondition
 
@@ -158,6 +152,21 @@ This includes existing callbacks registered at the apex.
 See [GitLab OAuth applications](https://docs.gitlab.com/integration/oauth_provider/) and [Outline's OAuth provider](https://docs.getoutline.com/s/hosting/doc/oauth-provider-9YJWoe3BJN).
 See [GitHub's callback guidance](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-user-authorization-callback-url).
 Exact callback comparison follows [OAuth Security Best Current Practice](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.1.3).
+
+## Check that it worked
+
+1. Open the apex.
+   It serves the web app over HTTPS.
+2. Open a workspace hostname.
+   It serves the web app over HTTPS.
+
+## Undo
+
+1. Set `workspaceSubdomains.enabled: false`.
+2. Upgrade with the same site values.
+3. Keep the DNS records and the certificate while other services need them.
+
+The apex workspace links then serve the web app without a tenant redirect.
 
 ## Browser access and CSRF
 

@@ -1,7 +1,7 @@
 ---
-id: practice-model-cutover
-title: Practice model cutover checks
+title: Check a practice model cutover
 description: Verify retained pilot history and diagnose a refused practice model upgrade.
+page_type: how-to
 ---
 
 The [release migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns the upgrade order, historical-proof rule, script preparation, and rollback boundary.
@@ -12,7 +12,7 @@ The [production runbook](./upgrade) owns isolation and recovery.
 1. Follow [Validate the actual production data](./upgrade#validate-the-actual-production-data) on a verified pilot restore.
 2. Use the exact candidate release without diagnostic changes.
 3. Record the migration duration, locks, disk use, and WAL growth.
-4. Complete the history checks below before the production outage.
+4. Complete the history checks of [Check that it worked](#check-that-it-worked) before the production outage.
 5. After a failure or repair, repeat the rehearsal on a fresh restore.
 
 One synthetic rehearsal with 40,000 work items and 896,019 results took 15 minutes 1.214 seconds.
@@ -21,7 +21,7 @@ The run added diagnostic source indexes.
 Its duration does not prove production performance for an unmodified release.
 Use the measured pilot restore to set the outage budget.
 
-## Check retained pilot history
+## Check that it worked
 
 Keep the [silent deployment barriers](./production-operations-runbook#silent-deployment-checklist) in place throughout these checks.
 Do these checks before any deliberate new review or scan.

@@ -1,9 +1,8 @@
 ---
-title: Admin passkeys
+title: Protect admin access with passkeys
 description: Configure passkey protection, enroll administrators, and recover lost credentials.
+page_type: how-to
 ---
-
-# Admin passkeys
 
 OAuth identifies the account. Local WebAuthn verification permits protected admin access.
 Production instances require passkeys for instance administration by default.
@@ -79,6 +78,14 @@ High-risk admin operations require passkey verification within five minutes by d
 `HEPHAESTUS_AUTH_STEP_UP_MAX_AGE` controls this interval.
 Token refresh does not advance verification time or the absolute session deadline.
 The application does not replay a refused operation after verification.
+
+## Check that it worked
+
+1. Open **User settings**.
+2. Under **Passkeys**, find the two passkeys that you registered.
+   **Personal admin protection** is on.
+3. Select **Verify passkey**.
+   The section shows **Recently confirmed.**
 
 ## Recover passkeys
 
