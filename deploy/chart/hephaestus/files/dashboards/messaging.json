@@ -88,7 +88,9 @@
 				{
 					"title": "Oldest due event",
 					"description": "Per provider. 0 when no event is due.",
-					"expr": ["max by (provider) (integration_consumer_oldest_due_seconds{job=\"hephaestus\"})"],
+					"expr": [
+						"max by (provider) (integration_consumer_oldest_due_seconds{job=\"hephaestus\"})"
+					],
 					"alias": ["{{provider}}"],
 					"unit": "s",
 					"showLegend": true,
@@ -108,7 +110,9 @@
 				{
 					"title": "Dead letters",
 					"description": "Per provider, until their retention ends.",
-					"expr": ["max by (provider) (integration_consumer_backlog{job=\"hephaestus\",state=\"DEAD\"})"],
+					"expr": [
+						"max by (provider) (integration_consumer_backlog{job=\"hephaestus\",state=\"DEAD\"})"
+					],
 					"alias": ["{{provider}}"],
 					"showLegend": true,
 					"width": 6

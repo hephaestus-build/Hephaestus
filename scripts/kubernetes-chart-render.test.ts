@@ -1269,10 +1269,18 @@ const grants = (role: unknown) =>
 
 await test("the server receives no stream settings: the receiver stores into the provider event inbox", () => {
 	const server = workload(rendered(layersFor("small")), "server");
-	for (const variable of list(get(container(server), "env")).map((entry) => String(get(entry, "name")))) {
-		assert.doesNotMatch(variable, /^HEPHAESTUS_WEBHOOK_STREAM_|^HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE/u);
+	for (const variable of list(get(container(server), "env")).map((entry) =>
+		String(get(entry, "name")),
+	)) {
+		assert.doesNotMatch(
+			variable,
+			/^HEPHAESTUS_WEBHOOK_STREAM_|^HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE/u,
+		);
 	}
-	assert.match(render([...layersFor("small"), { webhook: { stream: { maxAge: "7d" } } }]).stderr, /webhook/u);
+	assert.match(
+		render([...layersFor("small"), { webhook: { stream: { maxAge: "7d" } } }]).stderr,
+		/webhook/u,
+	);
 });
 
 await test("a server with sandboxes receives its runtime settings, its sandbox namespace and only the authority its runtime uses", () => {
