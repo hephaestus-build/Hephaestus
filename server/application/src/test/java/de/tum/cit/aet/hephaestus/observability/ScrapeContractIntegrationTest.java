@@ -21,19 +21,21 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
- * The metric names that the release's alert rules read from the roles ({@code job="hephaestus"}) exist: in the code
- * for every role, and on the scrape of this context for each meter that the server role registers at start. A renamed
- * meter, or a rule that reads a name that no role exports, fails here instead of leaving an alert that never fires.
+ * The metric names that the release's alert rules and dashboards read from the roles ({@code job="hephaestus"})
+ * exist: in the code for every role, and, for the rules, on the scrape of this context for each meter that the server
+ * role registers at start. A renamed meter, or a rule or panel that reads a name that no role exports, fails here
+ * instead of leaving an alert that never fires or a panel that stays empty.
  */
 // An own context: the shared one also holds the meters of other classes, so its series depend on the class order.
 @TestPropertySource(properties = "hephaestus.test.context=scrape-contract")
 class ScrapeContractIntegrationTest extends BaseIntegrationTest {
 
     private static final Path RULES = Path.of("../../deploy/chart/hephaestus/files/hephaestus-alerts.yml");
+    private static final Path DASHBOARDS = Path.of("../../deploy/chart/hephaestus/files/dashboards");
     private static final Path SOURCES = Path.of("src/main/java");
 
-    /** Name prefixes of meters that a library registers, not this code: Spring MVC and HikariCP. */
-    private static final Set<String> LIBRARY = Set.of("http_server_requests", "hikaricp_connections");
+    /** Name prefixes of meters that a library registers, not this code: Spring MVC, HikariCP and the JVM. */
+    private static final Set<String> LIBRARY = Set.of("http_server_requests", "hikaricp_connections", "jvm_");
 
     /**
      * Rule metrics that this context does not export at start, by the exact name that the rule selects, each with the
@@ -95,7 +97,7 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
     private WebTestClient webTestClient;
 
     @Test
-    void shouldFindEveryRuleMetricInTheCode() throws IOException {
+    void shouldFindEveryRuleAndDashboardMetricInTheCode() throws IOException {
         Set<String> literals;
         try (Stream<Path> files = Files.walk(SOURCES)) {
             var literal = Pattern.compile("\"([a-z][a-z0-9]*(?:[._][a-z0-9]+)+)\"");
@@ -112,8 +114,10 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
                     .map(name -> name.replace('.', '_'))
                     .collect(Collectors.toSet());
         }
+        Set<String> read = new TreeSet<>(ruleMetrics());
+        read.addAll(dashboardMetrics());
         Map<String, Set<String>> unknown = new TreeMap<>();
-        for (String metric : ruleMetrics()) {
+        for (String metric : read) {
             Set<String> families = families(metric);
             if (families.stream()
                     .noneMatch(family ->
@@ -121,7 +125,9 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
                 unknown.put(metric, families);
             }
         }
-        assertThat(unknown).as("rule metrics without a meter name in the code").isEmpty();
+        assertThat(unknown)
+                .as("rule and dashboard metrics without a meter name in the code")
+                .isEmpty();
     }
 
     @Test
@@ -174,16 +180,35 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
 
     /** The names that the rules select with {@code job="hephaestus"}. */
     private static Set<String> ruleMetrics() throws IOException {
+        Set<String> metrics = roleMetrics(Files.readString(RULES));
+        assertThat(metrics).as("the rules select role metrics").hasSizeGreaterThan(30);
+        return metrics;
+    }
+
+    /** The names that the dashboards' panels select with {@code job="hephaestus"}. */
+    private static Set<String> dashboardMetrics() throws IOException {
+        Set<String> metrics = new TreeSet<>();
+        try (Stream<Path> files = Files.list(DASHBOARDS)) {
+            for (Path file :
+                    files.filter(path -> path.toString().endsWith(".json")).toList()) {
+                // A panel's expression is a JSON string, so its label quotes are escaped.
+                metrics.addAll(roleMetrics(Files.readString(file).replace("\\\"", "\"")));
+            }
+        }
+        assertThat(metrics).as("the dashboards select role metrics").hasSizeGreaterThan(10);
+        return metrics;
+    }
+
+    private static Set<String> roleMetrics(String text) {
         Set<String> metrics = new TreeSet<>();
         var selector =
-                Pattern.compile("([a-zA-Z_:][a-zA-Z0-9_:]*)\\{([^}]*)\\}").matcher(Files.readString(RULES));
+                Pattern.compile("([a-zA-Z_:][a-zA-Z0-9_:]*)\\{([^}]*)\\}").matcher(text);
         while (selector.find()) {
             if (selector.group(2).contains("job=\"hephaestus\"")
                     && !selector.group(1).equals("up")) {
                 metrics.add(selector.group(1));
             }
         }
-        assertThat(metrics).as("the rules select role metrics").hasSizeGreaterThan(30);
         return metrics;
     }
 
