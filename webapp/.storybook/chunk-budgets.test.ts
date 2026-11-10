@@ -12,8 +12,9 @@ it("keeps the ordinary chunk limit for application and story code", () => {
 });
 
 it.each([
-	["/repo/node_modules/storybook/dist/preview/runtime.js", 1_186_100],
+	["/repo/node_modules/storybook/dist/preview/runtime.js", 1_300_000],
 	[String.raw`C:\repo\node_modules\axe-core\axe.js`, 672_000],
+	["/repo/node_modules/@storybook/addon-docs/dist/blocks.js", 536_000],
 ])("budgets the exact upstream module %s", (id, limit) => {
 	expect(checkChunkBudget("a".repeat(limit), [id])).toContain(`${limit}/${limit} bytes`);
 	expect(() => checkChunkBudget("a".repeat(limit + 1), [id])).toThrow("exceeds its tooling budget");

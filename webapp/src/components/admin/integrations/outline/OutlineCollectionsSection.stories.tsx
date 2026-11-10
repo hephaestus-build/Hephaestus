@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import type { OutlineCollection } from "@/api/types.gen";
@@ -10,30 +9,21 @@ import { OutlineCollectionsSection } from "./OutlineCollectionsSection";
 /**
  * Admin surface for the mirrored-collections plane of the Outline integration. Presentational:
  * the lifecycle mutations are delegated to the container, so these stories mock the callbacks
- * with `fn()`. The Add-collection dialog issues a lazy candidates query (only while open), so
- * the component is wrapped in a fresh QueryClient and candidate-driven stories bring their own
- * MSW handler.
+ * with `fn()`. The Add collections dialog and its candidates come in as props too.
  */
 const meta = {
 	component: OutlineCollectionsSection,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
-	decorators: [
-		(Story) => (
-			<QueryClientProvider
-				client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-			>
-				<Story />
-			</QueryClientProvider>
-		),
-	],
 	args: {
-		workspaceSlug: "demo-workspace",
 		collections: [],
 		isLoading: false,
 		onRegisterCollection: fn(),
 		onUpdateCollectionState: fn(),
 		onRemoveCollection: fn(),
+		addOpen: false,
+		onAddOpenChange: fn(),
+		collectionCandidates: { isLoading: true, onRetry: fn() },
 	},
 } satisfies Meta<typeof OutlineCollectionsSection>;
 

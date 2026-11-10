@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { delay, HttpResponse, http } from "msw";
 import { expect, fn, screen, within } from "storybook/test";
 
 import type { SlackChannelConsentEvent, SlackMonitoredChannel } from "@/api/types.gen";
@@ -7,8 +6,6 @@ import { expectSettledVisible } from "@/stories/overlay";
 import { daysBefore } from "@/stories/story-clock";
 
 import { ChannelHistorySheet } from "./ChannelHistorySheet";
-
-const CONSENT_EVENTS_URL = "*/slack/channels/:slackChannelId/consent-events";
 
 const channel: SlackMonitoredChannel = {
 	id: "1",
@@ -64,13 +61,13 @@ const meta = {
 	component: ChannelHistorySheet,
 	parameters: {
 		layout: "centered",
-		// One MSW worker answers a whole Docs page, so each story gets its own frame until MSW goes.
+		// The sheet is a modal overlay: each story gets its own frame on the Docs page.
 		docs: { story: { inline: false, height: "600px" } },
 	},
 	tags: ["autodocs"],
 	args: {
-		workspaceSlug: "demo-workspace",
 		channel,
+		history: { events, isLoading: false, onRetry: fn() },
 		onOpenChange: fn(),
 	},
 } satisfies Meta<typeof ChannelHistorySheet>;
@@ -79,9 +76,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Populated: Story = {
-	parameters: {
-		msw: { handlers: [http.get(CONSENT_EVENTS_URL, () => HttpResponse.json(events))] },
-	},
 	play: async () => {
 		const sheet = within(await screen.findByRole("dialog"));
 		await sheet.findAllByText("Monitoring");
@@ -96,9 +90,7 @@ export const Populated: Story = {
 };
 
 export const EmptyHistory: Story = {
-	parameters: {
-		msw: { handlers: [http.get(CONSENT_EVENTS_URL, () => HttpResponse.json([]))] },
-	},
+	args: { history: { events: [], isLoading: false, onRetry: fn() } },
 	play: async () => {
 		const sheet = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(await sheet.findByText(/no consent changes recorded yet/iu));
@@ -106,28 +98,19 @@ export const EmptyHistory: Story = {
 };
 
 export const Loading: Story = {
-	parameters: {
-		msw: {
-			handlers: [
-				http.get(CONSENT_EVENTS_URL, async () => {
-					await delay("infinite");
-					return HttpResponse.json([]);
-				}),
-			],
-		},
-	},
+	args: { history: { isLoading: true, onRetry: fn() } },
 };
 
+/** The read failed: Retry asks the route to read again. */
 export const LoadError: Story = {
-	parameters: {
-		msw: {
-			handlers: [http.get(CONSENT_EVENTS_URL, () => new HttpResponse(null, { status: 500 }))],
-		},
+	args: {
+		history: { isLoading: false, error: { status: 500 }, onRetry: fn() },
 	},
-	play: async () => {
+	play: async ({ args, userEvent }) => {
 		const sheet = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(await sheet.findByText(/could not load the consent history/iu));
-		sheet.getByRole("button", { name: /^retry$/iu });
+		await userEvent.click(sheet.getByRole("button", { name: /^retry$/iu }));
+		await expect(args.history.onRetry).toHaveBeenCalledOnce();
 	},
 };
 

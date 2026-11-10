@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { HttpResponse, http } from "msw";
 import { expect, fn } from "storybook/test";
 
 import type { AuthEventView } from "@/api/types.gen";
 
-import { AuthAuditPanel } from "./AuthAuditPanel";
+import { AuthAuditPanel, type AuthAuditPanelProps } from "./AuthAuditPanel";
 
 const failedLogin: AuthEventView = {
 	id: 2,
@@ -46,28 +45,30 @@ const events: AuthEventView[] = [
 	},
 ];
 
-function page(content: AuthEventView[]) {
-	return { content };
+/** The list as a read that answered hands it over. */
+function loaded(rows: AuthEventView[]) {
+	return {
+		status: "ready",
+		rows,
+		hasMore: false,
+		isLoadingMore: false,
+		onLoadMore: fn(),
+	} satisfies AuthAuditPanelProps["list"];
 }
-
-const handlers = (content: AuthEventView[] = events) => [
-	http.get("*/admin/audit/count", () => HttpResponse.json({ total: content.length })),
-	http.get("*/admin/audit", () => HttpResponse.json(page(content))),
-];
 
 const meta = {
 	component: AuthAuditPanel,
-	parameters: {
-		layout: "padded",
-		msw: { handlers: handlers() },
-		// One MSW worker answers a whole Docs page, so each story gets its own frame until MSW goes.
-		docs: { story: { inline: false, height: "600px" } },
-	},
+	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
 		search: { tab: "signins" },
 		onSearchChange: fn(),
 		resolveWorkspaceName: (id: number) => (id === 3 ? "Acme" : undefined),
+		list: loaded(events),
+		total: events.length,
+		read: "all",
+		exporting: false,
+		onExport: fn(),
 	},
 } satisfies Meta<typeof AuthAuditPanel>;
 
@@ -83,35 +84,49 @@ export const Default: Story = {
 };
 
 export const Empty: Story = {
-	parameters: { msw: { handlers: handlers([]) } },
+	args: { list: loaded([]), total: 0 },
 };
 
 export const FilteredToNothing: Story = {
-	args: { search: { tab: "signins", outcome: ["FAILURE"], from: "2026-07-01" } },
-	parameters: { msw: { handlers: handlers([]) } },
+	args: {
+		search: { tab: "signins", outcome: ["FAILURE"], from: "2026-07-01" },
+		list: loaded([]),
+		total: 0,
+	},
 };
 
 export const FiltersFromUrl: Story = {
-	args: { search: { tab: "signins", eventType: ["LOGIN_FAILED"], outcome: ["FAILURE"] } },
-	parameters: { msw: { handlers: handlers([failedLogin]) } },
+	args: {
+		search: { tab: "signins", eventType: ["LOGIN_FAILED"], outcome: ["FAILURE"] },
+		list: loaded([failedLogin]),
+		total: 1,
+	},
+};
+
+export const Loading: Story = {
+	args: { list: { status: "loading" }, total: undefined },
 };
 
 export const LoadFailed: Story = {
-	parameters: {
-		msw: {
-			handlers: [
-				http.get("*/admin/audit", () =>
-					HttpResponse.json(
-						{
-							type: "about:blank",
-							title: "Internal Server Error",
-							status: 500,
-							detail: "The audit store is unavailable.",
-						},
-						{ status: 500 },
-					),
-				),
-			],
+	args: {
+		list: {
+			status: "error",
+			error: {
+				type: "about:blank",
+				title: "Internal Server Error",
+				status: 500,
+				detail: "The audit store is unavailable.",
+			},
+			onRetry: fn(),
 		},
+		total: undefined,
+	},
+};
+
+/** The CSV export is under way. */
+export const Exporting: Story = {
+	args: { exporting: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: /export csv/iu })).toBeDisabled();
 	},
 };

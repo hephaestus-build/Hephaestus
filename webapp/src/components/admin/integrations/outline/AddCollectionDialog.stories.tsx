@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { delay, HttpResponse, http } from "msw";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
+import type { OutlineCollectionCandidate } from "@/api/types.gen";
 import { expectSettledVisible } from "@/stories/overlay";
+import { sleep } from "@/test/async";
 
 import { AddCollectionDialog } from "./AddCollectionDialog";
 
@@ -11,21 +11,12 @@ const meta = {
 	component: AddCollectionDialog,
 	parameters: {
 		layout: "centered",
-		// One MSW worker answers a whole Docs page, so each story gets its own frame until MSW goes.
+		// The dialog is a modal overlay: each story gets its own frame on the Docs page.
 		docs: { story: { inline: false, height: "600px" } },
 	},
 	tags: ["autodocs"],
-	decorators: [
-		(Story) => (
-			<QueryClientProvider
-				client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-			>
-				<Story />
-			</QueryClientProvider>
-		),
-	],
 	args: {
-		workspaceSlug: "demo-workspace",
+		candidates: { isLoading: true, onRetry: fn() },
 		open: true,
 		onOpenChange: fn(),
 		onRegister: fn(),
@@ -35,7 +26,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const candidates = [
+const candidates: OutlineCollectionCandidate[] = [
 	{
 		collectionId: "col-engineering",
 		name: "Engineering",
@@ -64,34 +55,26 @@ const candidates = [
 	},
 ];
 
-type JsonBody = Record<string, unknown> | Record<string, unknown>[];
+/** The candidates as the route hands them over once Outline has answered. */
+const read = (items: readonly OutlineCollectionCandidate[]) => ({
+	items,
+	isLoading: false,
+	onRetry: fn(),
+});
 
-const candidatesHandler = (body: JsonBody, init?: { status?: number; delayMs?: number }) =>
-	http.get("*/workspaces/:workspaceSlug/outline/collections/candidates", async () => {
-		if (init?.delayMs !== undefined) {
-			await delay(init.delayMs);
-		}
-		return HttpResponse.json(body, { status: init?.status ?? 200 });
-	});
-
-export const Loading: Story = {
-	parameters: { msw: { handlers: [candidatesHandler(candidates, { delayMs: 100_000 })] } },
-};
+export const Loading: Story = {};
 
 export const ProbeFailed: Story = {
-	parameters: {
-		msw: {
-			handlers: [
-				candidatesHandler(
-					{
-						type: "about:blank",
-						title: "Bad Gateway",
-						status: 502,
-						detail: "Outline did not respond to collections.list.",
-					},
-					{ status: 502 },
-				),
-			],
+	args: {
+		candidates: {
+			isLoading: false,
+			error: {
+				type: "about:blank",
+				title: "Bad Gateway",
+				status: 502,
+				detail: "Outline did not respond to collections.list.",
+			},
+			onRetry: fn(),
 		},
 	},
 	play: async () => {
@@ -102,7 +85,7 @@ export const ProbeFailed: Story = {
 };
 
 export const NoVisibleCollections: Story = {
-	parameters: { msw: { handlers: [candidatesHandler([])] } },
+	args: { candidates: read([]) },
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 		await expectSettledVisible(
@@ -113,7 +96,7 @@ export const NoVisibleCollections: Story = {
 };
 
 export const PopulatedSearchable: Story = {
-	parameters: { msw: { handlers: [candidatesHandler(candidates)] } },
+	args: { candidates: read(candidates) },
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 
@@ -131,7 +114,7 @@ export const PopulatedSearchable: Story = {
 };
 
 export const MultiSelect: Story = {
-	parameters: { msw: { handlers: [candidatesHandler(candidates)] } },
+	args: { candidates: read(candidates) },
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 		await expect(await within(dialog).findByRole("listbox")).toHaveAttribute(
@@ -158,7 +141,7 @@ export const MultiSelect: Story = {
 };
 
 export const KeyboardNavigation: Story = {
-	parameters: { msw: { handlers: [candidatesHandler(candidates)] } },
+	args: { candidates: read(candidates) },
 	play: async ({ args }) => {
 		const dialog = await screen.findByRole("dialog");
 		const search = await within(dialog).findByRole("combobox");
@@ -194,7 +177,7 @@ export const KeyboardNavigation: Story = {
 };
 
 export const EmptySearchResult: Story = {
-	parameters: { msw: { handlers: [candidatesHandler(candidates)] } },
+	args: { candidates: read(candidates) },
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 		await userEvent.type(await within(dialog).findByRole("combobox"), "nothing-matches-this");
@@ -204,11 +187,7 @@ export const EmptySearchResult: Story = {
 };
 
 export const AllAlreadyMirrored: Story = {
-	parameters: {
-		msw: {
-			handlers: [candidatesHandler(candidates.map((c) => ({ ...c, alreadyMirrored: true })))],
-		},
-	},
+	args: { candidates: read(candidates.map((c) => ({ ...c, alreadyMirrored: true }))) },
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 		await expectSettledVisible(
@@ -219,11 +198,9 @@ export const AllAlreadyMirrored: Story = {
 };
 
 export const RegisteringSequentially: Story = {
-	parameters: { msw: { handlers: [candidatesHandler(candidates)] } },
 	args: {
-		onRegister: fn(async () => {
-			await delay(400);
-		}),
+		candidates: read(candidates),
+		onRegister: fn(async () => sleep(400)),
 	},
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");

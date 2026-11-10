@@ -4,11 +4,13 @@ import { ScrollTextIcon } from "lucide-react";
 
 import { adminListWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 import { type AuditSearch, auditSearchSchema } from "@/components/admin/audit/audit-search";
-import { AuthAuditPanel } from "@/components/admin/audit/AuthAuditPanel";
-import { AdminConfigAuditPanel } from "@/components/admin/audit/ConfigAuditPanel";
+import { AuthAuditPanel, type AuthAuditPanelProps } from "@/components/admin/audit/AuthAuditPanel";
+import { ConfigAuditPanel } from "@/components/admin/audit/ConfigAuditPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuthAuditRead } from "@/hooks/use-auth-audit-read";
+import { useAdminConfigAuditRead } from "@/hooks/use-config-audit-read";
 import { instanceAdminHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
 
@@ -54,13 +56,13 @@ function AdminAuditPage() {
 					}));
 				}}
 			>
-				<TabsList className="h-10 w-full p-1 sm:w-fit">
+				<TabsList className="w-full p-1 sm:w-fit">
 					<TabsTrigger value="signins">Access</TabsTrigger>
 					<TabsTrigger value="settings">Settings</TabsTrigger>
 				</TabsList>
 
 				<TabsContent value="signins">
-					<AuthAuditPanel
+					<AccessTab
 						search={search}
 						onSearchChange={patchSearch}
 						resolveWorkspaceName={resolveWorkspaceName}
@@ -68,7 +70,7 @@ function AdminAuditPage() {
 				</TabsContent>
 
 				<TabsContent value="settings">
-					<AdminConfigAuditPanel
+					<SettingsTab
 						search={search}
 						onSearchChange={patchSearch}
 						resolveWorkspaceName={resolveWorkspaceName}
@@ -77,4 +79,15 @@ function AdminAuditPage() {
 			</Tabs>
 		</PageLayout>
 	);
+}
+
+type TabProps = Pick<AuthAuditPanelProps, "search" | "onSearchChange" | "resolveWorkspaceName">;
+
+/** A tab reads its own list: only the open tab's panel is mounted, so only it reads. */
+function AccessTab(props: TabProps) {
+	return <AuthAuditPanel {...props} {...useAuthAuditRead(props.search)} />;
+}
+
+function SettingsTab(props: TabProps) {
+	return <ConfigAuditPanel {...props} {...useAdminConfigAuditRead(props.search)} showWorkspace />;
 }

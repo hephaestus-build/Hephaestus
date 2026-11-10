@@ -63,6 +63,9 @@ const config: StorybookConfig = {
 			groups: [
 				...(splitting.groups ?? []),
 				{ name: "storybook-stories", test: /storybook-stories\.js$/u },
+				// The network mock is a test tool that only route-level stories still load, so it stays out
+				// of the preview runtime chunk and its tooling budget.
+				{ name: "msw", test: /\/node_modules\/(?:msw|@mswjs\/interceptors)\//u },
 				// Preserve the upstream UI module boundary without recursively merging its shared dependencies.
 				{
 					name: "storybook-components",

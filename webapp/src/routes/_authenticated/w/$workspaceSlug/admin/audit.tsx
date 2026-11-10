@@ -5,9 +5,10 @@ import {
 	type ConfigAuditSearch,
 	workspaceAuditSearchSchema,
 } from "@/components/admin/audit/audit-search";
-import { WorkspaceConfigAuditPanel } from "@/components/admin/audit/ConfigAuditPanel";
+import { ConfigAuditPanel } from "@/components/admin/audit/ConfigAuditPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
+import { useWorkspaceConfigAuditRead } from "@/hooks/use-config-audit-read";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
 
@@ -21,6 +22,7 @@ function WorkspaceAuditPage() {
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
 	const setSearch = useSearchState();
+	const read = useWorkspaceConfigAuditRead(workspaceSlug, search);
 
 	const patchSearch = (patch: Partial<ConfigAuditSearch>) => {
 		void setSearch((prev) => ({ ...prev, ...patch }), { replace: true });
@@ -34,11 +36,7 @@ function WorkspaceAuditPage() {
 				description="A permanent record of who changed workspace settings."
 			/>
 
-			<WorkspaceConfigAuditPanel
-				search={search}
-				onSearchChange={patchSearch}
-				workspaceSlug={workspaceSlug}
-			/>
+			<ConfigAuditPanel search={search} onSearchChange={patchSearch} {...read} />
 		</PageLayout>
 	);
 }

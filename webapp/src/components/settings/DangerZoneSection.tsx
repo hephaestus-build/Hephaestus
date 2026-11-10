@@ -1,12 +1,5 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { toast } from "@/lib/toast";
 
-import {
-	getDataExportStatusOptions,
-	requestDataExportMutation,
-} from "@/api/@tanstack/react-query.gen";
-import { deleteCurrentUser, downloadDataExport } from "@/api/sdk.gen";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -22,28 +15,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { saveBlobFile } from "@/lib/download";
-import { hasText } from "@/lib/text";
-import { recordAccountDeleted } from "@/runtime/auth/account-deleted-notice";
-import { useAuth } from "@/runtime/auth/AuthContext";
 
 const DELETE_CONFIRM_PHRASE = "delete my account";
 
-// Export states that mean the server is still working — keep polling while in these.
-const EXPORT_IN_PROGRESS = new Set(["PENDING", "PROCESSING"]);
+/** Where the reader's data export stands. `stalled`: the server still works on it after three minutes. */
+export type DataExportState = "idle" | "requesting" | "preparing" | "ready" | "stalled" | "failed";
 
-// Give up polling after this long so a wedged export doesn't poll indefinitely.
-const MAX_EXPORT_WAIT_MS = 3 * 60 * 1000;
-
-interface DangerZoneSectionProps {
-	/** Called after the server confirms the deletion (e.g. open the sign-in page). */
-	onAccountDeleted: () => void | Promise<void>;
+export interface DangerZoneSectionProps {
+	dataExport: {
+		state: DataExportState;
+		downloading: boolean;
+		onRequest: () => void;
+		onDownload: () => void;
+	};
+	deletion: {
+		/** The signed-in account is known, so the server can confirm whose account to delete. */
+		available: boolean;
+		deleting: boolean;
+		onDelete: () => void;
+	};
 }
 
 /**
  * Danger-zone settings: GDPR data export (Art. 20) and account deletion (Art. 17).
  */
-export function DangerZoneSection({ onAccountDeleted }: DangerZoneSectionProps) {
+export function DangerZoneSection({ dataExport, deletion }: DangerZoneSectionProps) {
 	return (
 		<section className="space-y-6" aria-labelledby="danger-zone-heading">
 			<div className="space-y-1">
@@ -55,101 +51,29 @@ export function DangerZoneSection({ onAccountDeleted }: DangerZoneSectionProps) 
 				</p>
 			</div>
 
-			<DataExportRow />
-			<DeleteAccountRow onAccountDeleted={onAccountDeleted} />
+			<DataExportRow {...dataExport} />
+			<DeleteAccountRow {...deletion} />
 		</section>
 	);
 }
 
-/**
- * GDPR Art. 20 data export. Requests an export, polls its status while the server
- * prepares it, then offers a download that is saved as a JSON Blob.
- */
-function DataExportRow() {
-	const [exportId, setExportId] = useState<number | null>(null);
-	const [requestedAt, setRequestedAt] = useState<number | null>(null);
-	const [isDownloading, setIsDownloading] = useState(false);
-
-	const requestExport = useMutation({
-		...requestDataExportMutation(),
-		onSuccess: (data) => {
-			if (typeof data.id === "number") {
-				setExportId(data.id);
-				// oxlint-disable-next-line no-restricted-properties -- Read once on an event, and necessarily the same clock TanStack Query stamps `dataUpdatedAt` with: the stall check below subtracts one from the other.
-				setRequestedAt(Date.now());
-			} else {
-				toast.error("We could not start your data export. Try again.");
-			}
-		},
-		onError: () => {
-			toast.error("We could not request your data export. Try again.");
-		},
-	});
-
-	const statusQuery = useQuery({
-		...getDataExportStatusOptions({ path: { id: exportId ?? 0 } }),
-		enabled: exportId !== null,
-		refetchInterval: (query) => {
-			const status = query.state.data?.status?.toUpperCase();
-			const stillWorking = hasText(status) && EXPORT_IN_PROGRESS.has(status);
-			if (!stillWorking || requestedAt === null) {
-				return stillWorking ? 2000 : false;
-			}
-			return query.state.dataUpdatedAt - requestedAt < MAX_EXPORT_WAIT_MS ? 2000 : false;
-		},
-	});
-
-	const status = statusQuery.data?.status?.toUpperCase();
-	const inProgress = exportId !== null && hasText(status) && EXPORT_IN_PROGRESS.has(status);
-	// Polling gave up while the export was still working — let the user retry rather than spin forever.
-	const isStalled =
-		inProgress &&
-		requestedAt !== null &&
-		statusQuery.dataUpdatedAt - requestedAt >= MAX_EXPORT_WAIT_MS;
-	const isPreparing = !isStalled && (requestExport.isPending || inProgress);
-	const isReady = status === "READY";
-	const isFailed = status === "FAILED" || status === "EXPIRED" || isStalled;
-
-	const handleDownload = async () => {
-		if (exportId === null) {
-			return;
-		}
-		setIsDownloading(true);
-		try {
-			const response = await downloadDataExport({
-				path: { id: exportId },
-				parseAs: "blob",
-			});
-			// parseAs: "blob" yields a Blob at runtime even though the generated
-			// response type is `string`; normalise defensively for other shapes.
-			const payload: unknown = response.data;
-			let blob: Blob;
-			if (payload instanceof Blob) {
-				blob = payload;
-			} else if (typeof payload === "string") {
-				blob = new Blob([payload], { type: "application/json" });
-			} else {
-				blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-			}
-			saveBlobFile(blob, "hephaestus-export.json");
-		} catch {
-			toast.error("We could not download your export. Try again.");
-		}
-		setIsDownloading(false);
-	};
-
-	let statusText = "";
-	if (requestExport.isPending) {
-		statusText = "Requesting export…";
-	} else if (isPreparing) {
-		statusText = "Preparing your export… This can take a moment.";
-	} else if (isReady) {
-		statusText = "Your export is ready to download.";
-	} else if (isStalled) {
-		statusText = "This is taking longer than expected. Try again.";
-	} else if (isFailed) {
-		statusText = "We could not prepare your export. Try again.";
-	}
+/** GDPR Art. 20 data export: request it, follow its preparation, then download it. */
+function DataExportRow({
+	state,
+	downloading,
+	onRequest,
+	onDownload,
+}: DangerZoneSectionProps["dataExport"]) {
+	const isPreparing = state === "requesting" || state === "preparing";
+	const isFailed = state === "failed" || state === "stalled";
+	const statusText = {
+		idle: "",
+		requesting: "Requesting export…",
+		preparing: "Preparing your export… This can take a moment.",
+		ready: "Your export is ready to download.",
+		stalled: "This is taking longer than expected. Try again.",
+		failed: "We could not prepare your export. Try again.",
+	}[state];
 
 	return (
 		<div className="flex items-start justify-between gap-6 py-2">
@@ -165,19 +89,13 @@ function DataExportRow() {
 				)}
 			</div>
 			<div className="mt-1 flex shrink-0 gap-2">
-				{isReady ? (
-					<Button
-						variant="outline"
-						onClick={() => {
-							void handleDownload();
-						}}
-						disabled={isDownloading}
-					>
-						{isDownloading ? <Spinner className="mr-1.5" /> : null}
+				{state === "ready" ? (
+					<Button variant="outline" onClick={onDownload} disabled={downloading}>
+						{downloading ? <Spinner className="mr-1.5" /> : null}
 						Download
 					</Button>
 				) : (
-					<Button variant="outline" onClick={() => requestExport.mutate({})} disabled={isPreparing}>
+					<Button variant="outline" onClick={onRequest} disabled={isPreparing}>
 						{isPreparing ? <Spinner className="mr-1.5" /> : null}
 						{isFailed ? "Request export again" : "Request export"}
 					</Button>
@@ -187,39 +105,18 @@ function DataExportRow() {
 	);
 }
 
-// The server requires the confirmation header to equal the caller's own account id
-// (a deliberate "you know who you are" guard against forged/CSRF-style deletes).
-// The sign-in page notice is recorded only once the server confirms the deletion.
-async function deleteOwnAccount(accountId: string): Promise<void> {
-	await deleteCurrentUser({ headers: { "X-Confirm-Delete": accountId }, throwOnError: true });
-	recordAccountDeleted(accountId);
-}
-
 /**
  * GDPR Art. 17 account deletion. Requires typing a confirmation phrase before the
  * destructive action enables.
  */
-function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
-	const { getUserId } = useAuth();
+function DeleteAccountRow({ available, deleting, onDelete }: DangerZoneSectionProps["deletion"]) {
 	const [confirmText, setConfirmText] = useState("");
 	const confirmed = confirmText.trim().toLowerCase() === DELETE_CONFIRM_PHRASE;
 
-	const deleteAccount = useMutation({
-		mutationFn: deleteOwnAccount,
-		onSuccess: async () => {
-			await onAccountDeleted();
-		},
-		onError: () => {
-			toast.error("We could not delete your account. Try again.");
-		},
-	});
-
 	const handleConfirm = () => {
-		const userId = getUserId();
-		if (!confirmed || !hasText(userId)) {
-			return;
+		if (confirmed && available) {
+			onDelete();
 		}
-		deleteAccount.mutate(userId);
 	};
 
 	return (
@@ -241,12 +138,8 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 			>
 				<AlertDialogTrigger
 					render={
-						<Button
-							variant="destructive"
-							disabled={deleteAccount.isPending}
-							className="mt-1 shrink-0"
-						>
-							{deleteAccount.isPending ? "Deleting…" : "Delete account"}
+						<Button variant="destructive" disabled={deleting} className="mt-1 shrink-0">
+							{deleting ? "Deleting…" : "Delete account"}
 						</Button>
 					}
 				/>
@@ -278,10 +171,10 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleConfirm}
-							disabled={!confirmed || !hasText(getUserId()) || deleteAccount.isPending}
+							disabled={!confirmed || !available || deleting}
 							variant="destructive"
 						>
-							{deleteAccount.isPending ? "Deleting…" : "Delete account"}
+							{deleting ? "Deleting…" : "Delete account"}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

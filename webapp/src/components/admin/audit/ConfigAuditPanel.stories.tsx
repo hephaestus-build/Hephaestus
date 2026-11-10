@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { HttpResponse, http } from "msw";
 import { expect, fn } from "storybook/test";
 
 import type { ConfigAuditEntryView } from "@/api/types.gen";
 
-import { AdminConfigAuditPanel, WorkspaceConfigAuditPanel } from "./ConfigAuditPanel";
+import { ConfigAuditPanel, type ConfigAuditPanelProps } from "./ConfigAuditPanel";
 
 const llmConnectionCreated: ConfigAuditEntryView = {
 	id: 2,
@@ -52,30 +51,31 @@ const entries: ConfigAuditEntryView[] = [
 	},
 ];
 
-function page(content: ConfigAuditEntryView[]) {
-	return { content };
+/** The list as a read that answered hands it over. */
+function loaded(rows: ConfigAuditEntryView[]) {
+	return {
+		status: "ready",
+		rows,
+		hasMore: false,
+		isLoadingMore: false,
+		onLoadMore: fn(),
+	} satisfies ConfigAuditPanelProps["list"];
 }
 
-const handlers = (content: ConfigAuditEntryView[] = entries) => [
-	http.get("*/admin/config-audit/count", () => HttpResponse.json({ total: content.length })),
-	http.get("*/admin/config-audit", () => HttpResponse.json(page(content))),
-];
-
 const meta = {
-	component: AdminConfigAuditPanel,
-	parameters: {
-		layout: "padded",
-		msw: { handlers: handlers() },
-		// One MSW worker answers a whole Docs page, so each story gets its own frame until MSW goes.
-		docs: { story: { inline: false, height: "600px" } },
-	},
+	component: ConfigAuditPanel,
+	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
 		search: {},
 		onSearchChange: fn(),
 		resolveWorkspaceName: (id: number) => (id === 3 ? "Acme" : undefined),
+		list: loaded(entries),
+		total: entries.length,
+		read: "all",
+		showWorkspace: true,
 	},
-} satisfies Meta<typeof AdminConfigAuditPanel>;
+} satisfies Meta<typeof ConfigAuditPanel>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -88,52 +88,47 @@ export const InstanceScope: Story = {
 	},
 };
 
-export const WorkspaceScope: StoryObj<typeof WorkspaceConfigAuditPanel> = {
-	render: () => (
-		<WorkspaceConfigAuditPanel search={{}} onSearchChange={fn()} workspaceSlug="acme" />
-	),
-	parameters: {
-		msw: {
-			handlers: [
-				http.get("*/workspaces/*/config-audit/count", () =>
-					HttpResponse.json({ total: entries.length }),
-				),
-				http.get("*/workspaces/*/config-audit", () => HttpResponse.json(page(entries))),
-			],
-		},
-	},
+/** One workspace's log names no workspace. */
+export const WorkspaceScope: Story = {
+	args: { showWorkspace: false, resolveWorkspaceName: undefined },
 };
 
 export const Empty: Story = {
-	parameters: { msw: { handlers: handlers([]) } },
+	args: { list: loaded([]), total: 0 },
 };
 
 export const FilteredToNothing: Story = {
-	args: { search: { entityType: ["AGENT_BINDING"], from: "2026-07-01" } },
-	parameters: { msw: { handlers: handlers([]) } },
+	args: {
+		search: { entityType: ["AGENT_BINDING"], from: "2026-07-01" },
+		list: loaded([]),
+		total: 0,
+	},
 };
 
 export const FiltersFromUrl: Story = {
-	args: { search: { action: ["CREATED"], entityType: ["WORKSPACE_LLM_CONNECTION"] } },
-	parameters: { msw: { handlers: handlers([llmConnectionCreated]) } },
+	args: {
+		search: { action: ["CREATED"], entityType: ["WORKSPACE_LLM_CONNECTION"] },
+		list: loaded([llmConnectionCreated]),
+		total: 1,
+	},
+};
+
+export const Loading: Story = {
+	args: { list: { status: "loading" }, total: undefined },
 };
 
 export const LoadFailed: Story = {
-	parameters: {
-		msw: {
-			handlers: [
-				http.get("*/admin/config-audit", () =>
-					HttpResponse.json(
-						{
-							type: "about:blank",
-							title: "Internal Server Error",
-							status: 500,
-							detail: "The audit store is unavailable.",
-						},
-						{ status: 500 },
-					),
-				),
-			],
+	args: {
+		list: {
+			status: "error",
+			error: {
+				type: "about:blank",
+				title: "Internal Server Error",
+				status: 500,
+				detail: "The audit store is unavailable.",
+			},
+			onRetry: fn(),
 		},
+		total: undefined,
 	},
 };

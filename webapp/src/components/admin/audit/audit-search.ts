@@ -2,6 +2,9 @@ import { z } from "zod";
 
 import { multiValue } from "@/lib/search-params";
 
+// The filter helpers live in auth-audit-filters.ts and config-audit-filters.ts: the routes import this
+// module for `validateSearch`, so it loads with every page, and their label tables must not.
+
 /**
  * Every field is `.catch()`-ed rather than merely optional: a stale link from an old ticket must still
  * open the log, less narrowly filtered, instead of failing `validateSearch` into an error page.

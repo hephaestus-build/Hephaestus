@@ -16,6 +16,7 @@ import { toast } from "@/lib/toast";
 import {
 	createWorkspaceMutation,
 	getProvidersOptions,
+	gitLabPreflightMutation,
 	listGitLabGroupsMutation,
 	listGitLabProjectsMutation,
 	listIdentityProvidersOptions,
@@ -261,6 +262,12 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 	const navigate = useNavigate();
 	const stepAnnouncement = `Step ${state.step} of 3: ${STEP_META[state.step].title}`;
 
+	const preflight = useMutation({
+		...gitLabPreflightMutation(),
+		onSuccess: (data, { body }) => {
+			dispatch({ type: "SET_PREFLIGHT_RESULT", result: data, request: body });
+		},
+	});
 	const listGroups = useMutation(listGitLabGroupsMutation());
 	// A POST, so the token travels in the body and never in a URL or a cache key.
 	const listProjects = useMutation(listGitLabProjectsMutation());
@@ -436,7 +443,17 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 
 			<div className="mt-6" role="region" aria-labelledby="wizard-heading">
 				<WizardContext.Provider value={wizardContextValue}>
-					{state.step === 1 && <ConnectGitLabStep />}
+					{state.step === 1 && (
+						<ConnectGitLabStep
+							validating={preflight.isPending}
+							unreachable={preflight.isError && isForCurrentToken(state, preflight.variables.body)}
+							onValidate={(body) => {
+								// A new check drops the answer to an earlier token.
+								preflight.reset();
+								preflight.mutate({ body });
+							}}
+						/>
+					)}
 					{state.step === 2 && <SelectGroupStep />}
 					{state.step === 3 && (
 						<ConfigureWorkspaceStep

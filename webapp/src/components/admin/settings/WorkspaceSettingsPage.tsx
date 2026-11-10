@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { WorkspaceCapabilitiesSettings } from "./WorkspaceCapabilitiesSettings";
-import { WorkspaceDangerZoneSettings } from "./WorkspaceDangerZoneSettings";
+import {
+	WorkspaceDangerZoneSettings,
+	type WorkspaceDangerZoneSettingsProps,
+} from "./WorkspaceDangerZoneSettings";
 import {
 	WorkspaceHiddenPeopleSettings,
 	type WorkspaceHiddenPeopleSettingsProps,
@@ -18,6 +21,7 @@ export interface WorkspaceSettingsPageProps {
 	practicesEnabled: boolean;
 	publicActivity: WorkspacePublicActivitySettingsProps;
 	hiddenPeople: Omit<WorkspaceHiddenPeopleSettingsProps, "workspaceSlug">;
+	dangerZone: Omit<WorkspaceDangerZoneSettingsProps, "workspaceSlug">;
 }
 
 export function WorkspaceSettingsPage({
@@ -27,6 +31,7 @@ export function WorkspaceSettingsPage({
 	practicesEnabled,
 	publicActivity,
 	hiddenPeople,
+	dangerZone,
 }: WorkspaceSettingsPageProps) {
 	return (
 		<div className="max-w-4xl space-y-10">
@@ -38,7 +43,7 @@ export function WorkspaceSettingsPage({
 			<WorkspacePublicActivitySettings {...publicActivity} />
 			<WorkspaceHiddenPeopleSettings workspaceSlug={workspaceSlug} {...hiddenPeople} />
 			{security}
-			<WorkspaceDangerZoneSettings workspaceSlug={workspaceSlug} />
+			<WorkspaceDangerZoneSettings workspaceSlug={workspaceSlug} {...dangerZone} />
 		</div>
 	);
 }

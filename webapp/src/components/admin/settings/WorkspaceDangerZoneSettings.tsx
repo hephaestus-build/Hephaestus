@@ -1,51 +1,34 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { toast } from "@/lib/toast";
 
-import { listWorkspacesQueryKey, purgeWorkspaceMutation } from "@/api/@tanstack/react-query.gen";
-import type { ListWorkspacesResponse } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { problemDetailOf } from "@/lib/problem-detail";
-import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 
 import { DeleteWorkspaceAlertDialog } from "./DeleteWorkspaceAlertDialog";
 
+/** Whether the reader owns the workspace, which deletion needs. */
+export type OwnerCheck =
+	| { status: "pending" }
+	| { status: "failed"; retrying: boolean; onRetry: () => void }
+	| { status: "known"; owner: boolean };
+
 export interface WorkspaceDangerZoneSettingsProps {
 	workspaceSlug: string;
+	ownerCheck: OwnerCheck;
+	deleting: boolean;
+	/** Deletes the workspace. Resolves on success; rejects to keep the confirmation open. */
+	onDelete: () => Promise<void>;
 }
 
-export function WorkspaceDangerZoneSettings({ workspaceSlug }: WorkspaceDangerZoneSettingsProps) {
-	const queryClient = useQueryClient();
-	const navigate = useNavigate();
+export function WorkspaceDangerZoneSettings({
+	workspaceSlug,
+	ownerCheck,
+	deleting,
+	onDelete,
+}: WorkspaceDangerZoneSettingsProps) {
 	const [dialogOpen, setDialogOpen] = useState(false);
-
-	const {
-		data: membership,
-		isPending: isRolePending,
-		isError: isRoleError,
-		isFetching: isRoleFetching,
-		refetch: refetchRole,
-	} = useQuery(workspaceMembershipQueryOptions(workspaceSlug));
-	const isOwner = membership?.role === "OWNER";
-	const roleUnavailable = membership == null && isRoleError;
-
-	const purgeWorkspace = useMutation({
-		...purgeWorkspaceMutation(),
-		onSuccess: () => {
-			setDialogOpen(false);
-			toast.success("Workspace deleted");
-			queryClient.setQueryData(listWorkspacesQueryKey(), (workspaces?: ListWorkspacesResponse) =>
-				workspaces?.filter((workspace) => workspace.workspaceSlug !== workspaceSlug),
-			);
-			void navigate({ to: "/", replace: true });
-			void queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() });
-		},
-		onError: (e) =>
-			toast.error("We could not delete the workspace", { description: problemDetailOf(e) }),
-	});
+	const isOwner = ownerCheck.status === "known" && ownerCheck.owner;
 
 	return (
 		<section aria-labelledby="workspace-danger-zone-heading">
@@ -68,17 +51,17 @@ export function WorkspaceDangerZoneSettings({ workspaceSlug }: WorkspaceDangerZo
 								</Link>{" "}
 								covers your own account only.
 							</p>
-							{isRolePending && (
+							{ownerCheck.status === "pending" && (
 								<p className="text-sm text-muted-foreground" role="status">
 									Checking your permissions…
 								</p>
 							)}
-							{roleUnavailable && (
+							{ownerCheck.status === "failed" && (
 								<p className="text-sm text-destructive" role="alert">
 									We could not verify that you are the workspace owner.
 								</p>
 							)}
-							{!isRolePending && !roleUnavailable && !isOwner && (
+							{ownerCheck.status === "known" && !ownerCheck.owner && (
 								<p className="text-sm text-muted-foreground">
 									Only the workspace owner can delete this workspace.
 								</p>
@@ -93,17 +76,15 @@ export function WorkspaceDangerZoneSettings({ workspaceSlug }: WorkspaceDangerZo
 								Delete workspace
 							</Button>
 						)}
-						{roleUnavailable && (
+						{ownerCheck.status === "failed" && (
 							<Button
 								variant="outline"
 								className="w-full shrink-0 sm:mt-1 sm:w-auto"
-								disabled={isRoleFetching}
-								onClick={() => {
-									void refetchRole();
-								}}
+								disabled={ownerCheck.retrying}
+								onClick={ownerCheck.onRetry}
 							>
-								{isRoleFetching && <Spinner aria-hidden />}
-								{isRoleFetching ? "Retrying…" : "Retry"}
+								{ownerCheck.retrying && <Spinner aria-hidden />}
+								{ownerCheck.retrying ? "Retrying…" : "Retry"}
 							</Button>
 						)}
 					</div>
@@ -115,8 +96,13 @@ export function WorkspaceDangerZoneSettings({ workspaceSlug }: WorkspaceDangerZo
 				open={dialogOpen}
 				onOpenChange={setDialogOpen}
 				workspaceSlug={workspaceSlug}
-				isDeleting={purgeWorkspace.isPending}
-				onConfirm={() => purgeWorkspace.mutate({ path: { workspaceSlug } })}
+				isDeleting={deleting}
+				onConfirm={() => {
+					onDelete()
+						.then(() => setDialogOpen(false))
+						// The failure has its own notice, and the open confirmation lets the owner try again.
+						.catch(() => undefined);
+				}}
 			/>
 		</section>
 	);

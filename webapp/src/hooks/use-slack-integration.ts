@@ -25,6 +25,7 @@ import type {
 } from "@/components/admin/integrations/WorkspaceSlackConnectionSettings";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { useConnectionSync } from "@/hooks/use-connection-sync";
+import { useSlackConsentHistory } from "@/hooks/use-slack-consent-history";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
@@ -109,6 +110,8 @@ export function useSlackIntegration(workspaceSlug: string) {
 	const slackChannelCandidatesQueryOptions = listSlackChannelCandidatesOptions({
 		path: { workspaceSlug },
 	});
+	const history = useSlackConsentHistory(workspaceSlug);
+
 	const candidatesQuery = useQuery({
 		...slackChannelCandidatesQueryOptions,
 		enabled: hasSlackCredentials,
@@ -277,7 +280,6 @@ export function useSlackIntegration(workspaceSlug: string) {
 					isConnecting: connect.isPending,
 				}) satisfies WorkspaceSlackConnectionSettingsProps,
 		channelsSettingsProps: {
-			workspaceSlug,
 			hasSlackConnection: isConnectionActive,
 			channels: isConnectionActive && !channelsFailed ? (slackChannelsQuery.data ?? []) : [],
 			isLoading: isConnectionActive && slackChannelsQuery.isLoading,
@@ -310,6 +312,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 			onRegisterChannel: handleRegisterChannel,
 			onUpdateConsent: handleUpdateConsent,
 			onRemoveChannel: handleRemoveChannel,
+			...history,
 		} satisfies WorkspaceSlackChannelsSettingsProps,
 	};
 }

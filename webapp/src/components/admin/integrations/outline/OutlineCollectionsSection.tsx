@@ -19,7 +19,7 @@ import {
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
-import { AddCollectionDialog } from "./AddCollectionDialog";
+import { AddCollectionDialog, type CollectionCandidates } from "./AddCollectionDialog";
 import { OutlineCollectionRow, type OutlineMirrorState } from "./OutlineCollectionRow";
 import { RemoveCollectionAlertDialog } from "./RemoveCollectionAlertDialog";
 
@@ -42,7 +42,6 @@ function CollectionsTableHeader() {
 }
 
 export interface OutlineCollectionsSectionProps {
-	workspaceSlug: string;
 	collections: OutlineCollection[];
 	isLoading: boolean;
 	/** The collection-list query's error, if it failed — surfaced with a retry instead of the empty state. */
@@ -61,6 +60,10 @@ export interface OutlineCollectionsSectionProps {
 	/** Remove the collection and erase its mirrored documents. Resolves on success, rejects to
 	 * keep the confirm dialog open. */
 	onRemoveCollection: (input: { collectionId: string }) => Promise<void> | void;
+	/** The Add collections dialog is open. The route reads the candidates only while it is. */
+	addOpen: boolean;
+	onAddOpenChange: (open: boolean) => void;
+	collectionCandidates: CollectionCandidates;
 }
 
 /**
@@ -118,7 +121,6 @@ function MirroredCollection({
  * for why they are not duplicated here.
  */
 export function OutlineCollectionsSection({
-	workspaceSlug,
 	collections,
 	isLoading,
 	error,
@@ -127,9 +129,10 @@ export function OutlineCollectionsSection({
 	onRegisterCollection,
 	onUpdateCollectionState,
 	onRemoveCollection,
+	addOpen,
+	onAddOpenChange,
+	collectionCandidates,
 }: OutlineCollectionsSectionProps) {
-	const [addOpen, setAddOpen] = useState(false);
-
 	const hasCollections = collections.length > 0;
 	const failed = error != null;
 	const refreshAlert = refreshFailure !== undefined && (
@@ -187,7 +190,7 @@ export function OutlineCollectionsSection({
 						</EmptyDescription>
 					</EmptyHeader>
 					<EmptyContent>
-						<Button size="sm" onClick={() => setAddOpen(true)}>
+						<Button size="sm" onClick={() => onAddOpenChange(true)}>
 							<PlusIcon className="size-4" />
 							Add collection
 						</Button>
@@ -208,7 +211,7 @@ export function OutlineCollectionsSection({
 						{". "}Removing it <strong>erases every mirrored document</strong> from Hephaestus.
 					</CardDescription>
 					<CardAction>
-						<Button size="sm" onClick={() => setAddOpen(true)}>
+						<Button size="sm" onClick={() => onAddOpenChange(true)}>
 							<PlusIcon className="size-4" />
 							Add collection
 						</Button>
@@ -219,9 +222,9 @@ export function OutlineCollectionsSection({
 			</Card>
 
 			<AddCollectionDialog
-				workspaceSlug={workspaceSlug}
+				candidates={collectionCandidates}
 				open={addOpen}
-				onOpenChange={setAddOpen}
+				onOpenChange={onAddOpenChange}
 				onRegister={onRegisterCollection}
 			/>
 		</div>

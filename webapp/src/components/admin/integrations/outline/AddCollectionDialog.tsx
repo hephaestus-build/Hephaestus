@@ -1,8 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
 import { CheckIcon, LibraryIcon, LockIcon } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 
-import { listOutlineCollectionCandidatesOptions } from "@/api/@tanstack/react-query.gen";
 import type { OutlineCollectionCandidate } from "@/api/types.gen";
 import { OutlineCollectionIcon } from "@/components/admin/integrations/outline/OutlineCollectionIcon";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -37,8 +35,17 @@ import { Spinner } from "@/components/ui/spinner";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 
+/** The collections Outline lists for the token, read while the dialog is open. */
+export interface CollectionCandidates {
+	items?: readonly OutlineCollectionCandidate[];
+	isLoading: boolean;
+	/** The read failed. */
+	error?: unknown;
+	onRetry: () => void;
+}
+
 export interface AddCollectionDialogProps {
-	workspaceSlug: string;
+	candidates: CollectionCandidates;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	onRegister: (input: { collectionId: string }) => Promise<void> | void;
@@ -53,7 +60,7 @@ function searchTextOf(candidate: OutlineCollectionCandidate) {
 }
 
 export function AddCollectionDialog({
-	workspaceSlug,
+	candidates,
 	open,
 	onOpenChange,
 	onRegister,
@@ -63,19 +70,7 @@ export function AddCollectionDialog({
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const [registered, setRegistered] = useState(0);
 
-	const {
-		data: candidates,
-		isLoading,
-		error: candidatesError,
-		refetch,
-	} = useQuery({
-		...listOutlineCollectionCandidatesOptions({ path: { workspaceSlug } }),
-		enabled: open,
-		staleTime: 0,
-		retry: false,
-	});
-
-	const all = candidates ?? [];
+	const all = candidates.items ?? [];
 	const canSubmit = selectedIds.length > 0 && !submitting;
 
 	function handleOpenChange(next: boolean) {
@@ -140,11 +135,9 @@ export function AddCollectionDialog({
 				>
 					<CollectionPicker
 						candidates={all}
-						isLoading={isLoading}
-						error={candidatesError}
-						onRetry={() => {
-							void refetch();
-						}}
+						isLoading={candidates.isLoading}
+						error={candidates.error}
+						onRetry={candidates.onRetry}
 						selectedIds={selectedIds}
 						onSelectedIdsChange={setSelectedIds}
 						disabled={submitting}
@@ -179,9 +172,9 @@ export function AddCollectionDialog({
 }
 
 interface CollectionPickerProps {
-	candidates: OutlineCollectionCandidate[];
+	candidates: readonly OutlineCollectionCandidate[];
 	isLoading: boolean;
-	error: Error | null;
+	error: unknown;
 	onRetry: () => void;
 	selectedIds: readonly string[];
 	onSelectedIdsChange: (ids: readonly string[]) => void;
@@ -208,7 +201,7 @@ function CollectionPicker({
 			</div>
 		);
 	}
-	if (error) {
+	if (error !== undefined) {
 		return <QueryErrorAlert error={error} title="We could not reach Outline" onRetry={onRetry} />;
 	}
 	if (candidates.length === 0) {

@@ -10,7 +10,9 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { renderWithRouter } from "@/test/router-harness";
 
-import { WorkspaceDangerZoneSettings } from "./WorkspaceDangerZoneSettings";
+import { WorkspaceDangerZoneSettings } from "@/components/admin/settings/WorkspaceDangerZoneSettings";
+
+import { useWorkspaceDangerZone } from "./use-workspace-danger-zone";
 
 vi.mock("@/lib/toast", () => ({
 	toast: { success: vi.fn(), error: vi.fn() },
@@ -22,13 +24,18 @@ function membershipHandler(role: "OWNER" | "ADMIN") {
 	return http.get("*/workspaces/demo/members/me", () => HttpResponse.json(ownMembership(role)));
 }
 
+/** The settings page's wiring of the danger zone: the hook reads and writes, the section shows. */
+function DangerZone() {
+	return <WorkspaceDangerZoneSettings workspaceSlug="demo" {...useWorkspaceDangerZone("demo")} />;
+}
+
 async function renderContainer() {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
 	const rendered = await renderWithRouter(
 		<QueryClientProvider client={queryClient}>
-			<WorkspaceDangerZoneSettings workspaceSlug="demo" />
+			<DangerZone />
 		</QueryClientProvider>,
 		"/w/demo/admin/settings",
 	);
@@ -60,7 +67,7 @@ beforeEach(() => {
 	vi.clearAllMocks();
 });
 
-describe("WorkspaceDangerZoneSettings", () => {
+describe("useWorkspaceDangerZone", () => {
 	it("deletes the workspace and leaves its route", async () => {
 		server.use(
 			membershipHandler("OWNER"),

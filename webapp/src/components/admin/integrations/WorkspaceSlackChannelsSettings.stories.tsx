@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
@@ -9,22 +8,13 @@ import { WorkspaceSlackChannelsSettings } from "./WorkspaceSlackChannelsSettings
 
 /**
  * Admin surface to allow-list Slack channels and drive their per-channel consent lifecycle.
- * Mutations are mocked with `fn()`. The history Sheet issues a lazy query, so the component is
- * wrapped in a fresh QueryClient (its query stays disabled while the Sheet is closed).
+ * Mutations are mocked with `fn()`. The consent history comes in as props, as the route reads it.
  */
 const meta = {
 	component: WorkspaceSlackChannelsSettings,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
-	decorators: [
-		(Story) => (
-			<QueryClientProvider client={new QueryClient()}>
-				<Story />
-			</QueryClientProvider>
-		),
-	],
 	args: {
-		workspaceSlug: "demo-workspace",
 		hasSlackConnection: true,
 		isLoading: false,
 		channels: [],
@@ -32,6 +22,8 @@ const meta = {
 		onRegisterChannel: fn(),
 		onUpdateConsent: fn(),
 		onRemoveChannel: fn(),
+		consentHistory: { isLoading: false, onRetry: fn() },
+		onHistoryOpenChange: fn(),
 	},
 } satisfies Meta<typeof WorkspaceSlackChannelsSettings>;
 
