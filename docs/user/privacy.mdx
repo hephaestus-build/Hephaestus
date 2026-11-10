@@ -94,6 +94,7 @@ Workspace admins choose the connected sources and what runs in the workspace:
 - **GitHub and GitLab:** contributor profiles, repository and team membership, and commit metadata. They also supply issues, pull requests or merge requests, reviews, comments, and discussions. Practice reviews can also read relevant code changes, repository snapshots, and reachable Git history.
 - **Slack:** identities, privacy choices, direct conversations with Hephaestus, and new messages in monitored channels. Channel monitoring requires separate activation, a visible announcement, and participant privacy controls. A Slack connection alone does not activate it. Each person in a monitored thread gets a separate review. That review judges only that person’s own messages.
 - **Outline:** selected collections and documents, their content, and author information.
+- **Browser extension:** it sends your instance the address of each supported work page that you open on an allowed site. [Browser extension privacy](./browser-extension-privacy) lists everything it reads and sends.
 
 Practice reviews can read all permitted workspace areas and repositories available to the review.
 This includes Slack threads and observation and feedback history scoped to a person.
@@ -133,9 +134,13 @@ These records support security, troubleshooting, and spending controls:
 - Page load and response times from your browser, if your instance turns them on. They name no person, workspace or page address.
 
 The app uses essential cookies and browser storage for sign-in, security, and preferences.
-It sends no error reports from your browser.
 The server keeps its own diagnostic logs on your instance's hosts.
 Your instance must disclose where those logs go, why, and for how long.
+
+Your instance can turn on browser fault reports.
+Then the app reports each failure on a page: its kind, the type of page, the error class, the release, and code positions.
+For a failed request, it also sends the request's trace ID and status.
+These reports carry no error message, page address, or identity.
 
 When a page shows an avatar from a source platform, your browser requests the image from its host.
 That host receives network metadata, such as your IP address and the image address.
@@ -193,6 +198,7 @@ Access differs by role and destination:
 - The About page lists the people who contribute to the Hephaestus open-source project, as GitHub shows them.
 - Feedback on GitHub, GitLab, or Slack is visible to that destination’s audience.
 - Instance admins can use **View as user** to read activity, practice pages, feedback, and existing conversations. This includes access before your first Hephaestus sign-in. Each read has a recorded reason. This access cannot send messages, answer questions, or make choices for you. It does not count as you seeing feedback. Workspace admins do not have this access.
+- Instance admins can also open any workspace as one of its admins, but never as an owner. Each such access is recorded. They then see what a workspace admin sees.
 - Instance operators can access stored data for operation and privacy requests. Instance admins can read product feedback submissions.
 
 ## Your choices and right to object
@@ -360,13 +366,17 @@ Do not delete your account to leave one workspace or sign out a device.
 
 Hephaestus immediately signs you out on all devices.
 If your instance sends email and your account has a verified address, it sends confirmation with the cleanup date.
-After the default **48-hour cooldown**, scheduled cleanup removes sign-in details, connected identities, AI choice, and product feedback submissions.
+After the default **48-hour cooldown**, scheduled cleanup erases your personal data in Hephaestus.
+This covers sign-in details, AI choice, product feedback submissions, memberships, observations, feedback, and conversations.
+It also covers the identities connected to your account: their contributor profiles and the copies of their work.
+
 An account record remains with contact details cleared.
+Hephaestus also keeps the minimal identity keys that stop it from processing those identities again.
 There is no self-service undo.
 
-**Account deletion is not complete person erasure.**
-Contributor profiles, conversations, observations, feedback, and other retained copies require a wider request.
-A source disconnection or workspace removal is not a substitute.
+If Hephaestus posted feedback on GitHub, GitLab, or Slack for you, cleanup stays incomplete until the operator removes those comments.
+Deletion covers only the identities connected to your account.
+For another identity, or for posted feedback you want corrected, use the wider request below.
 Deletion in Hephaestus does not delete original work on connected services.
 
 With or without an account:
@@ -417,7 +427,8 @@ The sections above describe account and export timing.
 
 - **Slack channel threads:** retention uses a rolling period measured from the latest message. An active thread can still contain much older messages. This period does not apply to your conversation.
 - **Outline:** selected content stays while its collection and connection stay active.
-- **Conversations and memberships:** records stay with the workspace. Workspace removal or verified person erasure removes them. Deleting one of your messages erases it sooner.
+- **Conversations:** each message, answer, digest, and summary is erased 400 days after it is written. Your instance can set another period. Deleting one of your messages, account deletion, workspace removal, or verified person erasure erases it sooner.
+- **Memberships:** records stay with the workspace. Account deletion, workspace removal, or verified person erasure removes them.
 - **Product feedback submissions:** there is no automatic expiry by age. Account deletion, applicable workspace removal, or verified erasure removes instance records and starts GitHub cleanup. The app cannot delete issues or their edit history. Maintainers complete those steps where needed, and public copies can remain.
 
 ### Security and review history
