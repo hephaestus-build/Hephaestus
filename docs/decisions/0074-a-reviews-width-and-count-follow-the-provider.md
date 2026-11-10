@@ -1,6 +1,6 @@
 # ADR 0074: A review's width and count follow the provider
 
-**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md))
+**Status:** Accepted
 **Date:** 2026-11-02
 **Authors:** Felix T.J. Dietrich
 
@@ -10,6 +10,7 @@
 - [ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md): a request on an unchanged item reuses current results, and [D10](0069-practices-run-when-ready-and-stay-current-by-their-sources.md#d10-practice-concurrency) gets a measured maximum.
 
 Each amended ADR has a dated update block that points here.
+**Amended by:** [ADR 0079](0079-one-agent-system.md)
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0001: Flat top-level layout
 
-**Status:** Accepted (amended 2026-09-17 — `server/` is a two-module Gradle root per [0032](0032-generated-clients-build-boundary.md))
+**Status:** Accepted
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 

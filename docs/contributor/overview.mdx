@@ -53,15 +53,12 @@ They live in the repository under
 [`docs/decisions/`](https://github.com/hephaestus-build/Hephaestus/tree/main/docs/decisions).
 [`decisions/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/README.md) indexes them.
 They refer to internal class names, so their reader already has the repository open.
-The PR that changes the code also amends the applicable ADR.
+The PR that changes the code also changes the applicable ADR.
 The same applies to `docs/auth-architecture.md` and `docs/auth-glossary.md`.
 
-Two rules when you touch them:
-
-- **Link them by absolute GitHub URL** from any page on this site. A relative `../decisions/…` link
-  resolves to nothing here and fails the docs build (`onBrokenMarkdownLinks: 'throw'`).
-- **An ADR records a decision, not a fix log.** Record a later bug fix in a changeset.
-  Amend an ADR only when the decision or one of its consequences changed.
+[How we write ADRs](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/README.md#how-we-write-adrs) owns the rules: the shape, the status values, and when to correct, update or supersede an ADR.
+Link an ADR by absolute GitHub URL from any page on this site.
+A relative `../decisions/…` link resolves to nothing here and fails the docs build (`onBrokenMarkdownLinks: 'throw'`).
 
 Continue with [Local development](./local-development) to set up your environment.
 

@@ -1,13 +1,12 @@
 # ADR 0021: Separate observations from feedback
 
-**Status:** Accepted (amended 2026-07-31 #1423, 2026-08-18 #1444 — rewritten in place; refined by [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md) and [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md)); superseded 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md)
+**Status:** Superseded by [ADR 0056](0056-one-practice-model-for-items-and-scans.md)
 **Date:** 2026-06-14  
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** [ADR 0020](0020-context-fabric-everything-is-an-integration.md) and
 [ADR 0007](0007-sandbox-spi-shape.md)  
-**Refined by:** [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md) and
-[ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md)
+**Amended by:** [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md), [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md)
 
 ## Context
 

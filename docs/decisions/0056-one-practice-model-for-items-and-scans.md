@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-10-14
 **Authors:** Hephaestus maintainers
+**Amended by:** [ADR 0062](0062-the-item-is-the-review-scope.md), [ADR 0063](0063-each-practice-is-staged-when-it-ends.md), [ADR 0065](0065-standing-counts-the-newest-observation-of-each-item.md), [ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md)
 
 ## Context
 

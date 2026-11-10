@@ -1,6 +1,6 @@
 # ADR 0007: Sandbox SPI shape — sealed VolumeMount + typed NetworkPolicy
 
-**Status:** Accepted (amended 2026-09-03 #1719 — mount portability superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — interactive SPI replaced by `HostSandbox`, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [one attempt runner over a narrow backend](#update--2026-10-24-one-attempt-runner-over-a-narrow-backend); 2026-10-28 — Jobs only, `HostSandbox` goes, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md); 2026-11-09 — superseded by [ADR 0079](0079-one-agent-system.md))
+**Status:** Superseded by [ADR 0079](0079-one-agent-system.md)
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 

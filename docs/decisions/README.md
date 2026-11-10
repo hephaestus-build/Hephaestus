@@ -1,125 +1,161 @@
 # Architecture Decision Records
 
-Decisions that shape the Hephaestus server foundations. Each ADR follows the
-[MADR](https://adr.github.io/madr/) template: context → drivers → considered options
-→ decision → consequences → revisit trigger.
+An architecture decision record (ADR) records one decision that shapes Hephaestus, the options that we rejected, and the reasons.
+This index lists every ADR.
+The rules below say how to write one and how it changes over time.
 
-New ADRs use the next available number and link from this index.
+## These are repo-only, not on the docs site
 
-## These are repo-only — deliberately not on the docs site
+`docs/decisions/`, `docs/auth-architecture.md` and `docs/auth-glossary.md` are not registered with a Docusaurus plugin.
+They never appear on [the site](https://docs.hephaestus.build/).
+This is a decision.
+They use internal class names, the pull request that changes the code also changes them, and their reader has the repository open.
 
-`docs/decisions/`, `docs/auth-architecture.md` and `docs/auth-glossary.md` are
-**not** registered with any Docusaurus plugin and never appear on
-[the site](https://docs.hephaestus.build/). That is a decision, not an oversight. They are
-written against internal class names, they are amended by the same PR that changes the code, and
-their reader already has the repository checked out. This index is their table of contents.
+- **Link an ADR by absolute GitHub URL from a published page.** Use `https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/<file>.md`. A relative `../decisions/…` link from `docs/user/`, `docs/contributor/` or `docs/admin/` resolves to nothing on the site, and `onBrokenMarkdownLinks: 'throw'` fails the docs build. Relative links between files in this directory are correct.
+- **An operator fact does not live only here.** If a self-hoster must do a step, the Admin Guide (`docs/admin/`) owns it, and the ADR links to it.
 
-Two rules follow, and CI enforces the second one:
+## How we write ADRs
 
-1. **An ADR is a record of a decision, not a changelog.** Context, drivers, options, decision,
-   consequences, revisit trigger. A bug fixed after the fact belongs in a changeset
-   (`.changeset/*.md`), not in an amendment — amend an ADR only when the decision or one of its
-   consequences actually changed.
+The rules come from [Nygard](https://www.cognitect.com/blog/2011/11/15/documenting-architecture-decisions), [MADR 4](https://github.com/adr/madr/blob/4.0.0/template/adr-template.md), Olaf Zimmermann's guidance on [creating](https://ozimmer.ch/practices/2023/04/03/ADRCreation.html) and [reviewing](https://ozimmer.ch/practices/2023/04/05/ADRReview.html) ADRs, and the [AWS ADR process](https://docs.aws.amazon.com/prescriptive-guidance/latest/architectural-decision-records/adr-process.html).
+Copy [the template](0000-template.md) and use the next free number.
 
-   **An amendment appends; it never rewrites.** Add a dated `## Update — YYYY-MM-DD (issue #N)`
-   block at the end, say which section above it supersedes, and leave that section standing. This
-   applies hardest to the considered-and-rejected options: they are the reason a future engineer
-   does not re-propose a path that was already priced and declined, and deleting them is what turns
-   an ADR into the changelog rule 1 forbids. If a previously rejected option is now the chosen path,
-   the update block says so and dates it. [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md)
-   is the worked example.
-2. **A published page links here by absolute GitHub URL, never a relative path.** A relative
-   `../decisions/…` link from `docs/user/`, `docs/contributor/` or `docs/admin/` resolves to
-   nothing on the site, and `onBrokenMarkdownLinks: 'throw'` fails the docs build. Use
-   `https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/<file>.md`. Relative links
-   *between* files in this tree are fine — they are only ever read on GitHub.
+### Shape
 
-An operator-facing fact must not live only here. If a self-hoster has to do a step, its home is the
-Admin Guide (`docs/admin/`), and the ADR links to it.
+- **One decision per ADR.** The title states the decision as a sentence.
+- **Context** gives the forces and the real constraint in a few sentences. Do not tell the story of an incident or list run numbers.
+- **Considered options** give the real cost of each option. Never add an option that cannot work only to make the chosen one look good. Rejected options stay forever, so that nobody proposes them again without a new reason.
+- **Decision** is a set of rules that a reviewer can check against a diff. Detailed design goes to a contributor page, and the ADR links it.
+- **Consequences** include the bad ones.
+- **Confirmation** names the test, ArchUnit rule or CI gate that fails when the code breaks the decision. If nothing checks it, write `Not enforced.` and say what review catches it. MADR 4 calls this section Confirmation.
+- **Revisit trigger** names a signal that we can observe.
+- **Sources** name one to three trusted sources and what each one changes in the decision: a standard or RFC, the official docs of the tool, a peer-reviewed paper, or the docs of a well-run open-source project. Read the source before you cite it. If we differ from common practice on purpose, say why in one sentence.
+- **Length:** one or two pages. A longer ADR usually holds design that belongs on a contributor page.
+
+### Status
+
+The status line holds one value, and the index shows the same value:
+
+| Status | Meaning |
+| --- | --- |
+| `Proposed` | The decision is under review in an open pull request. |
+| `Accepted` | The decision is in force. |
+| `Superseded by NNNN` | A later ADR replaces this one. Read that ADR. |
+| `Deprecated` | The decision no longer applies, and no ADR replaces it. The last update gives the reason. |
+
+A rejected proposal is a closed pull request, not a status.
+"Superseded in part" is not a status. A partial change is an `**Amended by:**` link in the header.
+The header holds `**Status:**`, `**Date:**` and `**Authors:**`, then optional relation lines with links: `**Supersedes:**`, `**Amends:**`, `**Amended by:**`, `**Builds on:**` and `**Relates to:**`.
+
+### Correct, update or supersede
+
+An ADR records a decision. It is not a changelog. A bug fix after the fact goes in a changeset (`.changeset/*.md`).
+
+| Change | What to do |
+| --- | --- |
+| A name, a path or a link is stale, or the prose breaks the [writing standard](../contributor/simplified-technical-english.md) | **Correct** it in place. Add no update block. Git history records the change. Do not change what was decided. |
+| One rule or one consequence of the decision changed | **Update.** Append `## Update — YYYY-MM-DD: <what changed>` with the reason. Never rewrite the text above it. If another ADR made the change, add it to `**Amended by:**`. |
+| The Decision no longer holds as written, or the ADR would get its third update | **Supersede.** Write a new ADR that states what is true now. Cite each ADR that it replaces. List their rejected options under "Already priced and declined", with links. Set the status of each old ADR to `Superseded by NNNN`, and change nothing else in it. |
+| The decision no longer applies, and nothing replaces it | **Deprecate.** Set the status to `Deprecated` and append one update with the reason. |
+
+A new ADR can change an old decision.
+It then says what changed and why, and it cites a source for the new reason.
+Rejected options are never deleted. A superseded ADR keeps them, and the new ADR links them.
+
+### Checks
+
+`scripts/decisions-index.test.ts` runs in `vp run check`. It checks that:
+
+- each ADR has a unique number and a heading with that number;
+- each status is in the table above, and the index shows the same status;
+- each ADR link in a header points to an existing ADR;
+- the index lists each ADR exactly once;
+- each Accepted ADR from 0081 has a `## Confirmation` section.
+
+## Index
 
 | # | Title | Status |
 |---|---|---|
-| [0001](0001-flat-top-level-layout.md) | Flat top-level layout | Accepted (amended 2026-09-17 — `server/` is a two-module Gradle root per [0032](0032-generated-clients-build-boundary.md)) |
-| [0002](0002-java-package-rename-to-aet-cit-tum.md) | Rename Java base package to `de.tum.cit.aet.hephaestus` | Accepted (amended 2026-09-17 — deploy domain moved, package kept) |
-| [0003](0003-spring-modulith-adoption.md) | Spring Modulith 2.0 adoption with two empirical shared kernels | Accepted (amended 2026-09-17 — kernel and named-interface names corrected). Superseded 2026-11-12 by [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md). |
+| [0001](0001-flat-top-level-layout.md) | Flat top-level layout | Accepted |
+| [0002](0002-java-package-rename-to-aet-cit-tum.md) | Rename Java base package to `de.tum.cit.aet.hephaestus` | Accepted |
+| [0003](0003-spring-modulith-adoption.md) | Spring Modulith 2.0 adoption with two empirical shared kernels | Superseded by [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | [0004](0004-sql-layer-tenancy-via-statement-inspector.md) | SQL-layer tenancy enforcement via WorkspaceStatementInspector | Accepted |
-| [0005](0005-two-role-runtime-via-conditional-on-property.md) | Two-role runtime topology via `@ConditionalOnProperty` | Accepted (amended 2026-05-20 #1110 — webhook role wired; 2026-07-20 #1368 — proxy capability flag removed; 2026-07-21 #1368 — agent queue moved to PostgreSQL; 2026-07-22 #1368 — what the worker gate covers; 2026-08-22 — role-scoped settings gate; 2026-09-03 #1719 — role deferral superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-10-14 — job table and classes renamed; 2026-10-01 #1158 — server-only application server; 2026-10-09 — Heph host on the worker, [0057](0057-one-heph-conversation-per-developer.md); 2026-10-28 — one sandbox runtime for reviews and Heph, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md); 2026-11-09 — the worker role goes, [0079](0079-one-agent-system.md); 2026-11-10 — the webhook role goes, [0080](0080-provider-events-go-to-a-postgresql-inbox.md)) |
-| [0006](0006-llm-proxy-on-coordinator-trust-model.md) | LLM proxy stays on the coordinator (BYO trust model) | Accepted (amended 2026-07-20 #1368 — proxy follows the worker gate; 2026-07-28 #1400 — governed provider catalog; 2026-09-03 #1719 — Decision superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — Heph host credential and admission, [0057](0057-one-heph-conversation-per-developer.md); 2026-11-09 — the proxy runs in the server, [0079](0079-one-agent-system.md)) |
-| [0007](0007-sandbox-spi-shape.md) | Sandbox SPI shape — sealed VolumeMount + typed NetworkPolicy | Accepted (amended 2026-09-03 #1719 — mount portability superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — interactive SPI replaced by `HostSandbox`, [0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — one attempt runner over a narrow backend; 2026-10-28 — Jobs only, `HostSandbox` goes, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md); 2026-11-09 — superseded by [0079](0079-one-agent-system.md): one agent-sandbox claim for each subject) |
-| [0008](0008-webhook-runtime-role.md) | Webhook as a third runtime role (`webhook-server` container) | Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected; 2026-09-26 — the loss counter is withdrawn; 2026-10-09 — mentor schedulers, [0057](0057-one-heph-conversation-per-developer.md); 2026-10-26 — no database, [0066](0066-the-webhook-receiver-has-no-database.md); 2026-10-27 — one publish deadline; 2026-11-10 — superseded by [0080](0080-provider-events-go-to-a-postgresql-inbox.md)) |
-| [0009](0009-worker-runtime-substrate-wss-control-channel.md) | Worker runtime substrate + WSS-over-443 control channel | Accepted (amended 2026-07-21 #1368 — drain requeues in-flight jobs; 2026-09-03 #1719 — remote-worker premise superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — frame type names corrected; 2026-10-14 — job table and classes renamed; 2026-10-09 — mentor frames removed, correction of the 2026-09-05 note, [0057](0057-one-heph-conversation-per-developer.md); 2026-10-28 — WSS control channel superseded, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)) |
-| [0010](0010-outbound-oauth-state-handrolled.md) | Hand-roll OAuth state for outbound per-workspace integrations | Accepted (amended 2026-05-30 — PKCE primitive removed) |
+| [0005](0005-two-role-runtime-via-conditional-on-property.md) | Two-role runtime topology via `@ConditionalOnProperty` | Accepted |
+| [0006](0006-llm-proxy-on-coordinator-trust-model.md) | LLM proxy stays on the coordinator (BYO trust model) | Accepted |
+| [0007](0007-sandbox-spi-shape.md) | Sandbox SPI shape — sealed VolumeMount + typed NetworkPolicy | Superseded by [0079](0079-one-agent-system.md) |
+| [0008](0008-webhook-runtime-role.md) | Webhook as a third runtime role (`webhook-server` container) | Accepted |
+| [0009](0009-worker-runtime-substrate-wss-control-channel.md) | Worker runtime substrate + WSS-over-443 control channel | Accepted |
+| [0010](0010-outbound-oauth-state-handrolled.md) | Hand-roll OAuth state for outbound per-workspace integrations | Accepted |
 | [0011](0011-integration-identity-not-wired-from-sync.md) | `integration_identity` is OAuth-fed, not sync-fed (tombstone) | Superseded by [0016](0016-unified-identity-keycloak-as-truth.md) |
-| [0012](0012-cross-instance-identity-safety-on-sync-paths.md) | Cross-instance identity safety on sync paths | Accepted (amended 2026-09-17 — definitive-404 removal narrowed by [0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md)) |
-| [0013](0013-no-jetstream-dlq-stream.md) | No dedicated JetStream DLQ stream — poison handler ACKs after N redeliveries | Accepted (amended 2026-10-30 — unlimited transient retries and metadata-only replay records, #3463) |
-| [0014](0014-per-row-aes-gcm-aad-binding.md) | Per-row AES-GCM AAD binds ciphertext to record identity | Accepted (amended 2026-09-17 — key rotation realised with a per-row key version) |
-| [0015](0015-unified-integration-framework.md) | Unified integration framework — package layout and SPI surface | Accepted (amended 2026-05-27 for Phase 1-4 restructure; 2026-09-17 — names and paths corrected) |
+| [0012](0012-cross-instance-identity-safety-on-sync-paths.md) | Cross-instance identity safety on sync paths | Accepted |
+| [0013](0013-no-jetstream-dlq-stream.md) | No dedicated JetStream DLQ stream — poison handler ACKs after N redeliveries | Accepted |
+| [0014](0014-per-row-aes-gcm-aad-binding.md) | Per-row AES-GCM AAD binds ciphertext to record identity | Accepted |
+| [0015](0015-unified-integration-framework.md) | Unified integration framework — package layout and SPI surface | Accepted |
 | [0016](0016-unified-identity-keycloak-as-truth.md) | Unified identity — SCM `User` is the authoritative person row, Keycloak `sub` is the persisted join key | Superseded by [0017](0017-replace-keycloak-with-spring-native-auth.md) |
-| [0017](0017-replace-keycloak-with-spring-native-auth.md) | Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs) | Accepted (amended — Stage B-2 login model; read-only user views; data model corrected against the schema; installed clients by [ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md)); superseded in part 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md) |
-| [0018](0018-pg-partman-for-auth-event-partitioning.md) | pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions) | Accepted (PostgreSQL version superseded by [0038](0038-postgresql-18-release-baseline.md); amended 2026-09-17 — image name and changeset location; 2026-10-25 — `pg_stat_statements` preloaded) |
-| [0019](0019-workspace-membership-keyed-on-account.md) | Workspace membership is keyed on `Account`, not the SCM `User` | Proposed; superseded in part 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md) |
-| [0020](0020-context-fabric-everything-is-an-integration.md) | Context Fabric — everything is an integration, only practice review and mentor are native | Accepted (amended 2026-08-04 #1430 — artifact-source contract shipped; 2026-08-30 #1636 — filesystem evidence store superseded by [ADR 0039](0039-git-and-postgresql-own-evidence.md); 2026-09-03 #1719 — filesystem layout superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — shipped slice corrected against the code); superseded in part 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md) |
-| [0021](0021-observations-feedback-synthesis-seam.md) | Separate observations from feedback | Accepted (amended 2026-07-31 #1423, 2026-08-18 #1444 — rewritten in place; refined by [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md) and [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md)); superseded 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md) |
-| [0022](0022-observation-presence-assessment-and-schema-cleanup.md) | Observation = presence × assessment (drop `Practice.kind`); reaction anchors on feedback; ruthless column cleanup | Accepted (observation semantics amended before 1.0; 2026-09-17 — channel value corrected); superseded 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md) |
-| [0023](0023-outline-documentation-integration.md) | Outline documentation integration — a content source, not a detection surface | Accepted (amended 2026-08-08 — a document is a reviewable artifact; 2026-10-26 — route-derived signing secret, [0066](0066-the-webhook-receiver-has-no-database.md)) |
-| [0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md) | Integration sync lifecycle — drift tombstones and mirror erasure are two different operations | Accepted (amended 2026-09-03 #1404 — who may read a tombstoned row; 2026-09-04 #1806 — re-offered signals are held; 2026-09-05 #1825 — live occasions take the same hold; 2026-09-05 #1404 — capture and the non-SCM kinds; 2026-09-17 — Outline resubmitter recorded) |
-| [0025](0025-agent-job-queue-on-postgresql.md) | Agent job queue moves off NATS onto PostgreSQL | Accepted (amended 2026-10-14 — job table and classes renamed; 2026-11-09 — one run table, a NOTIFY wake and an epoch fence, [0079](0079-one-agent-system.md)) |
-| [0026](0026-per-purpose-agent-bindings-and-llm-governance.md) | Per-purpose agent bindings and governed OpenAI-compatible LLM catalog | Accepted (amended 2026-07-26 — named-agent-config model deleted; 2026-10-14 — job table and classes renamed; 2026-09-22 — member AI choice is per account, and the tiers collapse to in-house and cloud from one declared fact; 2026-10-09 — Heph turn accounting, [0057](0057-one-heph-conversation-per-developer.md); 2026-11-09 — the server holds the keys and admits turns, [0079](0079-one-agent-system.md); 2026-11-10 — the purposes for practice scripts are gone) |
+| [0017](0017-replace-keycloak-with-spring-native-auth.md) | Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs) | Accepted |
+| [0018](0018-pg-partman-for-auth-event-partitioning.md) | pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions) | Accepted |
+| [0019](0019-workspace-membership-keyed-on-account.md) | Workspace membership is keyed on `Account`, not the SCM `User` | Accepted |
+| [0020](0020-context-fabric-everything-is-an-integration.md) | Context Fabric — everything is an integration, only practice review and mentor are native | Accepted |
+| [0021](0021-observations-feedback-synthesis-seam.md) | Separate observations from feedback | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
+| [0022](0022-observation-presence-assessment-and-schema-cleanup.md) | Observation = presence × assessment (drop `Practice.kind`); reaction anchors on feedback; ruthless column cleanup | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
+| [0023](0023-outline-documentation-integration.md) | Outline documentation integration — a content source, not a detection surface | Accepted |
+| [0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md) | Integration sync lifecycle — drift tombstones and mirror erasure are two different operations | Accepted |
+| [0025](0025-agent-job-queue-on-postgresql.md) | Agent job queue moves off NATS onto PostgreSQL | Accepted |
+| [0026](0026-per-purpose-agent-bindings-and-llm-governance.md) | Per-purpose agent bindings and governed OpenAI-compatible LLM catalog | Accepted |
 | [0027](0027-dialog-lifetime-and-where-a-write-outcome-lands.md) | Dialog lifetime, and where a write's outcome lands when the dialog is gone | Accepted |
 | [0028](0028-source-synced-practice-catalog.md) | Source-synced practice catalog with sparse instance overrides | Accepted |
-| [0029](0029-measurement-intervention-seam-and-channel-levels.md) | Separate measurement from intervention and derive level from channel | Accepted (amended 2026-09-17 — `basedOn` names this run's observations only); superseded 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md); amended 2026-10-26 by [0061](0061-review-seals-then-feedback-composes.md) |
+| [0029](0029-measurement-intervention-seam-and-channel-levels.md) | Separate measurement from intervention and derive level from channel | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
 | [0030](0030-agent-runtime-is-typescript-on-bun.md) | The agent runtime is TypeScript on Bun, with no Node in the sandbox | Superseded by [0036](0036-agent-runtime-runs-on-node-24.md) |
 | [0031](0031-agent-image-follows-the-deployments-own-tag.md) | The agent image reference follows the deployment's own image tag | Superseded by [0034](0034-signed-release-image-lock.md) |
-| [0032](0032-generated-clients-build-boundary.md) | Generated clients have an independent build boundary | Ownership boundary accepted; Maven mechanism superseded by [0043](0043-gradle-java-build.md) |
-| [0033](0033-bun-is-the-javascript-runtime-and-package-manager.md) | Bun is the JavaScript runtime and package manager | Superseded by [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md). |
-| [0034](0034-signed-release-image-lock.md) | Production consumes one signed release image lock | Accepted (amended 2026-09-03 #1719 — 2.0 lock inventory from [0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — operator toolchain superseded by [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md); 2026-10-25 — the chart lock moves to 1.0, [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md)) |
-| [0035](0035-pull-request-previews-are-label-gated.md) | Pull request previews are label-gated and driven from the default branch | Accepted (amended 2026-09-03 #1719 — agent execution host superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — previews only for pull requests targeting `main`, and the concurrency groups; 2026-10-25 — the Coolify preview path goes, [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md); 2026-10-25 — mechanism superseded by [0059](0059-previews-run-on-the-staging-cluster.md)) |
-| [0036](0036-agent-runtime-runs-on-node-24.md) | Agent runtime runs on Node.js 24 with bounded resources | Accepted (amended 2026-09-17 — the image installs the SDK with pnpm; 2026-10-09 — each practice script runs in its own process without the child-process grant; 2026-10-09 — Heph host replaces the mentor runner, [0057](0057-one-heph-conversation-per-developer.md)). Supersedes [0030](0030-agent-runtime-is-typescript-on-bun.md) for the sandbox image. Repository tooling is governed by [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md), which superseded [0033](0033-bun-is-the-javascript-runtime-and-package-manager.md). |
-| [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) | Node.js 24 and pnpm 12 are the JavaScript toolchain | Accepted (amended 2026-09-03 — [0040](0040-vite-plus-is-the-command-surface.md) makes Vite+ the command surface; 2026-09-17 — the pins have moved) |
+| [0032](0032-generated-clients-build-boundary.md) | Generated clients have an independent build boundary | Accepted |
+| [0033](0033-bun-is-the-javascript-runtime-and-package-manager.md) | Bun is the JavaScript runtime and package manager | Superseded by [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) |
+| [0034](0034-signed-release-image-lock.md) | Production consumes one signed release image lock | Accepted |
+| [0035](0035-pull-request-previews-are-label-gated.md) | Pull request previews are label-gated and driven from the default branch | Accepted |
+| [0036](0036-agent-runtime-runs-on-node-24.md) | Agent runtime runs on Node.js 24 with bounded resources | Accepted |
+| [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) | Node.js 24 and pnpm 12 are the JavaScript toolchain | Accepted |
 | [0038](0038-postgresql-18-release-baseline.md) | PostgreSQL 18 is the only supported major version | Accepted |
-| [0039](0039-git-and-postgresql-own-evidence.md) | Git owns repository evidence; PostgreSQL owns captured payloads and references | Accepted (amended 2026-09-03 #1719 — publication, durability and materialization superseded by [0041](0041-compose-1x-kubernetes-2.md)) |
-| [0040](0040-vite-plus-is-the-command-surface.md) | Vite+ is the command surface; pnpm stays the package manager | Accepted (amended 2026-09-17 — how `prepare` enables the hooks) |
-| [0041](0041-compose-1x-kubernetes-2.md) | Compose for 1.x; Kubernetes only for 2.0 (§ Releases and support superseded by [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md)) | Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — the Kubernetes runtime; 2026-10-25 — Helm chart support and 1.x security fixes; 2026-10-25 — § Releases and support superseded by [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md); 2026-10-26 — the Kubernetes floor, [0060](0060-the-kubernetes-floor-follows-upstream-support.md); 2026-10-28 — one sandbox runtime for reviews and Heph, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)) |
-| [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Accepted. Replaces the CI-driven SSH push deployment, which no ADR had recorded; the release evidence and image-lock decisions it builds on ([0034](0034-signed-release-image-lock.md)) are unchanged. Amended 2026-10-25 — the apply step becomes `helm upgrade`, [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md). Amended 2026-10-26 — the project's own host operations live outside the product repository. |
+| [0039](0039-git-and-postgresql-own-evidence.md) | Git owns repository evidence; PostgreSQL owns captured payloads and references | Accepted |
+| [0040](0040-vite-plus-is-the-command-surface.md) | Vite+ is the command surface; pnpm stays the package manager | Accepted |
+| [0041](0041-compose-1x-kubernetes-2.md) | Compose for 1.x; Kubernetes only for 2.0 | Accepted |
+| [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Accepted |
 | [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
-| [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Accepted (amended 2026-11-09 — email delivery state in the action outbox, [0079](0079-one-agent-system.md)) |
-| [0045](0045-activity-counts-work-and-never-ranks-people.md) | Activity counts and lists work; it never scores or ranks people | Accepted (amended 2026-10-09 — sorting, the Contributions total and the public page superseded by [0052](0052-activity-sorts-by-contributions-and-can-be-public.md)) |
+| [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Accepted |
+| [0045](0045-activity-counts-work-and-never-ranks-people.md) | Activity counts and lists work; it never scores or ranks people | Accepted |
 | [0046](0046-heph-follows-its-model-not-a-workspace-switch.md) | Heph follows its model, not a workspace switch | Accepted |
 | [0047](0047-the-practice-profile-has-one-reader.md) | The Practice profile has one reader | Accepted |
-| [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) | Installed clients sign in with a PKCE handoff to their own revocable session | Accepted. Amends [0017](0017-replace-keycloak-with-spring-native-auth.md) for clients that cannot hold the cookie. |
-| [0049](0049-browser-extension-report-in-the-page.md) | The browser extension shows its report in the page and confirms changes in its own window | Accepted (amended 2026-10-12 — a not met result names its problems) |
-| [0050](0050-one-practice-standard-one-outcome.md) | One practice standard, one outcome | Accepted; superseded in part 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md) |
-| [0051](0051-practices-across-the-workspace-counts-developers.md) | Practices across the workspace counts developers and never names one | Accepted (amended 2026-10-07 — no smallest count; 2026-10-09 — stays out of sorting and the public page; 2026-10-26 — a work change keeps the live review, [0065](0065-standing-counts-the-newest-observation-of-each-item.md)). Builds on [0045](0045-activity-counts-work-and-never-ranks-people.md) and [0047](0047-the-practice-profile-has-one-reader.md). |
-| [0052](0052-activity-sorts-by-contributions-and-can-be-public.md) | Workspace activity sorts people by plain counts, and a workspace can publish it | Accepted. Supersedes parts of [0045](0045-activity-counts-work-and-never-ranks-people.md). |
-| [0053](0053-workspace-addresses-are-a-presentation-origin.md) | A workspace address is a presentation origin, and sign-in stays on the apex | Accepted. Builds on [0017](0017-replace-keycloak-with-spring-native-auth.md) and [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md). |
+| [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) | Installed clients sign in with a PKCE handoff to their own revocable session | Accepted |
+| [0049](0049-browser-extension-report-in-the-page.md) | The browser extension shows its report in the page and confirms changes in its own window | Accepted |
+| [0050](0050-one-practice-standard-one-outcome.md) | One practice standard, one outcome | Accepted |
+| [0051](0051-practices-across-the-workspace-counts-developers.md) | Practices across the workspace counts developers and never names one | Accepted |
+| [0052](0052-activity-sorts-by-contributions-and-can-be-public.md) | Workspace activity sorts people by plain counts, and a workspace can publish it | Accepted |
+| [0053](0053-workspace-addresses-are-a-presentation-origin.md) | A workspace address is a presentation origin, and sign-in stays on the apex | Accepted |
 | [0054](0054-practice-visuals-and-guides.md) | Practice visuals and guides are themeable inline SVG and Markdown | Accepted |
-| [0055](0055-practice-scripts-use-one-result-contract.md) | Practice scripts use one result contract | Accepted. Updated 2026-11-10: public scripts declare no models. |
-| [0056](0056-one-practice-model-for-items-and-scans.md) | One practice model for items and scans | Accepted (amended 2026-10-26 — [0062](0062-the-item-is-the-review-scope.md), [0063](0063-each-practice-is-staged-when-it-ends.md); 2026-10-28 — currentness by source fingerprints, [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md)) |
-| [0057](0057-one-heph-conversation-per-developer.md) | One Heph conversation per developer, on a stateless shared Heph host | Accepted (amended 2026-10-28 — Heph's host and turn sandbox superseded, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md); 2026-11-09 — turn lease, usage, Slack post and digest, [0079](0079-one-agent-system.md)). Amends 0005, 0006, 0007, 0008, 0009, 0026, 0036 and 0041. |
-| [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) | The Helm chart is the only supported deployment from 1.0 | Accepted (amended 2026-10-25 — previews, [0059](0059-previews-run-on-the-staging-cluster.md); 2026-10-28 — Docker sandbox driver goes before 1.0, no operator, [0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)). Supersedes 0041 § Releases and support. Amends 0034, 0035 and 0042. |
-| [0059](0059-previews-run-on-the-staging-cluster.md) | Previews run on the staging cluster | Accepted. Supersedes the mechanism of 0035 and keeps its label policy. Amends 0058. |
-| [0060](0060-the-kubernetes-floor-follows-upstream-support.md) | The Kubernetes floor follows upstream support | Accepted (amended 2026-10-28 — sandbox nodes need user namespaces, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)). Amends 0041 § Deployment (the floor). |
-| [0061](0061-review-seals-then-feedback-composes.md) | A practice review seals its results, then feedback is composed | Accepted. Amends 0029. Amended 2026-10-28 by [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md): the feedback composer works with tools. Superseded in part 2026-11-09 by [0079](0079-one-agent-system.md): composition is a run in the review sandbox. |
-| [0062](0062-the-item-is-the-review-scope.md) | The item is the review scope | Accepted. Builds on 0056. Amended 2026-10-28 by [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md): readiness per practice and freshness by source. |
-| [0063](0063-each-practice-is-staged-when-it-ends.md) | Each practice is staged when it ends, and the review seals once | Accepted. Builds on 0058 and 0061. Amended 2026-10-28 by [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md): freshness at the seal. Superseded in part 2026-11-09 by [0079](0079-one-agent-system.md): the run fence. |
-| [0064](0064-one-evidence-contract-for-every-producer.md) | One evidence contract for every result producer | Accepted. Builds on 0055. |
-| [0065](0065-standing-counts-the-newest-observation-of-each-item.md) | Standing counts the newest observation of each item | Accepted. Amends 0056. |
-| [0066](0066-the-webhook-receiver-has-no-database.md) | The webhook receiver has no database | Accepted. Amends 0008 and 0023. Superseded 2026-11-10 by [0080](0080-provider-events-go-to-a-postgresql-inbox.md). |
-| [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted (2026-05-19). Moved from the contributor docs. |
-| [0068](0068-reviews-and-heph-run-on-one-agent-runtime.md) | Reviews and Heph run on one agent runtime | Accepted (2026-10-28). Supersedes 0057 § The Heph host and § Context folder and turn sandbox, and the WSS control channel of 0009. Amends 0005, 0007, 0041, 0058 and 0060. Superseded in part 2026-11-09 by [0079](0079-one-agent-system.md): the placement. |
-| [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) | Practices run when they are ready and stay current by their sources | Accepted (2026-10-28). Amends 0056, 0061, 0062 and 0063. Superseded in part 2026-11-09 by [0079](0079-one-agent-system.md): the composer runs in the review sandbox. |
-| [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Accepted (2026-10-28; amended 2026-10-28 — lease recovery requeues the claimed reviews). Amends 0005, 0041, 0042 and 0058. Amended 2026-11-09 by [0079](0079-one-agent-system.md): no worker in the cutover steps. Amended 2026-11-10: the webhook role stops in the cutover too. |
-| [0071](0071-every-user-visible-failure-is-observable.md) | Every user-visible failure is observable, through one first-party pipeline | Accepted (2026-10-31). |
-| [0072](0072-few-dependencies-owned-slivers-kept-foundations.md) | Few dependencies — own a sliver, keep a foundation | Accepted (2026-10-31). |
-| [0073](0073-product-feedback-is-worked-on-in-github.md) | Product feedback is worked on in GitHub | Accepted (2026-10-31). Relates to 0025, 0026 and 0068. Superseded in part 2026-11-09 by [0079](0079-one-agent-system.md): filing is an outbox action. |
-| [0074](0074-a-reviews-width-and-count-follow-the-provider.md) | A review's width and count follow the provider | Accepted (2026-11-02). Amends 0068 and 0069. Superseded in part 2026-11-09 by [0079](0079-one-agent-system.md): no worker, one capacity home. Updated 2026-11-10: 170 calls and 680 requests per minute without direct script calls. |
-| [0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) | A transaction is one use case and talks to nothing | Accepted (2026-11-03). Builds on 0003 and 0044. Relates to 0076. |
-| [0076](0076-reads-are-shaped-like-the-screen.md) | Reads are shaped like the screen, entities are for writes | Accepted (2026-11-03). Relates to 0072 and 0075. |
-| [0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md) | Provider mirrors are shared, and the monitored scope isolates them | Accepted (2026-11-04). Amends 0004. |
-| [0078](0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md) | Lifecycles are explicit, and rigor follows the damage | Accepted (2026-11-06) |
-| [0079](0079-one-agent-system.md) | One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain | Accepted (2026-11-09). Supersedes 0007, and parts of 0005, 0006, 0025, 0026, 0044, 0057, 0061, 0063, 0068, 0069, 0073 and 0074. Amends 0070. Amended 2026-11-10 by [0080](0080-provider-events-go-to-a-postgresql-inbox.md). |
-| [0080](0080-provider-events-go-to-a-postgresql-inbox.md) | Provider events go to a PostgreSQL inbox, and the server receives them | Accepted (2026-11-10). Supersedes 0066, and parts of 0005 and 0008. Amends 0079. |
-| [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) | Each module owns its aggregates, declares its dependencies, and changes a lifecycle only through the aggregate | Accepted (2026-11-12). Supersedes 0003. |
-| [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted (2026-11-11). Amends 0080. |
+| [0055](0055-practice-scripts-use-one-result-contract.md) | Practice scripts use one result contract | Accepted |
+| [0056](0056-one-practice-model-for-items-and-scans.md) | One practice model for items and scans | Accepted |
+| [0057](0057-one-heph-conversation-per-developer.md) | One Heph conversation per developer, on a stateless shared Heph host | Accepted |
+| [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) | The Helm chart is the only supported deployment from 1.0 | Accepted |
+| [0059](0059-previews-run-on-the-staging-cluster.md) | Previews run on the staging cluster | Accepted |
+| [0060](0060-the-kubernetes-floor-follows-upstream-support.md) | The Kubernetes floor follows upstream support | Accepted |
+| [0061](0061-review-seals-then-feedback-composes.md) | A practice review seals its results, then feedback is composed | Accepted |
+| [0062](0062-the-item-is-the-review-scope.md) | The item is the review scope | Accepted |
+| [0063](0063-each-practice-is-staged-when-it-ends.md) | Each practice is staged when it ends, and the review seals once | Accepted |
+| [0064](0064-one-evidence-contract-for-every-producer.md) | One evidence contract for every result producer | Accepted |
+| [0065](0065-standing-counts-the-newest-observation-of-each-item.md) | Standing counts the newest observation of each item | Accepted |
+| [0066](0066-the-webhook-receiver-has-no-database.md) | The webhook receiver has no database | Superseded by [0080](0080-provider-events-go-to-a-postgresql-inbox.md) |
+| [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted |
+| [0068](0068-reviews-and-heph-run-on-one-agent-runtime.md) | Reviews and Heph run on one agent runtime | Accepted |
+| [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) | Practices run when they are ready and stay current by their sources | Accepted |
+| [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Accepted |
+| [0071](0071-every-user-visible-failure-is-observable.md) | Every user-visible failure is observable, through one first-party pipeline | Accepted |
+| [0072](0072-few-dependencies-owned-slivers-kept-foundations.md) | Few dependencies — own a sliver, keep a foundation | Accepted |
+| [0073](0073-product-feedback-is-worked-on-in-github.md) | Product feedback is worked on in GitHub | Accepted |
+| [0074](0074-a-reviews-width-and-count-follow-the-provider.md) | A review's width and count follow the provider | Accepted |
+| [0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) | A transaction is one use case and talks to nothing | Accepted |
+| [0076](0076-reads-are-shaped-like-the-screen.md) | Reads are shaped like the screen, entities are for writes | Accepted |
+| [0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md) | Provider mirrors are shared, and the monitored scope isolates them | Accepted |
+| [0078](0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md) | Lifecycles are explicit, and rigor follows the damage | Accepted |
+| [0079](0079-one-agent-system.md) | One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain | Accepted |
+| [0080](0080-provider-events-go-to-a-postgresql-inbox.md) | Provider events go to a PostgreSQL inbox, and the server receives them | Accepted |
+| [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) | Each module owns its aggregates, declares its dependencies, and changes a lifecycle only through the aggregate | Accepted |
+| [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
 
 Template: [0000-template.md](0000-template.md).

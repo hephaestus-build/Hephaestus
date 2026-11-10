@@ -1,8 +1,6 @@
 # ADR 0033: Bun is the JavaScript runtime and package manager
 
-## Status
-
-Superseded by [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md).
+**Status:** Superseded by [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md)
 
 ## Context
 

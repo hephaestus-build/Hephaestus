@@ -1,6 +1,6 @@
 # ADR 0041: Compose for 1.x; Kubernetes only for 2.0
 
-**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [the Kubernetes runtime](#update--2026-10-24-the-kubernetes-runtime); 2026-10-25 — Helm chart support and 1.x security fixes; 2026-10-25 — § Releases and support superseded by [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md); 2026-10-28 — one sandbox runtime for reviews and Heph, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+**Status:** Accepted
 **Date:** 2026-09-03
 **Authors:** Hephaestus maintainers
 **Amends:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md),
@@ -10,6 +10,7 @@
 [ADR 0034](0034-signed-release-image-lock.md),
 [ADR 0035](0035-pull-request-previews-are-label-gated.md), and
 [ADR 0039](0039-git-and-postgresql-own-evidence.md)
+**Amended by:** [ADR 0057](0057-one-heph-conversation-per-developer.md), [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md), [ADR 0060](0060-the-kubernetes-floor-follows-upstream-support.md), [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)
 
 ## Context
 

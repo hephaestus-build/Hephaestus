@@ -1,9 +1,10 @@
 # ADR 0035: Pull request previews are label-gated and driven from the default branch
 
-**Status:** Accepted (amended 2026-09-03 #1719 — agent execution host superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — previews only for pull requests targeting `main`, and the concurrency groups; 2026-10-16 — stacked previews restored; 2026-10-18 — pushes deploy on CI completion; 2026-10-25 — the Coolify preview path goes, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md), and the mechanism is superseded by [ADR 0059](0059-previews-run-on-the-staging-cluster.md))
+**Status:** Accepted
 **Date:** 2026-08-28
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) (the runtime the controller is written for)
+**Amended by:** [ADR 0041](0041-compose-1x-kubernetes-2.md), [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md), [ADR 0059](0059-previews-run-on-the-staging-cluster.md)
 
 ## Context
 

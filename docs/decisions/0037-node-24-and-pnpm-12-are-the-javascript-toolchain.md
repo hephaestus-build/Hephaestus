@@ -1,9 +1,10 @@
 # ADR 0037: Node.js 24 and pnpm 12 are the JavaScript toolchain
 
-**Status:** Accepted (amended 2026-09-03 — [0040](0040-vite-plus-is-the-command-surface.md) makes Vite+ the command surface; 2026-09-17 — the pins have moved)
+**Status:** Accepted
 **Date:** 2026-08-30
 **Supersedes:** [ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md)
 **Builds on:** [ADR 0036](0036-agent-runtime-runs-on-node-24.md), which moved the sandbox runtime first
+**Amended by:** [ADR 0040](0040-vite-plus-is-the-command-surface.md)
 
 ## Context
 

@@ -1,8 +1,6 @@
 # ADR 0038: PostgreSQL 18 is the only supported major version
 
-## Status
-
-Accepted
+**Status:** Accepted
 
 ## Context
 

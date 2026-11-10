@@ -1,6 +1,6 @@
 # ADR 0079: One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain
 
-**Status:** Accepted (2026-11-09). Amended 2026-11-09: [outbox erasure](#update--2026-11-09-erasure-deletes-the-actions-of-an-account), [sandbox token](#update--2026-11-09-a-tool-may-hold-the-sandbox-token), [run kinds](#update--2026-11-09-the-review-run-kinds-are-review-and-review_compose), [no NATS or webhook role](#update--2026-11-10-provider-events-go-to-a-postgresql-inbox).
+**Status:** Accepted
 **Date:** 2026-11-09
 **Authors:** Felix T.J. Dietrich
 

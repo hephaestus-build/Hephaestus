@@ -1,6 +1,6 @@
 # ADR 0080: Provider events go to a PostgreSQL inbox, and the server receives them
 
-**Status:** Accepted (2026-11-10)
+**Status:** Accepted
 **Date:** 2026-11-10
 **Authors:** Felix T.J. Dietrich
 **Supersedes:** [ADR 0066](0066-the-webhook-receiver-has-no-database.md). Parts of [ADR 0008](0008-webhook-runtime-role.md) (the webhook role and JetStream) and [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md) (the role list).

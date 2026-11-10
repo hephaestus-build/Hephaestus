@@ -1,6 +1,6 @@
 # ADR 0100: The server serves the web app
 
-**Status:** Accepted (2026-11-11)
+**Status:** Accepted
 **Date:** 2026-11-11
 **Authors:** Felix T.J. Dietrich
 

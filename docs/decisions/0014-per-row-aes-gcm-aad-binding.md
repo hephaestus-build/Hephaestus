@@ -1,6 +1,6 @@
 # ADR 0014: Per-row AES-GCM AAD binds ciphertext to record identity
 
-**Status:** Accepted (amended 2026-09-17 — key rotation realised with a per-row key version)
+**Status:** Accepted
 **Date:** 2026-05-25
 
 ## Context
