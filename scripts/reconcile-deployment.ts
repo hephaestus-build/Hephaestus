@@ -68,6 +68,8 @@ export interface AppliedState {
 	commit?: string;
 	/** The last other release this host ran, whose tree pruning keeps for a rollback. */
 	previous?: string;
+	/** {@link valuesDigest} of the site values and profiles the release was last applied with; absent in records written earlier. */
+	valuesDigest?: string;
 }
 
 export type Decision =
@@ -226,6 +228,27 @@ function isAppliedRequest(
 		: applied.channelIdentity === channelIdentity;
 }
 
+/** Whether the host already runs what the channel and the site values ask for. */
+function runsAlready(
+	channel: Channel,
+	applied: AppliedState | undefined,
+	channelCommit: string,
+	channelIdentity: string,
+	valuesChanged: boolean,
+): boolean {
+	// A new request naming the release already applied is a re-promotion, and re-applying is how a
+	// host that was hand-patched during an incident converges. A freeze only keeps automatic
+	// promotion away, so freezing what already runs asks the host for nothing, unless the same
+	// request also asks for the commit's database image. Changed site values are the operator's own
+	// request to this host, so they re-apply the running release even on an unchanged or frozen channel.
+	const freezesWhatRuns = channel.freeze === true && channel.refreshDatabaseImage !== true;
+	return (
+		applied?.release === channel.release &&
+		!valuesChanged &&
+		(freezesWhatRuns || isAppliedRequest(applied, channelCommit, channelIdentity))
+	);
+}
+
 export function decide(
 	channel: Channel,
 	applied: AppliedState | undefined,
@@ -235,6 +258,8 @@ export function decide(
 	advances: boolean,
 	/** Whether what the channel asks for is behind what is already running. */
 	targetPrecedesApplied = false,
+	/** Whether the site values or profiles differ from those the running release was applied with. */
+	valuesChanged = false,
 ): Decision {
 	if (applied && channelCommit !== applied.channelCommit && !advances) {
 		return {
@@ -242,15 +267,7 @@ export function decide(
 			reason: `channel commit ${channelCommit.slice(0, 8)} does not descend from the last accepted channel`,
 		};
 	}
-	// A new request naming the release already applied is a re-promotion, and re-applying is how a
-	// host that was hand-patched during an incident converges. A freeze only keeps automatic
-	// promotion away, so freezing what already runs asks the host for nothing, unless the same
-	// request also asks for the commit's database image.
-	const freezesWhatRuns = channel.freeze === true && channel.refreshDatabaseImage !== true;
-	if (
-		applied?.release === channel.release &&
-		(freezesWhatRuns || isAppliedRequest(applied, channelCommit, channelIdentity))
-	) {
+	if (runsAlready(channel, applied, channelCommit, channelIdentity, valuesChanged)) {
 		return { action: "noop", reason: `already running ${channel.release}` };
 	}
 	// Two builds of the default branch can finish out of order, and the later-finishing older build
@@ -430,6 +447,32 @@ export function chartSettings(environment: NodeJS.ProcessEnv): ChartSettings {
 	return settings;
 }
 
+/**
+ * The operator's inputs to the chart that do not come with a release: the site values and the profile
+ * names. A release's own files, images and chart change with the release, which the channel orders.
+ */
+export function valuesDigest(settings: ChartSettings, siteValues: string): string {
+	const site = createHash("sha256").update(siteValues).digest("hex");
+	return createHash("sha256")
+		.update(JSON.stringify({ profiles: settings.profiles, site }))
+		.digest("hex");
+}
+
+async function readSiteValuesDigest(config: HostConfig): Promise<string | undefined> {
+	try {
+		return valuesDigest(config.chart, await readFile(siteValuesPath(config), "utf8"));
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return undefined;
+		}
+		throw error;
+	}
+}
+
+function siteValuesPath(config: HostConfig): string {
+	return path.join(config.secretsDirectory, "chart.yaml");
+}
+
 /** The release tree's values file of each profile, in order; a profile the tree lacks is refused. */
 export async function profileFiles(
 	settings: ChartSettings,
@@ -526,6 +569,33 @@ function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
 	};
 }
 
+function checkApplied(applied: AppliedState): void {
+	if (!isTarget(applied.release)) {
+		throw new Error("applied.release must be a vX.Y.Z tag or a commit");
+	}
+	if (!isCommit(applied.channelCommit)) {
+		throw new Error("applied.channelCommit must be a Git commit");
+	}
+	if (applied.channelIdentity !== undefined && !SHA256_HEX.test(applied.channelIdentity)) {
+		throw new Error("applied.channelIdentity must be a SHA-256 digest");
+	}
+	if (applied.commit !== undefined && !isCommit(applied.commit)) {
+		throw new Error("applied.commit must be a Git commit");
+	}
+	if (applied.previous !== undefined && !isTarget(applied.previous)) {
+		throw new Error("applied.previous must be a vX.Y.Z tag or a commit");
+	}
+	if (applied.valuesDigest !== undefined && !SHA256_HEX.test(applied.valuesDigest)) {
+		throw new Error("applied.valuesDigest must be a SHA-256 digest");
+	}
+	if (
+		!Number.isFinite(Date.parse(applied.appliedAt)) ||
+		new Date(applied.appliedAt).toISOString() !== applied.appliedAt
+	) {
+		throw new Error("applied.appliedAt must be an ISO timestamp");
+	}
+}
+
 export async function readApplied(file: string): Promise<AppliedState | undefined> {
 	try {
 		const record = asRecord(await readJsonFile(file), "applied state");
@@ -540,28 +610,11 @@ export async function readApplied(file: string): Promise<AppliedState | undefine
 			...(record.previous === undefined
 				? {}
 				: { previous: asString(record.previous, "applied.previous") }),
+			...(record.valuesDigest === undefined
+				? {}
+				: { valuesDigest: asString(record.valuesDigest, "applied.valuesDigest") }),
 		};
-		if (!isTarget(applied.release)) {
-			throw new Error("applied.release must be a vX.Y.Z tag or a commit");
-		}
-		if (!isCommit(applied.channelCommit)) {
-			throw new Error("applied.channelCommit must be a Git commit");
-		}
-		if (applied.channelIdentity !== undefined && !SHA256_HEX.test(applied.channelIdentity)) {
-			throw new Error("applied.channelIdentity must be a SHA-256 digest");
-		}
-		if (applied.commit !== undefined && !isCommit(applied.commit)) {
-			throw new Error("applied.commit must be a Git commit");
-		}
-		if (applied.previous !== undefined && !isTarget(applied.previous)) {
-			throw new Error("applied.previous must be a vX.Y.Z tag or a commit");
-		}
-		if (
-			!Number.isFinite(Date.parse(applied.appliedAt)) ||
-			new Date(applied.appliedAt).toISOString() !== applied.appliedAt
-		) {
-			throw new Error("applied.appliedAt must be an ISO timestamp");
-		}
+		checkApplied(applied);
 		return applied;
 	} catch (error) {
 		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
@@ -737,14 +790,20 @@ async function recordUnchanged(
 	channelCommit: string,
 	channelIdentity: string | undefined,
 	startedAt: Date,
+	siteDigest: string | undefined,
 ): Promise<void> {
+	// A record from before the digest was kept adopts the current values: they are what runs, unless an
+	// operator changed them in the same tick as the upgrade of this tooling.
+	const recordedDigest = applied?.valuesDigest ?? siteDigest;
 	if (
 		applied &&
-		(applied.channelCommit !== channelCommit || applied.channelIdentity !== channelIdentity)
+		(applied.channelCommit !== channelCommit ||
+			applied.channelIdentity !== channelIdentity ||
+			applied.valuesDigest !== recordedDigest)
 	) {
 		await writeAtomic(
 			appliedFile,
-			`${JSON.stringify({ ...applied, channelCommit, channelIdentity }, null, "\t")}\n`,
+			`${JSON.stringify({ ...applied, channelCommit, channelIdentity, ...(recordedDigest === undefined ? {} : { valuesDigest: recordedDigest }) }, null, "\t")}\n`,
 		);
 	}
 	if (isSet(config.metricsFile) && applied) {
@@ -838,6 +897,11 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 					},
 				)
 			: true;
+	const siteDigest = await readSiteValuesDigest(config);
+	const valuesChanged =
+		applied?.valuesDigest !== undefined &&
+		siteDigest !== undefined &&
+		applied.valuesDigest !== siteDigest;
 	const decision = decide(
 		channel,
 		applied,
@@ -845,6 +909,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		channelIdentity,
 		advances,
 		await targetIsBehindApplied(config, channel, applied),
+		valuesChanged,
 	);
 
 	if (decision.action === "refuse") {
@@ -854,8 +919,19 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		console.log(`No change: ${decision.reason}`);
 		// A no-op means this request is the one that runs, which a record from before requests were kept
 		// learns here.
-		await recordUnchanged(config, appliedFile, applied, channelCommit, channelIdentity, startedAt);
+		await recordUnchanged(
+			config,
+			appliedFile,
+			applied,
+			channelCommit,
+			channelIdentity,
+			startedAt,
+			siteDigest,
+		);
 		return;
+	}
+	if (valuesChanged && applied.release === decision.release) {
+		console.log(`Site values changed: applying ${decision.release} again`);
 	}
 
 	// A release arrives as a tag; a commit is only reachable through the branch it is on, because a
@@ -895,10 +971,12 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		applied,
 	);
 
+	// After Helm finished a cutover in an earlier tick, this adopts the current file. Phase 4 applies its
+	// counts by hand before the timer resumes, and an older digest would start the workers mid-cutover.
 	const finishedAt = new Date();
 	await writeAtomic(
 		appliedFile,
-		`${JSON.stringify({ release: decision.release, channelCommit, channelIdentity, appliedAt: finishedAt.toISOString(), commit: releaseCommit, previous }, null, "\t")}\n`,
+		`${JSON.stringify({ release: decision.release, channelCommit, channelIdentity, appliedAt: finishedAt.toISOString(), commit: releaseCommit, previous, ...(siteDigest === undefined ? {} : { valuesDigest: siteDigest }) }, null, "\t")}\n`,
 	);
 	if (isSet(config.metricsFile)) {
 		await writeAtomic(
@@ -1245,7 +1323,7 @@ async function applyChart(
 				releaseTree,
 				profiles,
 				imagesFile,
-				path.join(config.secretsDirectory, "chart.yaml"),
+				siteValuesPath(config),
 				config.waitTimeoutSeconds,
 				packaged,
 				!stopped,
