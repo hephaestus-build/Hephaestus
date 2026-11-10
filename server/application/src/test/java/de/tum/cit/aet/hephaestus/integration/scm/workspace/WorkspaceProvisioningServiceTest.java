@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceNamespaceReservation;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
@@ -92,7 +93,8 @@ class WorkspaceProvisioningServiceTest {
         workspaceSlugs = new WorkspaceSlugService(
                 workspaceRepository,
                 mock(WorkspaceSlugHistoryRepository.class),
-                mock(WorkspaceSlugReservationRepository.class));
+                mock(WorkspaceSlugReservationRepository.class),
+                mock(WorkspaceNamespaceReservation.class));
         workspaceProperties = new WorkspaceProperties(
                 true,
                 new WorkspaceProperties.DefaultProperties("aet-org", "pat-token", List.of()),

@@ -240,7 +240,7 @@ not enough. Shared provider metadata has an explicit empty person selection, not
 | `review_job`, `review_composition_basis`, `llm_usage_event`, `instance_llm_settings` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/adapter/AgentPersonDataCatalog.java` (`select`, explicit export fields, `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/adapter/AgentPersonDataCatalog.java` (`erase` policy, `JdbcPersonDataStore.erase`) |
 | `account` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CoreAccountPersonDataCatalog.java` (`select`, explicit export fields, `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CoreAccountPersonDataCatalog.java` (`erase` policy, `JdbcPersonDataStore.erase`) |
 | `auth_rate_limit_bucket`, `passkey_credential`, `passkey_challenge`, `passkey_recovery_code`, `account_feature`, `account_public_activity_hidden_by_default`, `identity`, `issued_jwt`, `client_session`, `client_sign_in_handoff`, `account_export`, `consent_decision`, `auth_event`, `config_audit_event`, `config_audit_event_acting_account`, `config_audit_event_membership_subject`, `instance_settings`, `event_publication`, `person_data_request`, `person_data_request_administration`, `identity_restriction` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CorePrivacyPersonDataCatalog.java` (`select`, explicit export fields, `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CorePrivacyPersonDataCatalog.java` (`erase` policy, `JdbcPersonDataStore.erase`) |
-| `installation_account` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/privacy/ScmPersonDataCatalog.java` (`InstallationAccountPersonDataStore.select`, the connections of workspaces installed on the person's own provider account) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/privacy/ScmPersonDataCatalog.java` (`InstallationAccountPersonDataStore.erase`, keeps the login as the workspace's namespace) |
+| `installation_account` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/privacy/ScmPersonDataCatalog.java` (`InstallationAccountPersonDataStore.select`, the connections of workspaces installed on the person's own provider account) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/privacy/ScmPersonDataCatalog.java` (`InstallationAccountPersonDataStore.erase`, replaces the login in a purged workspace and keeps it in an active one) |
 | `git_repository_history` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/privacy/ScmPersonDataCatalog.java` (`GitRepositoryHistoryPersonDataStore.select`, repository references only) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/privacy/ScmPersonDataCatalog.java` (`GitRepositoryHistoryPersonDataStore.erase`, preserves upstream caches. Affected attempt folders use the evidence-erasure hook) |
 | `user`, `organization_membership`, `team_membership`, `repository_collaborator`, `issue_assignee`, `pull_request_requested_reviewers`, `organization`, `team`, `team_repository_permission`, `repository`, `milestone`, `issue_comment`, `pull_request_review`, `pull_request_review_comment`, `issue`, `pull_request_review_thread`, `git_commit`, `commit_contributor`, `commit_identity_change`, `commit_file_change`, `git_commit_committer`, `git_commit_authored_content`, `issue_merger` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/privacy/ScmPersonDataCatalog.java` (`select`, explicit export fields, `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/privacy/ScmPersonDataCatalog.java` (`erase` policy, `JdbcPersonDataStore.erase`) |
 | `oauth_state_nonce`, `connection_audit`, `consumer_dead_letter`, `sync_job`, `item_event`, `item_event_evidence`, `item_event_requester` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/connection/IntegrationCoreConnectionPersonDataCatalog.java` (`select`, explicit export fields, `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/connection/IntegrationCoreConnectionPersonDataCatalog.java` (`erase` policy, `JdbcPersonDataStore.erase`) |
@@ -388,11 +388,25 @@ It is in the workspace slug, the display name, the account login, the connection
 This is the same kind of data as the `owner/name` path of a repository.
 Instance-admin person export lists the connections of these workspaces under `installation_account`.
 
-Person erasure keeps the login.
+While the workspace exists, person erasure keeps the login, because the workspace still uses it.
 An uninstall of the app and a workspace purge also keep it.
 The purged workspace keeps its row, so that nobody else can take its slug.
-No erasure step removes this login yet.
-Tell the person this before you request the erasure.
+
+Person erasure removes the login from a purged workspace:
+
+- The slug, the account login and the connection names become `erased-<id>`.
+- The display name becomes `Erased workspace`.
+- The connection settings lose the login.
+- The old slug stays reserved, so that nobody else can take it.
+  For this, Hephaestus keeps a keyed hash of the slug, never the slug itself.
+  It keeps the same for the slug that the login names.
+
+Erasure needs the system key, which the `prod` profile always has.
+If the person asks for the login to go, purge their personal workspace first, then request the erasure.
+A purge after the erasure keeps the login, because the erasure no longer knows the person's account.
+A slug that the workspace had for an earlier login of the account stays reserved as it was written.
+The hash key derives from `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`.
+A new system key releases these reservations: the slug becomes free again.
 
 Hephaestus erases its own person records, derived data and collected copies. Person erasure cancels
 affected in-flight attempts and deletes their evidence folders through the evidence-erasure hook.

@@ -107,7 +107,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "workspace_llm_connection",
             "workspace_llm_model",
             "workspace_slug_history",
-            "workspace_slug_reservation", // Namespace labels only, with no account or contributor reference
+            // Namespace labels with no account or contributor reference; erasure replaces a person's with a token.
+            "workspace_slug_reservation",
             "workspace_team_label_filter",
             "workspace_team_repository_settings",
             "workspace_team_settings");
@@ -115,7 +116,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
     /**
      * The login of the provider account that a workspace is installed on is the namespace of its repositories, like a
      * repository's {@code owner/name}. It is a person's login when the account is a personal one. Person export lists
-     * it, and it stays, also after an uninstall or a workspace purge, which keep the workspace row.
+     * it, and it stays while the workspace exists. Person erasure replaces it in a purged workspace, which keeps its
+     * row (InstallationAccountPersonDataStore).
      */
     private static final Set<String> SOURCE_NAMESPACE =
             Set.of("workspace.account_login", "connection.display_name", "repository_to_monitor.name_with_owner");
