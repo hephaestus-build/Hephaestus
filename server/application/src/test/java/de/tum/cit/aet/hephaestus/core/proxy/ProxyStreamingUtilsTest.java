@@ -22,7 +22,6 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -184,36 +183,26 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldCancelTheBufferedBodyThroughTheCallersTransform() throws Exception {
+        void shouldCancelTheBufferedBodyThroughTheCallersTransform() {
             var cancelled = new AtomicBoolean();
-            var head = new CountDownLatch(1);
-            var bodySubscribed = new CountDownLatch(1);
             var stop = Sinks.<Void>empty();
+            // The caller cancels as soon as the body is read, on the thread that reads it: no second thread, no wait.
             var upstream = ClientResponse.create(HttpStatus.OK)
                     .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                     .body(Flux.<DataBuffer>never()
-                            .doOnSubscribe(unused -> bodySubscribed.countDown())
+                            .doOnSubscribe(unused -> stop.tryEmitEmpty())
                             .doOnCancel(() -> cancelled.set(true)))
                     .build();
-            try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
-                var response = requests.submit(() -> ProxyStreamingUtils.forward(
-                        ProxyStreamingUtils.parts(upstream, null, body -> body.takeUntilOther(stop.asMono()))
-                                .doOnNext(part -> {
-                                    if (part instanceof ProxyStreamingUtils.Head) head.countDown();
-                                }),
-                        Duration.ofSeconds(10),
-                        new MockHttpServletResponse(),
-                        null));
-                try {
-                    assertThat(head.await(3, TimeUnit.SECONDS)).isTrue();
-                    assertThat(bodySubscribed.await(3, TimeUnit.SECONDS)).isTrue();
-                    stop.tryEmitEmpty();
-                    response.get(2, TimeUnit.SECONDS);
-                    assertThat(cancelled).isTrue();
-                } finally {
-                    response.cancel(true);
-                }
-            }
+
+            var result = ProxyStreamingUtils.forward(
+                    ProxyStreamingUtils.parts(upstream, null, body -> body.takeUntilOther(stop.asMono())),
+                    Duration.ofSeconds(10),
+                    new MockHttpServletResponse(),
+                    null);
+
+            assertThat(cancelled).isTrue();
+            assertThat(result.status()).isEqualTo(200);
+            assertThat(result.body()).isEmpty();
         }
 
         @Test
