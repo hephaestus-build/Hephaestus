@@ -2,12 +2,15 @@ package de.tum.cit.aet.hephaestus.core.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.auth.web.CsrfController;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -30,6 +33,9 @@ class CsrfProtectionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @Autowired
+    private WorkspaceSubdomainProperties subdomains;
 
     @Test
     void shouldReturnRawCookieTokenWhenAnonymousBrowserFetchesCsrf() {
@@ -79,6 +85,7 @@ class CsrfProtectionIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void cookieStylePostWithoutCsrfTokenIsRejected() {
+        assertThat(subdomains.enabled()).isFalse();
         // No Authorization: Bearer header → treated as a cookie-style browser POST, so CSRF applies.
         // No token → 403 from the CSRF filter (before authentication; the SecurityContext has no
         // authentication yet, so AccessDenied resolves to 403, not the entry-point 401).
@@ -88,7 +95,13 @@ class CsrfProtectionIntegrationTest extends BaseIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isForbidden()
-                .expectBody(Void.class);
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.CSRF_TOKEN_REJECTED.uri().toString())
+                .jsonPath("$.properties")
+                .doesNotExist();
     }
 
     @Test

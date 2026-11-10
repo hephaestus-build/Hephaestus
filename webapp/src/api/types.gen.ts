@@ -4079,9 +4079,6 @@ export type ProblemChanges = {
 export type ProblemDetail = {
     detail?: string;
     instance?: string;
-    properties?: {
-        [key: string]: unknown;
-    };
     /**
      * The request's trace id, the same as the X-Request-Id header
      */
@@ -4089,6 +4086,7 @@ export type ProblemDetail = {
     status?: number;
     title?: string;
     type?: string;
+    [key: string]: unknown;
 };
 
 export type ProblemSummary = {
@@ -9139,7 +9137,7 @@ export type LogoutClientSessionErrors = {
     /**
      * The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs.
      */
-    403: unknown;
+    403: ProblemDetail;
     /**
      * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
      */
@@ -9176,7 +9174,7 @@ export type RefreshClientSessionErrors = {
     /**
      * The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs.
      */
-    403: unknown;
+    403: ProblemDetail;
     /**
      * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
      */
@@ -9209,7 +9207,7 @@ export type ExchangeClientSignInErrors = {
     /**
      * The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs.
      */
-    403: unknown;
+    403: ProblemDetail;
     /**
      * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
      */

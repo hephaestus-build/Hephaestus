@@ -2198,13 +2198,13 @@ paths:
           description: Silent Mode updated
         "412":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The supplied ETag is stale
         "428":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: If-Match is required when releasing Silent Mode
@@ -2370,7 +2370,9 @@ paths:
             \ also carries the browser session cookie"
         "403":
           content:
-            application/json: {}
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The request carries the browser session cookie without a valid
             CSRF token. The server refuses it before the endpoint runs.
         "429":
@@ -2414,7 +2416,9 @@ paths:
           description: The session has ended. Sign in again.
         "403":
           content:
-            application/json: {}
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The request carries the browser session cookie without a valid
             CSRF token. The server refuses it before the endpoint runs.
         "429":
@@ -2453,7 +2457,9 @@ paths:
             \ a valid CSRF token also carries the browser session cookie"
         "403":
           content:
-            application/json: {}
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The request carries the browser session cookie without a valid
             CSRF token. The server refuses it before the endpoint runs.
         "429":
@@ -2471,7 +2477,7 @@ paths:
       description: "Fetch with credentials before any other credentialed request at\
         \ startup and after sign-in or sign-out. Wait for this response before starting\
         \ other requests. Send the token in the returned header on unsafe requests.\
-        \ With workspace subdomains enabled, a CSRF 403 has the problem type https://docs.hephaestus.build/contributor/api-error-handling#csrf-token-rejected.\
+        \ A CSRF 403 has the problem type https://docs.hephaestus.build/contributor/api-error-handling#csrf-token-rejected.\
         \ On that response, refetch once and retry the rejected request once."
       operationId: getCsrfToken
       responses:
@@ -3316,31 +3322,31 @@ paths:
               style: simple
         "400":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Invalid preferences or If-Match header
         "403":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Enabling this subscription requires instance administration
         "409":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Enabling email requires a verified contact on an active account
         "412":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The supplied ETag is stale
         "428":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: If-Match is required
@@ -5225,26 +5231,26 @@ paths:
           description: A new sync job was created and dispatched
         "400":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Missing or invalid request body (e.g. absent sync type)
         "404":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Connection not found in this workspace
         "409":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Connection is not ACTIVE, a different sync type is already\
             \ running, or manual sync is unsupported for the kind"
         "503":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The server is too busy to dispatch the sync; retry later
@@ -5291,19 +5297,19 @@ paths:
           description: Cancellation requested; the running job stops cooperatively
         "400":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The update does not request cancellation
         "404":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Job not found in this workspace, or not owned by this connection"
         "409":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Job is already in a terminal status
@@ -20212,15 +20218,13 @@ components:
       - updated
     ProblemDetail:
       type: object
+      additionalProperties: true
       properties:
         detail:
           type: string
         instance:
           type: string
-          format: uri
-        properties:
-          type: object
-          additionalProperties: {}
+          format: uri-reference
         requestId:
           type: string
           description: "The request's trace id, the same as the X-Request-Id header"
@@ -20232,7 +20236,7 @@ components:
           type: string
         type:
           type: string
-          format: uri
+          format: uri-reference
     ProblemSummary:
       type: object
       properties:

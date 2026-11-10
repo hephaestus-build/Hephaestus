@@ -92,7 +92,7 @@ Another request changed the record first. Repeat the request.
 
 ### csrf-token-rejected
 
-The CSRF filter refused the request. Fetch a new token once, then retry the request once.
+The CSRF filter refused the request before the endpoint ran. Both workspace address modes use this problem response. Fetch a new token once, then retry the request once.
 
 ### feedback-withheld
 

@@ -46,7 +46,7 @@ public class ClientSessionController {
 
     /**
      * The CSRF filter answers before this controller: a POST that carries the browser session cookie
-     * without a valid CSRF token is refused with Spring Security's plain JSON error, not a problem detail.
+     * without a valid CSRF token is refused with an RFC 9457 problem response.
      */
     private static final String CSRF_REFUSED =
             "The request carries the browser session cookie without a valid CSRF token."
@@ -127,7 +127,10 @@ public class ClientSessionController {
     @ApiResponse(
             responseCode = "403",
             description = CSRF_REFUSED,
-            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE))
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "429",
             description = TOO_MANY_REQUESTS,
@@ -169,7 +172,10 @@ public class ClientSessionController {
     @ApiResponse(
             responseCode = "403",
             description = CSRF_REFUSED,
-            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE))
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "429",
             description = TOO_MANY_REQUESTS,
@@ -200,7 +206,10 @@ public class ClientSessionController {
     @ApiResponse(
             responseCode = "403",
             description = CSRF_REFUSED,
-            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE))
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "429",
             description = TOO_MANY_REQUESTS,

@@ -11189,17 +11189,14 @@ export const ProblemChangesSchema = {
 
 export const ProblemDetailSchema = {
     type: 'object',
+    additionalProperties: true,
     properties: {
         detail: {
             type: 'string'
         },
         instance: {
             type: 'string',
-            format: 'uri'
-        },
-        properties: {
-            type: 'object',
-            additionalProperties: {}
+            format: 'uri-reference'
         },
         requestId: {
             type: 'string',
@@ -11215,7 +11212,7 @@ export const ProblemDetailSchema = {
         },
         type: {
             type: 'string',
-            format: 'uri'
+            format: 'uri-reference'
         }
     }
 } as const;

@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus;
 
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
-import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
@@ -240,8 +239,7 @@ public class SecurityConfig {
             ObjectProvider<StaleAuthCookieFilter> staleAuthCookieFilterProvider,
             Converter<Jwt, AbstractAuthenticationToken> authenticationConverter,
             ObjectProvider<AuthRateLimitFilter> authRateLimitFilterProvider,
-            ObjectMapper objectMapper,
-            WorkspaceSubdomainProperties subdomains)
+            ObjectMapper objectMapper)
             throws Exception {
         http.sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()));
@@ -299,17 +297,15 @@ public class SecurityConfig {
                         // Resource-server initialization exempts all resolved tokens, including cookies.
                         // Set the matcher after initialization to retain CSRF checks for cookie auth.
                         filter.setRequireCsrfProtectionMatcher(SecurityConfig.this::requiresCsrf);
-                        if (subdomains.enabled()) {
-                            filter.setAccessDeniedHandler((request, response, exception) -> {
-                                response.setStatus(403);
-                                response.setContentType("application/problem+json");
-                                var problem = ProblemDetail.forStatus(403);
-                                problem.setType(ProblemType.CSRF_TOKEN_REJECTED.uri());
-                                problem.setTitle("Invalid CSRF token");
-                                objectMapper.writeValue(
-                                        response.getOutputStream(), RequestReference.name(problem, response));
-                            });
-                        }
+                        filter.setAccessDeniedHandler((request, response, exception) -> {
+                            response.setStatus(403);
+                            response.setContentType("application/problem+json");
+                            var problem = ProblemDetail.forStatus(403);
+                            problem.setType(ProblemType.CSRF_TOKEN_REJECTED.uri());
+                            problem.setTitle("Invalid CSRF token");
+                            objectMapper.writeValue(
+                                    response.getOutputStream(), RequestReference.name(problem, response));
+                        });
                         return filter;
                     }
                 }));

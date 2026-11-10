@@ -24,6 +24,22 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class OpenAPIConfigurationTest {
     @Test
+    void shouldDescribeProblemExtensionsAtTheTopLevel() {
+        var problem = objectWithFields("detail", "instance", "type", "properties");
+        var api = api(new Components().addSchemas("ProblemDetail", problem), responseOperation("ProblemDetail"));
+
+        new OpenAPIConfiguration().schemaCustomizer("test").customise(api);
+
+        assertThat(problem.getProperties()).containsKeys("detail", "requestId").doesNotContainKey("properties");
+        assertThat(problem.getAdditionalProperties()).isEqualTo(true);
+        assertThat(Stream.of("instance", "type")
+                        .map(name -> Objects.requireNonNull(
+                                        problem.getProperties().get(name))
+                                .getFormat()))
+                .containsOnly("uri-reference");
+    }
+
+    @Test
     void shouldKeepResponseAndAuthoredSchemaIdentitiesWhenTheirTrimmedNamesCollide() {
         Schema<Object> authored = new Schema<>();
         authored.addProperty("goingWell", new Schema<>().type("string"));
