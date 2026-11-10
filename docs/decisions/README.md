@@ -94,7 +94,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0017](0017-replace-keycloak-with-spring-native-auth.md) | Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs) | Superseded by [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) |
 | [0018](0018-pg-partman-for-auth-event-partitioning.md) | pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions) | Accepted |
 | [0019](0019-workspace-membership-keyed-on-account.md) | Workspace membership is keyed on `Account`, not the SCM `User` | Superseded by [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) |
-| [0020](0020-context-fabric-everything-is-an-integration.md) | Context Fabric — everything is an integration, only practice review and mentor are native | Accepted |
+| [0020](0020-context-fabric-everything-is-an-integration.md) | Context Fabric — everything is an integration, only practice review and mentor are native | Superseded by [0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) |
 | [0021](0021-observations-feedback-synthesis-seam.md) | Separate observations from feedback | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
 | [0022](0022-observation-presence-assessment-and-schema-cleanup.md) | Observation = presence × assessment (drop `Practice.kind`); reaction anchors on feedback; ruthless column cleanup | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
 | [0023](0023-outline-documentation-integration.md) | Outline documentation integration — a content source, not a detection surface | Accepted |
@@ -113,7 +113,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0036](0036-agent-runtime-runs-on-node-24.md) | Agent runtime runs on Node.js 24 with bounded resources | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) | Node.js 24 and pnpm 12 are the JavaScript toolchain | Superseded by [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) |
 | [0038](0038-postgresql-18-release-baseline.md) | PostgreSQL 18 is the only supported major version | Accepted |
-| [0039](0039-git-and-postgresql-own-evidence.md) | Git owns repository evidence; PostgreSQL owns captured payloads and references | Accepted |
+| [0039](0039-git-and-postgresql-own-evidence.md) | Git owns repository evidence; PostgreSQL owns captured payloads and references | Superseded by [0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) |
 | [0040](0040-vite-plus-is-the-command-surface.md) | Vite+ is the command surface; pnpm stays the package manager | Superseded by [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) |
 | [0041](0041-compose-1x-kubernetes-2.md) | Compose for 1.x; Kubernetes only for 2.0 | Accepted |
 | [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Accepted |
@@ -163,5 +163,6 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) | A practice review stages, seals, then composes, and each stage records why it stops | Accepted |
 | [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) | A person signs in through an instance login provider and is one account in every workspace | Accepted |
 | [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) | Pinned Node.js and pnpm install the repository, and Vite+ runs every command | Accepted |
+| [0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) | A practice review cites only bytes that the server captured, admission verifies each citation once, and Hephaestus keeps the verdict, not the bytes | Accepted |
 
 Template: [0000-template.md](0000-template.md).
