@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.composer;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
-import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
+import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRefusal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -28,7 +28,11 @@ public final class ModelSession {
 
     /** What the transport returned: the provider's answer, or the proxy rule that refused the call. */
     @SuppressWarnings("ArrayRecordComponent") // the provider's response bytes, parsed once here
-    public record Answer(int status, byte[] body, boolean owned, ReviewModelGateway.@Nullable Refusal refusal) {}
+    public record Answer(
+            int status,
+            byte[] body,
+            boolean owned,
+            @Nullable ProxyRefusal refusal) {}
 
     /** A tool the model may call. */
     public record Tool(String name, String description, ObjectNode parameters) {}

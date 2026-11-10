@@ -9,9 +9,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
-import de.tum.cit.aet.hephaestus.agent.composer.CompositionCapacity;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
-import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
@@ -38,7 +37,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
-import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
@@ -1683,15 +1681,24 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     mapper,
                     mock(FeedbackRepair.class),
                     mock(CompositionToolTrace.class));
-            var composer = new WorkerFeedbackComposer(
-                    sessions,
-                    continuation,
-                    mock(ReviewModelGateway.class),
-                    agentRuns.capacity(),
-                    meters,
-                    mapper,
-                    new CompositionCapacity(4));
-            composer.composeResumed(job, job.getRunId(), Instant.now());
+            // The sandbox's composer loop finds no time left before its first call, so it closes every destination
+            // with the deadline; on the last attempt the server withholds them instead of handing them on.
+            var identity = new ResultAdmissionService.AdmissionIdentity(
+                    job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
+            // The restored folder holds the attempt's person-copy receipt, which the withholdings' reads index.
+            var restored = continuation.restore(job);
+            try {
+                assertThat(sessions.close(
+                                job,
+                                identity,
+                                Map.of(
+                                        FeedbackDestination.ON_WORK, CompositionStop.DEADLINE,
+                                        FeedbackDestination.PRACTICE_PAGE, CompositionStop.DEADLINE,
+                                        FeedbackDestination.CONVERSATION, CompositionStop.DEADLINE)))
+                        .isNull();
+            } finally {
+                restored.close();
+            }
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
                             review.workspaceId(), review.reviewId()))

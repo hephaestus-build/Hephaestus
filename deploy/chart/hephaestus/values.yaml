@@ -343,8 +343,8 @@ worker:
     namespace: ""
     # The memory that the sandbox nodes give review Pods. The reviews that run at once are this over one
     # review Pod's request, 384 MiB (docs/admin/kubernetes.mdx § Sandbox sizes), and its RuntimeClass
-    # overhead. Each worker runs as many of them as its memory limit holds. The reviews tier's quota, the
-    # compositions and the worker's threads follow. 3840Mi holds 10 reviews.
+    # overhead. Each worker runs as many of them as its memory limit holds. The reviews tier's quota and the
+    # worker's threads follow. 3840Mi holds 10 reviews.
     reviewMemory: 3840Mi
     # One quota for each tier of sandboxes, reviews and conversations, derived from reviewMemory, the
     # workers' replicas, conversationLoop.turns and sandbox-pod-requests.json. Conversation sandboxes

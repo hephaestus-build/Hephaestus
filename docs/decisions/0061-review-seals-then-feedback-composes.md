@@ -105,3 +105,12 @@ Before this update, such a review read as Complete with destinations undecided.
 - Considered option 2 was rejected because a Pod adds start time for proxy calls only. That reason no longer decides: the review's sandbox already exists, and the composer needs tools (ADR 0069).
 
 The three parts, the one direction of dependencies, the seal, the stop reasons on the feedback rows and the skip rule stay.
+
+## Update — 2026-11-10: composition runs only in the review's sandbox
+
+The update of 2026-11-09 is implemented.
+
+- A measured review that admitted results hands on to a `review_compose` run (`ReviewRunKind.continueToCompose`). The review's sandbox runs the composer loop, and every composer route and model call goes through the gateway.
+- A claim of a review run never composes. An admitted review that a review run claims again, as after a lost lease, is handed on at once and measures nothing.
+- The worker step is gone: `WorkerFeedbackComposer`, `CompositionHandedOnException`, `ReviewModelGateway`, `CompositionCapacity`, and the settings `hephaestus.agent.max-active-compositions` and `hephaestus.agent.max-concurrent-compositions`.
+- Correction to the update of 2026-11-09: the `review_compose` run continues the job's attempt count. A hand-on spends no attempt, and a lost composition spends one, as § Retry says.

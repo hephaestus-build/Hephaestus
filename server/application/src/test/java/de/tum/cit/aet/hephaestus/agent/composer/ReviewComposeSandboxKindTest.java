@@ -21,12 +21,15 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobClaimService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobTerminal;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +57,7 @@ class ReviewComposeSandboxKindTest {
     private final CompositionSessions sessions = mock(CompositionSessions.class);
     private final ReviewJobTerminal terminal = mock(ReviewJobTerminal.class);
     private final ReviewRunKind reviewRuns = mock(ReviewRunKind.class);
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final ReviewComposeSandboxKind kind = new ReviewComposeSandboxKind(
             claims,
             jobs,
@@ -64,7 +68,9 @@ class ReviewComposeSandboxKindTest {
             terminal,
             reviewRuns,
             runs,
-            new TransactionTemplate(mock(PlatformTransactionManager.class)));
+            new TransactionTemplate(mock(PlatformTransactionManager.class)),
+            meters,
+            Tracer.NOOP);
 
     private final AgentRunFence fence = new AgentRunFence(UUID.randomUUID(), 7L, 2);
     private final SandboxRun run = new SandboxRun(
@@ -136,6 +142,12 @@ class ReviewComposeSandboxKindTest {
         assertThat(kind.end(run, SandboxRunKind.Outcome.COMPLETED)).isTrue();
 
         assertThat(closed).hasValue(1);
+        assertThat(meters.get(AgentMetrics.AGENT_JOB_STAGE_DURATION)
+                        .tag("stage", "composition")
+                        .tag("outcome", "ok")
+                        .timer()
+                        .count())
+                .isOne();
     }
 
     @Test

@@ -658,6 +658,10 @@ There is no webhook role and no NATS JetStream. The server receives provider del
 Events use the same claim, lease and reaper model as runs and actions, and the order is one leased event per scope.
 The open item "Ordered provider events across server replicas" closes with that claim.
 
+## Update — 2026-11-10: the JVM composer is gone
+
+The JVM composer, `ReviewModelGateway` and `CompositionCapacity` are removed, as § Decision says. A review's feedback is composed only in a `REVIEW_COMPOSE` run in the review's sandbox. [ADR 0061](0061-review-seals-then-feedback-composes.md), update of 2026-11-10, has the details. `ModelSession` stays for product feedback drafting only.
+
 ## Sources
 
 Fetched 2026-11-09.

@@ -356,26 +356,24 @@ class LlmProxyService {
             byte[] body,
             Span span,
             ProxyCallsInFlight.Call call) {
-        if (workTimeOver(routing))
-            return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
+        if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
         // Before the scan lock, so a call past the cap holds no thread while the attempt's previous call runs.
         if (call.isOverCap()) {
             // A refused client asks again each second, so the counter carries the signal, not this line.
             log.debug(
                     "Model call refused, its attempt has its most calls in flight: principal={}",
                     routing.principalDescription());
-            accounting.refused(ReviewModelGateway.Refusal.CALLS_IN_FLIGHT);
+            accounting.refused(ProxyRefusal.CALLS_IN_FLIGHT);
             // 429, so a model client asks again once one of the attempt's calls has ended.
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .header(HttpHeaders.RETRY_AFTER, "1")
-                    .header(REFUSAL_HEADER, ReviewModelGateway.Refusal.CALLS_IN_FLIGHT.name())
+                    .header(REFUSAL_HEADER, ProxyRefusal.CALLS_IN_FLIGHT.name())
                     .body("This attempt already has its most model calls in flight.");
         }
         // A scan call may wait for its attempt's previous call, at most until the work deadline.
         var lease = scanCalls.acquire(routing, body);
         try {
-            if (workTimeOver(routing))
-                return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
+            if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
             // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
             // provider
             // asks for longer, its answer reaches the caller as the failure it is.
@@ -403,12 +401,11 @@ class LlmProxyService {
             Instant absorbUntil) {
         ProxyRouting.BilledAttempt attempt = routing.attempt();
         if (call.isCancelled()) {
-            return refusal(
-                    HttpStatus.CONFLICT, ReviewModelGateway.Refusal.ATTEMPT_ENDED, "This turn attempt has ended");
+            return refusal(HttpStatus.CONFLICT, ProxyRefusal.ATTEMPT_ENDED, "This turn attempt has ended");
         }
 
         if (!requestPolicy.allows(routing)) {
-            return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.AI_CHOICE, AI_CHOICE_REFUSED);
+            return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
         }
 
         // A practice script call is refused with 402, which no rate limit answers, so its runner can tell a
@@ -417,13 +414,10 @@ class LlmProxyService {
                 practiceScript == null ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.PAYMENT_REQUIRED;
         // Before any credential is resolved or the network touched. Never interrupts a live stream.
         if (accounting.refuseForBudget(routing)) {
-            return refusal(
-                    spendingRefusal,
-                    ReviewModelGateway.Refusal.BUDGET,
-                    budgetReachedMessage(routing.connectionScope()));
+            return refusal(spendingRefusal, ProxyRefusal.BUDGET, budgetReachedMessage(routing.connectionScope()));
         }
         if (practiceScript != null && accounting.refuseForDirectModelCap(routing, attempt)) {
-            return refusal(spendingRefusal, ReviewModelGateway.Refusal.BUDGET, "Practice script budget spent");
+            return refusal(spendingRefusal, ProxyRefusal.BUDGET, "Practice script budget spent");
         }
 
         LlmModelResolver.ProxyCredential credential =
@@ -473,17 +467,14 @@ class LlmProxyService {
         if (poolPermit == null) {
             return refusal(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    ReviewModelGateway.Refusal.CAPACITY,
+                    ProxyRefusal.CAPACITY,
                     "The model capacity was unavailable before this attempt ended.");
         }
         ProxyTransportClosure transports = new ProxyTransportClosure();
         try {
             // A wait for capacity can outlast the check above, while other calls of the workspace settle.
             if (accounting.refuseForBudget(routing)) {
-                return refusal(
-                        spendingRefusal,
-                        ReviewModelGateway.Refusal.BUDGET,
-                        budgetReachedMessage(routing.connectionScope()));
+                return refusal(spendingRefusal, ProxyRefusal.BUDGET, budgetReachedMessage(routing.connectionScope()));
             }
             LlmConnectionHealth.Permit permit = health.acquire(routing.connectionScope(), routing.connectionId());
             if (permit == null) {
@@ -514,7 +505,7 @@ class LlmProxyService {
             try {
                 if (workTimeOver(routing)) {
                     permit.released();
-                    return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
+                    return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
                 }
                 if (poolPermit.isRevoked()) {
                     permit.released();
@@ -531,17 +522,17 @@ class LlmProxyService {
                     accounting.recordStreamUsageUnsupported(routing.apiProtocol());
                     if (!requestPolicy.allows(routing)) {
                         permit.released();
-                        return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.AI_CHOICE, AI_CHOICE_REFUSED);
+                        return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
                     }
                     if (workTimeOver(routing)) {
                         permit.released();
-                        return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
+                        return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
                     }
                     if (!callPermits.beforeRetry(poolPermit, call::isCancelled, deadline)) {
                         permit.released();
                         return refusal(
                                 HttpStatus.SERVICE_UNAVAILABLE,
-                                ReviewModelGateway.Refusal.CAPACITY,
+                                ProxyRefusal.CAPACITY,
                                 "Model capacity is unavailable for this retry.");
                     }
                     upstream = callUpstream(
@@ -590,8 +581,7 @@ class LlmProxyService {
                             e.getClass().getSimpleName());
                 accounting.recordError(routing.apiProtocol());
                 // The work deadline is answered as such; any other failure as before.
-                if (workTimeOver(routing))
-                    return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
+                if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
                 return ResponseEntity.status(502).body("Upstream request failed");
             }
 
@@ -902,7 +892,7 @@ class LlmProxyService {
     }
 
     /** The proxy's own refusal, before the call reaches a provider. */
-    private ResponseEntity<String> refusal(HttpStatus status, ReviewModelGateway.Refusal rule, String message) {
+    private ResponseEntity<String> refusal(HttpStatus status, ProxyRefusal rule, String message) {
         accounting.refused(rule);
         return ResponseEntity.status(status).header(REFUSAL_HEADER, rule.name()).body(message);
     }

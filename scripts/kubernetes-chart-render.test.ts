@@ -2255,8 +2255,6 @@ const workerCapacity = (reviewCount: number) => {
 		"worker",
 	);
 	return {
-		active: envValue(worker, "AGENT_MAX_ACTIVE_COMPOSITIONS"),
-		attempts: envValue(worker, "AGENT_MAX_CONCURRENT_COMPOSITIONS"),
 		threads: envValue(worker, "BPL_JVM_THREAD_COUNT"),
 		sandboxes: envValue(worker, "SANDBOX_MAX_CONCURRENT"),
 	};
@@ -2270,28 +2268,19 @@ await test("the webhook role's heap is sized from what that role loads", () => {
 });
 
 await test("what a worker holds for its reviews follows the reviews that the sandbox nodes hold", () => {
-	// Up to eight reviews, the application's defaults hold. A larger worker must not stop at them.
 	assert.deepEqual(workerCapacity(1), {
-		active: "4",
-		attempts: "16",
 		threads: "128",
 		sandboxes: "1",
 	});
 	assert.deepEqual(workerCapacity(16), {
-		active: "8",
-		attempts: "24",
 		threads: "248",
 		sandboxes: "16",
 	});
 	assert.deepEqual(workerCapacity(32), {
-		active: "16",
-		attempts: "48",
 		threads: "376",
 		sandboxes: "32",
 	});
 	assert.deepEqual(workerCapacity(64), {
-		active: "32",
-		attempts: "96",
 		threads: "632",
 		sandboxes: "64",
 	});

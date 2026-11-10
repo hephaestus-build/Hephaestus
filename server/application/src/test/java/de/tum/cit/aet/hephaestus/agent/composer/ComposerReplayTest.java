@@ -10,8 +10,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Each replay case admits the packages it records: the composer loop, given the same sealed basis and the same model
- * answers, prepares the same feedback, withholds the same destinations and records the same stops. The worker's loop and
- * the Node loop of a {@code review_compose} run both replay every case, the Node loop over a loopback gateway. A recorded case
+ * answers, prepares the same feedback, withholds the same destinations and records the same stops. The Node loop of a
+ * {@code review_compose} run replays every case over a loopback gateway to the server side. A recorded case
  * replays a live model's answers, so its outcome is exact. Run with {@code UPDATE_COMPOSITION_REPLAYS=1} to rewrite
  * each case's expected outcome from what the loop admits, then review the diff.
  */
@@ -28,22 +28,11 @@ class ComposerReplayTest {
     void shouldAdmitTheRecordedPackagesWhenTheComposerReplaysTheModelsAnswers(String name) throws Exception {
         var replay = ComposerReplay.load(name);
         var outcome =
-                ComposerReplay.jvm(replay, ComposerReplay.replayed(replay)).toJson();
+                ComposerReplay.node(replay, ComposerReplay.replayed(replay)).toJson();
         if (UPDATE) {
             replay.set("expected", outcome);
             ComposerReplay.write(name, replay);
         }
         assertThat(replay.path("expected")).as(name).isEqualTo(outcome);
-    }
-
-    @ParameterizedTest
-    @MethodSource("cases")
-    void shouldAdmitTheSamePackagesWhenTheNodeComposerReplaysTheModelsAnswers(String name) throws Exception {
-        var replay = ComposerReplay.load(name);
-
-        var outcome =
-                ComposerReplay.node(replay, ComposerReplay.replayed(replay)).toJson();
-
-        assertThat(outcome).as(name).isEqualTo(replay.path("expected"));
     }
 }

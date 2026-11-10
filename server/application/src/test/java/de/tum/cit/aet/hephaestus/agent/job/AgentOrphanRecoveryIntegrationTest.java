@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -25,12 +26,15 @@ import de.tum.cit.aet.hephaestus.agent.handler.AdmittedResultFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -43,6 +47,8 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -96,6 +102,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -136,10 +143,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Verifies orphan recovery, retry fencing, and claim eligibility against PostgreSQL. */
 @DisplayName("Orphan recovery over PostgreSQL Integration")
@@ -155,6 +164,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewRunKind reviewRuns;
+
+    @Autowired
+    private ApplicationContext context;
 
     @Autowired
     private AgentRuns agentRuns;
@@ -934,22 +946,12 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(continuing.getPracticePagePreparedAt() != null).isEqualTo(privatePiece);
     }
 
-    @ParameterizedTest(name = "{0}")
-    @ValueSource(strings = {"not admitted", "public review not accepted", "expired inputs", "retry limit reached"})
-    @DisplayName("a timed-out run ends timed out after its composition and drops its retained inputs")
-    void shouldEndATimedOutRunAsTimedOutAndDropItsRetainedInputs(String why) {
-        int attempt = why.equals("retry limit reached") ? 5 : 0;
+    @Test
+    @DisplayName("a timed-out run that admitted nothing ends timed out and drops its retained inputs")
+    void shouldEndATimedOutRunAsTimedOutAndDropItsRetainedInputs() {
+        int attempt = 0;
         UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), attempt);
-        if (!why.equals("not admitted")) admitWithResult(jobId);
-        if (!why.equals("not admitted") && !why.equals("public review not accepted")) acceptPublicReview(jobId);
-        keepOriginalInputs(
-                jobId,
-                attempt,
-                "READY",
-                "COMPLETE",
-                why.equals("expired inputs")
-                        ? Instant.now().minusSeconds(1)
-                        : Instant.now().plus(Duration.ofHours(1)));
+        keepOriginalInputs(jobId, attempt, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
         spentBeforeItWasLost(jobId, 2);
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
 
@@ -963,6 +965,85 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
                 .isEmpty();
         assertThat(usageCalls(jobId)).containsExactly(2);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"public review not accepted", "expired inputs", "retry limit reached"})
+    @DisplayName("a timed-out run of an admitted review hands it on, and its composition run ends it timed out")
+    void shouldEndAnAdmittedTimedOutReviewTimedOutWhenItsCompositionEnds(String why) {
+        int attempt = why.equals("retry limit reached") ? 5 : 0;
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), attempt);
+        admitWithResult(jobId);
+        if (!why.equals("public review not accepted")) acceptPublicReview(jobId);
+        keepOriginalInputs(
+                jobId,
+                attempt,
+                "READY",
+                "COMPLETE",
+                why.equals("expired inputs")
+                        ? Instant.now().minusSeconds(1)
+                        : Instant.now().plus(Duration.ofHours(1)));
+        spentBeforeItWasLost(jobId, 2);
+        ReviewJob running = jobRepository.findById(jobId).orElseThrow();
+
+        // The measuring attempt keeps what it measured and hands the review on to the run that composes it.
+        assertThat(tracking(executor(), running).executePrepared(jobId, running, mock(SandboxSpec.class)))
+                .isNull();
+        ReviewJob waiting = jobRepository.findById(jobId).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(jdbc.queryForObject("SELECT kind FROM agent_run WHERE id=?", String.class, waiting.getRunId()))
+                .isEqualTo("REVIEW_COMPOSE");
+
+        // Its composition run, as its sandbox's pull and end drive it.
+        String subject = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT concurrency_key FROM agent_run WHERE id=?", String.class, waiting.getRunId()));
+        var claims = composeClaims();
+        var terminal = SandboxReviewClaims.terminal(context);
+        var claimed = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            var lease = agentRuns.claimSubject(workspace.getId(), subject, Set.of(AgentRunKind.REVIEW_COMPOSE));
+            assertThat(lease).as("the composition run is due").isPresent();
+            return claims.claimLeased(lease.orElseThrow().fence());
+        }));
+        assertThat(claimed).as("the composition run's claim starts it").isPresent();
+        var fence = claimed.orElseThrow().fence();
+        Boolean completed = transactionTemplate.execute(status -> terminal.completeComposed(jobId, fence));
+        assertThat(completed).isTrue();
+
+        ReviewJob ended = jobRepository.findById(jobId).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.TIMED_OUT);
+        assertThat(ended.getErrorMessage()).isEqualTo("The container timed out.");
+        // This run decided no destination, so the review's feedback is still open and its inputs stay for it.
+        assertThat(compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
+                .isPresent();
+        assertThat(usageCalls(jobId)).contains(2);
+    }
+
+    /**
+     * The claim of a composition run, as the review sandbox's kind makes it, for a developer who allows AI reviews. The
+     * fixture freezes no assignment rows, so the claim reads the review's one assignment from a stub.
+     */
+    private ReviewJobClaimService composeClaims() {
+        var policy = mock(ReviewMemberAiPolicy.class);
+        when(policy.permitsReview(any())).thenReturn(true);
+        when(policy.binding(any())).thenReturn(Optional.of(new WorkspaceAgentBinding()));
+        var assignments = mock(ReviewJobAssignments.class);
+        when(assignments.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        var budgets = mock(LlmBudgetService.class);
+        when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
+        return new ReviewJobClaimService(
+                jobRepository,
+                policy,
+                mock(ReviewMethodVerifier.class),
+                assignments,
+                transactionTemplate,
+                context.getBean(JsonMapper.class),
+                context.getBean(ReviewStart.class),
+                budgets,
+                null,
+                context.getBean(ReviewJobTelemetry.class),
+                mock(LlmCallPermits.class),
+                agentRuns,
+                reviewRuns);
     }
 
     @Test

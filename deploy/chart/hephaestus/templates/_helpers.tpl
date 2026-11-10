@@ -757,16 +757,6 @@ below one review fails the render: the JVM would stop at its start, or run out o
 {{- min (int (include "hephaestus.clusterReviews" .)) (mul (int .Values.worker.replicas) (int (include "hephaestus.workerReviews" .))) -}}
 {{- end -}}
 
-{{/* Compositions run after a review's sandbox ends, and they take about half as long as the sandbox. */}}
-{{- define "hephaestus.activeCompositions" -}}
-{{- max 4 (div (add (int (include "hephaestus.workerReviews" .)) 1) 2) -}}
-{{- end -}}
-
-{{/* Every local review attempt: those that hold a sandbox, and those that compose. */}}
-{{- define "hephaestus.concurrentCompositions" -}}
-{{- max 16 (div (add (mul 3 (int (include "hephaestus.workerReviews" .))) 1) 2) -}}
-{{- end -}}
-
 {{/* The existing review tier CPU reservation, including each running worker's probe and Pod overhead. */}}
 {{- define "hephaestus.reviewCpuMillis" -}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}

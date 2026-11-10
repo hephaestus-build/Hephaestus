@@ -65,7 +65,7 @@ public final class SandboxLayout {
     public static final String MANIFEST_PATH = "INDEX.json";
 
     /**
-     * Path of the feedback-composition request among the files the worker's composer reads: which destinations it
+     * Path of the feedback-composition request among the files the composer sessions read: which destinations it
      * may write for and the bounds each must respect. A sandbox is never given one.
      */
     public static final String FEEDBACK_COMPOSITION_PATH = INPUTS_PREFIX + "feedback-composition.json";

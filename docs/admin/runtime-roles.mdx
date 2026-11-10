@@ -109,8 +109,8 @@ Through it, the probe checks that a review sandbox reaches the gateway and that 
 A review loop renews its own attempt lease through this Service during execution and result upload.
 Any ready worker can renew it. The worker that launched the Pod is not required for renewal.
 If renewal fails, the loop stops when its last confirmed lease expires.
-The worker renews the lease before the loop starts, after it exits, and during composition.
-The rollout drain stays unchanged until completion and composition can also survive a worker replacement.
+The worker renews the lease before the loop starts and after it exits.
+The feedback is composed in a later run of the review's sandbox, which renews its own lease through the same Service.
 
 To deploy a worker pod:
 
@@ -714,11 +714,6 @@ Pool edits, deletion, and membership changes wait for open requests, retained ra
 
 The cooldown follows the retry headers and never shortens an existing pause.
 A workspace-controlled connection can lower the limit and pause only a pool that its model has alone.
-
-The worker loads at most four compositions at once by default.
-It acquires this local capacity before it loads or restores composition inputs.
-This bound is separate from the existing sixteen-local-attempt ceiling.
-It does not reduce the resident review limit to four.
 
 ### The conversation loop
 

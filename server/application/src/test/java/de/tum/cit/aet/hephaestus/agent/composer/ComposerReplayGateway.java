@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -35,7 +34,7 @@ final class ComposerReplayGateway implements AutoCloseable {
     private final ReviewJob job;
     private final ResultAdmissionService.AdmissionIdentity identity;
     private final Instant deadline;
-    private final Function<byte[], ReviewModelGateway.Answer> model;
+    private final Function<byte[], ModelSession.Answer> model;
 
     ComposerReplayGateway(
             JsonMapper mapper,
@@ -43,7 +42,7 @@ final class ComposerReplayGateway implements AutoCloseable {
             ReviewJob job,
             ResultAdmissionService.AdmissionIdentity identity,
             Instant deadline,
-            Function<byte[], ReviewModelGateway.Answer> model)
+            Function<byte[], ModelSession.Answer> model)
             throws IOException {
         // The server leaves null fields out of its JSON (application.yml), and so does this gateway.
         this.mapper = mapper.rebuild()

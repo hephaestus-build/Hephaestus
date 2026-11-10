@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -126,7 +127,9 @@ public final class ComposeRunGateway implements AutoCloseable {
                 SandboxReviewClaims.terminal(context),
                 context.getBean(ReviewRunKind.class),
                 runs,
-                transactions);
+                transactions,
+                new SimpleMeterRegistry(),
+                Tracer.NOOP);
         var application = new SpringApplication(
                 GatewayApplication.class,
                 classNamed("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"),

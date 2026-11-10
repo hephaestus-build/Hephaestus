@@ -19,7 +19,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
-import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.ConversationEligibilityDTO;
@@ -133,42 +132,6 @@ final class ComposerReplay {
                 StandardCharsets.UTF_8);
     }
 
-    /**
-     * Runs the worker's composer loop on the case, with each model call answered by {@code model}: the replayed
-     * answers, or a live model when the answers are recorded.
-     */
-    static Outcome jvm(JsonNode replay, Function<byte[], ReviewModelGateway.Answer> model) throws IOException {
-        var state = new Server(replay);
-        var gateway = mock(ReviewModelGateway.class);
-        var calls = JSON.arrayNode();
-        var previous = new ArrayList<JsonNode>();
-        when(gateway.call(any(), any())).thenAnswer(invocation -> {
-            byte[] body = invocation.getArgument(1);
-            calls.add(delta(MAPPER.readTree(body), previous));
-            return model.apply(body);
-        });
-        var composer = new WorkerFeedbackComposer(
-                state.sessions(),
-                state.continuation,
-                gateway,
-                state.capacity,
-                new SimpleMeterRegistry(),
-                MAPPER,
-                Duration.ZERO,
-                new CompositionCapacity(1));
-        String handedOn = null;
-        try {
-            composer.composeAfterMeasurement(state.job, RUN, Instant.now().plus(Duration.ofHours(1)));
-        } catch (CompositionHandedOnException handed) {
-            handedOn = handed.stop().name();
-        }
-        var packages = JSON.arrayNode();
-        state.accepted.forEach(accepted -> packages.add(MAPPER.valueToTree(accepted)));
-        var stops = JSON.arrayNode();
-        state.reviewStops.forEach(stops::add);
-        return new Outcome(packages, stops, handedOn, calls);
-    }
-
     /** The Node composer driver that replays a case against a loopback gateway, run from the module directory. */
     private static final Path NODE_DRIVER = Path.of("src/test/resources/agent/review-composer-replay.ts");
 
@@ -176,13 +139,13 @@ final class ComposerReplay {
      * Runs the Node composer loop of a {@code review_compose} run on the case, in its own process, against the same
      * server side over a loopback gateway, with each model call answered by {@code model}.
      */
-    static Outcome node(JsonNode replay, Function<byte[], ReviewModelGateway.Answer> model)
+    static Outcome node(JsonNode replay, Function<byte[], ModelSession.Answer> model)
             throws IOException, InterruptedException {
         var state = new Server(replay);
         var sessions = state.sessions();
         var calls = JSON.arrayNode();
         var previous = new ArrayList<JsonNode>();
-        Function<byte[], ReviewModelGateway.Answer> recorded = body -> {
+        Function<byte[], ModelSession.Answer> recorded = body -> {
             calls.add(delta(MAPPER.readTree(body), previous));
             return model.apply(body);
         };
@@ -211,7 +174,7 @@ final class ComposerReplay {
     }
 
     /** Answers each call with the case's next answer. */
-    static Function<byte[], ReviewModelGateway.Answer> replayed(JsonNode replay) {
+    static Function<byte[], ModelSession.Answer> replayed(JsonNode replay) {
         var answers = new ArrayList<JsonNode>();
         replay.path("responses").forEach(answers::add);
         var next = new int[] {0};
@@ -222,9 +185,9 @@ final class ComposerReplay {
         };
     }
 
-    private static ReviewModelGateway.Answer answer(JsonNode answer, @Nullable String draftId) {
+    private static ModelSession.Answer answer(JsonNode answer, @Nullable String draftId) {
         if (answer.has("status"))
-            return new ReviewModelGateway.Answer(answer.path("status").asInt(), new byte[0], true, null);
+            return new ModelSession.Answer(answer.path("status").asInt(), new byte[0], true, null);
         if (answer.has("body")) return completion(answer.path("body"));
         if (answer.has("text")) return completion(text(answer.path("text").asString()));
         String arguments = answer.path("arguments").toString();
@@ -253,8 +216,8 @@ final class ComposerReplay {
         return body;
     }
 
-    private static ReviewModelGateway.Answer completion(JsonNode body) {
-        return new ReviewModelGateway.Answer(200, body.toString().getBytes(StandardCharsets.UTF_8), true, null);
+    private static ModelSession.Answer completion(JsonNode body) {
+        return new ModelSession.Answer(200, body.toString().getBytes(StandardCharsets.UTF_8), true, null);
     }
 
     /** The draft ID the latest tool result in the request returned, if any. */
@@ -535,7 +498,7 @@ final class ComposerReplay {
      * only what the composer reads, its message's role, text and tool calls. The endpoint's own fields, such as its model
      * name and metrics, stay out, and so do its tool call IDs, which the case numbers in order.
      */
-    static ArrayNode recorded(List<ReviewModelGateway.Answer> sent) {
+    static ArrayNode recorded(List<ModelSession.Answer> sent) {
         var answers = JSON.arrayNode();
         int callNumber = 0;
         for (var answer : sent) {

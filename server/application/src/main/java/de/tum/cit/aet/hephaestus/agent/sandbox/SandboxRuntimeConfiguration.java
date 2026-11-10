@@ -50,9 +50,8 @@ public class SandboxRuntimeConfiguration {
     /**
      * Platform threads for review attempts, one per claimed attempt.
      *
-     * <p>The executor's claim bound limits simultaneous sandboxes to {@code maxConcurrentContainers}. An attempt whose
-     * sandbox ended keeps its thread while the worker composes its feedback, but not its sandbox slot, so the pool is
-     * not that bound. It hands off directly ({@code queueCapacity=0}): a rejected submission undoes the claim and the
+     * <p>The executor's claim bound limits the attempts that run here to {@code maxConcurrentContainers}; the pool
+     * itself sets no bound. It hands off directly ({@code queueCapacity=0}): a rejected submission undoes the claim and the
      * row goes back to QUEUED for a later poll.
      */
     @Bean(name = "sandboxExecutor")

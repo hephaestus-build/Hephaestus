@@ -26,9 +26,9 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Composes the review on the work for every labelled composition case with a live model, through main's
- * {@link ModelSession} and its system prompt, opening turn and check_package tool. The session follows
- * {@code WorkerFeedbackComposer}'s review session: the same call bound, one finish reminder, the nudge before the bound,
- * and main's answer to a refused review. It writes each case's final review and main's check of it to
+ * {@link ModelSession} and its system prompt, opening turn and check_package tool. The session follows the review
+ * session of the composer loop ({@code review-composer.ts}): the same call bound, one finish reminder, the nudge before
+ * the bound, and main's answer to a refused review. It writes each case's final review and main's check of it to
  * {@code COMPOSITION_EVAL_CHECKED} after each case. A rerun with the same model settings and requests resumes from that
  * file. The eval stops at validated drafts, before publication or delivery. The test asserts nothing about semantic
  * quality: the release-eval script scores the file against the labels.

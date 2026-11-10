@@ -114,20 +114,14 @@ Near the budget limit, the model receives a request to record its current result
 Each reservation ends after the call that spends its budget.
 The serial set ends after the call that spends its pool.
 
-The worker writes the feedback after the sandbox ends, with the same model.
+The review's sandbox writes the feedback after the review is measured, in a run of its own, with the same model.
 These calls count against the workspace's model budget like the review's own calls.
 Each feedback session makes at most the model calls of one practice's turn for each practice that it decides, and at most three practices' worth.
-`hephaestus.practice-review.composition-timeout` bounds the time that the worker spends on it (default 10 minutes, at least 1 minute).
+`hephaestus.practice-review.composition-timeout` bounds the time that the run spends on it (default 10 minutes, at least 1 minute).
 The step also ends 1 minute before the stale-job sweep would end the attempt, about 14 minutes after the assignment's timeout.
 The whole review can therefore take that much longer than the timeout of its **Practice reviews** assignment.
 
-While the worker writes, the review holds no sandbox, so the worker can start the next review.
-`AGENT_MAX_CONCURRENT_COMPOSITIONS` (default 16) sets how many reviews one worker runs at once, with or without a sandbox.
-`AGENT_MAX_ACTIVE_COMPOSITIONS` (default 4) sets how many of them write feedback at once. The others wait without their inputs.
-The Helm chart sets both from `SANDBOX_MAX_CONCURRENT`, the reviews that one worker runs.
-It sets 3/2 of it and 1/2 of it, and at least the defaults.
-
-Feedback that the worker cannot write is withheld with the most specific reason:
+Feedback that the composition cannot write is withheld with the most specific reason:
 
 - **No AI** when the workspace's AI choice no longer permits the model.
 - **Evidence not permitted** when the captured work was erased.

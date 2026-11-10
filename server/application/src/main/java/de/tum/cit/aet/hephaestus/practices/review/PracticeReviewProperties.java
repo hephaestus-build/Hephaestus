@@ -30,8 +30,8 @@ import org.springframework.validation.annotation.Validated;
  * @param directModelSearchUnitsPerAttempt The search units that the direct reranking calls of one review attempt may
  *                                         bill, for providers such as Cohere that bill search units. The proxy counts
  *                                         them and refuses further direct calls.
- * @param compositionTimeout  the longest the worker composes the feedback of one review attempt after its sandbox
- *                            ends. A destination still open then is withheld as not composed.
+ * @param compositionTimeout  the longest a review's composition run composes its feedback after the review is
+ *                            measured. A destination still open then is withheld as not composed.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.practice-review")

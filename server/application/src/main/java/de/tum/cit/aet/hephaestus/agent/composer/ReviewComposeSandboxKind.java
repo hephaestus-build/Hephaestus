@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobClaimService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobTerminal;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
+import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
@@ -21,7 +22,10 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -57,6 +61,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
     private final ReviewRunKind reviewRuns;
     private final AgentRuns runs;
     private final TransactionTemplate transactions;
+    private final ReviewStageTelemetry stages;
     private final Map<AgentRunFence, Decision> decisions = new ConcurrentHashMap<>();
 
     public ReviewComposeSandboxKind(
@@ -69,7 +74,9 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
             ReviewJobTerminal terminal,
             ReviewRunKind reviewRuns,
             AgentRuns runs,
-            TransactionTemplate transactions) {
+            TransactionTemplate transactions,
+            MeterRegistry meters,
+            Tracer tracer) {
         this.claims = claims;
         this.jobs = jobs;
         this.admission = admission;
@@ -80,6 +87,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         this.reviewRuns = reviewRuns;
         this.runs = runs;
         this.transactions = transactions;
+        this.stages = new ReviewStageTelemetry(meters, tracer);
     }
 
     @Override
@@ -97,7 +105,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         var fence = run.fence();
         return claims.claimLeased(fence)
                 .map(started -> {
-                    decisions.put(fence, new Decision(started.withholdOnly()));
+                    decisions.put(fence, new Decision(started.withholdOnly(), Instant.now()));
                     return true;
                 })
                 .orElse(false);
@@ -179,7 +187,14 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
             case HANDED_ON -> reviewRuns.requeue(jobId, fence, AgentRuns.Charge.SPEND, Duration.ZERO, null);
         };
         custody.release(composing.identity());
-        decisions.remove(fence);
+        var decision = decisions.remove(fence);
+        if (held && decision != null)
+            stages.record(
+                    ReviewStageTelemetry.Stage.COMPOSITION,
+                    Duration.between(decision.claimedAt(), Instant.now()),
+                    outcome == Outcome.COMPLETED
+                            ? ReviewStageTelemetry.Outcome.OK
+                            : ReviewStageTelemetry.Outcome.HANDED_ON);
         return held;
     }
 
@@ -193,15 +208,21 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
     /** What a claim decided: to compose, or to withhold what is open with a cause and make no model call. */
     private static final class Decision {
         private final @Nullable CompositionStop withholdOnly;
+        private final Instant claimedAt;
         private boolean withheld;
 
-        Decision(@Nullable CompositionStop withholdOnly) {
+        Decision(@Nullable CompositionStop withholdOnly, Instant claimedAt) {
             this.withholdOnly = withholdOnly;
+            this.claimedAt = claimedAt;
         }
 
         @Nullable
         CompositionStop withholdOnly() {
             return withholdOnly;
+        }
+
+        Instant claimedAt() {
+            return claimedAt;
         }
 
         /** Withholds what is open once for the claim; a failed withholding is tried again by the next call. */
