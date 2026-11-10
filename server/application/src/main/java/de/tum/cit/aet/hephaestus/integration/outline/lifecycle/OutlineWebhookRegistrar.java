@@ -308,19 +308,14 @@ public class OutlineWebhookRegistrar {
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void deregister(long workspaceId, long connectionId) {
-        boolean hadSubscription;
         try {
-            Optional<Runnable> deletion = prepareDeregistration(workspaceId, connectionId);
-            deletion.ifPresent(Runnable::run);
-            hadSubscription = deletion.isPresent();
+            prepareDeregistration(workspaceId, connectionId).ifPresent(Runnable::run);
         } catch (RuntimeException e) {
             log.warn(
                     "outline.webhook: deregistration failed for connectionId={}: {}",
                     connectionId,
                     e.getClass().getSimpleName());
-            hadSubscription = true;
         }
-        if (hadSubscription) {}
     }
 
     /**

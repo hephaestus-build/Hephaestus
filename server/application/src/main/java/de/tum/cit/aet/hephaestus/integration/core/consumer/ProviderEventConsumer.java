@@ -291,7 +291,7 @@ public class ProviderEventConsumer implements SmartLifecycle {
             return;
         } catch (ExecutionException crashed) {
             renewal.cancel(false);
-            if (crashed.getCause() instanceof Error error) throw error;
+            rethrowError(crashed);
             failure.set(crashed);
         }
         renewal.cancel(false);
@@ -396,6 +396,12 @@ public class ProviderEventConsumer implements SmartLifecycle {
         }
         logged.log("Handler timed out and did not stop; this replica restarts and keeps the event until then");
         breakLiveness();
+    }
+
+    /** A handler's Error, such as an OutOfMemoryError, ends the claimer: it is no failure of the event. */
+    @SuppressWarnings("PMD.PreserveStackTrace") // The wrapper only carries the handler thread's Error across.
+    private static void rethrowError(ExecutionException crashed) {
+        if (crashed.getCause() instanceof Error error) throw error;
     }
 
     /** Restarts this replica through Kubernetes, so a handler thread that would not stop dies with the Pod. */

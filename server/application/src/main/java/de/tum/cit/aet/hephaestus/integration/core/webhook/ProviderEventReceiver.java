@@ -73,16 +73,23 @@ public class ProviderEventReceiver {
             return pending.get(DEADLINE.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException late) {
             pending.cancel(true);
-            throw new QueryTimeoutException("The inbox did not store the delivery within " + DEADLINE);
+            throw new QueryTimeoutException("The inbox did not store the delivery within " + DEADLINE, late);
         } catch (InterruptedException interrupted) {
             pending.cancel(true);
             Thread.currentThread().interrupt();
-            throw new QueryTimeoutException("The receiver stopped while the inbox stored the delivery");
+            throw new QueryTimeoutException("The receiver stopped while the inbox stored the delivery", interrupted);
         } catch (ExecutionException failed) {
-            if (failed.getCause() instanceof RuntimeException runtime) throw runtime;
-            if (failed.getCause() instanceof Error error) throw error;
-            throw new IllegalStateException(failed.getCause());
+            throw unwrap(failed);
         }
+    }
+
+    /** The store's own failure, so the pipeline maps a database failure to its 503 as before. */
+    @SuppressWarnings("PMD.PreserveStackTrace") // The wrapper only carries the store thread's failure across.
+    private static RuntimeException unwrap(ExecutionException failed) {
+        Throwable cause = failed.getCause();
+        if (cause instanceof RuntimeException runtime) return runtime;
+        if (cause instanceof Error error) throw error;
+        return new IllegalStateException(failed);
     }
 
     private int store(
