@@ -31,7 +31,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSync
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser.RepositoryOwnerAndName;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
-import de.tum.cit.aet.hephaestus.integration.scm.github.common.GraphQlConnectionOverflowDetector;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestConnection;
@@ -57,7 +56,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Stream;
 import org.hibernate.Hibernate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -170,23 +168,15 @@ public class GitHubPullRequestSyncService {
     }
 
     /**
-     * Synchronizes pull requests for a repository with incremental sync support.
-     * <p>
-     * When {@code lastSyncTimestamp} is provided and incremental sync is enabled,
-     * pagination stops when we encounter a PR with updatedAt older than the timestamp.
-     * Since GitHub's GraphQL API doesn't support filterBy for PRs, we implement
-     * client-side filtering by stopping pagination early.
-     * <p>
-     * If the GitHub GraphQL API silently truncates results (totalCount &gt; fetched),
-     * this method automatically retries with state-based splitting (OPEN, CLOSED, MERGED).
-     * Each state gets its own independent pagination connection, effectively tripling
-     * the cap imposed by GitHub's connection limit.
+     * Synchronizes the pull requests of a repository that changed since the buffered watermark, or within the
+     * configured timeframe on the first sync. GitHub's GraphQL API has no {@code filterBy} for pull requests, so
+     * pagination stops at the first pull request older than that bound.
      *
      * @param scopeId           the scope ID for authentication
      * @param repositoryId      the repository ID to sync pull requests for
      * @param syncTargetId      the sync target ID for cursor persistence (null to disable)
      * @param initialCursor     the cursor to resume from (null to start from beginning)
-     * @param lastSyncTimestamp the timestamp of the last sync for incremental sync (null for full sync)
+     * @param lastSyncTimestamp the timestamp of the last sync for incremental sync (null for the initial sync timeframe)
      * @return sync result containing status and count of pull requests synced
      */
     public SyncResult syncForRepository(
@@ -195,24 +185,6 @@ public class GitHubPullRequestSyncService {
             @Nullable Long syncTargetId,
             @Nullable String initialCursor,
             @Nullable Instant lastSyncTimestamp) {
-        return syncForRepositoryWithStates(scopeId, repositoryId, syncTargetId, initialCursor, lastSyncTimestamp, null);
-    }
-
-    /**
-     * Core sync implementation that accepts an optional PR state filter.
-     * <p>
-     * When {@code states} is null, all PR states are fetched. If the GitHub GraphQL API
-     * silently truncates the connection (a known bug where hasNextPage returns false
-     * prematurely), this method detects the overflow and — for the unfiltered case —
-     * retries automatically by splitting into per-state queries (OPEN, CLOSED, MERGED).
-     */
-    private SyncResult syncForRepositoryWithStates(
-            Long scopeId,
-            Long repositoryId,
-            @Nullable Long syncTargetId,
-            @Nullable String initialCursor,
-            @Nullable Instant lastSyncTimestamp,
-            @Nullable List<String> states) {
         // Fetch repository outside of transaction to avoid holding locks during API calls
         Optional<Repository> repositoryResult = Objects.requireNonNull(
                 transactionTemplate.execute(status -> repositoryRepository.findById(repositoryId)));
@@ -237,36 +209,29 @@ public class GitHubPullRequestSyncService {
         // standard 30s timeout, triggering retries that waste rate limit budget.
         Duration timeout = syncProperties.extendedGraphqlTimeout();
 
-        Instant effectiveSyncTimestamp = lastSyncTimestamp;
-        boolean isIncrementalSync = false;
-        if (syncProperties.incrementalSyncEnabled()) {
-            if (lastSyncTimestamp != null) {
-                // Subtract buffer to ensure items updated just before recorded timestamp are still fetched
-                effectiveSyncTimestamp = lastSyncTimestamp.minus(syncProperties.incrementalSyncBuffer());
-                log.info(
-                        "Starting incremental PR sync: repoName={}, since={}, buffer={}",
-                        safeNameWithOwner,
-                        effectiveSyncTimestamp,
-                        syncProperties.incrementalSyncBuffer());
-            } else {
-                // First sync - use configured timeframe as fallback to limit initial data fetch
-                effectiveSyncTimestamp = OffsetDateTime.now(ZoneOffset.UTC)
-                        .minusDays(syncSchedulerProperties.timeframeDays())
-                        .toInstant();
-                log.info(
-                        "Starting first PR sync with timeframe fallback: repoName={}, timeframeDays={}, since={}",
-                        safeNameWithOwner,
-                        syncSchedulerProperties.timeframeDays(),
-                        effectiveSyncTimestamp);
-            }
-            isIncrementalSync = true;
+        Instant effectiveSyncTimestamp;
+        if (lastSyncTimestamp != null) {
+            // The overlap includes updates whose provider clock is behind the recorded watermark.
+            effectiveSyncTimestamp = lastSyncTimestamp.minus(syncProperties.incrementalSyncBuffer());
+            log.info(
+                    "Starting incremental PR sync: repoName={}, since={}, buffer={}",
+                    safeNameWithOwner,
+                    effectiveSyncTimestamp,
+                    syncProperties.incrementalSyncBuffer());
+        } else {
+            effectiveSyncTimestamp = OffsetDateTime.now(ZoneOffset.UTC)
+                    .minusDays(syncSchedulerProperties.timeframeDays())
+                    .toInstant();
+            log.info(
+                    "Starting first PR sync with timeframe fallback: repoName={}, timeframeDays={}, since={}",
+                    safeNameWithOwner,
+                    syncSchedulerProperties.timeframeDays(),
+                    effectiveSyncTimestamp);
         }
 
         // Probe the newest PR's updatedAt before running the expensive full query. Mirrors the
-        // issue-sync totalCount probe (~1 point vs ~59). Only valid for the unfiltered,
-        // start-from-scratch case: a state-split retry observes a different population, and a
-        // resumed cursor means we already know there is work left to page through.
-        if (isIncrementalSync && effectiveSyncTimestamp != null && initialCursor == null && states == null) {
+        // issue-sync totalCount probe (~1 point vs ~59). A resumed cursor means there are still pages to read.
+        if (initialCursor == null) {
             if (!hasPullRequestsUpdatedSince(
                     client, ownerAndName, effectiveSyncTimestamp, timeout, safeNameWithOwner)) {
                 log.info(
@@ -292,7 +257,6 @@ public class GitHubPullRequestSyncService {
         int retryAttempt = 0;
         boolean resuming = initialCursor != null;
         boolean stoppedByIncrementalSync = false;
-        final boolean incrementalSync = isIncrementalSync;
         SyncResult.Status abortReason = null; // null means completed successfully
 
         if (initialCursor != null) {
@@ -329,7 +293,6 @@ public class GitHubPullRequestSyncService {
                                                 PR_SYNC_PAGE_SIZE,
                                                 graphQlClientProvider.getRateLimitRemaining(scopeId)))
                                 .variable("after", currentCursor)
-                                .variable("states", states)
                                 .execute())
                         .retryWhen(Retry.backoff(TRANSPORT_MAX_RETRIES, TRANSPORT_INITIAL_BACKOFF)
                                 .maxBackoff(TRANSPORT_MAX_BACKOFF)
@@ -463,7 +426,7 @@ public class GitHubPullRequestSyncService {
 
                 // PRs are ordered by updatedAt DESC, so the last node in the page is the oldest —
                 // compare it against effectiveSyncTimestamp to decide whether to stop.
-                if (incrementalSync && hasMore) {
+                if (hasMore) {
                     var nodes = connection.getNodes();
                     if (!nodes.isEmpty()) {
                         var oldestPr = nodes.get(nodes.size() - 1);
@@ -592,56 +555,6 @@ public class GitHubPullRequestSyncService {
             }
         }
 
-        // Only meaningful during full sync — incremental sync intentionally fetches only
-        // recently-updated items, so fetchedCount < totalCount is expected there by design. The
-        // force-pagination above handles most truncation; if GitHub still returns empty pages
-        // (truly can't serve more data), fall back to state splitting.
-        if (reportedTotalCount >= 0 && !incrementalSync && abortReason == null) {
-            // totalPRsSynced is the comparand the fallback below uses. checkPaginated returns
-            // true only on a real early-stop gap (empty page after force-pagination), not on the
-            // benign case where GitHub's totalCount over-reports.
-            boolean overflowDetected = GraphQlConnectionOverflowDetector.checkPaginated(
-                    "pullRequests",
-                    totalPRsSynced,
-                    reportedTotalCount,
-                    abortReason != null || hasMore,
-                    safeNameWithOwner);
-            if (overflowDetected && states == null && !stoppedByIncrementalSync) {
-                log.info(
-                        "PR connection overflow persists after force-pagination (fetched={}, total={}), "
-                                + "falling back to state splitting: repo={}",
-                        totalPRsSynced,
-                        reportedTotalCount,
-                        safeNameWithOwner);
-                // Clear stale cursor from the truncated run before retrying
-                if (syncTargetId != null) {
-                    clearCursorCheckpoint(syncTargetId);
-                }
-                SyncResult[] stateResults = Stream.of("OPEN", "CLOSED", "MERGED")
-                        .map(state -> {
-                            log.info("State-split sync: repo={}, state={}", safeNameWithOwner, state);
-                            return syncForRepositoryWithStates(
-                                    scopeId,
-                                    repositoryId,
-                                    null, // no cursor persistence for state-split retries
-                                    null, // start fresh
-                                    lastSyncTimestamp,
-                                    List.of(state));
-                        })
-                        .toArray(SyncResult[]::new);
-                return SyncResult.merge(stateResults);
-            }
-            if (overflowDetected && states != null) {
-                log.error(
-                        "PR sync data loss: state={} still has more PRs than GitHub GraphQL can return. "
-                                + "fetched={}, totalCount={}, repo={}. No further recovery possible.",
-                        states,
-                        totalPRsSynced,
-                        reportedTotalCount,
-                        safeNameWithOwner);
-            }
-        }
-
         if (!prsNeedingReviewPagination.isEmpty()) {
             log.debug(
                     "Starting additional review fetch for PRs with pagination: repoName={}, prCount={}",
@@ -727,7 +640,7 @@ public class GitHubPullRequestSyncService {
         SyncResult.Status finalStatus = abortReason != null ? abortReason : discussionReads.status();
 
         log.info(
-                "Completed pull request sync: repoName={}, prCount={}, reviewCount={}, reviewCommentCount={}, commentCount={}, prsWithReviewPagination={}, prsWithThreadPagination={}, prsWithCommentPagination={}, resumed={}, incremental={}, stoppedByIncremental={}, status={}",
+                "Completed pull request sync: repoName={}, prCount={}, reviewCount={}, reviewCommentCount={}, commentCount={}, prsWithReviewPagination={}, prsWithThreadPagination={}, prsWithCommentPagination={}, resumed={}, stoppedByIncremental={}, status={}",
                 safeNameWithOwner,
                 totalPRsSynced,
                 totalReviewsSynced,
@@ -737,7 +650,6 @@ public class GitHubPullRequestSyncService {
                 prsNeedingThreadPagination.size(),
                 prsNeedingCommentPagination.size(),
                 resuming,
-                incrementalSync,
                 stoppedByIncrementalSync,
                 finalStatus);
         return new SyncResult(finalStatus, totalPRsSynced);
@@ -910,8 +822,7 @@ public class GitHubPullRequestSyncService {
      * most-recently-updated PR (UPDATED_AT DESC, first: 1) and compares its {@code updatedAt}
      * against the cutoff: if even the newest PR predates the cutoff, no PR can have changed.
      * <p>
-     * Fails open — any probe failure returns {@code true} so the caller runs the full sync
-     * rather than silently skipping data.
+     * If the probe fails, the caller reads pages with the same update bound instead of skipping data.
      *
      * @param client            the GraphQL client
      * @param ownerAndName      the parsed repository owner and name
@@ -945,7 +856,7 @@ public class GitHubPullRequestSyncService {
 
             if (response == null || !response.isValid()) {
                 log.warn(
-                        "PR update probe returned invalid response, falling back to full sync: repoName={}",
+                        "PR update probe returned invalid response, continuing with the pull request page query: repoName={}",
                         safeNameWithOwner);
                 return true;
             }
@@ -960,7 +871,7 @@ public class GitHubPullRequestSyncService {
             Object rawUpdatedAt = nodes.get(0).get("updatedAt");
             if (rawUpdatedAt == null) {
                 log.warn(
-                        "PR update probe returned null updatedAt, falling back to full sync: repoName={}",
+                        "PR update probe returned null updatedAt, continuing with the pull request page query: repoName={}",
                         safeNameWithOwner);
                 return true;
             }
@@ -969,9 +880,9 @@ public class GitHubPullRequestSyncService {
                     OffsetDateTime.parse(rawUpdatedAt.toString()).toInstant();
             return !newestUpdatedAt.isBefore(since);
         } catch (Exception e) {
-            // Fail-open: if the probe itself fails, proceed with the full sync
+            // Fail-open: if the probe itself fails, read the pull request pages with the same time bound
             log.warn(
-                    "PR update probe failed, falling back to full sync: repoName={}, error={}",
+                    "PR update probe failed, continuing with the pull request page query: repoName={}, error={}",
                     safeNameWithOwner,
                     e.getClass().getSimpleName());
             return true;

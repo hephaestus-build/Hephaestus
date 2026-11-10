@@ -132,8 +132,6 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
                 .when(exceptionClassifier.classifyWithDetails(any()))
                 .thenReturn(ClassificationResult.of(Category.UNKNOWN, "test error"));
 
-        // Full sync (not incremental) keeps the cheap latest-update probe out of the path.
-        lenient().when(syncProperties.incrementalSyncEnabled()).thenReturn(false);
         lenient().when(syncProperties.extendedGraphqlTimeout()).thenReturn(Duration.ofSeconds(30));
         lenient().when(syncProperties.paginationThrottle()).thenReturn(Duration.ZERO);
 

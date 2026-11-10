@@ -27,7 +27,6 @@ import org.springframework.validation.annotation.Validated;
  *         graphql-timeout: 30s
  *         extended-graphql-timeout: 60s
  *         pagination-throttle: 200ms
- *         incremental-sync-enabled: true
  *         incremental-sync-buffer: 5m
  * }</pre>
  *
@@ -49,9 +48,6 @@ import org.springframework.validation.annotation.Validated;
  * @param paginationThrottle     delay between pagination requests to avoid hammering GitHub's API;
  *                               reduces 502/504 errors caused by rapid-fire complex queries
  *                               (default: 200 milliseconds)
- * @param incrementalSyncEnabled whether to use incremental sync based on last sync timestamp;
- *                               when enabled, sync operations fetch only items updated since the
- *                               last sync (default: true)
  * @param incrementalSyncBuffer  Time subtracted from the last sync time, so that items updated shortly before it are
  *                               still fetched despite clock differences with GitHub.
  * @param backfillPrPageSize     Page size of pull request backfill queries. It is smaller than in regular sync,
@@ -71,6 +67,5 @@ public record GitHubSyncProperties(
         @NotNull @DurationUnit(MILLIS) @DefaultValue("200ms")
         Duration paginationThrottle,
 
-        @DefaultValue("true") boolean incrementalSyncEnabled,
         @NotNull @DurationUnit(MINUTES) @DefaultValue("5m") Duration incrementalSyncBuffer,
         @DefaultValue("10") int backfillPrPageSize) {}

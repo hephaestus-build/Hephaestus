@@ -876,7 +876,6 @@ hephaestus:
                 graphql-timeout: ${HEPHAESTUS_SYNC_GRAPHQL_TIMEOUT:60s}
                 extended-graphql-timeout: ${HEPHAESTUS_SYNC_EXTENDED_GRAPHQL_TIMEOUT:120s}
                 pagination-throttle: ${HEPHAESTUS_SYNC_PAGINATION_THROTTLE:200ms}
-                incremental-sync-enabled: ${HEPHAESTUS_SYNC_INCREMENTAL_ENABLED:true}
                 incremental-sync-buffer: ${HEPHAESTUS_SYNC_INCREMENTAL_BUFFER:5m}
                 backfill-graphql-timeout: ${HEPHAESTUS_SYNC_BACKFILL_TIMEOUT:120s}
                 backfill-pr-page-size: ${HEPHAESTUS_SYNC_BACKFILL_PR_PAGE_SIZE:10}

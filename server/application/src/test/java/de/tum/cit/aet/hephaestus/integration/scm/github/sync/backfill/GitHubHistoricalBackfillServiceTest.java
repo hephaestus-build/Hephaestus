@@ -134,7 +134,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
                 Duration.ofSeconds(60),
                 Duration.ofSeconds(120),
                 Duration.ZERO, // no throttle in tests
-                true,
                 Duration.ofMinutes(5),
                 10);
 

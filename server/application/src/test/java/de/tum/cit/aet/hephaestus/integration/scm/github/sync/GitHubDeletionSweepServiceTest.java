@@ -100,7 +100,6 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
                 Duration.ofSeconds(60),
                 Duration.ofSeconds(120),
                 Duration.ZERO,
-                true,
                 Duration.ofMinutes(5),
                 10);
 
