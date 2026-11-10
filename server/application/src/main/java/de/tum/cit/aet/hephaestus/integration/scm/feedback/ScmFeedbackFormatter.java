@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
+import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.List;
 import java.util.Objects;
@@ -82,6 +83,21 @@ public class ScmFeedbackFormatter {
 
     private String respondLink(ItemRef item) {
         return "Answer or disagree in [Hephaestus](" + feedbackAddress(item.workspaceId(), item.itemId()) + ").";
+    }
+
+    /**
+     * Marks an answer to a request comment. The answer has no feedback-copy receipt, so capture keeps the marker and
+     * treats the comment's authorship as uncertain.
+     */
+    public static final String REQUEST_ANSWER_MARKER = WorkspaceScmProjection.HEPHAESTUS_MARKER + "-request-answer -->";
+
+    /** The body of an answer to a request comment: plain text, a link to the work's feedback, and its marker. */
+    public String requestAnswer(long workspaceId, long itemId, String text) {
+        return PostedText.of(text)
+                + "\n\n[Open the feedback in Hephaestus]("
+                + feedbackAddress(workspaceId, itemId)
+                + ")\n"
+                + REQUEST_ANSWER_MARKER;
     }
 
     /** The page in Hephaestus that holds the feedback on this work. */

@@ -69,6 +69,28 @@ class ReviewCommandListenerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldNameAPullRequestAndAGitHubAccountWhenTheCommandCameFromGitHub() {
+        var gitHub = mock(ScmCommentReplySink.class);
+        when(gitHub.kind()).thenReturn(IntegrationKind.GITHUB);
+        var listening = new ReviewCommandListener(requests, List.of(sink, gitHub), reviews, memberships);
+        when(requests.requestByComment(anyLong(), anyLong(), any(), any(), any()))
+                .thenThrow(new AccessForbiddenException("not linked"));
+
+        listening.on(new BotCommandReceivedEvent(
+                IntegrationKind.GITHUB, 11L, 22L, "/hephaestus review", "someone", 1L, 33L, 44L, "acme/widgets#7"));
+
+        verify(gitHub)
+                .reply(
+                        11L,
+                        22L,
+                        "acme/widgets#7",
+                        "Hephaestus did not start a review: only the author or an assignee of this pull request, or a"
+                                + " workspace admin, can ask for a review, and only from a GitHub account that is linked"
+                                + " to their Hephaestus account.");
+        verify(sink, never()).reply(anyLong(), anyLong(), anyString(), anyString());
+    }
+
+    @Test
     void shouldAnswerARequestThatThePersonMayNotMake() {
         when(requests.requestByComment(anyLong(), anyLong(), any(), any(), any()))
                 .thenThrow(new AccessForbiddenException("not linked"));

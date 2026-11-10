@@ -8,7 +8,7 @@ import org.jspecify.annotations.Nullable;
  * comment. {@code ReviewCommandListener} in {@code practices/} handles it.
  *
  * <p>Vendor-neutral by contract: the publishing adapter resolves the comment to its workspace and canonical item,
- * so the subscriber never names a provider's repository or number. Today only the GitLab webhook path publishes it.
+ * so the subscriber never names a provider's repository or number. The GitHub and GitLab comment handlers publish it.
  *
  * @param kind           the integration kind of the publishing SCM
  * @param workspaceId    the workspace whose connection received the comment
