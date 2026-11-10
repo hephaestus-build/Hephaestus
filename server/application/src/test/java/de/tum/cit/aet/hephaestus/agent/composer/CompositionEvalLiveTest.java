@@ -4,42 +4,34 @@ import static de.tum.cit.aet.hephaestus.agent.composer.CompositionEvalCases.JSON
 import static de.tum.cit.aet.hephaestus.agent.composer.CompositionEvalCases.MAPPER;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmCredentials;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmTest;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Composes the review on the work for every labelled composition case with a live model, through main's
- * {@link ModelSession} and its system prompt, opening turn and check_package tool. The session follows the review
- * session of the composer loop ({@code review-composer.ts}): the same call bound, one finish reminder, the nudge before
- * the bound, and main's answer to a refused review. It writes each case's final review and main's check of it to
- * {@code COMPOSITION_EVAL_CHECKED} after each case. A rerun with the same model settings and requests resumes from that
- * file. The eval stops at validated drafts, before publication or delivery. The test asserts nothing about semantic
- * quality: the release-eval script scores the file against the labels.
+ * Composes every labelled composition case with a live model through the composer that production runs: the Node
+ * {@code review_compose} loop ({@code review-composer.ts}) over the real composer sessions, which render its prompts,
+ * check each draft and accept its publication ({@link CompositionEvalCases#compose}). It writes each case's published
+ * review, or its last checked one, to {@code COMPOSITION_EVAL_CHECKED} after each case. A rerun with the same model
+ * settings and requests resumes from that file. The eval stops at preparation, before approval and delivery. The test
+ * asserts nothing about semantic quality: the release-eval script scores the file against the labels.
  */
 @LiveLlmTest
 class CompositionEvalLiveTest {
-    /** {@code hephaestus.practice-review.practice-model-calls} at its default, as staging runs it. */
-    private static final int PRACTICE_MODEL_CALLS = 36;
-
-    /** The composer's own bound, {@code MAX_COMPOSITION_CALLS}. */
-    private static final int COMPOSITION_CALLS = 12;
 
     @Test
     void shouldComposeEveryCaseWithTheLiveModel() throws Exception {
@@ -49,8 +41,7 @@ class CompositionEvalLiveTest {
         String effort = Objects.requireNonNullElse(System.getenv("COMPOSITION_EVAL_REASONING_EFFORT"), "MEDIUM");
         int maxTokens = Integer.parseInt(
                 Objects.requireNonNullElse(System.getenv("COMPOSITION_EVAL_MAX_OUTPUT_TOKENS"), "32768"));
-        var settings = new ModelSession.Settings(
-                LlmApiProtocol.OPENAI_COMPLETIONS, creds.model(), ReasoningEffort.valueOf(effort), maxTokens, null);
+        var reasoning = ReasoningEffort.valueOf(effort);
         var transport = new LiveChatTransport(creds);
         var sourceScenarios = CompositionEvalCases.load();
         var scenarios = new ArrayList<LiveCase>();
@@ -61,11 +52,9 @@ class CompositionEvalLiveTest {
                     scenario.turn().toolParameters(),
                     ReviewOnWork.TOOL_DESCRIPTION,
                     CompositionEvalCases.system(),
-                    raw -> CompositionEvalCases.check(scenario, raw),
-                    scenario::fromModel,
-                    ReviewOnWork.finishText(
-                            scenario.turn().restable().keySet().stream().toList()),
-                    ReviewOnWork.NUDGE));
+                    CompositionEvalCases.basis(scenario, reasoning, maxTokens),
+                    FeedbackDestination.ON_WORK,
+                    scenario::fromModel));
         for (var scenario : CompositionEvalCases.privateScenarios(sourceScenarios))
             scenarios.add(new LiveCase(
                     scenario.id(),
@@ -73,10 +62,9 @@ class CompositionEvalLiveTest {
                     scenario.toolParameters(),
                     PrivateFeedback.TOOL_DESCRIPTION,
                     CompositionSessions.sharedStyle() + "\n\n" + CompositionSessions.prompt("feedback-composer.md"),
-                    scenario::check,
-                    UnaryOperator.identity(),
-                    "Decide every eligible practice with check_package.",
-                    PrivateFeedback.NUDGE));
+                    CompositionEvalCases.basis(scenario, reasoning, maxTokens),
+                    FeedbackDestination.valueOf(scenario.destination()),
+                    UnaryOperator.identity()));
         String only = System.getenv("COMPOSITION_EVAL_CASES");
 
         var model = JSON.objectNode()
@@ -97,7 +85,7 @@ class CompositionEvalLiveTest {
         var file = JSON.objectNode().put("version", 1).put("commit", commit);
         file.set("model", model);
         file.put("requestsSha256", requests);
-        file.put("runner", "CompositionEvalLiveTest (main's ModelSession, OPENAI_COMPLETIONS)");
+        file.put("runner", "CompositionEvalLiveTest (the review_compose Node loop, OPENAI_COMPLETIONS)");
         var cases = file.putArray("cases");
         var privateCases = file.putArray("privateCases");
         var done = new HashSet<String>();
@@ -131,7 +119,17 @@ class CompositionEvalLiveTest {
             if (only != null && !List.of(only.split(",", -1)).contains(scenario.id())) continue;
             if (done.contains(scenario.id())) continue;
             transport.resetServedModels();
-            (scenario.id().contains("/") ? privateCases : cases).add(compose(scenario, transport, settings));
+            var entry = CompositionEvalCases.compose(
+                    scenario.id(),
+                    scenario.basis(),
+                    scenario.destination(),
+                    scenario.output(),
+                    transport.answering(creds.model(), new ArrayList<>()));
+            entry.set(
+                    "servedModels",
+                    CompositionEvalCases.strings(
+                            transport.servedModels().stream().sorted().toList()));
+            (scenario.id().contains("/") ? privateCases : cases).add(entry);
             CompositionEvalCases.write(checkedFile, file);
         }
         var selected = scenarios.stream()
@@ -153,101 +151,19 @@ class CompositionEvalLiveTest {
         });
     }
 
+    /**
+     * One eval case: what its first request renders, for the digest that guards a resumed file, and what the composer
+     * loop composes it from.
+     */
     private record LiveCase(
             String id,
             String turn,
             ObjectNode parameters,
             String description,
             String system,
-            Function<JsonNode, CompositionEvalCases.Checked> check,
-            UnaryOperator<JsonNode> output,
-            String finish,
-            String nudge) {}
-
-    private static ObjectNode compose(
-            LiveCase scenario, ModelSession.Transport transport, ModelSession.Settings settings) {
-        var tool = new ModelSession.Tool("check_package", scenario.description(), scenario.parameters());
-        var session = new ModelSession(transport, MAPPER, settings, scenario.system(), List.of(tool));
-        int bound = Math.min(COMPOSITION_CALLS, PRACTICE_MODEL_CALLS);
-        long started = System.nanoTime();
-        Boolean firstAccepted = null;
-        JsonNode last = null;
-        CompositionEvalCases.Checked checked = null;
-        String failure = null;
-        boolean askedOnceMore = false;
-        boolean nudged = false;
-        var reply = session.send(scenario.turn());
-        while (true) {
-            boolean room = session.calls() < bound;
-            var failed = reply.failure();
-            if (failed != null) {
-                if (failed == ModelSession.Failure.PROVIDER && room) {
-                    reply = session.retry();
-                    continue;
-                }
-                failure = failed.name();
-                break;
-            }
-            var calls = reply.toolCalls();
-            if (calls.isEmpty()) {
-                if (!room || askedOnceMore) {
-                    failure = "NO_DECISION";
-                    break;
-                }
-                askedOnceMore = true;
-                reply = session.send(scenario.finish());
-                continue;
-            }
-            var results = new ArrayList<ModelSession.ToolResult>();
-            boolean stored = false;
-            for (var call : calls) {
-                if (!call.name().equals("check_package")) {
-                    results.add(new ModelSession.ToolResult(
-                            call.id(),
-                            "There is no tool named " + call.name() + "; check the review with check_package."));
-                    continue;
-                }
-                if (stored) {
-                    results.add(new ModelSession.ToolResult(call.id(), "The review is already stored."));
-                    continue;
-                }
-                last = call.arguments();
-                checked = scenario.check().apply(last);
-                if (firstAccepted == null) firstAccepted = checked.accepted();
-                stored = checked.accepted();
-                results.add(new ModelSession.ToolResult(
-                        call.id(), Objects.requireNonNullElse(checked.correction(), "The review is stored.")));
-            }
-            if (stored) break;
-            if (!room) {
-                failure = "OUT_OF_CALLS";
-                break;
-            }
-            String then = null;
-            if (!nudged && session.calls() >= bound - 2) {
-                nudged = true;
-                then = scenario.nudge();
-            }
-            reply = session.answer(results, then);
-        }
-        var entry = JSON.objectNode().put("id", scenario.id());
-        entry.put("calls", session.calls());
-        entry.put("elapsedMs", Duration.ofNanos(System.nanoTime() - started).toMillis());
-        if (failure != null) entry.put("failure", failure);
-        else entry.putNull("failure");
-        if (firstAccepted != null) entry.put("firstAccepted", firstAccepted);
-        else entry.putNull("firstAccepted");
-        entry.put("accepted", checked != null && checked.accepted());
-        entry.set("errors", CompositionEvalCases.strings(checked == null ? List.of() : checked.errors()));
-        if (last != null) entry.set("review", scenario.output().apply(ReviewOnWork.unwrapArguments(last)));
-        else entry.putNull("review");
-        if (transport instanceof LiveChatTransport live)
-            entry.set(
-                    "servedModels",
-                    CompositionEvalCases.strings(
-                            live.servedModels().stream().sorted().toList()));
-        return entry;
-    }
+            ComposerReplay.Basis basis,
+            FeedbackDestination destination,
+            UnaryOperator<JsonNode> output) {}
 
     /** One digest over every rendered request, so a resumed file belongs to the same prompts, criteria and cases. */
     private static String requestsDigest(List<LiveCase> scenarios) throws Exception {

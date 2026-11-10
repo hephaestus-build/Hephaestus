@@ -10,8 +10,10 @@ import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /** Sends a composer's chat request bytes to a live endpoint, without the proxy that fences and bills them. */
 final class LiveChatTransport implements ModelSession.Transport {
@@ -32,6 +34,20 @@ final class LiveChatTransport implements ModelSession.Transport {
      */
     Set<String> servedModels() {
         return Set.copyOf(servedModels);
+    }
+
+    /**
+     * Answers each of a composer's model calls with the live model, under the model's own name, and keeps every
+     * answer, a failed call's too.
+     */
+    Function<byte[], ModelSession.Answer> answering(String model, List<ModelSession.Answer> answers) {
+        return body -> {
+            var request = (ObjectNode) MAPPER.readTree(body);
+            request.put("model", model);
+            var answer = call(MAPPER.writeValueAsBytes(request));
+            answers.add(answer);
+            return answer;
+        };
     }
 
     /** Starts a new measurement, so that one case reports only the models that served its own calls. */

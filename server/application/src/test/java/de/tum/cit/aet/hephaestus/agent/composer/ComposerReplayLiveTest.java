@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -64,7 +63,7 @@ class ComposerReplayLiveTest {
             var structures = new ArrayList<JsonNode>();
             for (int run = 0; run < runs; run++) {
                 var answers = new ArrayList<ModelSession.Answer>();
-                var outcome = ComposerReplay.node(basis, live(transport, creds.model(), answers));
+                var outcome = ComposerReplay.node(basis, transport.answering(creds.model(), answers));
                 structures.add(structure(outcome.packages(), outcome.handedOn()));
                 if (run > 0) continue;
                 var recorded = basis.deepCopy();
@@ -137,19 +136,6 @@ class ComposerReplayLiveTest {
 
     private static String recordedName(ObjectNode basis) {
         return basis.path("scenario").asString() + "-recorded";
-    }
-
-    /** Sends each call to the live model under its own name, and keeps every answer, a failed call's too. */
-    private static Function<byte[], ModelSession.Answer> live(
-            LiveChatTransport transport, String model, List<ModelSession.Answer> answers) {
-        return body -> {
-            var request = (ObjectNode) ComposerReplay.MAPPER.readTree(body);
-            request.put("model", model);
-            var sent = transport.call(ComposerReplay.MAPPER.writeValueAsBytes(request));
-            var answer = new ModelSession.Answer(sent.status(), sent.body(), true, null);
-            answers.add(answer);
-            return answer;
-        };
     }
 
     /**
