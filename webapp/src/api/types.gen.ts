@@ -6970,6 +6970,10 @@ export type WorkspaceListItem = {
      */
     id: number;
     /**
+     * Hosts that a link in model-written text may point to in this workspace: Hephaestus and the workspace's providers. A host that starts with a dot also allows its subdomains. Any other link shows as text.
+     */
+    linkHosts: Array<string>;
+    /**
      * Whether practice reviews are on
      */
     practicesEnabled: boolean;

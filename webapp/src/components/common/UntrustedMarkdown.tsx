@@ -15,21 +15,38 @@ import styles from "./UntrustedMarkdown.module.css";
 
 import { InlineLink } from "@/components/common/InlineLink";
 import { MarkdownCode } from "@/components/common/MarkdownCode";
+import { linkIsAllowed, ModelLinkHostsContext } from "@/components/common/model-links";
 
 const HTTP_URL = /^https?:\/\//iu;
 
 const plainText = (value: string): ReactNode => value;
+
+/** The hosts the link rule allows for this text, or `null` for authored text, which keeps its links. */
+const LinkRuleContext = createContext<readonly string[] | null>([]);
 
 /** Carries {@link UntrustedMarkdownProps.renderText} to the text runs; the default is the words. */
 const RenderTextContext = createContext(plainText);
 
 /**
  * A link the model wrote is only a link when it is one: anything else renders as its own text.
+ * A web address on a host outside {@link ModelLinkHostsContext} shows its words and the address as
+ * code, so the reader sees where it points but cannot follow it by a click (OWASP LLM05).
  * A link opens in a new tab, so it carries the outbound icon and says so to a screen reader.
  */
 function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnchorElement>) {
+	const hosts = useContext(LinkRuleContext);
 	if (typeof href !== "string" || !HTTP_URL.test(href)) {
 		return <span className={className}>{children}</span>;
+	}
+	if (hosts !== null && !linkIsAllowed(href, hosts)) {
+		// A bare address renders its own words; `www.` ones gain a scheme in the link only.
+		return typeof children === "string" && href.endsWith(children) ? (
+			<code>{children}</code>
+		) : (
+			<span className={className}>
+				{children} (<code>{href}</code>)
+			</span>
+		);
 	}
 	return (
 		<InlineLink href={href} external>
@@ -185,6 +202,11 @@ export interface UntrustedMarkdownProps {
 	streaming?: boolean;
 	/** The level of every heading in the body: one below the heading of the section it sits under. */
 	headingLevel?: 3 | 4 | 5;
+	/**
+	 * A person wrote the text, such as a practice guide, so its web links stay links. Model-written
+	 * text leaves it unset and links only to the hosts of {@link ModelLinkHostsContext}.
+	 */
+	authored?: boolean;
 }
 
 /**
@@ -211,26 +233,30 @@ export function UntrustedMarkdown({
 	renderImage,
 	streaming = false,
 	headingLevel = 4,
+	authored = false,
 }: UntrustedMarkdownProps) {
+	const linkHosts = useContext(ModelLinkHostsContext);
 	return (
-		<HeadingLevelContext.Provider value={headingLevel}>
-			<RenderTextContext.Provider value={renderText ?? plainText}>
-				<RenderImageContext.Provider value={renderImage ?? noImage}>
-					<Streamdown
-						mode={streaming ? "streaming" : "static"}
-						isAnimating={streaming}
-						// No span per word: styling each one costs a frame per chunk on a long answer.
-						animated={false}
-						BlockComponent={streaming ? FadingBlock : Block}
-						rehypePlugins={[]}
-						remarkRehypeOptions={{ allowDangerousHtml: false }}
-						components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
-						translations={TRANSLATIONS}
-					>
-						{children}
-					</Streamdown>
-				</RenderImageContext.Provider>
-			</RenderTextContext.Provider>
-		</HeadingLevelContext.Provider>
+		<LinkRuleContext.Provider value={authored ? null : linkHosts}>
+			<HeadingLevelContext.Provider value={headingLevel}>
+				<RenderTextContext.Provider value={renderText ?? plainText}>
+					<RenderImageContext.Provider value={renderImage ?? noImage}>
+						<Streamdown
+							mode={streaming ? "streaming" : "static"}
+							isAnimating={streaming}
+							// No span per word: styling each one costs a frame per chunk on a long answer.
+							animated={false}
+							BlockComponent={streaming ? FadingBlock : Block}
+							rehypePlugins={[]}
+							remarkRehypeOptions={{ allowDangerousHtml: false }}
+							components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
+							translations={TRANSLATIONS}
+						>
+							{children}
+						</Streamdown>
+					</RenderImageContext.Provider>
+				</RenderTextContext.Provider>
+			</HeadingLevelContext.Provider>
+		</LinkRuleContext.Provider>
 	);
 }

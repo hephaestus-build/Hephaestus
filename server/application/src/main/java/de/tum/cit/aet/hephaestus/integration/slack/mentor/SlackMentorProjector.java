@@ -5,6 +5,7 @@ import com.slack.api.model.block.LayoutBlock;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.HistoryPage;
@@ -152,6 +153,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     private final MentorTurnCompletion completion;
     private final SlackMessageService slack;
     private final SlackMentorPoster poster;
+    private final ModelLinkHosts linkHosts;
     private final Clock clock;
     private final MeterRegistry meters;
 
@@ -175,6 +177,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             MentorTurnCompletion completion,
             SlackMessageService slack,
             SlackMentorPoster poster,
+            ModelLinkHosts linkHosts,
             Clock clock,
             MeterRegistry meters) {
         this(
@@ -185,6 +188,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                 completion,
                 slack,
                 poster,
+                linkHosts,
                 clock,
                 meters,
                 Executors.newVirtualThreadPerTaskExecutor(),
@@ -206,6 +210,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             MentorTurnCompletion completion,
             SlackMessageService slack,
             SlackMentorPoster poster,
+            ModelLinkHosts linkHosts,
             Clock clock,
             MeterRegistry meters,
             ExecutorService workers,
@@ -217,6 +222,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         this.completion = completion;
         this.slack = slack;
         this.poster = poster;
+        this.linkHosts = linkHosts;
         this.clock = clock;
         this.meters = meters;
         this.workers = workers;
@@ -685,10 +691,11 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             stream.attempt = turn.getAttempt();
             showWorking(projection.workspaceId, stream);
         }
-        String text = delivery.writing(turn);
-        if (text == null || stream.end != StreamEnd.SEND_REST) {
+        String writing = delivery.writing(turn);
+        if (writing == null || stream.end != StreamEnd.SEND_REST) {
             return;
         }
+        String text = SlackMentorPosts.streamable(writing, linkHosts.forWorkspace(projection.workspaceId));
         if (!text.startsWith(stream.sent)) {
             // Hephaestus's answer no longer starts with what Slack shows, for example after a retried model call.
             stream.end = StreamEnd.REPLACE;
@@ -862,7 +869,8 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
      */
     private void finish(SlackTurn turn, @Nullable ReplyStream stream, boolean reconciling) {
         MentorTurn.Status status = turn.turn().getStatus();
-        SlackMentorPosts.Reply reply = SlackMentorPosts.reply(turn.messages());
+        SlackMentorPosts.Reply reply = SlackMentorPosts.reply(
+                turn.messages(), linkHosts.forWorkspace(turn.turn().getWorkspaceId()));
         boolean redacted = turn.question().isRedacted();
         UUID answerId =
                 redacted || status == MentorTurn.Status.FAILED || reply.text().isBlank() ? null : turn.answerId();

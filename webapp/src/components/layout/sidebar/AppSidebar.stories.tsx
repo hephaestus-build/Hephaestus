@@ -16,6 +16,7 @@ const mockWorkspace = {
 	createdAt: new Date("2025-01-15T00:00:00Z"),
 	practicesEnabled: true,
 	publishesPublicActivity: false,
+	linkHosts: [] as string[],
 } as const;
 
 const meta = {

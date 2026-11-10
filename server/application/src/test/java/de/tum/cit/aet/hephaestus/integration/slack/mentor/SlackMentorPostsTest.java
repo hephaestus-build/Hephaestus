@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -94,7 +95,7 @@ class SlackMentorPostsTest extends BaseUnitTest {
                 MentorLinkDTO.Kind.RESULT, UUID.randomUUID(), "The tests cover the cache.", "explain-decisions", 421L);
 
         SlackMentorPosts.Reply reply = SlackMentorPosts.reply(
-                List.of(heph("Here is what I saw.", feedback, result), heph("What do you make of it?")));
+                List.of(heph("Here is what I saw.", feedback, result), heph("What do you make of it?")), Set.of());
 
         assertThat(reply.text()).isEqualTo("""
                         Here is what I saw.
@@ -124,7 +125,8 @@ class SlackMentorPostsTest extends BaseUnitTest {
                 MentorLinkDTO.Kind.FEEDBACK, feedbackId, "Your description says what changed.", null, 421L);
         MentorLinkDTO again =
                 new MentorLinkDTO(MentorLinkDTO.Kind.FEEDBACK, feedbackId, "Say why you chose it, too.", null, 421L);
-        SlackMentorPosts.Reply reply = SlackMentorPosts.reply(List.of(heph("Here is what I saw.", first, again)));
+        SlackMentorPosts.Reply reply =
+                SlackMentorPosts.reply(List.of(heph("Here is what I saw.", first, again)), Set.of());
 
         // Slack shows the first quote whole and the second one only in part.
         SlackMentorPosts.Reply.Seen seen =
@@ -132,5 +134,52 @@ class SlackMentorPostsTest extends BaseUnitTest {
 
         assertThat(seen.whole()).isEmpty();
         assertThat(seen.partly()).containsExactly(feedbackId);
+    }
+
+    @Test
+    void shouldShowALinkToAnotherHostAsCodeWhenHephaestusRepliesInSlack() {
+        SlackMentorPosts.Reply reply = SlackMentorPosts.reply(
+                List.of(
+                        heph(
+                                "Read [this guide](https://evil.example/?q=secret) or [the PR](https://github.com/a/b/pull/1).")),
+                Set.of("github.com"));
+
+        assertThat(reply.text())
+                .isEqualTo(
+                        "Read this guide (`https://evil.example/?q=secret`) or [the PR](https://github.com/a/b/pull/1).");
+    }
+
+    @Test
+    void shouldHoldBackOnlyALinkThatIsStillBeingWritten() {
+        Set<String> hosts = Set.of("github.com");
+
+        assertThat(SlackMentorPosts.streamable("Your reviews are", hosts)).isEqualTo("Your reviews are");
+        assertThat(SlackMentorPosts.streamable("Read [this guide](https://evil.exa", hosts))
+                .isEqualTo("Read ");
+        assertThat(SlackMentorPosts.streamable("Read https://evil.example/x and more", hosts))
+                .isEqualTo("Read ");
+        assertThat(SlackMentorPosts.streamable("Open ht", hosts)).isEqualTo("Open ");
+        assertThat(SlackMentorPosts.streamable("Look ![", hosts)).isEqualTo("Look ");
+        assertThat(SlackMentorPosts.streamable("See https://evil.example/a.\n\nNext we", hosts))
+                .isEqualTo("See `https://evil.example/a`.\n\nNext we");
+    }
+
+    @Test
+    void shouldStreamTheStartOfTheFinishedReply() {
+        Set<String> hosts = Set.of("github.com");
+        String answer = "See https://evil.example/a.\n\nThen [the PR](https://github.com/a/b/pull/1) and <!here>.";
+        String finished = SlackMentorPosts.reply(List.of(heph(answer)), hosts).text();
+
+        for (int end = 0; end <= answer.length(); end++) {
+            assertThat(finished).startsWith(SlackMentorPosts.streamable(answer.substring(0, end), hosts));
+        }
+    }
+
+    @Test
+    void shouldReadTheJoinedReplyAsOneTextWhenAMessageClosesAnotherMessagesFence() {
+        SlackMentorPosts.Reply reply = SlackMentorPosts.reply(
+                List.of(heph("```"), heph("```\n[x](https://evil.example/?q=s)")), Set.of("github.com"));
+
+        assertThat(reply.text()).doesNotContain("](https://evil.example").contains("`https://evil.example/?q=s`");
     }
 }

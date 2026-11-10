@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { ModelLinkHostsContext } from "./model-links";
 import { UntrustedMarkdown } from "./UntrustedMarkdown";
 
 /** Links every `#n` it finds, the way the feedback card links the work it can vouch for. */
@@ -24,9 +25,11 @@ function fading(container: HTMLElement): Element[] {
 describe("UntrustedMarkdown", () => {
 	it("leaves the words of a link the model wrote alone, so no link lands inside another", () => {
 		render(
-			<UntrustedMarkdown renderText={linkReferences}>
-				See [**#12**](https://example.com/pull/12) and **#13**.
-			</UntrustedMarkdown>,
+			<ModelLinkHostsContext.Provider value={["example.com"]}>
+				<UntrustedMarkdown renderText={linkReferences}>
+					See [**#12**](https://example.com/pull/12) and **#13**.
+				</UntrustedMarkdown>
+			</ModelLinkHostsContext.Provider>,
 		);
 
 		const links = screen.getAllByRole("link");
@@ -37,6 +40,34 @@ describe("UntrustedMarkdown", () => {
 		for (const link of links) {
 			expect(link.querySelector("a")).toBeNull();
 		}
+	});
+
+	it("shows a link to a host outside the workspace as its words and its address, never as a link", () => {
+		render(
+			<ModelLinkHostsContext.Provider value={["github.com", ".hephaestus.example"]}>
+				<UntrustedMarkdown>
+					Read [this guide](https://evil.example/?q=secret), https://other.example/a, [the
+					PR](https://github.com/a/b/pull/1) and [your page](https://team.hephaestus.example/p).
+				</UntrustedMarkdown>
+			</ModelLinkHostsContext.Provider>,
+		);
+
+		expect(screen.getAllByRole("link").map((link) => link.getAttribute("href"))).toStrictEqual([
+			"https://github.com/a/b/pull/1",
+			"https://team.hephaestus.example/p",
+		]);
+		expect(screen.getByText("https://evil.example/?q=secret").tagName).toBe("CODE");
+		expect(screen.getByText("https://other.example/a").tagName).toBe("CODE");
+	});
+
+	it("keeps the links of text a person wrote, such as a practice guide", () => {
+		render(
+			<ModelLinkHostsContext.Provider value={["github.com"]}>
+				<UntrustedMarkdown authored>See [the guide](https://docs.example/guide).</UntrustedMarkdown>
+			</ModelLinkHostsContext.Provider>,
+		);
+
+		expect(screen.getByRole("link").getAttribute("href")).toBe("https://docs.example/guide");
 	});
 
 	it("draws no image unless the caller draws it, so no image loads from anywhere", () => {

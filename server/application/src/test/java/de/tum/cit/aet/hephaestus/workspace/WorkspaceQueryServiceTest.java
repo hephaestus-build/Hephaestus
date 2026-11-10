@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
@@ -8,12 +9,14 @@ import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMetadataQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -46,6 +49,7 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
                 repositoryToMonitorRepository,
                 connectionService,
                 connectionMetadata,
+                mock(ModelLinkHosts.class),
                 publicActivityPolicy,
                 new WorkspaceProperties(false, null, false, null, WorkspaceProperties.CreationPolicy.ADMIN_ONLY),
                 new WorkspaceSubdomainProperties(false, ""),
@@ -100,7 +104,8 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
                                 workspace.getPublicActivityEnabled()),
                         null,
                         "/w/" + workspace.getWorkspaceSlug(),
-                        instanceAllows)
+                        instanceAllows,
+                        Set.of())
                 .publishesPublicActivity();
     }
 

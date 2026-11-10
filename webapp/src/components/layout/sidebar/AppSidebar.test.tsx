@@ -26,6 +26,7 @@ const workspace = {
 	status: "ACTIVE",
 	practicesEnabled: false,
 	publishesPublicActivity: false,
+	linkHosts: [] as string[],
 } as const;
 
 function renderMobileSidebar() {

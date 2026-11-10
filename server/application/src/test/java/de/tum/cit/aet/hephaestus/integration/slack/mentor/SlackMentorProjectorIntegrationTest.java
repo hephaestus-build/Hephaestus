@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.ConversationReceiptsDue;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
@@ -147,6 +148,9 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     private JdbcTemplate jdbc;
 
     @Autowired
+    private ModelLinkHosts linkHosts;
+
+    @Autowired
     private TransactionTemplate transactions;
 
     @Autowired
@@ -201,6 +205,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 completion,
                 slack,
                 new SlackMentorPoster(slack, delivery),
+                linkHosts,
                 clock,
                 meters,
                 new OnTheCallersThread(),
@@ -647,6 +652,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 completion,
                 slack,
                 new SlackMentorPoster(slack, delivery),
+                linkHosts,
                 clock,
                 meters,
                 new OnTheCallersThread(),

@@ -42,7 +42,7 @@ export function PracticeGuideMarkdown({ guide, headingLevel = 4 }: PracticeGuide
 				"max-w-2xl text-sm text-pretty prose-figure:my-2 [&_ul>li]:marker:text-muted-foreground",
 			)}
 		>
-			<UntrustedMarkdown renderImage={renderFigure} headingLevel={headingLevel}>
+			<UntrustedMarkdown renderImage={renderFigure} headingLevel={headingLevel} authored>
 				{guide.markdown}
 			</UntrustedMarkdown>
 		</div>
