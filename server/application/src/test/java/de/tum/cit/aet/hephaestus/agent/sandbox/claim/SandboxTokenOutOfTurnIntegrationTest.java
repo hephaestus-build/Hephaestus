@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -130,7 +131,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
             factory.registerSingleton("sandboxRunArguments", new WebMvcConfigurer() {
                 @Override
                 public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-                    resolvers.add(new SandboxRunArgumentResolver(runs));
+                    resolvers.add(new SandboxRunArgumentResolver(runs, Tracer.NOOP));
                 }
             });
             factory.registerSingleton("agentSandboxes", sandboxes);

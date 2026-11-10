@@ -4,6 +4,9 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import java.util.Objects;
@@ -11,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.MDC;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -32,9 +36,11 @@ public final class SandboxRunArgumentResolver implements HandlerMethodArgumentRe
     public static final String EPOCH_HEADER = "X-Agent-Epoch";
 
     private final AgentRuns runs;
+    private final Tracer tracer;
 
-    public SandboxRunArgumentResolver(AgentRuns runs) {
+    public SandboxRunArgumentResolver(AgentRuns runs, Tracer tracer) {
         this.runs = runs;
+        this.tracer = tracer;
     }
 
     @Override
@@ -53,8 +59,18 @@ public final class SandboxRunArgumentResolver implements HandlerMethodArgumentRe
             throw hidden();
         String runId = pathVariable(request);
         if (runId == null || !runId.equals(request.getHeader(RUN_HEADER))) throw hidden();
-        return resolve(runs, sandbox, runId, request.getHeader(EPOCH_HEADER))
+        SandboxRun run = resolve(runs, sandbox, runId, request.getHeader(EPOCH_HEADER))
                 .orElseThrow(SandboxRunArgumentResolver::hidden);
+        // Checked: the run is the sandbox's own. The token filter removes these with the request's other fields.
+        MDC.put(StructuredLogKeys.RUN_ID, run.fence().runId().toString());
+        MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(run.fence().epoch()));
+        Span span = tracer.currentSpan();
+        if (span != null)
+            span.tag("hephaestus.run.id", run.fence().runId().toString())
+                    .tag("hephaestus.run.epoch", run.fence().epoch())
+                    .tag("hephaestus.subject.key", sandbox.subjectKey())
+                    .tag("hephaestus.sandbox.name", sandbox.claimName());
+        return run;
     }
 
     /**

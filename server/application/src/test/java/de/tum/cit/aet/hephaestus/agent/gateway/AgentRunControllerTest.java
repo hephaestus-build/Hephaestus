@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -21,14 +22,20 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.tracing.Tracer;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -72,7 +79,7 @@ class AgentRunControllerTest extends BaseUnitTest {
         mvc = MockMvcBuilders.standaloneSetup(new AgentRunController(runs, sandboxes, transactions, List.of(review)))
                 // The global advice too, whose handler of every exception must not answer a stale claim first.
                 .setControllerAdvice(new GlobalControllerAdvice(), new AgentGatewayErrors())
-                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs))
+                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs, Tracer.NOOP))
                 .build();
         SecurityContextHolder.getContext()
                 .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(SANDBOX, null, List.of()));
@@ -81,6 +88,8 @@ class AgentRunControllerTest extends BaseUnitTest {
     @AfterEach
     void clearSandbox() {
         SecurityContextHolder.clearContext();
+        // The token filter, which this standalone setup leaves out, removes the run's fields after each request.
+        MDC.clear();
     }
 
     private static MockHttpServletRequestBuilder claimed(MockHttpServletRequestBuilder request) {
@@ -95,12 +104,19 @@ class AgentRunControllerTest extends BaseUnitTest {
     @Test
     void shouldServeTheRunsContextFromItsKindWhileTheClaimHoldsIt() throws Exception {
         when(runs.isCurrent(FENCE.run(), 3)).thenReturn(true);
-        when(review.context(run()))
-                .thenReturn(new JsonMapper().createObjectNode().put("practice", "names"));
+        var logContext = new AtomicReference<@Nullable Map<String, String>>();
+        when(review.context(run())).thenAnswer(invocation -> {
+            logContext.set(MDC.getCopyOfContextMap());
+            return new JsonMapper().createObjectNode().put("practice", "names");
+        });
 
         mvc.perform(claimed(get("/internal/agent/runs/{runId}/context", RUN)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.practice").value("names"));
+        assertThat(logContext.get())
+                .as("the kind's records name the run that the resolver checked")
+                .containsEntry(StructuredLogKeys.RUN_ID, RUN.toString())
+                .containsEntry(StructuredLogKeys.RUN_EPOCH, "3");
     }
 
     @Test
@@ -193,7 +209,7 @@ class AgentRunControllerTest extends BaseUnitTest {
         var unserved = MockMvcBuilders.standaloneSetup(
                         new AgentRunController(runs, sandboxes, mock(TransactionTemplate.class), List.of()))
                 .setControllerAdvice(new AgentGatewayErrors())
-                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs))
+                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs, Tracer.NOOP))
                 .build();
 
         unserved.perform(claimed(get("/internal/agent/runs/{runId}/context", RUN)))
