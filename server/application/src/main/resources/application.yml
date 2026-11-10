@@ -528,10 +528,9 @@ hephaestus:
             enabled: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:false}
             base-domain: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:}
         init-default: true
-        # Dev-only convenience: seed ADMIN membership to the first authenticated visitor of a
-        # zero-membership workspace (fresh dev DB). MUST stay false in production (prod overrides
-        # it) — otherwise it is a privilege-escalation on org-sync-churned empty-membership state.
-        auto-seed-membership: true
+        # Local development only: the first signed-in visitor of a workspace with no members becomes
+        # its ADMIN. The server refuses to start with it on under the prod profile.
+        auto-seed-membership: false
         default:
             login: ${GITHUB_PAT_LOGIN:hephaestus-build}
             token: ${GITHUB_PAT:}

@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mock.env.MockEnvironment;
 
 class MembershipAutoSeederIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -34,8 +35,8 @@ class MembershipAutoSeederIntegrationTest extends AbstractWorkspaceIntegrationTe
         User owner = persistUser("auto-seed-owner");
         Workspace workspace = createWorkspace("auto-seed", "AutoSeed", "autoseed", AccountType.ORG, owner);
         membershipRepository.deleteAll(membershipRepository.findByWorkspace_Id(workspace.getId()));
-        MembershipAutoSeeder seeder =
-                new MembershipAutoSeeder(membershipRepository, membershipService, connectionService, true);
+        MembershipAutoSeeder seeder = new MembershipAutoSeeder(
+                membershipRepository, membershipService, connectionService, true, new MockEnvironment());
 
         var seeded = seeder.seedFirstUserWhenEmpty(workspace, List.of(actor(visitor)));
 
@@ -67,8 +68,8 @@ class MembershipAutoSeederIntegrationTest extends AbstractWorkspaceIntegrationTe
                         null),
                 owner.getId());
         membershipRepository.deleteAll(membershipRepository.findByWorkspace_Id(workspace.getId()));
-        MembershipAutoSeeder seeder =
-                new MembershipAutoSeeder(membershipRepository, membershipService, connectionService, true);
+        MembershipAutoSeeder seeder = new MembershipAutoSeeder(
+                membershipRepository, membershipService, connectionService, true, new MockEnvironment());
 
         seeder.seedFirstUserWhenEmpty(workspace, List.of(actor(gitLabActor), actor(gitHubActor)));
 

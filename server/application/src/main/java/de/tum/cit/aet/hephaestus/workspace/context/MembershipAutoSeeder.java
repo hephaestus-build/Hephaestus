@@ -12,8 +12,15 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.Collection;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
+/**
+ * Local development only: makes the first signed-in visitor of a workspace with no members its ADMIN. It is off unless
+ * {@code hephaestus.workspace.auto-seed-membership} is set, and the server refuses to start with it on under the
+ * {@code prod} profile, because an unaudited ADMIN grant must not depend on a profile list being right.
+ */
 @ConditionalOnServerRole
 @Component
 public class MembershipAutoSeeder {
@@ -27,7 +34,12 @@ public class MembershipAutoSeeder {
             MembershipRepository membershipRepository,
             MembershipService membershipService,
             ConnectionService connectionService,
-            @Value("${hephaestus.workspace.auto-seed-membership:false}") boolean enabled) {
+            @Value("${hephaestus.workspace.auto-seed-membership:false}") boolean enabled,
+            Environment environment) {
+        if (enabled && environment.acceptsProfiles(Profiles.of("prod"))) {
+            throw new IllegalStateException(
+                    "hephaestus.workspace.auto-seed-membership must not be true under the 'prod' profile");
+        }
         this.membershipRepository = membershipRepository;
         this.membershipService = membershipService;
         this.connectionService = connectionService;
