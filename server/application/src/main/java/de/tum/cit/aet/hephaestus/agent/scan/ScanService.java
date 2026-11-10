@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ScanListedItem;
 import java.io.Serial;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -24,6 +25,9 @@ import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.core.retry.RetryPolicy;
+import org.springframework.core.retry.RetryTemplate;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.AntPathMatcher;
 
@@ -40,6 +44,18 @@ public class ScanService {
     private final Clock clock;
 
     public static final int PAGE_SIZE = 1000;
+
+    /**
+     * The first page registers the listed items, so a concurrent sync write can fail it with a serialization or lock
+     * conflict. Each attempt is a new transaction; a conflict that persists still ends the scan.
+     */
+    static final RetryPolicy LISTING_CONFLICTS = RetryPolicy.builder()
+            .includes(ConcurrencyFailureException.class)
+            .maxRetries(2)
+            .delay(Duration.ofMillis(100))
+            .build();
+
+    private final RetryTemplate listingRetries = new RetryTemplate(LISTING_CONFLICTS);
 
     public PreparedInventory prepare(ReviewSnapshot review) {
         var kinds = review.practices().stream()
@@ -65,8 +81,8 @@ public class ScanService {
         @Nullable String cursor = null;
         do {
             if (!clock.instant().isBefore(deadline)) throw new EnumerationFailure(ReviewStopReason.ENUMERATION_LIMIT);
-            var page = matching.getFirst()
-                    .list(new ItemListRequest(review.item(), pinned, kinds.getFirst(), cursor, PAGE_SIZE));
+            var request = new ItemListRequest(review.item(), pinned, kinds.getFirst(), cursor, PAGE_SIZE);
+            var page = listingRetries.invoke(() -> matching.getFirst().list(request));
             if (page.reason() != null)
                 throw new EnumerationFailure(
                         "ENUMERATION_LIMIT".equals(page.reason())
