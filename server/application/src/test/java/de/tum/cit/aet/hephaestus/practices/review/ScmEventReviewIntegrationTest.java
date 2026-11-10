@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
@@ -88,7 +89,7 @@ import de.tum.cit.aet.hephaestus.practices.ReviewOn;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicationContext;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackStoreService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendTransactions;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
@@ -304,7 +305,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     FeedbackCopyRepository copyRows;
 
     @Autowired
-    FeedbackSendRepository sends;
+    FeedbackSendQueue sendQueue;
 
     @Autowired
     PendingItemEventReaper reaper;
@@ -590,7 +591,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(oldFeedback.getState())
                 .as("Prepared public piece: %s", oldFeedback.getStopReason())
                 .isEqualTo(FeedbackState.READY);
-        assertThat(sends.findById(oldPiece).orElseThrow().getState()).isEqualTo(FeedbackSendState.PENDING);
+        assertThat(sendQueue.current(item.workspaceId(), oldPiece).orElseThrow().getState())
+                .isEqualTo(FeedbackSendState.PENDING);
 
         transactions.executeWithoutResult(ignored -> {
             var changed = pulls.findById(pull.getId()).orElseThrow();
@@ -624,7 +626,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(lateRow.getEndReason()).isEqualTo(ResultEndReason.WORK_CHANGED);
         assertThat(resultRows.findById(newerResult).orElseThrow().getEndedAt()).isNull();
 
-        String oldOwner = "owner-" + oldPiece;
+        var oldOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + oldPiece)
+                .orElseThrow();
         assertThat(delivery.claim(item.workspaceId(), oldPiece, oldOwner)).isNotNull();
         assertThat(delivery.fence(
                         item.workspaceId(),
@@ -650,7 +653,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 publication.issue(
                         item.workspaceId(), item.itemId(), newer.review().getId(), List.of(developer)));
         assertThat(feedbackRows.findById(newerPiece).orElseThrow().getState()).isEqualTo(FeedbackState.READY);
-        String newerOwner = "owner-" + newerPiece;
+        var newerOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + newerPiece)
+                .orElseThrow();
         var summary = FeedbackIds.copy(newerPiece, FeedbackCopyKind.SUMMARY, 0);
         assertThat(delivery.claim(item.workspaceId(), newerPiece, newerOwner)).isNotNull();
         assertThat(delivery.fence(item.workspaceId(), newerPiece, newerOwner, List.of(summary), List.of()))

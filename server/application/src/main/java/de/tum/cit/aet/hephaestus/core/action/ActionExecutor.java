@@ -129,7 +129,11 @@ public class ActionExecutor {
     }
 
     ActionResult run(ActionStore.Claim claim) {
-        ActionAdapter adapter = Objects.requireNonNull(adapters.get(claim.kind()));
+        return run(claim, Objects.requireNonNull(adapters.get(claim.kind())));
+    }
+
+    /** Carries out a claim with the given adapter; a test swaps in an adapter whose provider it controls. */
+    ActionResult run(ActionStore.Claim claim, ActionAdapter adapter) {
         var fenced = new AtomicBoolean();
         var attempt = new ActionAttempt(
                 claim.id(),

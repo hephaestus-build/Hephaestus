@@ -17,7 +17,7 @@ Do not copy it.
 2. Add a CHECK for the closed set of values, in the same migration as the column.
 3. Add a CHECK for each column that a state implies, such as a reason or a completion time.
 4. Put the legal transitions in one table beside the enum. `IntegrationState` shows the form.
-5. Write each transition as a compare-and-set on the expected state, as `FeedbackSendRepository.claim` does.
+5. Write each transition as a compare-and-set on the expected state, as `AgentActionRepository.claim` does.
 6. Refuse an illegal transition, and record the reason.
 7. Decide what a crash, a replay and a retry do to each state. State the answer in a test.
 

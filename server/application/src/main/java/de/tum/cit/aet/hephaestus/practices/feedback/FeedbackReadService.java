@@ -36,7 +36,7 @@ public class FeedbackReadService {
     private final FeedbackRepository feedback;
     private final FeedbackBasisRead basisRead;
     private final FeedbackCopyRepository copies;
-    private final FeedbackSendRepository sends;
+    private final FeedbackSendQueue sends;
     private final FeedbackDecisionRepository decisions;
     private final FeedbackResponseRepository responses;
     private final FeedbackContentDigest digests;
@@ -79,7 +79,7 @@ public class FeedbackReadService {
         var actualCopies = copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, id).stream()
                 .map(copy -> redactedCopy(copy, readable))
                 .toList();
-        var activeSend = sends.findByFeedbackIdAndWorkspaceId(id, workspaceId).map(FeedbackSendDTO::from).stream()
+        var activeSend = sends.current(workspaceId, id).map(FeedbackSendDTO::from).stream()
                 .toList();
         return new ReviewFeedbackDetailDTO(
                 summary.id(),

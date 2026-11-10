@@ -90,7 +90,7 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
         when(resolution.resolveExisting(any())).thenReturn(target);
         var corrector =
                 new PostedCopyCorrector(copies, visibility, List.of(gitlab.channel()), List.of(writer), transactions);
-        sender = new FeedbackSendService(
+        sender = sender(new FeedbackSendService(
                 transactions,
                 resolution,
                 List.of(gitlab.channel()),
@@ -98,7 +98,7 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
                 corrector,
                 new FeedbackReadbackMeters(new SimpleMeterRegistry()),
                 mock(FeedbackProviderReadback.class),
-                mock(FeedbackOwnCopyEditor.class));
+                mock(FeedbackOwnCopyEditor.class)));
         prepare(true);
         sender.send(workspace.getId(), feedbackId);
         if (rejected) {

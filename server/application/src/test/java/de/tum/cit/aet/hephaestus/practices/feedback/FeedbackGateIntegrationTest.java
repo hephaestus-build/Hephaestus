@@ -536,11 +536,9 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     }
 
     private List<@Nullable String> sendsOf(Feedback row) {
-        return jdbc.queryForList(
-                "SELECT action || ':' || state FROM feedback_send WHERE workspace_id=? AND feedback_id=?",
-                String.class,
-                workspace.getId(),
-                row.getId());
+        return sends.findById(row.getId()).stream()
+                .<@Nullable String>map(send -> send.getAction() + ":" + send.getState())
+                .toList();
     }
 
     private long workspaceRolloutRevision() {

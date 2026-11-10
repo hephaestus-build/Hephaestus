@@ -98,6 +98,69 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
     @Query(value = "SELECT id FROM agent_action WHERE idempotency_key = :key", nativeQuery = true)
     Optional<UUID> findIdByIdempotencyKey(@Param("key") String idempotencyKey);
 
+    /** Whether this attempt still holds its action: the epoch is current and the lease runs. */
+    @WorkspaceAgnostic("Checks one claimed action by its id and epoch")
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM agent_action
+             WHERE id = :id AND lease_epoch = :epoch AND state = 'EXECUTING' AND leased_until > clock_timestamp())
+            """, nativeQuery = true)
+    boolean holds(@Param("id") UUID id, @Param("epoch") long epoch);
+
+    interface LaneRow {
+        UUID getId();
+
+        String getKind();
+
+        String getIdempotencyKey();
+
+        String getState();
+
+        int getAttempts();
+
+        boolean getRereading();
+
+        Instant getNextAttemptAt();
+
+        @Nullable
+        String getStopReason();
+
+        Instant getCreatedAt();
+
+        Instant getUpdatedAt();
+    }
+
+    /**
+     * The newest action of a lane; its owner reads it under the lock of the lane's domain row. An action that waits for
+     * its next readback has its next attempt after its last update ({@link #reread}); a running claim does not.
+     */
+    @Query(value = """
+            SELECT id AS "id", kind AS "kind", idempotency_key AS "idempotencyKey", state AS "state",
+              attempts AS "attempts",
+              state = 'EXECUTING' AND next_attempt_at > updated_at AS "rereading", next_attempt_at AS "nextAttemptAt",
+              stop_reason AS "stopReason", created_at AS "createdAt",
+              updated_at AS "updatedAt"
+              FROM agent_action WHERE workspace_id = :workspaceId AND lane_key = :lane
+             ORDER BY created_at DESC, id DESC LIMIT 1
+            """, nativeQuery = true)
+    Optional<LaneRow> newestInLane(@Param("workspaceId") long workspaceId, @Param("lane") String laneKey);
+
+    /** Cancels the lane's actions that have not started; their owner withdrew them. */
+    @Modifying
+    @Query(value = """
+            UPDATE agent_action SET state = 'CANCELLED', stop_reason = 'WITHDRAWN', payload = NULL,
+                   ended_at = clock_timestamp(), updated_at = clock_timestamp()
+             WHERE workspace_id = :workspaceId AND lane_key = :lane AND state IN ('PROPOSED', 'ADMITTED')
+            """, nativeQuery = true)
+    int cancelPending(@Param("workspaceId") long workspaceId, @Param("lane") String laneKey);
+
+    /** The most attempts of a live action of these kinds; 0 when none is live. */
+    @WorkspaceAgnostic("One instance-wide maximum; it reads no content or identifiers")
+    @Query(value = """
+            SELECT COALESCE(MAX(attempts), 0) FROM agent_action
+             WHERE kind IN (:kinds) AND state IN ('PROPOSED', 'ADMITTED', 'EXECUTING')
+            """, nativeQuery = true)
+    int maxLiveAttempts(@Param("kinds") Collection<String> kinds);
+
     @WorkspaceAgnostic("Inserts one action under its own workspace, already claimed by its caller")
     @Query(value = """
             WITH a AS (
@@ -252,6 +315,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
                      ended_at = CASE WHEN attempts >= max_attempts THEN clock_timestamp() END,
                      payload = CASE WHEN attempts >= max_attempts THEN NULL ELSE payload END,
                      leased_until = CASE WHEN attempts >= max_attempts THEN NULL
+                       ELSE clock_timestamp() + make_interval(secs => :after) END,
+                     next_attempt_at = CASE WHEN attempts >= max_attempts THEN next_attempt_at
                        ELSE clock_timestamp() + make_interval(secs => :after) END,
                      updated_at = clock_timestamp()
                WHERE id = :id AND lease_epoch = :epoch AND state = 'EXECUTING'

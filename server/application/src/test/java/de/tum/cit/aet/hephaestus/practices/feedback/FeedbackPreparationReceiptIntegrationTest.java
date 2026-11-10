@@ -223,12 +223,9 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
                 .extracting(copy -> copy.getId())
                 .containsExactlyElementsOf(
                         proposal.copies().stream().map(FeedbackCopyInput::id).toList());
-        assertThat(jdbc.queryForList(
-                        "SELECT action || '|' || state FROM feedback_send WHERE" + " workspace_id=? AND feedback_id=?",
-                        String.class,
-                        workspace.getId(),
-                        feedbackId))
-                .containsExactly("POST|PENDING");
+        assertThat(sends.findById(feedbackId))
+                .hasValueSatisfying(send ->
+                        assertThat(send.getAction() + "|" + send.getState()).isEqualTo("POST|PENDING"));
     }
 
     @Test
@@ -258,12 +255,7 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
         store.prepareAll(workspace.getId(), reviewId, List.of(draft(false)));
         assertThat(current().getState()).isEqualTo(FeedbackState.AWAITING_APPROVAL);
         assertThat(children()).hasSize(1);
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM feedback_send WHERE workspace_id=? AND" + " feedback_id=?",
-                        Long.class,
-                        workspace.getId(),
-                        feedbackId))
-                .isZero();
+        assertThat(sends.findById(feedbackId)).isEmpty();
     }
 
     @Test

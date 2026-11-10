@@ -34,6 +34,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,7 +63,10 @@ public abstract class AbstractFeedbackIntegrationTest extends AbstractWorkspaceI
     protected FeedbackBasisRepository basis;
 
     @Autowired
-    protected FeedbackSendRepository sends;
+    protected FeedbackSendQueue sendQueue;
+
+    /** The newest send of a feedback, read as its callers read it. */
+    protected final Sends sends = new Sends();
 
     @Autowired
     protected FeedbackResponseRepository responses;
@@ -293,5 +297,15 @@ public abstract class AbstractFeedbackIntegrationTest extends AbstractWorkspaceI
                 .developerId(developerId)
                 .ordinal(0)
                 .build());
+    }
+
+    protected final class Sends {
+        public Optional<FeedbackSend> findById(UUID feedbackId) {
+            return sendQueue.current(workspace.getId(), feedbackId);
+        }
+
+        public Optional<FeedbackSend> findByFeedbackIdAndWorkspaceId(UUID feedbackId, long workspaceId) {
+            return sendQueue.current(workspaceId, feedbackId);
+        }
     }
 }

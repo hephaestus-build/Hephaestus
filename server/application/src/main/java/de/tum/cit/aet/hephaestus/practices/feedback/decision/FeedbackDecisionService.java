@@ -32,7 +32,6 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,7 +47,6 @@ public class FeedbackDecisionService {
     private final FeedbackDecisionRepository decisions;
     private final FeedbackBasisRepository basis;
     private final FeedbackCopyRepository copies;
-    private final ApplicationEventPublisher events;
     private final Clock clock;
     private final FeedbackGate gate;
     private final FeedbackContentDigest digests;
@@ -77,7 +75,7 @@ public class FeedbackDecisionService {
                 .orElseThrow(() -> new EntityNotFoundException("Feedback", feedbackId.toString()));
         if (feedback.getDestination() == FeedbackDestination.ON_WORK && feedback.getState() == FeedbackState.REPLACED)
             throw conflict("A newer revision owns this copy. Open that revision to change its delivery.");
-        var send = sendQueue.lock(workspaceId, feedbackId);
+        var send = sendQueue.current(workspaceId, feedbackId);
         var lockedCopies = copies.lockByFeedbackId(workspaceId, feedbackId);
         Instant now = clock.instant();
         if (action == FeedbackDecisionAction.RESTORE
@@ -156,9 +154,6 @@ public class FeedbackDecisionService {
                                     && copy.getExternalRef() == null)) {
                 sendQueue.queue(feedback, FeedbackSendAction.POST, FeedbackSendState.PENDING);
             }
-        }
-        if (action == FeedbackDecisionAction.APPROVE) {
-            events.publishEvent(new ApprovedFeedbackReadyEvent(workspaceId, feedbackId));
         }
         return new FeedbackDecisionOutcome(
                 decision.getId(),

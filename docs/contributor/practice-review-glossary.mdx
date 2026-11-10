@@ -197,7 +197,7 @@ The same name is the source capture code that causes it.
 | **Composition stop**           | The cause that left a destination without composed feedback. A passing cause hands the attempt on.        | CompositionStop                |
 | **Stage**                      | The admission of one practice's candidate when the practice ends. The candidate waits on its membership row until the seal. | planned: review_item.state = STAGED |
 | **Seal**                       | The one transaction that writes a review's staged results and problems. | planned |
-| **Send**                       | One leased provider post, quiet correction, readback or retraction of on-work feedback, with its reconciliation state.               | feedback_send                  |
+| **Send**                       | One leased provider post, quiet correction, readback or retraction of on-work feedback, with its reconciliation state.               | agent_action                   |
 | **Review digest**              | The digest of the definition inputs that can change an observation from the same evidence.                | practice_version.review_digest |
 | **Turn**                       | One run of Hephaestus for one question in a conversation, with its attempts, lease, partial answer and usage.       | mentor_turn, conversation_turn from 1.0                    |
 | **Call pool**                  | Provider capacity that the models in it share, whichever workspace calls them: a learned limit of calls in flight, an interactive reserve and a cooldown. Every model has one. | llm_call_pool |

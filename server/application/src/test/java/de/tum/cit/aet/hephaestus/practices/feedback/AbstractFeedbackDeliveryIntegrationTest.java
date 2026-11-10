@@ -9,6 +9,11 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyForm;
@@ -31,10 +36,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
-import de.tum.cit.aet.hephaestus.practices.feedback.delivery.ApprovedFeedbackDeliveryListener;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackOwnCopyEditor;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackReadbackMeters;
-import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecovery;
+import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendAdapter;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendTransactions;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
@@ -53,12 +57,12 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDraft;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -70,6 +74,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFeedbackIntegrationTest {
@@ -88,17 +93,22 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
     @MockitoBean
     MentorReadinessQuery conversationReadiness;
 
-    @MockitoBean
-    FeedbackSendRecovery scheduledRecovery;
+    @Autowired
+    protected ActionExecutor executor;
 
-    @MockitoBean
-    ApprovedFeedbackDeliveryListener approvalDelivery;
+    @Autowired
+    protected AgentActions actions;
+
+    @Autowired
+    protected ApplicationContext context;
+
+    private final Map<UUID, ActionAttempt> owners = new HashMap<>();
 
     protected UUID feedbackId;
     protected Result supportingResult;
     protected FeedbackTarget target;
     protected Provider provider;
-    protected FeedbackSendService sender;
+    protected Sender sender;
 
     @BeforeEach
     void configureProvider() {
@@ -143,12 +153,12 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         sender = newSender();
     }
 
-    protected FeedbackSendService newSender() {
+    protected Sender newSender() {
         var targets = mock(FeedbackTargetResolver.class);
         when(targets.resolve(any())).thenReturn(target);
         when(targets.resolveExisting(any())).thenReturn(target);
         var corrector = new PostedCopyCorrector(copies, visibility, List.of(provider), List.of(provider), transactions);
-        return new FeedbackSendService(
+        return sender(new FeedbackSendService(
                 transactions,
                 targets,
                 List.of(provider),
@@ -156,7 +166,28 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                 corrector,
                 new FeedbackReadbackMeters(new SimpleMeterRegistry()),
                 mock(FeedbackProviderReadback.class),
-                mock(FeedbackOwnCopyEditor.class));
+                mock(FeedbackOwnCopyEditor.class)));
+    }
+
+    protected Sender sender(FeedbackSendService service) {
+        return new Sender(service);
+    }
+
+    /** Carries out a feedback's due send, as the executor would, through this test's provider. */
+    protected final class Sender {
+        private final FeedbackSendService service;
+
+        Sender(FeedbackSendService service) {
+            this.service = service;
+        }
+
+        public void send(long workspaceId, UUID feedbackId) {
+            ActionTestSupport.runLane(
+                    executor,
+                    jdbc,
+                    "feedback:" + feedbackId,
+                    new FeedbackSendAdapter(ActionKind.DELIVER_FEEDBACK, service, transactions));
+        }
     }
 
     protected void prepare(boolean note) {
@@ -229,11 +260,53 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
     }
 
     protected void due() {
+        ActionTestSupport.due(jdbc, "feedback:" + feedbackId);
+    }
+
+    /** Claims the feedback's due send, as a process that then stops at any point would. */
+    protected ActionAttempt claimSend(UUID id) {
+        return ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + id).orElseThrow();
+    }
+
+    /** The claimed send of a feedback, claimed on first use. */
+    protected ActionAttempt owner(UUID id) {
+        return owners.computeIfAbsent(id, this::claimSend);
+    }
+
+    /**
+     * Settles a claimed send as its attempt would, and records the result as the executor would. An exhausted send is
+     * on its last attempt.
+     */
+    protected void finishSend(UUID id, ActionAttempt owner, boolean exhausted) {
+        if (exhausted) jdbc.update("UPDATE agent_action SET attempts = max_attempts WHERE id = ?", owner.id());
+        ActionTestSupport.record(context, owner, transactions.finish(workspace.getId(), id, owner));
+    }
+
+    /** Ends the lease of the feedback's running send, as if its process stopped. */
+    protected void expireClaim() {
+        ActionTestSupport.expireLease(jdbc, "feedback:" + feedbackId);
+    }
+
+    /** Queues a send that is due now, as an earlier release left it. */
+    protected void queueSend(UUID id, FeedbackSendAction action) {
         jdbc.update(
-                "UPDATE feedback_send SET next_attempt_at=? WHERE workspace_id=? AND feedback_id=?",
-                Timestamp.from(Instant.now().minusSeconds(1)),
-                workspace.getId(),
-                feedbackId);
+                """
+                INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload,
+                  subject_account_id, max_attempts, next_attempt_at, created_at, updated_at)
+                SELECT uuidv7(), f.workspace_id, ?, 'feedback:' || f.id,
+                       'feedback:' || f.id || ':' || (SELECT count(*) + 1 FROM agent_action a
+                                                       WHERE a.lane_key = 'feedback:' || f.id) || ':' || ?,
+                       'ADMITTED', jsonb_build_object('feedbackId', f.id), f.developer_id, 8,
+                       now() - interval '1 second', now(), now()
+                  FROM feedback f WHERE f.id = ?
+                """,
+                switch (action) {
+                    case POST, READBACK -> "DELIVER_FEEDBACK";
+                    case EDIT -> "EDIT_FEEDBACK";
+                    case RETRACT -> "RETRACT_FEEDBACK";
+                },
+                action.name(),
+                id);
     }
 
     protected enum Failure {

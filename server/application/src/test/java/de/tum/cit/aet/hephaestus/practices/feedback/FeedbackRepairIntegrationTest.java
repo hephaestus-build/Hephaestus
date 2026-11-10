@@ -6,7 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReadRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReadback;
@@ -24,12 +24,9 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDraft;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.sql.Timestamp;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -178,13 +175,14 @@ class FeedbackRepairIntegrationTest extends AbstractFeedbackDeliveryIntegrationT
         String recorded = current().getComposition().toString();
         UUID physicalId = UUID.fromString(children().getFirst().getExternalRef());
         provider.physical.put(physicalId, "A later provider observation.");
-        var queued = new FeedbackSendQueue(sends, Clock.systemUTC(), copies, visibility, mock(ConfigAuditPort.class));
-        queued.queue(current(), FeedbackSendAction.READBACK, FeedbackSendState.PENDING);
-        assertThat(transactions.claim(workspace.getId(), feedbackId, "new-owner"))
-                .isNotNull();
-        transport.readback().capture(workspace.getId(), feedbackId, "old-owner");
+        queueSend(feedbackId, FeedbackSendAction.READBACK);
+        var expired = claimSend(feedbackId);
+        expireClaim();
+        var owner = claimSend(feedbackId);
+        assertThat(transactions.claim(workspace.getId(), feedbackId, owner)).isNotNull();
+        transport.readback().capture(workspace.getId(), feedbackId, expired);
         assertThat(current().getComposition().toString()).isEqualTo(recorded);
-        transport.readback().capture(workspace.getId(), feedbackId, "new-owner");
+        transport.readback().capture(workspace.getId(), feedbackId, owner);
         assertThat(current()
                         .getComposition()
                         .path("readback")
@@ -192,7 +190,7 @@ class FeedbackRepairIntegrationTest extends AbstractFeedbackDeliveryIntegrationT
                         .path("body")
                         .asString())
                 .contains("A later provider observation.");
-        transactions.finish(workspace.getId(), feedbackId, "new-owner", false);
+        finishSend(feedbackId, owner, false);
     }
 
     @Test
@@ -230,11 +228,7 @@ class FeedbackRepairIntegrationTest extends AbstractFeedbackDeliveryIntegrationT
                         .getFirst()
                         .getState())
                 .isEqualTo(FeedbackCopyState.WRITE_STARTED);
-        jdbc.update(
-                "UPDATE feedback_send SET next_attempt_at=? WHERE workspace_id=? AND feedback_id=?",
-                Timestamp.from(Instant.now().minusSeconds(1)),
-                workspace.getId(),
-                revision);
+        ActionTestSupport.due(jdbc, "feedback:" + revision);
         provider.updateFailure = Failure.NONE;
         transport.sender().send(workspace.getId(), revision);
         var copy = copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspace.getId(), revision)
@@ -322,7 +316,7 @@ class FeedbackRepairIntegrationTest extends AbstractFeedbackDeliveryIntegrationT
                 draft.page());
     }
 
-    private record Transport(FeedbackSendService sender, FeedbackProviderReadback readback) {}
+    private record Transport(Sender sender, FeedbackProviderReadback readback) {}
 
     private Transport transport(boolean humanEdited) {
         var reader = mock(FeedbackCopyReader.class);
@@ -362,7 +356,7 @@ class FeedbackRepairIntegrationTest extends AbstractFeedbackDeliveryIntegrationT
                 Clock.systemUTC(),
                 mock(ApplicationEventPublisher.class),
                 privacy,
-                sends);
+                actions);
         var editor = new FeedbackOwnCopyEditor(
                 copies, feedback, List.of(reader), List.of(provider), List.of(provider), transactions);
         var sender = new FeedbackSendService(
@@ -374,6 +368,6 @@ class FeedbackRepairIntegrationTest extends AbstractFeedbackDeliveryIntegrationT
                 new FeedbackReadbackMeters(new SimpleMeterRegistry()),
                 readback,
                 editor);
-        return new Transport(sender, readback);
+        return new Transport(sender(sender), readback);
     }
 }

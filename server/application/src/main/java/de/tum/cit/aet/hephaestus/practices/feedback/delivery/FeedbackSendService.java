@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
@@ -13,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackProviderReadback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
@@ -31,7 +35,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class FeedbackSendService {
     private static final Logger log = LoggerFactory.getLogger(FeedbackSendService.class);
-    public static final int MAX_READBACK_ATTEMPTS = 8;
     private final FeedbackSendTransactions transactions;
     private final FeedbackTargetResolver targets;
     private final List<SummaryWriter> summaries;
@@ -41,29 +44,28 @@ public class FeedbackSendService {
     private final FeedbackProviderReadback providerReadback;
     private final FeedbackOwnCopyEditor editor;
 
-    public void send(long workspaceId, UUID feedbackId) {
-        String owner = UUID.randomUUID().toString();
+    /** Carries out one claimed send of a feedback to its work. */
+    public ActionResult send(ActionAttempt owner) {
+        long workspaceId = Objects.requireNonNull(owner.workspaceId());
+        UUID feedbackId = FeedbackSendQueue.feedbackOf(owner.idempotencyKey());
         var attempt = transactions.claim(workspaceId, feedbackId, owner);
-        if (attempt == null) return;
+        if (attempt == null) return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
         try {
             var target = attempt.action() == FeedbackSendAction.RETRACT
                             || attempt.copies().stream().anyMatch(copy -> copy.getWriteStartedAt() != null)
                     ? targets.resolveExisting(attempt.feedback())
                     : targets.resolve(attempt.feedback());
-            if (attempt.action() == FeedbackSendAction.READBACK) return;
-            if (attempt.action() == FeedbackSendAction.EDIT) {
-                editor.edit(attempt, target, owner);
-                return;
-            }
-            if (attempt.action() == FeedbackSendAction.RETRACT) {
-                corrector.correct(attempt, target, owner);
-                return;
-            }
-            if (target.item().kind().value().equals("scm.pull_request")) {
-                packageOnWork(attempt, target, owner);
-            } else {
-                for (var copy : attempt.copies())
-                    if (copy.getKind() == FeedbackCopyKind.SUMMARY) summary(attempt, target, owner, copy);
+            // A readback only reads the provider back, below.
+            switch (attempt.action()) {
+                case READBACK -> {}
+                case EDIT -> editor.edit(attempt, target, owner);
+                case RETRACT -> corrector.correct(attempt, target, owner);
+                case POST -> {
+                    if (target.item().kind().value().equals("scm.pull_request")) packageOnWork(attempt, target, owner);
+                    else
+                        for (var copy : attempt.copies())
+                            if (copy.getKind() == FeedbackCopyKind.SUMMARY) summary(attempt, target, owner, copy);
+                }
             }
         } catch (FeedbackTargetResolver.TargetUnavailable refusal) {
             transactions.refuseTarget(workspaceId, feedbackId, owner, refusal.reason());
@@ -72,18 +74,22 @@ public class FeedbackSendService {
         } catch (RuntimeException failure) {
             transactions.error(workspaceId, feedbackId, owner);
             log.warn("Feedback send did not settle: workspaceId={}, feedbackId={}", workspaceId, feedbackId);
-        } finally {
-            try {
-                if (attempt.action() != FeedbackSendAction.RETRACT)
-                    providerReadback.capture(workspaceId, feedbackId, owner);
-            } finally {
-                transactions.finish(workspaceId, feedbackId, owner, attempt.attempts() >= MAX_READBACK_ATTEMPTS);
-            }
         }
+        try {
+            if (attempt.action() != FeedbackSendAction.RETRACT)
+                providerReadback.capture(workspaceId, feedbackId, owner);
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "Feedback readback capture failed: workspaceId={}, feedbackId={}, errorType={}",
+                    workspaceId,
+                    feedbackId,
+                    failure.getClass().getName());
+        }
+        return transactions.finish(workspaceId, feedbackId, owner);
     }
 
     private void summary(
-            FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, String owner, FeedbackCopy copy) {
+            FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner, FeedbackCopy copy) {
         if (copy.getState() != FeedbackCopyState.PLANNED && copy.getState() != FeedbackCopyState.WRITE_STARTED) return;
         var matching = summaries.stream()
                 .filter(writer -> writer.kind() == target.integration().kind())
@@ -124,8 +130,10 @@ public class FeedbackSendService {
             return;
         }
         var handle = transactions.recipientWrite(attempt.feedback().getDeveloperId(), () -> {
-            if (!transactions.fence(
-                    copy.getWorkspaceId(), copy.getFeedbackId(), owner, List.of(copy.getId()), List.of())) return null;
+            if (!owner.fence().beginWrite()
+                    || !transactions.fence(
+                            copy.getWorkspaceId(), copy.getFeedbackId(), owner, List.of(copy.getId()), List.of()))
+                return null;
             return writer.postSummary(target, content);
         });
         if (handle == null) return;
@@ -137,7 +145,7 @@ public class FeedbackSendService {
                         copy.getId(), CopyDisposition.POSTED, handle.externalRef(), handle.url(), true, null)));
     }
 
-    private void packageOnWork(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, String owner) {
+    private void packageOnWork(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner) {
         long workspaceId = attempt.feedback().getWorkspaceId();
         UUID feedbackId = attempt.feedback().getId();
         var unresolved = copies(attempt, FeedbackCopyState.WRITE_STARTED);
@@ -197,7 +205,8 @@ public class FeedbackSendService {
                         target,
                         publication,
                         (attempting, completed) ->
-                                transactions.fence(workspaceId, feedbackId, owner, attempting, completed)));
+                                (attempting.isEmpty() || owner.fence().beginWrite())
+                                        && transactions.fence(workspaceId, feedbackId, owner, attempting, completed)));
         transactions.receipt(workspaceId, feedbackId, owner, result.receipts());
         transactions.withholdCopies(
                 workspaceId, feedbackId, owner, result.withheldCopyIds(), FeedbackStopReason.VOLUME_CAPPED);

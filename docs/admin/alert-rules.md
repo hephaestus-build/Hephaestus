@@ -153,7 +153,7 @@ For the volume rules, change their name patterns.
 | `HephaestusDeployMetricsMissing` | No `hephaestus_deploy_reconcile_timestamp_seconds` | The textfile collector, the metrics file or the reconciler is gone, which no other rule of the group shows |
 | `HephaestusDeployToolingPending` | `hephaestus_deploy_tooling_pending` | The host runs tooling that no apply recorded. The next promotion of the release that the host runs ends it. An hour leaves time for that promotion |
 | `HephaestusCertificateExpiring` | `certmanager_certificate_expiration_timestamp_seconds` | cert-manager renews a certificate when one third of its lifetime remains: 15 days of a 45-day certificate. For a certificate with a lifetime of less than 21 days, lower the threshold. cert-manager reports 0 for a certificate that it did not issue yet. Therefore, the alert also fires when a first issuance takes longer than its wait |
-| `HephaestusFeedbackSendRetrying` | `practice_feedback_send_attempts` at half `practice_feedback_send_readback_limit` for one minute | A send repeatedly needs recovery or readback. A manual retry keeps its lifetime count |
+| `HephaestusFeedbackSendRetrying` | `practice_feedback_send_attempts` at half `practice_feedback_send_readback_limit` for one minute | A send repeatedly needs recovery or readback. A manual retry is a new send with its own count |
 | `HephaestusFeedbackSendMetricsUnavailable` | An absent or `NaN` attempt gauge for five minutes on a scraped server | The database read did not succeed, so the retry alert has no reliable input |
 
 The WAL archive rule reads the server's [WAL archive metrics](./metrics#wal-archive-metrics).

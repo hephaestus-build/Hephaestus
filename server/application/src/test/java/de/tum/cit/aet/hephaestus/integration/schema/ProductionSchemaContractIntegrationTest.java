@@ -272,7 +272,6 @@ class ProductionSchemaContractIntegrationTest {
         assertColumnExists("identity_provider", "type");
         assertIndexExists("idx_slack_thread_participants");
         assertIndexExists("idx_slack_message_ingest");
-        assertConstraintExists("ck_feedback_send_lease");
         assertConstraintExists("ck_feedback_copy_fence");
         assertConstraintExists("ck_feedback_withheld");
     }

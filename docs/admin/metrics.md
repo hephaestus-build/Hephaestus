@@ -155,8 +155,8 @@ The server role and the workers count each change into a settled state, when the
 
 | Prometheus name | Type | Labels | Meaning |
 | --- | --- | --- | --- |
-| `practice_feedback_send_attempts` | Gauge | none | Most lifetime attempts of sends whose state is not `DONE` |
-| `practice_feedback_send_readback_limit` | Gauge | none | Attempt threshold at which an unresolved readback stops retrying |
+| `practice_feedback_send_attempts` | Gauge | none | Most attempts of a feedback send that has not ended |
+| `practice_feedback_send_readback_limit` | Gauge | none | Attempts at which a send whose copies stay unresolved ends `UNCERTAIN` |
 | `practice_feedback_settled_total` | Counter | `destination`, `state`, `reason` | Each time feedback reaches a settled state |
 | `practice_review_first_delivery_seconds` | Histogram | `trigger`, `approval` | From the occasion of a review to its first posted copy |
 | `practice_feedback_oldest_waiting_seconds` | Gauge | none | The age of the oldest feedback on the work that may be sent and has no posted copy |
@@ -183,16 +183,17 @@ Take the maximum over the servers.
 The roles register every settled state and every first delivery at zero when they start.
 Thus, `increase()` also counts the first change after a start.
 
-The server samples send attempts every 30 seconds. If every send is `DONE`, the gauge gives `0`.
+The server samples send attempts every 30 seconds. If every send has ended, the gauge gives `0`.
 Before the first sample or after a read failure, the attempts gauge gives `NaN`.
 
 The readback threshold comes from the same constant that delivery uses.
-It bounds automatic readback, not the lifetime count: a manual retry keeps the prior attempts.
-A crash before settlement leaves the send for lease recovery. Each reclaim increases its attempts.
+Each send is one action in the outbox, and the threshold is its maximum number of attempts.
+A crash before settlement leaves the send to the outbox, which takes it again when its lease ends. Each reclaim increases its attempts.
+A manual retry is a new send that starts at zero attempts.
 
 `HephaestusFeedbackSendRetrying` fires at half the threshold for one minute.
 `HephaestusFeedbackSendMetricsUnavailable` reports a missing gauge or a failed read.
-Exhaustion ends automatic readback and moves the send to `DONE`, so it no longer contributes to the attempts gauge.
+Exhaustion ends automatic readback and moves the send to `UNCERTAIN`, so it no longer contributes to the attempts gauge.
 
 These gauges read all workspaces without a workspace label. Take the maximum over servers.
 

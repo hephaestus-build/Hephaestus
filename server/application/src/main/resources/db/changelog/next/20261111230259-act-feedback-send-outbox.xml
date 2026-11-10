@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794276484048-1" author="hephaestus"><sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_action
+  DROP CONSTRAINT ck_agent_action_kind,
+  ADD CONSTRAINT ck_agent_action_kind
+    CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK','RETRACT_FEEDBACK'));
+-- A send that had not settled when the instance stopped runs again as the first action of its feedback's lane.
+-- A copy whose write may have reached the provider keeps its fence, so that action reads it back before it writes.
+INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload, subject_account_id, max_attempts,
+  next_attempt_at, created_at, updated_at)
+SELECT uuidv7(), s.workspace_id,
+       CASE s.action WHEN 'EDIT' THEN 'EDIT_FEEDBACK' WHEN 'RETRACT' THEN 'RETRACT_FEEDBACK' ELSE 'DELIVER_FEEDBACK' END,
+       'feedback:' || s.feedback_id, 'feedback:' || s.feedback_id || ':1:' || s.action, 'ADMITTED',
+       jsonb_build_object('feedbackId', s.feedback_id), f.developer_id, 8, clock_timestamp(), s.created_at, clock_timestamp()
+  FROM feedback_send s JOIN feedback f ON f.id = s.feedback_id AND f.workspace_id = s.workspace_id
+ WHERE s.state IN ('PENDING', 'SENDING', 'UNCERTAIN')
+ ORDER BY s.next_attempt_at, s.feedback_id;
+DROP TABLE feedback_send;
+DROP FUNCTION guard_feedback_send_destination();
+]]></sql></changeSet>
+</databaseChangeLog>

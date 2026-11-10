@@ -1,8 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
@@ -31,17 +28,18 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -49,7 +47,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
-import org.mockito.AdditionalAnswers;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration;
@@ -65,6 +62,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -87,6 +85,7 @@ public final class ComposeRunGateway implements AutoCloseable {
     private final ConfigurableApplicationContext gateway;
     private final AgentSandboxes sandboxes;
     private final FakeSandboxClaims claims = new FakeSandboxClaims();
+    private final ScheduledTaskRegistrar outbox = new ScheduledTaskRegistrar();
     private final int port;
 
     /**
@@ -111,7 +110,7 @@ public final class ComposeRunGateway implements AutoCloseable {
                 runs.capacity(),
                 context.getBean(MeterRegistry.class),
                 context.getBean(JsonMapper.class),
-                deliveredElsewhere(context.getBean(FeedbackRepair.class)),
+                context.getBean(FeedbackRepair.class),
                 context.getBean(CompositionToolTrace.class));
         sandboxes = new AgentSandboxes(
                 context.getBean(AgentSandboxRepository.class),
@@ -175,6 +174,9 @@ public final class ComposeRunGateway implements AutoCloseable {
                 "--" + RuntimeRole.SERVER_PROPERTY + "=false",
                 "--hephaestus.sandbox.gateway.port=0");
         port = gateway.getBean(SandboxGatewayConnector.class).port();
+        // The isolated test context has no scheduler; composition waits for the outbox's provider readback.
+        outbox.addFixedDelayTask(context.getBean(ActionExecutor.class)::runDue, Duration.ofSeconds(1));
+        outbox.afterPropertiesSet();
     }
 
     /** The token of the review sandbox of {@code subjectKey}, as its claim gives it to the sandbox. */
@@ -192,17 +194,29 @@ public final class ComposeRunGateway implements AutoCloseable {
      * @return what the driver printed: {@code {"ended": <status>}}, or {@code {"idle": true}}
      */
     public String drive(String token) throws Exception {
-        var process = new ProcessBuilder("node", DRIVER.toString(), "http://localhost:" + port, token)
-                .redirectError(ProcessBuilder.Redirect.INHERIT)
-                .start();
-        byte[] printed = process.getInputStream().readAllBytes();
-        if (!process.waitFor(2, TimeUnit.MINUTES) || process.exitValue() != 0)
-            throw new IllegalStateException("The sandbox driver did not finish: exit " + process.exitValue());
-        return new String(printed, StandardCharsets.UTF_8);
+        Path output = Files.createTempFile("review-compose-driver-", ".out");
+        try {
+            var process = new ProcessBuilder("node", DRIVER.toString(), "http://localhost:" + port, token)
+                    .redirectError(ProcessBuilder.Redirect.INHERIT)
+                    .redirectOutput(output.toFile())
+                    .start();
+            try {
+                if (!process.waitFor(2, TimeUnit.MINUTES))
+                    throw new IllegalStateException("The sandbox driver did not finish within two minutes");
+                if (process.exitValue() != 0)
+                    throw new IllegalStateException("The sandbox driver failed: exit " + process.exitValue());
+                return Files.readString(output, StandardCharsets.UTF_8);
+            } finally {
+                if (process.isAlive()) process.destroyForcibly();
+            }
+        } finally {
+            Files.deleteIfExists(output);
+        }
     }
 
     @Override
     public void close() {
+        outbox.destroy();
         gateway.close();
     }
 
@@ -244,16 +258,4 @@ public final class ComposeRunGateway implements AutoCloseable {
     })
     @Import(SandboxGatewayConfiguration.class)
     static class GatewayApplication {}
-
-    /**
-     * The repair of the review on the work, with its readback answered at once. This gateway runs no delivery, so a
-     * published review is never read back; the real readback would wait until the composition's deadline.
-     */
-    private static FeedbackRepair deliveredElsewhere(FeedbackRepair repair) {
-        var answered = mock(FeedbackRepair.class, AdditionalAnswers.delegatesTo(repair));
-        doReturn(new FeedbackRepairStatus(null, FeedbackRepairStatus.State.STOPPED, 0, List.of()))
-                .when(answered)
-                .status(anyLong(), any());
-        return answered;
-    }
 }

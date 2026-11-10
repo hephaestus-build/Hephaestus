@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
@@ -35,7 +36,7 @@ public class PostedCopyCorrector {
     private final FeedbackSendTransactions transactions;
 
     /** Brings each posted copy to what its marks and the piece's withdrawal now ask. Other copies stay untouched. */
-    public void correct(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, String owner) {
+    public void correct(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner) {
         var feedback = attempt.feedback();
         long workspaceId = feedback.getWorkspaceId();
         UUID feedbackId = feedback.getId();
@@ -46,7 +47,7 @@ public class PostedCopyCorrector {
             boolean remove = visibility.withdrawn(workspaceId, feedbackId)
                     || copies.incorrectCopyIds(workspaceId, feedbackId).contains(copy.getId());
             if (remove == (copy.getState() == FeedbackCopyState.RETRACTED)) continue;
-            if (!transactions.holdsLease(workspaceId, feedbackId, owner)) return;
+            if (!owner.fence().beginWrite() || !transactions.holdsLease(workspaceId, feedbackId, owner)) return;
             if (!remove) {
                 if (restoreAllowed == null) restoreAllowed = transactions.mayRestore(workspaceId, feedbackId, owner);
                 if (!restoreAllowed) continue;
@@ -68,7 +69,7 @@ public class PostedCopyCorrector {
     }
 
     private void correctSummary(
-            Feedback feedback, FeedbackCopy copy, FeedbackTarget target, boolean remove, String owner) {
+            Feedback feedback, FeedbackCopy copy, FeedbackTarget target, boolean remove, ActionAttempt owner) {
         if (copies.hasNewerSummaryReceipt(
                 copy.getWorkspaceId(), copy.getFeedbackId(), Objects.requireNonNull(copy.getExternalRef()))) {
             transactions.correctionError(
@@ -103,7 +104,7 @@ public class PostedCopyCorrector {
     }
 
     private void correctNote(
-            Feedback feedback, FeedbackCopy copy, FeedbackTarget target, boolean remove, String owner) {
+            Feedback feedback, FeedbackCopy copy, FeedbackTarget target, boolean remove, ActionAttempt owner) {
         if (copies.hasNewerSummaryReceipt(
                 copy.getWorkspaceId(), copy.getFeedbackId(), Objects.requireNonNull(copy.getExternalRef()))) {
             transactions.correctionError(
@@ -155,7 +156,7 @@ public class PostedCopyCorrector {
                     " Correction receipt is unavailable.");
     }
 
-    private void apply(FeedbackCopy copy, CopyUpdateReceipt receipt, boolean remove, String owner) {
+    private void apply(FeedbackCopy copy, CopyUpdateReceipt receipt, boolean remove, ActionAttempt owner) {
         if (!copy.getId().equals(receipt.copyId())
                 || (receipt.externalRef() != null && !Objects.equals(copy.getExternalRef(), receipt.externalRef())))
             throw new IllegalArgumentException("Correction must address the original copy.");
@@ -187,7 +188,7 @@ public class PostedCopyCorrector {
                     " Provider correction is not confirmed.");
     }
 
-    private void unsupported(FeedbackCopy copy, String owner) {
+    private void unsupported(FeedbackCopy copy, ActionAttempt owner) {
         transactions.correctionError(
                 copy.getWorkspaceId(),
                 copy.getFeedbackId(),

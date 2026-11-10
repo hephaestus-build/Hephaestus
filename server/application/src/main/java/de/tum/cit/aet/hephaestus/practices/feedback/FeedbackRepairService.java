@@ -78,7 +78,7 @@ public class FeedbackRepairService implements FeedbackRepair {
                 && (!request || observed.stream().noneMatch(copy -> copy.status() == CopyReadback.Status.UNAVAILABLE)))
             return new FeedbackRepairStatus(targetId, FeedbackRepairStatus.State.READBACK, 0, observed);
         if (request) {
-            var send = queue.lock(workspaceId, targetId);
+            var send = queue.current(workspaceId, targetId);
             if (send.isEmpty() || send.get().getState() == FeedbackSendState.DONE) {
                 var next = (ObjectNode) target.getComposition().deepCopy();
                 next.remove("readback");

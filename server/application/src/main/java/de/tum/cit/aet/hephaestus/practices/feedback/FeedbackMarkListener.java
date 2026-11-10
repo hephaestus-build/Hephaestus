@@ -29,7 +29,6 @@ public class FeedbackMarkListener {
     private final FeedbackOutcomes outcomes;
     private final FeedbackBasisRepository basis;
     private final FeedbackCopyRepository copies;
-    private final FeedbackSendRepository sends;
     private final FeedbackDecisionRepository decisionHistory;
     private final FeedbackVisibilityService visibility;
     private final FeedbackSendQueue sendQueue;
@@ -46,7 +45,7 @@ public class FeedbackMarkListener {
         for (UUID id : ids) {
             var row = feedback.lockByIdAndWorkspaceId(id, mark.workspaceId())
                     .orElseThrow(() -> new EntityNotFoundException("Feedback", id.toString()));
-            var send = sends.lockByFeedbackId(row.getWorkspaceId(), id);
+            var send = sendQueue.current(row.getWorkspaceId(), id);
             var children = copies.lockByFeedbackId(row.getWorkspaceId(), id);
             boolean onWork = row.getDestination() == FeedbackDestination.ON_WORK;
             if (!mark.removed()) {

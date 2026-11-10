@@ -129,7 +129,7 @@ class FeedbackDecisionErasureIntegrationTest extends AbstractFeedbackDeliveryInt
     @Test
     void shouldSettleWithdrawalAtTheFenceWithoutInventingAnApprovalRefusal() {
         prepare(false);
-        String owner = "withdrawal-fence-test";
+        var owner = owner(feedbackId);
         assertThat(transactions.claim(workspace.getId(), feedbackId, owner)).isNotNull();
         var withdrawal = decisionService.decide(
                 workspace.getId(),
@@ -143,9 +143,9 @@ class FeedbackDecisionErasureIntegrationTest extends AbstractFeedbackDeliveryInt
                         List.of(children().getFirst().getId()),
                         List.of()))
                 .isFalse();
+        finishSend(feedbackId, owner, false);
         var send = sends.findById(feedbackId).orElseThrow();
         assertThat(send.getState()).isEqualTo(FeedbackSendState.DONE);
-        assertThat(send.getLeaseOwner()).isNull();
         assertThat(children()).allSatisfy(copy -> {
             assertThat(copy.getState()).isEqualTo(FeedbackCopyState.PLANNED);
             assertThat(copy.getWriteStartedAt()).isNull();

@@ -473,7 +473,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "Review", // Through PR
                                         "Comment", // Through PR -> repository.organization.workspaceId
                                         "Commit", // Through repository.organization.workspaceId
-                                        "ApprovedFeedbackReadyEvent", // carries workspaceId directly
                                         "BotCommand", // BotCommandReceivedEvent carries workspaceId directly
                                         "WorkspaceCreatedEvent", // Carries workspaceId + kind
                                         "ConnectionCredentialsReplacedEvent", // Carries workspaceId and connectionId

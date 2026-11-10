@@ -5,8 +5,8 @@ page_type: reference
 ---
 
 An effect on the outside world is one action in the `agent_action` table.
-Email and product-feedback issues (`FILE_ISSUE`) are the kinds of action in this release.
-Feedback posts and Slack replies still use their own delivery code until they move here.
+Email, product-feedback issues (`FILE_ISSUE`) and feedback on the reviewed work (`DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`) are the kinds of action in this release.
+Slack replies still use their own delivery code until they move here.
 One executor carries out the actions on every server replica.
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) records why there is one outbox.
 The code is in `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/action/`.
@@ -114,6 +114,20 @@ So a retry does not reach a person who unsubscribed or lost the role or the addr
 Each email has a stable `Message-ID` derived from the idempotency key.
 The adapter retries only what the relay provably did not accept: a failed connection, a failed login, or an SMTP reply code of 4xx.
 Any other failure after the message reached the transport ends `UNCERTAIN`.
+
+## Feedback on the work
+
+Each feedback has one lane, `feedback:<feedback id>`, and its newest action is the feedback's send.
+`FeedbackSendQueue` enqueues the sends in the transaction that changes the feedback, under the feedback's row lock.
+A new send cancels a send of the lane that has not started.
+While a send runs, `queue` refuses a new send with 409. A caller that sees a running send leaves the correction to it.
+When a send ends, its `ended` hook decides, under the feedback's lock, whether the send owes a correction, and queues it.
+So a decision or a mark that commits while the send runs is never lost.
+
+The copies keep their own write fences.
+A send calls `beginWrite` before it fences a copy.
+While a copy's write may have reached the provider, the send returns `Reread`, and the next attempt reads the copy back by its marker.
+The `ended` hook also projects the copies of a send that ended without its own settlement.
 
 ## Retention and erasure
 

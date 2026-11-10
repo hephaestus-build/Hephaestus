@@ -25,7 +25,6 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @PersonDataStores({
     "practice_version",
-    "feedback_send",
     "feedback_response",
     "feedback_copy",
     "feedback_basis",
@@ -130,16 +129,6 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id",
                                 "created_by_account_id=NULL",
                                 -180),
-                        new JdbcPersonDataStore(
-                                jdbc,
-                                mapper,
-                                "feedback_send",
-                                "feedback_send",
-                                "t.feedback_id IN(" + FEEDBACK_IDS + ")",
-                                "feedback_id,workspace_id,action,state,lease_owner,lease_expires_at,next_attempt_at,attempts,last_error,created_at,updated_at",
-                                "feedback_id,workspace_id",
-                                "",
-                                -230),
                         new JdbcPersonDataStore(
                                 jdbc,
                                 mapper,
