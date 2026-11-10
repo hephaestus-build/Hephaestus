@@ -45,8 +45,24 @@ public class AgentRunNotifications implements DisposableBean {
             thread = Thread.ofPlatform().name("agent-run-listener").daemon(true).start(this::listen);
     }
 
+    /**
+     * Hands {@code kind} to every subscriber. A subscriber that throws is logged, and the others still hear the run: one
+     * failure must not cost the listener its connection.
+     */
+    static void publish(List<Consumer<AgentRunKind>> subscribers, AgentRunKind kind) {
+        for (Consumer<AgentRunKind> subscriber : subscribers) {
+            try {
+                subscriber.accept(kind);
+            } catch (RuntimeException failed) {
+                log.warn(
+                        "A run notification subscriber failed: kind={}, error={}",
+                        kind,
+                        failed.getClass().getSimpleName());
+            }
+        }
+    }
+
     private void listen() {
-        Consumer<AgentRunKind> queued = kind -> subscribers.forEach(subscriber -> subscriber.accept(kind));
         long backoffMillis = 1000;
         while (running) {
             try (var connection = DriverManager.getConnection(
@@ -59,11 +75,14 @@ public class AgentRunNotifications implements DisposableBean {
                     var received = notifications.getNotifications(WAIT_MILLIS);
                     if (received != null) {
                         for (var notification : received) {
+                            AgentRunKind kind;
                             try {
-                                queued.accept(AgentRunKind.valueOf(notification.getParameter()));
+                                kind = AgentRunKind.valueOf(notification.getParameter());
                             } catch (IllegalArgumentException unknown) {
                                 log.warn("Ignoring a run notification of an unknown kind");
+                                continue;
                             }
+                            publish(subscribers, kind);
                         }
                     }
                     statement.execute("SELECT 1");
