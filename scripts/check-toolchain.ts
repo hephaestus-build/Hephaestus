@@ -535,7 +535,7 @@ const dockerfile = readFileSync("webapp/Dockerfile", "utf8");
 // No lifecycle script runs in the image: the platform binaries come from optional dependencies,
 // and the root `prepare` would look for a Git repository that an image build does not have.
 if (
-	!/^\s+pnpm install --offline --frozen-lockfile --ignore-scripts --filter webapp$/mu.test(
+	!/^\s+pnpm install --offline --frozen-lockfile --ignore-scripts --filter webapp --store-dir \/pnpm\/store-cache$/mu.test(
 		dockerfile,
 	)
 ) {
