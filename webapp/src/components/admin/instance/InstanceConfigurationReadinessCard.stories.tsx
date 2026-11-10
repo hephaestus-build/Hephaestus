@@ -28,14 +28,14 @@ function fact(
 
 const satisfied = [
 	fact("database.url", "spring.datasource.url", "database", {
-		roles: ["SERVER", "WEBHOOK"],
+		roles: ["SERVER"],
 		explanation: "A PostgreSQL JDBC URL is required.",
 	}),
 	fact("external.base-url", "hephaestus.host-url", "external-url", {
 		explanation: "A root HTTPS origin without credentials, query, or fragment is required.",
 	}),
 	fact("webhook.shared-secret", "hephaestus.webhook.secret", "webhooks", {
-		roles: ["SERVER", "WEBHOOK"],
+		roles: ["SERVER"],
 		explanation: "A webhook secret of at least 32 printable ASCII characters is required.",
 	}),
 ];
