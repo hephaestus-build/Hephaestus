@@ -3,9 +3,7 @@
  * fetch. Fetching lives in the route file (or a `src/hooks/use-*.ts` it calls), which passes plain
  * props down. Their stories carry the second half of the rule: no MSW.
  *
- * A script rather than a lint rule because the allowlist below is repo-wide, and a linter reporting
- * per file cannot fail the build when an entry scans clean. Vitest cannot carry it either — scanning
- * the tree inside a worker starves the route tests sharing it.
+ * Vitest cannot carry it: scanning the tree inside a worker starves the route tests sharing it.
  */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -40,18 +38,6 @@ const QUERY_HOOKS = [
 	"useQueryClient",
 ];
 const MOCK_MODULES = ["msw", "msw-storybook-addon", "story-mock-server", "@/mocks/handlers"];
-
-/** Shrink only: refactor a file, delete its line. An entry that scans clean fails the build. */
-const ALLOWLIST = {
-	fetching: [
-		"webapp/src/components/admin/audit/AuthAuditPanel.tsx",
-		"webapp/src/components/admin/audit/ConfigAuditPanel.tsx",
-	],
-	storyMocks: [
-		"webapp/src/components/admin/audit/AuthAuditPanel.stories.tsx",
-		"webapp/src/components/admin/audit/ConfigAuditPanel.stories.tsx",
-	],
-};
 
 /**
  * Import statements start a line; a commented-out or quoted one does not. Multi-line specifier lists
@@ -148,7 +134,6 @@ const calledQueryHooks = (source: string): string[] => {
 
 const fetchingFailures: string[] = [];
 const docsFailures: string[] = [];
-const stale: string[] = [];
 
 /** R1 — components take data as props. */
 const componentTreeGroups = await Promise.all(
@@ -171,12 +156,8 @@ for (const file of componentFiles) {
 		...calledQueryHooks(source).map((hook) => `calls ${hook}()`),
 		...importedQueryHooks(source).map((hook) => `imports ${hook}`),
 	];
-	const allowed = ALLOWLIST.fetching.includes(file);
-	if (reasons.length > 0 && !allowed) {
+	if (reasons.length > 0) {
 		fetchingFailures.push(`${file} — ${reasons.join(", ")}`);
-	}
-	if (reasons.length === 0 && allowed) {
-		stale.push(`${file} (fetching)`);
 	}
 }
 
@@ -195,12 +176,8 @@ for (const file of componentStories) {
 	const source = await readSource(file);
 	const mocked =
 		importsAny(source, MOCK_MODULES).length > 0 || source.includes("story-mock-server");
-	const allowed = ALLOWLIST.storyMocks.includes(file);
-	if (mocked && !allowed) {
+	if (mocked) {
 		fetchingFailures.push(`${file} — mocks the network in a story`);
-	}
-	if (!mocked && allowed) {
-		stale.push(`${file} (storyMocks)`);
 	}
 }
 
@@ -241,10 +218,6 @@ const reports: readonly (readonly [string, readonly string[]])[] = [
 		'A story file that mocks the network must set docs: { story: { inline: false } } on its meta, or drop tags: ["autodocs"].',
 		docsFailures,
 	],
-	[
-		"These are no longer violations. Delete them from ALLOWLIST in this script — it only shrinks.",
-		stale,
-	],
 ];
 for (const [message, entries] of reports) {
 	if (entries.length === 0) {
@@ -256,11 +229,10 @@ for (const [message, entries] of reports) {
 	}
 	console.error("");
 }
-if (fetchingFailures.length > 0 || docsFailures.length > 0 || stale.length > 0) {
+if (fetchingFailures.length > 0 || docsFailures.length > 0) {
 	process.exit(1);
 }
 
 console.log(
-	`check-presentational-components: ${componentFiles.length} components, ${allStories.length} story files, ` +
-		`${ALLOWLIST.fetching.length + ALLOWLIST.storyMocks.length} allowlisted.`,
+	`check-presentational-components: ${componentFiles.length} components, ${allStories.length} story files.`,
 );

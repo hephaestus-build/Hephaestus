@@ -1,16 +1,9 @@
-import { hashKey, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { DownloadIcon } from "lucide-react";
-import { toast } from "@/lib/toast";
 
-import {
-	adminCountAuthEventsOptions,
-	adminListAuthEventsInfiniteOptions,
-} from "@/api/@tanstack/react-query.gen";
-import { adminExportAuthEvents } from "@/api/sdk.gen";
-import type { AdminExportAuthEventsData } from "@/api/types.gen";
+import type { AuthEventView } from "@/api/types.gen";
 import { AdminAuditTable } from "@/components/admin/audit/AdminAuditTable";
 import { EVENT_TYPE_LABELS } from "@/components/admin/audit/audit-format";
-import { auditRows } from "@/components/admin/audit/audit-list";
+import type { AuditListState } from "@/components/admin/audit/audit-list";
 import {
 	type AuditSearch,
 	dayAfterInstant,
@@ -26,14 +19,7 @@ import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { saveTextFile } from "@/lib/download";
-import { formatNumber } from "@/lib/numbers";
 import { narrowToEnum, nonEmpty } from "@/lib/search-params";
-import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
-import { nextCursorOf } from "@/runtime/tanstack-query/list-pages";
-import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
-
-const PAGE_SIZE = 50;
 
 const EVENT_TYPE_OPTIONS = toFacetOptions(EVENT_TYPE_LABELS);
 const EVENT_TYPES = EVENT_TYPE_OPTIONS.map((option) => option.value);
@@ -44,38 +30,10 @@ const OUTCOME_OPTIONS = [
 ];
 const OUTCOMES: ("SUCCESS" | "FAILURE")[] = ["SUCCESS", "FAILURE"];
 
-/**
- * Reads the auth events under `query` as CSV and hands them to the browser as a file named for the
- * day the reader saved it.
- */
-async function downloadAuditLog(query: AdminExportAuthEventsData["query"]): Promise<void> {
-	const { data, error, response } = await adminExportAuthEvents({ query });
-	if (error !== undefined || typeof data !== "string") {
-		throw new Error("Export failed");
-	}
-	const day = new Date().toISOString().slice(0, 10);
-	saveTextFile(data, `audit-log-${day}.csv`, "text/csv;charset=utf-8;");
-	const leftOut = Number(response?.headers.get("X-Left-Out-Count"));
-	if (leftOut > 0) {
-		toast.warning("The file does not hold every matching event", {
-			description: `It leaves out ${formatNumber(leftOut)} matching ${leftOut === 1 ? "event" : "events"}. Narrow the filters to export them.`,
-		});
-	}
-}
-
-export interface AuthAuditPanelProps {
-	search: AuditSearch;
-	onSearchChange: (patch: Partial<AuditSearch>) => void;
-	resolveWorkspaceName?: (id: number) => string | undefined;
-}
-
-export function AuthAuditPanel({
-	search,
-	onSearchChange,
-	resolveWorkspaceName,
-}: AuthAuditPanelProps) {
+/** The server's filters for the auth events that `search` asks for. */
+export function authAuditFilters(search: AuditSearch) {
 	const dateRange = toDateRange(search);
-	const filters = {
+	return {
 		eventType: narrowToEnum(search.eventType, EVENT_TYPES),
 		result: narrowToEnum(search.outcome, OUTCOMES),
 		accountId: search.accountId,
@@ -83,23 +41,37 @@ export function AuthAuditPanel({
 		from: dateRange?.from ? dayStartInstant(dateRange.from) : undefined,
 		to: dateRange?.to ? dayAfterInstant(dateRange.to) : undefined,
 	} as const;
+}
 
-	const listOptions = adminListAuthEventsInfiniteOptions({
-		query: { size: PAGE_SIZE, ...filters },
-	});
-	const listQuery = useInfiniteQuery({
-		...listOptions,
-		initialPageParam: { query: { cursor: undefined } },
-		getNextPageParam: nextCursorOf,
-	});
-	useQueryReadRefusal(listOptions.queryKey, listQuery.isError, listQuery.error);
-	const list = infiniteListState(listQuery, auditRows);
-	const countOptions = adminCountAuthEventsOptions({ query: filters });
-	const countQuery = useQuery(countOptions);
-	useQueryReadRefusal(countOptions.queryKey, countQuery.isError, countQuery.error);
+export interface AuthAuditPanelProps {
+	search: AuditSearch;
+	onSearchChange: (patch: Partial<AuditSearch>) => void;
+	resolveWorkspaceName?: (id: number) => string | undefined;
+	list: AuditListState<AuthEventView>;
+	/** How many events the filters match, once that read has answered. */
+	total: number | undefined;
+	/** The read's query key, hashed: the filters the list was read for. */
+	read: string;
+	/** The CSV export of the matching events is under way. */
+	exporting: boolean;
+	onExport: () => void;
+}
+
+export function AuthAuditPanel({
+	search,
+	onSearchChange,
+	resolveWorkspaceName,
+	list,
+	total: count,
+	read,
+	exporting,
+	onExport,
+}: AuthAuditPanelProps) {
+	const dateRange = toDateRange(search);
+	const filters = authAuditFilters(search);
 	// Names, the count and the export come only from a read that stands, never from one refused.
 	const events = list.status === "ready" ? list.rows : [];
-	const total = list.status === "ready" ? countQuery.data?.total : undefined;
+	const total = list.status === "ready" ? count : undefined;
 	const hasAppliedFilter =
 		(filters.eventType?.length ?? 0) > 0 ||
 		(filters.result?.length ?? 0) > 0 ||
@@ -117,11 +89,6 @@ export function AuthAuditPanel({
 			to: undefined,
 		});
 
-	const exportCsv = useMutation({
-		mutationFn: async () => downloadAuditLog(filters),
-		onError: () => toast.error("We could not export the audit log. Try again."),
-	});
-
 	return (
 		<div className="space-y-4">
 			<FilterToolbar
@@ -132,10 +99,10 @@ export function AuthAuditPanel({
 						variant="outline"
 						size="sm"
 						className="h-8"
-						onClick={() => exportCsv.mutate()}
-						disabled={exportCsv.isPending || events.length === 0}
+						onClick={onExport}
+						disabled={exporting || events.length === 0}
 					>
-						{exportCsv.isPending ? <Spinner className="size-3.5" /> : <DownloadIcon aria-hidden />}
+						{exporting ? <Spinner className="size-3.5" /> : <DownloadIcon aria-hidden />}
 						Export CSV
 					</Button>
 				}
@@ -180,7 +147,7 @@ export function AuthAuditPanel({
 			<AdminAuditTable
 				// One table per read: another filter's read starts with nothing selected, while the same
 				// read failing to refresh keeps what is open.
-				key={hashKey(listOptions.queryKey)}
+				key={read}
 				state={list}
 				hasFilter={hasAppliedFilter}
 				onResetFilters={reset}
