@@ -4,9 +4,9 @@ description: How Hephaestus reviews pull requests, merge requests, and issues fo
 page_type: feature
 ---
 
-Hephaestus reviews eligible work against your workspace’s practices and records observations before it decides whether feedback would help you.
-Developers decide what to do with feedback: fix the work, ask why, or disagree.
-Merge decisions stay with your reviewers.
+Hephaestus uses an AI model to review eligible work against your workspace’s practices.
+It records observations before it decides whether feedback would help you.
+The model can be wrong, so you decide what to do with feedback: fix the work, ask why, or disagree.
 
 ## Observations
 
@@ -19,6 +19,27 @@ It is never sent as feedback.
 If Hephaestus cannot capture the evidence it needs, it records no observation.
 Withheld means that the review stopped feedback before delivery and recorded why.
 It does not mean your work failed a practice.
+
+## What Hephaestus can and cannot do
+
+An AI model writes every observation and every piece of feedback, and it can be wrong.
+Each comment says so in its footer.
+
+Hephaestus can:
+
+- Check your work against the practices that your workspace chose.
+- Quote the lines or text that each problem rests on. It sends no feedback for a practice if a quote does not match the reviewed work.
+- Say when the evidence is not enough. Then the observation says Could not determine.
+
+Hephaestus cannot:
+
+- Prove that a problem matters. A matching quote shows where the problem is, not that the claim about it is right.
+- Find every problem. Met means that the review found the practice met in the evidence it read.
+- See context that the practice does not read, such as a decision your team made in a meeting.
+- Decide for you. Merge decisions stay with your reviewers.
+
+When feedback is wrong, [disagree in Hephaestus](#respond-to-feedback).
+A workspace admin can also [mark the observation incorrect](#corrections-by-workspace-admins).
 
 ## Where feedback appears
 
