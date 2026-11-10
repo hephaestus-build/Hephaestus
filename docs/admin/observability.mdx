@@ -1490,7 +1490,27 @@ roles whose spans you want to collect:
 | `TRACING_OTLP_ENDPOINT`        | `http://localhost:4318/v1/traces` | Full OTLP HTTP receiver URL, reachable from the application container.         |
 | `TRACING_SAMPLING_PROBABILITY` | `0.0`                             | Fraction of new traces sampled. Use `1.0` for a dedicated evaluation instance. |
 
-The chart sets them on the server, worker and webhook from `config.tracing.otlpEnabled`, `config.tracing.otlpEndpoint` and `config.tracing.samplingProbability`.
+The chart ships no collector and no trace store. To send traces to your own OpenTelemetry collector:
+
+1. Run an OpenTelemetry collector in the cluster, with an OTLP HTTP receiver. Configure the exporter to your trace store in the collector.
+2. Set the trace values in your site values. Use the collector's namespace and pod labels, and its receiver URL:
+
+   ```yaml
+   config:
+     tracing:
+       otlpEnabled: true
+       otlpEndpoint: http://otel-collector.observability:4318/v1/traces
+       samplingProbability: "0.1"
+   networkPolicy:
+     traceCollector:
+       namespace: observability
+       podLabels:
+         app.kubernetes.io/name: opentelemetry-collector
+   ```
+
+3. Upgrade the release. Then find a request's trace in your trace store by the `X-Request-Id` that the server returned.
+
+The chart sets the variables above on the server, worker and webhook from `config.tracing.otlpEnabled`, `config.tracing.otlpEndpoint` and `config.tracing.samplingProbability`.
 By default, the chart's network policy admits no collector inside the cluster.
 Set `networkPolicy.traceCollector` to the namespace and pod labels of that collector ([Network policy](./kubernetes.mdx#network-policy)).
 The roles can then reach it on the port that `config.tracing.otlpEndpoint` names.

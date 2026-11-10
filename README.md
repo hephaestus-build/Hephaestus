@@ -33,7 +33,11 @@ Workspace admins can approve feedback before it appears on the work.
 <div align="center">
   <img alt="An illustration of one change through a project. Issue #412 has no acceptance criteria. The pull request grows to 34 files. A reviewer raises a vague concern about large exports. The pull request merges with that thread unresolved. Hephaestus points back to the issue." src="./docs/images/readme/landing-hero-dark.png#gh-dark-mode-only" width="1280">
   <img alt="An illustration of one change through a project. Issue #412 has no acceptance criteria. The pull request grows to 34 files. A reviewer raises a vague concern about large exports. The pull request merges with that thread unresolved. Hephaestus points back to the issue." src="./docs/images/readme/landing-hero-light.png#gh-light-mode-only" width="1280">
-  <p><sub>An illustration of the feedback Hephaestus writes. See the <a href="https://docs.hephaestus.build/user/ai-code-review">user guide</a> for the real interface.</sub></p>
+</div>
+
+<div align="center">
+  <img alt="The practice profile in Hephaestus. A summary shows four practices in three groups: one needs attention, one is mixed and two are going well. Below it, a recurring feedback pattern for the practice State how to verify the change says that reviewers cannot see how to check the change, and why it was raised." src="./docs/static/img/user/practice-profile/overview.dark.webp#gh-dark-mode-only" width="1024">
+  <img alt="The practice profile in Hephaestus. A summary shows four practices in three groups: one needs attention, one is mixed and two are going well. Below it, a recurring feedback pattern for the practice State how to verify the change says that reviewers cannot see how to check the change, and why it was raised." src="./docs/static/img/user/practice-profile/overview.light.webp#gh-light-mode-only" width="1024">
 </div>
 
 ## Why Hephaestus
