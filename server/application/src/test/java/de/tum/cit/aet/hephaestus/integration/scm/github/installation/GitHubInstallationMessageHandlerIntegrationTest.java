@@ -19,6 +19,8 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -156,6 +159,22 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         handler.handleEvent(event);
 
+        assertThat(persistedWorkspace(event).getStatus()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
+    }
+
+    @Test
+    void shouldReadProviderStatusWithoutTransactionWhenSuspensionArrives() throws IOException {
+        GitHubInstallationEventDTO event = loadPayload("installation.suspend");
+        createWorkspaceFor(event);
+        var readInTransaction = new AtomicReference<@Nullable Boolean>();
+        when(appTokens.isInstallationSuspended(installationId(event))).thenAnswer(invocation -> {
+            readInTransaction.set(TransactionSynchronizationManager.isActualTransactionActive());
+            return true;
+        });
+
+        handler.dispatchEvent(event);
+
+        assertThat(readInTransaction.get()).isFalse();
         assertThat(persistedWorkspace(event).getStatus()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
     }
 
