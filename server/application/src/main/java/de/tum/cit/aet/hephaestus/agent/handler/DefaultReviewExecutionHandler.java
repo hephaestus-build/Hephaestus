@@ -130,6 +130,11 @@ public class DefaultReviewExecutionHandler {
             if (review.kind() == ReviewKind.ITEM && conditions != null)
                 required.addAll(applicability.sources(item.kind(), conditions));
         }
+        // Every practice's inputs carry the item's record, so a capture reads its source even when no open practice
+        // declares it, as on a retry whose remaining practices read only the code.
+        required.add(items.descriptorFor(item.kind())
+                .orElseThrow(() -> new IllegalStateException("The captured item kind has no descriptor"))
+                .recordSource());
         var grantedContext = new LinkedHashMap<ReviewAssignmentId, List<String>>();
         if (review.kind() == ReviewKind.SCAN) {
             var composers = scanVersions.stream()

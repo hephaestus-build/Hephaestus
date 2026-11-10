@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.chat.item;
 
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
@@ -16,6 +17,9 @@ import org.springframework.stereotype.Component;
 /** Thread metadata remains available when no chat provider is connected. */
 @Component
 public class ThreadItemDescriptor implements ItemDescriptor {
+    /** The conversation thread source, which holds a thread's record. */
+    public static final SourceKind RECORD_SOURCE = new SourceKind("slack.conversation.thread");
+
     @Override
     public ItemKind kind() {
         return ThreadEvents.THREAD;
@@ -61,6 +65,11 @@ public class ThreadItemDescriptor implements ItemDescriptor {
     @Override
     public String recordSchemaResource() {
         return "contracts/items/chat.thread.schema.json";
+    }
+
+    @Override
+    public SourceKind recordSource() {
+        return RECORD_SOURCE;
     }
 
     @Override

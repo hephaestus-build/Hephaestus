@@ -54,7 +54,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 class CodeQualityTest extends HephaestusArchitectureTest {
     private static final Map<String, Integer> CONTRACT_INTERFACE_METHODS =
-            Map.of("de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor", 9);
+            Map.of("de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor", 10);
 
     @Nested
     class GodClassTests {

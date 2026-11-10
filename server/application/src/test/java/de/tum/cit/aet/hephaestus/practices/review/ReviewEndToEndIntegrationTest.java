@@ -158,6 +158,12 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         A_COMMIT_IS_PUSHED
     }
 
+    /** What the practice reads: the work and its discussion, or sources that leave the work record out. */
+    enum Reads {
+        THE_WORK,
+        NOT_THE_RECORD
+    }
+
     /** How the review was asked for: by a person, or by a provider event whose occasion the review then reads. */
     enum Asked {
         BY_REQUEST,
@@ -355,7 +361,30 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return review(IdentityProviderType.GITHUB, Asked.BY_REQUEST, between);
     }
 
+    /**
+     * A capture reads what its open practices declare, so a retry whose remaining practices read only the code once
+     * captured no work record and could not prepare. Every practice's inputs carry that record, so the capture still
+     * reads its source. Git checkouts are off here, so the practice requires the discussion instead of the diff.
+     */
+    @Test
+    void shouldMeasureThePracticeWhenNoOpenPracticeReadsTheWorkRecord() {
+        var reviewed = review(IdentityProviderType.GITHUB, Asked.BY_REQUEST, Between.NOTHING, Reads.NOT_THE_RECORD);
+        // The stub cites the work record, which this practice does not declare, so admission withholds that citation.
+        // What matters here is that the attempt prepares, starts the practice and asks the model.
+        assertThat(sandbox.calls)
+                .as("the attempt prepares and measures: %s", reviewed.calls())
+                .anySatisfy(call -> assertThat(call.path() + " " + call.body())
+                        .contains("start-practice")
+                        .contains("\"current\":true"))
+                .anySatisfy(call -> assertThat(call.path()).isEqualTo("completions"));
+        assertThat(reviewed.modelRequests()).isEqualTo(1);
+    }
+
     private Reviewed review(IdentityProviderType type, Asked asked, Between between) {
+        return review(type, asked, between, Reads.THE_WORK);
+    }
+
+    private Reviewed review(IdentityProviderType type, Asked asked, Between between, Reads reads) {
         var provider = type == IdentityProviderType.GITHUB ? ensureGitHubProvider() : ensureGitLabProvider();
         User persisted = persistUser("review-end-to-end-" + UUID.randomUUID());
         persisted.setProvider(provider);
@@ -367,7 +396,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 workspace.getId(), new ItemKind("scm.repository"), repository.getId(), null, null));
         ItemRef item = itemWriter.upsert(new ItemRegistration(
                 workspace.getId(), new ItemKind("scm.pull_request"), pull.getId(), holder.itemId(), null));
-        Practice practice = practice(workspace);
+        Practice practice = practice(workspace, reads);
         // A review can start while the discussion sync still runs: the mirror has not read the whole discussion yet.
         if (between == Between.THE_DISCUSSION_SYNC_FINISHES)
             jdbc.update("UPDATE issue SET discussion_read_whole=FALSE WHERE id=?", pull.getId());
@@ -402,9 +431,11 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .pollInterval(Duration.ofMillis(250))
                     .until(() -> {
                         completion.tick();
+                        // A practice withheld at its start is final before the review that held it ends.
                         return !jdbc.queryForList(
-                                        "SELECT status FROM review_practice WHERE review_id = ?"
-                                                + " AND status IN ('DONE', 'WITHHELD', 'FAILED')",
+                                        "SELECT p.status FROM review_practice p JOIN review r ON r.id = p.review_id"
+                                                + " WHERE p.review_id = ? AND p.status IN ('DONE', 'WITHHELD', 'FAILED')"
+                                                + " AND r.status NOT IN ('QUEUED', 'RUNNING')",
                                         String.class,
                                         reviewId)
                                 .isEmpty();
@@ -647,7 +678,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 author.getId());
     }
 
-    private Practice practice(Workspace workspace) {
+    private Practice practice(Workspace workspace, Reads reads) {
         var kind = new ItemKind("scm.pull_request");
         var base = DefinitionTestFixtures.definition(
                 kind, "States its change", "# The title states the change\n\nThe title names what changes.", null);
@@ -658,13 +689,23 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 base.about(),
                 new PracticeReads(
                         ClasspathSourceCatalogRegistry.CURRENT_VERSION.value(),
-                        List.of(
-                                new PracticeReadSource(new SourceKind("scm.pull-request.core"), ReadNeed.REQUIRED),
-                                new PracticeReadSource(
-                                        new SourceKind("scm.general-review-comments"), ReadNeed.OPTIONAL),
-                                new PracticeReadSource(new SourceKind("scm.review-threads"), ReadNeed.OPTIONAL),
-                                new PracticeReadSource(new SourceKind("scm.linked-work-items"), ReadNeed.OPTIONAL),
-                                new PracticeReadSource(PullRequestChecksRecord.KIND, ReadNeed.OPTIONAL))),
+                        reads == Reads.NOT_THE_RECORD
+                                ? List.of(
+                                        new PracticeReadSource(
+                                                new SourceKind("scm.general-review-comments"), ReadNeed.REQUIRED),
+                                        new PracticeReadSource(
+                                                new SourceKind("scm.pull-request.diff"), ReadNeed.OPTIONAL),
+                                        new PracticeReadSource(
+                                                new SourceKind("scm.repository.tree"), ReadNeed.OPTIONAL))
+                                : List.of(
+                                        new PracticeReadSource(
+                                                new SourceKind("scm.pull-request.core"), ReadNeed.REQUIRED),
+                                        new PracticeReadSource(
+                                                new SourceKind("scm.general-review-comments"), ReadNeed.OPTIONAL),
+                                        new PracticeReadSource(new SourceKind("scm.review-threads"), ReadNeed.OPTIONAL),
+                                        new PracticeReadSource(
+                                                new SourceKind("scm.linked-work-items"), ReadNeed.OPTIONAL),
+                                        new PracticeReadSource(PullRequestChecksRecord.KIND, ReadNeed.OPTIONAL))),
                 base.reviewedBy(),
                 base.criteria(),
                 base.script(),
