@@ -2,6 +2,10 @@ package de.tum.cit.aet.hephaestus.core.tenancy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,6 +17,7 @@ import io.micrometer.core.instrument.Counter;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class WorkspaceStatementInspectorTest extends BaseUnitTest {
@@ -20,6 +25,14 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
     private final WorkspaceScopedTables scopedTables = mock(WorkspaceScopedTables.class);
     private final TenancyViolationReporter reporter = mock(TenancyViolationReporter.class);
     private final Counter parseFailureCounter = mock(Counter.class);
+
+    /** Every table in these cases keys on {@code id}; a case that needs a collection key stubs it. */
+    @BeforeEach
+    void everyTableKeysOnId() {
+        lenient()
+                .when(scopedTables.isSingleKeyColumn(anyString(), eq("id"), anyBoolean()))
+                .thenReturn(true);
+    }
 
     @AfterEach
     void clearBypass() {
@@ -318,14 +331,14 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         // onto every repository.
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         inspector.inspect("delete from practice where id=?");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
     }
 
     @Test
     void pkOnlyUpdateOnScopedTableIsAllowed() {
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         inspector.inspect("update practice set name=?, updated_at=? where id=?");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
     }
 
     @Test
@@ -335,7 +348,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         // already had the parent's PK (workspace-scoped at retrieval).
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         inspector.inspect("delete from issue_blocking where blocked_issue_id=?");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
     }
 
     @Test
@@ -380,7 +393,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         // Hibernate appends "AND version = ?" to UPDATEs for entities with @Version.
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         inspector.inspect("update notification_subscription set enabled=?,kind=?,version=? where id=? and version=?");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
     }
 
     @Test
@@ -401,7 +414,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         inspector.inspect("select r1_0.id,r1_0.archived,r1_0.created_at,r1_0.html_url,r1_0.name "
                 + "from repository r1_0 where r1_0.id=?");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
     }
 
     @Test
@@ -412,7 +425,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
                 + "from repository r1_0 "
                 + "left join organization o1_0 on r1_0.organization_id=o1_0.id "
                 + "where r1_0.id=?");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
     }
 
     @Test
@@ -438,7 +451,72 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
                 + "from issue_label i1_0 "
                 + "join issue i1_1 on i1_0.issue_id=i1_1.id "
                 + "where i1_0.label_id=?");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
+    }
+
+    @Test
+    void loadByAForeignKeyThatNoCollectionMapsIsReported() {
+        // A derived findByDeveloperId: one *_id predicate, but not a key the caller held, so it reaches every
+        // workspace's rows that name that developer.
+        when(scopedTables.isScoped("review_item")).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect("select r1_0.id,r1_0.state from review_item r1_0 where r1_0.developer_id=?");
+        verify(reporter).report(any(), eq(Set.of("review_item")), eq(TenancyEnforcement.LOG));
+    }
+
+    @Test
+    void writeByAForeignKeyThatNoCollectionMapsIsReported() {
+        when(scopedTables.isScoped("review_item")).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect("update review_item set state=? where developer_id=?");
+        verify(reporter).report(any(), eq(Set.of("review_item")), eq(TenancyEnforcement.LOG));
+    }
+
+    @Test
+    void everyTableOfACommaJoinIsChecked() {
+        // Only the first table after FROM was read, so a scoped table later in the list escaped the check.
+        when(scopedTables.isScoped("practice")).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect("select l.name from label_catalog l, practice p where p.slug=l.name");
+        verify(reporter).report(any(), eq(Set.of("practice")), eq(TenancyEnforcement.LOG));
+    }
+
+    @Test
+    void collectionKeyOfAWorkspaceOwnedParentLoadsButDoesNotWrite() {
+        // An inverse @OneToMany is loaded by its key, but Hibernate never clears it by that key, so a write by it
+        // would reach every row that names the parent.
+        when(scopedTables.isScoped("review_item")).thenReturn(true);
+        when(scopedTables.isSingleKeyColumn("review_item", "review_id", false)).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect("select r1_0.id,r1_0.state from review_item r1_0 where r1_0.review_id=?");
+        verifyNoInteractions(reporter);
+        inspector.inspect("update review_item set state=? where review_id=?");
+        verify(reporter).report(any(), eq(Set.of("review_item")), eq(TenancyEnforcement.LOG));
+    }
+
+    @Test
+    void negatedKeyIsReported() {
+        when(scopedTables.isScoped("review_item")).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect("select r1_0.id from review_item r1_0 where not r1_0.id=?");
+        verify(reporter).report(any(), eq(Set.of("review_item")), eq(TenancyEnforcement.LOG));
+    }
+
+    @Test
+    void keyComparedOutsideTheWhereClauseIsReported() {
+        when(scopedTables.isScoped("review_item")).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect("select r1_0.id=? as mine,r1_0.state from review_item r1_0 where r1_0.developer_id=?");
+        verify(reporter).report(any(), eq(Set.of("review_item")), eq(TenancyEnforcement.LOG));
+    }
+
+    @Test
+    void keyInASubqueryDoesNotExemptTheOuterTable() {
+        when(scopedTables.isScoped("practice")).thenReturn(true);
+        when(scopedTables.isScoped("result")).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect("select (select 1 from result r where r.id=?) as x, p.slug from practice p where p.slug=?");
+        verify(reporter).report(any(), eq(Set.of("practice", "result")), eq(TenancyEnforcement.LOG));
     }
 
     @Test
@@ -446,7 +524,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         // @OneToMany owned by the child via FK: SELECT c.* FROM comment c WHERE c.issue_id = ?
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         inspector.inspect("select c1_0.id,c1_0.body from issue_comment c1_0 where c1_0.issue_id=?");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
     }
 
     @Test
@@ -458,7 +536,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         inspector.inspect("select l1_0.repository_id,l1_0.id,l1_0.color,l1_0.name "
                 + "from label l1_0 where l1_0.repository_id=any(?)");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
     }
 
     @Test
@@ -490,7 +568,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         // still the one keyed row, so it is tenancy-safe by construction.
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         inspector.inspect("select p1_0.id from practice p1_0 where p1_0.id=? and exists (select 1 from result" + " o)");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
     }
 
     @Test
@@ -515,7 +593,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         inspector.inspect("select pr1_0.id,pr1_0.body,pr1_0.title "
                 + "from issue pr1_0 "
                 + "where pr1_0.id=? and pr1_0.issue_type='PullRequest'");
-        verifyNoInteractions(reporter, scopedTables);
+        verifyNoInteractions(reporter);
     }
 
     // composite primary keys: the mapping metamodel decides, never a naming convention

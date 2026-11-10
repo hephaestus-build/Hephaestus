@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.core.tenancy;
 
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.EntityType;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -11,6 +13,7 @@ import java.util.TreeSet;
 import org.hibernate.SessionFactory;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.metamodel.MappingMetamodel;
+import org.hibernate.metamodel.mapping.ForeignKeyDescriptor;
 import org.hibernate.metamodel.mapping.TableDetails;
 import org.hibernate.persister.entity.EntityPersister;
 import org.slf4j.Logger;
@@ -153,6 +156,8 @@ public class WorkspaceScopedTables {
     private volatile Set<String> scopedTables = Set.of();
     private volatile Set<String> manyToManyJoinTables = Set.of();
     private volatile Map<String, Set<String>> primaryKeyColumns = Map.of();
+    private volatile Map<String, Set<String>> collectionKeyColumns = Map.of();
+    private volatile Map<String, Set<String>> ownedCollectionKeyColumns = Map.of();
     private final ObjectProvider<EntityManagerFactory> entityManagerFactoryProvider;
 
     // Hibernate customizers consume this bean while the factory is being built.
@@ -185,8 +190,20 @@ public class WorkspaceScopedTables {
         // parent. Collections owned via a foreign-key column on the child entity resolve
         // to the child's own table — already added in the entity walk above.
         Set<String> joinTables = new TreeSet<>();
+        Map<String, Set<String>> collectionKeys = new HashMap<>();
+        Map<String, Set<String>> ownedCollectionKeys = new HashMap<>();
         metamodel.forEachCollectionDescriptor(collection -> {
             addIfScoped(tables, collection.getTableName());
+            // Only a workspace-owned parent pins its collection to one workspace: a user or a provider mirror row is
+            // shared, so its collections span workspaces.
+            String owner = normalize(
+                    collection.getOwnerEntityPersister().getMappedTableDetails().getTableName());
+            if (!GLOBAL_TABLES.contains(owner) && !MIRROR_TABLES.contains(owner)) {
+                var key = collection.getAttributeMapping().getKeyDescriptor();
+                recordCollectionKey(collectionKeys, key);
+                // Hibernate clears a collection by its key only from the owning side.
+                if (!collection.isInverse()) recordCollectionKey(ownedCollectionKeys, key);
+            }
             // A many-to-many join table is the one shape whose rows Hibernate deletes by
             // both
             // foreign keys; the inspector allows exactly that statement, for exactly these
@@ -206,6 +223,8 @@ public class WorkspaceScopedTables {
         this.scopedTables = Set.copyOf(tables);
         this.manyToManyJoinTables = Set.copyOf(joinTables);
         this.primaryKeyColumns = Map.copyOf(keys);
+        this.collectionKeyColumns = Map.copyOf(collectionKeys);
+        this.ownedCollectionKeyColumns = Map.copyOf(ownedCollectionKeys);
         log.info(
                 "WorkspaceScopedTables populated: {} workspace-scoped tables (incl. join tables)," + " {} global",
                 scopedTables.size(),
@@ -227,6 +246,20 @@ public class WorkspaceScopedTables {
             columns.add(name);
         }
         if (!columns.isEmpty()) keys.put(table, Set.copyOf(columns));
+    }
+
+    /**
+     * The column by which Hibernate loads or clears a mapped collection: the parent's foreign key in the child or join
+     * table. A composite key contributes nothing, because the single-key forms that consult this cannot name it.
+     */
+    private static void recordCollectionKey(Map<String, Set<String>> keys, ForeignKeyDescriptor key) {
+        String table = normalize(key.getKeyTable());
+        if (table.isEmpty()) return;
+        List<String> columns = new ArrayList<>();
+        key.getKeyPart()
+                .forEachSelectable((index, selectable) -> columns.add(normalize(selectable.getSelectionExpression())));
+        if (columns.size() != 1 || columns.getFirst().isEmpty()) return;
+        keys.computeIfAbsent(table, unused -> new HashSet<>()).add(columns.getFirst());
     }
 
     /** Bare, unquoted, lowercase — the form the inspector compares against. */
@@ -259,6 +292,21 @@ public class WorkspaceScopedTables {
     public Set<String> primaryKeyColumns(String tableName) {
         if (tableName == null) return Set.of();
         return primaryKeyColumns.getOrDefault(tableName.toLowerCase(Locale.ROOT), Set.of());
+    }
+
+    /**
+     * True iff a single {@code column = ?} pins {@code tableName} to rows its caller already held: the column is the
+     * table's whole primary key, or the key by which a workspace-owned parent loads ({@code write} false) or clears
+     * ({@code write} true) a mapped collection. Any other foreign key, such as the one a derived
+     * {@code findByDeveloperId} reads, is not a key here.
+     */
+    public boolean isSingleKeyColumn(String tableName, String column, boolean write) {
+        if (tableName == null || column == null) return false;
+        String table = tableName.toLowerCase(Locale.ROOT);
+        String name = column.replace("\"", "").toLowerCase(Locale.ROOT);
+        var collectionKeys = write ? ownedCollectionKeyColumns : collectionKeyColumns;
+        return primaryKeyColumns.getOrDefault(table, Set.of()).equals(Set.of(name))
+                || collectionKeys.getOrDefault(table, Set.of()).contains(name);
     }
 
     /** True iff the table is a {@code @ManyToMany} join table, per the mapping metamodel. */

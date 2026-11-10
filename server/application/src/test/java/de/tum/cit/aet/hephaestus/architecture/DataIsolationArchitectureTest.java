@@ -8,13 +8,17 @@ import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusCondit
 
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaParameterizedType;
+import com.tngtech.archunit.core.domain.JavaType;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.Entity;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -36,6 +40,9 @@ import org.springframework.data.jpa.repository.Query;
  * @see ArchitectureTestConstants
  */
 class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
+
+    /** findById, findAllById and their fetch-join forms such as findAllByIdWithRelations; not findByIdModelId. */
+    private static final Pattern BY_ID_LOAD = Pattern.compile("^find(?:All)?ById(?:In)?(?:With[A-Z][A-Za-z]*)?$");
 
     /**
      * Entity types that are workspace-scoped through their relationship chain.
@@ -355,7 +362,9 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
                                     "deleteAll",
                                     "count",
                                     "existsById");
-                            if (standardMethods.contains(methodName)) {
+                            // A load by primary keys, with or without fetch joins: the caller already held each key.
+                            if (standardMethods.contains(methodName)
+                                    || BY_ID_LOAD.matcher(methodName).matches()) {
                                 return;
                             }
 
@@ -367,12 +376,10 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
                                 return;
                             }
 
-                            String returnType = method.getRawReturnType().getSimpleName();
-                            boolean returnsEntity = WORKSPACE_SCOPED_ENTITIES.stream()
-                                    .anyMatch(e -> returnType.equals(e)
-                                            || returnType.contains("List<" + e)
-                                            || returnType.contains("Optional<" + e)
-                                            || returnType.contains("Set<" + e));
+                            // The raw type of List<Foo> is List, so the entity is read from the type arguments too.
+                            Set<String> returned = new HashSet<>();
+                            collectTypeNames(method.getReturnType(), returned);
+                            boolean returnsEntity = returned.stream().anyMatch(WORKSPACE_SCOPED_ENTITIES::contains);
 
                             if (!returnsEntity) {
                                 return;
@@ -385,6 +392,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
 
                             boolean hasWorkspaceParam = method.getRawParameterTypes().stream()
                                     .anyMatch(p -> p.getSimpleName().equals("Long")
+                                            || p.getSimpleName().equals("long")
                                             || // workspaceId
                                             p.getSimpleName().equals("Workspace"));
 
@@ -481,6 +489,14 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
                     .because("Workspace deletion should not cascade to global entities");
 
             rule.check(classes);
+        }
+    }
+
+    /** The simple names of a type and of every type argument in it, at any depth. */
+    private static void collectTypeNames(JavaType type, Set<String> names) {
+        names.add(type.toErasure().getSimpleName());
+        if (type instanceof JavaParameterizedType parameterized) {
+            for (JavaType argument : parameterized.getActualTypeArguments()) collectTypeNames(argument, names);
         }
     }
 }

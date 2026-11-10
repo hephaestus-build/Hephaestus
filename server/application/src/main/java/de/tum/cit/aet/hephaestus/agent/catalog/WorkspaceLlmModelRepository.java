@@ -28,7 +28,8 @@ public interface WorkspaceLlmModelRepository extends JpaRepository<WorkspaceLlmM
             + " m.id")
     List<WorkspaceLlmModel> findByWorkspaceIdWithConnection(@Param("workspaceId") Long workspaceId);
 
-    boolean existsByConnectionIdAndUpstreamModelId(Long connectionId, String upstreamModelId);
+    boolean existsByConnectionIdAndWorkspaceIdAndUpstreamModelId(
+            Long connectionId, Long workspaceId, String upstreamModelId);
 
     Optional<WorkspaceLlmModel> findByWorkspaceIdAndSlug(Long workspaceId, String slug);
 

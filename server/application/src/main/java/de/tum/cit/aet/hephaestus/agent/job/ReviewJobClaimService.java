@@ -157,7 +157,7 @@ public class ReviewJobClaimService {
             Optional<ReviewJob> locked =
                     jobRepository.lockParentForQueuedClaim(lease.runId()).isEmpty()
                             ? Optional.empty()
-                            : jobRepository.lockQueuedByRun(lease.runId());
+                            : jobRepository.lockQueuedByRun(lease.runId(), lease.workspaceId());
             if (locked.isEmpty()) {
                 status.setRollbackOnly();
                 return new Declined(lease.runId(), ClaimOutcome.LOCKED);
@@ -244,7 +244,7 @@ public class ReviewJobClaimService {
      */
     private void holdForBudget(AgentRunRef run) {
         transactionTemplate.executeWithoutResult(status -> jobRepository
-                .lockQueuedByRun(run.id())
+                .lockQueuedByRun(run.id(), run.workspaceId())
                 .ifPresent(job -> runs.hold(run, AgentRunHold.BUDGET, BUDGET_HOLD_INTERVAL)));
     }
 

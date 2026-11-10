@@ -205,13 +205,13 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                             null));
                 })
                 .thenReturn(Optional.empty());
-        lenient().when(jobs.lockQueuedByRun(runId)).thenReturn(Optional.of(job));
+        lenient().when(jobs.lockQueuedByRun(eq(runId), anyLong())).thenReturn(Optional.of(job));
     }
 
     /** The claim leases a run whose job a lifecycle write holds. */
     private void offerHeld(ReviewJob job) {
         offer(job);
-        when(jobs.lockQueuedByRun(job.getRunId())).thenReturn(Optional.empty());
+        when(jobs.lockQueuedByRun(eq(job.getRunId()), anyLong())).thenReturn(Optional.empty());
     }
 
     /** The inputs that a composition keeps, which the next executor's terminal writes forget. */
