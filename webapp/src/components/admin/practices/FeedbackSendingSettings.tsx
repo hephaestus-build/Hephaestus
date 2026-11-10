@@ -80,8 +80,8 @@ export function FeedbackSendingSettings({
 					<FieldContent>
 						<FieldLabel htmlFor="policy-deliver-merged">Post feedback after merge</FieldLabel>
 						<FieldDescription>
-							When on, feedback still posts on work that is merged or closed. The practice page and
-							the conversation get their feedback either way.
+							When on, feedback can still post on work that is merged or closed. The practice page
+							and the conversation can get their feedback either way.
 						</FieldDescription>
 						<InheritedSettingHint
 							label="Post feedback after merge"
