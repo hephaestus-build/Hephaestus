@@ -988,13 +988,15 @@
 								"instanceAdminRequired",
 								"workspaceAdminRequired",
 								"rpId",
-								"allowedOrigins"
+								"allowedOrigins",
+								"adminMaxAge"
 							],
 							"properties": {
 								"instanceAdminRequired": { "type": "boolean" },
 								"workspaceAdminRequired": { "type": "boolean" },
 								"rpId": { "$ref": "#/definitions/text" },
-								"allowedOrigins": { "$ref": "#/definitions/stringList" }
+								"allowedOrigins": { "$ref": "#/definitions/stringList" },
+								"adminMaxAge": { "$ref": "#/definitions/duration" }
 							}
 						}
 					}

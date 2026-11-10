@@ -84,7 +84,7 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
             return;
         }
         if (account.isPasskeyRecoveryRequired()
-                || !verified(authentication, sensitive ? auth.stepUpMaxAge() : auth.sessionMaxLifetime())) {
+                || !verified(authentication, sensitive ? auth.stepUpMaxAge() : properties.adminMaxAge())) {
             events.required(Objects.requireNonNull(account.getId()));
             throw new PasskeyRequiredException();
         }

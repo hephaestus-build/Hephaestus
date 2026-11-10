@@ -40,7 +40,7 @@ class PasskeyAssurancePolicyTest {
         account.setId(42L);
         when(accounts.findById(42L)).thenReturn(Optional.of(account));
         return new PasskeyAssurancePolicy(
-                new PasskeyProperties(instance, workspace, "example.com", List.of()),
+                new PasskeyProperties(instance, workspace, "example.com", List.of(), Duration.ofHours(6)),
                 accounts,
                 enforced ? AuthPropertiesFixture.defaults() : AuthPropertiesFixture.withoutAssurance(),
                 Clock.fixed(NOW, ZoneOffset.UTC),
@@ -152,6 +152,22 @@ class PasskeyAssurancePolicyTest {
     @Test
     void shouldKeepGeneralAdminAccessWhenPasskeyIsOlderThanSensitiveWindow() {
         policy(true, false).requireInstanceAdmin(authentication(NOW.minus(Duration.ofMinutes(6)), false), false);
+    }
+
+    @Test
+    void shouldAskAdminToVerifyAgainWhenPasskeyIsOlderThanAdminWindow() {
+        var policy = policy(true, false);
+        policy.requireInstanceAdmin(authentication(NOW.minus(Duration.ofHours(5)), false), false);
+        assertThatThrownBy(
+                        () -> policy.requireInstanceAdmin(authentication(NOW.minus(Duration.ofHours(7)), false), false))
+                .isInstanceOf(PasskeyRequiredException.class);
+    }
+
+    @Test
+    void shouldAskWorkspaceAdminToVerifyAgainWhenPasskeyIsOlderThanAdminWindow() {
+        SecurityContextHolder.getContext().setAuthentication(authentication(NOW.minus(Duration.ofHours(7)), false));
+        assertThatThrownBy(() -> policy(false, true).requireWorkspaceAdmin(false, false, false))
+                .isInstanceOf(PasskeyRequiredException.class);
     }
 
     @Test

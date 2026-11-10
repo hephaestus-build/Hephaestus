@@ -132,6 +132,8 @@ spec:
               value: {{ $config.auth.passkeys.rpId | quote }}
             - name: HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS
               value: {{ $config.auth.passkeys.allowedOrigins | join "," | quote }}
+            - name: HEPHAESTUS_AUTH_PASSKEYS_ADMIN_MAX_AGE
+              value: {{ $config.auth.passkeys.adminMaxAge | quote }}
             - name: GITHUB_OAUTH_CLIENT_ID
               value: {{ $config.github.oauthClientId | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "GITHUB_OAUTH_CLIENT_SECRET" "optional" true) | nindent 12 }}

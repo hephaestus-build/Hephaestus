@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.webauthn;
 
+import java.time.Duration;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -15,10 +16,20 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *     issuer is used. Passkeys registered under one RP ID do not work under another.
  * @param allowedOrigins Browser origins that may register and use passkeys, as a comma-separated list. Each must be an
  *     HTTPS origin on the RP ID or one of its subdomains. When it is empty, the origin of the auth issuer is used.
+ * @param adminMaxAge How long one passkey verification opens admin work that a passkey protects. After it, the admin
+ *     verifies a passkey again; the session itself continues. Sensitive actions keep the shorter
+ *     {@code hephaestus.auth.step-up-max-age}.
  */
 @ConfigurationProperties("hephaestus.auth.passkeys")
 public record PasskeyProperties(
         @DefaultValue("false") boolean instanceAdminRequired,
         @DefaultValue("false") boolean workspaceAdminRequired,
         @DefaultValue("") String rpId,
-        @DefaultValue List<String> allowedOrigins) {}
+        @DefaultValue List<String> allowedOrigins,
+        @DefaultValue("6h") Duration adminMaxAge) {
+    public PasskeyProperties {
+        if (adminMaxAge == null || adminMaxAge.isNegative() || adminMaxAge.isZero()) {
+            throw new IllegalArgumentException("hephaestus.auth.passkeys.admin-max-age must be a positive duration.");
+        }
+    }
+}

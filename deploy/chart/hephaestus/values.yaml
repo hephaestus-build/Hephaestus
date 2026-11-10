@@ -444,6 +444,8 @@ config:
       workspaceAdminRequired: false
       rpId: ""
       allowedOrigins: []
+      # How long one passkey verification opens protected admin access.
+      adminMaxAge: 6h
   github:
     oauthClientId: ""
     appId: 0
