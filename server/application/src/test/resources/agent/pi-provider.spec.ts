@@ -9,8 +9,10 @@ import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import {
 	loadProviderConfig,
 	type RegisteredModel,
+	parseProxyClaim,
 	registerHephaestusProvider,
 	registerRunProvider,
+	withClaim,
 } from "../../../main/resources/agent/pi-provider.ts";
 
 function registered(env: Record<string, string | undefined>): RegisteredModel {
@@ -88,4 +90,40 @@ void test("a sandbox's run calls the gateway's model routes with the sandbox tok
 		"x-agent-run": "0b1d4b71-5f1e-4a52-9a43-7e0c4b0d8a11",
 		"x-agent-epoch": "3",
 	});
+});
+
+void test("a runner reads only its run's claim headers from LLM_PROXY_CLAIM, and none outside a sandbox's run", () => {
+	assert.deepEqual(parseProxyClaim(undefined), {});
+	assert.deepEqual(parseProxyClaim('{"x-agent-run":"r","x-agent-epoch":"3"}'), {
+		"x-agent-run": "r",
+		"x-agent-epoch": "3",
+	});
+	for (const refused of [
+		'{"authorization":"Bearer t"}',
+		'{"x-agent-run":3}',
+		"[]",
+		'{"x-agent-run":""}',
+	]) {
+		assert.throws(() => parseProxyClaim(refused), /LLM_PROXY_CLAIM/u);
+	}
+});
+
+void test("a runner's calls carry its run's claim beside their own headers", async () => {
+	let sent: Headers | undefined;
+	const base: typeof fetch = async (_input, init) => {
+		sent = new Headers(init?.headers);
+		return new Response(null, { status: 204 });
+	};
+	await withClaim(base, { "x-agent-run": "r", "x-agent-epoch": "3" })(
+		"http://gateway.test/internal/llm/x",
+		{
+			headers: { authorization: "Bearer t" },
+		},
+	);
+
+	assert.ok(sent !== undefined);
+	assert.equal(sent.get("authorization"), "Bearer t");
+	assert.equal(sent.get("x-agent-run"), "r");
+	assert.equal(sent.get("x-agent-epoch"), "3");
+	assert.equal(withClaim(base, {}), base);
 });

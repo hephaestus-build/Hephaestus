@@ -37,7 +37,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationExceptio
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
@@ -198,8 +197,8 @@ public class ReviewJobExecutor {
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
     private final ReviewAttemptUsageService attemptUsage;
+    private final ReviewJobTerminal terminal;
     private final PracticeScriptRunRecorder practiceScriptRuns;
-    private final @Nullable LlmAdmissionService llmAdmissionService;
 
     // RetryTemplate, not @Retryable: both wrap private methods called from inside this class, and a
     // self-invocation never reaches the proxy the annotation needs.
@@ -251,13 +250,7 @@ public class ReviewJobExecutor {
 
     private final Optional<WorkerCapacityState> capacityState;
 
-    private @Nullable ReviewCompositionContinuation compositionContinuation;
     private @Nullable WorkerFeedbackComposer feedbackComposer;
-
-    @Autowired(required = false)
-    void setCompositionContinuation(ReviewCompositionContinuation compositionContinuation) {
-        this.compositionContinuation = compositionContinuation;
-    }
 
     @Autowired(required = false)
     void setFeedbackComposer(WorkerFeedbackComposer feedbackComposer) {
@@ -280,13 +273,14 @@ public class ReviewJobExecutor {
             ReviewJobTelemetry jobTelemetry,
             ReviewAttemptUsageService attemptUsage,
             PracticeScriptRunRecorder practiceScriptRuns,
-            @Nullable LlmAdmissionService llmAdmissionService,
             Optional<WorkerCapacityState> capacityState,
             ReviewJobClaimService claims,
             ReviewRunKind reviewRuns,
             AgentRuns runs,
-            AgentRunNotifications notifications) {
+            AgentRunNotifications notifications,
+            ReviewJobTerminal terminal) {
         this.agentProperties = agentProperties;
+        this.terminal = terminal;
         this.claims = claims;
         this.reviewRuns = reviewRuns;
         this.runs = runs;
@@ -305,7 +299,6 @@ public class ReviewJobExecutor {
         this.jobTelemetry = jobTelemetry;
         this.attemptUsage = attemptUsage;
         this.practiceScriptRuns = practiceScriptRuns;
-        this.llmAdmissionService = llmAdmissionService;
         this.capacityState = capacityState;
 
         this.drainedRequeued = Counter.builder(AgentMetrics.AGENT_JOB_DRAINED)
@@ -1103,13 +1096,7 @@ public class ReviewJobExecutor {
 
     /** Its feedback is decided: no attempt reads the retained inputs again. The retention sweep removes what this leaves. */
     private void forgetCompositionInputs(ReviewJob job) {
-        ReviewCompositionContinuation kept = compositionContinuation;
-        if (kept == null) return;
-        try {
-            kept.forget(job);
-        } catch (RuntimeException e) {
-            log.warn("Could not remove original composition inputs: jobId={}", job.getId(), e);
-        }
+        terminal.forgetCompositionInputs(job);
     }
 
     /**
@@ -1200,24 +1187,13 @@ public class ReviewJobExecutor {
         try {
             status = terminalPersistRetries.execute(named(
                     "Terminal persistence for jobId=" + jobId,
-                    () -> transactionTemplate.execute(transaction -> {
-                        if (transitionTerminal(jobId, attempt, ReviewJobStatus.COMPLETED, Instant.now(), null) == 0)
-                            return null;
-                        ReviewJob fresh = jobRepository.findById(jobId).orElseThrow();
-                        ReviewJobLlmUsage proxyCounts =
-                                jobRepository.findLlmUsageById(jobId).orElse(null);
-                        ConfigSnapshot snapshot = ConfigSnapshot.fromJson(fresh.getConfigSnapshot(), objectMapper);
-                        fresh.setProcessingStatus(ProcessingStatus.PENDING);
-                        attemptUsage.settleAttempt(
-                                fresh, FrozenCharge.admitted(snapshot, admittedPrice(snapshot)), null, proxyCounts);
-                        jobRepository.saveAndFlush(fresh);
-                        return ReviewJobStatus.COMPLETED;
-                    })));
+                    () -> transactionTemplate.execute(
+                            transaction -> terminal.completeComposed(jobId, ownFence(jobId, attempt))
+                                    ? ReviewJobStatus.COMPLETED
+                                    : null)));
         } catch (RetryException e) {
             throw new TerminalPersistenceException(e);
         }
-        if (status != null)
-            forgetCompositionInputs(jobRepository.findById(jobId).orElseThrow());
         return status;
     }
 
@@ -1799,9 +1775,7 @@ public class ReviewJobExecutor {
     // ends with its job, in the caller's transaction.
     private int transitionTerminal(
             UUID jobId, int attempt, ReviewJobStatus status, Instant now, @Nullable String error) {
-        int updated = jobRepository.transitionStatusOwnedBy(jobId, status, now, error, ownRun(jobId), attempt);
-        if (updated > 0) runs.end(ownFence(jobId, attempt));
-        return updated;
+        return terminal.transition(jobId, ownFence(jobId, attempt), status, now, error);
     }
 
     /** Ends the attempt as refused, with its run, in the caller's transaction. */
@@ -1979,11 +1953,7 @@ public class ReviewJobExecutor {
     }
 
     private LlmPriceSnapshot admittedPrice(ConfigSnapshot snapshot) {
-        if (snapshot.model().priceSnapshot() != null) return snapshot.model().priceSnapshot();
-        if (llmAdmissionService != null) {
-            throw new IllegalStateException("Started job has no admitted LLM price snapshot");
-        }
-        return LlmPriceSnapshot.unpricedInstance();
+        return terminal.admittedPrice(snapshot);
     }
 
     // Price lookup must not throw and roll back a completed attempt; unavailable rates stay UNPRICED.

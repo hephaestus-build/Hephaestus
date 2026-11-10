@@ -59,6 +59,13 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
             @Param("claimName") String claimName,
             @Param("shutdownAt") Instant shutdownAt);
 
+    /** The live sandboxes of a kind, of every workspace: what the dispatch counts against the kind's limit. */
+    @WorkspaceAgnostic("The dispatch counts the live sandboxes of every workspace against one limit")
+    @Query(value = """
+            SELECT count(*) FROM agent_sandbox WHERE kind = :kind AND state IN ('REQUESTED', 'READY')
+            """, nativeQuery = true)
+    int countLive(@Param("kind") String kind);
+
     @Query(value = "SELECT" + COLUMNS + """
              FROM agent_sandbox WHERE workspace_id = :workspaceId AND subject_key = :subjectKey
               AND state IN ('REQUESTED', 'READY')

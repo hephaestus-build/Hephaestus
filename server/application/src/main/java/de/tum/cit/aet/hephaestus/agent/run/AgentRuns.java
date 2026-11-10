@@ -151,6 +151,29 @@ public class AgentRuns {
                 .map(AgentRuns::lease);
     }
 
+    /** A queued run that its sandbox claims next. */
+    public record DueRun(AgentRunRef run, AgentRunKind kind, String concurrencyKey) {}
+
+    /**
+     * The queued runs of these kinds that a claim would offer next, at most {@code limit}, in the claim's order. It
+     * leases nothing: the dispatch starts their sandboxes, and each sandbox claims its own run.
+     */
+    @Transactional(readOnly = true)
+    public List<DueRun> due(Set<AgentRunKind> kinds, int limit) {
+        if (kinds.isEmpty() || limit <= 0) return List.of();
+        return runs
+                .findDue(
+                        kinds.stream().map(AgentRunKind::name).toList(),
+                        limit,
+                        capacity.bandAging().toSeconds())
+                .stream()
+                .map(row -> new DueRun(
+                        new AgentRunRef(row.getId(), row.getWorkspaceId()),
+                        AgentRunKind.valueOf(row.getKind()),
+                        row.getConcurrencyKey()))
+                .toList();
+    }
+
     /** The run of a workspace, in whatever state; locks nothing. */
     @Transactional(readOnly = true)
     public Optional<AgentRun> find(AgentRunRef run) {

@@ -192,6 +192,49 @@ export function loadProviderConfig(cwd = DEFAULT_WORKSPACE_ROOT): ProviderConfig
 /** A provider config complete enough to register: it names the protocol and the model. */
 export type RegisteredProviderConfig = ProviderConfig & { apiProtocol: string; modelId: string };
 
+/** The headers of a run's claim, the only headers a runner adds to its gateway calls for a sandbox's driver. */
+const CLAIM_HEADERS = new Set(["x-agent-run", "x-agent-epoch"]);
+
+/**
+ * The claim of the run that a runner works for, from `LLM_PROXY_CLAIM`: a JSON object of the run's claim headers that
+ * the sandbox's driver passes. Absent outside a sandbox driver's run, so the runner sends no claim; anything else than
+ * the claim's two headers with text values is refused.
+ */
+export function parseProxyClaim(value: string | undefined): Readonly<Record<string, string>> {
+	if (value === undefined || value === "") {
+		return {};
+	}
+	const parsed: unknown = JSON.parse(value);
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		throw new Error("LLM_PROXY_CLAIM is not an object of the run's claim headers");
+	}
+	const claim: Record<string, string> = {};
+	for (const [name, header] of Object.entries(parsed)) {
+		if (!CLAIM_HEADERS.has(name) || typeof header !== "string" || header === "") {
+			throw new Error("LLM_PROXY_CLAIM names only the run's claim headers, each with a value");
+		}
+		claim[name] = header;
+	}
+	return claim;
+}
+
+/** `base`, sending the run's claim headers with every request. */
+export function withClaim(
+	base: typeof fetch,
+	claim: Readonly<Record<string, string>>,
+): typeof fetch {
+	if (Object.keys(claim).length === 0) {
+		return base;
+	}
+	return async (input, init) => {
+		const headers = new Headers(init?.headers);
+		for (const [name, value] of Object.entries(claim)) {
+			headers.set(name, value);
+		}
+		return base(input, { ...init, headers });
+	};
+}
+
 /**
  * The provider of a run that a sandbox drives: the gateway's model routes, called with the sandbox token and the
  * run's claim (`X-Agent-Run`, `X-Agent-Epoch`), so the gateway bills the call to the run and refuses it once the claim

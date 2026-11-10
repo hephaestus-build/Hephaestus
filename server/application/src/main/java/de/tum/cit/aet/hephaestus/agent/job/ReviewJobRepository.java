@@ -412,6 +412,24 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     int requeueRunning(@Param("id") UUID id, @Param("runId") UUID runId, @Param("attempt") int attempt);
 
     /**
+     * Hands the running attempt's admitted job on to the run that composes it: the job waits on that run, keeping what
+     * it admitted and staged. The caller ended the attempt's run and queued the next in the same transaction.
+     *
+     * @return rows updated (0 or 1)
+     */
+    @WorkspaceAgnostic("ID-based fenced hand-on; the caller holds the attempt's run")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.runId = :nextRunId, j.startedAt = null,"
+            + " j.executionStartedAt = null, j.llmCalls = 0, j.llmInputTokens = 0,"
+            + " j.llmOutputTokens = 0, j.llmReasoningTokens = 0, j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0"
+            + " WHERE j.id = :id AND j.status = 'RUNNING' AND j.runId = :runId AND j.attempt = :attempt")
+    int queueOnNextRun(
+            @Param("id") UUID id,
+            @Param("runId") UUID runId,
+            @Param("attempt") int attempt,
+            @Param("nextRunId") UUID nextRunId);
+
+    /**
      * Cancels this worker's attempt for capacity: nothing of its sandbox ran, so it has no execution time either.
      *
      * @return rows updated (0 or 1)

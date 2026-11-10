@@ -36,7 +36,9 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
@@ -178,9 +180,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mapper,
                 metrics,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                new ReviewAttemptUsageService(jobs, attemptUsageRows, mock(LlmUsageRecorder.class), agentRuns),
+                attemptUsage(),
                 mock(PracticeScriptRunRecorder.class),
-                admission,
                 Optional.empty(),
                 new ReviewJobClaimService(
                         jobs,
@@ -198,7 +199,12 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         reviewRuns),
                 reviewRuns,
                 agentRuns,
-                mock(AgentRunNotifications.class));
+                mock(AgentRunNotifications.class),
+                new ReviewJobTerminal(jobs, agentRuns, attemptUsage(), mapper, admission, null));
+    }
+
+    private ReviewAttemptUsageService attemptUsage() {
+        return new ReviewAttemptUsageService(jobs, attemptUsageRows, mock(LlmUsageRecorder.class), agentRuns);
     }
 
     @Autowired
@@ -546,6 +552,87 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(parentStatus(job)).isEqualTo("QUEUED");
     }
 
+    /** Leases the job's run as its sandbox's pull does, and starts the job in the same transaction. */
+    private Optional<ReviewJobClaimService.ClaimResult> claimLeased(ReviewJob job) {
+        String subject = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, job.getRunId()));
+        return Objects.requireNonNull(transactions.execute(status -> agentRuns
+                .claimSubject(job.getWorkspaceId(), subject, Set.of(AgentRunKind.REVIEW))
+                .flatMap(lease -> claimService(jobs).claimLeased(lease.fence()))));
+    }
+
+    @Test
+    void shouldStartTheJobOfARunThatItsSandboxLeasedInTheSameTransaction() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+
+        assertThat(claimLeased(job)).isPresent();
+
+        var claimed = jobs.findById(job.getId()).orElseThrow();
+        assertThat(claimed.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        assertThat(RuntimeJobTestData.runState(jdbc, claimed)).isEqualTo("LEASED");
+        assertThat(parentStatus(job)).isEqualTo("RUNNING");
+    }
+
+    @Test
+    void shouldEndTheRunWithItsJobWhenASandboxLeasesTheRunOfACancelledReview() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        jdbc.update(
+                "UPDATE review SET status='CANCELLED',completed_at=clock_timestamp(),stop_reason='CANCELLED' WHERE workspace_id=? AND id=?",
+                job.getWorkspaceId(),
+                job.getReviewId());
+
+        assertThat(claimLeased(job)).isEmpty();
+
+        var cancelled = jobs.findById(job.getId()).orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
+        assertThat(RuntimeJobTestData.runState(jdbc, cancelled)).isEqualTo("ENDED");
+    }
+
+    @Test
+    void shouldPutTheRunBackWithoutSpendingAnAttemptWhileALifecycleWriteHoldsItsReview() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
+            transactions.executeWithoutResult(status -> {
+                jdbc.queryForObject(
+                        "SELECT status FROM review WHERE workspace_id=? AND id=? FOR UPDATE",
+                        String.class,
+                        job.getWorkspaceId(),
+                        job.getReviewId());
+                assertThat(CompletableFuture.supplyAsync(() -> claimLeased(job), requests)
+                                .orTimeout(10, TimeUnit.SECONDS)
+                                .join())
+                        .isEmpty();
+            });
+        }
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(RuntimeJobTestData.runState(jdbc, waiting)).isEqualTo("QUEUED");
+        assertThat(waiting.spentAttempts()).isZero();
+    }
+
+    @Test
+    void shouldHandAMeasuredReviewOnToTheRunThatComposesIt() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var started = claimLeased(job).orElseThrow();
+        UUID measuring = started.fence().runId();
+
+        var composing = Objects.requireNonNull(
+                        transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), started.fence())))
+                .orElseThrow();
+
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.getRunId()).isEqualTo(composing.id());
+        assertThat(jdbc.queryForObject("SELECT kind FROM agent_run WHERE id=?", String.class, composing.id()))
+                .isEqualTo("REVIEW_COMPOSE");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE id=?", Integer.class, measuring))
+                .as("the measuring run is retired")
+                .isZero();
+        Optional<AgentRunRef> again = Objects.requireNonNull(
+                transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), started.fence())));
+        assertThat(again).as("a stale claim hands nothing on").isEmpty();
+    }
+
     private AgentCapacityProperties runs() {
         return agentRuns.capacity();
     }
@@ -628,7 +715,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
                 usage,
                 mock(PracticeScriptRunRecorder.class),
-                admission,
                 Optional.empty(),
                 new ReviewJobClaimService(
                         jobs,
@@ -646,7 +732,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         reviewRuns),
                 reviewRuns,
                 agentRuns,
-                mock(AgentRunNotifications.class));
+                mock(AgentRunNotifications.class),
+                new ReviewJobTerminal(jobs, agentRuns, usage, mapper, admission, null));
     }
 
     @Test

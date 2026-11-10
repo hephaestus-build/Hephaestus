@@ -1382,13 +1382,12 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
                 attemptUsage,
                 new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
-                null,
                 Optional.empty(),
                 mock(ReviewJobClaimService.class),
                 reviewRuns,
                 agentRuns,
-                mock(AgentRunNotifications.class));
-        executor.setCompositionContinuation(continuation);
+                mock(AgentRunNotifications.class),
+                new ReviewJobTerminal(jobRepository, agentRuns, attemptUsage, objectMapper, null, continuation));
         return executor;
     }
 
