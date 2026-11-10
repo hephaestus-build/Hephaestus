@@ -192,7 +192,7 @@ public class ReviewJobClaimService {
     }
 
     /**
-     * Starts the job of a run that its sandbox just leased, in the caller's transaction: the same checks as a claim of
+     * Starts the job of the run that its sandbox just leased under {@code fence}, in the caller's transaction: the same checks as a claim of
      * the worker's, but no room or quota check, since the sandbox already exists. A claim that cannot start now leaves
      * nothing leased: a refused job ends with its run, and one that must wait goes back to the queue with its run,
      * spending no attempt.
@@ -200,12 +200,11 @@ public class ReviewJobClaimService {
      * @return the started attempt; empty when its run was ended or requeued instead
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public Optional<ClaimResult> claimLeased(AgentRunLease lease) {
-        AgentRunFence fence = lease.fence();
+    public Optional<ClaimResult> claimLeased(AgentRunFence fence) {
         Optional<ReviewJob> locked =
-                jobRepository.lockParentForQueuedClaim(lease.runId()).isEmpty()
+                jobRepository.lockParentForQueuedClaim(fence.runId()).isEmpty()
                         ? Optional.empty()
-                        : jobRepository.lockQueuedByRun(lease.runId());
+                        : jobRepository.lockQueuedByRun(fence.runId());
         if (locked.isEmpty()) {
             // A lifecycle write holds the review or its job; the run waits for the next pull.
             runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY);

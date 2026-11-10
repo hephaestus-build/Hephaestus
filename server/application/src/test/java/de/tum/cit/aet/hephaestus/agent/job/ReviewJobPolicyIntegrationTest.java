@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
@@ -557,7 +558,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, job.getRunId()));
         return Objects.requireNonNull(transactions.execute(status -> agentRuns
                 .claimSubject(job.getWorkspaceId(), subject, Set.of(AgentRunKind.REVIEW))
-                .flatMap(lease -> claimService(jobs).claimLeased(lease))));
+                .flatMap(lease -> claimService(jobs).claimLeased(lease.fence()))));
     }
 
     @Test
@@ -607,6 +608,29 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(RuntimeJobTestData.runState(jdbc, waiting)).isEqualTo("QUEUED");
         assertThat(waiting.spentAttempts()).isZero();
+    }
+
+    @Test
+    void shouldHandAMeasuredReviewOnToTheRunThatComposesIt() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var started = claimLeased(job).orElseThrow();
+        UUID measuring = started.fence().runId();
+
+        var composing = Objects.requireNonNull(
+                        transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), started.fence())))
+                .orElseThrow();
+
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.getRunId()).isEqualTo(composing.id());
+        assertThat(jdbc.queryForObject("SELECT kind FROM agent_run WHERE id=?", String.class, composing.id()))
+                .isEqualTo("REVIEW_COMPOSE");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE id=?", Integer.class, measuring))
+                .as("the measuring run is retired")
+                .isZero();
+        Optional<AgentRunRef> again = Objects.requireNonNull(
+                transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), started.fence())));
+        assertThat(again).as("a stale claim hands nothing on").isEmpty();
     }
 
     private AgentCapacityProperties runs() {

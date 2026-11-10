@@ -25,6 +25,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -213,6 +214,28 @@ public class ReviewRunKind implements AgentRunHandler {
         if (!runs.requeue(fence, charge, wait, hold))
             throw new IllegalStateException("The attempt's run moved under its lock");
         return true;
+    }
+
+    /**
+     * Hands an admitted review from its measuring run on to the run that composes it, in the caller's transaction: the
+     * measuring attempt is settled, its run ends, and the job waits on a {@code REVIEW_COMPOSE} run that continues it
+     * ({@link AgentRuns#continueAs}). The sandbox of the review drives the composition next.
+     *
+     * @return the composing run; empty when {@code fence} no longer holds the job
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<AgentRunRef> continueToCompose(UUID jobId, AgentRunFence fence) {
+        files.holdCopyAdmission();
+        ReviewJob job = jobs.lockById(jobId).orElse(null);
+        if (job == null || !holds(job, fence)) return Optional.empty();
+        settle(job);
+        if (!runs.end(fence)) return Optional.empty();
+        AgentRunRef ended = new AgentRunRef(fence.runId(), fence.workspaceId());
+        AgentRunRef composing = runs.continueAs(ended, fence.epoch(), AgentRunKind.REVIEW_COMPOSE);
+        if (jobs.queueOnNextRun(jobId, fence.runId(), attempt(fence.epoch()), composing.id()) == 0)
+            throw new IllegalStateException("The attempt's job moved under its lock");
+        runs.retire(ended);
+        return Optional.of(composing);
     }
 
     /**

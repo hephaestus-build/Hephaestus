@@ -76,6 +76,10 @@ public class ReviewJobTerminal {
     /** Moves the attempt's job to a terminal status and ends its run; 0 when the attempt no longer owns the job. */
     @Transactional(propagation = Propagation.MANDATORY)
     public int transition(UUID jobId, AgentRunFence fence, ReviewJobStatus status, Instant at, @Nullable String error) {
+        return end(jobId, fence, status, at, error);
+    }
+
+    private int end(UUID jobId, AgentRunFence fence, ReviewJobStatus status, Instant at, @Nullable String error) {
         int updated = jobs.transitionStatusOwnedBy(
                 jobId, status, at, error, fence.runId(), ReviewRunKind.attempt(fence.epoch()));
         if (updated > 0) runs.end(fence);
@@ -91,7 +95,7 @@ public class ReviewJobTerminal {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean completeComposed(UUID jobId, AgentRunFence fence) {
-        if (transition(jobId, fence, ReviewJobStatus.COMPLETED, Instant.now(), null) == 0) return false;
+        if (end(jobId, fence, ReviewJobStatus.COMPLETED, Instant.now(), null) == 0) return false;
         ReviewJob completed = jobs.findById(jobId).orElseThrow();
         ConfigSnapshot snapshot = ConfigSnapshot.fromJson(completed.getConfigSnapshot(), objectMapper);
         completed.setProcessingStatus(ProcessingStatus.PENDING);
