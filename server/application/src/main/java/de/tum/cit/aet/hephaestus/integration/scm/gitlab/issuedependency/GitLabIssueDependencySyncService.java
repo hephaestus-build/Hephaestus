@@ -13,8 +13,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenServic
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,14 +34,11 @@ import org.springframework.web.reactive.function.client.WebClient;
  * to fetch linked issues. Maps {@code blocks} and {@code is_blocked_by}
  * link types to the {@code issue_blocking} join table.
  * <p>
- * Supports incremental sync: when {@code updatedAfter} is provided, only
- * issues updated since that timestamp are processed (reducing API calls).
+ * Every run reads the links of every issue, because no webhook reports a link change. The calls run one at a time, and
+ * {@link GitLabRateLimitTracker} stops the run when the rate limit is critically low. A run that stops, or that could
+ * not read some issues' links, does not report itself complete.
  * <p>
- * Integrates with {@link GitLabRateLimitTracker} to pause when rate limit
- * is critically low.
- * <p>
- * Implements bidirectional stale cleanup: when blocking relationships are
- * removed in GitLab, both directions are cleaned from the local DB.
+ * GitLab reports a link from both of its issues, so the blocked issue's own read removes an edge that GitLab dropped.
  * <p>
  * No webhook available (GitLab doesn't fire events for issue link changes).
  * Runs only during scheduled sync.
@@ -54,9 +49,6 @@ public class GitLabIssueDependencySyncService {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabIssueDependencySyncService.class);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
-
-    /** Max issues to process per sync cycle to bound rate limit consumption. */
-    private static final int MAX_ISSUES_PER_CYCLE = 200;
 
     private final IssueRepository issueRepository;
     private final RepositoryRepository repositoryRepository;
@@ -80,38 +72,16 @@ public class GitLabIssueDependencySyncService {
         this.webClient = webClientBuilder.builder().build();
     }
 
-    /**
-     * Syncs blocking/blocked-by relationships for issues in a repository.
-     * <p>
-     * When {@code updatedAfter} is provided, only processes issues updated
-     * since that time (incremental). Otherwise processes all issues (full sync).
-     *
-     * @param scopeId      workspace scope ID
-     * @param repository   the repository to sync dependencies for
-     * @param updatedAfter optional cutoff for incremental sync
-     * @return sync result
-     */
-    public SyncResult syncDependenciesForRepository(
-            Long scopeId, Repository repository, @Nullable OffsetDateTime updatedAfter) {
+    /** Syncs the blocking and blocked-by relationships of every issue in {@code repository}. */
+    public SyncResult syncDependenciesForRepository(Long scopeId, Repository repository) {
         return admission
                 .capture(scopeId, repository)
-                .map(read -> syncDependenciesForRepository(scopeId, repository, updatedAfter, read))
+                .map(read -> syncDependenciesForRepository(scopeId, repository, read))
                 .orElseGet(() -> SyncResult.completed(0));
     }
 
     public SyncResult syncDependenciesForRepository(
-            Long scopeId,
-            Repository repository,
-            @Nullable OffsetDateTime updatedAfter,
-            GitLabProjectAdmission.ProjectRead read) {
-        return syncDependenciesInternal(scopeId, repository, updatedAfter, read);
-    }
-
-    private SyncResult syncDependenciesInternal(
-            Long scopeId,
-            Repository repository,
-            @Nullable OffsetDateTime updatedAfter,
-            GitLabProjectAdmission.ProjectRead read) {
+            Long scopeId, Repository repository, GitLabProjectAdmission.ProjectRead read) {
         String safeProjectPath = Objects.requireNonNullElse(sanitizeForLog(repository.getNameWithOwner()), "<unknown>");
 
         // Issues only: GitLab keeps issue IIDs and merge-request IIDs in separate per-project namespaces
@@ -120,38 +90,17 @@ public class GitLabIssueDependencySyncService {
         // fetching the *issue* of that IID and attaching its links to the MR row (cross-contaminating the
         // dependency graph), plus one wasted rate-limited API call per MR. Issue links are an issue-domain
         // concept a merge request has no part in.
-        List<Issue> allIssues = issueRepository.findAllIssuesByRepositoryId(repository.getId());
-        if (allIssues.isEmpty()) return SyncResult.completed(0);
-
-        // Filter to issues updated since cutoff (incremental) or all (full sync)
-        List<Issue> issuesToProcess;
-        if (updatedAfter != null) {
-            Instant cutoff = updatedAfter.toInstant();
-            issuesToProcess = allIssues.stream()
-                    .filter(i -> i.getNumber() > 0)
-                    .filter(i -> i.getUpdatedAt() != null && i.getUpdatedAt().isAfter(cutoff))
-                    .toList();
-        } else {
-            issuesToProcess = allIssues.stream().filter(i -> i.getNumber() > 0).toList();
-        }
-
+        List<Issue> issuesToProcess = issueRepository.findAllIssuesByRepositoryId(repository.getId()).stream()
+                .filter(i -> i.getNumber() > 0)
+                .toList();
         if (issuesToProcess.isEmpty()) return SyncResult.completed(0);
-
-        // Cap to avoid rate limit exhaustion
-        if (issuesToProcess.size() > MAX_ISSUES_PER_CYCLE) {
-            log.info(
-                    "Capping dependency sync: project={}, total={}, cap={}",
-                    safeProjectPath,
-                    issuesToProcess.size(),
-                    MAX_ISSUES_PER_CYCLE);
-            issuesToProcess = issuesToProcess.subList(0, MAX_ISSUES_PER_CYCLE);
-        }
 
         String serverUrl = tokenService.resolveServerUrl(scopeId);
         String token = tokenService.getAccessToken(scopeId);
         long nativeId = repository.getNativeId();
 
         int totalDeps = 0;
+        int unread = 0;
 
         for (Issue issue : issuesToProcess) {
             // Check rate limit before each API call
@@ -167,6 +116,7 @@ public class GitLabIssueDependencySyncService {
                 int deps = processIssueDependencies(scopeId, serverUrl, token, nativeId, issue, repository, read);
                 totalDeps += deps;
             } catch (Exception e) {
+                unread++;
                 log.debug(
                         "Failed to fetch issue links for dependencies: project={}, issue=#{}",
                         safeProjectPath,
@@ -175,7 +125,13 @@ public class GitLabIssueDependencySyncService {
             }
         }
 
-        if (totalDeps > 0) {
+        if (unread > 0) {
+            log.warn(
+                    "Incomplete GitLab dependency sync: project={}, issuesUnread={}, issuesProcessed={}",
+                    safeProjectPath,
+                    unread,
+                    issuesToProcess.size());
+        } else if (totalDeps > 0) {
             log.info(
                     "GitLab dependency sync: project={}, issuesProcessed={}, dependenciesProcessed={}",
                     safeProjectPath,
@@ -183,7 +139,8 @@ public class GitLabIssueDependencySyncService {
                     totalDeps);
         }
 
-        return admission.current(read) ? SyncResult.completed(totalDeps) : SyncResult.completed(0);
+        if (!admission.current(read)) return SyncResult.completed(0);
+        return unread > 0 ? SyncResult.completedWithWarnings(totalDeps) : SyncResult.completed(totalDeps);
     }
 
     @SuppressWarnings("unchecked")
@@ -231,8 +188,6 @@ public class GitLabIssueDependencySyncService {
         Issue issueWithDeps =
                 issueRepository.findByIdWithBlockedBy(issue.getId()).orElse(issue);
         Set<Long> currentBlockerIds = new HashSet<>();
-        // Track which issues this issue blocks (for bidirectional cleanup)
-        Set<Long> currentBlockingIds = new HashSet<>();
 
         int depsFound = 0;
 
@@ -259,7 +214,6 @@ public class GitLabIssueDependencySyncService {
                 Issue blocked = findIssueByLink(link, linkedIid, repository);
                 Repository referenced = blocked != null ? blocked.getRepository() : null;
                 if (blocked != null && referenced != null && admission.allowsReference(read, referenced)) {
-                    currentBlockingIds.add(blocked.getId());
                     Issue blockedWithDeps = issueRepository
                             .findByIdWithBlockedBy(blocked.getId())
                             .orElse(blocked);
@@ -276,10 +230,6 @@ public class GitLabIssueDependencySyncService {
         issueWithDeps
                 .getBlockedBy()
                 .removeIf(blocker -> !currentBlockerIds.contains(blocker.getId()) && mayChange(read, blocker));
-
-        // Bidirectional stale cleanup: remove this issue as blocker from issues
-        // it no longer blocks (the "blocks" direction)
-        cleanStalBlocksDirection(issue, repository, currentBlockingIds);
 
         issueRepository.save(issueWithDeps);
         return depsFound;
@@ -303,31 +253,6 @@ public class GitLabIssueDependencySyncService {
     private boolean mayChange(GitLabProjectAdmission.ProjectRead read, Issue blocker) {
         Repository referenced = blocker.getRepository();
         return referenced != null && admission.allowsReference(read, referenced);
-    }
-
-    /**
-     * Removes this issue from the blockedBy set of issues it no longer blocks.
-     */
-    private void cleanStalBlocksDirection(Issue blocker, Repository repository, Set<Long> currentBlockingIds) {
-        // Find all issues in this repo that have this issue in their blockedBy set
-        // We only process issues we know about - a full bidirectional pass
-        // would require loading all issues with their blockedBy, which is expensive.
-        // Instead, we rely on the fact that when the blocked issue is itself processed,
-        // its is_blocked_by links will be reconciled. This method handles the case
-        // where the blocked issue hasn't been updated recently (incremental skip).
-        // Issues only (see syncDependenciesForRepository): a merge request sharing an issue's IID must
-        // never enter the bidirectional blocker cleanup.
-        List<Issue> allRepoIssues = issueRepository.findAllIssuesByRepositoryId(repository.getId());
-        for (Issue candidate : allRepoIssues) {
-            if (currentBlockingIds.contains(candidate.getId())) continue;
-            // Check if this candidate currently has blocker in its blockedBy
-            Issue candidateWithDeps =
-                    issueRepository.findByIdWithBlockedBy(candidate.getId()).orElse(null);
-            if (candidateWithDeps != null && candidateWithDeps.getBlockedBy().contains(blocker)) {
-                candidateWithDeps.getBlockedBy().remove(blocker);
-                issueRepository.save(candidateWithDeps);
-            }
-        }
     }
 
     /**

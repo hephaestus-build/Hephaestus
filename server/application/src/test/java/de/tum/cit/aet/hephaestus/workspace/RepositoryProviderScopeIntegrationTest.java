@@ -1275,7 +1275,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                                                 .build())),
                 projectAdmission);
 
-        dependencies.syncDependenciesForRepository(own.getId(), ownRepository, null, read);
+        dependencies.syncDependenciesForRepository(own.getId(), ownRepository, read);
 
         boolean related = selection == RepositorySelection.ALL || monitorsLinkedProject;
         assertSoftly(softly -> {
@@ -1333,7 +1333,6 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 .syncDependenciesForRepository(
                         holder.getId(),
                         sourceA,
-                        null,
                         projectAdmission.capture(holder.getId(), sourceA).orElseThrow());
         assertThat(blockerIds(blocked)).containsExactlyInAnyOrder(sharedBlocker.getId(), ownBlocker.getId());
         assertThat(blockerIds(sharedBlocked)).containsExactly(blocked.getId());
@@ -1349,7 +1348,6 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 .syncDependenciesForRepository(
                         own.getId(),
                         sourceA,
-                        null,
                         projectAdmission.capture(own.getId(), sourceA).orElseThrow());
 
         // No body says nothing, so both edges stay. A workspace that may not refer to B cannot tell whether B's edge

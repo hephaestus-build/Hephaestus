@@ -1069,7 +1069,7 @@ public class GitLabWorkspaceInitializationService {
             }
             if (depSync != null) {
                 try {
-                    SyncResult r = depSync.syncDependenciesForRepository(workspace.getId(), repo, null, read);
+                    SyncResult r = depSync.syncDependenciesForRepository(workspace.getId(), repo, read);
                     if (!admission.current(read)) continue;
                     totalDeps += r.count();
                     reportIncomplete(handle, r, SyncPhase.ISSUES, "Issue dependency sync", repo.getNameWithOwner());

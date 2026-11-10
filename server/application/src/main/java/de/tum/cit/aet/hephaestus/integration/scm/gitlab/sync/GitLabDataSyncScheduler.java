@@ -1043,7 +1043,7 @@ public class GitLabDataSyncScheduler {
             }
             if (depSync != null) {
                 try {
-                    SyncResult r = depSync.syncDependenciesForRepository(session.scopeId(), repo, null, read);
+                    SyncResult r = depSync.syncDependenciesForRepository(session.scopeId(), repo, read);
                     if (!admission.current(read)) continue;
                     totalDeps += r.count();
                     if (r.status() != SyncResult.Status.COMPLETED) {
