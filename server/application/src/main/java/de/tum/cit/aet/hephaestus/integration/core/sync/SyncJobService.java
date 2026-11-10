@@ -424,9 +424,10 @@ public class SyncJobService implements SmartLifecycle {
     }
 
     /**
-     * Requests cancellation of every job this JVM is running — in memory, so a runner polling
-     * {@link SyncJobHandle#isCancellationRequested()} aborts promptly, and durably in
-     * {@code cancel_requested}, so the request survives the process and outlives this pod.
+     * Requests cancellation of every job this JVM is running, in memory only, so a runner polling
+     * {@link SyncJobHandle#isCancellationRequested()} aborts promptly. It does not write
+     * {@code cancel_requested}: that column records a person's request, and the admin pages show it as
+     * "Stopping". A job that this shutdown stops for good is reaped as abandoned, which names the restart.
      *
      * <p>It does <em>not</em> report an outcome on the runner's behalf, and it does not interrupt
      * anyone. Consequences, accepted deliberately:
@@ -457,17 +458,6 @@ public class SyncJobService implements SmartLifecycle {
             log.info("Requesting cancellation of {} in-flight sync job(s) for application shutdown", jobIds.size());
             for (Long jobId : jobIds) {
                 notifyLocalRunner(jobId);
-            }
-            try {
-                transactionTemplate.executeWithoutResult(status -> {
-                    for (Long jobId : jobIds) {
-                        syncJobRepository.markCancelRequested(jobId, SyncJobStatus.ACTIVE);
-                    }
-                });
-            } catch (Exception e) {
-                log.warn(
-                        "Could not persist sync-job shutdown cancellation: {}",
-                        e.getClass().getName());
             }
         } finally {
             callback.run();

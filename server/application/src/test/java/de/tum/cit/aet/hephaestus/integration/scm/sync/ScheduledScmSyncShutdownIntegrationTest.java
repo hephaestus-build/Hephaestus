@@ -196,6 +196,9 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
         assertThat(seen.lockReleased())
                 .as("the scheduled sync released its lock before the database closed")
                 .isTrue();
+        assertThat(latestJob().isCancelRequested())
+                .as("a shutdown is not a person's cancel, so the admin pages do not show the job as stopping")
+                .isFalse();
         assertThat(schedulerDependencies)
                 .as("every task scheduler closes before the database beans")
                 .isNotEmpty()
@@ -394,8 +397,13 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
                 .isEqualTo(1);
     }
 
+    /** Shutdown asks every runner of this server to cancel when it stops the sync service, in memory. */
     private void awaitCancellationRequested() {
-        await().atMost(Duration.ofSeconds(30)).until(() -> latestJob().isCancelRequested());
+        await().atMost(Duration.ofSeconds(30)).until(this::cancellationRequested);
+    }
+
+    private boolean cancellationRequested() {
+        return !requireServer().getBean(SyncJobService.class).isRunning();
     }
 
     private SyncSession connectedSession(Provider provider) {
@@ -503,7 +511,7 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
         /** Returns at once and completes later, as Tomcat's graceful shutdown does. */
         @Override
         public void shutDownGracefully(GracefulShutdownCallback callback) {
-            cancelRequestedWhenDrainBegan = latestJob().isCancelRequested();
+            cancelRequestedWhenDrainBegan = cancellationRequested();
             drainBegan.countDown();
             Thread.ofPlatform().start(() -> {
                 awaitLatch(releaseDrain);

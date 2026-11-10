@@ -377,7 +377,7 @@ class SyncJobServiceTest extends BaseUnitTest {
                 .isFalse();
         assertThat(started.job().getStatus()).isEqualTo(SyncJobStatus.CANCELLED);
         assertThat(started.job().getFinishedAt()).isNotNull();
-        verify(syncJobRepository).markCancelRequested(started.job().getId(), SyncJobStatus.ACTIVE);
+        verify(syncJobRepository, never()).markCancelRequested(started.job().getId(), SyncJobStatus.ACTIVE);
     }
 
     @Test
