@@ -9,7 +9,8 @@ import { ConfigAuditPanel } from "@/components/admin/audit/ConfigAuditPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAdminConfigAuditRead, useAuthAuditRead } from "@/hooks/use-audit-reads";
+import { useAuthAuditRead } from "@/hooks/use-auth-audit-read";
+import { useAdminConfigAuditRead } from "@/hooks/use-config-audit-read";
 import { instanceAdminHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
 

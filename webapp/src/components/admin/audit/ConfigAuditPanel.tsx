@@ -2,10 +2,10 @@ import type { ConfigAuditEntryView } from "@/api/types.gen";
 import type { AuditListState } from "@/components/admin/audit/audit-list";
 import {
 	type ConfigAuditSearch,
-	configAuditFilters,
 	fromDateRange,
 	toDateRange,
 } from "@/components/admin/audit/audit-search";
+import { configAuditFilters } from "@/components/admin/audit/config-audit-filters";
 import { ACTION_LABELS, ENTITY_TYPE_LABELS } from "@/components/admin/audit/config-audit-format";
 import { ConfigAuditTable } from "@/components/admin/audit/ConfigAuditTable";
 import { nameForRef } from "@/components/admin/audit/name-for-ref";

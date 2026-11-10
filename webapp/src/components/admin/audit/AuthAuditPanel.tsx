@@ -6,10 +6,10 @@ import { EVENT_TYPE_LABELS } from "@/components/admin/audit/audit-format";
 import type { AuditListState } from "@/components/admin/audit/audit-list";
 import {
 	type AuditSearch,
-	authAuditFilters,
 	fromDateRange,
 	toDateRange,
 } from "@/components/admin/audit/audit-search";
+import { authAuditFilters } from "@/components/admin/audit/auth-audit-filters";
 import { nameForRef } from "@/components/admin/audit/name-for-ref";
 import { DateRangeFacet } from "@/components/common/DateRangeFacet";
 import { FacetMultiSelect, toFacetOptions } from "@/components/common/FacetMultiSelect";

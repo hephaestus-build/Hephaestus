@@ -8,7 +8,7 @@ import {
 import { ConfigAuditPanel } from "@/components/admin/audit/ConfigAuditPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
-import { useWorkspaceConfigAuditRead } from "@/hooks/use-audit-reads";
+import { useWorkspaceConfigAuditRead } from "@/hooks/use-config-audit-read";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
 
