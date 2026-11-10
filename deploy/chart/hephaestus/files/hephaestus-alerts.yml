@@ -460,6 +460,13 @@ groups:
         annotations:
           summary: The sandbox reaper keeps failing to delete sandboxes that no work needs, so they hold cluster capacity
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusAgentSandboxUnisolated
+        expr: sum(increase(agent_sandbox_revoked_total{job="hephaestus",reason="unisolated"}[15m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: A sandbox could still reach the Kubernetes API 10 seconds after it started, so its network policy does not hold
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewFeedbackUnconfirmed
         expr: sum(increase(agent_job_composition_stopped_total{job="hephaestus",outcome="unrecorded"}[1h])) > 0
         labels:

@@ -95,6 +95,19 @@ A sandbox token expires at the sandbox's shutdown time, which is at most the lif
 `POST /internal/agent/next` leases the subject's next run to the sandbox with `AgentRuns.claimSubject`: the same rule and order as a claim, within one subject. It holds the sandbox's row in the same transaction, so the reaper cannot take the sandbox back between the check and the lease.
 It offers only the run kinds that the sandbox's kind drives (`AgentSandboxKind.runs`). Review jobs are still claimed by the worker's executor, so no kind drives one yet, and `next` answers `204`.
 
+### Sandbox driver
+
+The agent image's entrypoint is the driver, `agent/driver.ts`. A sandbox's container runs it, and the kind of each run is its parameter (`agent/driver-kinds.ts`).
+The driver pulls the subject's next run, keeps its lease, and ends it with `POST …/runs/{runId}/end`. A kind runner never renews the lease and never ends the run.
+Every tool in the sandbox can hold the sandbox token, so each gateway write enforces its own guardrails on the server ([ADR 0079 § Update — a tool may hold the sandbox token](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md#update--2026-11-09-a-tool-may-hold-the-sandbox-token)).
+
+The driver starts no kind before the sandbox's network policy holds (isolation gate G6).
+A new Pod can reach the Kubernetes API before its node applies the namespace's NetworkPolicy, and the template has no init container that could wait.
+At its start, the driver connects to the API Service again and again (`agent/driver-isolation.ts`). A connection that is refused, or that does not open in 300 ms, shows that the policy holds.
+If the API still answers after 10 seconds, the driver ends its run as `unisolated` and pulls no more.
+The server then hands the run on and takes the sandbox back in one transaction (`AgentSandboxes.revoke`): its token stops at the commit, and the reaper deletes its claim.
+The alert `HephaestusAgentSandboxUnisolated` fires on each such sandbox.
+
 ### Sandbox reaper
 
 `AgentSandboxReaper` runs where the sandbox namespace's Kubernetes client is, every `hephaestus.agent.capacity.lease-renewal`, without a leader. One statement on the database clock takes back a live sandbox when one of these is true:

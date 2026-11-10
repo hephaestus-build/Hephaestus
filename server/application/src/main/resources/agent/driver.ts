@@ -4,11 +4,22 @@
 // The sandbox is the run's only writer. A kind runner reads its context and makes its calls with the run's headers;
 // it never renews the lease and never ends the run. The driver aborts the runner's signal when the lease is lost or
 // the sandbox is stopped, and then sends no end: the server's reaper owns a run whose lease ran out.
+//
+// No kind starts before the sandbox's network policy holds (driver-isolation.ts). A sandbox whose policy does not hold
+// in time ends its run as `unisolated`, which hands the run on and takes the sandbox back, and pulls no more.
 
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { guardIsolation, type Isolation } from "./driver-isolation.ts";
 import { KINDS } from "./driver-kinds.ts";
-import { isJsonObject } from "./work/practice-scripts/lib/core/json.ts";
+
+/**
+ * Where a kind works: Pi's working directory and its agent directory. The image gives both to UID 1000, and they last
+ * as long as the sandbox, so a conversation keeps its files from one turn to the next. The container's
+ * ephemeral-storage limit bounds them.
+ */
+export const WORKSPACE = "/workspace/work";
+export const AGENT_DIR = "/workspace/.pi";
 
 /** A run that the gateway leased to this sandbox (`POST /internal/agent/next`). */
 export interface Assignment {
@@ -48,6 +59,8 @@ export interface DriverOptions {
 	kinds: Readonly<Record<string, KindRunner>>;
 	/** Aborted on SIGTERM: the driver stops the current run and pulls no more. */
 	signal: AbortSignal;
+	/** Settles once the sandbox's policy holds, or once it has not held in time. */
+	isolation: Promise<Isolation>;
 	/** How often the lease is renewed; the server's lease lasts at least twice as long. */
 	renewEveryMs?: number;
 	/** How long the driver waits after the gateway had no run for it. */
@@ -96,7 +109,9 @@ export async function drive(options: DriverOptions): Promise<void> {
 			await sleep(wait, undefined, { signal }).catch(() => undefined);
 			continue;
 		}
-		await runOne(offered, { ...options, fetch, log, auth });
+		if ((await runOne(offered, { ...options, fetch, log, auth })) === "unisolated") {
+			return;
+		}
 	}
 }
 
@@ -139,6 +154,10 @@ function instant(value: unknown): number {
 	return typeof value === "string" && INSTANT.test(value) ? Date.parse(value) : Number.NaN;
 }
 
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** The gateway's answer, checked: a run that the driver cannot read is no run to start. */
 export function parseAssignment(value: unknown): Assignment {
 	if (!isJsonObject(value)) {
@@ -177,6 +196,10 @@ function bounded(signal: AbortSignal, ms: number): AbortSignal {
 	return AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, ms))]);
 }
 
+/** How the driver ends a run: as its runner said, or as unisolated when the sandbox's policy did not hold. */
+type EndOutcome = "completed" | "handed_on" | "unisolated";
+
+/** Runs one run; `unisolated` when the sandbox must pull no more. */
 async function runOne(
 	{ assignment, clockOffsetMs }: Offered,
 	options: DriverOptions & {
@@ -184,7 +207,7 @@ async function runOne(
 		log: (line: string) => void;
 		auth: Readonly<Record<string, string>>;
 	},
-): Promise<void> {
+): Promise<EndOutcome | null> {
 	const { fetch, log, gatewayUrl } = options;
 	const headers = {
 		...options.auth,
@@ -216,8 +239,14 @@ async function runOne(
 		},
 	);
 	const runner = options.kinds[assignment.kind];
-	let outcome: RunOutcome;
-	if (runner === undefined) {
+	const isolation = await options.isolation;
+	let outcome: RunOutcome | { leaseLost: false; outcome: "unisolated" };
+	if (!isolation.isolated) {
+		log(
+			`driver: the sandbox's network policy did not hold (${isolation.reason}); no kind runs here`,
+		);
+		outcome = { leaseLost: false, outcome: "unisolated" };
+	} else if (runner === undefined) {
 		// The server offers a sandbox only the kinds that its kind drives; another is a defect, not work to do.
 		log(
 			`driver: run ${assignment.runId} has kind ${assignment.kind}, which this sandbox does not run`,
@@ -236,7 +265,7 @@ async function runOne(
 	lost.abort();
 	await renewal;
 	if (outcome.leaseLost || overtaken) {
-		return;
+		return null;
 	}
 	// Its own bound, not the stop signal: a run that finished as the sandbox stops is still ended, not redone.
 	try {
@@ -257,6 +286,7 @@ async function runOne(
 			`driver: run ${assignment.runId} could not end: ${errorName(error)}; the server takes it back`,
 		);
 	}
+	return outcome.outcome;
 }
 
 /** The answers of a renewal after which the claim cannot recover: the lease, the run or the sandbox is gone. */
@@ -339,7 +369,13 @@ async function main(): Promise<void> {
 	}
 	const stop = new AbortController();
 	process.once("SIGTERM", () => stop.abort());
-	await drive({ gatewayUrl, token, kinds: KINDS, signal: stop.signal });
+	// From the start, while the first pull waits for the gateway.
+	const isolation = guardIsolation({
+		host: process.env.KUBERNETES_SERVICE_HOST,
+		port: process.env.KUBERNETES_SERVICE_PORT,
+		signal: stop.signal,
+	});
+	await drive({ gatewayUrl, token, kinds: KINDS, signal: stop.signal, isolation });
 	// Open keep-alive sockets would hold the first process of the container after its last run.
 	process.exit(0);
 }

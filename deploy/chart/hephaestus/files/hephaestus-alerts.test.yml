@@ -896,6 +896,26 @@ tests:
         alertname: HephaestusAgentSandboxReaperFailing
         exp_alerts: []
 
+  - name: one sandbox whose network policy did not hold fires, revocations of another reason do not
+    interval: 1m
+    input_series:
+      - series: 'agent_sandbox_revoked_total{job="hephaestus",instance="worker:9090",reason="unisolated"}'
+        values: "0x5 1x20"
+      - series: 'agent_sandbox_revoked_total{job="hephaestus",instance="worker:9090",reason="other"}'
+        values: "0 5x20"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HephaestusAgentSandboxUnisolated
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: HephaestusAgentSandboxUnisolated
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: A sandbox could still reach the Kubernetes API 10 seconds after it started, so its network policy does not hold
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a job that waits more than an hour fires, a shorter wait does not
     interval: 1m
     input_series:
