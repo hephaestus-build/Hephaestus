@@ -46,9 +46,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.RuntimeNonResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SubmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.ComposeRunGateway;
@@ -2324,31 +2322,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    /**
-     * Hands the admitted job to a composition run of its own, as its review run's end does, in the caller's
-     * transaction: the review run ends, and the job waits for the composition run's claim.
-     *
-     * @return the composition run; empty when the fence no longer owns the job
-     */
-    private Optional<AgentRunRef> continueToCompose(UUID jobId, AgentRunFence fence) {
-        var job = jobs.findById(jobId).orElseThrow();
-        if (job.getStatus() != ReviewJobStatus.RUNNING
-                || !fence.runId().equals(job.getRunId())
-                || job.getAttempt() != ReviewRunKind.attempt(fence.epoch())) return Optional.empty();
-        agentRuns.end(fence);
-        var compose = agentRuns.continueAs(
-                new AgentRunRef(fence.runId(), fence.workspaceId()), fence.epoch(), AgentRunKind.REVIEW_COMPOSE);
-        jdbc.update(
-                "UPDATE review_job SET status='QUEUED', run_id=? WHERE workspace_id=? AND id=?",
-                compose.id(),
-                fence.workspaceId(),
-                jobId);
-        return Optional.of(compose);
-    }
-
     private UUID composeRun(ReviewJob job) {
         var fence = new AgentRunFence(job.getRunId(), job.getWorkspaceId(), ReviewRunKind.epoch(job.getAttempt()));
-        return Objects.requireNonNull(transactions.execute(status -> continueToCompose(job.getId(), fence)))
+        return Objects.requireNonNull(transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), fence)))
                 .orElseThrow()
                 .id();
     }
