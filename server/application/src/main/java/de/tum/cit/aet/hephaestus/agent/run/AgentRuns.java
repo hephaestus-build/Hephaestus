@@ -55,10 +55,7 @@ public class AgentRuns {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef continueAfter(AgentRunRef ended, int lastEpoch) {
-        AgentRun previous = runs.findByRef(ended.id(), ended.workspaceId())
-                .orElseThrow(() -> new IllegalStateException("The run to continue does not exist"));
-        if (previous.getState() != AgentRunState.ENDED)
-            throw new IllegalStateException("Only an ended run is continued");
+        AgentRun previous = ended(ended);
         return insert(
                 previous.getWorkspaceId(),
                 previous.getKind(),
@@ -67,6 +64,33 @@ public class AgentRuns {
                 Math.max(lastEpoch, previous.getLeaseEpoch()),
                 previous.getAttempt() + 1,
                 null);
+    }
+
+    /**
+     * Queues the next step of work whose earlier run ended, as a run of another kind: a review's composition after its
+     * measurement. Its epochs go on from {@code lastEpoch}, as a continuation's do. It is no retry, so it spends no
+     * attempt: the work's attempts count across both steps.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AgentRunRef continueAs(AgentRunRef ended, int lastEpoch, AgentRunKind kind) {
+        AgentRun previous = ended(ended);
+        if (previous.getKind() == kind) throw new IllegalArgumentException("A run of the same kind continues it");
+        return insert(
+                previous.getWorkspaceId(),
+                kind,
+                previous.getBand(),
+                previous.getConcurrencyKey(),
+                Math.max(lastEpoch, previous.getLeaseEpoch()),
+                previous.getAttempt(),
+                null);
+    }
+
+    private AgentRun ended(AgentRunRef ended) {
+        AgentRun previous = runs.findByRef(ended.id(), ended.workspaceId())
+                .orElseThrow(() -> new IllegalStateException("The run to continue does not exist"));
+        if (previous.getState() != AgentRunState.ENDED)
+            throw new IllegalStateException("Only an ended run is continued");
+        return previous;
     }
 
     private AgentRunRef insert(

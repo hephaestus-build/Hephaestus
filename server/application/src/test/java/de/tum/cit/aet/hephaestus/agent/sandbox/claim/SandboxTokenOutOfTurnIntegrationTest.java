@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
+import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
@@ -39,6 +40,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -60,6 +62,8 @@ import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import tools.jackson.databind.JsonNode;
@@ -112,7 +116,8 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
                 "http://hephaestus-sandbox-gateway.hephaestus.svc:8081",
                 host -> "10.43.0.12",
                 new SimpleMeterRegistry());
-        var controller = new AgentRunController(runs, sandboxes, transactions, List.of(new FencedReview(runs)));
+        var review = new FencedReview(runs);
+        var controller = new AgentRunController(runs, sandboxes, transactions, List.of(review));
         var application = new SpringApplication(
                 GatewayApplication.class,
                 Class.forName("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"),
@@ -120,6 +125,8 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         application.addInitializers(context -> {
             var factory = context.getBeanFactory();
             factory.registerSingleton("agentRunController", controller);
+            factory.registerSingleton("modelRoute", new ModelRoute());
+            factory.registerSingleton("fencedReview", review);
             factory.registerSingleton("sandboxRunArguments", new WebMvcConfigurer() {
                 @Override
                 public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
@@ -195,6 +202,18 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         return http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
     }
 
+    private int model(Sandbox caller, UUID run, int epoch) throws Exception {
+        var request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + gatewayPort + "/internal/llm/chat/completions"))
+                .header("Authorization", "Bearer " + caller.token())
+                .header(SandboxRunArgumentResolver.RUN_HEADER, run.toString())
+                .header(SandboxRunArgumentResolver.EPOCH_HEADER, Integer.toString(epoch))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .build();
+        return http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+    }
+
     private int renew(Sandbox caller, UUID run, int epoch) throws Exception {
         return call("POST", caller, run, epoch, "lease", "{}");
     }
@@ -220,7 +239,9 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
                 .orElseThrow();
         assertThat(current.runId()).isEqualTo(first.runId());
 
+        assertThat(model(sandbox, current.runId(), current.epoch())).isEqualTo(200);
         for (int epoch : new int[] {first.epoch(), current.epoch() + 1}) {
+            assertThat(model(sandbox, current.runId(), epoch)).isEqualTo(409);
             assertThat(renew(sandbox, current.runId(), epoch)).isEqualTo(409);
             assertThat(end(sandbox, current.runId(), epoch, "completed")).isEqualTo(409);
             assertThat(end(sandbox, current.runId(), epoch, "handed_on")).isEqualTo(409);
@@ -238,6 +259,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         var lease = leased(other);
 
         assertThat(renew(tool, lease.runId(), lease.epoch())).isEqualTo(404);
+        assertThat(model(tool, lease.runId(), lease.epoch())).isEqualTo(401);
         assertThat(end(tool, lease.runId(), lease.epoch(), "completed")).isEqualTo(404);
         assertThat(end(tool, lease.runId(), lease.epoch(), "unisolated")).isEqualTo(404);
         assertThat(call("GET", tool, lease.runId(), lease.epoch(), "context", ""))
@@ -258,6 +280,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         assertThat(end(sandbox, lease.runId(), lease.epoch(), "completed")).isEqualTo(204);
 
         assertThat(renew(sandbox, lease.runId(), lease.epoch())).isEqualTo(409);
+        assertThat(model(sandbox, lease.runId(), lease.epoch())).isEqualTo(409);
         assertThat(end(sandbox, lease.runId(), lease.epoch(), "handed_on")).isEqualTo(409);
         assertThat(end(sandbox, lease.runId(), lease.epoch(), "completed")).isEqualTo(409);
         assertThat(call("GET", sandbox, lease.runId(), lease.epoch(), "context", ""))
@@ -273,6 +296,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         assertThat(end(sandbox, lease.runId(), lease.epoch(), "unisolated")).isEqualTo(204);
 
         assertThat(renew(sandbox, lease.runId(), lease.epoch())).isEqualTo(401);
+        assertThat(model(sandbox, lease.runId(), lease.epoch())).isEqualTo(401);
         assertThat(end(sandbox, lease.runId(), lease.epoch(), "completed")).isEqualTo(401);
         var next = HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/internal/agent/next"))
                 .header("Authorization", "Bearer " + sandbox.token())
@@ -291,6 +315,27 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         }
 
         @Override
+        public AgentSandboxKind sandbox() {
+            return AgentSandboxKind.REVIEW;
+        }
+
+        @Override
+        public boolean claimed(SandboxRun run) {
+            return true;
+        }
+
+        @Override
+        public Optional<ProxyAttempt> attempt(SandboxRun run) {
+            return Optional.of(new ProxyAttempt(
+                    ProxyAttempt.Caller.REVIEW,
+                    run.fence().runId(),
+                    run.fence().workspaceId(),
+                    run.attempt(),
+                    run.fence().runId(),
+                    Instant.now().plus(Duration.ofMinutes(10))));
+        }
+
+        @Override
         public JsonNode context(SandboxRun run) {
             return JsonNodeFactory.instance.objectNode();
         }
@@ -301,6 +346,15 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
                 case COMPLETED -> runs.end(run.fence());
                 case HANDED_ON -> runs.requeue(run.fence(), AgentRuns.Charge.SPEND, Duration.ZERO);
             };
+        }
+    }
+
+    /** The model route as far as authentication decides it: a call that gets here was admitted. */
+    @RestController
+    static class ModelRoute {
+        @PostMapping("/internal/llm/chat/completions")
+        String complete() {
+            return "routed";
         }
     }
 

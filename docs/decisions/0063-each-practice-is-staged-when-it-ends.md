@@ -1,6 +1,6 @@
 # ADR 0063: Each practice is staged when it ends, and the review seals once
 
-**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md))
+**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md), amended 2026-11-09 — [the review run kinds](#update--2026-11-09-the-review-run-kinds-are-review-and-review_compose))
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
@@ -160,3 +160,11 @@ This layer adds no provider writer, composition template or separate scheduling 
 - In the table of § Decision, the row "Attempt, lease and fence" is now kept in `agent_run`, and the server's reaper requeues the run. The rows that name a lost worker now mean a lost sandbox or a lost server replica.
 - Composition after the seal is a `review_compose` run in the same sandbox ([ADR 0061](0061-review-seals-then-feedback-composes.md)).
 - In the 2026-10-30 failure table, the row "Every practice already ended" changes. The server seals without a capture or a measurement. A `review_compose` run then composes, in the review's sandbox if it is live, or in a new one.
+
+## Update — 2026-11-09: the review run kinds are REVIEW and REVIEW_COMPOSE
+
+This update changes the run kind names in the update "superseded in part by ADR 0079". The other sections stay.
+
+- The measuring run kind is `REVIEW`. No kind is named `review_measure`, so the fence of every stage write is on the `REVIEW` run.
+- The compose run kind is `REVIEW_COMPOSE`.
+- [ADR 0079 § Update — the review run kinds](0079-one-agent-system.md#update--2026-11-09-the-review-run-kinds-are-review-and-review_compose) gives the reason.

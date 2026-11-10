@@ -1,6 +1,6 @@
 # ADR 0079: One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain
 
-**Status:** Accepted (2026-11-09, amended 2026-11-09 — [erasure of outbox actions](#update--2026-11-09-erasure-deletes-the-actions-of-an-account), [a tool may hold the sandbox token](#update--2026-11-09-a-tool-may-hold-the-sandbox-token))
+**Status:** Accepted (2026-11-09). Amended 2026-11-09: [outbox erasure](#update--2026-11-09-erasure-deletes-the-actions-of-an-account), [sandbox token](#update--2026-11-09-a-tool-may-hold-the-sandbox-token), [run kinds](#update--2026-11-09-the-review-run-kinds-are-review-and-review_compose).
 **Date:** 2026-11-09
 **Authors:** Felix T.J. Dietrich
 
@@ -641,6 +641,15 @@ The process uses the sandbox's own token for writes out of turn:
 - A model call over the budget.
 
 The gateway must refuse each of them.
+
+## Update — 2026-11-09: the review run kinds are REVIEW and REVIEW_COMPOSE
+
+This update changes the names of two run kinds in § Data model and § Interactive and proactive work. The other sections stay.
+
+- The measuring run kind is `REVIEW`. No kind is named `review_measure`.
+- The compose run kind is `REVIEW_COMPOSE`.
+- A rename of `REVIEW` would need a data migration around the trigger that keeps a run's kind fixed. It would also change the `kind` label of the run metrics that the review alerts read.
+- A `REVIEW_COMPOSE` run continues the `REVIEW` run of the same review (`AgentRuns.continueAs`). Its epochs go on, and it spends no attempt.
 
 ## Sources
 

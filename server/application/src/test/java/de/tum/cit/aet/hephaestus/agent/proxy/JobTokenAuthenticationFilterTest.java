@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -45,7 +46,14 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     private final AttemptTokenVerifier verifier = mock(AttemptTokenVerifier.class);
     private final AgentRuns runs = mock(AgentRuns.class);
     private final JobTokenAuthenticationFilter filter = new JobTokenAuthenticationFilter(
-            jobs, runs, turns, new ConversationLoopProperties(LOOP_SECRET), verifier, mock(ProxyAccounting.class));
+            jobs,
+            runs,
+            turns,
+            new ConversationLoopProperties(LOOP_SECRET),
+            verifier,
+            null,
+            Map.of(),
+            mock(ProxyAccounting.class));
 
     @AfterEach
     void clearContext() {
@@ -72,7 +80,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(principal.get()).isInstanceOf(JobTokenAuthentication.class);
         assertThat(((JobTokenAuthentication) principal.get()).getPrincipal().job())
-                .isEqualTo(jwt);
+                .isEqualTo(ProxyAttempt.of(jwt));
         assertThat(job.getConfigSnapshot()).isNull();
         verify(jobs).findById(job.getId());
         verify(runs)
@@ -96,7 +104,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                         SecurityContextHolder.getContext().getAuthentication())));
         assertThat(response.getStatus()).isEqualTo(200);
         var authenticated = (JobTokenAuthentication) principal.get();
-        assertThat(authenticated.getPrincipal().turn()).isEqualTo(jwt);
+        assertThat(authenticated.getPrincipal().turn()).isEqualTo(ProxyAttempt.of(jwt));
         assertThat(authenticated.getPrincipal().description()).isEqualTo("mentor-turn:" + jwt.id());
         assertThat(authenticated.getDetails()).isEqualTo(jwt);
         verifyNoInteractions(jobs);

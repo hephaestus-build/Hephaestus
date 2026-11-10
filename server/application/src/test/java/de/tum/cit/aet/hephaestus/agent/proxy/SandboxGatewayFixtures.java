@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import jakarta.servlet.Filter;
+import java.util.Map;
 import org.mockito.Mockito;
 
 /**
@@ -19,6 +20,13 @@ public final class SandboxGatewayFixtures {
     public static Filter credentialFilter(
             ReviewJobRepository jobs, AgentRuns runs, MentorTurnRepository turns, AttemptTokenVerifier verifier) {
         return new JobTokenAuthenticationFilter(
-                jobs, runs, turns, new ConversationLoopProperties(null), verifier, Mockito.mock(ProxyAccounting.class));
+                jobs,
+                runs,
+                turns,
+                new ConversationLoopProperties(null),
+                verifier,
+                null,
+                Map.of(),
+                Mockito.mock(ProxyAccounting.class));
     }
 }

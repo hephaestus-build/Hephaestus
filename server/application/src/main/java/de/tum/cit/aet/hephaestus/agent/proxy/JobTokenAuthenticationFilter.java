@@ -1,12 +1,17 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
+import java.util.Map;
 import org.apache.hc.core5.net.InetAddressUtils;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.MediaType;
@@ -50,9 +55,12 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
             MentorTurnRepository turns,
             ConversationLoopProperties loop,
             AttemptTokenVerifier verifier,
+            @Nullable AgentSandboxes sandboxes,
+            Map<AgentRunKind, SandboxRunKind> kinds,
             ProxyAccounting accounting) {
         super(
-                new ProviderManager(new JobTokenAuthenticationProvider(jobs, runs, turns, loop, verifier)),
+                new ProviderManager(
+                        new JobTokenAuthenticationProvider(jobs, runs, turns, loop, verifier, sandboxes, kinds)),
                 JobTokenAuthenticationFilter::convert);
         setSuccessHandler((request, response, authentication) -> {});
         setFailureHandler((request, response, failure) -> {
@@ -75,7 +83,9 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
             return new RequestIdentity(
                     segment(path, RUNTIME_PATH),
                     segment(path, TURN_PATH),
-                    "POST".equals(incoming.getMethod()) && path.equals(ASSIGNMENTS_PATH));
+                    "POST".equals(incoming.getMethod()) && path.equals(ASSIGNMENTS_PATH),
+                    incoming.getHeader(SandboxRunArgumentResolver.RUN_HEADER),
+                    incoming.getHeader(SandboxRunArgumentResolver.EPOCH_HEADER));
         });
         return converter;
     }
@@ -99,9 +109,14 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
      *
      * @param turnId the turn a turn endpoint names
      * @param assignments whether this is the conversation loop's assignment pull
+     * @param run the run that a sandbox's call names, with {@code epoch} the claim it holds
      */
     record RequestIdentity(
-            @Nullable String runtimeJobId, @Nullable String turnId, boolean assignments) {}
+            @Nullable String runtimeJobId,
+            @Nullable String turnId,
+            boolean assignments,
+            @Nullable String run,
+            @Nullable String epoch) {}
 
     static boolean isPrivateIp(@Nullable String ip) {
         if (ip == null || (!InetAddressUtils.isIPv4(ip) && !InetAddressUtils.isIPv6(ip))) return false;

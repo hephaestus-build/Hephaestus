@@ -300,6 +300,31 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldContinueAnEndedRunAsTheNextStepOfItsWorkWithoutSpendingAnAttempt() {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.INTERACTIVE, "review:composed");
+        AgentRunLease measured = claim().orElseThrow();
+        transactions.executeWithoutResult(status -> runs.end(measured.fence()));
+
+        Objects.requireNonNull(
+                transactions.execute(status -> runs.continueAs(run, measured.epoch(), AgentRunKind.REVIEW_COMPOSE)));
+
+        assertThat(claim())
+                .as("the measuring kind's claim does not offer the composition")
+                .isEmpty();
+        AgentRunLease composing = Objects.requireNonNull(transactions.execute(
+                        status -> runs.claimSubject(workspace, "review:composed", Set.of(AgentRunKind.REVIEW_COMPOSE))))
+                .orElseThrow();
+        assertThat(composing.kind()).isEqualTo(AgentRunKind.REVIEW_COMPOSE);
+        assertThat(composing.epoch()).isEqualTo(measured.epoch() + 1);
+        assertThat(composing.attempt()).as("the next step is no retry").isEqualTo(measured.attempt());
+        assertThat(jdbc.queryForObject("SELECT band FROM agent_run WHERE id = ?", String.class, composing.runId()))
+                .isEqualTo("INTERACTIVE");
+        assertThatThrownBy(() -> transactions.executeWithoutResult(
+                        status -> runs.continueAs(run, measured.epoch(), AgentRunKind.REVIEW)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void shouldRequeueAnExpiredLeaseWithItsDomainRowAndLeaveARenewedOneAlone() {
         var handler = new RecordingHandler(2);
         var reaper = reaper(handler);

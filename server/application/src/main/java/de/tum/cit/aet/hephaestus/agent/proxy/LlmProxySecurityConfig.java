@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
@@ -23,6 +24,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.springframework.beans.factory.ObjectProvider;
@@ -53,8 +55,8 @@ import tools.jackson.databind.ObjectMapper;
  * the chains that would otherwise serve {@code /internal/llm/**}:
  *
  * <ol>
- *   <li>the sandbox capabilities on the gateway connector, authenticated by a sandbox credential
- *       ({@link JobTokenAuthenticationProvider}), rate-limited per source address before any credential is read and per
+ *   <li>the sandbox capabilities on the gateway connector, authenticated by an attempt's credential, or by a
+ *       sandbox's token with the claim of a run that it holds ({@link JobTokenAuthenticationProvider}), rate-limited per source address before any credential is read and per
  *       caller after it. A review job reaches its runtime, its
  *       review endpoints and the model; a Heph turn reaches the model and its own turn endpoints; a Heph host's session
  *       reaches only its own runtime discovery, workspace and command channel. The Heph host's turn bookkeeping (its
@@ -96,6 +98,8 @@ class LlmProxySecurityConfig {
             MentorTurnRepository mentorTurnRepository,
             ConversationLoopProperties conversationLoop,
             AttemptTokenVerifier jwtVerifier,
+            ObjectProvider<AgentSandboxes> sandboxes,
+            List<SandboxRunKind> sandboxRunKinds,
             BucketResolver bucketResolver,
             SandboxGatewayBodyBudget bodyBudget,
             ProxyAccounting accounting,
@@ -175,6 +179,8 @@ class LlmProxySecurityConfig {
                                 mentorTurnRepository,
                                 conversationLoop,
                                 jwtVerifier,
+                                sandboxes.getIfAvailable(),
+                                SandboxRunKind.byKind(sandboxRunKinds),
                                 accounting),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(

@@ -10,7 +10,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,17 +45,14 @@ public class AgentRunController {
     private final AgentRuns runs;
     private final AgentSandboxes sandboxes;
     private final TransactionTemplate transactions;
-    private final Map<AgentRunKind, SandboxRunKind> kinds = new EnumMap<>(AgentRunKind.class);
+    private final Map<AgentRunKind, SandboxRunKind> kinds;
 
     public AgentRunController(
             AgentRuns runs, AgentSandboxes sandboxes, TransactionTemplate transactions, List<SandboxRunKind> kinds) {
         this.runs = runs;
         this.sandboxes = sandboxes;
         this.transactions = transactions;
-        for (SandboxRunKind kind : kinds) {
-            if (this.kinds.put(kind.kind(), kind) != null)
-                throw new IllegalStateException("Two sandbox runs of kind " + kind.kind());
-        }
+        this.kinds = SandboxRunKind.byKind(kinds);
     }
 
     /** The run's context, as its kind's loop reads it. */

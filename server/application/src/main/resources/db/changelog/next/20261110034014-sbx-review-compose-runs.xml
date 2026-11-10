@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794253174369-1" author="hephaestus">
+        <comment>A review composes in a run of its own, which continues the run that measured it, so its sandbox drives the composition as a run too.</comment>
+        <sql splitStatements="false">
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_kind;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_kind CHECK (kind IN ('REVIEW', 'REVIEW_COMPOSE'));
+DROP TRIGGER agent_run_review_agrees ON agent_run;
+CREATE CONSTRAINT TRIGGER agent_run_review_agrees AFTER UPDATE OF state ON agent_run
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.kind IN ('REVIEW', 'REVIEW_COMPOSE'))
+ EXECUTE FUNCTION enforce_review_job_run();
+        </sql>
+        <rollback>
+DROP TRIGGER agent_run_review_agrees ON agent_run;
+CREATE CONSTRAINT TRIGGER agent_run_review_agrees AFTER UPDATE OF state ON agent_run
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.kind = 'REVIEW') EXECUTE FUNCTION enforce_review_job_run();
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_kind;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_kind CHECK (kind IN ('REVIEW'));
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

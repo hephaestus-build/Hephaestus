@@ -157,6 +157,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         turnRepository,
                         new ConversationLoopProperties(LOOP_SECRET),
                         jwtVerifier,
+                        owners.getBeanProvider(AgentSandboxes.class),
+                        List.of(),
                         resolver,
                         new SandboxGatewayBodyBudget(bodyBudgetBytes),
                         accounting,
