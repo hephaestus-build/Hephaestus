@@ -83,7 +83,12 @@ public class AgentSandboxes {
     }
 
     /** A live sandbox: the caller of a gateway route, or the sandbox that serves a subject now. */
-    public record LiveSandbox(UUID id, long workspaceId, String subjectKey, AgentSandboxKind kind) {}
+    public record LiveSandbox(UUID id, long workspaceId, String subjectKey, AgentSandboxKind kind) {
+        /** The name of its claim, Sandbox and Pod, as its log records and the cluster name it. */
+        public String claimName() {
+            return AgentSandboxes.claimName(id);
+        }
+    }
 
     /**
      * The subject's live sandbox, or a new one with its claim. A new sandbox and its token end at {@code shutdownAt};
@@ -170,7 +175,7 @@ public class AgentSandboxes {
                 sandboxes.used(sandbox.id(), sandbox.workspaceId());
                 log.atInfo()
                         .addKeyValue("event.name", "agent.sandbox.leased")
-                        .addKeyValue(StructuredLogKeys.SANDBOX_NAME, claimName(sandbox.id()))
+                        .addKeyValue(StructuredLogKeys.SANDBOX_NAME, sandbox.claimName())
                         .addKeyValue(StructuredLogKeys.SUBJECT_KEY, sandbox.subjectKey())
                         .addKeyValue(StructuredLogKeys.WORKSPACE_ID, sandbox.workspaceId())
                         .addKeyValue(StructuredLogKeys.RUN_ID, leased.runId())

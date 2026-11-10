@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,6 +12,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.MDC;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.context.SecurityContextHolderStrategy;
@@ -24,6 +26,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 final class SandboxTokenAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER = "Bearer ";
+    private static final List<String> SCOPE = List.of(
+            StructuredLogKeys.SANDBOX_NAME,
+            StructuredLogKeys.SUBJECT_KEY,
+            StructuredLogKeys.WORKSPACE_ID,
+            StructuredLogKeys.RUN_ID,
+            StructuredLogKeys.RUN_EPOCH);
 
     private final AttemptTokenVerifier verifier;
     private final @Nullable AgentSandboxes sandboxes;
@@ -47,13 +55,20 @@ final class SandboxTokenAuthenticationFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
+        var live = sandbox.get();
         var context = contexts.createEmptyContext();
-        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(sandbox.get(), null, List.of()));
+        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(live, null, List.of()));
         contexts.setContext(context);
+        // Every record of the request names its sandbox. The run's resolver adds the run and the epoch once it has
+        // checked them; this filter removes all of them, so a pooled thread carries none into the next request.
+        MDC.put(StructuredLogKeys.SANDBOX_NAME, live.claimName());
+        MDC.put(StructuredLogKeys.SUBJECT_KEY, live.subjectKey());
+        MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(live.workspaceId()));
         try {
             chain.doFilter(request, response);
         } finally {
             contexts.clearContext();
+            for (String key : SCOPE) MDC.remove(key);
         }
     }
 

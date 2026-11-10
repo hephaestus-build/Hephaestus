@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -59,6 +60,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
@@ -119,6 +121,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     private long bodyBudgetBytes = 1L << 20;
     private FilterChainProxy chains;
     private final AtomicReference<@Nullable Authentication> servedAs = new AtomicReference<>();
+    private final AtomicReference<@Nullable Map<String, String>> servedWithLogContext = new AtomicReference<>();
 
     @BeforeEach
     void buildChains() throws Exception {
@@ -181,6 +184,14 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         assertThat(answerTo(withToken(request("POST", "/internal/agent/next", GATEWAY_PORT), "sandbox-token")))
                 .isEqualTo(200);
         assertThat(servedAs.get()).extracting(Authentication::getPrincipal).isEqualTo(live);
+        assertThat(servedWithLogContext.get())
+                .as("every record of the request names its sandbox")
+                .containsEntry(StructuredLogKeys.SANDBOX_NAME, live.claimName())
+                .containsEntry(StructuredLogKeys.SUBJECT_KEY, "review:9")
+                .containsEntry(StructuredLogKeys.WORKSPACE_ID, "7");
+        assertThat(MDC.get(StructuredLogKeys.SANDBOX_NAME))
+                .as("the request's thread carries no sandbox into the next one")
+                .isNull();
         assertThat(answerTo(withToken(request("POST", "/internal/agent/next", APPLICATION_PORT), "sandbox-token")))
                 .as("the application connector has no agent route")
                 .isEqualTo(404);
@@ -746,11 +757,10 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         servedAs.set(null);
 
-        chains.doFilter(
-                request,
-                response,
-                (ignoredRequest, ignoredResponse) ->
-                        servedAs.set(SecurityContextHolder.getContext().getAuthentication()));
+        chains.doFilter(request, response, (ignoredRequest, ignoredResponse) -> {
+            servedAs.set(SecurityContextHolder.getContext().getAuthentication());
+            servedWithLogContext.set(MDC.getCopyOfContextMap());
+        });
 
         if (response.getStatus() == 409) {
             assertThat(response.getContentAsString())
