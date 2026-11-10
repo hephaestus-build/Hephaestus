@@ -25,6 +25,7 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ started_at
         TIMESTAMPTZ ended_at
+        VARCHAR(16) hold_reason
     }
 
     AgentSandbox {
@@ -249,7 +250,6 @@ erDiagram
         TIMESTAMPTZ submitted_at "NOT NULL"
         VARCHAR(20) status "NOT NULL"
         VARCHAR(16) processing_status "NOT NULL"
-        VARCHAR(32) hold_reason
         VARCHAR(32) trace_id "NOT NULL"
         JSONB input "NOT NULL"
         JSONB config_snapshot "NOT NULL"

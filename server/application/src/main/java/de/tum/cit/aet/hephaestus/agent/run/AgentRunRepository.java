@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.run;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -66,7 +67,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             """;
 
     String LEASE = """
-            UPDATE agent_run r SET state = 'LEASED', lease_epoch = r.lease_epoch + 1,
+            UPDATE agent_run r SET state = 'LEASED', lease_epoch = r.lease_epoch + 1, hold_reason = NULL,
                    leased_until = clock_timestamp() + make_interval(secs => :ttlSeconds),
                    started_at = COALESCE(r.started_at, clock_timestamp())
               FROM picked WHERE r.id = picked.id
@@ -112,7 +113,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
             UPDATE agent_run SET state = 'QUEUED', leased_until = NULL, attempt = attempt + :spent,
-                   available_at = clock_timestamp() + make_interval(secs => :delaySeconds)
+                   available_at = clock_timestamp() + make_interval(secs => :delaySeconds), hold_reason = :hold
              WHERE id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch AND state = 'LEASED'
             """, nativeQuery = true)
     int requeue(
@@ -120,11 +121,12 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("workspaceId") long workspaceId,
             @Param("epoch") int epoch,
             @Param("spent") int spent,
-            @Param("delaySeconds") long delaySeconds);
+            @Param("delaySeconds") long delaySeconds,
+            @Param("hold") @Nullable String hold);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, stop_reason = :reason,
+            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = :reason,
                    ended_at = clock_timestamp()
              WHERE id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch AND state = 'LEASED'
             """, nativeQuery = true)
@@ -136,7 +138,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, stop_reason = 'CANCELLED',
+            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = 'CANCELLED',
                    ended_at = clock_timestamp()
              WHERE id = :runId AND workspace_id = :workspaceId AND state <> 'ENDED'
             """, nativeQuery = true)
@@ -145,29 +147,33 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @WorkspaceAgnostic("A fleet-wide verdict ends the runs it selected in every workspace")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, stop_reason = 'CANCELLED',
+            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = 'CANCELLED',
                    ended_at = clock_timestamp()
              WHERE id IN (:runIds) AND state <> 'ENDED'
             """, nativeQuery = true)
     int cancelAll(@Param("runIds") Collection<UUID> runIds);
 
-    /** Moves a queued run's next offer; a leased or ended run keeps its own. */
+    /** Holds a queued run until {@code delaySeconds} from now; a leased or ended run has no hold. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET available_at = clock_timestamp() + make_interval(secs => :delaySeconds)
+            UPDATE agent_run SET available_at = clock_timestamp() + make_interval(secs => :delaySeconds), hold_reason = :hold
              WHERE id = :runId AND workspace_id = :workspaceId AND state = 'QUEUED'
             """, nativeQuery = true)
-    int defer(
+    int hold(
             @Param("runId") UUID runId,
             @Param("workspaceId") long workspaceId,
+            @Param("hold") String hold,
             @Param("delaySeconds") long delaySeconds);
 
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    /** Offers now the workspace's queued runs that {@code hold} held; a retry's backoff is not a hold and stays. */
+    // A list result runs as a query, which neither flushes nor clears; Hibernate flushes before a native statement.
+    // So a run or job loaded earlier in the caller's transaction keeps its stale hold until it is read again.
     @Query(value = """
-            UPDATE agent_run SET available_at = clock_timestamp()
-             WHERE workspace_id = :workspaceId AND id IN (:runIds) AND state = 'QUEUED'
+            UPDATE agent_run SET available_at = clock_timestamp(), hold_reason = NULL
+             WHERE workspace_id = :workspaceId AND state = 'QUEUED' AND hold_reason = :hold
+            RETURNING kind
             """, nativeQuery = true)
-    int releaseAll(@Param("workspaceId") long workspaceId, @Param("runIds") Collection<UUID> runIds);
+    List<String> releaseHolds(@Param("workspaceId") long workspaceId, @Param("hold") String hold);
 
     /**
      * Holds the lease against every concurrent requeue, end or reap until the caller's transaction ends: an update of
@@ -248,7 +254,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, stop_reason = :reason,
+            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = :reason,
                    attempt = attempt + CASE WHEN state = 'LEASED' THEN 1 ELSE 0 END, ended_at = clock_timestamp()
              WHERE id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch
                AND ((state = 'LEASED' AND leased_until < clock_timestamp())

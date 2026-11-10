@@ -84,6 +84,11 @@ public class AgentRun {
     @Column(name = "available_at", nullable = false)
     private Instant availableAt;
 
+    /** Why the queued run waits beyond a retry's backoff; none on a leased or ended run. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "hold_reason", length = 16)
+    private @Nullable AgentRunHold holdReason;
+
     @Column(name = "deadline", updatable = false)
     private @Nullable Instant deadline;
 

@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
@@ -210,12 +211,9 @@ public class ReviewJobClaimService {
      * claim checks the budget again.
      */
     private void holdForBudget(AgentRunRef run) {
-        transactionTemplate.executeWithoutResult(
-                status -> jobRepository.lockQueuedByRun(run.id()).ifPresent(job -> {
-                    job.setHoldReason(ReviewJob.HOLD_REASON_BUDGET);
-                    jobRepository.save(job);
-                    runs.defer(run, BUDGET_HOLD_INTERVAL);
-                }));
+        transactionTemplate.executeWithoutResult(status -> jobRepository
+                .lockQueuedByRun(run.id())
+                .ifPresent(job -> runs.hold(run, AgentRunHold.BUDGET, BUDGET_HOLD_INTERVAL)));
     }
 
     private ClaimAttempt claimLocked(ReviewJob job, AgentRunFence fence, BooleanSupplier reviewRoom) {
@@ -324,8 +322,6 @@ public class ReviewJobClaimService {
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setStartedAt(claimedAt);
         job.setExecutionStartedAt(null);
-        // Clear the budget hold marker so a crash requeue cannot inherit an expired hold.
-        job.setHoldReason(null);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         jobRepository.save(job);
 
@@ -354,7 +350,6 @@ public class ReviewJobClaimService {
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(null);
-        job.setHoldReason(null);
         jobRepository.save(job);
         return new ClaimResult(
                 job, fence, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);

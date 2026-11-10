@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -1726,11 +1727,7 @@ public class ReviewJobExecutor {
         // attempt among them only lengthens a wait that MAX_ROOM_WAIT bounds.
         Duration wait = roomWait(Math.max(0, job.getAttempt() - job.spentAttempts()));
         transactionTemplate.executeWithoutResult(status -> reviewRuns.requeue(
-                jobId,
-                ownFence(jobId, job.getAttempt()),
-                AgentRuns.Charge.FREE,
-                wait,
-                ReviewJob.HOLD_REASON_SANDBOX_ROOM));
+                jobId, ownFence(jobId, job.getAttempt()), AgentRuns.Charge.FREE, wait, AgentRunHold.SANDBOX_ROOM));
         log.warn(
                 "No room for the review's sandbox, so the job waits in the queue: reason={}, retryIn={}",
                 reason.tag(),

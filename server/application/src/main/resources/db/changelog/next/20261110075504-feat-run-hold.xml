@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794224228989-1" author="hephaestus">
+        <addColumn tableName="agent_run">
+            <column name="hold_reason" type="VARCHAR(16)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794224228989-3" author="hephaestus">
+        <comment>A waiting review job's hold moves to its run. Only a queued run waits, so the hold of a job whose run already left the queue ends with the move.</comment>
+        <sql>
+UPDATE agent_run r SET hold_reason = j.hold_reason
+  FROM review_job j
+ WHERE j.run_id = r.id AND j.workspace_id = r.workspace_id AND r.state = 'QUEUED'
+   AND j.hold_reason IN ('BUDGET', 'SANDBOX_ROOM');
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_hold_reason
+    CHECK (hold_reason IS NULL OR hold_reason IN ('BUDGET', 'SANDBOX_ROOM'));
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_hold_queued
+    CHECK (hold_reason IS NULL OR state = 'QUEUED');
+        </sql>
+        <rollback>
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_hold_queued;
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_hold_reason;
+        </rollback>
+    </changeSet>
+    <changeSet id="1794224228989-2" author="hephaestus">
+        <dropColumn columnName="hold_reason" tableName="review_job"/>
+    </changeSet>
+</databaseChangeLog>

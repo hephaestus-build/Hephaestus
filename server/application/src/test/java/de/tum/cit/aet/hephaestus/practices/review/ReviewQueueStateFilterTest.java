@@ -22,7 +22,8 @@ class ReviewQueueStateFilterTest extends BaseUnitTest {
                 .getMethod("queueCountsAt", long.class, Instant.class, Instant.class, Instant.class)
                 .getAnnotation(Query.class)
                 .value();
-        String condition = ReviewQueriesImpl.queueStatePredicate(state).replace("hold_reason", "holdReason");
+        // The list reads the hold from the job's run (r); the counts read it through the job's formula.
+        String condition = ReviewQueriesImpl.queueStatePredicate(state).replace("r.hold_reason", "j.holdReason");
 
         // How queueCountsAt adds up the jobs of one figure.
         assertThat(counts).contains("SUM(CASE WHEN " + condition + " THEN 1L ELSE 0L END)");

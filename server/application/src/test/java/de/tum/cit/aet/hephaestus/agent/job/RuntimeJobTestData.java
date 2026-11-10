@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.sql.Timestamp;
@@ -251,7 +252,7 @@ public final class RuntimeJobTestData {
                 jdbc.update("UPDATE agent_run SET state='QUEUED', leased_until=NULL WHERE id=?", job.getRunId());
             case "LEASED" -> {
                 jdbc.update(
-                        "UPDATE agent_run SET state='LEASED', lease_epoch=lease_epoch+1, started_at=clock_timestamp(),"
+                        "UPDATE agent_run SET state='LEASED', lease_epoch=lease_epoch+1, hold_reason=NULL, started_at=clock_timestamp(),"
                                 + " leased_until=clock_timestamp()+make_interval(secs => ?) WHERE id=?",
                         LEASE.toSeconds(),
                         job.getRunId());
@@ -259,7 +260,7 @@ public final class RuntimeJobTestData {
             }
             default ->
                 jdbc.update(
-                        "UPDATE agent_run SET state='ENDED', leased_until=NULL, stop_reason='COMPLETED',"
+                        "UPDATE agent_run SET state='ENDED', leased_until=NULL, hold_reason=NULL, stop_reason='COMPLETED',"
                                 + " ended_at=clock_timestamp() WHERE id=?",
                         job.getRunId());
         }
@@ -302,7 +303,7 @@ public final class RuntimeJobTestData {
     public static void passAttempt(JdbcTemplate jdbc, ReviewJob job) {
         inTransaction(jdbc, () -> {
             jdbc.update(
-                    "UPDATE agent_run SET state='LEASED', lease_epoch=lease_epoch+1, started_at=clock_timestamp(),"
+                    "UPDATE agent_run SET state='LEASED', lease_epoch=lease_epoch+1, hold_reason=NULL, started_at=clock_timestamp(),"
                             + " leased_until=clock_timestamp()+make_interval(secs => ?) WHERE id=? AND state='QUEUED'",
                     LEASE.toSeconds(),
                     job.getRunId());
@@ -317,6 +318,11 @@ public final class RuntimeJobTestData {
                 "UPDATE agent_run SET leased_until=? WHERE id=? AND state='LEASED'",
                 Timestamp.from(until),
                 job.getRunId());
+    }
+
+    /** Holds the job's queued run for {@code reason}, as a claim that finds no budget or no sandbox room does. */
+    public static void hold(JdbcTemplate jdbc, ReviewJob job, AgentRunHold reason) {
+        jdbc.update("UPDATE agent_run SET hold_reason=? WHERE id=? AND state='QUEUED'", reason.name(), job.getRunId());
     }
 
     /** The job's run state, or {@code null} when it has none. */

@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -1094,7 +1095,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(3);
         assertThat(held.spentAttempts()).as("the refusal spends no retry").isEqualTo(2);
         assertThat(RuntimeJobTestData.runState(jdbc, held)).isEqualTo("QUEUED");
-        assertThat(held.getHoldReason()).isEqualTo(ReviewJob.HOLD_REASON_SANDBOX_ROOM);
+        assertThat(held.getHoldReason()).isEqualTo(AgentRunHold.SANDBOX_ROOM.name());
         assertThat(held.getAvailableAt()).isAfter(Instant.now());
         assertThat(eligibleForClaim(jobId)).as("it waits before the next claim").isFalse();
         assertThat(sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_EXCEEDED))
@@ -1150,8 +1151,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     void shouldCountASandboxRoomHoldAsWaitingAndOnlyABudgetHoldAsHeld() {
         UUID room = runningJobOwnedBy("live-owner", Instant.now(), 0);
         UUID budget = runningJobOwnedBy("live-owner", Instant.now(), 0);
-        heldBy(room, ReviewJob.HOLD_REASON_SANDBOX_ROOM);
-        heldBy(budget, ReviewJob.HOLD_REASON_BUDGET);
+        heldBy(room, AgentRunHold.SANDBOX_ROOM);
+        heldBy(budget, AgentRunHold.BUDGET);
 
         ReviewRuntimeRepository.QueueCounts counts = runtimeRepository.queueCounts(workspace.getId(), Instant.now());
 
@@ -1162,12 +1163,12 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     /** The job waits in the queue on the hold. */
-    private void heldBy(UUID jobId, String holdReason) {
+    private void heldBy(UUID jobId, AgentRunHold hold) {
         transactionTemplate.executeWithoutResult(status -> {
             ReviewJob job = jobRepository.findById(jobId).orElseThrow();
             job.setStatus(ReviewJobStatus.QUEUED);
-            job.setHoldReason(holdReason);
             jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+            RuntimeJobTestData.hold(jdbc, job, hold);
         });
     }
 
@@ -1180,7 +1181,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         queuedAndDue(composing);
         UUID budgetHeld = queuedAndDue(runningJobOwnedBy("live-owner", Instant.now(), 0));
         // Its hold has run out, and no claim has cleared it yet.
-        jdbc.update("UPDATE review_job SET hold_reason = 'BUDGET' WHERE id = ?", budgetHeld);
+        RuntimeJobTestData.hold(jdbc, jobRepository.findById(budgetHeld).orElseThrow(), AgentRunHold.BUDGET);
         var sandbox = mock(SandboxManager.class);
         when(sandbox.neverFits(any())).thenReturn(true);
 
@@ -1197,7 +1198,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(held.getStatus())
                 .as("a budget hold waits for money, not room")
                 .isEqualTo(ReviewJobStatus.QUEUED);
-        assertThat(held.getHoldReason()).isEqualTo(ReviewJob.HOLD_REASON_BUDGET);
+        assertThat(held.getHoldReason()).isEqualTo(AgentRunHold.BUDGET.name());
     }
 
     @Test

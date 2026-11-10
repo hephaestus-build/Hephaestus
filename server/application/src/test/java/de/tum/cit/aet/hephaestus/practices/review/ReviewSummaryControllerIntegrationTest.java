@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
@@ -443,7 +444,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
         data.activeJob(waiting, "QUEUED", null);
         data.end(waiting, at.plusSeconds(30));
         var held = data.result(scenario, ResultOutcome.MET, at.plusSeconds(60));
-        data.activeJob(held, "QUEUED", "BUDGET");
+        data.activeJob(held, "QUEUED", AgentRunHold.BUDGET);
         data.end(held, at.plusSeconds(90));
         var running = data.result(scenario, ResultOutcome.MET, at.plusSeconds(120));
         data.activeJob(running, "RUNNING", null);
@@ -482,7 +483,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
         data.activeJob(waiting, "QUEUED", null);
         data.end(waiting, at.plusSeconds(30));
         var held = data.result(scenario, ResultOutcome.MET, at.plusSeconds(60));
-        data.activeJob(held, "QUEUED", "BUDGET");
+        data.activeJob(held, "QUEUED", AgentRunHold.BUDGET);
         data.end(held, at.plusSeconds(90));
         var running = data.result(scenario, ResultOutcome.MET, at.plusSeconds(120));
         data.activeJob(running, "RUNNING", null);

@@ -62,7 +62,8 @@ public class ReviewQueriesImpl implements ReviewQueries {
                     filter.status().stream().map(Enum::name).toList());
         }
         if (filter.queueState() != null)
-            where.append(" AND EXISTS(SELECT 1 FROM review_job j WHERE j.workspace_id=q.workspace_id AND"
+            where.append(" AND EXISTS(SELECT 1 FROM review_job j JOIN agent_run r ON r.id=j.run_id"
+                    + " AND r.workspace_id=j.workspace_id WHERE j.workspace_id=q.workspace_id AND"
                     + " j.review_id=q.id AND " + queueStatePredicate(filter.queueState()) + ")");
         if (filter.developerId() != null || filter.practiceSlug() != null || filter.groupSlug() != null) {
             var basis = new StringBuilder("EXISTS(SELECT 1 FROM result r JOIN practice p ON p.id=r.practice_id AND"
@@ -100,8 +101,8 @@ public class ReviewQueriesImpl implements ReviewQueries {
      */
     static String queueStatePredicate(ReviewQueueState state) {
         return switch (state) {
-            case WAITING -> "j.status='QUEUED' AND (j.hold_reason IS NULL OR j.hold_reason<>'BUDGET')";
-            case HELD -> "j.status='QUEUED' AND j.hold_reason='BUDGET'";
+            case WAITING -> "j.status='QUEUED' AND (r.hold_reason IS NULL OR r.hold_reason<>'BUDGET')";
+            case HELD -> "j.status='QUEUED' AND r.hold_reason='BUDGET'";
             case RUNNING -> "j.status='RUNNING'";
         };
     }

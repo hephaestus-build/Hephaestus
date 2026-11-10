@@ -344,7 +344,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         public boolean end(SandboxRun run, Outcome outcome) {
             return switch (outcome) {
                 case COMPLETED -> runs.end(run.fence());
-                case HANDED_ON -> runs.requeue(run.fence(), AgentRuns.Charge.SPEND, Duration.ZERO);
+                case HANDED_ON -> runs.requeue(run.fence(), AgentRuns.Charge.SPEND, Duration.ZERO, null);
             };
         }
     }

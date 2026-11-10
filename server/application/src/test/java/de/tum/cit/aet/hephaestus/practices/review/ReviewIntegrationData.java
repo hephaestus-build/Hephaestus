@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
@@ -471,18 +472,22 @@ public class ReviewIntegrationData {
         return id;
     }
 
-    /** An unfinished job of the result's review: QUEUED (waiting, or held when holdReason is BUDGET) or RUNNING. */
+    /** An unfinished job of the result's review: QUEUED (waiting, or held by {@code hold}) or RUNNING. */
     @Transactional
-    public UUID activeJob(Result result, String status, @Nullable String holdReason) {
+    public UUID activeJob(Result result, String status, @Nullable AgentRunHold hold) {
         var id = UUID.randomUUID();
+        UUID run = RuntimeJobTestData.insertRun(jdbc, result.getWorkspaceId(), result.getReviewId(), status, 0);
+        if (hold != null)
+            jdbc.sql("UPDATE agent_run SET hold_reason=:hold WHERE id=:run AND state='QUEUED'")
+                    .param("hold", hold.name())
+                    .param("run", run)
+                    .update();
         jdbc.sql("""
-            INSERT INTO review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,config_snapshot,submitted_at,started_at,hold_reason)
-            VALUES(:id,:review,:ws,:status,:run,'NONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,:at,:started,:hold)
+            INSERT INTO review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,config_snapshot,submitted_at,started_at)
+            VALUES(:id,:review,:ws,:status,:run,'NONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,:at,:started)
             """)
                 .param("id", id)
-                .param(
-                        "run",
-                        RuntimeJobTestData.insertRun(jdbc, result.getWorkspaceId(), result.getReviewId(), status, 0))
+                .param("run", run)
                 .param("review", result.getReviewId())
                 .param("ws", result.getWorkspaceId())
                 .param("status", status)
@@ -493,7 +498,6 @@ public class ReviewIntegrationData {
                         "started",
                         "RUNNING".equals(status) ? Timestamp.from(result.getRecordedAt()) : null,
                         Types.TIMESTAMP)
-                .param("hold", holdReason, Types.VARCHAR)
                 .update();
         return id;
     }

@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeQueryAdapter;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
@@ -289,8 +290,8 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
         first = RuntimeJobTestData.save(transactions, jdbc, jobs, first);
         var held = job(workspace.getId(), first.getReviewId());
         held.setInput(first.getInput());
-        held.setHoldReason(ReviewJob.HOLD_REASON_BUDGET);
         jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, held));
+        RuntimeJobTestData.hold(jdbc, held, AgentRunHold.BUDGET);
         var retained = UUID.randomUUID();
         var facts = mock(ReviewTimingFactsQuery.class);
         var from = at.minusSeconds(10);

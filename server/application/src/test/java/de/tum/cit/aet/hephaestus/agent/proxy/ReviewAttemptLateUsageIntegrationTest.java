@@ -298,8 +298,7 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
                     job,
                     Map.of(ModelKind.CHAT, INSTANCE_CHAT),
                     jobs.findLlmUsageById(job.getId()).orElse(null));
-            assertThat(jobs.requeueRunning(job.getId(), job.getRunId(), 0, null))
-                    .isEqualTo(1);
+            assertThat(jobs.requeueRunning(job.getId(), job.getRunId(), 0)).isEqualTo(1);
             RuntimeJobTestData.agree(jdbc, job.getId());
             attemptUsage.settleAttempt(job, Map.of(ModelKind.CHAT, INSTANCE_CHAT), null, null);
         });

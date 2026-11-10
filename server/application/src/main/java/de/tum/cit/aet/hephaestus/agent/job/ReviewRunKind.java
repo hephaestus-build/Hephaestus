@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHandler;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
@@ -160,7 +161,7 @@ public class ReviewRunKind implements AgentRunHandler {
             log.info("Review attempt lost its lease at the retry limit, so the review fails: jobId={}", job.getId());
             return false;
         }
-        jobs.requeueRunning(job.getId(), lost.runId(), job.getAttempt(), null);
+        jobs.requeueRunning(job.getId(), lost.runId(), job.getAttempt());
         log.info("Review attempt lost its lease and is queued again: jobId={}", job.getId());
         return true;
     }
@@ -202,14 +203,14 @@ public class ReviewRunKind implements AgentRunHandler {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean requeue(
-            UUID jobId, AgentRunFence fence, AgentRuns.Charge charge, Duration delay, @Nullable String holdReason) {
+            UUID jobId, AgentRunFence fence, AgentRuns.Charge charge, Duration delay, @Nullable AgentRunHold hold) {
         files.holdCopyAdmission();
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return false;
         settle(job);
-        if (jobs.requeueRunning(jobId, fence.runId(), attempt(fence.epoch()), holdReason) == 0) return false;
+        if (jobs.requeueRunning(jobId, fence.runId(), attempt(fence.epoch())) == 0) return false;
         Duration wait = charge == AgentRuns.Charge.SPEND ? AgentRuns.backoff(job.spentAttempts() + 1) : delay;
-        if (!runs.requeue(fence, charge, wait))
+        if (!runs.requeue(fence, charge, wait, hold))
             throw new IllegalStateException("The attempt's run moved under its lock");
         return true;
     }
@@ -220,7 +221,7 @@ public class ReviewRunKind implements AgentRunHandler {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void releaseBudgetHolds(long workspaceId) {
-        runs.releaseAll(workspaceId, jobs.clearBudgetHolds(workspaceId));
+        runs.releaseHolds(workspaceId, AgentRunHold.BUDGET);
     }
 
     /**
