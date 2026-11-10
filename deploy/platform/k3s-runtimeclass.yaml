@@ -5,3 +5,9 @@ kind: RuntimeClass
 metadata:
   name: gvisor
 handler: runsc
+# The Sentry and the gofer of each gVisor Pod, which the scheduler and the sandbox quotas count with
+# the Pod's requests: docs/admin/kubernetes.mdx § Sandbox templates.
+overhead:
+  podFixed:
+    memory: 48Mi
+    cpu: 10m

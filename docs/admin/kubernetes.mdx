@@ -1025,7 +1025,7 @@ The bundle holds these files:
 | `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
 | `k3s-agent-sandbox.yaml` | The agent-sandbox controller and its resource definitions, with its pin. It goes to the k3s manifests directory. |
 | `k3s-containerd.toml.tmpl` | The containerd configuration of k3s with gVisor as the `runsc` runtime, and the pin of the gVisor release. |
-| `k3s-runtimeclass.yaml` | The RuntimeClass `gvisor` of the sandbox templates. It goes to the k3s manifests directory. |
+| `k3s-runtimeclass.yaml` | The RuntimeClass `gvisor` of the sandbox templates, with the Pod overhead of gVisor. It goes to the k3s manifests directory. |
 | `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
 | `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, no bundled Traefik, no ServiceLB, and no metrics server. |
 | `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, and the shutdown grace period. Also the memory and CPU reserved for k3s and the host, and the eviction thresholds. |
@@ -1770,6 +1770,8 @@ A template's Pod has one container, the agent image, and these settings:
 - The RuntimeClass `worker.sandbox.templates.runtimeClassName`, or the cluster's default runtime.
   On the default runtime, or another class except `gvisor`, the Pod sets `hostUsers: false`.
   A `gvisor` Pod keeps host users, because gVisor does not support user namespaces yet ([google/gvisor#13303](https://github.com/google/gvisor/issues/13303)). Its own kernel separates the sandbox from the node kernel.
+  On the one-host platform, the RuntimeClass counts gVisor's own use with each Pod.
+  It adds 48 MiB of memory and 10 millicores of CPU to the Pod's requests.
 - The resources of `worker.sandbox.templates.<kind>.resources`.
 
 The agent image must be on each sandbox node before a sandbox starts.

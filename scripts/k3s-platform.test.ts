@@ -1507,6 +1507,9 @@ await test("the one-host sandboxes run on gVisor from one pinned release, which 
 	const [runtimeClass] = documents(read("k3s-runtimeclass.yaml"));
 	assert.ok(runtimeClass && isRecord(runtimeClass.metadata));
 	assert.equal(runtimeClass.handler, handler);
+	// gVisor's Sentry and gofer use memory beside the containers', which quotas must count.
+	assert.ok(isRecord(runtimeClass.overhead) && isRecord(runtimeClass.overhead.podFixed));
+	assert.equal(typeof runtimeClass.overhead.podFixed.memory, "string");
 	const values: unknown = parse(read("k3s-values.yaml"));
 	assert.ok(isRecord(values) && isRecord(values.worker) && isRecord(values.worker.sandbox));
 	assert.ok(isRecord(values.worker.sandbox.templates));
