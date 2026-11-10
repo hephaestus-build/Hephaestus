@@ -155,12 +155,17 @@ From `v1.0.0`, the gate fails on these changes, unless the change [heads for a m
 
 | Surface | The gate fails on |
 | --- | --- |
-| Helm chart values | A value that is gone, a lower maximum, a higher minimum, or a lost enum value |
+| Helm chart values | A value that is gone, a lower maximum, a higher minimum, a lost enum value, a lost type, or a lost pattern |
+| Release Secret | A key that a chart template now reads without `optional`: a new key, or an optional key that became required |
 | Shipped alert rules | An alert that is gone, or a metric that the rules no longer read |
-| Practice definition schema | A field that is gone |
+| Practice definition schema | A field that is gone, or a field that accepts less, as for chart values |
 | Catalog | A practice or group slug that is gone |
+| Problem types | A slug of `ProblemType` that is gone |
 | Practice script entry points | An export that is gone, or a changed contract version, outcome list or severity list |
 | Links in posted text | A route in `DEEP_LINKS` that the web app no longer has |
+
+The gate cannot prove that one regular expression accepts more than another, so a changed pattern counts as lost.
+To widen a pattern, keep the old pattern in an `anyOf` branch beside the new one.
 
 A change that moves one of these files updates the list in `scripts/check-public-contract.ts`.
 Otherwise, the gate warns below `v1.0.0` and fails from `v1.0.0`.

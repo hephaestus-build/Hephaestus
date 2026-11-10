@@ -215,7 +215,14 @@ interface ValueLimits {
 	maximum?: number;
 	minimum?: number;
 	values?: unknown[];
+	types?: string[];
+	patterns?: string[];
 }
+
+const asList = (value: unknown): string[] =>
+	(Array.isArray(value) ? value : [value]).filter(
+		(item): item is string => typeof item === "string",
+	);
 
 /**
  * Each name that a JSON schema accepts, as a dotted path, and what each path accepts. `[]` marks the
@@ -246,11 +253,15 @@ const schemaValues = (schema: unknown) => {
 		const known = limits.get(name) ?? {};
 		const { maximum, minimum } = node;
 		const values: unknown[] | undefined = Array.isArray(node.enum) ? node.enum : undefined;
+		const types = asList(node.type);
+		const patterns = asList(node.pattern);
 		limits.set(name, {
 			...known,
 			...(typeof maximum === "number" && { maximum: Math.max(maximum, known.maximum ?? maximum) }),
 			...(typeof minimum === "number" && { minimum: Math.min(minimum, known.minimum ?? minimum) }),
 			...(values !== undefined && { values: [...(known.values ?? []), ...values] }),
+			...(types.length > 0 && { types: [...(known.types ?? []), ...types] }),
+			...(patterns.length > 0 && { patterns: [...(known.patterns ?? []), ...patterns] }),
 		});
 	};
 	const walk = (raw: unknown, prefix: string): void => {
@@ -287,7 +298,11 @@ export const removedChartValues = (base: unknown, head: unknown): string[] => {
 	);
 };
 
-/** Each kept value that accepts less than before: a lower maximum, a higher minimum or a lost enum value. */
+/**
+ * Each kept value that accepts less than before: a lower maximum, a higher minimum, a lost enum value,
+ * a lost type, or a lost pattern. A regular expression cannot be proved wider than another, so a changed
+ * pattern counts as lost. A wider pattern keeps the old one beside it, in an `anyOf` branch.
+ */
 export const narrowedChartValues = (base: unknown, head: unknown): string[] => {
 	const { limits: kept } = schemaValues(head);
 	return [...schemaValues(base).limits].flatMap(([name, before]) => {
@@ -305,9 +320,20 @@ export const narrowedChartValues = (base: unknown, head: unknown): string[] => {
 		const lostValues = (before.values ?? []).filter(
 			(value) => after.values !== undefined && !after.values.includes(value),
 		);
+		const lostTypes = (before.types ?? []).filter(
+			(type) =>
+				after.types !== undefined &&
+				!after.types.includes(type) &&
+				!(type === "integer" && after.types.includes("number")),
+		);
+		const lostPatterns = (before.patterns ?? []).filter(
+			(pattern) => after.patterns !== undefined && !after.patterns.includes(pattern),
+		);
 		return [
 			...lines,
 			...lostValues.map((value) => `${name}: value ${JSON.stringify(value)} is gone`),
+			...lostTypes.map((type) => `${name}: type ${type} is gone`),
+			...lostPatterns.map((pattern) => `${name}: pattern ${pattern} is gone`),
 		];
 	});
 };
