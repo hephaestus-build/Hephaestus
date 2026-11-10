@@ -26,9 +26,17 @@ final class LiveChatTransport implements ModelSession.Transport {
         this.creds = creds;
     }
 
-    /** The model names the endpoint reported serving, which can differ from the one requested. */
+    /**
+     * The model names the endpoint reported serving since the last {@link #resetServedModels}, which can differ from
+     * the one requested.
+     */
     Set<String> servedModels() {
         return Set.copyOf(servedModels);
+    }
+
+    /** Starts a new measurement, so that one case reports only the models that served its own calls. */
+    void resetServedModels() {
+        servedModels.clear();
     }
 
     @Override

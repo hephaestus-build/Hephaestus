@@ -130,7 +130,7 @@ class CompositionEvalLiveTest {
         for (var scenario : scenarios) {
             if (only != null && !List.of(only.split(",", -1)).contains(scenario.id())) continue;
             if (done.contains(scenario.id())) continue;
-            transport.servedModels().clear();
+            transport.resetServedModels();
             (scenario.id().contains("/") ? privateCases : cases).add(compose(scenario, transport, settings));
             CompositionEvalCases.write(checkedFile, file);
         }
