@@ -682,9 +682,23 @@ await test(
 	{ skip: process.platform === "win32" },
 	() => {
 		const deployed = { status: "deployed", chart: "hephaestus-0.95.0", app_version: "0.95.0" };
+		const failed = { ...deployed, status: "failed" };
+		const attempt = (revision: number) => ({ ...failed, revision });
 		const cases = [
 			{ releases: [{ ...deployed, chart: "hephaestus-0.94.0", app_version: "0.94.0" }] },
-			{ releases: [{ ...deployed, status: "failed" }] },
+			{
+				releases: [failed],
+				history: [{ ...deployed, revision: 1, status: "superseded" }, attempt(2)],
+			},
+			{ releases: [failed], history: [], permitted: false },
+			// Another release ran its migration first.
+			{
+				releases: [failed],
+				history: [{ ...attempt(1), chart: "hephaestus-0.94.0", app_version: "0.94.0" }, attempt(2)],
+			},
+			// Helm trimmed the start of the history, which could hide another release.
+			{ releases: [failed], history: [attempt(11), attempt(12)] },
+			{ releases: [{ ...failed, chart: "hephaestus-0.94.0" }] },
 			{ releases: [{ ...deployed, status: "pending-upgrade" }] },
 			{ releases: [{ ...deployed, app_version: "0.94.0" }] },
 			{ releases: [{ ...deployed, chart: "hephaestus-0.94.0" }] },
@@ -694,6 +708,8 @@ await test(
 			{ releases: [], status: 1 },
 			{ releases: [deployed], permitted: true },
 			{ releases: [], permitted: true },
+			// A first install that failed, and a retry of it, ran only this release.
+			{ releases: [failed], history: [attempt(1), attempt(2)], permitted: true },
 		];
 		for (const scenario of cases) {
 			const fixture = installerProbe(`#!/bin/sh
@@ -702,6 +718,7 @@ version) printf 'v4.0.0' ;;
 template) printf 'loginProvider: found' ;;
 --kubeconfig)
   printf '%s\\n' "$*" >> "$(dirname "$0")/queries"
+  if [ "$3" = history ]; then cat "$(dirname "$0")/history.json"; exit 0; fi
   cat "$(dirname "$0")/release.json"
   exit ${String(scenario.status ?? 0)} ;;
 *) echo "unexpected Helm mutation" >&2; exit 97 ;;
@@ -711,6 +728,10 @@ esac
 				writeFileSync(
 					path.join(fixture.directory, "bin", "release.json"),
 					scenario.raw ?? JSON.stringify(scenario.releases),
+				);
+				writeFileSync(
+					path.join(fixture.directory, "bin", "history.json"),
+					JSON.stringify(scenario.history ?? []),
 				);
 				const result = installerAt(
 					fixture.directory,
