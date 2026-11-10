@@ -273,6 +273,8 @@ erDiagram
         TIMESTAMPTZ execution_started_at
         TIMESTAMPTZ completed_at
         UUID run_id FK,UK "NOT NULL"
+        UUID scan_call_lease
+        TIMESTAMPTZ scan_call_until
     }
 
     ReviewJobAttemptCharge {

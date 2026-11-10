@@ -156,6 +156,16 @@ public class ReviewJob {
     @Column(name = "admission_digest", length = 64)
     private @Nullable String admissionDigest;
 
+    /**
+     * The lease of the attempt's running scan call, so that one model call of a scan attempt runs at a time on any
+     * server replica. Only the proxy's native queries write it.
+     */
+    @Column(name = "scan_call_lease")
+    private @Nullable UUID scanCallLease;
+
+    @Column(name = "scan_call_until")
+    private @Nullable Instant scanCallUntil;
+
     @ColumnDefault("0")
     @Column(name = "llm_calls", nullable = false)
     private int llmCalls = 0;

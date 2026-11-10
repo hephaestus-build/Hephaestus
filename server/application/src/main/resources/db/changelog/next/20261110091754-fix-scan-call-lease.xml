@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794281808847-1" author="hephaestus">
+        <addColumn tableName="review_job">
+            <column name="scan_call_lease" type="UUID"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794281808847-2" author="hephaestus">
+        <addColumn tableName="review_job">
+            <column name="scan_call_until" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

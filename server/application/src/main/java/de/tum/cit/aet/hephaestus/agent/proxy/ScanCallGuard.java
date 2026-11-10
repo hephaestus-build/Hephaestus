@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
@@ -12,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanBudget;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
@@ -21,14 +18,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -54,10 +50,10 @@ public class ScanCallGuard {
 
     static final String ATTEMPT_WORK_SPENT =
             "This review attempt has used the most model work that its practices may take; it makes no more model calls.";
-    // Active leases and their waiters hold strong references; idle locks can be reclaimed without evicting a live
-    // fence.
-    private final Cache<Attempt, ReentrantLock> locks =
-            Caffeine.newBuilder().weakValues().build();
+    private final ScanCallLeases leases;
+
+    /** How long a call waits before it asks again for the lease that its attempt's previous call holds. */
+    static final Duration LEASE_POLL = Duration.ofMillis(200);
 
     public Optional<Lease> acquire(ProxyRouting route, byte[] body) {
         var attempt = route.attempt();
@@ -69,14 +65,18 @@ public class ScanCallGuard {
             requireWithinAttemptWork(job, route);
             return Optional.empty();
         }
-        var lock = locks.get(new Attempt(job.getId(), attempt.number()), key -> new ReentrantLock());
-        // The attempt's previous call holds the lease; waiting for it counts against the same work deadline.
-        Duration remaining = ProxyStreamingUtils.remainingUntil(Objects.requireNonNull(route.workDeadline()));
-        try {
-            if (!lock.tryLock(remaining.toNanos(), TimeUnit.NANOSECONDS)) throw workTimeOver(null);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw workTimeOver(interrupted);
+        // The attempt's previous call holds the lease, on this replica or another; waiting for it counts against the
+        // same work deadline.
+        Instant deadline = Objects.requireNonNull(route.workDeadline());
+        UUID lease;
+        while ((lease = leases.take(job.getId(), workspace).orElse(null)) == null) {
+            if (!Instant.now().plus(LEASE_POLL).isBefore(deadline)) throw workTimeOver(null);
+            try {
+                Thread.sleep(LEASE_POLL);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw workTimeOver(interrupted);
+            }
         }
         try {
             job = jobs.findByIdAndWorkspaceId(job.getId(), workspace).orElseThrow(ScanCallGuard::refused);
@@ -132,9 +132,9 @@ public class ScanCallGuard {
             if (route.practiceScriptSlot() == null
                     && job.getLlmCalls()
                             >= budget.callCap(job.getInput().assignments().size())) throw refused();
-            return Optional.of(new Lease(lock));
+            return Optional.of(new Lease(leases, job.getId(), workspace, lease));
         } catch (RuntimeException | Error failure) {
-            lock.unlock();
+            leases.release(job.getId(), workspace, lease);
             throw failure;
         }
     }
@@ -192,18 +192,23 @@ public class ScanCallGuard {
                 HttpStatus.PAYMENT_REQUIRED, "The scan budget or its frozen execution bounds do not permit this call.");
     }
 
-    private record Attempt(UUID jobId, int number) {}
-
+    /** The attempt's scan call lease, which the call releases when it ends. */
     public static final class Lease implements AutoCloseable {
-        private final ReentrantLock lock;
+        private final ScanCallLeases leases;
+        private final UUID jobId;
+        private final long workspaceId;
+        private final UUID lease;
 
-        private Lease(ReentrantLock lock) {
-            this.lock = lock;
+        private Lease(ScanCallLeases leases, UUID jobId, long workspaceId, UUID lease) {
+            this.leases = leases;
+            this.jobId = jobId;
+            this.workspaceId = workspaceId;
+            this.lease = lease;
         }
 
         @Override
         public void close() {
-            lock.unlock();
+            leases.release(jobId, workspaceId, lease);
         }
     }
 }
