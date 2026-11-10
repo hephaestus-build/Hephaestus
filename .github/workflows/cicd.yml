@@ -878,7 +878,7 @@ jobs:
 
       - uses: ./.github/actions/setup-toolchain
         with:
-          install: "none"
+          install: "frozen"
 
       - uses: ./.github/actions/setup-release-security-tools
         with:
