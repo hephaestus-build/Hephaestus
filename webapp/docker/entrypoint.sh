@@ -55,6 +55,21 @@ write_security_txt() {
   } > "$file"
 }
 
+# The content security policy lets the app connect to its own origin and to the API's origin, which
+# differs on a workspace host. nginx-http.conf reads this map.
+write_api_origin() {
+  local file="${RUNTIME_DIR}/nginx-api-origin.map" origin
+  rm -f "${RUNTIME_DIR}"/nginx-api-origin*.map
+  # Empty, or a path on the app's own origin: 'self' covers it.
+  [[ -z "${APPLICATION_SERVER_URL:-}" || "$APPLICATION_SERVER_URL" =~ ^/([^/]|$) ]] && return
+  if [[ ! "$APPLICATION_SERVER_URL" =~ ^(https?://[A-Za-z0-9.-]+(:[0-9]+)?)(/[^[:space:]\"\';]*)?$ ]]; then
+    log "ERROR: APPLICATION_SERVER_URL must be an http(s) URL."
+    exit 1
+  fi
+  origin="${BASH_REMATCH[1]}"
+  printf '~. "%s";\n' "$origin" > "$file"
+}
+
 main() {
   # Recover git metadata from build-time variables if runtime vars are empty/missing
   # An empty runtime GIT_COMMIT or GIT_BRANCH would otherwise override the baked values.
@@ -95,6 +110,7 @@ main() {
     "$subdomains" \
     "$(escape_for_js "${APPLICATION_VERSION:-}")" > "${RUNTIME_DIR}/.well-known/hephaestus.json"
   write_security_txt
+  write_api_origin
 
   # Extract all env var names from TypeScript (single source of truth)
   local -a all_vars=()

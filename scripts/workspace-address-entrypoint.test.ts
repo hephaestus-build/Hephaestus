@@ -156,6 +156,42 @@ void describe("webapp container entrypoint", () => {
 		}
 	});
 
+	void test("the content security policy admits the API origin and nothing else", () => {
+		for (const [server, map] of [
+			["https://example.invalid/api", '~. "https://example.invalid";\n'],
+			["http://localhost:8080", '~. "http://localhost:8080";\n'],
+			["", undefined],
+			["/api", undefined],
+		] as const) {
+			const fixture = createFixture();
+			try {
+				const result = runEntrypoint(fixture, {
+					HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "false",
+					APPLICATION_SERVER_URL: server,
+				});
+				assert.equal(result.status, 0, result.stderr);
+				const file = path.join(fixture.runtime, "nginx-api-origin.map");
+				assert.equal(existsSync(file) ? readFileSync(file, "utf8") : undefined, map, server);
+			} finally {
+				removeFixture(fixture);
+			}
+		}
+	});
+
+	void test("an API URL that is not a plain http(s) URL stops the container", () => {
+		const fixture = createFixture();
+		try {
+			const result = runEntrypoint(fixture, {
+				HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "false",
+				APPLICATION_SERVER_URL: 'https://example.invalid";add_header X 1;',
+			});
+			assert.equal(result.status, 1);
+			assert.match(result.stderr, /APPLICATION_SERVER_URL must be an http\(s\) URL/u);
+		} finally {
+			removeFixture(fixture);
+		}
+	});
+
 	void test("the container accepts an empty client URL with workspace addresses off", () => {
 		const fixture = createFixture();
 		try {
@@ -193,6 +229,7 @@ void describe("webapp container entrypoint", () => {
 				path.join(".well-known", "hephaestus.json"),
 				...result.envConfigs,
 				"index.html",
+				"nginx-api-origin.map",
 			]);
 			const { envConfig, index, environment, discovery } = served(fixture, result.envConfigs);
 			assert.ok(index.includes(`<script src="/${envConfig}"></script>`));
