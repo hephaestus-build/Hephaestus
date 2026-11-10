@@ -349,9 +349,11 @@ public class SandboxAttemptRunner implements SandboxManager {
         }
     }
 
-    /** The sandbox's environment for the gateway address its backend gives it. */
-    private static Map<String, String> environment(
-            SandboxSpec spec, String gateway, UUID sessionId, Instant workDeadline, Instant uploadDeadline) {
+    /**
+     * The runner's environment from its spec, without the gateway's routes and credential: the spec's variables less the
+     * blocked ones, the trace, and Git's hardening. A sandbox's REVIEW run serves the same environment.
+     */
+    public static Map<String, String> runnerEnvironment(SandboxSpec spec) {
         Map<String, String> env = new HashMap<>();
 
         // Enforced values must overwrite caller-supplied variables: SandboxEnvBlocklist already drops the
@@ -368,6 +370,13 @@ public class SandboxAttemptRunner implements SandboxManager {
         // The agent can clone a repository at runtime and carry a hostile .git/config in with it.
         env.putAll(SandboxGitHardening.environment());
 
+        return env;
+    }
+
+    /** The sandbox's environment for the gateway address its backend gives it. */
+    private static Map<String, String> environment(
+            SandboxSpec spec, String gateway, UUID sessionId, Instant workDeadline, Instant uploadDeadline) {
+        Map<String, String> env = runnerEnvironment(spec);
         // One route for every provider: the proxy identifies the connection from the authenticated job token, not the
         // URL.
         env.put("LLM_PROXY_URL", gateway + "/internal/llm");

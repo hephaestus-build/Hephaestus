@@ -29,8 +29,16 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
@@ -42,6 +50,9 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
@@ -65,6 +76,7 @@ import io.micrometer.tracing.Tracer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -602,6 +614,78 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldFailAnAttemptWhosePreparationCannotSucceedWithOnlyItsBoundedDiagnosis() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        var failure = new JobPreparationException(
+                JobPreparationException.Reason.REVIEW_RANGE_UNAVAILABLE, "token=private path=/private/repository");
+
+        results(new SimpleMeterRegistry())
+                .unprepared(
+                        jobs.findById(job.getId()).orElseThrow(),
+                        fence,
+                        PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure),
+                        failure);
+
+        var failed = jobs.findById(job.getId()).orElseThrow();
+        assertThat(failed.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+        assertThat(failed.getErrorMessage()).isNotBlank().doesNotContain("private");
+        var diagnosis = Objects.requireNonNull(failed.getCapture()).path("preparationFailure");
+        assertThat(diagnosis.path("stage").asString()).isEqualTo("INPUTS");
+        assertThat(diagnosis.path("reason").asString()).isEqualTo("REVIEW_RANGE_UNAVAILABLE");
+        assertThat(diagnosis.toString()).doesNotContain("private");
+        assertThat(RuntimeJobTestData.runState(jdbc, failed)).isEqualTo("ENDED");
+    }
+
+    @Test
+    void shouldRequeueAnAttemptWhoseSourceIsNotReadyYetAndSpendARetry() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        var metrics = new SimpleMeterRegistry();
+        var failure = new ReviewSourceNotReadyException("the pushed commit is not synced yet");
+
+        results(metrics)
+                .unprepared(
+                        jobs.findById(job.getId()).orElseThrow(),
+                        fence,
+                        PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure),
+                        failure);
+
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(RuntimeJobTestData.runState(jdbc, waiting)).isEqualTo("QUEUED");
+        assertThat(jdbc.queryForObject("SELECT attempt FROM agent_run WHERE id=?", Integer.class, job.getRunId()))
+                .isEqualTo(1);
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "preparation")
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldRefuseAnAttemptWhoseEvidenceIsTooLittleAndEndItsRun() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        var failure = new InsufficientEvidenceException(
+                "too little evidence", new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
+
+        results(new SimpleMeterRegistry())
+                .unprepared(
+                        jobs.findById(job.getId()).orElseThrow(),
+                        fence,
+                        PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure),
+                        failure);
+
+        var refused = jobs.findById(job.getId()).orElseThrow();
+        assertThat(refused.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+        assertThat(Objects.requireNonNull(refused.getOutput()).path("outcome").asString())
+                .isEqualTo(RefusalOutcome.INSUFFICIENT_EVIDENCE.name());
+        assertThat(refused.getCapture() == null
+                        || refused.getCapture().path("preparationFailure").isMissingNode())
+                .isTrue();
+        assertThat(RuntimeJobTestData.runState(jdbc, refused)).isEqualTo("ENDED");
+    }
+
+    @Test
     void shouldStartTheJobOfARunThatItsSandboxLeasedInTheSameTransaction() {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
 
@@ -688,6 +772,29 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 String.class,
                 job.getWorkspaceId(),
                 job.getReviewId()));
+    }
+
+    /** The steps after a sandbox's attempt, with the real job and run writes and nothing of its measurement. */
+    private ReviewAttemptResults results(SimpleMeterRegistry metrics) {
+        return new ReviewAttemptResults(
+                jobs,
+                mock(DefaultReviewExecutionHandler.class),
+                mock(PracticePiAdapter.class),
+                mock(ReviewAttemptPreparation.class),
+                new ReviewJobTerminal(
+                        jobs,
+                        agentRuns,
+                        mock(ReviewAttemptUsageService.class),
+                        mapper,
+                        context.getBeanProvider(LlmAdmissionService.class),
+                        context.getBeanProvider(ReviewCompositionContinuation.class)),
+                reviewRuns,
+                mock(ReviewAttemptUsageService.class),
+                mock(PracticeScriptRunRecorder.class),
+                transactions,
+                mapper,
+                metrics,
+                new ReviewJobTelemetry(metrics, Tracer.NOOP));
     }
 
     private ReviewJobClaimService claimService(ReviewJobRepository repository) {
@@ -1038,6 +1145,52 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .get()
                 .extracting(ReviewJob::getStatus, ReviewJob::getCancellationReason)
                 .containsExactly(ReviewJobStatus.QUEUED, null);
+    }
+
+    @Test
+    void shouldHandAnAdmittedReviewOnToItsCompositionWhenItsSandboxClaimsItsReviewRun() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        // Attempt 0 admitted the results and lost its run before it handed them on.
+        RuntimeJobTestData.passAttempt(jdbc, job);
+        jdbc.update(
+                "UPDATE review_job SET admission_attempt=0, admission_digest=? WHERE id=?",
+                "a".repeat(64),
+                job.getId());
+
+        var sandboxRuns = new ReviewSandboxRuns(
+                claimService(jobs),
+                mock(ReviewAttemptPreparation.class),
+                mock(ReviewAttemptCustody.class),
+                mock(ReviewJobTerminal.class),
+                jobs,
+                mock(SandboxWorkspaceManager.class),
+                mock(SandboxGatewaySessions.class),
+                transactions,
+                mapper,
+                mock(DefaultReviewExecutionHandler.class),
+                mock(ReviewAttemptResults.class),
+                reviewRuns,
+                agentRuns);
+        String subject = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, job.getRunId()));
+
+        Boolean claimed = transactions.execute(status -> agentRuns
+                .claimSubject(job.getWorkspaceId(), subject, Set.of(AgentRunKind.REVIEW))
+                .map(lease -> sandboxRuns.claimed(new SandboxRun(
+                        new AgentSandboxes.LiveSandbox(
+                                UUID.randomUUID(), job.getWorkspaceId(), subject, AgentSandboxKind.REVIEW),
+                        lease.fence(),
+                        lease.kind(),
+                        lease.attempt())))
+                .orElseThrow());
+
+        assertThat(claimed).isFalse();
+
+        var handedOn = jobs.findById(job.getId()).orElseThrow();
+        assertThat(handedOn.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(handedOn.getExecutionStartedAt()).isNull();
+        assertThat(runKind(handedOn)).isEqualTo("REVIEW_COMPOSE");
+        assertThat(RuntimeJobTestData.runState(jdbc, handedOn)).isEqualTo("QUEUED");
     }
 
     @Test

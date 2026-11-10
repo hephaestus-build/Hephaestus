@@ -268,19 +268,13 @@ public class ReviewJobClaimService {
         job.setCompletedAt(Instant.now());
         job.setErrorMessage(preparation.message());
         jobRepository.save(job);
-        var diagnosis = objectMapper
-                .createObjectNode()
-                .put("attempt", job.getAttempt())
-                .put("stage", preparation.stage().name())
-                .put("kind", preparation.kind().name())
-                .put("reason", preparation.reason().name());
         runs.end(fence);
         jobRepository.recordPreparationFailure(
                 job.getId(),
                 job.getWorkspaceId(),
                 job.getAttempt(),
                 job.getRunId(),
-                objectMapper.writeValueAsString(diagnosis));
+                preparation.diagnosis(objectMapper, job.getAttempt()));
         jobTelemetry.preparationFailed(job, preparation, "FAILED");
         return new TerminalClaim(job, ReviewJobStatus.FAILED);
     }

@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
@@ -35,7 +34,6 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -83,8 +81,6 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.core.retry.RetryException;
 import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
@@ -101,6 +97,7 @@ import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 // Claim and terminal writes use short transactions; sandbox execution must hold no database connection.
 @Component
@@ -115,7 +112,7 @@ public class ReviewJobExecutor {
     private static final String MDC_JOB_TYPE = "agent.jobType";
     /**
      * When the terminal accounting write is worth re-attempting. NOT the same question as
-     * {@link #isRetryableExecutionFailure}, which requeues the whole JOB — conflating the two would charge
+     * {@link ReviewAttemptResults#isRetryable}, which requeues the whole JOB — conflating the two would charge
      * twice for a job that already spent money. {@code includes} matches nested causes, which is what
      * makes these usable directly against JPA's and {@code TransactionTemplate}'s wrapping.
      */
@@ -221,6 +218,8 @@ public class ReviewJobExecutor {
     private final Phaser inFlight = new Phaser(1); // 1 = the executor itself; deregistered on stop
     // The attempt and lease each locally running job runs, so a later attempt of the same job is never mistaken for it.
     private final Map<UUID, LocalAttempt> localRunningJobs = new ConcurrentHashMap<>();
+    /** The claims of attempts that their own sandbox measured, while their results are handled here; never renewed. */
+    private final Map<UUID, AgentRunFence> sandboxAttempts = new ConcurrentHashMap<>();
 
     /**
      * Claimed jobs that still prepare their sandbox, which the runtime's room does not count yet. A job leaves at its
@@ -309,7 +308,6 @@ public class ReviewJobExecutor {
         }
     }
 
-    @EventListener(ApplicationReadyEvent.class)
     public void start() {
         if (!running.compareAndSet(false, true)) {
             return;
@@ -528,14 +526,19 @@ public class ReviewJobExecutor {
      * @throws ResultAdmissionService.StaleAttemptException when the attempt no longer holds the row
      */
     private ReviewJob ownRow(UUID jobId) {
-        LocalAttempt local = localRunningJobs.get(jobId);
+        AgentRunFence fence = claimOf(jobId);
         ReviewJob row = jobRepository.findById(jobId).orElse(null);
-        if (local == null
+        if (fence == null
                 || row == null
-                || row.getAttempt() != local.attempt()
-                || !local.fence().runId().equals(row.getRunId()))
-            throw new ResultAdmissionService.StaleAttemptException();
+                || row.getAttempt() != ReviewRunKind.attempt(fence.epoch())
+                || !fence.runId().equals(row.getRunId())) throw new ResultAdmissionService.StaleAttemptException();
         return row;
+    }
+
+    /** The claim of the attempt that runs here, or that its sandbox measured; null for neither. */
+    private @Nullable AgentRunFence claimOf(UUID jobId) {
+        LocalAttempt local = localRunningJobs.get(jobId);
+        return local != null ? local.fence() : sandboxAttempts.get(jobId);
     }
 
     /** Records an attempt that this worker claimed, so that each of its writes is fenced on its own claim. */
@@ -554,15 +557,13 @@ public class ReviewJobExecutor {
      * and claimed again is refused by the run.
      */
     private AgentRunFence ownFence(UUID jobId, int attempt) {
-        AgentRunFence tracked = Objects.requireNonNull(localRunningJobs.get(jobId), "The attempt does not run here")
-                .fence();
+        AgentRunFence tracked = Objects.requireNonNull(claimOf(jobId), "The attempt does not run here");
         return new AgentRunFence(tracked.runId(), tracked.workspaceId(), ReviewRunKind.epoch(attempt));
     }
 
     /** The run of the attempt that runs here, which each of its fenced writes names with its attempt. */
     private UUID ownRun(UUID jobId) {
-        return Objects.requireNonNull(localRunningJobs.get(jobId), "The attempt does not run here")
-                .fence()
+        return Objects.requireNonNull(claimOf(jobId), "The attempt does not run here")
                 .runId();
     }
 
@@ -1019,6 +1020,27 @@ public class ReviewJobExecutor {
             throw failed;
         }
         sandbox.end(sandboxOutcome(result));
+        return measured(jobId, job, endedBefore, result);
+    }
+
+    /**
+     * The steps after an attempt's sandbox measured, for a sandbox that ran its own run: the same as after a review Job,
+     * each write fenced on the sandbox's claim.
+     *
+     * @param endedBefore the practices that had ended when the attempt's measurement started
+     */
+    @Nullable
+    ReviewJobStatus afterSandbox(ReviewJob job, AgentRunFence fence, int endedBefore, SandboxResult result) {
+        if (sandboxAttempts.putIfAbsent(job.getId(), fence) != null)
+            throw new IllegalStateException("The attempt's results are already being handled");
+        try {
+            return measured(job.getId(), job, endedBefore, result);
+        } finally {
+            sandboxAttempts.remove(job.getId());
+        }
+    }
+
+    private @Nullable ReviewJobStatus measured(UUID jobId, ReviewJob job, int endedBefore, SandboxResult result) {
         AgentResult agentResult = practiceAgent.parseResult(result);
 
         ReviewJob retained;
@@ -1281,7 +1303,7 @@ public class ReviewJobExecutor {
                     preparation.exceptionTypes());
         }
 
-        if (isRetryableExecutionFailure(e)) {
+        if (ReviewAttemptResults.isRetryable(e)) {
             int currentRetryCount = job.getAttempt();
             RequeueCause cause = preparation != null ? RequeueCause.PREPARATION : RequeueCause.SANDBOX;
             if (requeueForAnotherAttempt(job, cause)) {
@@ -1361,35 +1383,6 @@ public class ReviewJobExecutor {
         ReviewJobStatus terminal() {
             return this == FAILED ? ReviewJobStatus.FAILED : null;
         }
-    }
-
-    /**
-     * Deliberately narrower than {@link SandboxException}, which also covers deterministic
-     * validation/config failures and a catch-all wrap of an unknown defect: retrying either would burn
-     * the retry budget on a failure that was never going to resolve itself.
-     */
-    static boolean isRetryableExecutionFailure(Exception e) {
-        return e instanceof ReviewSourceNotReadyException
-                || e instanceof SandboxInfrastructureException
-                || e instanceof IOException
-                || transientCapture(PreparationFailure.captureOf(e));
-    }
-
-    /**
-     * A capture that failed, or whose source was not ready, can succeed on another attempt; the same item captured on
-     * earlier attempts. Removed or hidden work, withheld consent, a lost version and an occasion that kept no record do
-     * not come back.
-     */
-    private static boolean transientCapture(@Nullable ItemCaptureException capture) {
-        return capture != null
-                && switch (capture.code()) {
-                    case CAPTURE_FAILED, SOURCE_NOT_READY -> true;
-                    case ITEM_REMOVED,
-                            ITEM_NOT_VISIBLE,
-                            CONSENT_WITHHELD,
-                            VERSION_UNAVAILABLE,
-                            OCCASION_EVIDENCE_UNAVAILABLE -> false;
-                };
     }
 
     private static ReviewStageTelemetry.Outcome sandboxOutcome(SandboxResult result) {

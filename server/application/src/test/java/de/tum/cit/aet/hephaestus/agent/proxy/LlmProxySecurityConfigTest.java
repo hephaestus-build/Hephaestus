@@ -149,6 +149,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         new SandboxGatewayConnector(GATEWAY_PORT, gateway.maxConnections()),
                         jwtVerifier,
                         owners.getBeanProvider(AgentSandboxes.class),
+                        new SandboxGatewayBodyBudget(bodyBudgetBytes),
                         accounting,
                         OBJECT_MAPPER),
                 config.llmProxyFilterChain(

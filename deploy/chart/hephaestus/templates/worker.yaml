@@ -174,8 +174,7 @@ subjects:
     namespace: {{ .Release.Namespace }}
 ---
 # Review sandboxes may reach the workers on the gateway port, and nothing else: no
-# DNS, no API, no database, no broker. A sandbox is bound to its own worker by its credential, not
-# by the network.
+# DNS, no API, no database, no broker.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -226,6 +225,8 @@ spec:
           protocol: TCP
 ---
 # Callers reach a worker that holds its isolation proof, because readiness carries that proof.
+# A review sandbox's attempt lives on the worker that took the sandbox's first call, so each caller
+# stays on one worker until the gateway keeps no attempt state of its own.
 apiVersion: v1
 kind: Service
 metadata:
@@ -234,6 +235,10 @@ metadata:
     {{- include "hephaestus.labels" (dict "root" . "component" "worker") | nindent 4 }}
 spec:
   type: ClusterIP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 86400
   selector:
     {{- include "hephaestus.selectorLabels" (dict "root" . "component" "worker") | nindent 4 }}
   ports:
