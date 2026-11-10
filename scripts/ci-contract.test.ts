@@ -2767,10 +2767,7 @@ void describe("CI contract", () => {
 		assert.match(reusable, /kubernetes-cluster\.ts verify/u);
 		assert.match(reusable, /kubernetes-cluster\.ts request/u);
 		assert.match(reusable, /kubernetes-cluster\.ts live --packaged/u);
-		assert.match(
-			reusable,
-			/inputs\.application-artifact != '' && inputs\.minor == '1.37' && inputs\.arch == 'amd64'/u,
-		);
+		assert.match(reusable, /inputs\.application-artifact != '' && env\.DRILLS == 'true'/u);
 		assert.doesNotMatch(source, /sandbox-isolation-probe\.ts/u);
 	});
 
@@ -5948,6 +5945,34 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	assert.match(
 		String(lintStep.get("run")),
 		new RegExp(`for version in ${versions.join(" ").replaceAll(".", String.raw`\.`)}; do`, "u"),
+	);
+});
+
+void test("a merge group runs no Kubernetes drill, and no release ships past a failed nightly run", async () => {
+	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
+	assert.equal(
+		kubernetes.getIn(["jobs", "k3d", "env", "DRILLS"]),
+		`\${{ inputs.minor == '1.37' && inputs.arch == 'amd64' && github.event_name != 'merge_group' }}`,
+	);
+	const steps = kubernetes.getIn(["jobs", "k3d", "steps"]);
+	assert.ok(isSeq(steps));
+	const drillSteps = steps.items.filter(isMap);
+	for (const drill of [
+		"Keep a conversation turn through a worker roll and a loop roll",
+		"Qualify the sandbox adapters in the chart worker Pod",
+		"Verify kubelet memory eviction order on a disposable node",
+	]) {
+		const drillStep = drillSteps.find((item) => item.get("name") === drill);
+		assert.match(String(drillStep?.get("if")), /env\.DRILLS == 'true'/u, drill);
+	}
+	const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	assert.equal(cicd.getIn(["jobs", "Release-preflight", "permissions", "actions"]), "read");
+	const preflight = cicd.getIn(["jobs", "Release-preflight", "steps"]);
+	assert.ok(isSeq(preflight));
+	assert.ok(
+		preflight.items.some(
+			(item) => isMap(item) && item.get("run") === "node scripts/check-nightly-kubernetes.ts",
+		),
 	);
 });
 
