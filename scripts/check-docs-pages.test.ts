@@ -89,6 +89,11 @@ await describe("checkPage", async () => {
 		assert.deepEqual(check("1. Rotate the key.", "admin"), []);
 	});
 
+	await test("accepts a tutorial in the contributor guide", () => {
+		const source = page("page_type: tutorial", "1. Clone the repository.\n\n## Next steps");
+		assert.deepEqual(check(source, "contributor"), []);
+	});
+
 	await test("sends a user page's reader to the user or admin guide, not the contributor guide", () => {
 		const link = "See [the pipeline](/contributor/practice-review-pipeline).";
 		assert.deepEqual(check(feature(link)), [

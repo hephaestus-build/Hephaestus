@@ -11,7 +11,7 @@ export type Guide = (typeof GUIDES)[number];
 const PAGE_TYPES: Record<Guide, readonly string[]> = {
 	user: ["overview", "tutorial", "feature", "reference"],
 	admin: ["overview", "tutorial", "how-to", "reference", "explanation", "troubleshooting"],
-	contributor: ["overview", "how-to", "reference", "explanation"],
+	contributor: ["overview", "tutorial", "how-to", "reference", "explanation"],
 };
 // Every page of these guides declares a type, so each page answers to every rule.
 const FULLY_CHECKED = new Set<Guide>(["user"]);

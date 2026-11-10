@@ -22,7 +22,7 @@ Each fact goes in the guide of the reader who acts on it.
 | --- | --- | --- | --- | --- |
 | User (`docs/user/`) | A developer or a workspace admin who uses Hephaestus in the web app, on GitHub or GitLab, or in Slack | Get feedback on their work, understand it, act on it, and set up their workspace | Product voice | overview, tutorial, feature, reference |
 | Admin (`docs/admin/`) | An operator or an instance admin who installs, configures, upgrades, and secures an instance | Keep an instance available, safe, and current | STE | overview, tutorial, how-to, reference, explanation, troubleshooting |
-| Contributor (`docs/contributor/`) | An engineer or a coding agent that changes the code | Make a correct change and know why the system works as it does | STE | overview, how-to, reference, explanation |
+| Contributor (`docs/contributor/`) | An engineer or a coding agent that changes the code | Make a correct change and know why the system works as it does | STE | overview, tutorial, how-to, reference, explanation |
 
 The place of a task decides between the user and the admin guide.
 A task in the web app for a workspace, such as the feedback mode, goes in the user guide.
@@ -54,7 +54,7 @@ Declare the type in the front matter as `page_type`.
 | `page_type` | The reader wants to | Example |
 | --- | --- | --- |
 | `overview` | Find the right page in a guide. Each guide has one. | `user/overview` |
-| `tutorial` | Get a first result from start to end, on one path | `user/getting-started`, `admin/first-steps` |
+| `tutorial` | Get a first result from start to end, on one path | `user/getting-started`, `admin/first-steps`, `contributor/first-change` |
 | `how-to` | Finish one task | `admin/backup-restore` |
 | `feature` | Use one area of the product. Only in the user guide. | `user/practice-profile` |
 | `reference` | Look up a fact | `admin/configuration-reference`, `user/accessibility` |

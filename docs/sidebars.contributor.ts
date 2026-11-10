@@ -12,6 +12,7 @@ const sidebars: SidebarsConfig = {
 			label: "Start",
 			collapsed: false,
 			items: [
+				"first-change",
 				"local-development",
 				"local-verification",
 				{
