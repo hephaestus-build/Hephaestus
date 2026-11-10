@@ -3,16 +3,15 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.UUID;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -23,24 +22,17 @@ class LlmCallCallerTest extends BaseUnitTest {
             mock(LlmCallPermitRepository.class),
             mock(TransactionTemplate.class),
             new LlmCallPoolProperties(Duration.ofSeconds(20), Duration.ofSeconds(30)),
+            LlmCallPermitsTestFixtures.PERMIT_AGING,
             "caller-test",
             new SimpleMeterRegistry(),
             mock(LlmModelResolver.class));
 
     @ParameterizedTest
-    @EnumSource(value = LlmCallClass.class, names = "PRODUCT_FEEDBACK", mode = EnumSource.Mode.EXCLUDE)
-    void shouldRejectAWorkspaceCallWhenItsWorkspaceIsMissing(LlmCallClass kind) {
+    @EnumSource(value = AgentRunBand.class, names = "BACKGROUND", mode = EnumSource.Mode.EXCLUDE)
+    void shouldRejectACallWithoutAWorkspaceWhenItIsNotInTheBackgroundBand(AgentRunBand band) {
         var caller = new LlmCallPermits.Caller(null, UUID.randomUUID(), 0, null);
-        assertThatThrownBy(() -> permits.acquire(1, kind, caller, () -> false, null))
+        assertThatThrownBy(() -> permits.acquire(1, band, caller, () -> false, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Product feedback calls have no workspace; all other calls require one");
-    }
-
-    @Test
-    void shouldRejectProductFeedbackWhenItNamesAWorkspace() {
-        var caller = new LlmCallPermits.Caller(1L, UUID.randomUUID(), 0, null);
-        assertThatThrownBy(() -> permits.acquire(1, LlmCallClass.PRODUCT_FEEDBACK, caller, () -> false, null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Product feedback calls have no workspace; all other calls require one");
+                .hasMessage("A call without a workspace is product feedback, in the background band");
     }
 }

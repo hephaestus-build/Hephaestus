@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
@@ -35,6 +34,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -214,7 +214,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 waitingCall,
                 blockedPool,
                 "blocked-waiter",
-                LlmCallClass.REQUEST.name(),
+                AgentRunBand.BATCH,
                 workspace.getId(),
                 UUID.randomUUID(),
                 0)));
@@ -341,10 +341,10 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
         // With room to spare, a background waiter in the pool holds the claim until it is served.
         when(sandboxes.roomFor(any())).thenReturn(Integer.MAX_VALUE);
-        when(calls.hasBackgroundWaiters(anyLong())).thenReturn(true);
+        when(calls.hasReviewCallsWaiting(anyLong())).thenReturn(true);
         assertThat(polling.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
         assertUnclaimed(queuedJobs.get(4));
-        when(calls.hasBackgroundWaiters(anyLong())).thenReturn(false);
+        when(calls.hasReviewCallsWaiting(anyLong())).thenReturn(false);
         assertThat(polling.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
         assertThat(queuedJobs)
                 .extracting(job -> jobs.findById(job.getId()).orElseThrow().getStatus())
@@ -372,7 +372,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var job = queued(selected);
         var capacity = mock(LlmCallPermits.class);
         when(capacity.poolFor(any())).thenReturn(poolId);
-        when(capacity.hasBackgroundWaiters(poolId))
+        when(capacity.hasReviewCallsWaiting(poolId))
                 .thenThrow(new IllegalStateException("pool unavailable"))
                 .thenReturn(false);
         var polling = pooledExecutor(properties, capacity, roomySandboxes());
@@ -398,14 +398,11 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         UUID active = UUID.randomUUID();
         transactions.executeWithoutResult(status -> {
             rows.enqueue(new LlmCallPermitRepository.Request(
-                    active,
-                    poolId,
-                    "active-call",
-                    LlmCallClass.REQUEST.name(),
-                    workspace.getId(),
-                    UUID.randomUUID(),
-                    0));
-            assertThat(rows.grant(active, 0)).isEqualTo(1);
+                    active, poolId, "active-call", AgentRunBand.BATCH, workspace.getId(), UUID.randomUUID(), 0));
+            assertThat(jdbc.update(
+                            "UPDATE llm_call_permit SET state='ACTIVE',granted_at=clock_timestamp(),requests=1 WHERE id=? AND state='WAITING'",
+                            active))
+                    .isEqualTo(1);
         });
         var job = queued(selected);
         var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
@@ -430,13 +427,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var rows = context.getBean(LlmCallPermitRepository.class);
         UUID feedback = UUID.randomUUID();
         transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
-                feedback,
-                poolId,
-                "feedback-waiter",
-                LlmCallClass.PRODUCT_FEEDBACK.name(),
-                null,
-                UUID.randomUUID(),
-                0)));
+                feedback, poolId, "feedback-waiter", AgentRunBand.BACKGROUND, null, UUID.randomUUID(), 0)));
         var job = queued(selected);
         var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
         try {
@@ -672,7 +663,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         long poolId = pool.getId();
         var busy = Objects.requireNonNull(capacity.acquire(
                 poolId,
-                LlmCallClass.EVENT,
+                AgentRunBand.BATCH,
                 busyCaller,
                 () -> false,
                 Instant.now().plusSeconds(5)));
@@ -698,7 +689,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
             var repeated = requests.submit(() -> capacity.acquire(
                     poolId,
-                    LlmCallClass.REQUEST,
+                    AgentRunBand.BATCH,
                     busyCaller,
                     () -> false,
                     Instant.now().plusSeconds(10)));
@@ -845,7 +836,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var metrics = new SimpleMeterRegistry();
         var capacity = mock(LlmCallPermits.class);
         when(capacity.poolFor(any())).thenReturn(42L);
-        when(capacity.hasBackgroundWaiters(anyLong())).thenReturn(true);
+        when(capacity.hasReviewCallsWaiting(anyLong())).thenReturn(true);
         var claims = new ReviewJobClaimService(
                 jobs,
                 policy,

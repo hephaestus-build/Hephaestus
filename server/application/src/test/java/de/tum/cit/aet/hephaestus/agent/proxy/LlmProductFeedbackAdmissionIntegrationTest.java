@@ -2,10 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
@@ -71,14 +71,14 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = LlmCallClass.class, names = "PRODUCT_FEEDBACK", mode = EnumSource.Mode.EXCLUDE)
-    void shouldGrantHigherClassesWhenProductFeedbackWasQueuedFirst(LlmCallClass higher) throws Exception {
+    @EnumSource(AgentRunBand.class)
+    void shouldGrantAReviewOrTurnOfAnyBandWhenProductFeedbackWasQueuedFirst(AgentRunBand band) throws Exception {
         long pool = pool(1);
-        var occupied = admit(first, pool, LlmCallClass.EVENT, 1L);
-        var feedback = submit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
-        awaitWaiting(pool, LlmCallClass.PRODUCT_FEEDBACK);
-        var priority = submit(second, pool, higher, 2L);
-        awaitWaiting(pool, higher);
+        var occupied = admit(first, pool, AgentRunBand.BATCH, 1L);
+        var feedback = submit(first, pool, AgentRunBand.BACKGROUND, null);
+        awaitWaiting(pool, null);
+        var priority = submit(second, pool, band, 2L);
+        awaitWaiting(pool, 2L);
 
         occupied.close();
 
@@ -93,11 +93,11 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     void shouldAdmitFeedbackWhenHigherDemandTargetsAnotherEndpoint() throws Exception {
         long busyPool = pool(1);
         long idlePool = pool(1);
-        admit(first, busyPool, LlmCallClass.EVENT, 1L);
-        var review = submit(second, busyPool, LlmCallClass.REQUEST, 2L);
-        awaitWaiting(busyPool, LlmCallClass.REQUEST);
+        admit(first, busyPool, AgentRunBand.BATCH, 1L);
+        var review = submit(second, busyPool, AgentRunBand.BATCH, 2L);
+        awaitWaiting(busyPool, 2L);
 
-        assertThat(admit(first, idlePool, LlmCallClass.PRODUCT_FEEDBACK, null).isRevoked())
+        assertThat(admit(first, idlePool, AgentRunBand.BACKGROUND, null).isRevoked())
                 .isFalse();
         assertThat(review.isDone()).isFalse();
     }
@@ -105,11 +105,11 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldLeaveInteractiveCapacityWhenFeedbackWaits() throws Exception {
         long pool = pool(2);
-        var occupied = admit(first, pool, LlmCallClass.EVENT, 1L);
-        var feedback = submit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
-        awaitWaiting(pool, LlmCallClass.PRODUCT_FEEDBACK);
+        var occupied = admit(first, pool, AgentRunBand.BATCH, 1L);
+        var feedback = submit(first, pool, AgentRunBand.BACKGROUND, null);
+        awaitWaiting(pool, null);
 
-        var turn = admit(second, pool, LlmCallClass.TURN, 2L);
+        var turn = admit(second, pool, AgentRunBand.INTERACTIVE, 2L);
         assertThat(feedback.isDone()).isFalse();
         occupied.close();
         assertThat(feedback.get(10, TimeUnit.SECONDS).isRevoked()).isFalse();
@@ -119,15 +119,15 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldLimitFeedbackToOneCallWhenWorkersShareAPool() throws Exception {
         long pool = pool(3);
-        var feedback = admit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
-        var another = submit(second, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
-        awaitWaiting(pool, LlmCallClass.PRODUCT_FEEDBACK);
+        var feedback = admit(first, pool, AgentRunBand.BACKGROUND, null);
+        var another = submit(second, pool, AgentRunBand.BACKGROUND, null);
+        awaitWaiting(pool, null);
 
-        var review = admit(second, pool, LlmCallClass.REQUEST, 2L);
+        var review = admit(second, pool, AgentRunBand.BATCH, 2L);
         assertThat(another.isDone()).isFalse();
         assertThat(feedback.isRevoked()).isFalse();
         assertThat(jdbc.queryForObject(
-                        "SELECT workspace_id FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND call_class='PRODUCT_FEEDBACK'",
+                        "SELECT workspace_id FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND workspace_id IS NULL",
                         Long.class,
                         pool))
                 .isNull();
@@ -137,16 +137,16 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRetainFeedbackUntilClosureWhenAHigherClassArrives() throws Exception {
+    void shouldRetainFeedbackUntilClosureWhenAReviewCallArrives() throws Exception {
         long pool = pool(1);
-        var feedback = admit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
-        var review = submit(second, pool, LlmCallClass.REQUEST, 2L);
-        awaitWaiting(pool, LlmCallClass.REQUEST);
+        var feedback = admit(first, pool, AgentRunBand.BACKGROUND, null);
+        var review = submit(second, pool, AgentRunBand.BATCH, 2L);
+        awaitWaiting(pool, 2L);
 
         assertThat(feedback.isRevoked()).isFalse();
         assertThat(review.isDone()).isFalse();
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND call_class='PRODUCT_FEEDBACK'",
+                        "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND workspace_id IS NULL",
                         Long.class,
                         pool))
                 .isEqualTo(1L);
@@ -160,22 +160,22 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         var start = new CyclicBarrier(2);
         var a = calls.submit(() -> {
             start.await(10, TimeUnit.SECONDS);
-            return admit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
+            return admit(first, pool, AgentRunBand.BACKGROUND, null);
         });
         requests.add(a);
         var b = calls.submit(() -> {
             start.await(10, TimeUnit.SECONDS);
-            return admit(second, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
+            return admit(second, pool, AgentRunBand.BACKGROUND, null);
         });
         requests.add(b);
         Awaitility.await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
             assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND call_class='PRODUCT_FEEDBACK'",
+                            "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND workspace_id IS NULL",
                             Long.class,
                             pool))
                     .isEqualTo(1L);
             assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='WAITING' AND call_class='PRODUCT_FEEDBACK'",
+                            "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='WAITING' AND workspace_id IS NULL",
                             Long.class,
                             pool))
                     .isEqualTo(1L);
@@ -187,7 +187,7 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         a.get(10, TimeUnit.SECONDS);
         b.get(10, TimeUnit.SECONDS);
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND call_class='PRODUCT_FEEDBACK'",
+                        "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND workspace_id IS NULL",
                         Long.class,
                         pool))
                 .isEqualTo(1L);
@@ -199,8 +199,8 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         var cooling = pools.findById(pool).orElseThrow();
         cooling.setNoCallBefore(Instant.now().plusSeconds(30));
         pools.saveAndFlush(cooling);
-        var feedback = submit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
-        awaitWaiting(pool, LlmCallClass.PRODUCT_FEEDBACK);
+        var feedback = submit(first, pool, AgentRunBand.BACKGROUND, null);
+        awaitWaiting(pool, null);
         assertThat(context.getBean(LlmCallPermitRepository.class).countActive(pool))
                 .isZero();
         cooling.setNoCallBefore(null);
@@ -212,20 +212,20 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     void shouldDebitSharedRateBudgetWhenFeedbackRetries() {
         long pool = pool(3);
         var budget = pools.findById(pool).orElseThrow();
-        // Background calls get two thirds of these rates.
+        // Calls that are not interactive get two thirds of these rates.
         budget.setRequestsPerMinute(5);
         budget.setTokensPerMinute(500L);
         budget.setTokensPerCall(100L);
         pools.saveAndFlush(budget);
-        admit(first, pool, LlmCallClass.REQUEST, 2L).close();
-        var feedback = admit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
+        admit(first, pool, AgentRunBand.BATCH, 2L).close();
+        var feedback = admit(first, pool, AgentRunBand.BACKGROUND, null);
         assertThat(first.beforeRetry(feedback, ended::get, Instant.now().plusSeconds(1)))
                 .isTrue();
         feedback.close();
 
         assertThat(first.acquire(
                         pool,
-                        LlmCallClass.PRODUCT_FEEDBACK,
+                        AgentRunBand.BACKGROUND,
                         new LlmCallPermits.Caller(null, UUID.randomUUID(), 0, null),
                         ended::get,
                         Instant.now().plusMillis(25)))
@@ -247,13 +247,13 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     }
 
     private Future<LlmCallPermits.Permit> submit(
-            LlmCallPermits worker, long pool, LlmCallClass kind, @Nullable Long workspace) {
+            LlmCallPermits worker, long pool, AgentRunBand kind, @Nullable Long workspace) {
         var request = calls.submit(() -> admit(worker, pool, kind, workspace));
         requests.add(request);
         return request;
     }
 
-    private LlmCallPermits.Permit admit(LlmCallPermits worker, long pool, LlmCallClass kind, @Nullable Long workspace) {
+    private LlmCallPermits.Permit admit(LlmCallPermits worker, long pool, AgentRunBand kind, @Nullable Long workspace) {
         var permit = Objects.requireNonNull(worker.acquire(
                 pool,
                 kind,
@@ -264,14 +264,16 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         return permit;
     }
 
-    private void awaitWaiting(long pool, LlmCallClass kind) {
+    /** Product feedback is the only call without a workspace. */
+    private void awaitWaiting(long pool, @Nullable Long workspace) {
         Awaitility.await()
                 .atMost(Duration.ofSeconds(5))
                 .untilAsserted(() -> assertThat(jdbc.queryForObject(
-                                "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND call_class=? AND state='WAITING'",
+                                "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='WAITING'"
+                                        + " AND workspace_id IS NOT DISTINCT FROM ?",
                                 Long.class,
                                 pool,
-                                kind.name()))
+                                workspace))
                         .isEqualTo(1L));
     }
 }

@@ -2671,9 +2671,9 @@ tests:
   - name: conversation calls that wait over 5 seconds fire once at least ten calls ended
     interval: 1m
     input_series:
-      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",class="turn",reason="capacity",le="5.0"}'
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",band="interactive",reason="capacity",le="5.0"}'
         values: "0+1x30"
-      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",class="turn",reason="capacity"}'
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",band="interactive",reason="capacity"}'
         values: "0+2x30"
     alert_rule_test:
       - eval_time: 3m
@@ -2692,9 +2692,9 @@ tests:
   - name: conversation calls that wait a short time do not fire
     interval: 1m
     input_series:
-      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",class="turn",reason="capacity",le="5.0"}'
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",band="interactive",reason="capacity",le="5.0"}'
         values: "0+2x30"
-      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",class="turn",reason="capacity"}'
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",band="interactive",reason="capacity"}'
         values: "0+2x30"
     alert_rule_test:
       - eval_time: 20m
@@ -2704,9 +2704,9 @@ tests:
   - name: review calls that wait over two minutes fire after 15 minutes
     interval: 1m
     input_series:
-      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",class="event",reason="capacity",le="120.0"}'
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",band="batch",reason="capacity",le="120.0"}'
         values: "0+1x60"
-      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",class="event",reason="capacity"}'
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",band="batch",reason="capacity"}'
         values: "0+2x60"
     alert_rule_test:
       - eval_time: 20m
@@ -2725,9 +2725,9 @@ tests:
   - name: review calls that queue for less than two minutes do not fire
     interval: 1m
     input_series:
-      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",class="event",reason="capacity",le="120.0"}'
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",band="batch",reason="capacity",le="120.0"}'
         values: "0+2x60"
-      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",class="event",reason="capacity"}'
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",band="batch",reason="capacity"}'
         values: "0+2x60"
     alert_rule_test:
       - eval_time: 40m

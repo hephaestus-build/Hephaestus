@@ -3,13 +3,13 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallLimit;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -110,7 +110,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         while (true) {
             try (var permit = Objects.requireNonNull(worker.acquire(
                     pool,
-                    LlmCallClass.EVENT,
+                    AgentRunBand.BATCH,
                     new LlmCallPermits.Caller(workspace, source, 0, null),
                     () -> false,
                     Instant.now().plusSeconds(120)))) {
@@ -152,7 +152,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                 .isPositive();
         assertThat(meters.get(AgentMetrics.LLM_POOL_PERMITS_GRANTED)
                         .tag("pool", slug)
-                        .tag("class", "event")
+                        .tag("band", "batch")
                         .counter()
                         .count())
                 .isPositive();
@@ -248,7 +248,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                     while (System.nanoTime() < ends) {
                         try (var permit = Objects.requireNonNull(worker.acquire(
                                 pool,
-                                LlmCallClass.EVENT,
+                                AgentRunBand.BATCH,
                                 new LlmCallPermits.Caller(1L, source, 0, null),
                                 () -> false,
                                 Instant.now().plusSeconds(120)))) {
@@ -283,13 +283,13 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         assertThat(delayDecreases).isPositive();
         assertThat(meters.get(AgentMetrics.GEN_AI_CLIENT_TIME_TO_FIRST_CHUNK)
                         .tag("pool", slug)
-                        .tag("class", "event")
+                        .tag("band", "batch")
                         .timer()
                         .count())
                 .isPositive();
         assertThat(meters.get(AgentMetrics.GEN_AI_CLIENT_TIME_TO_FIRST_CHUNK)
                         .tag("pool", slug)
-                        .tag("class", "turn")
+                        .tag("band", "interactive")
                         .timer()
                         .count())
                 .isZero();
@@ -306,8 +306,8 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = ownPool();
         setLimit(pool, 4);
         jdbc.update("UPDATE llm_call_pool SET baseline_first_token_ms=900 WHERE id=?", pool);
-        var composition = admit(workerA, pool, LlmCallClass.COMPOSITION, 1);
-        var held = List.of(admit(workerA, pool, LlmCallClass.EVENT, 1), admit(workerA, pool, LlmCallClass.EVENT, 1));
+        var composition = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        var held = List.of(admit(workerA, pool, AgentRunBand.BATCH, 1), admit(workerA, pool, AgentRunBand.BATCH, 1));
 
         composition.served(true);
         composition.close();
@@ -319,7 +319,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldLeaveASharedPoolAloneWhenAWorkspaceCredentialsCallIsSlow() {
         long pool = sharedPool();
-        var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
 
         workerA.firstToken(call, Duration.ofMinutes(5).toNanos(), false);
         call.close();
@@ -352,8 +352,8 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldLowerTheLimitOnceForTheCallsThatStartedUnderIt() {
         long pool = ownPool();
-        var first = admit(workerA, pool, LlmCallClass.EVENT, 1);
-        var second = admit(workerB, pool, LlmCallClass.EVENT, 1);
+        var first = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        var second = admit(workerB, pool, AgentRunBand.BATCH, 1);
 
         workerA.throttled(first, 429, pause(1), true);
         workerB.throttled(second, 429, pause(1), true);
@@ -363,7 +363,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         second.close();
 
         clearCooldown(pool);
-        var later = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var later = admit(workerA, pool, AgentRunBand.BATCH, 1);
         workerA.throttled(later, 503, pause(1), true);
         later.close();
         assertThat(limit(pool)).isEqualTo(3);
@@ -378,25 +378,26 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldWaitForTheProvidersPauseAcrossWorkersEvenForAConversation() {
         long pool = ownPool();
-        var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
         workerA.throttled(call, 429, pause(2), true);
         call.close();
 
-        assertThat(probe(workerB, pool, LlmCallClass.TURN, 2, Duration.ofMillis(50)))
+        assertThat(probe(workerB, pool, AgentRunBand.INTERACTIVE, 2, Duration.ofMillis(50)))
                 .isNull();
         await().atMost(Duration.ofSeconds(5))
-                .untilAsserted(() -> assertThat(probe(workerB, pool, LlmCallClass.TURN, 2, Duration.ofMillis(300)))
-                        .isNotNull());
+                .untilAsserted(
+                        () -> assertThat(probe(workerB, pool, AgentRunBand.INTERACTIVE, 2, Duration.ofMillis(300)))
+                                .isNotNull());
     }
 
     @Test
     void shouldHoldAGrantThatAnotherWorkerMadeUntilARefusalsPauseEnds() throws Exception {
         long pool = ownPool();
         setMaximum(pool, 1);
-        var held = admit(workerB, pool, LlmCallClass.EVENT, 2);
+        var held = admit(workerB, pool, AgentRunBand.BATCH, 2);
         AtomicBoolean ended = new AtomicBoolean();
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
-            var waiter = calls.submit(() -> acquire(workerA, pool, LlmCallClass.EVENT, 1, UUID.randomUUID(), ended));
+            var waiter = calls.submit(() -> acquire(workerA, pool, AgentRunBand.BATCH, 1, UUID.randomUUID(), ended));
             await().atMost(Duration.ofSeconds(5))
                     .untilAsserted(() -> assertThat(waiting(pool)).isEqualTo(1));
             UUID queued = Objects.requireNonNull(jdbc.queryForObject(
@@ -404,7 +405,9 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
             // Another worker granted it, and then a refusal paused the pool before its own worker found the grant.
             held.close();
             transactions.executeWithoutResult(status -> {
-                rows.grant(queued, 0);
+                jdbc.update(
+                        "UPDATE llm_call_permit SET state='ACTIVE',granted_at=clock_timestamp(),requests=1 WHERE id=? AND state='WAITING'",
+                        queued);
                 jdbc.update(
                         "UPDATE llm_call_pool SET no_call_before=clock_timestamp()+interval '2 seconds' WHERE id=?",
                         pool);
@@ -425,7 +428,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = ownPool();
         setLimit(pool, 64);
         setMaximum(pool, 16);
-        var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
 
         workerA.throttled(call, 429, pause(1), true);
         call.close();
@@ -436,8 +439,8 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldNotRaiseTheLimitForAServedCallThatStartedBeforeTheLastRefusal() {
         long pool = ownPool();
-        var old = admit(workerA, pool, LlmCallClass.EVENT, 1);
-        var refused = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var old = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        var refused = admit(workerA, pool, AgentRunBand.BATCH, 1);
         workerA.throttled(refused, 429, pause(1), true);
         refused.close();
         int lowered = limit(pool);
@@ -451,7 +454,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldNotRaiseTheLimitWhenItDoesNotBind() {
         long pool = ownPool();
-        var alone = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var alone = admit(workerA, pool, AgentRunBand.BATCH, 1);
         alone.served(true);
         alone.close();
 
@@ -468,9 +471,9 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
             assertThat(limit(pool)).isEqualTo(4);
             // Three background calls fill the limit of four, so the limit binds when the first ends.
             var held = List.of(
-                    admit(workerA, pool, LlmCallClass.EVENT, 1),
-                    admit(workerA, pool, LlmCallClass.EVENT, 1),
-                    admit(workerB, pool, LlmCallClass.EVENT, 2));
+                    admit(workerA, pool, AgentRunBand.BATCH, 1),
+                    admit(workerA, pool, AgentRunBand.BATCH, 1),
+                    admit(workerB, pool, AgentRunBand.BATCH, 2));
             held.getFirst().served(true);
             held.forEach(LlmCallPermits.Permit::close);
         }
@@ -484,10 +487,10 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         setLimit(pool, 4);
         setMaximum(pool, 4);
         var held = List.of(
-                admit(workerA, pool, LlmCallClass.EVENT, 1),
-                admit(workerA, pool, LlmCallClass.EVENT, 1),
-                admit(workerA, pool, LlmCallClass.EVENT, 1));
-        assertThat(probe(workerB, pool, LlmCallClass.EVENT, 1, Duration.ofMillis(50)))
+                admit(workerA, pool, AgentRunBand.BATCH, 1),
+                admit(workerA, pool, AgentRunBand.BATCH, 1),
+                admit(workerA, pool, AgentRunBand.BATCH, 1));
+        assertThat(probe(workerB, pool, AgentRunBand.BATCH, 1, Duration.ofMillis(50)))
                 .isNull();
         held.getFirst().served(true);
         held.forEach(LlmCallPermits.Permit::close);
@@ -500,19 +503,19 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = ownPool();
         List<LlmCallPermits.Permit> reviews = new ArrayList<>();
         // A limit of eight leaves six background calls and two for conversations.
-        for (int i = 0; i < 6; i++) reviews.add(admit(workerA, pool, LlmCallClass.EVENT, 1));
-        assertThat(probe(workerB, pool, LlmCallClass.EVENT, 1, Duration.ofMillis(50)))
+        for (int i = 0; i < 6; i++) reviews.add(admit(workerA, pool, AgentRunBand.BATCH, 1));
+        assertThat(probe(workerB, pool, AgentRunBand.BATCH, 1, Duration.ofMillis(50)))
                 .isNull();
 
         // The limit falls to five, while the six reviews stay in flight. Its reserve of two still holds.
         workerA.throttled(reviews.getFirst(), 429, pause(1), true);
         clearCooldown(pool);
         assertThat(limit(pool)).isEqualTo(5);
-        var firstTurn = admit(workerB, pool, LlmCallClass.TURN, 2);
-        var secondTurn = admit(workerB, pool, LlmCallClass.TURN, 2);
-        assertThat(probe(workerB, pool, LlmCallClass.TURN, 2, Duration.ofMillis(50)))
+        var firstTurn = admit(workerB, pool, AgentRunBand.INTERACTIVE, 2);
+        var secondTurn = admit(workerB, pool, AgentRunBand.INTERACTIVE, 2);
+        assertThat(probe(workerB, pool, AgentRunBand.INTERACTIVE, 2, Duration.ofMillis(50)))
                 .isNull();
-        assertThat(probe(workerB, pool, LlmCallClass.EVENT, 1, Duration.ofMillis(50)))
+        assertThat(probe(workerB, pool, AgentRunBand.BATCH, 1, Duration.ofMillis(50)))
                 .isNull();
 
         firstTurn.close();
@@ -529,16 +532,16 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         UUID other = UUID.randomUUID();
         // The wide review already holds its fill.
         List<LlmCallPermits.Permit> held = new ArrayList<>();
-        for (int i = 0; i < 6; i++) held.add(admit(workerA, pool, LlmCallClass.EVENT, 1, wide));
+        for (int i = 0; i < 6; i++) held.add(admit(workerA, pool, AgentRunBand.BATCH, 1, wide));
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
             AtomicBoolean ended = new AtomicBoolean();
             List<Future<LlmCallPermits.@Nullable Permit>> queued = new ArrayList<>();
             for (int i = 0; i < 20; i++)
-                queued.add(calls.submit(() -> acquire(workerA, pool, LlmCallClass.EVENT, 1, wide, ended)));
+                queued.add(calls.submit(() -> acquire(workerA, pool, AgentRunBand.BATCH, 1, wide, ended)));
             for (int i = 0; i < 4; i++)
-                queued.add(calls.submit(() -> acquire(workerB, pool, LlmCallClass.EVENT, 1, narrow, ended)));
+                queued.add(calls.submit(() -> acquire(workerB, pool, AgentRunBand.BATCH, 1, narrow, ended)));
             for (int i = 0; i < 4; i++)
-                queued.add(calls.submit(() -> acquire(workerB, pool, LlmCallClass.EVENT, 2, other, ended)));
+                queued.add(calls.submit(() -> acquire(workerB, pool, AgentRunBand.BATCH, 2, other, ended)));
             await().atMost(Duration.ofSeconds(5))
                     .untilAsserted(() -> assertThat(waiting(pool)).isEqualTo(28));
 
@@ -575,20 +578,20 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = ownPool();
         setLimit(pool, 8);
         List<LlmCallPermits.Permit> held = new ArrayList<>();
-        for (int i = 0; i < 6; i++) held.add(admit(workerA, pool, LlmCallClass.EVENT, 1));
+        for (int i = 0; i < 6; i++) held.add(admit(workerA, pool, AgentRunBand.BATCH, 1));
         AtomicBoolean ended = new AtomicBoolean();
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
             List<Future<LlmCallPermits.@Nullable Permit>> queued = new ArrayList<>();
             for (int i = 0; i < 400; i++) {
                 LlmCallPermits worker = i % 2 == 0 ? workerA : workerB;
-                queued.add(calls.submit(() -> acquire(worker, pool, LlmCallClass.EVENT, 1, UUID.randomUUID(), ended)));
+                queued.add(calls.submit(() -> acquire(worker, pool, AgentRunBand.BATCH, 1, UUID.randomUUID(), ended)));
             }
             await().atMost(Duration.ofSeconds(30))
                     .untilAsserted(() -> assertThat(waiting(pool)).isEqualTo(400));
             List<Long> latencies = new ArrayList<>();
             for (int i = 0; i < 40; i++) {
                 long start = System.nanoTime();
-                var turn = admit(i % 2 == 0 ? workerA : workerB, pool, LlmCallClass.TURN, 2);
+                var turn = admit(i % 2 == 0 ? workerA : workerB, pool, AgentRunBand.INTERACTIVE, 2);
                 latencies.add(System.nanoTime() - start);
                 turn.close();
             }
@@ -627,7 +630,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldLeaveASharedPoolAloneWhenAWorkspaceCredentialIsRefused() {
         long pool = sharedPool();
-        var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
 
         assertThat(workerA.throttled(call, 429, pause(30), false)).isNull();
         call.close();
@@ -642,7 +645,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     void shouldNotRaiseASharedPoolsLimitForAWorkspaceCredentialsServedCall() {
         long pool = sharedPool();
         var held = new ArrayList<LlmCallPermits.Permit>();
-        for (int i = 0; i < 6; i++) held.add(admit(workerA, pool, LlmCallClass.EVENT, 1));
+        for (int i = 0; i < 6; i++) held.add(admit(workerA, pool, AgentRunBand.BATCH, 1));
 
         held.getFirst().served(false);
         held.forEach(LlmCallPermits.Permit::close);
@@ -655,16 +658,16 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = ownPool();
         setLimit(pool, 2);
         setMaximum(pool, 2);
-        var held = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var held = admit(workerA, pool, AgentRunBand.BATCH, 1);
         AtomicBoolean ended = new AtomicBoolean();
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
-            var waiter = calls.submit(() -> acquire(workerB, pool, LlmCallClass.EVENT, 1, UUID.randomUUID(), ended));
+            var waiter = calls.submit(() -> acquire(workerB, pool, AgentRunBand.BATCH, 1, UUID.randomUUID(), ended));
             await().atMost(Duration.ofSeconds(5))
                     .untilAsserted(() -> assertThat(waiting(pool)).isEqualTo(1));
             // This worker's round grants the other worker's call, which ends before its worker finds the grant.
             ended.set(true);
             held.close();
-            admit(workerA, pool, LlmCallClass.EVENT, 2).close();
+            admit(workerA, pool, AgentRunBand.BATCH, 2).close();
             var late = waiter.get(10, TimeUnit.SECONDS);
             if (late != null) late.close();
         }
@@ -675,7 +678,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldLetAWorkspaceCredentialSlowItsOwnModelsPool() {
         long pool = ownPool();
-        var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
 
         assertThat(workerA.throttled(call, 429, pause(30), false)).isEqualTo(Duration.ofSeconds(30));
         call.close();
@@ -690,10 +693,10 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = ownPool();
         String slug = slug(pool);
         setLimit(pool, 2);
-        var held = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var held = admit(workerA, pool, AgentRunBand.BATCH, 1);
         AtomicBoolean ended = new AtomicBoolean();
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
-            var waiter = calls.submit(() -> acquire(workerB, pool, LlmCallClass.EVENT, 1, UUID.randomUUID(), ended));
+            var waiter = calls.submit(() -> acquire(workerB, pool, AgentRunBand.BATCH, 1, UUID.randomUUID(), ended));
             await().atMost(Duration.ofSeconds(5))
                     .untilAsserted(() -> assertThat(waiting(pool)).isEqualTo(1));
 
@@ -702,7 +705,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
             assertThat(gauge(meters, AgentMetrics.LLM_POOL_LIMIT, slug)).isEqualTo(2);
             assertThat(meters.get(AgentMetrics.LLM_POOL_WAITERS)
                             .tag("pool", slug)
-                            .tag("queue", "background")
+                            .tag("band", "batch")
                             .gauge()
                             .value())
                     .isEqualTo(1);
@@ -720,11 +723,11 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         pool.setDisplayName("Own");
         long id = pools.save(pool).getId();
 
-        admit(workerA, id, LlmCallClass.EVENT, 1).close();
+        admit(workerA, id, AgentRunBand.BATCH, 1).close();
 
         assertThat(meters.get(AgentMetrics.LLM_POOL_PERMITS_GRANTED)
                         .tag("pool", LlmPoolMeters.WORKSPACE_MODELS_LABEL)
-                        .tag("class", "event")
+                        .tag("band", "batch")
                         .counter()
                         .count())
                 .isPositive();
@@ -736,7 +739,14 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
 
     private LlmCallPermits worker(String id, MeterRegistry registry) {
         return new LlmCallPermits(
-                pools, rows, transactions, LlmCallPermitsTestFixtures.PROPERTIES, id, registry, models);
+                pools,
+                rows,
+                transactions,
+                LlmCallPermitsTestFixtures.PROPERTIES,
+                LlmCallPermitsTestFixtures.PERMIT_AGING,
+                id,
+                registry,
+                models);
     }
 
     /** A pool as a model gets it from the database: dedicated, with no maximum. */
@@ -799,12 +809,12 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         return headers;
     }
 
-    private static LlmCallPermits.Permit admit(LlmCallPermits worker, long pool, LlmCallClass kind, long workspace) {
+    private static LlmCallPermits.Permit admit(LlmCallPermits worker, long pool, AgentRunBand kind, long workspace) {
         return admit(worker, pool, kind, workspace, UUID.randomUUID());
     }
 
     private static LlmCallPermits.Permit admit(
-            LlmCallPermits worker, long pool, LlmCallClass kind, long workspace, UUID source) {
+            LlmCallPermits worker, long pool, AgentRunBand kind, long workspace, UUID source) {
         return Objects.requireNonNull(worker.acquire(
                 pool,
                 kind,
@@ -814,7 +824,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     }
 
     private static LlmCallPermits.@Nullable Permit acquire(
-            LlmCallPermits worker, long pool, LlmCallClass kind, long workspace, UUID source, AtomicBoolean ended) {
+            LlmCallPermits worker, long pool, AgentRunBand kind, long workspace, UUID source, AtomicBoolean ended) {
         return worker.acquire(
                 pool,
                 kind,
@@ -824,7 +834,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     }
 
     private static LlmCallPermits.@Nullable Permit probe(
-            LlmCallPermits worker, long pool, LlmCallClass kind, long workspace, Duration wait) {
+            LlmCallPermits worker, long pool, AgentRunBand kind, long workspace, Duration wait) {
         var permit = worker.acquire(
                 pool,
                 kind,

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -32,9 +33,10 @@ public class LlmCallPermit {
     @Column(name = "worker_id", nullable = false, length = 255)
     private String workerId;
 
+    /** The grant priority of the call. A waiting call that is not interactive rises with its wait. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "call_class", nullable = false, length = 16)
-    private LlmCallClass callClass;
+    @Column(name = "band", nullable = false, length = 16)
+    private AgentRunBand band;
 
     @ColumnDefault("now()")
     @Column(name = "acquired_at", nullable = false)
@@ -45,7 +47,10 @@ public class LlmCallPermit {
     @Column(name = "renewed_at", nullable = false)
     private Instant renewedAt;
 
-    /** Orders fair grants across a pool's workspaces and scopes nothing. Only a product feedback call has none. */
+    /**
+     * Orders fair grants across a pool's workspaces and scopes nothing. Only a product feedback call has none, and it is
+     * always a background call.
+     */
     @Column(name = "workspace_id")
     private @Nullable Long workspaceId;
 

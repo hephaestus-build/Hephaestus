@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -12,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
@@ -59,16 +59,17 @@ class ProxyRoutingService {
     }
 
     /**
-     * Whose call this is, for its pool: a conversation turn, or the origin of the review that makes it.
+     * The band of the call, for its pool: a conversation turn is interactive, a review's composition is batch, and any
+     * other review call takes the band of the review's origin.
      *
      * @throws ResponseStatusException 409 when the call's review no longer exists
      */
-    LlmCallClass callClass(ProxyRouting routing) {
-        if (routing.hephTurn()) return LlmCallClass.TURN;
+    AgentRunBand band(ProxyRouting routing) {
+        if (routing.hephTurn()) return AgentRunBand.INTERACTIVE;
         var job = agentJobRepository.findById(routing.sourceId()).orElseThrow(ProxyRoutingService::attemptEnded);
-        if (ResultAdmissionService.isAdmitted(job)) return LlmCallClass.COMPOSITION;
+        if (ResultAdmissionService.isAdmitted(job)) return AgentRunBand.BATCH;
         return reviews.find(job.getWorkspaceId(), job.getReviewId())
-                .map(review -> LlmCallClass.of(review.origin()))
+                .map(review -> ReviewRunKind.band(review.origin()))
                 .orElseThrow(ProxyRoutingService::attemptEnded);
     }
 

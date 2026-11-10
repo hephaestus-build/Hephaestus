@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.Collection;
 import java.util.List;
@@ -22,32 +23,34 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             nativeQuery = true)
     long countActive(@Param("poolId") long poolId);
 
+    /** The calls in flight that no person waits for: they may not use the interactive band's reserve. */
     @Query(
             value =
-                    "SELECT count(*) FROM llm_call_permit WHERE pool_id = :poolId AND state='ACTIVE' AND call_class <> 'TURN'",
+                    "SELECT count(*) FROM llm_call_permit WHERE pool_id = :poolId AND state='ACTIVE' AND band <> 'INTERACTIVE'",
             nativeQuery = true)
-    long countBackground(@Param("poolId") long poolId);
+    long countNotInteractive(@Param("poolId") long poolId);
 
     record Request(
             UUID id,
             long poolId,
             String workerId,
-            String callClass,
+            AgentRunBand band,
             @Nullable Long workspaceId,
             UUID sourceId,
             int attempt) {}
 
+    /** Product feedback is the only call without a workspace. */
     @Query(
             value =
-                    "SELECT count(*) FROM llm_call_permit WHERE pool_id=:poolId AND state='ACTIVE' AND call_class='PRODUCT_FEEDBACK'",
+                    "SELECT count(*) FROM llm_call_permit WHERE pool_id=:poolId AND state='ACTIVE' AND workspace_id IS NULL",
             nativeQuery = true)
     long countActiveProductFeedback(@Param("poolId") long poolId);
 
     @Modifying
     @Query(value = """
                     INSERT INTO llm_call_permit
-                      (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,requests,tokens)
-                    VALUES (:#{#request.id()},:#{#request.poolId()},:#{#request.workerId()},:#{#request.callClass()},
+                      (id,pool_id,worker_id,band,workspace_id,source_id,attempt,state,acquired_at,renewed_at,requests,tokens)
+                    VALUES (:#{#request.id()},:#{#request.poolId()},:#{#request.workerId()},:#{#request.band().name()},
                       :#{#request.workspaceId()},:#{#request.sourceId()},:#{#request.attempt()},'WAITING',clock_timestamp(),clock_timestamp(),0,0)
                     """, nativeQuery = true)
     void enqueue(@Param("request") Request request);
@@ -56,14 +59,17 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     @Query(value = "SELECT 1 FROM (SELECT pg_notify(:channel, :payload)) sent", nativeQuery = true)
     int notifyPool(@Param("channel") String channel, @Param("payload") String payload);
 
-    /** Uses database time and includes every workspace and worker in this endpoint pool. */
+    /**
+     * Whether a review's call waits: one that is not interactive and has a workspace. Uses database time and includes
+     * every workspace and worker in this endpoint pool.
+     */
     @Query(value = """
             SELECT EXISTS (SELECT 1 FROM llm_call_permit q WHERE q.pool_id=p.id
-              AND q.state='WAITING' AND q.call_class NOT IN ('TURN','PRODUCT_FEEDBACK')
+              AND q.state='WAITING' AND q.band <> 'INTERACTIVE' AND q.workspace_id IS NOT NULL
               AND q.renewed_at>=clock_timestamp()-make_interval(secs => :staleSeconds))
             FROM llm_call_pool p WHERE p.id=:poolId
             """, nativeQuery = true)
-    Optional<Boolean> hasBackgroundWaiters(@Param("poolId") long poolId, @Param("staleSeconds") long staleSeconds);
+    Optional<Boolean> hasReviewCallsWaiting(@Param("poolId") long poolId, @Param("staleSeconds") long staleSeconds);
 
     /**
      * Reclaim expired owners without refunding calls that already reached the provider.
@@ -86,52 +92,102 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             """, nativeQuery = true)
     long prune(@Param("poolId") long poolId, @Param("staleSeconds") long staleSeconds);
 
-    interface Head {
-        UUID getId();
-
-        String getCallClass();
-    }
+    /**
+     * The room of one admission round, which the caller computes under the pool row lock. Each value is how many grants
+     * fit, and {@link Long#MAX_VALUE} has no bound.
+     *
+     * @param interactive the interactive calls that fit: under the limit, or within the reserve
+     * @param limit the calls of any band that fit under the limit
+     * @param notInteractive the calls that fit outside the reserve
+     * @param productFeedback the product feedback calls that fit: at most one is in flight
+     * @param rate the calls that fit in the pool's rate budgets
+     * @param notInteractiveRate the calls that fit in the rate share outside the reserve
+     */
+    record Room(
+            long interactive,
+            long limit,
+            long notInteractive,
+            long productFeedback,
+            long rate,
+            long notInteractiveRate) {}
 
     /**
-     * The next request of one queue. The workspace with the fewest calls in flight comes first, then, within it, the
-     * service class and then the attempt, so that a wide review cannot hold more than its share while another waits.
-     * Grant timestamps break ties independently of provider rate debits. Each group is read once: this runs under the
-     * pool row lock, and a wide review can leave hundreds of requests waiting.
+     * One admission round, in one statement: grants the longest prefix of the waiting calls, in grant order, that fits
+     * the room. No call after a call that does not fit gets a grant, so no call passes one ahead of it.
+     *
+     * <p>The grant order is the band, then the workspace with the fewest granted calls in the pool, then the source with
+     * the fewest granted calls, then age. A call that is not interactive rises one band for each {@code :agingSeconds}
+     * that it waits, but never into the interactive band, as the agent run claim does. Product feedback comes after all
+     * other calls. A round can grant several calls, so each call counts the calls ahead of it in its own workspace and
+     * source as granted: apart from ties, the order is the one that one grant at a time would give. A tie goes to the
+     * workspace whose last grant in the call's band was the oldest before the round, and then to the source whose last
+     * grant was; a grant earlier in the same round does not move that time. The rows are locked in id order, as
+     * {@link #renew} locks them, so a round and a renewal cannot deadlock. Each group is
+     * read once: this runs under the pool row lock, and a wide review can leave hundreds of requests waiting.
+     *
+     * @return the calls granted
      */
+    @Modifying
     @Query(value = """
             WITH granted AS (
-              SELECT workspace_id,source_id,call_class,state,granted_at FROM llm_call_permit
-              WHERE pool_id=:poolId AND granted_at IS NOT NULL AND (call_class='TURN')=:interactive
+              SELECT workspace_id,source_id,band,state,granted_at FROM llm_call_permit
+              WHERE pool_id=:poolId AND granted_at IS NOT NULL
             ), workspaces AS (
-              SELECT workspace_id,count(*) FILTER (WHERE state='ACTIVE') AS active,max(granted_at) AS last
-              FROM granted GROUP BY workspace_id
-            ), classes AS (
-              SELECT workspace_id,call_class='COMPOSITION' AS composition,max(granted_at) AS last
-              FROM granted GROUP BY workspace_id,call_class='COMPOSITION'
+              SELECT workspace_id,count(*) FILTER (WHERE state='ACTIVE') AS active FROM granted GROUP BY workspace_id
+            ), recent AS (
+              SELECT workspace_id,band,max(granted_at) AS last FROM granted GROUP BY workspace_id,band
             ), sources AS (
               SELECT source_id,count(*) FILTER (WHERE state='ACTIVE') AS active,max(granted_at) AS last
               FROM granted GROUP BY source_id
+            ), waiting AS (
+              SELECT id,workspace_id,source_id,band,acquired_at,workspace_id IS NULL AS feedback,
+                CASE WHEN band='INTERACTIVE' THEN 0
+                     ELSE GREATEST(1,(CASE band WHEN 'BATCH' THEN 1 ELSE 2 END)
+                          - FLOOR(EXTRACT(EPOCH FROM (clock_timestamp()-acquired_at)) / :agingSeconds))
+                END AS effective_band
+              FROM llm_call_permit WHERE pool_id=:poolId AND state='WAITING'
+            ), by_source AS (
+              SELECT w.*,s.last AS source_last,COALESCE(s.active,0) + row_number() OVER (PARTITION BY w.source_id
+                  ORDER BY w.feedback,w.effective_band,w.acquired_at,w.id) AS source_turn
+              FROM waiting w LEFT JOIN sources s ON s.source_id=w.source_id
+            ), turns AS (
+              SELECT b.*,r.last AS workspace_last,COALESCE(ws.active,0) + row_number() OVER (PARTITION BY b.workspace_id
+                  ORDER BY b.feedback,b.effective_band,b.source_turn,b.source_last NULLS FIRST,b.acquired_at,b.id)
+                  AS workspace_turn
+              FROM by_source b
+              LEFT JOIN workspaces ws ON ws.workspace_id IS NOT DISTINCT FROM b.workspace_id
+              LEFT JOIN recent r ON r.workspace_id IS NOT DISTINCT FROM b.workspace_id AND r.band=b.band
+            ), ordered AS (
+              SELECT id,band,feedback,row_number() OVER grant_order AS n,
+                count(*) FILTER (WHERE band='INTERACTIVE') OVER grant_order AS interactive,
+                count(*) FILTER (WHERE band<>'INTERACTIVE') OVER grant_order AS not_interactive,
+                count(*) FILTER (WHERE feedback) OVER grant_order AS feedback_calls
+              FROM turns
+              WINDOW grant_order AS (ORDER BY feedback,effective_band,workspace_turn,workspace_last NULLS FIRST,
+                source_turn,source_last NULLS FIRST,acquired_at,id ROWS UNBOUNDED PRECEDING)
+            ), fitting AS (
+              SELECT id,bool_and(fits) OVER (ORDER BY n ROWS UNBOUNDED PRECEDING) AS prefix_fits
+              FROM (SELECT id,n,n<=:#{#room.rate()} AND CASE WHEN band='INTERACTIVE'
+                       THEN interactive<=:#{#room.interactive()}
+                       ELSE interactive+not_interactive<=:#{#room.limit()}
+                         AND not_interactive<=:#{#room.notInteractive()}
+                         AND not_interactive<=:#{#room.notInteractiveRate()}
+                         AND feedback_calls<=:#{#room.productFeedback()}
+                     END AS fits
+                    FROM ordered) candidates
+            ), locked AS (
+              SELECT q.id FROM llm_call_permit q JOIN fitting f ON f.id=q.id
+              WHERE f.prefix_fits AND q.state='WAITING' ORDER BY q.id FOR UPDATE OF q
             )
-            SELECT q.id AS "id",q.call_class AS "callClass" FROM llm_call_permit q
-            LEFT JOIN workspaces w ON w.workspace_id=q.workspace_id
-            LEFT JOIN classes c ON c.workspace_id=q.workspace_id AND c.composition=(q.call_class='COMPOSITION')
-            LEFT JOIN sources s ON s.source_id=q.source_id
-            WHERE q.pool_id=:poolId AND q.state='WAITING' AND (q.call_class='TURN')=:interactive
-              AND (q.call_class<>'PRODUCT_FEEDBACK' OR NOT EXISTS (
-                SELECT 1 FROM llm_call_permit h WHERE h.pool_id=q.pool_id
-                  AND h.state='WAITING' AND h.call_class<>'PRODUCT_FEEDBACK'))
-            ORDER BY COALESCE(w.active,0),w.last NULLS FIRST,c.last NULLS FIRST,
-              COALESCE(s.active,0),s.last NULLS FIRST,q.acquired_at,q.id LIMIT 1
+            UPDATE llm_call_permit p SET state='ACTIVE',granted_at=clock_timestamp(),renewed_at=clock_timestamp(),
+              requests=1,tokens=:tokens,input_tokens=:tokens
+            FROM locked l WHERE p.id=l.id AND p.state='WAITING'
             """, nativeQuery = true)
-    Optional<Head> next(@Param("poolId") long poolId, @Param("interactive") boolean interactive);
-
-    /** Any worker may grant the head of the queue. The request's own worker finds the grant and makes the call. */
-    @Modifying
-    @Query(
-            value =
-                    "UPDATE llm_call_permit SET state='ACTIVE',granted_at=clock_timestamp(),renewed_at=clock_timestamp(),requests=1,tokens=:tokens,input_tokens=:tokens WHERE id=:id AND state='WAITING'",
-            nativeQuery = true)
-    int grant(@Param("id") UUID id, @Param("tokens") long tokens);
+    int grantRound(
+            @Param("poolId") long poolId,
+            @Param("room") Room room,
+            @Param("tokens") long tokens,
+            @Param("agingSeconds") long agingSeconds);
 
     interface Queued {
         UUID getId();
@@ -154,7 +210,9 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
         @Nullable
         Integer getMaxConcurrentCalls();
 
-        long getWaitingTurns();
+        long getWaitingInteractive();
+
+        long getWaitingBatch();
 
         long getWaitingBackground();
 
@@ -166,8 +224,9 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     @Query(value = """
             SELECT p.slug AS "slug",p.learned_limit AS "learnedLimit",p.max_concurrent_calls AS "maxConcurrentCalls",
               p.baseline_first_token_ms AS "baselineFirstTokenMs",
-              count(*) FILTER (WHERE q.state='WAITING' AND q.call_class='TURN') AS "waitingTurns",
-              count(*) FILTER (WHERE q.state='WAITING' AND q.call_class<>'TURN') AS "waitingBackground"
+              count(*) FILTER (WHERE q.state='WAITING' AND q.band='INTERACTIVE') AS "waitingInteractive",
+              count(*) FILTER (WHERE q.state='WAITING' AND q.band='BATCH') AS "waitingBatch",
+              count(*) FILTER (WHERE q.state='WAITING' AND q.band='BACKGROUND') AS "waitingBackground"
             FROM llm_call_pool p JOIN llm_call_permit q ON q.pool_id=p.id
             GROUP BY p.id,p.slug,p.learned_limit,p.max_concurrent_calls,p.baseline_first_token_ms
             """, nativeQuery = true)
@@ -176,7 +235,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     @Modifying
     @Query(
             value =
-                    "UPDATE llm_call_permit SET renewed_at=clock_timestamp() WHERE worker_id=:workerId AND id IN (:ids) AND state IN ('WAITING','ACTIVE') AND (state='WAITING' OR renewed_at >= clock_timestamp()-make_interval(secs => :staleSeconds))",
+                    "UPDATE llm_call_permit SET renewed_at=clock_timestamp() WHERE id IN (SELECT id FROM llm_call_permit WHERE worker_id=:workerId AND id IN (:ids) AND state IN ('WAITING','ACTIVE') AND (state='WAITING' OR renewed_at >= clock_timestamp()-make_interval(secs => :staleSeconds)) ORDER BY id FOR UPDATE)",
             nativeQuery = true)
     int renew(
             @Param("workerId") String workerId,
@@ -211,23 +270,23 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
 
         long getTokens();
 
-        long getBackgroundRequests();
+        long getNotInteractiveRequests();
 
-        long getBackgroundTokens();
+        long getNotInteractiveTokens();
 
         long getInputTokens();
 
         long getOutputTokens();
 
-        long getBackgroundInputTokens();
+        long getNotInteractiveInputTokens();
 
-        long getBackgroundOutputTokens();
+        long getNotInteractiveOutputTokens();
     }
 
     /** Active calls retain their complete rate debit. Closed calls retain it for a full minute after closure. */
     @Query(
             value =
-                    "SELECT COALESCE(sum(requests),0) AS requests,COALESCE(sum(tokens),0) AS tokens,COALESCE(sum(input_tokens),0) AS \"inputTokens\",COALESCE(sum(output_tokens),0) AS \"outputTokens\",COALESCE(sum(requests) FILTER (WHERE call_class <> 'TURN'),0) AS \"backgroundRequests\",COALESCE(sum(tokens) FILTER (WHERE call_class <> 'TURN'),0) AS \"backgroundTokens\",COALESCE(sum(input_tokens) FILTER (WHERE call_class <> 'TURN'),0) AS \"backgroundInputTokens\",COALESCE(sum(output_tokens) FILTER (WHERE call_class <> 'TURN'),0) AS \"backgroundOutputTokens\" FROM llm_call_permit WHERE pool_id=:poolId AND granted_at IS NOT NULL AND (closed_at IS NULL OR closed_at > clock_timestamp()-interval '1 minute')",
+                    "SELECT COALESCE(sum(requests),0) AS requests,COALESCE(sum(tokens),0) AS tokens,COALESCE(sum(input_tokens),0) AS \"inputTokens\",COALESCE(sum(output_tokens),0) AS \"outputTokens\",COALESCE(sum(requests) FILTER (WHERE band <> 'INTERACTIVE'),0) AS \"notInteractiveRequests\",COALESCE(sum(tokens) FILTER (WHERE band <> 'INTERACTIVE'),0) AS \"notInteractiveTokens\",COALESCE(sum(input_tokens) FILTER (WHERE band <> 'INTERACTIVE'),0) AS \"notInteractiveInputTokens\",COALESCE(sum(output_tokens) FILTER (WHERE band <> 'INTERACTIVE'),0) AS \"notInteractiveOutputTokens\" FROM llm_call_permit WHERE pool_id=:poolId AND granted_at IS NOT NULL AND (closed_at IS NULL OR closed_at > clock_timestamp()-interval '1 minute')",
             nativeQuery = true)
     Rates rates(@Param("poolId") long poolId);
 

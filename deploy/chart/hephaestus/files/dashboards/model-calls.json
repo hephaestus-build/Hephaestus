@@ -15,9 +15,9 @@
 				},
 				{
 					"title": "Calls that wait",
-					"description": "By pool and queue.",
-					"expr": ["max by (pool, queue) (llm_pool_waiters{job=\"hephaestus\"})"],
-					"alias": ["{{pool}} {{queue}}"],
+					"description": "By pool and band.",
+					"expr": ["max by (pool, band) (llm_pool_waiters{job=\"hephaestus\"})"],
+					"alias": ["{{pool}} {{band}}"],
 					"showLegend": true,
 					"width": 6
 				},
@@ -25,7 +25,7 @@
 					"title": "Wait p95, conversation calls",
 					"description": "The bound of the alert is 5 seconds.",
 					"expr": [
-						"histogram_quantile(0.95, sum by (le, pool) (rate(llm_pool_permit_wait_seconds_bucket{job=\"hephaestus\",class=~\"turn|product_feedback\"}[5m])))"
+						"histogram_quantile(0.95, sum by (le, pool) (rate(llm_pool_permit_wait_seconds_bucket{job=\"hephaestus\",band=\"interactive\"}[5m])))"
 					],
 					"alias": ["{{pool}}"],
 					"unit": "s",
@@ -36,7 +36,7 @@
 					"title": "Wait p95, review calls",
 					"description": "The bound of the alert is 2 minutes.",
 					"expr": [
-						"histogram_quantile(0.95, sum by (le, pool) (rate(llm_pool_permit_wait_seconds_bucket{job=\"hephaestus\",class!~\"turn|product_feedback\"}[5m])))"
+						"histogram_quantile(0.95, sum by (le, pool) (rate(llm_pool_permit_wait_seconds_bucket{job=\"hephaestus\",band!=\"interactive\"}[5m])))"
 					],
 					"alias": ["{{pool}}"],
 					"unit": "s",

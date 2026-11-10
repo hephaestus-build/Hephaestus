@@ -27,11 +27,11 @@ import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
 import de.tum.cit.aet.hephaestus.agent.catalog.InstanceLlmSettingsRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
@@ -1085,8 +1085,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     routing,
                     new LlmModelResolver.ProxyCredential(
                             baseUrl, "openai-completions", LlmAuthMode.BEARER, "catalog-model", "secret", 42L));
-            when(routingService.callClass(any())).thenReturn(LlmCallClass.EVENT);
-            when(streamingPermits.acquire(eq(42L), eq(LlmCallClass.EVENT), any(), any(), any()))
+            when(routingService.band(any())).thenReturn(AgentRunBand.BATCH);
+            when(streamingPermits.acquire(eq(42L), eq(AgentRunBand.BATCH), any(), any(), any()))
                     .thenReturn(permit);
             ResponseEntity<?> answer = streamingController.proxy(
                     request("POST", "/internal/llm/chat/completions"),

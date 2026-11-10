@@ -1,13 +1,14 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallDelay;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallLimit;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
@@ -35,6 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
+import java.util.stream.LongStream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,6 +70,7 @@ public class LlmCallPermits {
     private final LlmCallPermitRepository rows;
     private final TransactionTemplate transactions;
     private final LlmCallPoolProperties properties;
+    private final Duration permitAging;
     private final String workerId;
     private final LlmPoolMeters meters;
     private final Map<UUID, Permit> held = new ConcurrentHashMap<>();
@@ -85,11 +88,21 @@ public class LlmCallPermits {
             LlmCallPermitRepository rows,
             TransactionTemplate transactions,
             LlmCallPoolProperties properties,
+            AgentCapacityProperties capacity,
             WorkerProperties worker,
             MeterRegistry registry,
             LlmModelResolver models,
             LlmPoolNotifications notifications) {
-        this(pools, rows, transactions, properties, worker.resolvedWorkerId(), registry, models, notifications);
+        this(
+                pools,
+                rows,
+                transactions,
+                properties,
+                capacity.permitAging(),
+                worker.resolvedWorkerId(),
+                registry,
+                models,
+                notifications);
     }
 
     LlmCallPermits(
@@ -97,10 +110,11 @@ public class LlmCallPermits {
             LlmCallPermitRepository rows,
             TransactionTemplate transactions,
             LlmCallPoolProperties properties,
+            Duration permitAging,
             String workerId,
             MeterRegistry registry,
             LlmModelResolver models) {
-        this(pools, rows, transactions, properties, workerId, registry, models, null);
+        this(pools, rows, transactions, properties, permitAging, workerId, registry, models, null);
     }
 
     LlmCallPermits(
@@ -108,6 +122,7 @@ public class LlmCallPermits {
             LlmCallPermitRepository rows,
             TransactionTemplate transactions,
             LlmCallPoolProperties properties,
+            Duration permitAging,
             String workerId,
             MeterRegistry registry,
             LlmModelResolver models,
@@ -118,6 +133,7 @@ public class LlmCallPermits {
         this.rows = rows;
         this.transactions = transactions;
         this.properties = properties;
+        this.permitAging = permitAging;
         this.workerId = workerId;
         this.meters = new LlmPoolMeters(registry);
     }
@@ -182,13 +198,16 @@ public class LlmCallPermits {
     /**
      * No provider call starts without a committed grant, or for a caller that has ended.
      *
+     * @param band the call's grant priority: its run's band. Product feedback, the only call without a workspace, is
+     *     {@link AgentRunBand#BACKGROUND}
      * @param deadline when the caller stops waiting, and when the call must have ended; {@code null} for a call that
      *     its own ceiling ends
      */
     public @Nullable Permit acquire(
-            long poolId, LlmCallClass callClass, Caller caller, BooleanSupplier ended, @Nullable Instant deadline) {
-        if ((caller.workspaceId() == null) != (callClass == LlmCallClass.PRODUCT_FEEDBACK))
-            throw new IllegalArgumentException("Product feedback calls have no workspace; all other calls require one");
+            long poolId, AgentRunBand band, Caller caller, BooleanSupplier ended, @Nullable Instant deadline) {
+        if (caller.workspaceId() == null && band != AgentRunBand.BACKGROUND)
+            throw new IllegalArgumentException(
+                    "A call without a workspace is product feedback, in the background band");
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("Model calls must acquire capacity outside a database transaction");
         if (ended.getAsBoolean() || expired(deadline)) return null;
@@ -199,10 +218,10 @@ public class LlmCallPermits {
             if (!samePool(poolId, caller))
                 throw new IllegalStateException("The configured model call pool changed before admission");
             rows.enqueue(new LlmCallPermitRepository.Request(
-                    id, poolId, workerId, callClass.name(), caller.workspaceId(), caller.sourceId(), caller.attempt()));
+                    id, poolId, workerId, band, caller.workspaceId(), caller.sourceId(), caller.attempt()));
             return admission.getSlug();
         }));
-        Waiter waiter = new Waiter(poolId, poolSlug, callClass, deadline);
+        Waiter waiter = new Waiter(poolId, poolSlug, band, deadline);
         waiting.put(id, waiter);
         long began = System.nanoTime();
         boolean handedOff = false;
@@ -221,8 +240,8 @@ public class LlmCallPermits {
                 arrived = false;
                 admitted = waiter.awaitGrant();
                 if (admitted != null) {
-                    meters.pool(admitted.pool).granted(callClass);
-                    meters.pool(admitted.pool).waited(callClass, "capacity", System.nanoTime() - began);
+                    meters.pool(admitted.pool).granted(band);
+                    meters.pool(admitted.pool).waited(band, "capacity", System.nanoTime() - began);
                     Permit result = handOff(admitted, ended, deadline);
                     handedOff = result != null;
                     return result;
@@ -236,8 +255,8 @@ public class LlmCallPermits {
             if (admitted == null && !waiter.granted.isCompletedExceptionally()) admitted = waiter.granted.getNow(null);
             if (!handedOff && admitted != null) admitted.close();
             if (!handedOff && admitted == null) {
-                meters.pool(poolSlug).abandoned(callClass, "capacity");
-                meters.pool(poolSlug).waited(callClass, "capacity", System.nanoTime() - began);
+                meters.pool(poolSlug).abandoned(band, "capacity");
+                meters.pool(poolSlug).waited(band, "capacity", System.nanoTime() - began);
                 try {
                     // No transport can have opened before handoff, including an uncertain grant commit.
                     pendingRelease.put(id, poolId);
@@ -285,9 +304,9 @@ public class LlmCallPermits {
         return model == null || poolFor(model) == poolId;
     }
 
-    /** A point-in-time endpoint backlog observation; this creates no request or grant. */
-    public boolean hasBackgroundWaiters(long poolId) {
-        return rows.hasBackgroundWaiters(poolId, properties.permitLease().toSeconds())
+    /** Whether a review's call waits for the pool: a point-in-time observation that creates no request or grant. */
+    public boolean hasReviewCallsWaiting(long poolId) {
+        return rows.hasReviewCallsWaiting(poolId, properties.permitLease().toSeconds())
                 .orElseThrow(() -> new IllegalStateException("Configured call pool is unavailable"));
     }
 
@@ -295,8 +314,8 @@ public class LlmCallPermits {
      * One admission round: grants whatever the pool has room for, in fair order, whichever worker's requests they are,
      * and hands this worker's grants to its waiters. So one round per worker and pool is enough, however many calls
      * wait. The round runs under the pool's row lock, so it writes no waiter's row: {@link #renew()} keeps them alive
-     * four times per lease. A new conversation call queues for its round, as it must not lose time to the review calls
-     * that wait beside it.
+     * four times per lease. A new interactive call queues for its round, as it must not lose time to the calls that wait
+     * beside it.
      */
     private void admit(long poolId, boolean arrived) {
         Admissions local = admissions.computeIfAbsent(poolId, key -> new Admissions());
@@ -315,8 +334,8 @@ public class LlmCallPermits {
                 var pool = pools.lockAdmission(poolId)
                         .orElseThrow(() -> new IllegalStateException("Configured call pool is unavailable"));
                 long expired = rows.prune(poolId, properties.permitLease().toSeconds());
-                boolean granted = grantWhileRoom(poolId, pool, true);
-                granted |= grantWhileRoom(poolId, pool, false);
+                boolean granted = pool.getCooldownMillis() <= 0
+                        && rows.grantRound(poolId, room(poolId, pool), tokenBound(pool), permitAging.toSeconds()) > 0;
                 Map<UUID, Boolean> queued = new HashMap<>();
                 if (!mine.isEmpty()) {
                     for (var row : rows.findQueued(workerId, mine.keySet()))
@@ -347,16 +366,6 @@ public class LlmCallPermits {
         }
     }
 
-    private boolean grantWhileRoom(long poolId, LlmCallPoolRepository.Admission pool, boolean interactive) {
-        boolean granted = false;
-        while (true) {
-            var head = rows.next(poolId, interactive).orElse(null);
-            if (head == null || !room(poolId, pool, LlmCallClass.valueOf(head.getCallClass()))) return granted;
-            if (rows.grant(head.getId(), tokenBound(pool)) != 1) return granted;
-            granted = true;
-        }
-    }
-
     private boolean releaseRow(UUID id, long poolId) {
         if (rows.release(id, workerId) != 1) return false;
         notifyPool(poolId);
@@ -376,58 +385,71 @@ public class LlmCallPermits {
         wake(poolId);
     }
 
-    private boolean room(long poolId, LlmCallPoolRepository.Admission pool, LlmCallClass callClass) {
-        if (pool.getCooldownMillis() > 0) return false;
-        if (callClass == LlmCallClass.PRODUCT_FEEDBACK && rows.countActiveProductFeedback(poolId) >= 1) return false;
+    /**
+     * What one round may grant. An interactive call may use the reserve, also when the calls in flight fill the limit. A
+     * call that is not interactive may not: calls that a lowered limit left in flight must not cost a person the
+     * reserve.
+     */
+    private LlmCallPermitRepository.Room room(long poolId, LlmCallPoolRepository.Admission pool) {
         int limit = limit(pool);
         int reserve = LlmCallLimit.reserve(limit);
         long active = rows.countActive(poolId);
-        long background = rows.countBackground(poolId);
-        // Background calls that a lowered limit left in flight must not cost a conversation its reserve.
-        boolean within = callClass.interactive()
-                ? active < limit || active - background < reserve
-                : active < limit && background < limit - reserve;
-        return within && rateRoom(poolId, pool, callClass);
+        long notInteractive = rows.countNotInteractive(poolId);
+        var used = rows.rates(poolId);
+        long bound = tokenBound(pool);
+        Integer perMinute = pool.getRequestsPerMinute();
+        Long requests = perMinute == null ? null : perMinute.longValue();
+        Long tokens = pool.getTokensPerMinute();
+        Long input = pool.getInputTokensPerMinute();
+        Long output = pool.getOutputTokensPerMinute();
+        // An output bucket counts tokens as a model writes them, so a call needs no room in it before it starts.
+        long rate = LongStream.of(
+                        fit(requests, used.getRequests(), 1),
+                        fit(tokens, used.getTokens(), bound),
+                        fit(input, used.getInputTokens(), bound),
+                        fit(output, used.getOutputTokens(), 0))
+                .min()
+                .orElseThrow();
+        long notInteractiveRate = LongStream.of(
+                        fitShare(requests, used.getNotInteractiveRequests(), pool, 1),
+                        fitShare(tokens, used.getNotInteractiveTokens(), pool, bound),
+                        fitShare(input, used.getNotInteractiveInputTokens(), pool, bound),
+                        fitShare(output, used.getNotInteractiveOutputTokens(), pool, 0))
+                .min()
+                .orElseThrow();
+        return new LlmCallPermitRepository.Room(
+                Math.max(0, Math.max(limit - active, reserve - (active - notInteractive))),
+                Math.max(0, limit - active),
+                Math.max(0, limit - reserve - notInteractive),
+                Math.max(0, 1 - rows.countActiveProductFeedback(poolId)),
+                rate,
+                notInteractiveRate);
     }
 
     private static int limit(LlmCallPoolRepository.Admission pool) {
         return LlmCallLimit.effective(pool.getLearnedLimit(), pool.getMaxConcurrentCalls());
     }
 
-    private boolean rateRoom(long poolId, LlmCallPoolRepository.Admission pool, LlmCallClass callClass) {
-        Integer requests = pool.getRequestsPerMinute();
-        Long tokens = pool.getTokensPerMinute();
-        Long input = pool.getInputTokensPerMinute();
-        Long output = pool.getOutputTokensPerMinute();
-        if (requests == null && tokens == null && input == null && output == null) return true;
-        var used = rows.rates(poolId);
-        long bound = tokenBound(pool);
-        if (requests != null && used.getRequests() >= requests) return false;
-        // An output bucket counts tokens as a model writes them, so a call needs no room in it before it starts.
-        if (!fits(tokens, used.getTokens(), bound)
-                || !fits(input, used.getInputTokens(), bound)
-                || !fits(output, used.getOutputTokens(), 0)) return false;
-        if (callClass.interactive()) return true;
-        if (requests != null && used.getBackgroundRequests() >= backgroundShare(requests, pool, 1)) return false;
-        return fitsBackground(tokens, used.getBackgroundTokens(), pool, bound)
-                && fitsBackground(input, used.getBackgroundInputTokens(), pool, bound)
-                && fitsBackground(output, used.getBackgroundOutputTokens(), pool, 0);
+    /**
+     * How many calls fit in one rate budget, each of which debits {@code perCall} at its grant: {@link Long#MAX_VALUE}
+     * for no budget. A budget that debits nothing at a grant fits every call while it has room.
+     */
+    private static long fit(@Nullable Long budget, long used, long perCall) {
+        if (budget == null) return Long.MAX_VALUE;
+        if (perCall == 0) return used <= budget ? Long.MAX_VALUE : 0;
+        long slack = budget - perCall - used;
+        return slack < 0 ? 0 : slack / perCall + 1;
     }
 
-    private static boolean fits(@Nullable Long budget, long used, long bound) {
-        return budget == null || used <= budget - bound;
+    private static long fitShare(@Nullable Long budget, long used, LlmCallPoolRepository.Admission pool, long perCall) {
+        return budget == null ? Long.MAX_VALUE : fit(notInteractiveShare(budget, pool, perCall), used, perCall);
     }
 
-    private static boolean fitsBackground(
-            @Nullable Long budget, long used, LlmCallPoolRepository.Admission pool, long bound) {
-        return budget == null || used <= backgroundShare(budget, pool, bound) - bound;
-    }
-
-    /** Background calls get the rate's share that the limit gives them, and always at least one call. */
-    private static long backgroundShare(long budget, LlmCallPoolRepository.Admission pool, long perCall) {
+    /** Calls that are not interactive get the rate's share that the limit gives them, and always at least one call. */
+    private static long notInteractiveShare(long budget, LlmCallPoolRepository.Admission pool, long perCall) {
         int limit = limit(pool);
-        long background = (long) limit - LlmCallLimit.reserve(limit);
-        long proportional = (budget / limit) * background + (budget % limit) * background / limit;
+        long share = (long) limit - LlmCallLimit.reserve(limit);
+        long proportional = (budget / limit) * share + (budget % limit) * share / limit;
         return Math.max(perCall, proportional);
     }
 
@@ -441,7 +463,10 @@ public class LlmCallPermits {
         while (!ended.getAsBoolean() && !expired(deadline) && !permit.isRevoked()) {
             Boolean allowed = transactions.execute(status -> {
                 var pool = pools.lockAdmission(permit.poolId).orElseThrow();
-                if (pool.getCooldownMillis() > 0 || !rateRoom(permit.poolId, pool, permit.callClass)) return false;
+                if (pool.getCooldownMillis() > 0) return false;
+                var room = room(permit.poolId, pool);
+                if (room.rate() < 1 || (permit.band != AgentRunBand.INTERACTIVE && room.notInteractiveRate() < 1))
+                    return false;
                 return rows.debitRetry(
                                 permit.id,
                                 workerId,
@@ -471,7 +496,7 @@ public class LlmCallPermits {
 
     private void register(Permit permit) {
         if (held.putIfAbsent(permit.id, permit) == null)
-            meters.pool(permit.pool).active(permit.callClass).incrementAndGet();
+            meters.pool(permit.pool).active(permit.band).incrementAndGet();
     }
 
     /** Retries only releases whose request thread already confirmed transport closure. */
@@ -620,7 +645,7 @@ public class LlmCallPermits {
     public void firstToken(Permit permit, long nanos, boolean instanceCredential) {
         int millis = Math.toIntExact(Math.min(TimeUnit.NANOSECONDS.toMillis(nanos), Integer.MAX_VALUE));
         permit.firstTokenMillis = millis;
-        meters.pool(permit.pool).firstToken(permit.callClass, millis);
+        meters.pool(permit.pool).firstToken(permit.band, millis);
         var unused = Thread.ofVirtual().name("llm-first-token").start(() -> {
             try {
                 transactions.executeWithoutResult(status -> learnFromFirstToken(permit, millis, instanceCredential));
@@ -703,7 +728,7 @@ public class LlmCallPermits {
         if (waited == null ? delay.baselineMillis() != null : delay.queued(waited)) return;
         int limit = limit(pool);
         if (rows.countActive(permit.poolId) < limit
-                && rows.countBackground(permit.poolId) < limit - LlmCallLimit.reserve(limit)) return;
+                && rows.countNotInteractive(permit.poolId) < limit - LlmCallLimit.reserve(limit)) return;
         var next = new LlmCallLimit(pool.getLearnedLimit(), pool.getLimitCredit()).afterServedCall(pool.getProbing());
         pools.learned(permit.poolId, next.learned(), next.credit());
     }
@@ -735,15 +760,15 @@ public class LlmCallPermits {
     private static final class Waiter {
         private final long poolId;
         private final String pool;
-        private final LlmCallClass callClass;
+        private final AgentRunBand band;
         private final @Nullable Instant deadline;
         private final CompletableFuture<Permit> granted = new CompletableFuture<>();
         private final Semaphore changed = new Semaphore(0);
 
-        private Waiter(long poolId, String pool, LlmCallClass callClass, @Nullable Instant deadline) {
+        private Waiter(long poolId, String pool, AgentRunBand band, @Nullable Instant deadline) {
             this.poolId = poolId;
             this.pool = pool;
-            this.callClass = callClass;
+            this.band = band;
             this.deadline = deadline;
         }
 
@@ -780,7 +805,7 @@ public class LlmCallPermits {
         private final UUID id;
         private final long poolId;
         private final String pool;
-        private final LlmCallClass callClass;
+        private final AgentRunBand band;
         private final Sinks.Empty<Void> revoked = Sinks.empty();
         private final AtomicBoolean closed = new AtomicBoolean();
         private final AtomicBoolean lost = new AtomicBoolean();
@@ -807,7 +832,7 @@ public class LlmCallPermits {
             this.id = id;
             this.poolId = waiter.poolId;
             this.pool = waiter.pool;
-            this.callClass = waiter.callClass;
+            this.band = waiter.band;
             this.throttleMark = throttleMark;
             this.mustEndBy =
                     waiter.deadline != null ? waiter.deadline : Instant.now().plus(UNDATED_CALL);
@@ -835,7 +860,7 @@ public class LlmCallPermits {
 
         /** The tokens that the provider reported for this call. */
         public void tokens(ProxyTokenUsage usage) {
-            meters.pool(pool).tokens(callClass, usage);
+            meters.pool(pool).tokens(band, usage);
         }
 
         /** The whole usage of a call that ended on its own, which replaces its debit when the permit closes. */
@@ -867,7 +892,7 @@ public class LlmCallPermits {
 
         private void forgetClosed() {
             if (!closed.compareAndSet(false, true)) return;
-            if (held.remove(id, this)) meters.pool(pool).active(callClass).decrementAndGet();
+            if (held.remove(id, this)) meters.pool(pool).active(band).decrementAndGet();
         }
 
         @Override
@@ -878,10 +903,10 @@ public class LlmCallPermits {
             if (ended != null)
                 meters.pool(pool)
                         .called(
-                                callClass,
+                                band,
                                 unanswered && !LlmPoolMeters.EXPLICIT_OUTCOMES.contains(ended) ? "unanswered" : ended,
                                 endedAt - grantedAt);
-            if (held.remove(id, this)) meters.pool(pool).active(callClass).decrementAndGet();
+            if (held.remove(id, this)) meters.pool(pool).active(band).decrementAndGet();
             pendingRelease.put(id, poolId);
             try {
                 Boolean freed = transactions.execute(status -> {

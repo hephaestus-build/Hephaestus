@@ -200,12 +200,11 @@ The same name is the source capture code that causes it.
 | **Send**                       | One leased provider post, quiet correction, readback or retraction of on-work feedback, with its reconciliation state.               | feedback_send                  |
 | **Review digest**              | The digest of the definition inputs that can change an observation from the same evidence.                | practice_version.review_digest |
 | **Turn**                       | One run of Hephaestus for one question in a conversation, with its attempts, lease, partial answer and usage.       | mentor_turn, conversation_turn from 1.0                    |
-| **Call pool**                  | Provider capacity that the models in it share, whichever workspace calls them: a learned limit of calls in flight, a conversation reserve and a cooldown. Every model has one. | llm_call_pool |
+| **Call pool**                  | Provider capacity that the models in it share, whichever workspace calls them: a learned limit of calls in flight, an interactive reserve and a cooldown. Every model has one. | llm_call_pool |
 | **Learned limit**              | The calls in flight that a call pool thinks its provider serves. It rises while served calls fill it, and falls when the provider refuses or queues. | llm_call_pool.learned_limit |
 | **First-token baseline**       | The fastest first token that a call pool knows from its provider. Later first tokens are compared with it to detect a queue at the provider. | llm_call_pool.baseline_first_token_ms |
-| **Conversation reserve**       | The part of a call pool's limit that only conversation turns may use: a quarter, rounded up. | LlmCallLimit.reserve |
+| **Interactive reserve**        | The part of a call pool's limit that only interactive calls, such as a conversation turn's, may use: a quarter, rounded up. | LlmCallLimit.reserve |
 | **Call permit**                | One model call's share of its call pool, held as a lease by the worker that makes the call. | llm_call_permit |
-| **Call class**                 | Whose call takes a permit: a conversation turn, or a review of one origin. Only a turn may use the conversation reserve. | LlmCallClass |
 | **Context folder**             | The read-only files that one agent may read for one person, in one workspace, for one purpose. | INDEX.md, inputs/context/, repos/ |
 | **Context document**           | One JSON document about the developer or the workspace in the context folder of a conversation.            | inputs/context/*.json          |
 | **Context loader**             | The integration part that stages a heavy item, such as a repository, into a context folder on request. | ContextLoader, load_context |
@@ -222,7 +221,7 @@ The same name is the source capture code that causes it.
 | **Run**                        | One leased unit of agent work for a subject, such as the measurement of a review or one turn. One run of a subject runs at a time, and its sandbox is its only writer. | planned: agent_run |
 | **Run kind**                   | What a run drives. A `REVIEW` run measures a review. A `REVIEW_COMPOSE` run composes the review's feedback after its `REVIEW` run ended, and it continues that run's epochs. | AgentRunKind |
 | **Lease epoch**                | The fencing number of a run. Each claim raises it, and the database refuses a write that names an older one. | planned: agent_run.lease_epoch |
-| **Band**                       | The priority of a run and of its model calls: interactive, batch or background. An interactive call gets a grant first, and a batch call yields at grant time. It replaces the call class. | planned: agent_run.band |
+| **Band**                       | The priority of a run and of its model calls: interactive, batch or background. An interactive call gets a grant first, and a batch call yields at grant time. Work that waits rises one band at a time, but never into the interactive band. | agent_run.band, llm_call_permit.band |
 | **Sandbox**                    | The one agent-sandbox `Sandbox` of a subject: one container with the loop, the tools and the workspace. It is a cache. The server deletes it when no run needs it, and rebuilds its context from PostgreSQL. | planned: agent_sandbox |
 | **Sandbox token**              | The credential of one sandbox. It names the workspace, the subject and the sandbox, and it expires at the sandbox's shutdown time. Only the gateway accepts it. | planned |
 | **Gateway**                    | The server port that sandboxes can reach, and their only egress. It holds the LLM proxy, the call permits, the context and checkout, lease renewal and proposals. | planned: server port 8081 |

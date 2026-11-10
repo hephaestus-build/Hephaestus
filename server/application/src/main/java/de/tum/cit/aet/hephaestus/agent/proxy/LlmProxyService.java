@@ -458,7 +458,7 @@ class LlmProxyService {
 
         LlmCallPermits.Permit poolPermit = callPermits.acquire(
                 credential.callPoolId(),
-                routingService.callClass(routing),
+                routingService.band(routing),
                 new LlmCallPermits.Caller(
                         Objects.requireNonNull(routing.workspaceId()),
                         routing.sourceId(),

@@ -540,10 +540,15 @@ A shared host name alone does not establish a shared quota.
 [AI providers](./ai-providers.mdx#6-sharing-provider-capacity) owns the setup procedure.
 
 Every call takes a database grant before it reaches the provider.
-Review calls, composition, and direct script calls share the background capacity.
-Conversation calls can also use the conversation reserve.
-The reserve is never lent to background work.
-Both the total limit and the background limit apply independently.
+Each call has a band, which is its priority: `interactive`, `batch` or `background`.
+A conversation call is interactive.
+A composition call and the calls of a requested or event review are batch.
+The calls of a scheduled or backfill review and product feedback are background.
+
+Review calls, composition, and direct script calls share the capacity outside the interactive reserve.
+Interactive calls can also use the interactive reserve.
+The reserve is never lent to batch or background calls.
+Both the total limit and the limit outside the reserve apply independently.
 
 #### The learned limit
 
@@ -596,7 +601,7 @@ The database owns admission.
 A hint does not grant capacity.
 If a hint is lost, a two-second check recovers it and checks rate refills, cooldowns and expired permits.
 
-The conversation reserve is a quarter of the limit, rounded up, and the limit always leaves one background call.
+The interactive reserve is a quarter of the limit, rounded up, and the limit always leaves one call outside it.
 A limit of 32 has a reserve of 8. A limit of 8 has a reserve of 2.
 When the limit falls, calls in flight continue. A conversation can still use its reserve while they end.
 
@@ -619,33 +624,44 @@ The refusal reaches the caller as the provider's own answer, with its status, in
 A call that ends while it waits gets a capacity refusal. Hephaestus records this as its own stop, and it says nothing about the reviewed work.
 [Decisions and withholdings](/contributor/practice-review-pipeline#decisions-and-withholdings) explains how a stop affects the feedback.
 
-Product feedback uses the lowest call class, `PRODUCT_FEEDBACK`.
-It starts only when no other class waits in that endpoint pool.
-At most one drafting call can be active in each pool, and it cannot use the conversation reserve.
+Product feedback is a background call.
+It starts only when no other call waits in that endpoint pool, whatever the band of that call.
+At most one drafting call can be active in each pool, and it cannot use the interactive reserve.
 A later call does not revoke an active draft: it can wait for that draft's transport to close.
 
-A fair queue first serves the workspace with the fewest calls in flight.
-Within a workspace, composition and review calls take turns, and then the attempt with the fewest calls in flight goes first.
+A pool grants the waiting calls in this order:
+
+1. The band. Each waiting interactive call gets its grant before a batch call, and each batch call before a background call.
+2. The workspace with the fewest granted calls in the pool.
+3. In that workspace, the review attempt with the fewest granted calls.
+4. The oldest call.
+
 Thus, a wide review cannot hold more than its share while another review waits. It uses free capacity while none waits.
-Conversation and background grants have separate fairness history, so conversations do not defer their workspace's composition.
+A review's composition does not wait behind the measurements of a wider review.
+If two workspaces have the same number of granted calls, the workspace whose last grant in that band is older goes first.
 Every physical call joins this queue, including composition and direct script calls.
+
+A batch or background call that waits rises one band for each `hephaestus.agent.capacity.permit-aging`, 30 seconds by default.
+It never rises into the interactive band.
+Thus, the call of a scheduled review waits behind a steady stream of other reviews' calls for a limited time only.
 
 Each worker runs one admission round per pool for each 250 milliseconds while calls wait, and a new call starts one at once.
 A round can grant any worker's call, in queue order, up to the limit. The call's own worker finds the grant in its next round.
 Thus, the database load does not grow with the number of waiting calls.
-Conversation calls are granted first in each round.
+One database statement grants all the calls of a round. Interactive calls are granted first in each round.
 
 Before a review starts capture or creates a Pod, its claim checks the review quota and its model's endpoint pool.
 The parent review and its job start in one transaction after those checks pass.
-The claim stays queued while the quota has no room or the pool has a live background call waiting.
-Background classes are requested reviews, event reviews, scheduled reviews, backfill, and composition.
+The claim stays queued while the quota has no room or the pool has a live review call waiting.
+A review call is a batch or background call that has a workspace.
+It is a call of a requested, event, scheduled or backfill review, or of a composition.
 Conversation and product feedback waiters do not block a review claim.
 
 An unavailable observation leaves the review queued.
 The Kubernetes readiness check also fails while a namespace informer cannot list or watch its resources.
 
 This check takes no provider grant and adds no pool waiter.
-A pool whose calls are all active can admit a review when it has no background waiter.
+A pool whose calls are all active can admit a review when it has no review call waiting.
 The review's actual calls join the pool queue when they run.
 A new waiter or another worker can use room after the observation.
 The Kubernetes quota and the pool enforce capacity when the Pod and call start.

@@ -12,6 +12,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 public final class LlmCallPermitsTestFixtures {
     static final LlmCallPoolProperties PROPERTIES =
             new LlmCallPoolProperties(Duration.ofSeconds(20), Duration.ofSeconds(30));
+    /** The default of {@code hephaestus.agent.capacity.permit-aging}. */
+    public static final Duration PERMIT_AGING = Duration.ofSeconds(30);
 
     private LlmCallPermitsTestFixtures() {}
 
@@ -21,6 +23,7 @@ public final class LlmCallPermitsTestFixtures {
                 context.getBean(LlmCallPermitRepository.class),
                 context.getBean(TransactionTemplate.class),
                 PROPERTIES,
+                PERMIT_AGING,
                 workerId,
                 new SimpleMeterRegistry(),
                 context.getBean(LlmModelResolver.class));

@@ -75,7 +75,7 @@ erDiagram
     LlmCallPermit {
         UUID id PK
         TIMESTAMPTZ acquired_at "NOT NULL"
-        VARCHAR(16) call_class "NOT NULL"
+        VARCHAR(16) band "NOT NULL"
         BIGINT pool_id FK "NOT NULL"
         TIMESTAMPTZ renewed_at "NOT NULL"
         VARCHAR(255) worker_id "NOT NULL"
