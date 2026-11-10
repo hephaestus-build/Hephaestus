@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.scan;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -39,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.CannotAcquireLockException;
 
 class ScanServiceTest extends BaseUnitTest {
     private static final ItemKind FILE = new ItemKind("scm.file");
@@ -105,6 +108,22 @@ class ScanServiceTest extends BaseUnitTest {
         when(lister.list(any())).thenReturn(new ItemPage(List.of(), null, false, null));
         assertThatThrownBy(() -> service(10).prepare(review)).isInstanceOf(ScanService.EnumerationFailure.class);
         verifyNoInteractions(writer, store);
+    }
+
+    @Test
+    void shouldListAgainWhenAConcurrentWriteConflictsWithTheFirstPage() {
+        var review = review();
+        var listed = listed(1, "src/A.java");
+        var file = new ItemRef(1, 3, FILE, null, 2L, "src/A.java");
+        when(lister.list(any()))
+                .thenThrow(new CannotAcquireLockException("conflict with a sync write"))
+                .thenReturn(new ItemPage(List.of(listed), null, true, null));
+        when(writer.upsert(listed.item())).thenReturn(file);
+        when(versions.compose(List.of(file), Objects.requireNonNull(review.version()), List.of("pom.xml")))
+                .thenReturn(Map.of(file.itemId(), new ItemVersion("blob:one:context", null)));
+
+        assertThat(service(10).prepare(review)).isNotNull();
+        verify(lister, times(2)).list(any());
     }
 
     @Test
