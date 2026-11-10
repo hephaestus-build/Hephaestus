@@ -103,7 +103,7 @@ class DestinationService {
             throw invalid("The public and private repositories must differ.");
         transactions.executeWithoutResult(status -> {
             ProductFeedbackDestination destination = repository
-                    .findById(ProductFeedbackDestination.SINGLETON)
+                    .findForUpdate(ProductFeedbackDestination.SINGLETON)
                     .orElseGet(ProductFeedbackDestination::new);
             if (privateName == null && destination.getPrivateRepository() != null) refuseRemovingPrivate();
             boolean publicChanged = !Objects.equals(lower(destination.getPublicRepository()), lower(publicName));
@@ -157,23 +157,13 @@ class DestinationService {
     }
 
     private void storeSnapshot(String name, List<Snapshot.Entry> open) {
-        transactions.executeWithoutResult(status -> repository
-                .findById(ProductFeedbackDestination.SINGLETON)
-                .filter(destination -> name.equalsIgnoreCase(destination.getPublicRepository()))
-                .ifPresent(destination -> {
-                    destination.setSnapshot(Snapshot.write(open));
-                    destination.setSnapshotAt(clock.instant());
-                }));
+        transactions.executeWithoutResult(status -> repository.writeSnapshot(
+                ProductFeedbackDestination.SINGLETON, name, Snapshot.write(open), clock.instant()));
     }
 
     private void clearSnapshot(String name) {
-        transactions.executeWithoutResult(status -> repository
-                .findById(ProductFeedbackDestination.SINGLETON)
-                .filter(destination -> name.equalsIgnoreCase(destination.getPublicRepository()))
-                .ifPresent(destination -> {
-                    destination.setSnapshot(null);
-                    destination.setSnapshotAt(null);
-                }));
+        transactions.executeWithoutResult(
+                status -> repository.writeSnapshot(ProductFeedbackDestination.SINGLETON, name, null, null));
     }
 
     private Optional<ProductFeedbackIssues.Repository> lookup(@Nullable String name) {

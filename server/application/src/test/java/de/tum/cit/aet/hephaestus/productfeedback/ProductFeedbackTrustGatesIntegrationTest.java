@@ -33,6 +33,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +51,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -103,6 +108,9 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     private @Nullable String previousPublic;
     private @Nullable String previousPrivate;
@@ -161,6 +169,44 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
                             .isEqualTo("acme/secret is private. The public repository must be public.");
                 });
         assertThat(destination().getPublicRepository()).isEqualTo(PUBLIC_REPOSITORY.fullName());
+    }
+
+    @Test
+    void shouldCountBothNoticeVersionsWhenTwoAdminChangesOverlap() throws Exception {
+        int before = destination().getNoticeVersion();
+        var holding = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        Thread first = Thread.ofVirtual()
+                .start(() -> transactionTemplate.executeWithoutResult(status -> {
+                    ProductFeedbackDestination held = destinationRows
+                            .findForUpdate(ProductFeedbackDestination.SINGLETON)
+                            .orElseThrow();
+                    holding.countDown();
+                    awaitQuietly(release);
+                    held.setNoticeVersion(held.getNoticeVersion() + 1);
+                }));
+        holding.await();
+
+        var second = CompletableFuture.runAsync(() -> destinationService.update(
+                new UpdateProductFeedbackDestinationsDTO(
+                        PUBLIC_REPOSITORY.fullName(), PRIVATE_REPOSITORY.fullName(), null, 50, false, true),
+                Objects.requireNonNull(admin.getId())));
+        // The second change waits for the first instead of reading the version the first is about to replace.
+        assertThatThrownBy(() -> second.get(500, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+        release.countDown();
+        first.join();
+        second.get(30, TimeUnit.SECONDS);
+
+        assertThat(destination().getNoticeVersion()).isEqualTo(before + 2);
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test
