@@ -25,7 +25,6 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listsNoModels, UNLISTED_MODELS } from "@/lib/llm-api-protocol-labels";
 
 import { WorkspaceLlmModelsTable } from "./WorkspaceLlmModelsTable";
 
@@ -64,18 +63,11 @@ export interface WorkspaceLlmProviderPanelProps {
 }
 
 interface TestOutcome {
-	/** `neutral`: an endpoint for practice scripts may not list its models at all, so its failed probe is no fault. */
-	tone: "ok" | "neutral" | "failed";
+	tone: "ok" | "failed";
 	message: string;
 }
 
-const TEST_OUTCOME_VARIANT = {
-	ok: "success",
-	neutral: "default",
-	failed: "destructive",
-} as const satisfies Record<TestOutcome["tone"], "success" | "default" | "destructive">;
-
-function testOutcome(test: ProviderTestResult, connection: WorkspaceLlmConnection): TestOutcome {
+function testOutcome(test: ProviderTestResult): TestOutcome {
 	if (test.status === "failed") {
 		return { tone: "failed", message: test.message };
 	}
@@ -83,9 +75,6 @@ function testOutcome(test: ProviderTestResult, connection: WorkspaceLlmConnectio
 	if (result.reachable) {
 		const count = result.modelCount;
 		return { tone: "ok", message: `Connected. ${count} model${count === 1 ? "" : "s"} available.` };
-	}
-	if (listsNoModels(connection.apiProtocol, result)) {
-		return { tone: "neutral", message: UNLISTED_MODELS };
 	}
 	return { tone: "failed", message: result.message ?? "We could not reach the provider." };
 }
@@ -259,7 +248,7 @@ function ProviderSection({
 	onEditModel,
 	onDeleteModel,
 }: ProviderSectionProps) {
-	const outcome = test && testOutcome(test, connection);
+	const outcome = test && testOutcome(test);
 	const keepsModels = models.length > 0;
 	const keepsModelsId = useId();
 	return (
@@ -333,15 +322,15 @@ function ProviderSection({
 			{/* Mounted empty, so a result is announced when it arrives (ARIA22). Polite: an assertive
 			    one would cut across whatever is being read (SC 4.1.3). */}
 			<div role="status" className="empty:hidden">
-				{outcome !== undefined && outcome.tone !== "failed" && (
-					<Alert variant={TEST_OUTCOME_VARIANT[outcome.tone]} role="none">
+				{outcome?.tone === "ok" && (
+					<Alert variant="success" role="none">
 						<AlertDescription>{outcome.message}</AlertDescription>
 					</Alert>
 				)}
 			</div>
 			{/* A failure still earns an assertive alert. */}
 			{outcome?.tone === "failed" && (
-				<Alert variant={TEST_OUTCOME_VARIANT.failed}>
+				<Alert variant="destructive">
 					<AlertDescription>{outcome.message}</AlertDescription>
 				</Alert>
 			)}

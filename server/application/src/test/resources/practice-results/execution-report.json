@@ -1,5 +1,5 @@
 {
-	"schemaVersion": 2,
+	"schemaVersion": 3,
 	"practices": [
 		{
 			"practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
@@ -7,22 +7,10 @@
 				"kind": "custom",
 				"digest": "4e8a1f3c9b2d7e6058a1c4f9e2b7d3a6c5e8f1b4d9a2c7e3f6b0a5d8c1e4f7a2"
 			},
-			"models": [
-				{
-					"slot": "decision",
-					"need": "required",
-					"bound": false,
-					"failures": {}
-				}
-			],
 			"status": "withheld",
 			"stopReason": "unavailable",
 			"calls": {
-				"review": 0,
-				"chat": 0,
-				"decision": 0,
-				"embedding": 0,
-				"reranking": 0
+				"review": 0
 			},
 			"coverageReached": {
 				"reads": 0,
@@ -37,15 +25,10 @@
 				"kind": "builtin",
 				"digest": null
 			},
-			"models": [],
 			"status": "not-reached",
 			"stopReason": "deadline",
 			"calls": {
-				"review": 0,
-				"chat": 0,
-				"decision": 0,
-				"embedding": 0,
-				"reranking": 0
+				"review": 0
 			},
 			"coverageReached": {
 				"reads": 0,
@@ -60,15 +43,10 @@
 				"kind": "custom",
 				"digest": "b71c3e9a5d2f8046c1e7a9b3d5f2e8c6a4b1d7f3e9c2a5b8d0f6e1c4a7b3d9e2"
 			},
-			"models": [],
 			"status": "ok",
 			"stopReason": null,
 			"calls": {
-				"review": 1,
-				"chat": 0,
-				"decision": 0,
-				"embedding": 0,
-				"reranking": 0
+				"review": 1
 			},
 			"coverageReached": {
 				"reads": 9,
@@ -83,15 +61,10 @@
 				"kind": "builtin",
 				"digest": null
 			},
-			"models": [],
 			"status": "ok",
 			"stopReason": null,
 			"calls": {
-				"review": 1,
-				"chat": 0,
-				"decision": 0,
-				"embedding": 0,
-				"reranking": 0
+				"review": 1
 			},
 			"coverageReached": {
 				"reads": 6,
@@ -106,15 +79,10 @@
 				"kind": "custom",
 				"digest": "0a6d2f8c4e1b9a7d3c5f0e2b8a6d4c1f9e7b3a5d2c8f0e6b4a1d9c7e5f3b2a80"
 			},
-			"models": [],
 			"status": "ok",
 			"stopReason": null,
 			"calls": {
-				"review": 0,
-				"chat": 0,
-				"decision": 0,
-				"embedding": 0,
-				"reranking": 0
+				"review": 0
 			},
 			"coverageReached": {
 				"reads": 0,
@@ -129,16 +97,11 @@
 				"kind": "custom",
 				"digest": "e3b9d1f7a5c2e8046b1d9f3a7c5e2b8d6f4a1c9e7b3d5f0a2c8e6b4d1f9a7c35"
 			},
-			"models": [],
 			"status": "failed",
 			"stopReason": "invalid-program",
 			"error": "This practice script uses the retired leads contract (meta.version). Accept the practice's catalog update, or rewrite run() to return a result, for example return ctx.review({ leads }).",
 			"calls": {
-				"review": 0,
-				"chat": 0,
-				"decision": 0,
-				"embedding": 0,
-				"reranking": 0
+				"review": 0
 			},
 			"coverageReached": {
 				"reads": 0,
@@ -153,15 +116,10 @@
 				"kind": "builtin",
 				"digest": null
 			},
-			"models": [],
 			"status": "ok",
 			"stopReason": null,
 			"calls": {
-				"review": 1,
-				"chat": 0,
-				"decision": 0,
-				"embedding": 0,
-				"reranking": 0
+				"review": 1
 			},
 			"coverageReached": {
 				"reads": 4,

@@ -23,7 +23,6 @@ const meta = {
 		aiChoiceRequired: false,
 		ownProviderAllowed: true,
 		practiceReviewsOff: false,
-		unusedForCloudMembers: false,
 		onSave: fn(),
 		onTurnOff: fn(),
 	},

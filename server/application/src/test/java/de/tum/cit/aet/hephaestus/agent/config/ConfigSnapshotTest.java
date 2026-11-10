@@ -13,11 +13,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
-import java.util.EnumMap;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -30,9 +27,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
 
     @Test
     void roundTripStoresOneModelWithTypedProtocolAndNoCredentials() {
-        var snapshot = snapshot(600)
-                .withPriceSnapshot(LlmPriceSnapshot.unpricedInstance())
-                .withPracticeScript(Map.of(ModelKind.EMBEDDING, model(LlmApiProtocol.OPENAI_EMBEDDINGS)));
+        var snapshot = snapshot(600).withPriceSnapshot(LlmPriceSnapshot.unpricedInstance());
         var json = snapshot.toJson(mapper);
         assertThat(ConfigSnapshot.fromJson(json, mapper)).isEqualTo(snapshot);
         assertThat(json.path("model").path("apiProtocol").asString()).isEqualTo("openai-responses");
@@ -62,7 +57,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
         assertThat(snapshot.contextWindow()).isEqualTo(16000);
         assertThat(snapshot.maxOutputTokens()).isEqualTo(1000);
         assertThat(snapshot.model().apiProtocol()).isEqualTo(LlmApiProtocol.OPENAI_RESPONSES);
-        assertThat(snapshot.schemaVersion()).isEqualTo(9);
+        assertThat(snapshot.schemaVersion()).isEqualTo(10);
         assertThat(snapshot.toJson(mapper).has("allowInternet")).isFalse();
         assertThat(snapshot.withPriceSnapshot(LlmPriceSnapshot.unpricedInstance())
                         .model()
@@ -72,7 +67,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {-1, 0, 5, 7, 8, 10})
+    @ValueSource(ints = {-1, 0, 5, 7, 8, 9, 11})
     void rejectsEveryOtherSchemaVersion(int version) {
         var json = (ObjectNode) snapshot(600).toJson(mapper);
         json.put("schemaVersion", version);
@@ -87,16 +82,6 @@ class ConfigSnapshotTest extends BaseUnitTest {
     }
 
     @Test
-    void freezesScriptSlotsAgainstCallerMutation() {
-        var slots = new EnumMap<ModelKind, FrozenModel>(ModelKind.class);
-        slots.put(ModelKind.EMBEDDING, model(LlmApiProtocol.OPENAI_EMBEDDINGS));
-        var snapshot = snapshot(600).withPracticeScript(slots);
-        slots.clear();
-        assertThat(snapshot.practiceScriptSlot(ModelKind.EMBEDDING)).isNotNull();
-        assertThat(snapshot.practiceScriptSlot(ModelKind.RERANKING)).isNull();
-    }
-
-    @Test
     void enforcesTheRunnerTimeoutFloorAndRejectsNonpositiveTimeouts() {
         assertThat(snapshot(1).timeoutSeconds()).isEqualTo(PracticePiAdapter.MIN_TIMEOUT_SECONDS);
         assertThatThrownBy(() -> snapshot(0)).isInstanceOf(IllegalArgumentException.class);
@@ -104,7 +89,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
 
     private static ConfigSnapshot snapshot(int timeout) {
         return new ConfigSnapshot(
-                ConfigSnapshot.SCHEMA_VERSION, model(LlmApiProtocol.OPENAI_RESPONSES), 16000, 1000, timeout, null);
+                ConfigSnapshot.SCHEMA_VERSION, model(LlmApiProtocol.OPENAI_RESPONSES), 16000, 1000, timeout);
     }
 
     private static FrozenModel model(LlmApiProtocol protocol) {

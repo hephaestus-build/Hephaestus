@@ -204,7 +204,7 @@ The workspace configures the review model and its budget.
 The public script context exposes neither model calls nor budget controls.
 Keep `meta` empty.
 
-The host refuses nonempty metadata before it binds a model.
+The host refuses a stored script with any metadata field as an invalid program.
 The child process has no job token or provider secret.
 A failed or unreported provider call keeps its reservation.
 
@@ -214,4 +214,4 @@ Open questions have a limit of 20.
 The runtime withholds excessive proof rather than truncating a claim.
 
 The [operator script guide](/admin/practice-scripts) owns author procedures and local test commands.
-The [cost guide](/admin/ai-providers#cost-and-limits) owns model usage limits and prices.
+The [cost guide](/admin/ai-providers#ai-usage) owns model usage limits and prices.

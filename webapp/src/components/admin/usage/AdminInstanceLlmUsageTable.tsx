@@ -45,7 +45,6 @@ import { CapIsNotMonthScoped } from "./CapIsNotMonthScoped";
 import { CapMeter, capState } from "./CapMeter";
 import { type Fx, FxDisclosure, FxSpendLine, spendConversion } from "./fx";
 import { LlmUsageByDayTable, LlmUsageByJobTypeTable } from "./LlmUsageBreakdownTables";
-import { LlmUsageByPracticeTable } from "./LlmUsageByPracticeTable";
 import { MoneyCell } from "./MoneyCell";
 import { PurseHeading, PurseLeaf } from "./PurseHeading";
 import {
@@ -57,7 +56,6 @@ import {
 import {
 	budgetUsedPercent,
 	FIRST_COLUMN,
-	practiceScriptByPracticeDescription,
 	projectBudget,
 	purseCap,
 	unmeasuredOf,
@@ -546,17 +544,6 @@ function WorkspaceUsageDetails({
 					<Section level={3} title="By use">
 						<LlmUsageByJobTypeTable report={loaded} purses={purses} />
 					</Section>
-					{/* Only once loaded: most workspaces have no practice script calls, and a skeleton that
-					    then vanishes moves more than a section that appears among the others. */}
-					{loaded != null && loaded.byPractice.length > 0 && (
-						<Section
-							level={3}
-							title="Models for practice scripts, by practice"
-							description={practiceScriptByPracticeDescription(isCurrentMonth)}
-						>
-							<LlmUsageByPracticeTable report={loaded} purses={purses} />
-						</Section>
-					)}
 					<Section level={3} title="By day">
 						<LlmUsageByDayTable report={loaded} purses={purses} />
 					</Section>

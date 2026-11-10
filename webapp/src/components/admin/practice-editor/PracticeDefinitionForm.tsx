@@ -1,6 +1,6 @@
 import deepEqual from "fast-deep-equal";
 import { ChevronRight, RotateCcw } from "lucide-react";
-import { type ReactElement, type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { UnsavedPracticeDraft } from "./unsaved-practice-draft";
 
 import type {
@@ -111,11 +111,6 @@ interface PracticeDefinitionFormBaseProps {
 	 */
 	onSubmit: (value: PracticeDefinitionSubmission) => void | Promise<void>;
 	definitionOptions: PracticeDefinitionOptions;
-	/**
-	 * A link to the AI models page, rendered as *AI models* in the practice script's help. Only a
-	 * workspace has that page; without it the words stay plain.
-	 */
-	practiceScriptModelsLink?: ReactElement;
 }
 
 interface PracticeDefinitionFormCreateProps extends PracticeDefinitionFormBaseProps {
@@ -161,7 +156,6 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		cancelAction,
 		initialData,
 		definitionOptions,
-		practiceScriptModelsLink,
 	} = props;
 	const formDisabled = isPending || disabled;
 	const [draft, setDraft] = useState(() => initialDraft(definitionOptions, initialData));
@@ -520,17 +514,11 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 								>
 									<p className="max-w-2xl text-sm text-muted-foreground">
 										TypeScript that reviews this practice and returns its candidate observation. It
-										can decide in code, call models, or prepare places for the review to decide. It
-										never writes feedback. Without a script, the practice runs the built-in review.{" "}
+										can decide in code, or prepare places for the review to decide. It never writes
+										feedback. Without a script, the practice runs the built-in review.{" "}
 										<InlineLink href={PRACTICE_SCRIPT_GUIDE_URL} external>
 											Write a practice script
 										</InlineLink>
-										. It can call the models on{" "}
-										{practiceScriptModelsLink === undefined ? (
-											"AI models"
-										) : (
-											<InlineLink render={practiceScriptModelsLink}>AI models</InlineLink>
-										)}
 										.
 									</p>
 									<CodeEditor

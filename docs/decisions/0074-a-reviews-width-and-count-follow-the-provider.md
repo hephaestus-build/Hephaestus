@@ -221,3 +221,10 @@ This points at the larger gain: fewer calls in each session, not fewer sessions.
 - § Provider, "Claims follow Pod memory and `worker.reviews`": claims follow the order and the counts of ADR 0079.
 
 § Shared loop host stays rejected. Each subject has its own sandbox and loop.
+
+## Update — 2026-11-10: no direct script calls
+
+This update supersedes the call counts in the paragraph above that starts "The proxy's limit on calls in flight".
+Practice scripts make no direct model call any more (ADR 0055 and ADR 0026, updates of 2026-11-10).
+Thus, the limit is 170 calls for each attempt: 85 sessions, each with one open call and one that an abort left closing.
+The gateway's rate limit for each sandbox stays four times that limit: 680 requests per minute.

@@ -92,16 +92,6 @@ public record WorkspaceLlmUsageReportDTO(
         @NonNull List<LlmUsageByJobTypeDTO> byJobType,
         @NonNull List<LlmUsageByDayDTO> byDay,
 
-        @NonNull
-        @Schema(
-                description = "The decision, embedding and reranking calls of practice scripts, one entry per "
-                        + "practice, most spend first. Their spend is already part of byJobType. Chat calls of "
-                        + "practice scripts are in each review's own cost and not here.")
-        List<LlmUsageByPracticeDTO> byPractice,
-
-        @NonNull @Schema(description = "The byPractice entries in total, read from the ledger.")
-        LlmUsagePracticeScriptTotalDTO practiceScriptTotal,
-
         @Nullable
         @Schema(
                 description = "Display-only conversion when the instance has a display currency. "

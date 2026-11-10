@@ -23,13 +23,6 @@ import org.springframework.validation.annotation.Validated;
  * @param samplingTemperature requested model sampling temperature, or null for the provider default.
  * @param practiceModelCalls  The model calls that one practice gets in a review.
  * @param practiceOutputTokens The output tokens that one practice gets in a review.
- * @param directModelTokensPerAttempt The input and output tokens that the direct model calls of the practice scripts
- *                                    of one review attempt may spend together. The calls of the review session itself
- *                                    do not count. The runner holds the programs to it, and the proxy refuses further
- *                                    direct calls.
- * @param directModelSearchUnitsPerAttempt The search units that the direct reranking calls of one review attempt may
- *                                         bill, for providers such as Cohere that bill search units. The proxy counts
- *                                         them and refuses further direct calls.
  * @param compositionTimeout  the longest a review's composition run composes its feedback after the review is
  *                            measured. A destination still open then is withheld as not composed.
  */
@@ -42,6 +35,4 @@ public record PracticeReviewProperties(
         @Nullable @DecimalMin("0.0") @DecimalMax("2.0") Double samplingTemperature,
         @Min(1) @DefaultValue("36") int practiceModelCalls,
         @Min(1000) @DefaultValue("48000") int practiceOutputTokens,
-        @Min(1) @DefaultValue("200000") long directModelTokensPerAttempt,
-        @Min(1) @DefaultValue("1000") long directModelSearchUnitsPerAttempt,
         @DurationMin(minutes = 1) @DefaultValue("PT10M") Duration compositionTimeout) {}

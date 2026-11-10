@@ -7,23 +7,18 @@ import path from "node:path";
 import { after, describe, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
-import { chatOptionsSchema } from "./model-options.ts";
-
-import { MockEmbeddingModelV4, MockLanguageModelV4 } from "ai/test";
 
 import { parseDiff } from "../../kits/scm/diff-parser.ts";
-import { stagePracticeScripts, stageToolkitPrograms } from "../../stage.ts";
-import { MODEL_CONCURRENCY } from "./concurrency.ts";
+import { stagePracticeScripts } from "../../stage.ts";
 import {
 	executionEntrySchema,
 	NOT_A_DEFINITION_ERROR,
 	type Candidate,
 	type ReviewOptions,
-	type SlotModels,
 } from "./contract.ts";
 import { EvidenceReader, noReceipts, type EvidenceSources } from "./evidence-reader.ts";
-import { MAX_IPC_MESSAGE_BYTES } from "./ipc.ts";
-import { ModelBudget, reservationOf } from "./models-host.ts";
+import { MAX_IPC_MESSAGE_BYTES, type ReadRequest } from "./ipc.ts";
+import { resolveLeads } from "./leads.ts";
 import { UnratedError } from "./practice-script.ts";
 import {
 	notReached,
@@ -140,12 +135,9 @@ const malformed = async (ws: Workspace) => {
 		sourceFile === "context/metadata.json" ? "scm.pull-request.core" : "scm.review-threads";
 };
 
-/** Stored scripts, as production stages them. A model-slot case stages a private toolkit program instead. */
-async function workspace(
-	scripts: Record<string, string | null>,
-	stage: typeof stagePracticeScripts = stagePracticeScripts,
-): Promise<Workspace> {
-	const { root, practices } = await stage(scripts);
+/** Stored scripts, as production stages them. */
+async function workspace(scripts: Record<string, string | null>): Promise<Workspace> {
+	const { root, practices } = await stagePracticeScripts(scripts);
 	roots.push(root);
 	const repo = path.join(root, "repo");
 	await mkdir(path.join(repo, "src"), { recursive: true });
@@ -177,8 +169,8 @@ async function workspace(
 
 interface RunOptions {
 	review?: (options: ReviewOptions, signal: AbortSignal) => Promise<Candidate>;
-	models?: Partial<SlotModels>;
-	budget?: ModelBudget;
+	/** Answers the program's reads in place of the captured sources. */
+	answer?: EvidenceReader["answer"];
 	signal?: AbortSignal;
 	deadlineMs?: number;
 	requiredSources?: RequiredSource[];
@@ -208,10 +200,10 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 			deadline: Date.now() + (options.deadlineMs ?? 30_000),
 		},
 		{
-			reader: new EvidenceReader(ws.sources, receipts),
-			models: options.models ?? {},
-			budget: options.budget ?? new ModelBudget(10_000, MODEL_CONCURRENCY),
-			awaitModel: () => () => undefined,
+			reader: Object.assign(
+				new EvidenceReader(ws.sources, receipts),
+				options.answer === undefined ? {} : { answer: options.answer },
+			),
 			start: forkedProgram,
 			review: async (reviewOptions, signal) => {
 				reviews.push(reviewOptions);
@@ -233,7 +225,6 @@ function reportEntry(slug: string, outcome: ProgramOutcome) {
 	return executionEntrySchema.parse({
 		practiceSlug: slug,
 		program: outcome.program,
-		models: outcome.models,
 		status: outcome.status,
 		stopReason: outcome.stopReason,
 		...(outcome.error === undefined ? {} : { error: outcome.error.slice(0, 500) }),
@@ -243,17 +234,7 @@ function reportEntry(slug: string, outcome: ProgramOutcome) {
 	});
 }
 
-const calls = (
-	review: number,
-	models: Partial<Record<"chat" | "decision" | "embedding" | "reranking", number>> = {},
-) => ({
-	review,
-	chat: 0,
-	decision: 0,
-	embedding: 0,
-	reranking: 0,
-	...models,
-});
+const calls = (review: number) => ({ review });
 
 const slowReview = (ms: number) => async () => {
 	await sleep(ms);
@@ -302,7 +283,6 @@ void describe("a practice's result", () => {
 			kind: "custom",
 			digest: programDigest(staged.script?.source ?? Buffer.alloc(0)),
 		});
-		assert.deepEqual(outcome.models, []);
 		assert.partialDeepStrictEqual(outcome.candidate, {
 			outcome: "DOES_NOT_APPLY",
 			citations: [
@@ -620,19 +600,20 @@ export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({
 		{ models: { chat: "required" } },
 		{ models: { chat: "optional" } },
 		{ models: {} },
+		{ limits: {} },
 	]) {
-		void test(`a stored script with nonempty metadata ${JSON.stringify(meta)} is invalid before model binding`, async () => {
+		void test(`a stored script with nonempty metadata ${JSON.stringify(meta)} is invalid`, async () => {
 			const ws = await workspace({
 				importer: `import { definePracticeScript } from "@hephaestus/practice-scripts";
 export default definePracticeScript({ meta: ${JSON.stringify(meta)}, run: async (ctx) => ctx.review() });`,
 			});
-			const { outcome, reviews } = await run(ws, "importer", {
-				models: { chat: new MockLanguageModelV4({}) },
-			});
+			const { outcome, reviews } = await run(ws, "importer");
 			assert.equal(outcome.status, "failed");
 			assert.equal(outcome.stopReason, "invalid-program");
-			assert.match(outcome.error ?? "", /must declare empty meta/u);
-			assert.deepEqual(outcome.models, []);
+			assert.equal(
+				outcome.error,
+				"A practice script must declare empty meta. Rewrite the script for this API.",
+			);
 			assert.deepEqual(outcome.calls, calls(0));
 			assert.deepEqual(reviews, []);
 		});
@@ -660,7 +641,6 @@ export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({
 		assert.deepEqual(outcome.candidate, REVIEWED);
 		assert.deepEqual(outcome.calls, calls(1));
 		assert.deepEqual(outcome.program, { kind: "builtin", digest: null });
-		assert.deepEqual(outcome.models, []);
 		reportEntry("built-in", outcome);
 	});
 
@@ -709,6 +689,28 @@ export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({
 		assert.equal(outcome.stopReason, "error");
 		assert.match(outcome.error ?? "", /^review options: leads\.0\.at/u);
 		assert.deepEqual(outcome.calls, calls(0));
+	});
+
+	void test("a lead its source does not hold is an error of the program, never dropped", async () => {
+		const ws = await workspace({
+			"unheld-lead": program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => ctx.review({ leads: [{ at: { change: "src/cart.ts", line: 400 }, label: "A lead." }] }) }`,
+			),
+		});
+		const { outcome } = await run(ws, "unheld-lead", {
+			review: async (options) => {
+				await resolveLeads(options.leads ?? [], ws.sources);
+				return REVIEWED;
+			},
+		});
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "error");
+		assert.match(
+			outcome.error ?? "",
+			/^lead 1 \(A lead\.\) points at .*, which its source does not hold$/u,
+		);
+		assert.equal(outcome.candidate, undefined);
 	});
 });
 
@@ -874,39 +876,6 @@ export default definePracticeScript({
 });
 
 void describe("the host's bounds on a program's messages", () => {
-	void test("child shutdown drains model calls and returns a stable report", async () => {
-		let active = 0;
-		const embedding = new MockEmbeddingModelV4({
-			doEmbed: async ({ abortSignal }) => {
-				active += 1;
-				try {
-					assert.ok(abortSignal !== undefined);
-					await once(abortSignal, "abort");
-					await sleep(40);
-					throw new Error("stopped");
-				} finally {
-					active -= 1;
-				}
-			},
-		});
-		const ws = await workspace({ flood: await fixture("flood") }, stageToolkitPrograms);
-		const budget = new ModelBudget(200_000, 4);
-		const { outcome } = await run(ws, "flood", { models: { embedding }, budget });
-		assert.equal(active, 0);
-		assert.equal(outcome.calls.embedding, 4);
-		assert.equal(outcome.models[0]?.failures.deadline, 32);
-		const snapshot = JSON.stringify(outcome);
-		await sleep(50);
-		assert.equal(JSON.stringify(outcome), snapshot);
-		assert.ok(
-			"value" in
-				(await budget.run(1, new AbortController().signal, async () => ({
-					value: "next practice",
-					tokens: 1,
-				}))),
-		);
-	});
-
 	void test("a pending review settles before the next practice starts", async () => {
 		const candidate = {
 			...REVIEWED,
@@ -979,20 +948,38 @@ void describe("the host's bounds on a program's messages", () => {
 		assert.equal(outcome.error, "the program sent a message that is not JSON");
 		assert.deepEqual(reviews, []);
 	});
-	void test("more requests in flight than the host answers stop the program", async () => {
-		const embedding = new MockEmbeddingModelV4({
-			doEmbed: async ({ abortSignal }) => {
-				if (abortSignal !== undefined) {
-					await once(abortSignal, "abort");
-				}
-				throw new Error("aborted");
-			},
+	void test("more requests in flight than the host answers stop the program, and the host drains them", async () => {
+		let active = 0;
+		/** Holds each read until the host stops it. */
+		const answer = async (_request: ReadRequest, signal?: AbortSignal): Promise<never> => {
+			active += 1;
+			try {
+				assert.ok(signal !== undefined);
+				await once(signal, "abort");
+				await sleep(40);
+				throw new UnratedError("deadline", "stopped");
+			} finally {
+				active -= 1;
+			}
+		};
+		const ws = await workspace({
+			flood: program(
+				"definePracticeScript",
+				`{ meta: {}, async run(ctx) {
+					await Promise.all(Array.from({ length: 33 }, async () => ctx.evidence.record("metadata.json")));
+					return ctx.review();
+				} }`,
+			),
 		});
-		const ws = await workspace({ flood: await fixture("flood") }, stageToolkitPrograms);
-		const { outcome } = await run(ws, "flood", { models: { embedding } });
+		const { outcome, reviews } = await run(ws, "flood", { answer });
+		assert.equal(active, 0);
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "error");
 		assert.equal(outcome.error, "more than 32 requests at once");
+		assert.deepEqual(reviews, []);
+		const snapshot = JSON.stringify(outcome);
+		await sleep(50);
+		assert.equal(JSON.stringify(outcome), snapshot);
 		reportEntry("flood", outcome);
 	});
 
@@ -1160,88 +1147,6 @@ void describe("a program that does not stop when the host stops it", { concurren
 	});
 });
 
-void test("direct model calls share the attempt's budget: a later practice sees what is left, and a call above it never reaches the model", async () => {
-	const call = {
-		prompt: [{ role: "user", content: [{ type: "text", text: "Say hi." }] }],
-		maxOutputTokens: 1000,
-	};
-	const reserve = reservationOf("chat", chatOptionsSchema.parse(call));
-	const chat = new MockLanguageModelV4({
-		doGenerate: {
-			content: [{ type: "text", text: "hi" }],
-			finishReason: { unified: "stop", raw: "stop" },
-			usage: {
-				inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
-				outputTokens: { total: 50, text: 50, reasoning: 0 },
-			},
-			warnings: [],
-		},
-	});
-	const spend = `import { reasonOf } from "../lib/core/practice-script.ts";\n${program(
-		"definePracticeScript",
-		`{
-			meta: { models: { chat: "required" } },
-			async run(ctx) {
-				const before = ctx.budget.remaining().tokens;
-				const chat = await ctx.models.chat.doGenerate(${JSON.stringify(call)}).then(() => "rated", (error) => reasonOf(error));
-				return ctx.review({ facts: { before, after: ctx.budget.remaining().tokens, chat } });
-			},
-		}`,
-	)}`;
-	const ws = await workspace({ first: spend, second: spend }, stageToolkitPrograms);
-	const budget = new ModelBudget(reserve + 100, MODEL_CONCURRENCY);
-	const first = await run(ws, "first", { models: { chat }, budget });
-	assert.equal(first.outcome.status, "ok", first.outcome.error);
-	assert.deepEqual(first.reviews[0]?.facts, {
-		before: reserve + 100,
-		after: reserve - 50,
-		chat: "rated",
-	});
-	assert.equal(budget.left, reserve - 50);
-	assert.deepEqual(first.outcome.calls, calls(1, { chat: 1 }));
-
-	const second = await run(ws, "second", { models: { chat }, budget });
-	assert.equal(second.outcome.status, "ok", second.outcome.error);
-	assert.deepEqual(second.reviews[0]?.facts, {
-		before: reserve - 50,
-		after: reserve - 50,
-		chat: "budget",
-	});
-	assert.equal(chat.doGenerateCalls.length, 1);
-	assert.deepEqual(second.outcome.models, [
-		{ slot: "chat", need: "required", bound: true, failures: { budget: 1 } },
-	]);
-});
-
-void test("a model call that a lost side stops counts as unavailable, not as a deadline", async () => {
-	const cancel = new AbortController();
-	const call = { prompt: [{ role: "user", content: [{ type: "text", text: "Say hi." }] }] };
-	const chat = new MockLanguageModelV4({
-		doGenerate: async ({ abortSignal }) => {
-			cancel.abort(new UnratedError("unavailable", "the tools side stopped"));
-			abortSignal?.throwIfAborted();
-			throw new Error("the host left this call running");
-		},
-	});
-	const ws = await workspace(
-		{
-			waits: program(
-				"definePracticeScript",
-				`{
-				meta: { models: { chat: "required" } },
-				async run(ctx) { await ctx.models.chat.doGenerate(${JSON.stringify(call)}); return null; },
-			}`,
-			),
-		},
-		stageToolkitPrograms,
-	);
-	const { outcome } = await run(ws, "waits", { models: { chat }, signal: cancel.signal });
-	assert.equal(outcome.stopReason, "unavailable");
-	assert.deepEqual(outcome.models, [
-		{ slot: "chat", need: "required", bound: true, failures: { unavailable: 1 } },
-	]);
-});
-
 void describe("a program that gives no result", () => {
 	void test("one that throws an unrated error fails with its reason", async () => {
 		const ws = await workspace({
@@ -1281,28 +1186,11 @@ void describe("a program that gives no result", () => {
 	});
 });
 
-void test("a program whose required direct model is not bound is skipped", async () => {
-	const ws = await workspace(
-		{ "requires-decision": await fixture("requires-decision") },
-		stageToolkitPrograms,
-	);
-	const { outcome, reviews } = await run(ws, "requires-decision");
-	assert.equal(outcome.status, "withheld");
-	assert.equal(outcome.stopReason, "unavailable");
-	assert.equal(outcome.error, undefined);
-	assert.deepEqual(outcome.models, [
-		{ slot: "decision", need: "required", bound: false, failures: {} },
-	]);
-	assert.deepEqual(reviews, []);
-	reportEntry("requires-decision", outcome);
-});
-
 void test("a practice the host did not reach has no duration", async () => {
 	const source = Buffer.from(await fixture("direct"));
 	const outcome = notReached({ script: { path: "direct.ts", source } }, "deadline");
 	assert.deepEqual(outcome, {
 		program: { kind: "custom", digest: programDigest(source) },
-		models: [],
 		status: "not-reached",
 		stopReason: "deadline",
 		calls: calls(0),

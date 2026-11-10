@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateLookup;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
@@ -8,13 +7,11 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
-import java.util.Arrays;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -83,31 +80,6 @@ public class LlmUsageService {
                         row.getEvents()))
                 .toList();
 
-        List<LlmUsageByPracticeDTO> byPractice =
-                usageRepository.aggregatePracticeScriptByPractice(workspaceId, window.from(), window.to()).stream()
-                        .map(row -> new LlmUsageByPracticeDTO(
-                                row.getPracticeSlug(),
-                                row.getPracticeName(),
-                                purposes(row.getModelKinds()),
-                                row.getReviews(),
-                                row.getCalls(),
-                                row.getInputTokens(),
-                                row.getOutputTokens(),
-                                row.getInstanceTotalCostUsd(),
-                                row.getOwnProviderTotalCostUsd(),
-                                row.getUnpricedEventCount()))
-                        .toList();
-        LlmUsageEventRepository.PracticeScriptTotalAggregate practiceScript =
-                usageRepository.aggregatePracticeScriptTotal(workspaceId, window.from(), window.to());
-        LlmUsagePracticeScriptTotalDTO practiceScriptTotal = new LlmUsagePracticeScriptTotalDTO(
-                practiceScript.getReviews(),
-                practiceScript.getCalls(),
-                practiceScript.getInputTokens(),
-                practiceScript.getOutputTokens(),
-                practiceScript.getInstanceTotalCostUsd(),
-                practiceScript.getOwnProviderTotalCostUsd(),
-                practiceScript.getUnpricedEventCount());
-
         // One read, so a call that ends meanwhile is either confirmed or bounded, never both. The caps compare
         // confirmed spend plus the bounds; the report shows the bounds apart from the confirmed spend.
         LlmUsageEventRepository.MonthSpend spend =
@@ -148,8 +120,6 @@ public class LlmUsageService {
                 decision.blocks(UsageFundingSource.WORKSPACE),
                 byJobType,
                 byDay,
-                byPractice,
-                practiceScriptTotal,
                 fxRateLookup.forMonth(month).orElse(null));
     }
 
@@ -189,14 +159,6 @@ public class LlmUsageService {
 
     static boolean isCurrentMonth(YearMonth month) {
         return month.equals(YearMonth.now(ZoneOffset.UTC));
-    }
-
-    private static List<AgentPurpose> purposes(String modelKinds) {
-        List<ModelKind> kinds =
-                Arrays.stream(modelKinds.split(",")).map(ModelKind::valueOf).toList();
-        return AgentPurpose.practiceScript().stream()
-                .filter(purpose -> kinds.contains(purpose.kind()))
-                .toList();
     }
 
     /** The live gate's verdict, which always evaluates against now — so a closed month pauses nothing. */

@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
-import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -15,15 +13,10 @@ import org.jspecify.annotations.Nullable;
  *
  * @param principalDescription log/metrics-safe identifier of the caller — never the token
  * @param attempt the execution this credential bills to
- * @param practiceScriptSlot the model for practice scripts this credential calls; {@code null} for the review's own
- *     calls and for every other gateway capability
- * @param practiceScriptTier the data handling tier of that model, as the attempt froze it; {@code null} without a
- *     practice script slot or when the attempt froze no tier for that model
  * @param workDeadline the signed end of the job attempt's work: every model call of the attempt ends by then. {@code
  *     null} for a conversation turn, whose calls its turn ceiling bounds instead
  * @param outputLimit the output limit {@code L} of the call's frozen model: its {@code maxOutputTokens}, else its
- *     {@code contextWindow} ({@link OutputLimit}). {@code null} when the model froze neither, and for an embedding or
- *     reranking model, which writes no output
+ *     {@code contextWindow} ({@link OutputLimit}). {@code null} when the model froze neither
  */
 public record ProxyRouting(
         String principalDescription,
@@ -34,8 +27,6 @@ public record ProxyRouting(
         @Nullable Long modelId,
         @Nullable Long workspaceId,
         BilledAttempt attempt,
-        @Nullable ModelKind practiceScriptSlot,
-        @Nullable DataHandlingTier practiceScriptTier,
         @Nullable Instant workDeadline,
         @Nullable Long outputLimit) {
     public ProxyRouting {
@@ -64,10 +55,6 @@ public record ProxyRouting(
      *     call this credential authenticated is still out, so the call stays this attempt's, never that of whoever owns
      *     the row now.
      * @param runId the run whose claim authenticated this attempt
-     * @param directModelTokens the tokens that the claim's ended direct model calls used on every slot; 0 for every
-     *     other call
-     * @param directModelSearchUnits the search units that the claim's ended direct reranking calls billed; 0 for every
-     *     other call
      * @param workspaceId the job's workspace when the call was authenticated. {@code null} for a mentor turn
      */
     public record BilledAttempt(
@@ -75,22 +62,10 @@ public record ProxyRouting(
             UUID sourceId,
             int number,
             @Nullable UUID runId,
-            long directModelTokens,
-            long directModelSearchUnits,
             @Nullable Long workspaceId) {
 
         public BilledAttempt(UsageSourceType sourceType, UUID sourceId, int number, @Nullable UUID runId) {
-            this(sourceType, sourceId, number, runId, 0L, 0L, null);
-        }
-
-        public BilledAttempt(
-                UsageSourceType sourceType,
-                UUID sourceId,
-                int number,
-                @Nullable UUID runId,
-                long directModelTokens,
-                long directModelSearchUnits) {
-            this(sourceType, sourceId, number, runId, directModelTokens, directModelSearchUnits, null);
+            this(sourceType, sourceId, number, runId, null);
         }
 
         /** The claim of the run that this attempt holds: a turn's attempt is its epoch, a review's is one less. */

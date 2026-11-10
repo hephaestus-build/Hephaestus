@@ -84,8 +84,6 @@ void test("the docs kit reads and cites captured body bytes without inventing ab
 			review: async () => {
 				throw new Error("This script reads captured documents directly");
 			},
-			models: {},
-			tokensLeft: () => 1000,
 			log: (message) => assert.fail(message),
 			abortSignal: new AbortController().signal,
 		},

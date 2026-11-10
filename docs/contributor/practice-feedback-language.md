@@ -320,7 +320,7 @@ The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the 
 
 An account's AI choice applies in every workspace.
 A connected identity does not grant membership or permission for AI processing.
-The [AI provider guide](/admin/ai-providers#privacy) owns model tiers and their enforcement.
+The [AI provider guide](/admin/ai-providers#data-handling-and-members-ai-choices) owns model tiers and their enforcement.
 
 | Choice | Meaning |
 | --- | --- |

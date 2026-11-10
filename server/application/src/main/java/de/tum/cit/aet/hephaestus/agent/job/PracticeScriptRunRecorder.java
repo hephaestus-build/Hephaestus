@@ -2,13 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
 
-import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser.PracticeScriptRunReport;
-import de.tum.cit.aet.hephaestus.agent.runtime.ScriptModelUse;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
@@ -48,10 +45,8 @@ class PracticeScriptRunRecorder {
      * commit.
      *
      * @param report the collected report; {@code null} when the runner wrote none, which records nothing
-     * @param slots the models that this attempt froze for its practice scripts, by kind. Each claim replaces the
-     *     job's snapshot, and the attempt still holds its ownership fence here, so the snapshot is this attempt's.
      */
-    void record(ReviewJob job, byte @Nullable [] report, Map<ModelKind, FrozenModel> slots, Instant finishedAt) {
+    void record(ReviewJob job, byte @Nullable [] report, Instant finishedAt) {
         if (report == null) return;
         // The runner is given only the admissible practices, so only they can be missing from its report.
         var admitted = assignments.admissible(job).stream()
@@ -75,7 +70,6 @@ class PracticeScriptRunRecorder {
                             run.programKind(),
                             run.stopReason(),
                             calls(run),
-                            run.status() == ScriptRunStatus.NOT_REACHED ? null : stored(run.models(), slots),
                             finishedAt,
                             run.error(),
                             run.durationMs());
@@ -92,18 +86,6 @@ class PracticeScriptRunRecorder {
             calls.set(ScriptRun.REVIEW_SESSIONS, objectMapper.valueToTree(run.reviewSessions()));
         }
         return calls;
-    }
-
-    private @Nullable JsonNode stored(@Nullable List<ScriptModelUse> models, Map<ModelKind, FrozenModel> slots) {
-        return models == null
-                ? null
-                : objectMapper.valueToTree(models.stream()
-                        .map(use -> {
-                            FrozenModel slot =
-                                    slots.get(ModelKind.valueOf(use.slot().name()));
-                            return StoredModelUse.of(use, slot == null ? null : slot.dataHandlingTier());
-                        })
-                        .toList());
     }
 
     private Counter scripts(ScriptRunStatus status) {

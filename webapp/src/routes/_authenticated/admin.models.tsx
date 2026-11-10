@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { BrainCircuit, Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { isPracticeScriptApi } from "@/lib/llm-api-protocol-labels";
 import { toolChoiceTestState } from "@/lib/llm-tool-choice-test";
 import { toast } from "@/lib/toast";
 
@@ -513,7 +512,6 @@ function AdminLlmPage() {
 					connections.some(
 						(connection) =>
 							connection.id === modelDialog.model.connectionId &&
-							!isPracticeScriptApi(connection.apiProtocol) &&
 							connection.apiProtocol !== "anthropic-messages",
 					)
 						? {

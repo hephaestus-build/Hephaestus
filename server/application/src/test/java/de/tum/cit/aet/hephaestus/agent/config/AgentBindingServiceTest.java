@@ -177,34 +177,11 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
     }
 
-    @ParameterizedTest(name = "{0} refuses a {1} model")
-    @CsvSource({
-        "PRACTICE_REVIEW, OPENAI_EMBEDDINGS, This is an embedding model. Choose a chat model here.",
-        "MENTOR, COHERE_RERANK, This is a reranking model. Choose a chat model here.",
-        "PRACTICE_EMBEDDING, OPENAI_COMPLETIONS, This is a chat model. Choose an embedding model here.",
-        "PRACTICE_RERANKING, OPENAI_EMBEDDINGS, This is an embedding model. Choose a reranking model here.",
-        "PRACTICE_DECISION, OPENAI_RESPONSES, This is a chat model. Choose a decision model or a chat completions"
-                + " model here."
-    })
-    void upsertRejectsAModelWhenItsKindDoesNotFitThePurpose(
-            AgentPurpose purpose, LlmApiProtocol apiProtocol, String message) {
-        stubNewUndeclaredBinding(purpose, model(99L, apiProtocol));
-
-        var request = new AgentBindingRequestDTO(99L, null, null, true);
-        assertThatThrownBy(() -> service.upsertBinding(context(), purpose, DataHandlingTier.UNDECLARED, request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(message);
-        verify(bindingRepository, never()).save(any());
-        verify(configAudit, never()).record(any());
-    }
-
     @ParameterizedTest(name = "{0} accepts a {1} model")
     @CsvSource({
-        "PRACTICE_DECISION, OPENAI_DECISIONS",
-        "PRACTICE_DECISION, OPENAI_COMPLETIONS",
-        "PRACTICE_EMBEDDING, OPENAI_EMBEDDINGS",
-        "PRACTICE_RERANKING, COHERE_RERANK",
-        "PRACTICE_REVIEW, OPENAI_RESPONSES"
+        "PRACTICE_REVIEW, OPENAI_RESPONSES",
+        "PRACTICE_REVIEW, OPENAI_COMPLETIONS",
+        "PRACTICE_REVIEW, ANTHROPIC_MESSAGES"
     })
     void upsertBindsAModelWhenItsKindFitsThePurpose(AgentPurpose purpose, LlmApiProtocol apiProtocol) {
         stubNewUndeclaredBinding(purpose, model(99L, apiProtocol));

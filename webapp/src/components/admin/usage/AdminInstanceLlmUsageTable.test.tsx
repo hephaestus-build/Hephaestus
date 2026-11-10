@@ -12,7 +12,6 @@ import {
 	AdminInstanceLlmUsageTable,
 	type AdminInstanceLlmUsageTableProps,
 } from "./AdminInstanceLlmUsageTable";
-import { NO_PRACTICE_SCRIPT_USAGE } from "./fixtures";
 import type { AdminInstanceUsageView } from "./usage-search";
 
 const workspace: AdminWorkspaceLlmUsage = {
@@ -53,7 +52,6 @@ const detailReport: WorkspaceLlmUsageReport = {
 	ownProviderPaused: false,
 	ownProviderInUse: true,
 	unpricedEventCount: 0,
-	...NO_PRACTICE_SCRIPT_USAGE,
 	byJobType: [
 		{
 			jobType: "MENTOR_TURN",

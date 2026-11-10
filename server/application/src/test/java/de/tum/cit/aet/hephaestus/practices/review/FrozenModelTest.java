@@ -40,9 +40,9 @@ class FrozenModelTest extends BaseUnitTest {
                 "test-model",
                 null,
                 Map.of(
-                        "directModelTokensPerAttempt",
+                        "practiceOutputTokens",
                         JsonNodeFactory.instance.numberNode(limit),
-                        "directModelSearchUnitsPerAttempt",
-                        JsonNodeFactory.instance.numberNode(1000L)));
+                        "practiceModelCalls",
+                        JsonNodeFactory.instance.numberNode(36L)));
     }
 }

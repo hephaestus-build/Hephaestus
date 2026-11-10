@@ -61,78 +61,9 @@ export const Submitting: Story = {
 	},
 };
 
-export const AddRerankConnection: Story = {
-	play: async ({ args }) => {
-		await userEvent.type(await screen.findByLabelText("Display name"), "Reranker");
-		await userEvent.click(screen.getByRole("combobox", { name: "API" }));
-		await userEvent.click(
-			await screen.findByRole("option", { name: "Rerank API (Cohere-compatible)" }),
-		);
-		await expect(screen.getByRole("combobox", { name: "API" })).toHaveAccessibleDescription(
-			"Choose a provider that reports token usage, or set No metered API cost.",
-		);
-		const baseUrl = screen.getByLabelText("Base URL");
-		await expect(baseUrl).toHaveValue("");
-		await userEvent.type(baseUrl, "https://rerank.example.test/v1");
-		await userEvent.click(screen.getByRole("button", { name: "Add connection" }));
-		await expect(args.onCreate).toHaveBeenCalledWith(
-			expect.objectContaining({
-				displayName: "Reranker",
-				apiProtocol: "cohere-rerank",
-				baseUrl: "https://rerank.example.test/v1",
-			}),
-		);
-	},
-};
-
-const embeddingsConnection: LlmConnection = {
-	...mockConnection,
-	id: 2,
-	slug: "embeddings",
-	displayName: "Embeddings",
-	apiProtocol: "openai-embeddings",
-	purposes: ["PRACTICE_EMBEDDING"],
-};
-
-export const EditEmbeddingsConnection: Story = {
-	args: { editing: embeddingsConnection },
-	play: async () => {
-		const api = await screen.findByLabelText("API");
-		await expectSettledVisible(api);
-		await expect(api).toHaveValue("Embeddings API");
-		await expect(screen.queryByRole("combobox", { name: "API" })).toBeNull();
-	},
-};
-
-// Direct-model endpoints can omit /models; that absence must not report a failed connection.
-export const EmbeddingsProbeListsNoModels: Story = {
+export const SavedProbeRefused: Story = {
 	args: {
-		editing: embeddingsConnection,
-		onProbeSaved: fn<NonNullable<AdminLlmConnectionFormDialogProps["onProbeSaved"]>>(
-			(_id, callbacks) =>
-				callbacks.onSuccess({
-					reachable: false,
-					models: [],
-					statusCode: 404,
-					message: "The provider answered with HTTP 404.",
-				}),
-		),
-	},
-	play: async () => {
-		await userEvent.click(await screen.findByRole("button", { name: "Test saved connection" }));
-		const result = await screen.findByText(
-			"No model list at this address. Add the model by its ID. If its calls fail too, check the base URL.",
-		);
-		await expectSettledVisible(result);
-		await expect(screen.getByRole("status")).toContainElement(result);
-		await expect(screen.queryByRole("alert")).toBeNull();
-		await expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
-	},
-};
-
-export const EmbeddingsProbeRefused: Story = {
-	args: {
-		editing: embeddingsConnection,
+		editing: mockConnection,
 		onProbeSaved: fn<NonNullable<AdminLlmConnectionFormDialogProps["onProbeSaved"]>>(
 			(_id, callbacks) =>
 				callbacks.onSuccess({
@@ -150,7 +81,6 @@ export const EmbeddingsProbeRefused: Story = {
 		await expect(failure).toHaveTextContent(
 			"We could not fetch the model list. The provider answered with HTTP 401. You can still save the connection and enter a model ID.",
 		);
-		await expect(screen.queryByText(/No model list at this address/u)).toBeNull();
 	},
 };
 

@@ -20,14 +20,13 @@ const openAi: WorkspaceLlmConnection = {
 	createdAt: new Date("2026-06-01T10:00:00Z"),
 };
 
-const embeddings: WorkspaceLlmConnection = {
+const onPrem: WorkspaceLlmConnection = {
 	...openAi,
 	id: 2,
-	slug: "embeddings",
-	displayName: "On-prem embeddings",
-	apiProtocol: "openai-embeddings",
-	purposes: ["PRACTICE_EMBEDDING"],
-	baseUrl: "https://embed.example.test/v1",
+	slug: "on-prem-vllm",
+	displayName: "On-prem vLLM",
+	apiProtocol: "openai-completions",
+	baseUrl: "https://vllm.example.test/v1",
 	hasApiKey: false,
 	apiKeyLast4: undefined,
 };
@@ -60,7 +59,7 @@ const meta = {
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
 	args: {
-		state: { status: "ready", connections: [openAi, embeddings], models: [gpt] },
+		state: { status: "ready", connections: [openAi, onPrem], models: [gpt] },
 		registrationAllowed: true,
 		testResults: new Map(),
 		testingConnectionIds: new Set(),
@@ -86,31 +85,31 @@ export const Default: Story = {
 		await expect(chat.getByText("Responses API")).toBeVisible();
 		await expect(chat.getByText("Key ends in ab12")).toBeVisible();
 		await expect(chat.getByRole("table", { name: "Models on My OpenAI account" })).toBeVisible();
-		const embeddingsProvider = within(canvas.getByRole("region", { name: "On-prem embeddings" }));
-		await expect(embeddingsProvider.getByText("Embeddings API")).toBeVisible();
-		await expect(embeddingsProvider.getByText(", for Embedding model")).toHaveClass("sr-only");
+		const onPremProvider = within(canvas.getByRole("region", { name: "On-prem vLLM" }));
+		await expect(onPremProvider.getByText("Chat Completions API")).toBeVisible();
+		await expect(onPremProvider.getByText(", for Practice reviews and Conversations")).toHaveClass(
+			"sr-only",
+		);
 		await expect(
-			embeddingsProvider.getByRole("cell", {
+			onPremProvider.getByRole("cell", {
 				name: "No models yet. Add a model to use this provider.",
 			}),
 		).toBeVisible();
 		await expect(
-			embeddingsProvider.getByRole("button", { name: "Add model to On-prem embeddings" }),
+			onPremProvider.getByRole("button", { name: "Add model to On-prem vLLM" }),
 		).toBeVisible();
 		const keeps = chat.getByRole("button", { name: "Disconnect My OpenAI account" });
 		await expect(keeps).toBeDisabled();
 		await expect(keeps).toHaveAccessibleDescription("To disconnect, delete its models first.");
 		await expect(chat.getByText("To disconnect, delete its models first.")).toBeVisible();
 		await expect(
-			embeddingsProvider.getByRole("button", { name: "Disconnect On-prem embeddings" }),
+			onPremProvider.getByRole("button", { name: "Disconnect On-prem vLLM" }),
 		).toBeEnabled();
-		await expect(
-			embeddingsProvider.queryByText("To disconnect, delete its models first."),
-		).toBeNull();
+		await expect(onPremProvider.queryByText("To disconnect, delete its models first.")).toBeNull();
 		for (const column of ["Data handling", "Price", "Status", "Actions"]) {
-			await expect(
-				columnLeft(canvas.getByRole("region", { name: "On-prem embeddings" }), column),
-			).toBe(columnLeft(canvas.getByRole("region", { name: "My OpenAI account" }), column));
+			await expect(columnLeft(canvas.getByRole("region", { name: "On-prem vLLM" }), column)).toBe(
+				columnLeft(canvas.getByRole("region", { name: "My OpenAI account" }), column),
+			);
 		}
 	},
 };
@@ -119,7 +118,7 @@ export const ProviderOff: Story = {
 	args: {
 		state: {
 			status: "ready",
-			connections: [{ ...openAi, enabled: false }, embeddings],
+			connections: [{ ...openAi, enabled: false }, onPrem],
 			models: [gpt],
 		},
 	},
@@ -128,7 +127,7 @@ export const ProviderOff: Story = {
 		await expect(off.getByText("Off")).toBeVisible();
 		await expect(off.getByRole("cell", { name: "Connection off" })).toBeVisible();
 		await expect(off.queryByText("Ready")).toBeNull();
-		const on = within(canvas.getByRole("region", { name: "On-prem embeddings" }));
+		const on = within(canvas.getByRole("region", { name: "On-prem vLLM" }));
 		await expect(on.queryByText("Off")).toBeNull();
 	},
 };
@@ -175,7 +174,7 @@ export const TestResults: Story = {
 		testResults: new Map([
 			[openAi.id, { status: "answered", result: { reachable: true, modelCount: 12 } }],
 			[
-				embeddings.id,
+				onPrem.id,
 				{
 					status: "answered",
 					result: { reachable: false, modelCount: 0, statusCode: 404, message: "HTTP 404" },
@@ -186,11 +185,9 @@ export const TestResults: Story = {
 	play: async ({ canvas }) => {
 		const chat = within(canvas.getByRole("region", { name: "My OpenAI account" }));
 		await expect(chat.getByRole("status")).toHaveTextContent("Connected. 12 models available.");
-		const embeddingsProvider = within(canvas.getByRole("region", { name: "On-prem embeddings" }));
-		await expect(embeddingsProvider.getByRole("status")).toHaveTextContent(
-			/^No model list at this address/u,
-		);
-		await expect(embeddingsProvider.queryByRole("alert")).toBeNull();
+		const onPremProvider = within(canvas.getByRole("region", { name: "On-prem vLLM" }));
+		await expect(onPremProvider.getByRole("alert")).toHaveTextContent("HTTP 404");
+		await expect(onPremProvider.queryByRole("status")).toBeNull();
 	},
 };
 
@@ -199,7 +196,7 @@ export const Testing: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Testing… My OpenAI account" })).toBeDisabled();
 		await expect(
-			canvas.getByRole("button", { name: "Test connection to On-prem embeddings" }),
+			canvas.getByRole("button", { name: "Test connection to On-prem vLLM" }),
 		).toBeEnabled();
 	},
 };

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent } from "storybook/test";
 
 import { FieldGroup } from "@/components/ui/field";
 import { expectSettledVisible } from "@/stories/overlay";
@@ -59,26 +59,19 @@ export const ResponsesApi: Story = {
 export const ApiOptions: Story = {
 	play: async ({ canvas, args }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "API" }));
-		const chat = await screen.findByRole("group", { name: "Chat models" });
-		await expectSettledVisible(chat);
-		await expect(
-			within(chat)
-				.getAllByRole("option")
-				.map((option) => option.textContent),
-		).toStrictEqual(["Responses API", "Chat Completions API", "Messages API (Anthropic)"]);
-		const practiceScripts = screen.getByRole("group", { name: "For practice scripts" });
-		await expect(
-			within(practiceScripts)
-				.getAllByRole("option")
-				.map((option) => option.textContent),
-		).toStrictEqual(["Decisions API", "Embeddings API", "Rerank API (Cohere-compatible)"]);
-		await expect(screen.getAllByRole("option")).toHaveLength(6);
+		const completions = await screen.findByRole("option", { name: "Chat Completions API" });
+		await expectSettledVisible(completions);
+		await expect(screen.getAllByRole("option").map((option) => option.textContent)).toStrictEqual([
+			"Responses API",
+			"Chat Completions API",
+			"Messages API (Anthropic)",
+		]);
 
-		await userEvent.click(within(practiceScripts).getByRole("option", { name: "Embeddings API" }));
+		await userEvent.click(completions);
 		await expect(args.onChange).toHaveBeenLastCalledWith(
-			expect.objectContaining({ apiProtocol: "openai-embeddings" }),
+			expect.objectContaining({ apiProtocol: "openai-completions" }),
 		);
-		await expectClosedSelectShows(canvas, "API", "Embeddings API");
+		await expectClosedSelectShows(canvas, "API", "Chat Completions API");
 	},
 };
 
@@ -86,71 +79,41 @@ export const ChatCompletionsApi: Story = {
 	args: { value: { ...connectionFieldsValueOf(null), apiProtocol: "openai-completions" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("combobox", { name: "API" })).toHaveAccessibleDescription(
-			"Use only if the endpoint does not serve the Responses API. It can also serve the decision model if it returns token probabilities and answers without reasoning.",
+			"Use only if the endpoint does not serve the Responses API.",
 		);
 	},
 };
 
-export const DecisionsApi: Story = {
-	args: { value: { ...connectionFieldsValueOf(null), apiProtocol: "openai-decisions" } },
-	play: async ({ canvas }) => {
-		await expectClosedSelectShows(canvas, "API", "Decisions API");
-		await expect(canvas.getByRole("combobox", { name: "API" })).not.toHaveAccessibleDescription();
-	},
-};
-
-export const EmbeddingsApi: Story = {
-	args: { value: { ...connectionFieldsValueOf(null), apiProtocol: "openai-embeddings" } },
-	play: async ({ canvas }) => {
-		await expectClosedSelectShows(canvas, "API", "Embeddings API");
-		await expect(canvas.getByRole("combobox", { name: "API" })).not.toHaveAccessibleDescription();
-	},
-};
-
-export const RerankApi: Story = {
-	args: { value: { ...connectionFieldsValueOf(null), apiProtocol: "cohere-rerank" } },
-	play: async ({ canvas }) => {
-		await expectClosedSelectShows(canvas, "API", "Rerank API (Cohere-compatible)");
-		await expect(canvas.getByRole("combobox", { name: "API" })).toHaveAccessibleDescription(
-			"Choose a provider that reports token usage, or set No metered API cost.",
-		);
-	},
-};
-
-// Reranking requires a custom endpoint; switching presets must preserve an administrator's typed URL.
-export const RerankApiLeavesOpenAiPreset: Story = {
+// Only Anthropic serves its Messages API; switching presets must preserve an administrator's typed URL.
+export const MessagesApiSwitchesToAnthropicPreset: Story = {
 	play: async ({ canvas }) => {
 		await expectClosedSelectShows(canvas, "Endpoint preset", "OpenAI");
 		await expect(canvas.getByLabelText("Base URL")).toHaveValue("https://api.openai.com/v1");
 		await userEvent.click(canvas.getByRole("combobox", { name: "API" }));
-		await userEvent.click(
-			await screen.findByRole("option", { name: "Rerank API (Cohere-compatible)" }),
-		);
-		await expectClosedSelectShows(canvas, "Endpoint preset", "Other endpoint");
-		await expect(canvas.getByLabelText("Base URL")).toHaveValue("");
+		await userEvent.click(await screen.findByRole("option", { name: "Messages API (Anthropic)" }));
+		await expectClosedSelectShows(canvas, "Endpoint preset", "Anthropic");
+		await expect(canvas.getByLabelText("Base URL")).toHaveValue("https://api.anthropic.com");
 	},
 };
 
-export const RerankApiKeepsTypedUrl: Story = {
+export const MessagesApiKeepsTypedUrl: Story = {
 	args: {
-		value: { ...connectionFieldsValueOf(null), baseUrl: "https://rerank.example.test/v1" },
+		value: { ...connectionFieldsValueOf(null), baseUrl: "https://llm.example.test/v1" },
 	},
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "API" }));
-		await userEvent.click(
-			await screen.findByRole("option", { name: "Rerank API (Cohere-compatible)" }),
-		);
-		await expectClosedSelectShows(canvas, "Endpoint preset", "Other endpoint");
-		await expect(canvas.getByLabelText("Base URL")).toHaveValue("https://rerank.example.test/v1");
+		await userEvent.click(await screen.findByRole("option", { name: "Messages API (Anthropic)" }));
+		await expectClosedSelectShows(canvas, "Endpoint preset", "Anthropic");
+		await expect(canvas.getByLabelText("Base URL")).toHaveValue("https://llm.example.test/v1");
 	},
 };
 
 export const EditReadOnlyApi: Story = {
 	args: {
 		value: connectionFieldsValueOf({
-			displayName: "Embeddings",
+			displayName: "Completions",
 			baseUrl: "https://api.openai.com/v1",
-			apiProtocol: "openai-embeddings",
+			apiProtocol: "openai-completions",
 			authMode: "BEARER",
 		}),
 		isEdit: true,
@@ -160,7 +123,7 @@ export const EditReadOnlyApi: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("combobox", { name: "API" })).toBeNull();
 		const api = canvas.getByLabelText("API");
-		await expect(api).toHaveValue("Embeddings API");
+		await expect(api).toHaveValue("Chat Completions API");
 		await expectGenuinelyDisabled(api);
 		await expect(
 			canvas.getByText("Endpoint, API and authentication cannot change. Add a connection instead."),

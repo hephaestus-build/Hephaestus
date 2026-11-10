@@ -201,12 +201,7 @@ class ReviewClosureIntegrationTest extends AbstractResultAdmissionIntegrationTes
                 new ItemLabel(ref.itemId(), "Work", "Work", "pull request", 1, null, null, IntegrationKind.GITHUB));
         doReturn(pinned).when(productItems).pin(ref, version);
         doReturn(true).when(budget).canRequest(workspace, ReviewKind.ITEM, null);
-        doReturn(List.of(
-                        new BoundModelSlot("chat", ModelKind.CHAT, null),
-                        new BoundModelSlot("decision", ModelKind.DECISION, null),
-                        new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                        new BoundModelSlot("reranking", ModelKind.RERANKING, null),
-                        new BoundModelSlot("review", ModelKind.CHAT, null)))
+        doReturn(List.of(new BoundModelSlot("review", ModelKind.CHAT, null)))
                 .when(models)
                 .models(workspace, List.of());
         double before = ended("partial", "readiness_refused");

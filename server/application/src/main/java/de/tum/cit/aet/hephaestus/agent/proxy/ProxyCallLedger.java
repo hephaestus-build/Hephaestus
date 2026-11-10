@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
-import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
@@ -15,7 +14,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.CallUsage;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.OpenCall;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -51,16 +49,6 @@ class ProxyCallLedger {
 
         ClaimLost(Throwable cause) {
             super("The call's claim no longer holds its run", cause);
-        }
-    }
-
-    /** The practice script call names no practice of its review's workspace, so its spend could not be attributed. */
-    static final class UnknownPractice extends RuntimeException {
-        @Serial
-        private static final long serialVersionUID = 1L;
-
-        UnknownPractice() {
-            super("The practice script call names no practice of its workspace");
         }
     }
 
@@ -119,10 +107,9 @@ class ProxyCallLedger {
      * bound at once.
      *
      * @throws ClaimLost when the claim no longer holds its run
-     * @throws UnknownPractice when a practice script call names no practice of its workspace
      * @throws BudgetHeld when the call's bound does not fit under its purse's cap
      */
-    UUID open(ProxyRouting routing, @Nullable PracticeScriptCall script, Bound bound) {
+    UUID open(ProxyRouting routing, Bound bound) {
         var attempt = routing.attempt();
         long workspaceId = Objects.requireNonNull(routing.workspaceId(), "a billed call has a workspace");
         UUID runId = Objects.requireNonNull(attempt.runId(), "a billed call has a run");
@@ -132,7 +119,7 @@ class ProxyCallLedger {
                 runs.requireCurrent(new AgentRunFence(runId, workspaceId, attempt.epoch()));
                 OpenCall open = attempt.sourceType() == UsageSourceType.MENTOR_TURN
                         ? turnCall(attempt, workspaceId, runId, bound)
-                        : reviewCall(routing, attempt, workspaceId, runId, script, bound);
+                        : reviewCall(attempt, workspaceId, runId, bound);
                 // The bound that the row stores is the one held against the cap.
                 if (budgetGate.refusesHold(routing, open.costBoundUsd())) throw new BudgetHeld();
                 return recorder.open(open);
@@ -144,15 +131,10 @@ class ProxyCallLedger {
         return call;
     }
 
-    /**
-     * The most that the call can cost at its frozen price. A priced reranking call bills search units, which no token
-     * rate bounds.
-     */
-    static @Nullable BigDecimal costBound(ModelKind kind, LlmPriceSnapshot price, Bound bound) {
+    /** The most that the call can cost at its frozen price. */
+    static @Nullable BigDecimal costBound(LlmPriceSnapshot price, Bound bound) {
         Long output = bound.outputTokens();
-        if (output == null || (kind == ModelKind.RERANKING && price.pricingState() != UsagePricingState.NO_CHARGE))
-            return null;
-        return price.upperBound(bound.inputBytes(), output);
+        return output == null ? null : price.upperBound(bound.inputBytes(), output);
     }
 
     private OpenCall turnCall(ProxyRouting.BilledAttempt attempt, long workspaceId, UUID runId, Bound bound) {
@@ -174,40 +156,29 @@ class ProxyCallLedger {
                 null,
                 charge.model(),
                 charge.price(),
-                costBound(ModelKind.CHAT, charge.price(), bound));
+                costBound(charge.price(), bound));
     }
 
-    private OpenCall reviewCall(
-            ProxyRouting routing,
-            ProxyRouting.BilledAttempt attempt,
-            long workspaceId,
-            UUID runId,
-            @Nullable PracticeScriptCall script,
-            Bound bound) {
+    private OpenCall reviewCall(ProxyRouting.BilledAttempt attempt, long workspaceId, UUID runId, Bound bound) {
         var job = jobs.findByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
                 .filter(found -> found.getRunId().equals(runId))
                 .orElseThrow(() -> new ClaimLost(new IllegalStateException("The call's job moved to another run")));
-        ModelKind kind = routing.practiceScriptSlot() == null ? ModelKind.CHAT : routing.practiceScriptSlot();
         ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), mapper);
-        FrozenModel model = kind == ModelKind.CHAT ? snapshot.model() : snapshot.practiceScriptSlot(kind);
-        FrozenCharge charge = model == null ? FrozenCharge.UNKNOWN : FrozenCharge.of(model);
-        Long practiceId = script == null
-                ? null
-                : jobs.findPracticeId(workspaceId, script.practiceSlug()).orElseThrow(UnknownPractice::new);
+        FrozenCharge charge = FrozenCharge.of(snapshot.model());
         return new OpenCall(
                 workspaceId,
                 runId,
                 attempt.epoch(),
                 "PRACTICE_REVIEW",
-                UsageSourceType.ofReviewCall(kind),
+                UsageSourceType.REVIEW_JOB,
                 job.getId(),
                 attempt.number(),
                 job.getReviewId(),
-                kind,
-                practiceId,
+                ModelKind.CHAT,
+                null,
                 charge.model(),
                 charge.price(),
-                costBound(kind, charge.price(), bound));
+                costBound(charge.price(), bound));
     }
 
     /**
@@ -237,6 +208,6 @@ class ProxyCallLedger {
                 usage.cacheReadTokens(),
                 usage.cacheWriteTokens(),
                 usage.reasoningTokens(),
-                usage.searchUnits());
+                0);
     }
 }

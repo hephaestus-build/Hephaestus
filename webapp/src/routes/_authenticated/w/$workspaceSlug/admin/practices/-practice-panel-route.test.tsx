@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 
-import type { PracticeReleaseProposal, PracticeScriptSummary } from "@/api/types.gen";
+import type { PracticeReleaseProposal } from "@/api/types.gen";
 import { definitionOf } from "@/components/admin/practice-editor/fixtures";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import type { Wire } from "@/lib/dates";
@@ -26,71 +26,6 @@ const at = (kind: "practice" | "practice-edit", id: string) =>
 
 beforeEach(() => {
 	server.use(...practiceSetupHandlers());
-});
-
-describe("a practice's script needs on practice setup", () => {
-	const scripted = wirePractice({
-		slug: "comment-quality",
-		definition: definitionOf({ name: "Comment quality", script: "export default {};" }),
-	});
-	const summaries: Wire<PracticeScriptSummary>[] = [
-		{
-			practiceSlug: "another-practice",
-			practiceName: "Another practice",
-			asOf: {
-				jobId: "1",
-				reviewId: "11111111-1111-1111-1111-111111111111",
-				finishedAt: "2026-10-01T09:00:00Z",
-			},
-			scriptChanged: false,
-			needs: [{ slot: "embedding", need: "optional", unmetTiers: ["CLOUD"] }],
-		},
-		{
-			practiceSlug: "comment-quality",
-			practiceName: "Comment quality",
-			asOf: {
-				jobId: "2",
-				reviewId: "22222222-2222-2222-2222-222222222222",
-				finishedAt: "2026-10-03T09:00:00Z",
-			},
-			scriptChanged: false,
-			needs: [{ slot: "decision", need: "required", unmetTiers: ["IN_HOUSE"] }],
-		},
-	];
-	const needsRequested = vi.fn<(workspaceSlug: string) => void>();
-
-	beforeEach(() => {
-		needsRequested.mockReset();
-		// Register this handler before practices/:practiceSlug, which also matches this path.
-		server.use(
-			http.get("*/workspaces/:workspaceSlug/practices/practice-script-needs", ({ params }) => {
-				needsRequested(String(params.workspaceSlug));
-				return HttpResponse.json(summaries);
-			}),
-			...practicesHandlers([scripted]),
-		);
-	});
-
-	it("shows the open practice's own needs, read for this workspace", async () => {
-		renderRouteAt(at("practice", "comment-quality"));
-
-		const alert = await screen.findByRole("note", {}, ROUTE_RENDER_WAIT);
-		expect(alert.textContent).toBe(
-			"The practice script does not run for In-house members’ work: no decision model is assigned for them. Assign a decision model",
-		);
-		expect(
-			within(alert).getByRole("link", { name: "Assign a decision model" }).getAttribute("href"),
-		).toBe("/w/acme/admin/models?purpose=PRACTICE_DECISION");
-		expect(screen.queryByText(/embedding model/u)).toBeNull();
-		expect(needsRequested).toHaveBeenCalledWith("acme");
-	});
-
-	it("does not ask for needs while no practice is open", async () => {
-		renderRouteAt("/w/acme/admin/practices");
-
-		await screen.findByRole("link", { name: "Comment quality" }, ROUTE_RENDER_WAIT);
-		expect(needsRequested).not.toHaveBeenCalled();
-	});
 });
 
 describe("resetting a practice to the catalog after declining its update", () => {

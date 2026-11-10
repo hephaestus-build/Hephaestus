@@ -1376,12 +1376,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                     .findByWorkspaceIdAndPurpose(workspace.getId(), AgentPurpose.PRACTICE_REVIEW)
                     .getFirst();
             var frozen = methods.freeze(binding);
-            var slots = List.of(
-                    new BoundModelSlot("review", ModelKind.CHAT, frozen),
-                    new BoundModelSlot("chat", ModelKind.CHAT, null),
-                    new BoundModelSlot("decision", ModelKind.DECISION, null),
-                    new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                    new BoundModelSlot("reranking", ModelKind.RERANKING, null));
+            var slots = List.of(new BoundModelSlot("review", ModelKind.CHAT, frozen));
             String digest = requireNonNull(jdbc.queryForObject(
                     "SELECT review_model_digest(CAST(? AS jsonb))",
                     String.class,
@@ -1545,8 +1540,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                                 false),
                         null,
                         null,
-                        600,
-                        null)
+                        600)
                 .withPriceSnapshot(new LlmPriceSnapshot(
                         UsageFundingSource.INSTANCE, UsagePricingState.NO_CHARGE, null, null, null, null, null, null))
                 .toJson(objectMapper));

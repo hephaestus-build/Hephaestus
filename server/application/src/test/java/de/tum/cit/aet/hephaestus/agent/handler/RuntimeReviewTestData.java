@@ -31,15 +31,7 @@ public final class RuntimeReviewTestData {
     private RuntimeReviewTestData() {}
 
     public static ReviewAssignmentSnapshot assignment(@Nullable Long developer, @Nullable String script) {
-        var method = new ReviewMethod(
-                1,
-                "b".repeat(64),
-                List.of(
-                        new BoundModelSlot("review", ModelKind.CHAT, null),
-                        new BoundModelSlot("chat", ModelKind.CHAT, null),
-                        new BoundModelSlot("decision", ModelKind.DECISION, null),
-                        new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                        new BoundModelSlot("reranking", ModelKind.RERANKING, null)));
+        var method = new ReviewMethod(1, "b".repeat(64), List.of(new BoundModelSlot("review", ModelKind.CHAT, null)));
         var practice = new PinnedPractice(
                 31,
                 32,

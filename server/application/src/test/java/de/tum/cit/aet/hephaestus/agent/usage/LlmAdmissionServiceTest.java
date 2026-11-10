@@ -201,21 +201,15 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldFreezeThePriceWhenAnOptionalModelIsAvailable() {
-        WorkspaceAgentBinding binding = binding(AgentPurpose.PRACTICE_EMBEDDING);
+    void shouldFreezeThePriceWhenAModelIsAdmittedIfAvailable() {
+        WorkspaceAgentBinding binding = binding(AgentPurpose.PRACTICE_REVIEW);
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
                 .thenReturn(Optional.of(binding));
         when(resolver.isAvailable(binding)).thenReturn(true);
         when(modelRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(instanceModel(binding)));
         when(resolver.resolve(binding))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://api.example/v1",
-                        "openai-embeddings",
-                        "text-embedding-3-small",
-                        null,
-                        null,
-                        null,
-                        false));
+                        "https://api.example/v1", "openai-responses", "gpt-5-mini", null, null, null, false));
         when(resolver.connectionRef(binding))
                 .thenReturn(new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 10L, 20L, 30L));
         LlmModelPrice price = new LlmModelPrice();
@@ -226,14 +220,14 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
 
         AdmittedLlmModel admitted = service.admitIfAvailable(binding).orElseThrow();
 
-        assertThat(admitted.resolved().upstreamModelId()).isEqualTo("text-embedding-3-small");
+        assertThat(admitted.resolved().upstreamModelId()).isEqualTo("gpt-5-mini");
         assertThat(admitted.price().appliedPriceId()).isEqualTo(41L);
         assertThat(admitted.price().per1mInputUsd()).isEqualByComparingTo("0.02");
     }
 
     // A failure escaping the transactional proxy would mark the claim rollback-only.
     @Test
-    void shouldAdmitNothingWithoutThrowingWhenAnOptionalModelHasNoPrice() {
+    void shouldAdmitNothingWithoutThrowingWhenAModelHasNoPrice() {
         WorkspaceAgentBinding binding = byoBinding();
         workspaceModel(binding).setPricingMode(PricingMode.UNPRICED);
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
@@ -243,7 +237,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(workspaceModel(binding)));
         when(resolver.resolve(binding))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://byo.example/v1", "cohere-rerank", "rerank-v3.5", null, null, null, false));
+                        "https://byo.example/v1", "openai-completions", "byo-chat", null, null, null, false));
         when(resolver.connectionRef(binding))
                 .thenReturn(new LlmModelResolver.ConnectionRef(UsageFundingSource.WORKSPACE, 11L, 21L, 30L));
         when(workspaceModelRepository.findByIdAndWorkspaceId(21L, 30L))
@@ -253,8 +247,8 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldAdmitNothingWithoutResolvingWhenAnOptionalModelIsUnavailable() {
-        WorkspaceAgentBinding binding = binding(AgentPurpose.PRACTICE_DECISION);
+    void shouldAdmitNothingWithoutResolvingWhenAModelIsUnavailable() {
+        WorkspaceAgentBinding binding = binding(AgentPurpose.PRACTICE_REVIEW);
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
                 .thenReturn(Optional.of(binding));
         when(resolver.isAvailable(binding)).thenReturn(false);

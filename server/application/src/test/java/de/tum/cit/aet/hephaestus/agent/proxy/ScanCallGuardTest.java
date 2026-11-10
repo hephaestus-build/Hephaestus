@@ -79,7 +79,7 @@ class ScanCallGuardTest extends BaseUnitTest {
     private final ReviewJob job = RuntimeReviewTestData.job();
     private ReviewSnapshot scan;
     private static final PracticeReviewProperties PRACTICE_REVIEW =
-            new PracticeReviewProperties(false, 15, 5, null, 36, 48_000, 200_000, 1000, Duration.ofMinutes(10));
+            new PracticeReviewProperties(false, 15, 5, null, 36, 48_000, Duration.ofMinutes(10));
     private final ScanCallGuard guard = new ScanCallGuard(
             jobs,
             runs,
@@ -105,8 +105,6 @@ class ScanCallGuardTest extends BaseUnitTest {
                 1L,
                 1L,
                 new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, LEASE),
-                null,
-                null,
                 workDeadline,
                 100L);
     }
@@ -214,8 +212,7 @@ class ScanCallGuardTest extends BaseUnitTest {
                         false),
                 1000,
                 100,
-                60,
-                null)));
+                60)));
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         // The database answers from the run: a replaced attempt or another run holds no live lease.
         when(runs.isCurrent(any(AgentRunRef.class), anyInt()))
@@ -396,27 +393,6 @@ class ScanCallGuardTest extends BaseUnitTest {
         calls = 0;
         outputTokens = ScanCallGuard.WORK_MARGIN * loopOutputTokens();
         refusedForWork(route());
-    }
-
-    @Test
-    void shouldLeaveAPracticeScriptsDirectCallsToTheirOwnTokenBound() {
-        ordinaryReview();
-        calls = ScanCallGuard.WORK_MARGIN * loopCalls();
-        var script = new ProxyRouting(
-                "job",
-                "openai-completions",
-                "https://model.example",
-                UsageFundingSource.INSTANCE,
-                1L,
-                1L,
-                1L,
-                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, LEASE),
-                ModelKind.CHAT,
-                null,
-                Instant.now().plusSeconds(60),
-                null);
-
-        assertThat(guard.acquire(script, "{}".getBytes(StandardCharsets.UTF_8))).isEmpty();
     }
 
     private LlmUsageEventRepository.ReviewCalls reviewCalls() {

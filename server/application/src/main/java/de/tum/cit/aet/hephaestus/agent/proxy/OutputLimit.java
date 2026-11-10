@@ -59,12 +59,10 @@ final class OutputLimit {
                     throw new Refused("The total output limit of a model call is too large", overflow);
                 }
             }
-            case OPENAI_DECISIONS -> limit;
-            case OPENAI_EMBEDDINGS, COHERE_RERANK -> 0L;
         };
     }
 
-    /** Whether calls on this protocol write output. Embedding, reranking and decision calls write none. */
+    /** Whether calls on this protocol write output. */
     static boolean generative(LlmApiProtocol protocol) {
         return !fields(protocol).isEmpty();
     }
@@ -103,7 +101,6 @@ final class OutputLimit {
             case ANTHROPIC_MESSAGES -> List.of("max_tokens");
             case OPENAI_COMPLETIONS -> List.of("max_tokens", "max_completion_tokens");
             case OPENAI_RESPONSES -> List.of("max_output_tokens");
-            case OPENAI_DECISIONS, OPENAI_EMBEDDINGS, COHERE_RERANK -> List.of();
         };
     }
 }

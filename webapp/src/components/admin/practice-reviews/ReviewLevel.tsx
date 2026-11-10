@@ -810,8 +810,6 @@ function technicalFacts(review: ReviewDetail): TechnicalFact[] {
 			: []),
 		{ label: "Cost", value: usagePending ? "Not recorded yet" : costText(usage) },
 		{ label: "Model", value: hasText(review.model) ? review.model : "—" },
-		// The review's own calls: a practice script's decision, embedding and reranking calls are on
-		// the Practice scripts section above.
 		{
 			label: "Review model calls",
 			value: usagePending ? "Not recorded yet" : formatTokens(usage.calls),

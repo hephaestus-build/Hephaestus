@@ -314,24 +314,13 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldServeThePracticeScriptRouteOnTheGatewayWhenTheJobTokenCallsIt() throws Exception {
-        String path = "/internal/llm/practice-script/chat/chat/completions";
-        ReviewJob job = runningJobOnAttempt(1);
-        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
-
-        MockHttpServletRequest practiceScript = request("POST", path, GATEWAY_PORT);
-        practiceScript.addHeader("Authorization", "Bearer job-token");
-        assertThat(answerTo(practiceScript)).isEqualTo(200);
-        assertThat(servedAs.get())
-                .isNotNull()
-                .extracting(Authentication::getPrincipal)
-                .asInstanceOf(type(ProxyIdentity.class))
-                .extracting(ProxyIdentity::description)
-                .isEqualTo("job:" + job.getId());
-        assertThat(answerTo("POST", path, APPLICATION_PORT)).isEqualTo(404);
-        assertThat(answerTo("POST", path, GATEWAY_PORT, new byte[GATEWAY.maxRequestBytes() + 1]))
-                .isEqualTo(413);
+    void shouldServeNoPracticeScriptRouteWhenTheJobTokenCallsIt() throws Exception {
+        // The gateway refuses the path before it reads the credential: no capability serves it.
+        assertThat(answerTo(withToken(
+                        request("POST", "/internal/llm/practice-script/chat/chat/completions", GATEWAY_PORT),
+                        "job-token")))
+                .isEqualTo(404);
+        assertThat(servedAs.get()).isNull();
     }
 
     @ParameterizedTest
@@ -339,7 +328,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         "POST,/internal/llm/chat/completions",
         "POST,/internal/llm/responses",
         "POST,/internal/llm/v1/messages",
-        "POST,/internal/llm/practice-script/chat/chat/completions",
         "POST,/internal/llm/admit-results",
         "POST,/internal/llm/stage-result",
         "GET,/internal/llm/runtime/{job}",
@@ -363,8 +351,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         ReviewJob job = runningJobOnAttempt(1);
         when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
         when(jwtVerifier.verify("practice-script-token")).thenReturn(jobJwt(job, 1, "llm_practice_script"));
-        MockHttpServletRequest request =
-                request("POST", "/internal/llm/practice-script/chat/chat/completions", GATEWAY_PORT);
+        MockHttpServletRequest request = request("POST", "/internal/llm/chat/completions", GATEWAY_PORT);
         request.addHeader("Authorization", "Bearer practice-script-token");
 
         assertThat(answerTo(request)).isEqualTo(403);
@@ -440,10 +427,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                     .isEqualTo(401);
             assertThat(servedAs.get()).isNull();
         }
-        for (String path : List.of(
-                "/internal/llm/practice-script/chat/chat/completions",
-                "/internal/llm/admit-results",
-                "/internal/llm/stage-result")) {
+        for (String path : List.of("/internal/llm/admit-results", "/internal/llm/stage-result")) {
             assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "turn-token")))
                     .as(path)
                     .isEqualTo(403);
@@ -799,8 +783,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                                 false),
                         null,
                         null,
-                        600,
-                        null)
+                        600)
                 .toJson(OBJECT_MAPPER));
         return job;
     }

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { z } from "zod";
 import { QueryErrorAlert, queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { definitionFor } from "@/components/common/status-def";
-import { isPracticeScriptApi } from "@/lib/llm-api-protocol-labels";
 import { toolChoiceTestState } from "@/lib/llm-tool-choice-test";
 import { toast } from "@/lib/toast";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
@@ -18,8 +17,6 @@ import {
 	getWorkspaceOptions,
 	listAgentsOptions,
 	listAgentsQueryKey,
-	listPracticeScriptNeedsOptions,
-	listPracticeScriptNeedsQueryKey,
 	workspaceCreateLlmConnectionMutation,
 	workspaceCreateLlmModelMutation,
 	workspaceDeleteLlmConnectionMutation,
@@ -56,7 +53,7 @@ import {
 	type ProviderTestResult,
 	WorkspaceLlmProviderPanel,
 } from "@/components/admin/workspace-llm/WorkspaceLlmProviderPanel";
-import { type LoadState, panelState } from "@/components/common/panel-state";
+import type { LoadState } from "@/components/common/panel-state";
 import {
 	UNKNOWN_AGENT_PURPOSE_DEF,
 	AGENT_PURPOSE_DEFS,
@@ -161,16 +158,11 @@ function ModelsContainer() {
 		onboardingSettingsQuery.isError,
 		onboardingSettingsQuery.error,
 	);
-	const practiceScriptNeedsQuery = useQuery(
-		listPracticeScriptNeedsOptions({ path: { workspaceSlug } }),
-	);
 	const usageQuery = useQuery({
 		...getLlmUsageReportOptions({ path: { workspaceSlug }, query: { month: currentMonthUtc() } }),
 		staleTime: 60_000,
 	});
 
-	// The practice script needs are not among them: the page binds models without them, so their failure
-	// shows only in the section *Models for practice scripts*.
 	const pageQueries = [
 		bindingsQuery,
 		workspaceQuery,
@@ -195,9 +187,6 @@ function ModelsContainer() {
 		Promise.all([
 			queryClient.invalidateQueries({ queryKey: listAgentsQueryKey({ path: { workspaceSlug } }) }),
 			queryClient.invalidateQueries(getMemberOnboardingOptions({ path: { workspaceSlug } })),
-			queryClient.invalidateQueries({
-				queryKey: listPracticeScriptNeedsQueryKey({ path: { workspaceSlug } }),
-			}),
 		]);
 
 	const [saveRevisions, setSaveRevisions] = useState<Partial<Record<string, number>>>({});
@@ -305,10 +294,6 @@ function ModelsContainer() {
 			availableModels={availableModelsQuery.data ?? []}
 			practicesEnabled={workspaceQuery.data?.practicesEnabled ?? false}
 			aiChoiceRequired={onboardingSettingsQuery.data?.aiChoiceRequired ?? false}
-			practiceScriptNeeds={panelState(practiceScriptNeedsQuery, (summaries) => ({
-				status: "ready" as const,
-				summaries,
-			}))}
 			ownProviderAllowed={llmSettingsQuery.data?.ownProviderAllowed ?? false}
 			providerPanel={
 				<WorkspaceProviders
@@ -637,7 +622,6 @@ function WorkspaceProviders({
 					connections.some(
 						(connection) =>
 							connection.id === modelForm.model.connectionId &&
-							!isPracticeScriptApi(connection.apiProtocol) &&
 							connection.apiProtocol !== "anthropic-messages",
 					)
 						? {

@@ -638,15 +638,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 definition.lineNotes(),
                 definition.guidance()));
         when(models.models(eq(scenario.workspace().getId()), anyList()))
-                .thenReturn(List.of(
-                        new BoundModelSlot("chat", ModelKind.CHAT, null),
-                        new BoundModelSlot("decision", ModelKind.DECISION, null),
-                        new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                        new BoundModelSlot("reranking", ModelKind.RERANKING, null),
-                        new BoundModelSlot(
-                                "review",
-                                ModelKind.CHAT,
-                                new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of()))));
+                .thenReturn(List.of(new BoundModelSlot(
+                        "review",
+                        ModelKind.CHAT,
+                        new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of()))));
         return requestSelectedVersion();
     }
 
@@ -667,12 +662,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         doReturn(pinned).when(productItems).pin(eq(ref), isNull());
         when(budget.canRequest(workspace, ReviewKind.ITEM, null)).thenReturn(true);
         when(models.models(workspace, List.of()))
-                .thenReturn(List.of(
-                        new BoundModelSlot("chat", ModelKind.CHAT, null),
-                        new BoundModelSlot("decision", ModelKind.DECISION, null),
-                        new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                        new BoundModelSlot("reranking", ModelKind.RERANKING, null),
-                        new BoundModelSlot("review", ModelKind.CHAT, null)));
+                .thenReturn(List.of(new BoundModelSlot("review", ModelKind.CHAT, null)));
         return service.request(new ReviewRequest(
                 workspace,
                 ref.itemId(),
@@ -849,15 +839,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 .currentWorkVersion(workspace, ref.itemId());
         when(budget.canRequest(workspace, ReviewKind.ITEM, null)).thenReturn(true);
         when(models.models(eq(workspace), anyList()))
-                .thenReturn(List.of(
-                        new BoundModelSlot("chat", ModelKind.CHAT, null),
-                        new BoundModelSlot("decision", ModelKind.DECISION, null),
-                        new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                        new BoundModelSlot("reranking", ModelKind.RERANKING, null),
-                        new BoundModelSlot(
-                                "review",
-                                ModelKind.CHAT,
-                                new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of()))));
+                .thenReturn(List.of(new BoundModelSlot(
+                        "review",
+                        ModelKind.CHAT,
+                        new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of()))));
         return new ItemEventInput(
                 workspace,
                 ref.itemId(),
@@ -1019,16 +1004,11 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 "test-model",
                 null,
                 Map.of(
-                        "directModelTokensPerAttempt",
-                        JsonNodeFactory.instance.numberNode(200000L),
-                        "directModelSearchUnitsPerAttempt",
-                        JsonNodeFactory.instance.numberNode(1000L)));
-        var slots = List.of(
-                new BoundModelSlot("chat", ModelKind.CHAT, model),
-                new BoundModelSlot("decision", ModelKind.DECISION, null),
-                new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                new BoundModelSlot("reranking", ModelKind.RERANKING, null),
-                new BoundModelSlot("review", ModelKind.CHAT, model));
+                        "practiceModelCalls",
+                        JsonNodeFactory.instance.numberNode(36L),
+                        "practiceOutputTokens",
+                        JsonNodeFactory.instance.numberNode(48000L)));
+        var slots = List.of(new BoundModelSlot("review", ModelKind.CHAT, model));
         when(models.models(eq(input.workspaceId()), anyList())).thenReturn(slots);
         var expected = new ReviewMethod(1, reviews.modelDigest(json.writeValueAsString(slots)), slots);
         var eventId = itemEvents.record(input);

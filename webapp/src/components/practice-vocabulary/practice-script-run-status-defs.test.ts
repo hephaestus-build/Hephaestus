@@ -14,7 +14,6 @@ const run = (over: Partial<PracticeScriptRun>): PracticeScriptRun => ({
 	error: null,
 	finishedAt: new Date("2026-10-01T10:00:00Z"),
 	jobId: "0b6f3c3e-5f1d-4f4a-9b55-2b7f6c9d1e01",
-	models: [],
 	practiceId: "12",
 	practiceVersionId: "34",
 	scriptKind: "CUSTOM",

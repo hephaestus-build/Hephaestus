@@ -172,13 +172,7 @@ export const zAgentBinding = z.object({
     ]),
     enabled: z.boolean(),
     instanceModelId: z.int().optional(),
-    purpose: z.enum([
-        'PRACTICE_REVIEW',
-        'MENTOR',
-        'PRACTICE_DECISION',
-        'PRACTICE_EMBEDDING',
-        'PRACTICE_RERANKING'
-    ]),
+    purpose: z.enum(['PRACTICE_REVIEW', 'MENTOR']),
     ready: z.boolean(),
     servedTiers: z.array(z.enum([
         'IN_HOUSE',
@@ -299,13 +293,7 @@ export const zAvailableLlmModel = z.object({
         'NO_CHARGE',
         'UNPRICED'
     ]),
-    purposes: z.array(z.enum([
-        'PRACTICE_REVIEW',
-        'MENTOR',
-        'PRACTICE_DECISION',
-        'PRACTICE_EMBEDDING',
-        'PRACTICE_RERANKING'
-    ])),
+    purposes: z.array(z.enum(['PRACTICE_REVIEW', 'MENTOR'])),
     reasoningEffort: z.enum([
         'NONE',
         'MINIMAL',
@@ -692,10 +680,7 @@ export const zCreateLlmConnectionRequest = z.object({
     apiProtocol: z.enum([
         'anthropic-messages',
         'openai-completions',
-        'openai-responses',
-        'openai-decisions',
-        'openai-embeddings',
-        'cohere-rerank'
+        'openai-responses'
     ]),
     authMode: z.enum(['BEARER', 'API_KEY']).optional(),
     baseUrl: z.string().min(0).max(2048),
@@ -809,10 +794,7 @@ export const zCreateWorkspaceLlmConnectionRequest = z.object({
     apiProtocol: z.enum([
         'anthropic-messages',
         'openai-completions',
-        'openai-responses',
-        'openai-decisions',
-        'openai-embeddings',
-        'cohere-rerank'
+        'openai-responses'
     ]),
     authMode: z.enum(['BEARER', 'API_KEY']).optional(),
     baseUrl: z.string().min(0).max(2048),
@@ -1990,10 +1972,7 @@ export const zLlmConnection = z.object({
     apiProtocol: z.enum([
         'anthropic-messages',
         'openai-completions',
-        'openai-responses',
-        'openai-decisions',
-        'openai-embeddings',
-        'cohere-rerank'
+        'openai-responses'
     ]),
     authMode: z.enum(['BEARER', 'API_KEY']),
     baseUrl: z.string(),
@@ -2021,13 +2000,7 @@ export const zLlmConnection = z.object({
     enabled: z.boolean(),
     hasApiKey: z.boolean(),
     id: z.int(),
-    purposes: z.array(z.enum([
-        'PRACTICE_REVIEW',
-        'MENTOR',
-        'PRACTICE_DECISION',
-        'PRACTICE_EMBEDDING',
-        'PRACTICE_RERANKING'
-    ])),
+    purposes: z.array(z.enum(['PRACTICE_REVIEW', 'MENTOR'])),
     slug: z.string(),
     updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional()
 });
@@ -2190,41 +2163,6 @@ export const zLlmUsageByJobType = z.object({
     outputTokens: z.int(),
     ownProviderTotalCostUsd: z.number(),
     totalCalls: z.int(),
-    unpricedEventCount: z.int()
-});
-
-/**
- * The decision, embedding and reranking calls that one practice's script made this month. Each call names the practice that made it.
- */
-export const zLlmUsageByPractice = z.object({
-    calls: z.int(),
-    inputTokens: z.int(),
-    instanceTotalCostUsd: z.number(),
-    outputTokens: z.int(),
-    ownProviderTotalCostUsd: z.number(),
-    practiceName: z.string().optional(),
-    practiceSlug: z.string().optional(),
-    purposes: z.array(z.enum([
-        'PRACTICE_REVIEW',
-        'MENTOR',
-        'PRACTICE_DECISION',
-        'PRACTICE_EMBEDDING',
-        'PRACTICE_RERANKING'
-    ])),
-    reviews: z.int(),
-    unpricedEventCount: z.int()
-});
-
-/**
- * The decision, embedding and reranking calls of this month, in total. calls, inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and unpricedEventCount do not: one review can count for several practices there.
- */
-export const zLlmUsagePracticeScriptTotal = z.object({
-    calls: z.int(),
-    inputTokens: z.int(),
-    instanceTotalCostUsd: z.number(),
-    outputTokens: z.int(),
-    ownProviderTotalCostUsd: z.number(),
-    reviews: z.int(),
     unpricedEventCount: z.int()
 });
 
@@ -2741,54 +2679,12 @@ export const zPracticeReviewScopePreview = z.object({
     widens: z.boolean()
 });
 
-export const zPracticeScriptAsOf = z.object({
-    finishedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    jobId: z.uuid(),
-    reviewId: z.uuid()
-});
-
-export const zPracticeScriptModel = z.object({
-    cacheReadTokens: z.int(),
-    cacheWriteTokens: z.int(),
-    calls: z.int(),
-    dataHandlingTier: z.enum([
-        'IN_HOUSE',
-        'CLOUD',
-        'UNDECLARED'
-    ]).nullable(),
-    inputTokens: z.int(),
-    kind: z.enum([
-        'CHAT',
-        'DECISION',
-        'EMBEDDING',
-        'RERANKING'
-    ]),
-    modelId: z.string().nullable(),
-    outputTokens: z.int()
-});
-
-export const zPracticeScriptNeed = z.object({
-    need: z.enum(['required', 'optional']),
-    slot: z.enum([
-        'chat',
-        'decision',
-        'embedding',
-        'reranking'
-    ]),
-    unmetTiers: z.array(z.enum([
-        'IN_HOUSE',
-        'CLOUD',
-        'UNDECLARED'
-    ]))
-});
-
 export const zPracticeScriptRun = z.object({
     attempt: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     durationMs: z.int().nullable(),
     error: z.string().nullable(),
     finishedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
     jobId: z.uuid(),
-    models: z.array(zPracticeScriptModel),
     noResultCause: z.enum(['EVIDENCE_NOT_READ', 'SESSION_ENDED']).nullable(),
     practiceId: z.string().regex(/^[1-9][0-9]*$/),
     practiceVersionId: z.string().regex(/^[1-9][0-9]*$/),
@@ -2814,14 +2710,6 @@ export const zPracticeScriptRun = z.object({
         'INVALID_CANDIDATE',
         'UNREAD_EVIDENCE'
     ]).nullable()
-});
-
-export const zPracticeScriptSummary = z.object({
-    asOf: zPracticeScriptAsOf.nullable(),
-    needs: z.array(zPracticeScriptNeed),
-    practiceName: z.string(),
-    practiceSlug: z.string(),
-    scriptChanged: z.boolean()
 });
 
 export const zPracticeStandingResult = z.object({
@@ -2884,10 +2772,7 @@ export const zProbeLlmConnectionRequest = z.object({
     apiProtocol: z.enum([
         'anthropic-messages',
         'openai-completions',
-        'openai-responses',
-        'openai-decisions',
-        'openai-embeddings',
-        'cohere-rerank'
+        'openai-responses'
     ]),
     authMode: z.enum(['BEARER', 'API_KEY']).optional(),
     baseUrl: z.string().min(1)
@@ -6266,10 +6151,7 @@ export const zWorkspaceLlmConnection = z.object({
     apiProtocol: z.enum([
         'anthropic-messages',
         'openai-completions',
-        'openai-responses',
-        'openai-decisions',
-        'openai-embeddings',
-        'cohere-rerank'
+        'openai-responses'
     ]),
     authMode: z.enum(['BEARER', 'API_KEY']),
     baseUrl: z.string(),
@@ -6297,13 +6179,7 @@ export const zWorkspaceLlmConnection = z.object({
     enabled: z.boolean(),
     hasApiKey: z.boolean(),
     id: z.int(),
-    purposes: z.array(z.enum([
-        'PRACTICE_REVIEW',
-        'MENTOR',
-        'PRACTICE_DECISION',
-        'PRACTICE_EMBEDDING',
-        'PRACTICE_RERANKING'
-    ])),
+    purposes: z.array(z.enum(['PRACTICE_REVIEW', 'MENTOR'])),
     slug: z.string(),
     updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional()
 });
@@ -6391,7 +6267,6 @@ export const zWorkspaceLlmSettings = z.object({
 export const zWorkspaceLlmUsageReport = z.object({
     byDay: z.array(zLlmUsageByDay),
     byJobType: z.array(zLlmUsageByJobType),
-    byPractice: z.array(zLlmUsageByPractice),
     fx: zFxRateInfo.optional(),
     instanceBudgetVerdict: z.enum([
         'WITHIN',
@@ -6413,7 +6288,6 @@ export const zWorkspaceLlmUsageReport = z.object({
     ownProviderPaused: z.boolean(),
     ownProviderTotalCostUsd: z.number(),
     ownProviderUnmeasured: zLlmUnmeasuredUsage,
-    practiceScriptTotal: zLlmUsagePracticeScriptTotal,
     unpricedEventCount: z.int()
 });
 

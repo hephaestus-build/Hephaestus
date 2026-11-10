@@ -28,15 +28,14 @@ function parsed(text: string) {
 	return report.data;
 }
 
-const noCalls = { review: 0, chat: 0, decision: 0, embedding: 0, reranking: 0 };
+const noCalls = { review: 0 };
 
 function outcome(changes: Partial<ProgramOutcome> = {}): ProgramOutcome {
 	return {
 		program: { kind: "builtin", digest: null },
-		models: [],
 		status: "ok",
 		stopReason: null,
-		calls: { ...noCalls, review: 1 },
+		calls: { review: 1 },
 		coverageReached: { reads: 4, truncatedReads: 0, failedReads: 0 },
 		durationMs: 40,
 		...changes,
@@ -74,44 +73,20 @@ void test("one entry for each admitted practice, sorted by slug as Java compares
 	assert.equal(report.truncated, false);
 });
 
-void test("a custom program is reported with the digest of its staged bytes and the models it declared", () => {
+void test("a custom program is reported with the digest of its staged bytes", () => {
 	const digest = createHash("sha256").update("export default {};\n").digest("hex");
 	const report = parsed(
 		executionReport([
-			[
-				"decides",
-				outcome({
-					program: { kind: "custom", digest },
-					models: [
-						{ slot: "chat", need: "optional", bound: true, failures: {} },
-						{
-							slot: "decision",
-							need: "required",
-							bound: true,
-							failures: { unavailable: 1, budget: 2, deadline: 3, "too-large": 4 },
-						},
-					],
-					calls: { review: 0, chat: 2, decision: 9, embedding: 0, reranking: 0 },
-				}),
-			],
+			["decides", outcome({ program: { kind: "custom", digest }, calls: noCalls })],
 		]),
 	);
 	assert.deepEqual(report.practices, [
 		{
 			practiceSlug: "decides",
 			program: { kind: "custom", digest },
-			models: [
-				{ slot: "chat", need: "optional", bound: true, failures: {} },
-				{
-					slot: "decision",
-					need: "required",
-					bound: true,
-					failures: { unavailable: 1, budget: 2, deadline: 3, "too-large": 4 },
-				},
-			],
 			status: "ok",
 			stopReason: null,
-			calls: { review: 0, chat: 2, decision: 9, embedding: 0, reranking: 0 },
+			calls: noCalls,
 			coverageReached: { reads: 4, truncatedReads: 0, failedReads: 0 },
 			durationMs: 40,
 		},
@@ -122,7 +97,7 @@ void test("an error is reported only for a failed practice", () => {
 	const report = parsed(
 		executionReport([
 			["ok", outcome({ error: "a note the host kept" })],
-			["withheld", outcome({ status: "withheld", stopReason: "unavailable", error: "no model" })],
+			["withheld", outcome({ status: "withheld", stopReason: "unavailable", error: "no context" })],
 			[
 				"not-reached",
 				outcome({ status: "not-reached", stopReason: "deadline", durationMs: null, error: "late" }),
@@ -236,14 +211,15 @@ void test("the report keeps the first practices by slug within its bounds, and s
 	assert.equal(report.truncated, true);
 });
 
+/** The largest entry without an error: every field at its longest value. */
 const large = outcome({
 	program: { kind: "custom", digest: "f".repeat(64) },
-	models: (["chat", "decision", "embedding", "reranking"] as const).map((slot) => ({
-		slot,
-		need: "optional",
-		bound: true,
-		failures: Object.fromEntries(REASONS.map((reason) => [reason, 1_000_000])),
-	})),
+	status: "not-finished",
+	stopReason: "invalid-candidate",
+	calls: { review: 1_000_000 },
+	reviewSessions: { modelCalls: 1_000_000, evidenceRefusals: 1_000_000, formatRefusals: 1_000_000 },
+	coverageReached: { reads: 1_000_000, truncatedReads: 1_000_000, failedReads: 1_000_000 },
+	durationMs: 2_147_483_647,
 });
 
 function entryBytes(slug: string): number {

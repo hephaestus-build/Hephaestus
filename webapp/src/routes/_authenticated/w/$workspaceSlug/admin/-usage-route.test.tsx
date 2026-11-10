@@ -1,12 +1,11 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { LlmUsageByPractice, WorkspaceLlmUsageReport } from "@/api/types.gen";
+import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { levelsOpenedBy } from "@/test/detail-stack";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
@@ -27,42 +26,7 @@ const REPORT: Wire<WorkspaceLlmUsageReport> = {
 	unpricedEventCount: 0,
 	byJobType: [],
 	byDay: [],
-	byPractice: [],
-	practiceScriptTotal: {
-		reviews: 0,
-		calls: 0,
-		inputTokens: 0,
-		outputTokens: 0,
-		instanceTotalCostUsd: 0,
-		ownProviderTotalCostUsd: 0,
-		unpricedEventCount: 0,
-	},
 };
-
-const PRACTICE_SCRIPT_ROWS: Wire<LlmUsageByPractice>[] = [
-	{
-		practiceSlug: "comment-quality",
-		practiceName: "Comments explain why",
-		purposes: ["PRACTICE_DECISION"],
-		reviews: 4,
-		calls: 40,
-		inputTokens: 9000,
-		outputTokens: 120,
-		instanceTotalCostUsd: 0,
-		ownProviderTotalCostUsd: 0.4,
-		unpricedEventCount: 0,
-	},
-	{
-		purposes: ["PRACTICE_EMBEDDING", "PRACTICE_RERANKING"],
-		reviews: 1,
-		calls: 6,
-		inputTokens: 800,
-		outputTokens: 0,
-		instanceTotalCostUsd: 0,
-		ownProviderTotalCostUsd: 0.02,
-		unpricedEventCount: 0,
-	},
-];
 
 const REJECTION = "A cap above $1,000,000 is not accepted.";
 
@@ -144,8 +108,8 @@ function mockReport(report: Wire<WorkspaceLlmUsageReport>, requestedMonths: stri
 	);
 }
 
-describe("workspace AI usage route, models for practice scripts by practice", () => {
-	it("asks for the month in the address and lists each practice from the wire", async () => {
+describe("workspace AI usage route, the report", () => {
+	it("asks for the month in the address and lists each use from the wire", async () => {
 		const requestedMonths: string[] = [];
 		mockReport(
 			{
@@ -164,41 +128,14 @@ describe("workspace AI usage route, models for practice scripts by practice", ()
 						events: 5,
 					},
 				],
-				byPractice: PRACTICE_SCRIPT_ROWS,
-				practiceScriptTotal: {
-					...REPORT.practiceScriptTotal,
-					reviews: 4,
-					calls: 46,
-					ownProviderTotalCostUsd: 0.42,
-				},
 			},
 			requestedMonths,
 		);
 		renderRouteAt("/w/acme/admin/usage?month=2026-07");
 
-		const table = await screen.findByRole(
-			"table",
-			{ name: "Spend on models for practice scripts, by practice" },
-			ROUTE_RENDER_WAIT,
-		);
+		const use = await screen.findByText("Pull request review", undefined, ROUTE_RENDER_WAIT);
 		expect(requestedMonths).toContain("2026-07");
-		const link = within(table).getByRole("link", { name: "Comments explain why" });
-		expect(new URL(String(link.getAttribute("href")), window.location.origin).pathname).toBe(
-			"/w/acme/admin/practices",
-		);
-		expect(levelsOpenedBy(link)).toStrictEqual(["practice:comment-quality"]);
-		const notAttributed = within(within(table).getByRole("row", { name: /^Not attributed/u }));
-		notAttributed.getByText("Embedding model");
-		notAttributed.getByText("Reranking model");
-		expect(within(table).getByRole("row", { name: /^Total/u }).textContent).toContain("$0.42");
-	});
-
-	it("leaves the card out when no script called a model", async () => {
-		mockReport(REPORT);
-		renderRouteAt("/w/acme/admin/usage");
-
-		await screen.findByRole("button", { name: "Change provider cap" }, ROUTE_RENDER_WAIT);
-		expect(screen.queryByText("Models for practice scripts, by practice")).toBeNull();
+		expect(use.closest("table")?.querySelector("caption")?.textContent).toBe("AI spend by use");
 	});
 
 	it("says the report could not load, and offers a retry", async () => {

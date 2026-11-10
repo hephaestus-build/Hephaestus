@@ -48,7 +48,7 @@ class ScanBudgetTest extends BaseUnitTest {
             policy,
             admission,
             monthly,
-            new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200000, 1000, Duration.ofMinutes(10)));
+            new PracticeReviewProperties(false, 15, 5, null, 12, 16000, Duration.ofMinutes(10)));
     private final ReviewAssignmentSnapshot assignment = RuntimeReviewTestData.assignment(null, null);
     private final ScanExecutionSnapshot scan = new ScanExecutionSnapshot(
             RuntimeReviewTestData.review(ReviewKind.SCAN, assignment),
@@ -145,7 +145,6 @@ class ScanBudgetTest extends BaseUnitTest {
                 new BigDecimal("1"),
                 new BigDecimal("8"));
         assertThat(ScanBudget.cost(price, 1000000, 500000)).isEqualByComparingTo("10");
-        assertThat(ScanBudget.rate(price)).isEqualByComparingTo("8");
     }
 
     @Test
@@ -158,8 +157,6 @@ class ScanBudgetTest extends BaseUnitTest {
     @Test
     void anUnknownPriceCannotBeReportedAsFree() {
         assertThatThrownBy(() -> ScanBudget.cost(LlmPriceSnapshot.unpricedInstance(), 1, 1))
-                .isInstanceOf(ScanModelUnavailableException.class);
-        assertThatThrownBy(() -> ScanBudget.rate(LlmPriceSnapshot.unpricedInstance()))
                 .isInstanceOf(ScanModelUnavailableException.class);
     }
 

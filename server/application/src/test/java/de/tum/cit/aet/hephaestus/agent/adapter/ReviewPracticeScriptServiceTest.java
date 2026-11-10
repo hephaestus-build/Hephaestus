@@ -31,15 +31,10 @@ class ReviewPracticeScriptServiceTest extends BaseUnitTest {
     private static final long WORKSPACE = 7L;
     private static final UUID REVIEW = UUID.randomUUID();
     private static final UUID JOB = UUID.randomUUID();
-    private static final String HOST_CALLS = "\"review\":1,\"chat\":0,\"decision\":0,\"embedding\":0,\"reranking\":0";
 
     private static JsonNode calls(@Nullable String reviewSessions) {
-        return calls(HOST_CALLS, reviewSessions);
-    }
-
-    private static JsonNode calls(String hostCalls, @Nullable String reviewSessions) {
         return new JsonMapper()
-                .readTree("{" + hostCalls + (reviewSessions == null ? "" : ",\"reviewSessions\":" + reviewSessions)
+                .readTree("{\"review\":1" + (reviewSessions == null ? "" : ",\"reviewSessions\":" + reviewSessions)
                         + "}");
     }
 
@@ -54,7 +49,6 @@ class ReviewPracticeScriptServiceTest extends BaseUnitTest {
                 kind,
                 status == ScriptRunStatus.OK ? null : ScriptStopReason.OFF_FORMAT,
                 calls,
-                null,
                 Instant.EPOCH.plusSeconds(practiceId),
                 null,
                 1000);
@@ -68,7 +62,6 @@ class ReviewPracticeScriptServiceTest extends BaseUnitTest {
         when(reviews.findPinned(eq(WORKSPACE), anyCollection())).thenReturn(Map.of(REVIEW, List.of()));
         when(runtime.jobsOf(eq(WORKSPACE), anyCollection()))
                 .thenReturn(List.of(new ReviewRuntimeRepository.JobOfReview(JOB, REVIEW)));
-        when(runs.sumScriptCalls(eq(WORKSPACE), anyCollection())).thenReturn(List.of());
         when(runs.findByWorkspaceIdAndJobIdIn(eq(WORKSPACE), anyCollection()))
                 .thenReturn(List.of(
                         // Six model calls, four evidence refusals and one schema refusal, then a loop stop.
@@ -94,14 +87,12 @@ class ReviewPracticeScriptServiceTest extends BaseUnitTest {
                                 ScriptKind.BUILTIN,
                                 ScriptRunStatus.OK,
                                 calls("{\"modelCalls\":0,\"evidenceRefusals\":0,\"formatRefusals\":0}")),
-                        // Its review was refused once, then accepted; its own decision model then answered off-format.
+                        // Its review was refused once, then accepted; its own code then stopped off-format.
                         run(
                                 6,
                                 ScriptKind.CUSTOM,
                                 ScriptRunStatus.FAILED,
-                                calls(
-                                        "\"review\":1,\"chat\":0,\"decision\":1,\"embedding\":0,\"reranking\":0",
-                                        "{\"modelCalls\":3,\"evidenceRefusals\":1,\"formatRefusals\":0}"))));
+                                calls("{\"modelCalls\":3,\"evidenceRefusals\":1,\"formatRefusals\":0}"))));
 
         List<PracticeScriptRunDTO> mapped = new ReviewPracticeScriptService(runs, reviews, runtime)
                 .forReviews(WORKSPACE, List.of(REVIEW))
@@ -111,15 +102,14 @@ class ReviewPracticeScriptServiceTest extends BaseUnitTest {
                 .extracting(
                         PracticeScriptRunDTO::practiceId,
                         PracticeScriptRunDTO::noResultCause,
-                        PracticeScriptRunDTO::reviewModelCalls,
-                        PracticeScriptRunDTO::models)
+                        PracticeScriptRunDTO::reviewModelCalls)
                 .containsExactly(
-                        tuple("1", ScriptNoResultCause.EVIDENCE_NOT_READ, 6, List.of()),
-                        tuple("2", ScriptNoResultCause.SESSION_ENDED, null, List.of()),
-                        tuple("3", null, 3, List.of()),
-                        tuple("4", ScriptNoResultCause.SESSION_ENDED, 2, List.of()),
-                        tuple("5", null, 0, List.of()),
+                        tuple("1", ScriptNoResultCause.EVIDENCE_NOT_READ, 6),
+                        tuple("2", ScriptNoResultCause.SESSION_ENDED, null),
+                        tuple("3", null, 3),
+                        tuple("4", ScriptNoResultCause.SESSION_ENDED, 2),
+                        tuple("5", null, 0),
                         // Only the built-in's contract proves where an OFF_FORMAT came from.
-                        tuple("6", null, 3, List.of()));
+                        tuple("6", null, 3));
     }
 }

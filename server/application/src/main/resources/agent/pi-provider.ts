@@ -218,23 +218,6 @@ export function parseProxyClaim(value: string | undefined): Readonly<Record<stri
 	return claim;
 }
 
-/** `base`, sending the run's claim headers with every request. */
-export function withClaim(
-	base: typeof fetch,
-	claim: Readonly<Record<string, string>>,
-): typeof fetch {
-	if (Object.keys(claim).length === 0) {
-		return base;
-	}
-	return async (input, init) => {
-		const headers = new Headers(init?.headers);
-		for (const [name, value] of Object.entries(claim)) {
-			headers.set(name, value);
-		}
-		return base(input, { ...init, headers });
-	};
-}
-
 /**
  * The provider of a run that a sandbox drives: the gateway's model routes, called with the sandbox token and the
  * run's claim (`X-Agent-Run`, `X-Agent-Epoch`), so the gateway bills the call to the run and refuses it once the claim

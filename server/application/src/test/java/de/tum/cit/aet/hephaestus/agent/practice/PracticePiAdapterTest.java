@@ -2,26 +2,21 @@ package de.tum.cit.aet.hephaestus.agent.practice;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
-import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
-import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class PracticePiAdapterTest extends BaseUnitTest {
@@ -40,9 +35,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 new PiRuntimeFactory(mapper),
                 new PiResultParser(mapper, new SimpleMeterRegistry()),
                 new AgentImageProperties(IMAGE, ImagePullPolicy.IF_NOT_PRESENT),
-                new PracticeReviewProperties(
-                        false, 15, 5, samplingTemperature, 12, 16000, 150_000, 1000, Duration.ofMinutes(10)),
-                mapper);
+                new PracticeReviewProperties(false, 15, 5, samplingTemperature, 12, 16000, Duration.ofMinutes(10)));
     }
 
     @Test
@@ -55,7 +48,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
 
     private PracticeAgentRequest proxyRequest() {
         return new PracticeAgentRequest(
-                "azure-openai-responses", "gpt-5.4-mini", null, null, null, "job-token-123", 600, Map.of(), false);
+                "azure-openai-responses", "gpt-5.4-mini", null, null, null, "job-token-123", 600, false);
     }
 
     @Test
@@ -93,12 +86,10 @@ class PracticePiAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldGiveTheRunnerOneTokenAndTheDirectModelBudgetWhenBuildingTheSpec() {
+    void shouldGiveTheRunnerOneTokenWhenBuildingTheSpec() {
         var spec = adapter.buildSandboxSpec(proxyRequest());
 
-        assertThat(spec.environment())
-                .containsEntry(PracticePiAdapter.DIRECT_MODEL_TOKENS_ENV, "150000")
-                .doesNotContainKey("PRACTICE_SCRIPT_PROXY_TOKEN");
+        assertThat(spec.environment()).doesNotContainKey("PRACTICE_SCRIPT_PROXY_TOKEN");
         assertThat(spec.command().getLast()).doesNotContain("PRACTICE_SCRIPT_PROXY_TOKEN");
     }
 
@@ -112,7 +103,6 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 null,
                 "job-token-123",
                 PracticePiAdapter.MIN_TIMEOUT_SECONDS,
-                Map.of(),
                 false);
 
         assertThat(Long.parseLong(
@@ -125,55 +115,12 @@ class PracticePiAdapterTest extends BaseUnitTest {
     void shouldGiveTheRunnerTheWholeTimeoutLessTheShutdownBufferWhenBuildingTheSpec(
             int timeoutSeconds, long expectedBudgetMs) {
         PracticeAgentRequest request = new PracticeAgentRequest(
-                "openai-completions", "m", null, null, null, "job-token-123", timeoutSeconds, Map.of(), false);
+                "openai-completions", "m", null, null, null, "job-token-123", timeoutSeconds, false);
 
         long budgetMs =
                 Long.parseLong(adapter.buildSandboxSpec(request).environment().get("AGENT_BUDGET_MS"));
 
         assertThat(budgetMs).isEqualTo(expectedBudgetMs);
-    }
-
-    @Test
-    void shouldStageNoModelsFileWhenTheJobHasNoDirectModels() {
-        var spec = adapter.buildSandboxSpec(proxyRequest());
-
-        assertThat(spec.inputFiles()).doesNotContainKey(SandboxLayout.PRACTICE_SCRIPT_MODELS_FILE);
-    }
-
-    @Test
-    void shouldWriteTheReviewModelAsTheOnlyChatSlotWhenNoPracticeScriptModelIsBound() throws Exception {
-        PracticeAgentRequest request = new PracticeAgentRequest(
-                "openai-completions",
-                "qwen-chat",
-                null,
-                null,
-                null,
-                "job-token-123",
-                600,
-                Map.of(ModelKind.CHAT, model("openai-completions", "qwen-chat")),
-                false);
-
-        var spec = adapter.buildSandboxSpec(request);
-
-        assertThat(spec.environment()).doesNotContainKey("PRACTICE_SCRIPT_PROXY_TOKEN");
-        assertThat(spec.gatewayToken()).isEqualTo("job-token-123");
-        JsonNode models = new ObjectMapper().readTree(spec.inputFiles().get(SandboxLayout.PRACTICE_SCRIPT_MODELS_FILE));
-        assertThat(models.propertyNames()).containsExactly("chat");
-    }
-
-    private static FrozenModel model(String protocol, String modelId) {
-        return new FrozenModel(
-                LlmApiProtocol.parse(protocol).orElseThrow(),
-                "https://models.example",
-                modelId,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                false);
     }
 
     @Test
@@ -197,7 +144,6 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 ReasoningEffort.MEDIUM,
                 "job-token-123",
                 600,
-                Map.of(),
                 false);
 
         var spec = adapter.buildSandboxSpec(request);

@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelSlot;
-import de.tum.cit.aet.hephaestus.practices.spi.Need;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptStopReason;
@@ -12,7 +10,6 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -241,10 +238,7 @@ public class PiResultParser {
      * @param programDigest the SHA-256 of the staged script as the runner reported it; null for the built-in
      * @param stopReason why the program stopped without a candidate; null exactly when it returned one, or did not
      *     finish
-     * @param models the direct models the program declared; empty for the built-in and for a script that declares
-     *     none, and {@code null} when they are not known because the program did not finish
-     * @param calls the calls the program made, {@code {review, chat, decision, embedding, reranking}}; null when the
-     *     practice is not named by the report
+     * @param calls the calls the program made, {@code {review}}; null when the practice is not named by the report
      * @param coverageReached the reads the program's host counted; null when not named by the report
      * @param reviewSessions what the practice's review sessions did as the runner counted it,
      *     {@code {modelCalls, evidenceRefusals, formatRefusals}}; null when the report does not say. These are the
@@ -260,14 +254,12 @@ public class PiResultParser {
             ScriptKind programKind,
             @Nullable String programDigest,
             @Nullable ScriptStopReason stopReason,
-            @Nullable List<ScriptModelUse> models,
             @Nullable Map<String, Integer> calls,
             @Nullable Map<String, Integer> coverageReached,
             @Nullable Map<String, Integer> reviewSessions,
             @Nullable String error,
             @Nullable Integer durationMs) {
         public PracticeScriptRunReport {
-            models = models == null ? null : List.copyOf(models);
             calls = calls == null ? null : Map.copyOf(calls);
             coverageReached = coverageReached == null ? null : Map.copyOf(coverageReached);
             reviewSessions = reviewSessions == null ? null : Map.copyOf(reviewSessions);
@@ -276,21 +268,11 @@ public class PiResultParser {
         /** An admitted practice the report does not name: the runner lists every admitted practice, finished or not. */
         static PracticeScriptRunReport notFinished(String practiceSlug, ScriptKind programKind) {
             return new PracticeScriptRunReport(
-                    practiceSlug,
-                    ScriptRunStatus.NOT_FINISHED,
-                    programKind,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null);
+                    practiceSlug, ScriptRunStatus.NOT_FINISHED, programKind, null, null, null, null, null, null, null);
         }
     }
 
-    static final int PRACTICE_SCRIPT_REPORT_VERSION = 2;
+    static final int PRACTICE_SCRIPT_REPORT_VERSION = 3;
 
     static final int PRACTICE_SCRIPT_REPORT_MAX_BYTES = 1024 * 1024;
     static final int PRACTICE_SCRIPT_REPORT_MAX_ENTRIES = 2560;
@@ -320,10 +302,7 @@ public class PiResultParser {
                             : reason.name().toLowerCase(Locale.ROOT).replace('_', '-'),
                     reason -> reason));
 
-    public static final List<String> CALL_KINDS = List.of("review", "chat", "decision", "embedding", "reranking");
-
-    private static final Set<String> MODEL_FAILURE_REASONS =
-            Set.of("unavailable", "budget", "deadline", "too-large", "off-format", "refused", "error");
+    public static final List<String> CALL_KINDS = List.of("review");
 
     private static final List<String> COVERAGE_COUNTS = List.of("reads", "truncatedReads", "failedReads");
 
@@ -333,7 +312,6 @@ public class PiResultParser {
     private static final Set<String> ENTRY_KEYS = Set.of(
             "practiceSlug",
             "program",
-            "models",
             "status",
             "stopReason",
             "error",
@@ -341,12 +319,6 @@ public class PiResultParser {
             "coverageReached",
             "reviewSessions",
             "durationMs");
-
-    private static final Map<String, Need> PRACTICE_SCRIPT_NEEDS =
-            Map.of("required", Need.REQUIRED, "optional", Need.OPTIONAL);
-
-    private static final Map<String, ModelSlot> PURPOSES_BY_SLOT =
-            Arrays.stream(ModelSlot.values()).collect(Collectors.toUnmodifiableMap(ModelSlot::wireValue, slot -> slot));
 
     /**
      * The program runs of one attempt, one per admitted practice. An entry with a value outside the contract, a
@@ -393,7 +365,7 @@ public class PiResultParser {
             recordFailure(
                     "practice_script_report",
                     new IllegalArgumentException(
-                            "no report schema version 2, bounded practices array or truncation flag"));
+                            "no report schema version 3, bounded practices array or truncation flag"));
             return List.of();
         }
         Set<String> named = new HashSet<>();
@@ -447,13 +419,12 @@ public class PiResultParser {
         if ((status == ScriptRunStatus.OK) != stop.isNull() || (!stop.isNull() && stopReason == null)) {
             return null;
         }
-        List<ScriptModelUse> models = modelUses(entry.path("models"));
         Map<String, Integer> calls = counts(entry.path("calls"), CALL_KINDS);
         Map<String, Integer> coverage = counts(entry.path("coverageReached"), COVERAGE_COUNTS);
-        // Reports before the runner counted review sessions do not name them.
+        // The runner omits the review-session counts when it has none.
         Map<String, Integer> sessions =
                 entry.has("reviewSessions") ? counts(entry.path("reviewSessions"), REVIEW_SESSION_COUNTS) : null;
-        if (models == null || calls == null || coverage == null || (entry.has("reviewSessions") && sessions == null)) {
+        if (calls == null || coverage == null || (entry.has("reviewSessions") && sessions == null)) {
             return null;
         }
         // A program that did not start made no call and took no time.
@@ -467,7 +438,7 @@ public class PiResultParser {
         // A duration only explains the run, so a missing or malformed one leaves the run without it.
         Integer durationMs = started ? count(entry.path("durationMs")) : null;
         return new PracticeScriptRunReport(
-                slug, status, kind, digest, stopReason, models, calls, coverage, sessions, error, durationMs);
+                slug, status, kind, digest, stopReason, calls, coverage, sessions, error, durationMs);
     }
 
     private static @Nullable Map<String, Integer> counts(JsonNode node, List<String> names) {
@@ -492,30 +463,6 @@ public class PiResultParser {
                 : first.substring(0, first.offsetByCodePoints(0, PRACTICE_SCRIPT_ERROR_MAX_LENGTH));
         String line = BLANK_END.matcher(CONTROL.matcher(cut).replaceAll(" ")).replaceFirst("");
         return line.isEmpty() || !StorableText.isStorable(line) ? null : line;
-    }
-
-    private static @Nullable List<ScriptModelUse> modelUses(JsonNode models) {
-        if (!models.isArray()) return null;
-        var uses = new ArrayList<ScriptModelUse>();
-        var seen = new HashSet<ModelSlot>();
-        for (JsonNode model : models) {
-            ModelSlot slot = PURPOSES_BY_SLOT.get(model.path("slot").asString(""));
-            Need need = PRACTICE_SCRIPT_NEEDS.get(model.path("need").asString(""));
-            if (slot == null
-                    || !seen.add(slot)
-                    || need == null
-                    || !model.path("bound").isBoolean()) return null;
-            var failures = new ArrayList<ScriptModelUse.Failure>();
-            JsonNode counts = model.path("failures");
-            if (!counts.isObject()) return null;
-            for (var entry : counts.properties()) {
-                Integer amount = count(entry.getValue());
-                if (amount == null || !MODEL_FAILURE_REASONS.contains(entry.getKey())) return null;
-                if (amount > 0) failures.add(new ScriptModelUse.Failure(entry.getKey(), amount));
-            }
-            uses.add(new ScriptModelUse(slot, need, model.path("bound").asBoolean(), failures));
-        }
-        return List.copyOf(uses);
     }
 
     private static @Nullable Integer count(JsonNode value) {

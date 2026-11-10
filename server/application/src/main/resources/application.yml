@@ -582,14 +582,6 @@ hephaestus:
         # the whole run.
         practice-model-calls: ${PRACTICE_REVIEW_PRACTICE_MODEL_CALLS:36}
         practice-output-tokens: ${PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS:48000}
-        # The tokens, input and output together, that the direct model calls of one review attempt's practice
-        # programs may spend on all their slots: a sublimit of the attempt. The review session's own calls do
-        # not count against it. The proxy refuses further direct calls after this sum.
-        direct-model-tokens-per-attempt: ${PRACTICE_REVIEW_DIRECT_MODEL_TOKENS_PER_ATTEMPT:200000}
-        # The search units that the direct reranking calls of one review attempt may bill, for providers such
-        # as Cohere that bill search units instead of tokens. The proxy refuses further direct calls after
-        # this sum.
-        direct-model-search-units-per-attempt: ${PRACTICE_REVIEW_DIRECT_MODEL_SEARCH_UNITS_PER_ATTEMPT:1000}
         # How long the worker may compose a review's feedback after its sandbox ends. The stale-job sweep
         # bounds it as well.
         composition-timeout: ${PRACTICE_REVIEW_COMPOSITION_TIMEOUT:10m}
@@ -639,7 +631,7 @@ hephaestus:
         gateway:
             port: ${SANDBOX_API_PORT:8081}
             max-request-bytes: ${SANDBOX_API_MAX_REQUEST_BYTES:4194304}
-            requests-per-minute: ${SANDBOX_API_REQUESTS_PER_MINUTE:696}
+            requests-per-minute: ${SANDBOX_API_REQUESTS_PER_MINUTE:680}
             source-requests-per-minute: ${SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE:12000}
             max-connections: ${SANDBOX_API_MAX_CONNECTIONS:4096}
         # Each review sandbox; the sizing behind the defaults is in docs/admin/sizing.mdx § Review sandbox limits.

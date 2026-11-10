@@ -34,8 +34,7 @@ class ProxyRequestPolicy {
         var model = new LlmModelResolver.ConnectionRef(
                 request.connectionScope(), request.connectionId(), request.modelId(), workspaceId);
         return switch (attempt.sourceType()) {
-            // A model for practice scripts is checked like the review's own model: against the reviewed developer.
-            case REVIEW_JOB, PRACTICE_SCRIPT_DECISION, PRACTICE_SCRIPT_EMBEDDING, PRACTICE_SCRIPT_RERANKING ->
+            case REVIEW_JOB ->
                 jobs.findByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
                         .filter(job -> reviews.allows(job, model))
                         .isPresent();
@@ -43,6 +42,8 @@ class ProxyRequestPolicy {
                 turns.findAccountIdByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
                         .filter(account -> routing.allows(workspaceId, account, model))
                         .isPresent();
+            // Past ledger rows only: no call bills a practice script source.
+            case PRACTICE_SCRIPT_DECISION, PRACTICE_SCRIPT_EMBEDDING, PRACTICE_SCRIPT_RERANKING -> false;
         };
     }
 }

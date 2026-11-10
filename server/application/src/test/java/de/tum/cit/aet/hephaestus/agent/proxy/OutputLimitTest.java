@@ -172,27 +172,6 @@ class OutputLimitTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldBoundNoOutputWhenACallWritesNone() {
-        assertThat(OutputLimit.bound(LlmApiProtocol.OPENAI_EMBEDDINGS, null, json("{\"max_tokens\":1}")))
-                .isZero();
-        assertThat(OutputLimit.bound(LlmApiProtocol.COHERE_RERANK, null, json("{}")))
-                .isZero();
-        assertThat(OutputLimit.bound(LlmApiProtocol.OPENAI_DECISIONS, 64L, json("{}")))
-                .isEqualTo(64);
-        assertThat(OutputLimit.bound(LlmApiProtocol.OPENAI_DECISIONS, null, json("{}")))
-                .as("a decision model without a limit leaves its call without a bound")
-                .isNull();
-    }
-
-    @ParameterizedTest
-    @EnumSource(
-            value = LlmApiProtocol.class,
-            names = {"OPENAI_DECISIONS", "OPENAI_EMBEDDINGS", "COHERE_RERANK"})
-    void shouldWriteNoLimitWhenTheCallWritesNoOutput(LlmApiProtocol protocol) {
-        assertThat(OutputLimit.generative(protocol)).isFalse();
-    }
-
-    @Test
     void shouldBoundEveryRequestedCompletionWhenTheRequestNamesMoreThanOne() {
         JsonNode request = json("{\"max_tokens\":16384,\"n\":128}");
         assertThat(OutputLimit.bound(LlmApiProtocol.OPENAI_COMPLETIONS, 4096L, request))

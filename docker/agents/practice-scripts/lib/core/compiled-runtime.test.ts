@@ -151,7 +151,7 @@ child.onClose(() => { clearTimeout(timer); closed.resolve(); if (!replied) compl
 child.onMessage(raw => {
   try {
     const message = childMessageSchema.parse(typeof raw === "string" ? JSON.parse(raw) : raw);
-    if (message.kind === "meta") child.send({kind:"meta-accepted",models:{},forcedToolChoice:false,tokens:0});
+    if (message.kind === "meta") child.send({kind:"meta-accepted"});
     if (message.kind === "result") { replied = true; complete.resolve(message.value); }
     if (message.kind === "failed") complete.reject(new Error(message.message+"\\n"+output));
   } catch(error) { complete.reject(error); child.kill(); }

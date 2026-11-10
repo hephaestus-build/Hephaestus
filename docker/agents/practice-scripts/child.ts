@@ -1,25 +1,21 @@
-// Custom scripts run without credentials and request evidence and model calls through the host.
+// Custom scripts run without credentials and request evidence and their review through the host.
 import { once } from "node:events";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
-import { callLabel } from "./lib/core/call-label.ts";
 import { NOT_A_DEFINITION_ERROR } from "./lib/core/contract.ts";
-import {
-	MAX_LABEL_CHARS,
-	type ChildJob,
-	type ChildMessage,
-	type HostMessage,
-	type ReadRequest,
-	type ReadValues,
+import type {
+	ChildJob,
+	ChildMessage,
+	HostMessage,
+	ReadRequest,
+	ReadValues,
 } from "./lib/core/ipc.ts";
 import { isJsonObject } from "./lib/core/json.ts";
-import { ipcModels } from "./lib/core/models-ipc.ts";
 import {
 	captureFailures,
 	isPracticeScriptDefinition,
 	UnratedError,
-	type ModelNeeds,
 	type PracticeScriptDefinition,
 } from "./lib/core/practice-script.ts";
 import { programContext } from "./lib/core/program-context.ts";
@@ -40,8 +36,7 @@ const postLast = promisify((message: ChildMessage, sent: (error: Error | null) =
 
 const pending = new Map<number, (message: HostMessage) => void>();
 let nextId = 0;
-const metaReply = Promise.withResolvers<Extract<HostMessage, { kind: "meta-accepted" }>>();
-let tokensLeft = 0;
+const metaReply = Promise.withResolvers<undefined>();
 const stopped = new AbortController();
 
 // Host messages are trusted; only the routing field needs validation.
@@ -55,8 +50,7 @@ process.on("message", (message: unknown) => {
 		return;
 	}
 	if (message.kind === "meta-accepted") {
-		tokensLeft = message.tokens;
-		metaReply.resolve(message);
+		metaReply.resolve(undefined);
 		return;
 	}
 	if (message.kind === "abort") {
@@ -94,45 +88,14 @@ async function read(readRequest: ReadRequest): Promise<ReadValues[keyof ReadValu
 
 async function runDefinition(
 	job: ChildJob,
-	definition: PracticeScriptDefinition<ModelNeeds>,
+	definition: PracticeScriptDefinition,
 ): Promise<unknown> {
 	post({ kind: "meta", meta: definition.meta });
-	const accepted = await metaReply.promise;
+	await metaReply.promise;
 	const abortSignal = AbortSignal.any([
 		stopped.signal,
 		AbortSignal.timeout(Math.max(0, job.deadline - Date.now())),
 	]);
-	const models = ipcModels(
-		accepted.models,
-		async (slot, options, signal) => {
-			signal?.throwIfAborted();
-			const answered = new AbortController();
-			const reply = await request((id) => {
-				signal?.addEventListener(
-					"abort",
-					() => {
-						post({ kind: "cancel", id });
-					},
-					{ once: true, signal: answered.signal },
-				);
-				const label = (callLabel.getStore() ?? "").slice(0, MAX_LABEL_CHARS);
-				return { kind: "model", id, slot, label, options };
-			}).finally(() => {
-				answered.abort();
-			});
-			if (reply.kind === "model") {
-				tokensLeft = reply.tokensLeft;
-				return reply.answer;
-			}
-			if (reply.kind === "model-failed") {
-				tokensLeft = reply.tokensLeft;
-				// The AI SDK's `maxRetries` retries only an `APICallError`, so each direct model call runs once.
-				throw new UnratedError(reply.reason, reply.message);
-			}
-			throw new Error("unexpected reply to a model call");
-		},
-		accepted.forcedToolChoice,
-	);
 	const ctx = programContext(job, {
 		read,
 		review: async (options) => {
@@ -148,8 +111,6 @@ async function runDefinition(
 			}
 			throw new Error("unexpected reply to a review");
 		},
-		models,
-		tokensLeft: () => tokensLeft,
 		log: (text) => {
 			post({ kind: "log", text });
 		},

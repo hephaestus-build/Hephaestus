@@ -5,7 +5,6 @@ import { assert, describe, expect, it } from "vitest";
 import type { LlmUsageByDay, WorkspaceLlmUsageReport } from "@/api/types.gen";
 import type { Purse } from "@/components/practice-vocabulary/purse-defs";
 
-import { NO_PRACTICE_SCRIPT_USAGE } from "./fixtures";
 import { LlmUsageByDayTable, LlmUsageByJobTypeTable } from "./LlmUsageBreakdownTables";
 
 const julyFifth: LlmUsageByDay = {
@@ -29,7 +28,6 @@ const report: WorkspaceLlmUsageReport = {
 	ownProviderPaused: false,
 	ownProviderInUse: true,
 	unpricedEventCount: 2,
-	...NO_PRACTICE_SCRIPT_USAGE,
 	byDay: [
 		julyFifth,
 		{

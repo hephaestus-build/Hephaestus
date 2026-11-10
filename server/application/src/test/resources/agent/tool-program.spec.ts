@@ -18,7 +18,6 @@ import {
 	EvidenceReader,
 	noReceipts,
 } from "../../../../../../docker/agents/practice-scripts/lib/core/evidence-reader.ts";
-import { ModelBudget } from "../../../../../../docker/agents/practice-scripts/lib/core/models-host.ts";
 import {
 	runCustomProgram,
 	type ProgramServices,
@@ -126,9 +125,6 @@ async function attempt(slug: string, onReview: () => void = () => undefined) {
 			},
 			noReceipts(),
 		),
-		models: {},
-		budget: new ModelBudget(1000, 1),
-		awaitModel: () => () => undefined,
 		review: async (options) => {
 			reviews.push(options);
 			onReview();

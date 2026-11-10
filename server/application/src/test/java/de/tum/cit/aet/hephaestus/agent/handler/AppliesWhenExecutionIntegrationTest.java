@@ -676,7 +676,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
             assertThat(Objects.requireNonNull(job.getCapture()).path("index").size())
                     .isEqualTo(swiftChanged ? 1 : 0);
         }
-        byte[] report = "{\"schemaVersion\":2,\"truncated\":false,\"practices\":[]}".getBytes(StandardCharsets.UTF_8);
+        byte[] report = "{\"schemaVersion\":3,\"truncated\":false,\"practices\":[]}".getBytes(StandardCharsets.UTF_8);
         PracticeScriptRunRecorderFixtures.record(
                 new PiResultParser(mapper, meters),
                 scriptRuns,
@@ -685,7 +685,6 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 assignments,
                 job,
                 report,
-                Map.of(),
                 Instant.now());
 
         var recorded =

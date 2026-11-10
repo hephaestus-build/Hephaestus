@@ -240,7 +240,6 @@ export { listOwnReviews } from './sdk/listOwnReviews.gen.js';
 export { listPracticeGroups } from './sdk/listPracticeGroups.gen.js';
 export { listPracticeReleases } from './sdk/listPracticeReleases.gen.js';
 export { listPractices } from './sdk/listPractices.gen.js';
-export { listPracticeScriptNeeds } from './sdk/listPracticeScriptNeeds.gen.js';
 export { listPracticeVersions } from './sdk/listPracticeVersions.gen.js';
 export { listProductFeedbackNeedsAction } from './sdk/listProductFeedbackNeedsAction.gen.js';
 export { listResultMarks } from './sdk/listResultMarks.gen.js';

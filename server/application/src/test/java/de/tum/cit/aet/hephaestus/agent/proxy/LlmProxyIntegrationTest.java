@@ -38,18 +38,14 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
-import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -67,23 +63,18 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
-import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -95,7 +86,6 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -108,7 +98,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
-import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.server.HttpServer;
 import tools.jackson.databind.ObjectMapper;
 
@@ -118,6 +107,9 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** The output limit that the fixture jobs freeze for their chat model. */
     private static final int CHAT_OUTPUT_LIMIT = 4096;
+
+    @Autowired
+    private ReviewSnapshotQuery reviewSnapshots;
 
     @Autowired
     private ReviewJobRepository jobRepository;
@@ -159,12 +151,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private LlmUsageRecorder usageRecorder;
-
-    @Autowired
-    private LlmUsageEventRepository usageEvents;
-
-    @Autowired
-    private ReviewSnapshotQuery reviewSnapshots;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -213,72 +199,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
-    }
-
-    @Test
-    void shouldCloseAJsonBodyAfterHeadersWhenThePoolSelfFences() throws Exception {
-        var headers = new CountDownLatch(1);
-        var closed = new CountDownLatch(1);
-        var upstream = HttpServer.create()
-                .host("127.0.0.1")
-                .port(0)
-                .handle((request, response) -> response.header("Content-Type", "application/json")
-                        .sendHeaders()
-                        .then()
-                        .then(Mono.<Void>never()))
-                .bindNow();
-        try {
-            ReviewJob job = practiceScriptJob("http://127.0.0.1:" + upstream.port() + "/v1");
-            job = jobRepository.saveAndFlush(job);
-            var model = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
-                    .practiceScriptSlot(ModelKind.EMBEDDING);
-            var pool = new LlmCallPool();
-            pool.setSlug("json-fence-" + UUID.randomUUID());
-            pool.setDisplayName("JSON transport closure");
-            pool.setMaxConcurrentCalls(1);
-            pool = callPools.saveAndFlush(pool);
-            long poolId = pool.getId();
-            jdbc.update(
-                    "UPDATE llm_model SET call_pool_id=? WHERE id=?",
-                    poolId,
-                    Objects.requireNonNull(model).modelId());
-            var capacity = new LlmCallPermits(
-                    callPools,
-                    callRows,
-                    transactionTemplate,
-                    new LlmCallPoolProperties(Duration.ofSeconds(20), Duration.ofSeconds(30)),
-                    LlmCallPermitsTestFixtures.PERMIT_AGING,
-                    "worker-1",
-                    meterRegistry,
-                    modelResolver);
-            var client = WebClient.builder()
-                    .clientConnector(new ReactorClientHttpConnector(HttpClient.create()
-                            .doOnConnected(connection ->
-                                    connection.channel().closeFuture().addListener(unused -> closed.countDown()))
-                            .doOnResponse((response, connection) -> headers.countDown())))
-                    .build();
-            var service = proxyService(200_000, 1000, client, mock(LlmBudgetService.class), capacity);
-            ReviewJob activeJob = job;
-            try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
-                var result = requests.submit(() -> callPracticeScript(
-                        service, activeJob, "/internal/llm/practice-script/embedding/embeddings", PRACTICE, "{}"));
-                try {
-                    assertThat(headers.await(5, TimeUnit.SECONDS)).isTrue();
-                    assertThat(callRows.countActive(poolId)).isEqualTo(1);
-                    capacity.fence(System.nanoTime() + Duration.ofMinutes(1).toNanos());
-                    assertThat(closed.await(3, TimeUnit.SECONDS)).isTrue();
-                    result.get(3, TimeUnit.SECONDS);
-                    Awaitility.await()
-                            .atMost(Duration.ofSeconds(3))
-                            .untilAsserted(() ->
-                                    assertThat(callRows.countActive(poolId)).isZero());
-                } finally {
-                    result.cancel(true);
-                }
-            }
-        } finally {
-            upstream.disposeNow();
-        }
     }
 
     @Test
@@ -415,7 +335,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 "/internal/llm/stage-result"
             })
     void shouldAuthenticateTheJobsOneTokenWhenItCallsAnyModelRouteOrAdmission(String path) throws Exception {
-        ReviewJob job = practiceScriptJob("https://models.example.com/v1");
+        ReviewJob job = reviewJob("https://models.example.com/v1");
 
         AuthenticationResult result = authenticate("POST", path, tokenFor(job));
 
@@ -430,7 +350,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldReadMovedPoolMembershipWhenTheClaimAlreadyLoadedTheModel() {
-        ReviewJob job = practiceScriptJob("https://models.example.com/v1");
+        ReviewJob job = reviewJob("https://models.example.com/v1");
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
         var first = new LlmCallPool();
         first.setSlug("first-" + UUID.randomUUID());
@@ -456,174 +376,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                             new ConnectionRef(UsageFundingSource.INSTANCE, Long.MAX_VALUE, modelId, workspace.getId())))
                     .isNull();
         });
-    }
-
-    @Test
-    void shouldShareOneRateAccountAcrossDirectScriptsAndComposition() throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            for (int i = 0; i < 3; i++)
-                upstream.enqueue(json("{\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":2}}"));
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            job = jobRepository.saveAndFlush(job);
-            var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-            var pool = new LlmCallPool();
-            pool.setSlug("scripts-" + UUID.randomUUID());
-            pool.setDisplayName("Shared script and composition capacity");
-            pool.setMaxConcurrentCalls(4);
-            // Background calls get three quarters of these rates, which is what this test uses up.
-            pool.setRequestsPerMinute(4);
-            pool.setTokensPerMinute(400L);
-            pool.setTokensPerCall(100L);
-            pool = callPools.saveAndFlush(pool);
-            long poolId = pool.getId();
-            for (var model : List.of(
-                    snapshot.model(), Objects.requireNonNull(snapshot.practiceScriptSlot(ModelKind.EMBEDDING)))) {
-                jdbc.update(
-                        "UPDATE llm_model SET call_pool_id=? WHERE id=?",
-                        poolId,
-                        Objects.requireNonNull(model).modelId());
-            }
-            var capacity = new LlmCallPermits(
-                    callPools,
-                    callRows,
-                    transactionTemplate,
-                    new LlmCallPoolProperties(Duration.ofMinutes(1), Duration.ofMinutes(5)),
-                    LlmCallPermitsTestFixtures.PERMIT_AGING,
-                    "worker-1",
-                    meterRegistry,
-                    modelResolver);
-            var service = proxyService(200_000, 1000, WebClient.create(), mock(LlmBudgetService.class), capacity);
-            assertThat(callPracticeScript(
-                                    service,
-                                    job,
-                                    "/internal/llm/practice-script/chat/chat/completions",
-                                    PRACTICE,
-                                    "{\"messages\":[]}")
-                            .status())
-                    .isEqualTo(200);
-            assertThat(callPracticeScript(
-                                    service,
-                                    job,
-                                    "/internal/llm/practice-script/embedding/embeddings",
-                                    PRACTICE,
-                                    "{\"input\":[\"a\"]}")
-                            .status())
-                    .isEqualTo(200);
-            job.setAdmissionAttempt(job.getAttempt());
-            job.setAdmissionDigest("admitted");
-            job = jobRepository.saveAndFlush(job);
-            var routes = new ProxyRoutingService(
-                    jobRepository, turnRepository, objectMapper, usageEvents, reviewSnapshots, agentRuns);
-            var route = routes.resolve(
-                    ProxyIdentity.of(new ProxyAttempt(
-                            ProxyAttempt.Caller.REVIEW,
-                            job.getId(),
-                            workspace.getId(),
-                            ReviewRunKind.epoch(job.getAttempt()),
-                            job.getRunId(),
-                            Instant.now().plusSeconds(5))),
-                    new MockHttpServletRequest("POST", "/internal/llm/chat/completions"));
-            byte[] request = "{\"messages\":[]}".getBytes(StandardCharsets.UTF_8);
-            var composed = Objects.requireNonNull(
-                    service.serve(route, LlmApiProtocol.OPENAI_COMPLETIONS, null, null, new HttpHeaders(), request));
-            assertThat(composed.getStatusCode().value()).isEqualTo(200);
-            var blockedRoute = routes.resolve(
-                    ProxyIdentity.of(new ProxyAttempt(
-                            ProxyAttempt.Caller.REVIEW,
-                            job.getId(),
-                            workspace.getId(),
-                            ReviewRunKind.epoch(job.getAttempt()),
-                            job.getRunId(),
-                            Instant.now().plusMillis(100))),
-                    new MockHttpServletRequest("POST", "/internal/llm/chat/completions"));
-            var blocked = Objects.requireNonNull(service.serve(
-                    blockedRoute, LlmApiProtocol.OPENAI_COMPLETIONS, null, null, new HttpHeaders(), request));
-            assertThat(blocked.getStatusCode().value()).isEqualTo(503);
-            assertThat(blocked.getHeaders().getFirst(LlmProxyService.REFUSAL_HEADER))
-                    .isEqualTo("CAPACITY");
-            assertThat(upstream.getRequestCount()).isEqualTo(3);
-            assertThat(callRows.rates(poolId).getRequests()).isEqualTo(3);
-            // Each call ended on its own, so what the provider reported replaced the bound of 100.
-            assertThat(callRows.rates(poolId).getTokens()).isEqualTo(34);
-            assertThat(callRows.countActive(poolId)).isZero();
-        }
-    }
-
-    @Test
-    void shouldSlowAndServeEveryCallOfAModelNobodySetALimitForWhenItsProviderRefuses() throws Exception {
-        var inFlight = new AtomicInteger();
-        var refused = new AtomicInteger();
-        try (var upstream = new MockWebServer()) {
-            upstream.setDispatcher(new Dispatcher() {
-                @Override
-                public MockResponse dispatch(RecordedRequest request) throws InterruptedException {
-                    try {
-                        if (inFlight.incrementAndGet() > 2) {
-                            refused.incrementAndGet();
-                            return new MockResponse.Builder()
-                                    .code(429)
-                                    .addHeader("Content-Type", "application/json")
-                                    .addHeader("Retry-After", "1")
-                                    .body("{\"error\":{\"message\":\"too many\"}}")
-                                    .build();
-                        }
-                        TimeUnit.MILLISECONDS.sleep(150);
-                        return json("{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}");
-                    } finally {
-                        inFlight.decrementAndGet();
-                    }
-                }
-            });
-            upstream.start();
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            job = jobRepository.saveAndFlush(job);
-            var model = Objects.requireNonNull(ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
-                    .model());
-            // No one made this pool: the model has it from the moment it exists.
-            long poolId = modelRepository
-                    .findById(Objects.requireNonNull(model.modelId()))
-                    .orElseThrow()
-                    .getCallPoolId();
-            var row = callPools.findById(poolId).orElseThrow();
-            assertThat(row.isDedicated()).isTrue();
-            assertThat(row.getMaxConcurrentCalls()).isNull();
-            var capacity = new LlmCallPermits(
-                    callPools,
-                    callRows,
-                    transactionTemplate,
-                    new LlmCallPoolProperties(Duration.ofMinutes(1), Duration.ofMinutes(5)),
-                    LlmCallPermitsTestFixtures.PERMIT_AGING,
-                    "worker-1",
-                    meterRegistry,
-                    modelResolver);
-            var service = proxyService(2_000_000, 1000, WebClient.create(), mock(LlmBudgetService.class), capacity);
-            ReviewJob activeJob = job;
-            try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
-                List<Future<ProxyResult>> calls = new ArrayList<>();
-                for (int i = 0; i < 6; i++)
-                    calls.add(requests.submit(() -> callPracticeScript(
-                            service,
-                            activeJob,
-                            "/internal/llm/practice-script/chat/chat/completions",
-                            PRACTICE,
-                            "{\"messages\":[]}")));
-                for (var call : calls)
-                    assertThat(call.get(60, TimeUnit.SECONDS).status()).isEqualTo(200);
-            }
-            var learned = callPools.findById(poolId).orElseThrow();
-            assertThat(refused.get()).isPositive();
-            assertThat(learned.getThrottledAt()).isNotNull();
-            assertThat(learned.getLearnedLimit()).isLessThan(4);
-            assertThat(meterRegistry
-                            .get(AgentMetrics.LLM_POOL_UPSTREAM_THROTTLED)
-                            .tag("pool", learned.getSlug())
-                            .tag("status", "429")
-                            .counter()
-                            .count())
-                    .isPositive();
-            assertThat(callRows.countActive(poolId)).isZero();
-        }
     }
 
     /** Logos's shape when it fails: the head and a comment at once, and then nothing, with no error. */
@@ -781,7 +533,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
      */
     private LlmCallPool streamUntilTheWorkEnds(
             String baseUrl, int limit, @Nullable Integer baselineMillis, Duration silence) throws Exception {
-        ReviewJob job = practiceScriptJob(baseUrl);
+        ReviewJob job = reviewJob(baseUrl);
         job = jobRepository.saveAndFlush(job);
         var model = Objects.requireNonNull(
                 ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper).model());
@@ -804,8 +556,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 meterRegistry,
                 modelResolver);
         var service = proxyService(
-                200_000,
-                1000,
                 WebClient.create(),
                 mock(LlmBudgetService.class),
                 capacity,
@@ -855,208 +605,14 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return counter == null ? 0 : counter.count();
     }
 
-    @ParameterizedTest
-    @CsvSource(
-            delimiter = '|',
-            value = {
-                "CHAT|/internal/llm/practice-script/chat/chat/completions|/v1/chat/completions|"
-                        + "{\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":4}}|11|4",
-                "DECISION|/internal/llm/practice-script/decision/decisions|/v1/decisions|"
-                        + "{\"answers\":[],\"usage\":{\"input_tokens\":40,\"output_tokens\":3}}|40|3",
-                "EMBEDDING|/internal/llm/practice-script/embedding/embeddings|/v1/embeddings|"
-                        + "{\"data\":[],\"usage\":{\"prompt_tokens\":12,\"total_tokens\":12}}|12|0",
-                "RERANKING|/internal/llm/practice-script/reranking/rerank|/v1/rerank|{\"results\":[]}|0|0"
-            })
-    void shouldForwardEachPracticeScriptOpWithTheCatalogModelWhenTheJobTokenCallsIt(
-            ModelKind slot, String path, String upstreamPath, String reply, long input, long output) throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            upstream.enqueue(json(reply));
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-
-            ProxyResult result = callPracticeScript(job, path, "{\"model\":\"runner-controlled\",\"input\":[\"a\"]}");
-
-            assertThat(result.status()).isEqualTo(200);
-            RecordedRequest sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
-            assertThat(sent.getUrl().encodedPath()).isEqualTo(upstreamPath);
-            assertThat(sent.getHeaders().get("Authorization")).isEqualTo("Bearer upstream-secret");
-            assertThat(objectMapper
-                            .readTree(Objects.requireNonNull(sent.getBody()).utf8())
-                            .path("model")
-                            .asString())
-                    .isEqualTo(slot.name().toLowerCase(Locale.ROOT) + "-upstream");
-            assertThat(practiceScriptRows(job, 0)).containsExactly(new UsageRow(slot, PRACTICE, 1, input, output));
-            // A chat call of a practice script bills on the review's own model; another kind bills apart.
-            assertThat(jdbc.queryForObject(
-                            "SELECT source_type FROM llm_usage_event WHERE source_id = ?", String.class, job.getId()))
-                    .isEqualTo(UsageSourceType.ofReviewCall(slot).name());
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void shouldRouteAndBillNativeAnthropicCallsWithTheAttemptsOwnCredential(boolean stream) throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            String usage =
-                    "{\"input_tokens\":13,\"output_tokens\":7,\"cache_read_input_tokens\":1200,\"cache_creation_input_tokens\":300}";
-            upstream.enqueue(
-                    stream
-                            ? new MockResponse.Builder()
-                                    .code(200)
-                                    .addHeader("Content-Type", "text/event-stream")
-                                    .body(
-                                            "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":"
-                                                    + usage + "}}\n\n"
-                                                    + "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":null,\"output_tokens\":9,\"cache_read_input_tokens\":null,\"cache_creation_input_tokens\":null}}\n\n"
-                                                    + "event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"input_tokens\":null,\"output_tokens\":null,\"cache_read_input_tokens\":null,\"cache_creation_input_tokens\":null}}\n\n"
-                                                    + "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
-                                    .build()
-                            : json("{\"content\":[],\"usage\":" + usage + "}"));
-            ReviewJob job = practiceScriptJob(upstream.url("/").toString(), LlmApiProtocol.ANTHROPIC_MESSAGES);
-            var price = new LlmPriceSnapshot(
-                    UsageFundingSource.INSTANCE,
-                    UsagePricingState.PRICED,
-                    null,
-                    null,
-                    new BigDecimal("2"),
-                    new BigDecimal("3"),
-                    new BigDecimal("4"),
-                    new BigDecimal("5"));
-            job.setConfigSnapshot(ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
-                    .withPriceSnapshot(price)
-                    .toJson(objectMapper));
-            jobRepository.saveAndFlush(job);
-            var budget = capOf("0.006");
-            var request = new MockHttpServletRequest("POST", "/internal/llm/v1/messages");
-            request.setQueryString("beta=true");
-            request.setRemoteAddr("127.0.0.1");
-            request.addHeader("Authorization", "Bearer " + tokenFor(job));
-            var response = new MockHttpServletResponse();
-            var service = proxyService(200_000, 1000, WebClient.create(), budget, admittingPermits());
-            var body = objectMapper
-                    .createObjectNode()
-                    .put("model", "caller-model")
-                    .put("stream", stream)
-                    .put("max_tokens", 64);
-            body.putArray("messages").addObject().put("role", "user").put("content", "Review.");
-            AtomicReference<@Nullable ResponseEntity<?>> served = new AtomicReference<>();
-            filter.doFilter(
-                    request,
-                    response,
-                    (ignoredRequest, ignoredResponse) -> served.set(
-                            service.proxy(request, response, new HttpHeaders(), objectMapper.writeValueAsBytes(body))));
-            var answer = served.get();
-            assertThat(
-                            answer == null
-                                    ? response.getStatus()
-                                    : answer.getStatusCode().value())
-                    .isEqualTo(200);
-            var sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
-            assertThat(sent.getUrl().encodedPath()).isEqualTo("/v1/messages");
-            assertThat(sent.getUrl().query()).isNull();
-            assertThat(sent.getHeaders().get("x-api-key")).isEqualTo("upstream-secret");
-            assertThat(sent.getHeaders().get("Authorization")).isNull();
-            var forwarded =
-                    objectMapper.readTree(Objects.requireNonNull(sent.getBody()).utf8());
-            assertThat(forwarded.path("model").asString()).isEqualTo("chat-upstream");
-            assertThat(forwarded.has("stream_options")).isFalse();
-            var recorded = jdbc.queryForMap(
-                    "SELECT call_state, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, cost_usd"
-                            + " FROM llm_usage_event WHERE source_id = ?",
-                    job.getId());
-            assertThat(recorded)
-                    .containsEntry("call_state", "ENDED")
-                    .containsEntry("input_tokens", 13L)
-                    .containsEntry("cache_read_tokens", 1200L)
-                    .containsEntry("cache_write_tokens", 300L)
-                    .containsEntry("output_tokens", stream ? 9L : 7L);
-            assertThat((BigDecimal) recorded.get("cost_usd")).isEqualByComparingTo(stream ? "0.006353" : "0.006347");
-            // The ended call counts against the cap at once, so the next call is refused.
-            var refused = callPracticeScript(
-                    service, job, "/internal/llm/practice-script/decision/decisions", PRACTICE, "{}");
-            assertThat(refused.status()).isEqualTo(402);
-            assertThat(upstream.getRequestCount()).isEqualTo(1);
-        }
-    }
-
-    @Test
-    void shouldKeepTheResultUploadButMakeNoModelCallOnceTheWorkTimeHasEnded() throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            Instant work = Instant.now().plusSeconds(1);
-            String token = jwtIssuer.issueForReview(
-                    job.getId(),
-                    workspace.getId(),
-                    ReviewRunKind.epoch(job.getAttempt()),
-                    Objects.requireNonNull(job.getRunId()),
-                    work,
-                    work.plus(Duration.ofMinutes(10)));
-            // Real time passes the signed work deadline; the token itself stays valid for the upload.
-            while (!Instant.now().isAfter(work)) Thread.sleep(50);
-
-            assertThat(authenticate("POST", "/internal/llm/runtime/" + job.getId() + "/result", token)
-                            .status())
-                    .isEqualTo(200);
-            ProxyResult refused = callPracticeScript(
-                    proxyService(200_000), token, "/internal/llm/practice-script/embedding/embeddings", PRACTICE, "{}");
-
-            assertThat(refused.status()).isEqualTo(403);
-            assertThat(refused.body()).isEqualTo(LlmProxyService.WORK_TIME_OVER);
-            assertThat(upstream.getRequestCount()).isZero();
-            assertThat(practiceScriptRows(job, 0)).isEmpty();
-        }
-    }
-
-    @Test
-    void shouldRefuseWithPaymentRequiredWhenTheAttemptsDirectModelTokensReachTheCap() throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            upstream.enqueue(json("{\"data\":[],\"usage\":{\"prompt_tokens\":120}}"));
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            LlmProxyService capped = proxyService(100);
-
-            ProxyResult first = callPracticeScript(
-                    capped, job, "/internal/llm/practice-script/embedding/embeddings", PRACTICE, "{}");
-            ProxyResult second =
-                    callPracticeScript(capped, job, "/internal/llm/practice-script/decision/decisions", PRACTICE, "{}");
-
-            assertThat(first.status()).isEqualTo(200);
-            assertThat(second.status()).isEqualTo(402);
-            assertThat(second.body()).isEqualTo("Practice script budget spent");
-            assertThat(upstream.getRequestCount()).isEqualTo(1);
-        }
-    }
-
-    @Test
-    void shouldPersistUsageCompletenessWhenReportedAndUnknownCallsShareAnAggregate() throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            upstream.enqueue(json("{\"data\":[],\"usage\":{\"prompt_tokens\":10}}"));
-            upstream.enqueue(json("{\"data\":[]}"));
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            String path = "/internal/llm/practice-script/embedding/embeddings";
-
-            assertThat(callPracticeScript(job, path, "{}").status()).isEqualTo(200);
-            assertThat(callPracticeScript(job, path, "{}").status()).isEqualTo(200);
-
-            // A call whose provider reported no usage ends unverifiable and unpriced, never at zero cost.
-            assertThat(calls(job))
-                    .containsExactlyInAnyOrder(
-                            new CallRow("ENDED", "VERIFIED", "PRICED", 10, 0),
-                            new CallRow("ENDED", "UNVERIFIABLE", "UNPRICED", 0, 1));
-        }
-    }
-
     @Test
     void shouldForwardTheModelsOutputLimitAndHoldTheCallsUpperBoundWhenTheRequestNamesNone() throws Exception {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.start();
             upstream.enqueue(json("{\"choices\":[]}"));
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
 
-            assertThat(callChat(proxyService(200_000), job)).isEqualTo(200);
+            assertThat(callChat(proxyService(), job)).isEqualTo(200);
 
             var sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
             var forwarded =
@@ -1079,10 +635,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.start();
             upstream.enqueue(json("{\"choices\":[]}"));
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
             String request = "{\"max_tokens\":16384,\"messages\":[]}";
 
-            assertThat(callChat(proxyService(200_000), job, request)).isEqualTo(200);
+            assertThat(callChat(proxyService(), job, request)).isEqualTo(200);
 
             var sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
             var forwarded =
@@ -1107,217 +663,26 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.start();
             upstream.enqueue(json("{\"choices\":[]}"));
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
 
-            assertThat(callChat(
-                            proxyService(200_000, 1000, WebClient.create(), capOf("0.004159"), admittingPermits()),
-                            job))
+            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004159"), admittingPermits()), job))
                     .isEqualTo(429);
             assertThat(upstream.getRequestCount()).isZero();
             assertThat(calls(job)).isEmpty();
 
-            assertThat(callChat(
-                            proxyService(200_000, 1000, WebClient.create(), capOf("0.004160"), admittingPermits()),
-                            job))
+            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004160"), admittingPermits()), job))
                     .isEqualTo(200);
             assertThat(upstream.getRequestCount()).isEqualTo(1);
         }
     }
 
-    @Test
-    void shouldPersistReportedZeroWhenTheProviderReportsZeroUsage() throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            upstream.enqueue(json("{\"data\":[],\"usage\":{\"prompt_tokens\":0}}"));
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
+    // The worker role is off here; supply the ledger's production transaction boundary explicitly.
 
-            assertThat(callPracticeScript(job, "/internal/llm/practice-script/embedding/embeddings", "{}")
-                            .status())
-                    .isEqualTo(200);
-
-            assertThat(calls(job)).containsExactly(new CallRow("ENDED", "VERIFIED", "PRICED", 0, 0));
-        }
+    private LlmProxyService proxyService(WebClient client) {
+        return proxyService(client, mock(LlmBudgetService.class), admittingPermits());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void shouldKeepATimedOutCallUnpricedBesideTheReportedOne(boolean beforeHeaders) throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            upstream.enqueue(json("{\"data\":[],\"usage\":{\"prompt_tokens\":10}}"));
-            var delayed = new MockResponse.Builder().code(200).body("{\"data\":[]}");
-            if (beforeHeaders) delayed.headersDelay(3, TimeUnit.SECONDS);
-            else delayed.bodyDelay(3, TimeUnit.SECONDS);
-            upstream.enqueue(delayed.build());
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            WebClient client = WebClient.builder()
-                    .clientConnector(new ReactorClientHttpConnector(HttpClient.create()
-                            .responseTimeout(Duration.ofSeconds(1))
-                            .disableRetry(true)))
-                    .build();
-            LlmProxyService service = proxyService(200_000, 1000, client);
-            String path = "/internal/llm/practice-script/embedding/embeddings";
-
-            assertThat(callPracticeScript(service, job, path, PRACTICE, "{}").status())
-                    .isEqualTo(200);
-            assertThat(callPracticeScript(service, job, path, PRACTICE, "{}").status())
-                    .isEqualTo(502);
-            assertThat(upstream.takeRequest(5, TimeUnit.SECONDS)).isNotNull();
-            assertThat(upstream.takeRequest(5, TimeUnit.SECONDS)).isNotNull();
-            assertThat(upstream.getRequestCount()).isEqualTo(2);
-            // The call cut off by the timeout may have been billed by its provider: it stays unpriced and counts at
-            // its upper bound, its 2 request bytes at the frozen $1 per 1M input tokens.
-            assertThat(calls(job))
-                    .containsExactlyInAnyOrder(
-                            new CallRow("ENDED", "VERIFIED", "PRICED", 10, 0),
-                            new CallRow("ENDED", "UNVERIFIABLE", "UNPRICED", 0, 1));
-            assertThat(jdbc.queryForObject(
-                            "SELECT cost_bound_usd FROM llm_usage_event WHERE source_id = ?"
-                                    + " AND measurement_verification = 'UNVERIFIABLE'",
-                            BigDecimal.class,
-                            job.getId()))
-                    .isEqualByComparingTo("0.000002");
-        }
-    }
-
-    @Test
-    void shouldCountEachPracticeApartAndCapThemTogetherWhenTwoPracticesCallOneModel() throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            for (int call = 0; call < 3; call++) {
-                upstream.enqueue(json("{\"data\":[],\"usage\":{\"prompt_tokens\":60}}"));
-            }
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            LlmProxyService capped = proxyService(100);
-            String path = "/internal/llm/practice-script/embedding/embeddings";
-
-            ProxyResult first = callPracticeScript(capped, job, path, PRACTICE, "{}");
-            ProxyResult second = callPracticeScript(capped, job, path, "test-coverage", "{}");
-            ProxyResult third = callPracticeScript(capped, job, path, "test-coverage", "{}");
-
-            assertThat(first.status()).isEqualTo(200);
-            assertThat(second.status()).isEqualTo(200);
-            assertThat(third.status()).isEqualTo(402);
-            assertThat(practiceScriptRows(job, 0))
-                    .containsExactlyInAnyOrder(
-                            new UsageRow(ModelKind.EMBEDDING, PRACTICE, 1, 60, 0),
-                            new UsageRow(ModelKind.EMBEDDING, "test-coverage", 1, 60, 0));
-            assertThat(directModelTokens(job)).isEqualTo(120);
-        }
-    }
-
-    @Test
-    void shouldCountTheSearchUnitsAndRefuseAtTheirLimitWhenCohereBillsReranksInThem() throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            for (int call = 0; call < 2; call++) {
-                upstream.enqueue(json("{\"id\":\"r\",\"results\":[{\"index\":0,\"relevance_score\":0.5}],"
-                        + "\"meta\":{\"billed_units\":{\"search_units\":3}}}"));
-            }
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            LlmProxyService capped = proxyService(200_000, 6);
-            String path = "/internal/llm/practice-script/reranking/rerank";
-
-            ProxyResult first =
-                    callPracticeScript(capped, job, path, PRACTICE, "{\"query\":\"q\",\"documents\":[\"a\"]}");
-            ProxyResult second =
-                    callPracticeScript(capped, job, path, PRACTICE, "{\"query\":\"q\",\"documents\":[\"a\"]}");
-            ProxyResult third =
-                    callPracticeScript(capped, job, path, PRACTICE, "{\"query\":\"q\",\"documents\":[\"a\"]}");
-
-            assertThat(first.status()).isEqualTo(200);
-            assertThat(second.status()).isEqualTo(200);
-            assertThat(third.status()).isEqualTo(402);
-            assertThat(third.body()).isEqualTo("Practice script budget spent");
-            assertThat(upstream.getRequestCount()).isEqualTo(2);
-            assertThat(jdbc.queryForMap(
-                            "SELECT SUM(total_calls)::bigint AS calls, SUM(input_tokens)::bigint AS input_tokens,"
-                                    + " SUM(search_units)::bigint AS search_units FROM llm_usage_event"
-                                    + " WHERE source_id = ? AND model_kind = 'RERANKING'",
-                            job.getId()))
-                    .containsEntry("calls", 2L)
-                    .containsEntry("input_tokens", 0L)
-                    .containsEntry("search_units", 6L);
-        }
-    }
-
-    @Test
-    void shouldKeepTheCachedShareApartWhenAPracticeScriptChatCallReadsTheCache() throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            upstream.enqueue(json("{\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":5,"
-                    + "\"prompt_tokens_details\":{\"cached_tokens\":60}}}"));
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-
-            ProxyResult result =
-                    callPracticeScript(job, "/internal/llm/practice-script/chat/chat/completions", "{\"messages\":[]}");
-
-            assertThat(result.status()).isEqualTo(200);
-            assertThat(jdbc.queryForMap(
-                            "SELECT source_type, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens "
-                                    + "FROM llm_usage_event WHERE source_id = ? AND model_kind = 'CHAT'",
-                            job.getId()))
-                    .containsEntry("source_type", "REVIEW_JOB")
-                    .containsEntry("input_tokens", 40L)
-                    .containsEntry("cache_read_tokens", 60L)
-                    .containsEntry("cache_write_tokens", 0L)
-                    .containsEntry("output_tokens", 5L);
-            assertThat(directModelTokens(job)).isEqualTo(105L);
-        }
-    }
-
-    private ProxyResult callPracticeScript(ReviewJob job, String path, String body) throws Exception {
-        return callPracticeScript(proxyService(200_000), job, path, PRACTICE, body);
-    }
-
-    private ProxyResult callPracticeScript(
-            LlmProxyService service, ReviewJob job, String path, String practice, String body) throws Exception {
-        return callPracticeScript(service, tokenFor(job), path, practice, body);
-    }
-
-    private ProxyResult callPracticeScript(
-            LlmProxyService service, String token, String path, String practice, String body) throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
-        request.setRemoteAddr("127.0.0.1");
-        request.addHeader("Authorization", "Bearer " + token);
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PRACTICE_HEADER, practice);
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        AtomicReference<@Nullable ResponseEntity<?>> served = new AtomicReference<>();
-        filter.doFilter(
-                request,
-                response,
-                (filteredRequest, filteredResponse) -> served.set(service.proxyPracticeScript(
-                        request, response, headers, body.getBytes(StandardCharsets.UTF_8))));
-        ResponseEntity<?> result = served.get();
-        if (result == null) return new ProxyResult(response.getStatus(), null);
-        Object payload = result.getBody();
-        return new ProxyResult(
-                result.getStatusCode().value(),
-                payload instanceof byte[] bytes ? new String(bytes, StandardCharsets.UTF_8) : String.valueOf(payload));
-    }
-
-    private record ProxyResult(int status, @Nullable String body) {}
-
-    // The worker role is off here; supply the accumulator's production transaction boundary explicitly.
-    private LlmProxyService proxyService(long maxTokensPerAttempt) {
-        return proxyService(maxTokensPerAttempt, 1000);
-    }
-
-    private LlmProxyService proxyService(long maxTokensPerAttempt, long maxSearchUnitsPerAttempt) {
-        return proxyService(maxTokensPerAttempt, maxSearchUnitsPerAttempt, WebClient.create());
-    }
-
-    private LlmProxyService proxyService(long maxTokensPerAttempt, long maxSearchUnitsPerAttempt, WebClient client) {
-        return proxyService(
-                maxTokensPerAttempt,
-                maxSearchUnitsPerAttempt,
-                client,
-                mock(LlmBudgetService.class),
-                admittingPermits());
-    }
-
-    // One dollar, at the one dollar per million input tokens that practiceScriptJob freezes.
+    // One dollar, at the one dollar per million input tokens that reviewJob freezes.
     private static final String ONE_DOLLAR_ANSWER = "{\"choices\":[{\"message\":{\"role\":\"assistant\","
             + "\"content\":\"ok\"}}],\"usage\":{\"prompt_tokens\":1000000,\"completion_tokens\":0}}";
 
@@ -1376,11 +741,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.setDispatcher(alwaysOneDollar());
             upstream.start();
-            var service = proxyService(
-                    200_000, 1000, WebClient.create(), capOf(Integer.toString(capUsd)), admittingPermits());
+            var service = proxyService(WebClient.create(), capOf(Integer.toString(capUsd)), admittingPermits());
             List<ReviewJob> jobs = new ArrayList<>();
             for (int attempt = 0; attempt < attempts; attempt++) {
-                jobs.add(practiceScriptJob(upstream.url("/v1").toString()));
+                jobs.add(reviewJob(upstream.url("/v1").toString()));
             }
             try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
                 List<Future<Integer>> spenders = new ArrayList<>();
@@ -1406,12 +770,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.setDispatcher(alwaysOneDollar());
             upstream.start();
-            ReviewJob waiting = practiceScriptJob(upstream.url("/v1").toString());
-            ReviewJob spender = practiceScriptJob(upstream.url("/v1").toString());
+            ReviewJob waiting = reviewJob(upstream.url("/v1").toString());
+            ReviewJob spender = reviewJob(upstream.url("/v1").toString());
             var capacity = mock(LlmCallPermits.class);
             var permit = mock(LlmCallPermits.Permit.class);
             when(permit.revoked()).thenReturn(Mono.never());
-            var service = proxyService(200_000, 1000, WebClient.create(), capOf("1"), capacity);
+            var service = proxyService(WebClient.create(), capOf("1"), capacity);
             when(capacity.acquire(anyLong(), any(), any(), any(), any())).thenAnswer(wait -> {
                 LlmCallPermits.Caller caller = wait.getArgument(2);
                 if (caller.sourceId().equals(waiting.getId())) {
@@ -1439,42 +803,16 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return permits;
     }
 
-    private LlmProxyService proxyService(
-            long maxTokensPerAttempt,
-            long maxSearchUnitsPerAttempt,
-            WebClient client,
-            LlmBudgetService budgetService,
-            LlmCallPermits capacity) {
+    private LlmProxyService proxyService(WebClient client, LlmBudgetService budgetService, LlmCallPermits capacity) {
         return proxyService(
-                maxTokensPerAttempt,
-                maxSearchUnitsPerAttempt,
-                client,
-                budgetService,
-                capacity,
-                new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
+                client, budgetService, capacity, new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
     }
 
     private LlmProxyService proxyService(
-            long maxTokensPerAttempt,
-            long maxSearchUnitsPerAttempt,
-            WebClient client,
-            LlmBudgetService budgetService,
-            LlmCallPermits capacity,
-            HephCallProperties silence) {
+            WebClient client, LlmBudgetService budgetService, LlmCallPermits capacity, HephCallProperties silence) {
         ProxyRequestPolicy policy = mock(ProxyRequestPolicy.class);
         when(policy.allows(any())).thenReturn(true);
-        var gate = new ProxyBudgetGate(
-                budgetService,
-                new PracticeReviewProperties(
-                        false,
-                        15,
-                        5,
-                        null,
-                        12,
-                        16000,
-                        maxTokensPerAttempt,
-                        maxSearchUnitsPerAttempt,
-                        Duration.ofMinutes(10)));
+        var gate = new ProxyBudgetGate(budgetService);
         var ledger = new ProxyCallLedger(
                 usageRecorder,
                 agentRuns,
@@ -1492,22 +830,11 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 new ProxyAccounting(gate, ledger, meterRegistry, objectMapper),
                 policy,
                 mock(ScanCallGuard.class),
-                new ProxyRoutingService(
-                        jobRepository, turnRepository, objectMapper, usageEvents, reviewSnapshots, agentRuns),
+                new ProxyRoutingService(jobRepository, turnRepository, objectMapper, reviewSnapshots, agentRuns),
                 new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 capacity,
                 silence);
-    }
-
-    /** The tokens that the claim's ended practice script calls used, as the direct-model cap reads them. */
-    private long directModelTokens(ReviewJob job) {
-        return usageEvents
-                .sumDirectModelUsage(
-                        job.getWorkspaceId(),
-                        Objects.requireNonNull(job.getRunId()),
-                        ReviewRunKind.epoch(job.getAttempt()))
-                .getTokens();
     }
 
     /** Each call row of the job's first attempt. */
@@ -1526,24 +853,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private record CallRow(String state, String verification, String pricing, long inputTokens, int unreported) {}
 
-    private List<UsageRow> practiceScriptRows(ReviewJob job, int attempt) {
-        return jdbc.query(
-                "SELECT e.model_kind, p.slug AS practice_slug, SUM(e.total_calls) AS calls,"
-                        + " SUM(e.input_tokens) AS input_tokens, SUM(e.output_tokens) AS output_tokens FROM"
-                        + " llm_usage_event e JOIN practice p ON (p.id,p.workspace_id)=(e.practice_id,e.workspace_id)"
-                        + " WHERE e.source_id = ? AND e.source_attempt = ? GROUP BY e.model_kind, p.slug",
-                (row, index) -> new UsageRow(
-                        ModelKind.valueOf(row.getString("model_kind")),
-                        row.getString("practice_slug"),
-                        row.getInt("calls"),
-                        row.getLong("input_tokens"),
-                        row.getLong("output_tokens")),
-                job.getId(),
-                attempt);
-    }
-
-    private record UsageRow(ModelKind kind, String practice, int calls, long inputTokens, long outputTokens) {}
-
     private static MockResponse json(String body) {
         return new MockResponse.Builder()
                 .code(200)
@@ -1551,88 +860,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .body(body)
                 .build();
     }
-
-    private ReviewJob practiceScriptJob(String baseUrl) {
-        return practiceScriptJob(baseUrl, LlmApiProtocol.OPENAI_COMPLETIONS);
-    }
-
-    private ReviewJob practiceScriptJob(String baseUrl, LlmApiProtocol chatProtocol) {
-        Map<ModelKind, CatalogModel> catalog = new EnumMap<>(ModelKind.class);
-        for (ModelKind kind : ModelKind.values()) {
-            LlmApiProtocol protocol = switch (kind) {
-                case CHAT -> chatProtocol;
-                case DECISION -> LlmApiProtocol.OPENAI_DECISIONS;
-                case EMBEDDING -> LlmApiProtocol.OPENAI_EMBEDDINGS;
-                case RERANKING -> LlmApiProtocol.COHERE_RERANK;
-            };
-            String name = kind.name().toLowerCase(Locale.ROOT);
-            LlmConnection connection = LlmCatalogTestFixtures.connection(name + "-" + System.nanoTime());
-            connection.setBaseUrl(baseUrl);
-            connection.setApiProtocol(protocol);
-            connection.setAuthMode(LlmAuthMode.BEARER);
-            connection.setApiKey("upstream-secret");
-            connection = connectionRepository.save(connection);
-            LlmModel model = modelRepository.save(
-                    LlmCatalogTestFixtures.model(connection, name + "-" + System.nanoTime(), name + "-upstream"));
-            catalog.put(kind, new CatalogModel(protocol.wire(), connection.getId(), model.getId()));
-        }
-        LlmPriceSnapshot price = new LlmPriceSnapshot(
-                UsageFundingSource.INSTANCE,
-                UsagePricingState.PRICED,
-                null,
-                null,
-                BigDecimal.ONE,
-                BigDecimal.ONE,
-                null,
-                null);
-        Map<ModelKind, FrozenModel> slots = new EnumMap<>(ModelKind.class);
-        for (ModelKind kind : new ModelKind[] {ModelKind.DECISION, ModelKind.EMBEDDING, ModelKind.RERANKING}) {
-            CatalogModel model = Objects.requireNonNull(catalog.get(kind));
-            slots.put(
-                    kind,
-                    new FrozenModel(
-                            LlmApiProtocol.parse(model.protocol()).orElseThrow(),
-                            baseUrl,
-                            kind.name().toLowerCase(Locale.ROOT) + "-upstream",
-                            UsageFundingSource.INSTANCE,
-                            model.connectionId(),
-                            model.modelId(),
-                            workspace.getId(),
-                            DataHandlingTier.CLOUD,
-                            null,
-                            price,
-                            false));
-        }
-        CatalogModel chat = Objects.requireNonNull(catalog.get(ModelKind.CHAT));
-        ConfigSnapshot snapshot = new ConfigSnapshot(
-                        ConfigSnapshot.SCHEMA_VERSION,
-                        new FrozenModel(
-                                LlmApiProtocol.parse(chat.protocol()).orElseThrow(),
-                                baseUrl,
-                                "chat-upstream",
-                                UsageFundingSource.INSTANCE,
-                                chat.connectionId(),
-                                chat.modelId(),
-                                workspace.getId(),
-                                DataHandlingTier.UNDECLARED,
-                                null,
-                                price,
-                                false),
-                        128_000,
-                        CHAT_OUTPUT_LIMIT,
-                        600,
-                        null)
-                .withPracticeScript(slots);
-
-        ReviewJob job = new ReviewJob();
-        RuntimeJobTestData.initialize(job, workspace.getId());
-
-        job.setStatus(ReviewJobStatus.RUNNING);
-        job.setConfigSnapshot(snapshot.toJson(objectMapper));
-        return jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
-    }
-
-    private record CatalogModel(String protocol, Long connectionId, Long modelId) {}
 
     private AuthenticationResult authenticate(String token) throws Exception {
         return authenticate("POST", "/internal/llm/chat/completions", token);
@@ -1672,11 +899,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private ProxyRouting routingOf(AuthenticationResult result) {
         Authentication authentication = Objects.requireNonNull(result.authentication(), "token did not authenticate");
-        return new ProxyRoutingService(
-                        jobRepository, turnRepository, objectMapper, usageEvents, reviewSnapshots, agentRuns)
-                .resolve(
-                        (ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal()),
-                        new MockHttpServletRequest("POST", "/internal/llm/chat/completions"));
+        return new ProxyRoutingService(jobRepository, turnRepository, objectMapper, reviewSnapshots, agentRuns)
+                .resolve((ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal()));
     }
 
     private ReviewJob runningJob(boolean modelEnabled) {
@@ -1717,8 +941,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 false),
                         128_000,
                         CHAT_OUTPUT_LIMIT,
-                        600,
-                        null)
+                        600)
                 .toJson(objectMapper);
 
         ReviewJob job = new ReviewJob();
@@ -1727,5 +950,55 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(snapshot);
         return jobRepository.save(RuntimeJobTestData.persistParent(jdbc, job));
+    }
+
+    private ReviewJob reviewJob(String baseUrl) {
+        return reviewJob(baseUrl, LlmApiProtocol.OPENAI_COMPLETIONS);
+    }
+
+    private ReviewJob reviewJob(String baseUrl, LlmApiProtocol protocol) {
+        LlmConnection connection = LlmCatalogTestFixtures.connection("chat-" + System.nanoTime());
+        connection.setBaseUrl(baseUrl);
+        connection.setApiProtocol(protocol);
+        connection.setAuthMode(LlmAuthMode.BEARER);
+        connection.setApiKey("upstream-secret");
+        connection = connectionRepository.save(connection);
+        LlmModel model = modelRepository.save(
+                LlmCatalogTestFixtures.model(connection, "chat-" + System.nanoTime(), "chat-upstream"));
+        LlmPriceSnapshot price = new LlmPriceSnapshot(
+                UsageFundingSource.INSTANCE,
+                UsagePricingState.PRICED,
+                null,
+                null,
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                null,
+                null);
+        ConfigSnapshot snapshot = new ConfigSnapshot(
+                ConfigSnapshot.SCHEMA_VERSION,
+                new FrozenModel(
+                        protocol,
+                        baseUrl,
+                        "chat-upstream",
+                        UsageFundingSource.INSTANCE,
+                        connection.getId(),
+                        model.getId(),
+                        workspace.getId(),
+                        DataHandlingTier.UNDECLARED,
+                        null,
+                        price,
+                        false),
+                128_000,
+                CHAT_OUTPUT_LIMIT,
+                600);
+        ReviewJob job = new ReviewJob();
+        RuntimeJobTestData.initialize(job, workspace.getId());
+        job.setStatus(ReviewJobStatus.RUNNING);
+        job.setConfigSnapshot(snapshot.toJson(objectMapper));
+        return jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+    }
+
+    private LlmProxyService proxyService() {
+        return proxyService(WebClient.create());
     }
 }

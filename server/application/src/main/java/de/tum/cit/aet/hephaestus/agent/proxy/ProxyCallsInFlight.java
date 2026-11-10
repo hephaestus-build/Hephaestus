@@ -54,23 +54,17 @@ public class ProxyCallsInFlight {
     /** Far above the Heph turns that one worker runs at once; a bound, not a capacity. */
     private static final int MAX_REMEMBERED_FAILURES = 10_000;
 
-    /**
-     * Direct model calls that one review's practice scripts have in flight: {@code MODEL_CONCURRENCY} in
-     * {@code docker/agents/practice-scripts/lib/core/concurrency.ts}, which {@code ReviewRunnerConstantsTest} pins.
-     */
-    static final int SCRIPT_CALLS = 4;
-
     /** The runner's heap that one practice session holds, measured at about 3 MiB. */
     private static final int SESSION_HEAP_MIB = 3;
 
     /**
      * The most calls one review attempt has in flight. The runner starts a session only while its heap has room for
      * it, so it never runs more sessions than its heap holds. Each has one call open and one that an abort left
-     * closing, and the scripts' direct calls come on top. Only a sandbox that the runner no longer controls reaches
+     * closing. Only a sandbox that the runner no longer controls reaches
      * this. The cap protects this worker's memory, because a call that waits for a grant keeps its body here. A call
      * pool's fair grants share the provider.
      */
-    public static final int REVIEW_CALLS = 2 * (PracticeRunnerProfile.HEAP_MIB / SESSION_HEAP_MIB) + SCRIPT_CALLS;
+    public static final int REVIEW_CALLS = 2 * (PracticeRunnerProfile.HEAP_MIB / SESSION_HEAP_MIB);
 
     /** A Heph turn has one session: one call, and one that a stop left closing. */
     static final int TURN_CALLS = 2;

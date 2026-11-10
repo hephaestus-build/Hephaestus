@@ -16,7 +16,6 @@ import { isJsonObject } from "./lib/core/json.ts";
 import { resolveLeads } from "./lib/core/leads.ts";
 import {
 	isPracticeScriptDefinition,
-	type ModelNeeds,
 	type PracticeScriptDefinition,
 } from "./lib/core/practice-script.ts";
 import { programContext } from "./lib/core/program-context.ts";
@@ -212,7 +211,7 @@ async function load(
 	slug: string,
 	script?: string,
 ): Promise<{
-	definition: PracticeScriptDefinition<ModelNeeds>;
+	definition: PracticeScriptDefinition;
 	labels: Record<string, string>;
 	root: string;
 }> {
@@ -351,8 +350,6 @@ export async function runBundledProgram(slug: string, inputs: RunInputs = {}): P
 					reviews.push(checked.options);
 					return reviewed;
 				},
-				models: {},
-				tokensLeft: () => 0,
 				log: () => undefined,
 				abortSignal: new AbortController().signal,
 			},

@@ -32,20 +32,13 @@ export const ChatApi: Story = {
 	},
 };
 
-export const PracticeScriptApi: Story = {
-	args: { connection: { apiProtocol: "openai-embeddings", purposes: ["PRACTICE_EMBEDDING"] } },
-	play: async ({ canvas, canvasElement }) => {
-		await expect(canvas.getByText("Embeddings API")).toBeVisible();
-		await expect(canvas.getByText(", for Embedding model")).toHaveClass("sr-only");
-		await expect(canvasElement.querySelectorAll("[aria-hidden] svg")).toHaveLength(1);
-	},
-};
-
 export const LongNameReflow: Story = {
-	args: { connection: { apiProtocol: "cohere-rerank", purposes: ["PRACTICE_RERANKING"] } },
+	args: {
+		connection: { apiProtocol: "anthropic-messages", purposes: ["PRACTICE_REVIEW", "MENTOR"] },
+	},
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Rerank API (Cohere-compatible)")).toBeVisible();
+		await expect(canvas.getByText("Messages API (Anthropic)")).toBeVisible();
 		await expectNoPageOverflow();
 	},
 };

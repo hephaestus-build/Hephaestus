@@ -13,8 +13,8 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One model of a practice review as {@link ConfigSnapshot} freezes it: the review's own model ({@link
- * ConfigSnapshot#model()}) or a model for practice scripts of another kind. The credential is never frozen:
+ * The model of a practice review as {@link ConfigSnapshot} freezes it ({@link ConfigSnapshot#model()}). The
+ * credential is never frozen:
  * {@link #connectionScope} and {@link #connectionId} only identify the connection, and the proxy
  * resolves its credential live.
  *

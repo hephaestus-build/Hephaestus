@@ -9,10 +9,8 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -30,7 +28,6 @@ import org.mockito.Mock;
  */
 class ProxyBudgetGateTest extends BaseUnitTest {
     private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
-    private static final UUID OTHER_LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
 
     private static final long WORKSPACE_ID = 42L;
     private static final BigDecimal ONE_DOLLAR = new BigDecimal("1.00");
@@ -42,9 +39,7 @@ class ProxyBudgetGateTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        gate = new ProxyBudgetGate(
-                budgetService,
-                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000, 1000, Duration.ofMinutes(10)));
+        gate = new ProxyBudgetGate(budgetService);
     }
 
     private static LlmBudgetHeadroom instanceCapOfOneDollar(String spentUsd) {
@@ -69,8 +64,6 @@ class ProxyBudgetGateTest extends BaseUnitTest {
                 8L,
                 WORKSPACE_ID,
                 attempt(),
-                null,
-                null,
                 Instant.now().plusSeconds(60),
                 null);
     }
@@ -164,8 +157,6 @@ class ProxyBudgetGateTest extends BaseUnitTest {
                     null,
                     null,
                     attempt(),
-                    null,
-                    null,
                     Instant.now().plusSeconds(60),
                     null);
 
@@ -224,16 +215,5 @@ class ProxyBudgetGateTest extends BaseUnitTest {
     }
 
     @Nested
-    class DirectModelCap {
-
-        @ParameterizedTest
-        @CsvSource({"199999, 999, false", "200000, 0, true", "0, 999, false", "0, 1000, true", "199999, 1000, true"})
-        void shouldRefuseWhenTheAttemptsDirectModelTokensOrSearchUnitsReachTheirLimit(
-                long tokens, long searchUnits, boolean reached) {
-            var attempt = new ProxyRouting.BilledAttempt(
-                    UsageSourceType.PRACTICE_SCRIPT_RERANKING, UUID.randomUUID(), 0, OTHER_LEASE, tokens, searchUnits);
-
-            assertThat(gate.isDirectModelCapReached(attempt)).isEqualTo(reached);
-        }
-    }
+    class DirectModelCap {}
 }

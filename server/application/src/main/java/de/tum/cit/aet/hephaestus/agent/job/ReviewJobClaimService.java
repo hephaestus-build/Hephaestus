@@ -2,9 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
-import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
@@ -19,17 +17,13 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -345,13 +339,10 @@ public class ReviewJobClaimService {
                 if (!submitted.model().isAdmittedAs(admitted)) {
                     throw new ReviewJobStateConflictException("The frozen model is unavailable");
                 }
-                snapshot = submitted
-                        .withPriceSnapshot(
-                                submitted.model().priceSnapshot() == null
-                                        ? admitted.price()
-                                        : submitted.model().priceSnapshot())
-                        .withPracticeScript(
-                                admitPracticeScript(job, submitted.practiceScript(), llmAdmissionService, assigned));
+                snapshot = submitted.withPriceSnapshot(
+                        submitted.model().priceSnapshot() == null
+                                ? admitted.price()
+                                : submitted.model().priceSnapshot());
             } else {
                 methods.require(assigned.getFirst().practice().method(), "review", binding);
                 snapshot = submitted;
@@ -360,43 +351,6 @@ public class ReviewJobClaimService {
             return null;
         }
         return snapshot;
-    }
-
-    private @Nullable Map<ModelKind, FrozenModel> admitPracticeScript(
-            ReviewJob job,
-            @Nullable Map<ModelKind, FrozenModel> submitted,
-            LlmAdmissionService admission,
-            List<ReviewAssignmentSnapshot> assigned) {
-        if (submitted == null) {
-            return null;
-        }
-        Map<ModelKind, FrozenModel> admitted = new EnumMap<>(ModelKind.class);
-        for (AgentPurpose purpose : AgentPurpose.practiceScript()) {
-            FrozenModel slot = submitted.get(purpose.kind());
-            if (slot == null) {
-                continue;
-            }
-            DataHandlingTier tier = Objects.requireNonNullElse(slot.dataHandlingTier(), DataHandlingTier.UNDECLARED);
-            Optional<FrozenModel> priced = memberAiPolicy
-                    .practiceScriptBinding(job, purpose)
-                    .filter(binding -> binding.getDataHandlingTier() == tier)
-                    .flatMap(binding -> admission.admitIfAvailable(binding).map(model -> {
-                        methods.require(
-                                assigned.getFirst().practice().method(),
-                                purpose.kind().name().toLowerCase(Locale.ROOT),
-                                binding);
-                        return model;
-                    }))
-                    .filter(slot::isAdmittedAs)
-                    .map(model -> slot.withPriceSnapshot(
-                            slot.priceSnapshot() == null ? model.price() : slot.priceSnapshot()));
-            if (priced.isPresent()) {
-                admitted.put(purpose.kind(), priced.get());
-            } else {
-                throw new LlmModelUnavailableException("A frozen direct model is no longer available");
-            }
-        }
-        return admitted.isEmpty() ? null : admitted;
     }
 
     // Queued work can outpace budget updates, so claim must recheck the cap.

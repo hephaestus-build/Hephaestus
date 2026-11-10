@@ -1,11 +1,8 @@
-import type { PracticeScriptModel, PracticeScriptRun, ReviewPractice } from "@/api/types.gen";
+import type { PracticeScriptRun, ReviewPractice } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { definitionFor } from "@/components/common/status-def";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { PracticeScriptFixLink } from "@/components/practice-trace/PracticeScriptFixLink";
-import type { AgentPurpose } from "@/components/practice-vocabulary/agent-purpose-defs";
-import { DataHandlingMark } from "@/components/practice-vocabulary/DataHandlingMark";
-import { ModelKindMark } from "@/components/practice-vocabulary/ModelKindMark";
 import {
 	UNKNOWN_SCRIPT_RUN_DEF,
 	PRACTICE_SCRIPT_RUN_STATUS_DEFS,
@@ -46,13 +43,6 @@ export interface ReviewPracticeScriptTableProps {
 	practices: ReviewPractice[];
 }
 
-const SCRIPT_MODEL_PURPOSE = {
-	CHAT: "PRACTICE_REVIEW",
-	DECISION: "PRACTICE_DECISION",
-	EMBEDDING: "PRACTICE_EMBEDDING",
-	RERANKING: "PRACTICE_RERANKING",
-} satisfies Record<PracticeScriptModel["kind"], AgentPurpose>;
-
 export function ReviewPracticeScriptTable({
 	workspaceSlug,
 	practices,
@@ -70,10 +60,6 @@ export function ReviewPracticeScriptTable({
 					</TableHead>
 					<TableHead scope="col" numeric className="text-right">
 						Review calls
-					</TableHead>
-					<TableHead scope="col">Script models</TableHead>
-					<TableHead scope="col" numeric className="text-right">
-						Script calls
 					</TableHead>
 					<TableHead scope="col" numeric className="text-right">
 						Time
@@ -108,7 +94,6 @@ function ScriptRow({
 }) {
 	const fix = practiceScriptFix(run);
 	const error = run.status === "FAILED" && hasText(run.error) ? run.error : undefined;
-	const calls = run.models.reduce((sum, model) => sum + model.calls, 0);
 	return (
 		<TableRow variant="static">
 			<TableHead scope="row" variant="body">
@@ -144,36 +129,10 @@ function ScriptRow({
 			<TableCell numeric className="text-right align-top">
 				<ReviewCalls calls={run.reviewModelCalls} />
 			</TableCell>
-			<TableCell className="align-top">
-				<ScriptModels models={run.models} />
-			</TableCell>
-			<TableCell numeric className="text-right align-top">
-				{run.models.length === 0 ? <Nothing /> : formatNumber(calls)}
-			</TableCell>
 			<TableCell numeric className="text-right align-top">
 				{run.durationMs === null ? <Nothing /> : formatScriptTime(run.durationMs)}
 			</TableCell>
 		</TableRow>
-	);
-}
-
-function ScriptModels({ models }: { models: PracticeScriptModel[] }) {
-	if (models.length === 0) {
-		return <Nothing />;
-	}
-	return (
-		<ul className="flex flex-col gap-1">
-			{models.map((model) => (
-				<li key={model.kind} className="flex items-center gap-2">
-					<ModelKindMark purpose={SCRIPT_MODEL_PURPOSE[model.kind]} />
-					{model.dataHandlingTier === null ? (
-						model.calls === 0 && <span className="text-muted-foreground">No model</span>
-					) : (
-						<DataHandlingMark tier={model.dataHandlingTier} />
-					)}
-				</li>
-			))}
-		</ul>
 	);
 }
 

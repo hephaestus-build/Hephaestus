@@ -105,10 +105,6 @@ export const Edit: Story = {
 		await expect(
 			screen.getByRole("link", { name: "See review outcomes" }).getAttribute("href"),
 		).toMatch(/^\/w\/demo\/admin\/practices\/reviews\/results\?.*commit-discipline/u);
-		await expect(screen.getByRole("link", { name: "AI models" })).toHaveAttribute(
-			"href",
-			"/w/demo/admin/models",
-		);
 	},
 };
 

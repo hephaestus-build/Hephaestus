@@ -20,7 +20,6 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
-import { listsNoModels, UNLISTED_MODELS } from "@/lib/llm-api-protocol-labels";
 import type { FieldErrors, LlmConnectionFormField } from "@/lib/llm-form-validation";
 import type { LlmApiProtocol, LlmAuthMode } from "@/lib/llm-provider-type";
 import { hasText } from "@/lib/text";
@@ -212,7 +211,7 @@ function AdminLlmConnectionFormDialogContent({
 	};
 
 	let failure = probeError;
-	if (probeResult !== null && !probeResult.reachable && !listsNoModels(apiProtocol, probeResult)) {
+	if (probeResult !== null && !probeResult.reachable) {
 		failure = probeResult.message ?? "The provider did not answer.";
 	}
 
@@ -266,7 +265,7 @@ function AdminLlmConnectionFormDialogContent({
 						{/* Mounted empty, so a result is announced when it arrives (ARIA22). Polite: it answers
 						    the button the admin just pressed, and must not cut across what is being read. */}
 						<div role="status" className="not-empty:mt-2">
-							<ProbeFound apiProtocol={apiProtocol} probeResult={probeResult} />
+							<ProbeFound probeResult={probeResult} />
 						</div>
 						{hasText(failure) && (
 							<div className="mt-2">
@@ -296,12 +295,11 @@ function AdminLlmConnectionFormDialogContent({
 }
 
 interface ProbeFoundProps {
-	apiProtocol: LlmApiProtocol;
 	probeResult: LlmProbeResult | null;
 }
 
 // The enclosing status region announces this result; another alert role would announce it twice.
-function ProbeFound({ apiProtocol, probeResult }: ProbeFoundProps) {
+function ProbeFound({ probeResult }: ProbeFoundProps) {
 	if (probeResult?.reachable === true) {
 		return (
 			<Alert variant="success" role="none">
@@ -318,13 +316,6 @@ function ProbeFound({ apiProtocol, probeResult }: ProbeFoundProps) {
 						</div>
 					)}
 				</AlertDescription>
-			</Alert>
-		);
-	}
-	if (probeResult !== null && listsNoModels(apiProtocol, probeResult)) {
-		return (
-			<Alert role="none">
-				<AlertDescription>{UNLISTED_MODELS}</AlertDescription>
 			</Alert>
 		);
 	}

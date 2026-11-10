@@ -75,7 +75,6 @@ import {
 	parseProxyClaim,
 	registerHephaestusProvider,
 	submissionExtension,
-	withClaim,
 } from "./pi-provider.ts";
 import {
 	CONVERSATION_THREAD,
@@ -136,11 +135,8 @@ import { LIMITS } from "./tool-protocol.ts";
 import { parseDiff } from "./work/practice-scripts/kits/scm/diff-parser.ts";
 import { fileRecordSchema } from "./work/practice-scripts/kits/scm/records.ts";
 import type { DiffFile } from "./work/practice-scripts/kits/scm/types.ts";
-import { MODEL_CONCURRENCY } from "./work/practice-scripts/lib/core/concurrency.ts";
 import {
-	boundModelsSchema,
 	parseCandidate,
-	type BoundModels,
 	type Candidate,
 	type Problem,
 	type Citation,
@@ -161,11 +157,6 @@ import {
 import type { JobFiles } from "./work/practice-scripts/lib/core/ipc.ts";
 import { jsonArray, isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
 import { renderReviewInput, resolveLeads } from "./work/practice-scripts/lib/core/leads.ts";
-import {
-	hostModels,
-	ModelBudget,
-	waitingWhileCallsInFlight,
-} from "./work/practice-scripts/lib/core/models-host.ts";
 import {
 	UnratedError,
 	type UnratedReason,
@@ -720,7 +711,6 @@ export async function runReviewJob(): Promise<void> {
 	const RUNNER_DEBUG_PATH = outputPath(OUTPUT, "runner-debug.json");
 	const PRACTICE_COVERAGE_PATH = outputPath(OUTPUT, "practice-coverage.json");
 	const PRACTICE_SCRIPT_REPORT_PATH = outputPath(OUTPUT, "practice-scripts.json");
-	const PRACTICE_SCRIPT_MODELS_PATH = `${CWD}/practice-script-models.json`;
 	const REVIEW_INPUT_ROOT = "work/review-input";
 	// Compaction can remove prior recordings from the model context; retain them on disk.
 	const NOTES_PATH = `${CWD}/work/notes/review.md`;
@@ -742,7 +732,6 @@ export async function runReviewJob(): Promise<void> {
 	// The runner passes its credential where it is used. No process that it starts inherits it.
 	delete process.env.LLM_PROXY_TOKEN;
 	delete process.env.LLM_PROXY_CLAIM;
-	const DIRECT_MODEL_TOKENS = positiveIntegerEnv("PI_DIRECT_MODEL_TOKENS");
 	// Refusal exhaustion leaves the practice NOT_REACHED.
 	const MAX_REFUSALS_PER_PRACTICE = 8;
 	// The server sets what one practice may spend.
@@ -2032,18 +2021,6 @@ export async function runReviewJob(): Promise<void> {
 		return { head: { commit: head }, change: sources };
 	}
 
-	function readBoundModels(): BoundModels {
-		if (!existsSync(PRACTICE_SCRIPT_MODELS_PATH)) {
-			return {};
-		}
-		try {
-			return boundModelsSchema.parse(JSON.parse(readFileSync(PRACTICE_SCRIPT_MODELS_PATH, "utf8")));
-		} catch (error) {
-			diagnose("models.unparsable", { error: errorKind(error) });
-			return {};
-		}
-	}
-
 	function loadPracticeSlugs(): string[] {
 		return practiceIndex.map((practice) => practice.slug).filter(Boolean);
 	}
@@ -2851,8 +2828,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 
 		const evidenceSources = captureSources();
 		const inputReader = new InputReader({ practicesDir: INPUT_PATHS.practiceScripts });
-		const boundModels = readBoundModels();
-		const directBudget = new ModelBudget(DIRECT_MODEL_TOKENS, MODEL_CONCURRENCY);
 		let sessionStopFailure: Error | null = null;
 		const measuringEnded = new AbortController();
 		const lostSides = new Set<string>();
@@ -3246,7 +3221,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					Math.max(0, measureEnd - Date.now()),
 				);
 				const sources = sourcesForPractice(slug, evidenceSources);
-				const { modelWait } = sessionState();
 				const outcome = await runPracticeProgram(
 					program,
 					{
@@ -3258,22 +3232,12 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					},
 					{
 						reader: new EvidenceReader(sources, programReads),
-						models: hostModels(
-							boundModels,
-							LLM_PROXY_URL,
-							LLM_PROXY_TOKEN,
-							slug,
-							waitingWhileCallsInFlight(withClaim(fetch, LLM_PROXY_CLAIM)),
-						),
-						budget: directBudget,
-						awaitModel: () => modelWait.call(),
 						start: (start) => {
 							if (programs === null) {
 								throw new Error("This Pod has no program side");
 							}
 							return toolsProgram(programs, start);
 						},
-						gatewayUnavailable,
 						review: async (options, signal) =>
 							reviewPractice(slug, practiceHeading, options, signal, sessionReads),
 						signal: AbortSignal.any([stopped.signal, measuringEnded.signal]),

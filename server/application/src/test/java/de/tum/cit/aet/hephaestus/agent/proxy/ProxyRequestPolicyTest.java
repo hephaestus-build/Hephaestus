@@ -62,8 +62,6 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 8L,
                 1L,
                 new ProxyRouting.BilledAttempt(source, id, 0, LEASE),
-                null,
-                null,
                 source == UsageSourceType.MENTOR_TURN ? null : Instant.now().plusSeconds(60),
                 null);
     }
@@ -88,12 +86,9 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
     @EnumSource(
             value = UsageSourceType.class,
             names = {"PRACTICE_SCRIPT_DECISION", "PRACTICE_SCRIPT_EMBEDDING", "PRACTICE_SCRIPT_RERANKING"})
-    void shouldCheckAPracticeScriptModelAgainstTheReviewedDeveloperWhenItsSlotIsCalled(UsageSourceType source) {
-        var job = new ReviewJob();
-        when(jobs.findByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(job));
-        when(reviews.allows(job, model)).thenReturn(true);
-
-        assertThat(policy.allows(request(source))).isTrue();
+    void shouldRefuseHistoricalScriptSourcesWhenTheyAreUsedForANewCall(UsageSourceType source) {
+        assertThat(policy.allows(request(source))).isFalse();
+        verifyNoInteractions(jobs, turns, reviews, routing);
     }
 
     @Test
@@ -116,8 +111,6 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 8L,
                 null,
                 new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, id, 0, LEASE),
-                null,
-                null,
                 null,
                 null);
         assertThat(policy.allows(request)).isFalse();

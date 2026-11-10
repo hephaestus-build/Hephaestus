@@ -25,7 +25,6 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
-import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
@@ -241,25 +240,12 @@ public class ReviewServiceImpl implements ReviewService {
             if (plan.reason() == null)
                 developers.add(plan.roles().size() == 1 ? plan.roles().getFirst() : null);
         }
-        var models = bindings.models(request.workspaceId(), developers).stream()
-                .sorted(Comparator.comparing(BoundModelSlot::slot))
-                .toList();
-        if (models.size() != 5
-                || !models.stream()
-                        .map(BoundModelSlot::slot)
-                        .sorted()
-                        .toList()
-                        .equals(List.of("chat", "decision", "embedding", "reranking", "review")))
+        var models = bindings.models(request.workspaceId(), developers);
+        if (models.size() != 1 || !models.getFirst().slot().equals("review"))
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.MODEL_UNAVAILABLE,
-                    "The review method must contain the five frozen slots.");
-        if (!developers.isEmpty()
-                && models.stream()
-                                .filter(slot -> slot.slot().equals("review"))
-                                .findFirst()
-                                .orElseThrow()
-                                .model()
-                        == null)
+                    "The review method must contain the one frozen review slot.");
+        if (!developers.isEmpty() && models.getFirst().model() == null)
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.MODEL_UNAVAILABLE, "The review model is unavailable.");
         var digest = reviews.modelDigest(json.writeValueAsString(models));

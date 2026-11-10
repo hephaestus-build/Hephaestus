@@ -141,8 +141,6 @@ public final class SandboxLayout {
 
     public static final String NODE_PACKAGE_JSON_FILENAME = "package.json";
 
-    public static final String PRACTICE_SCRIPT_MODELS_FILE = "practice-script-models.json";
-
     /** Workspace-relative filename of the shared provider-registration ES module both runners import. */
     public static final String PROVIDER_HELPER_FILENAME = "pi-provider.js";
 
@@ -230,9 +228,4 @@ public final class SandboxLayout {
 
     /** Practice slug pattern enforced at the handler boundary as defense-in-depth against FS-path injection. */
     public static final Pattern PRACTICE_SLUG = Pattern.compile("[a-z0-9][a-z0-9-]{0,63}");
-
-    /** Exact workspace paths an adapter may pass in {@link PiPlanSpec#extraInputs()}. */
-    public static Set<String> allowedExtraInputPaths() {
-        return Set.of(PRACTICE_SCRIPT_MODELS_FILE);
-    }
 }

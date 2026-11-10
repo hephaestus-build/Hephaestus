@@ -59,4 +59,4 @@ A stored script keeps `meta` empty, prepares evidence, and calls `ctx.review`.
 The host refuses a stored script with any metadata field as an invalid program before it binds a model.
 The public toolkit has no direct-model entry, so a stored script makes no direct model call.
 Review sessions follow the developer's AI ceiling.
-Declared slots remain only for the toolkit's private test programs.
+The toolkit has no declared slots and no direct model calls, so no test program can use one either.

@@ -94,22 +94,11 @@
 			"matchManagers": ["npm"],
 			"matchFileNames": ["docker/agents/practice-scripts/package.json"],
 			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-			"groupName": "AI SDK and practice runtime"
-		},
-		{
-			"matchManagers": ["npm"],
-			"matchPackageNames": ["ai", "@ai-sdk/**"],
-			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-			"groupName": "AI SDK and practice runtime"
+			"groupName": "Practice runtime"
 		},
 		{
 			"description": "Each practice-runtime update needs its code ported and the practice evaluation set run before and after, so a maintainer starts it from the dashboard",
 			"matchFileNames": ["docker/agents/practice-scripts/package.json"],
-			"dependencyDashboardApproval": true
-		},
-		{
-			"description": "Each practice-runtime update needs its code ported and the practice evaluation set run before and after, so a maintainer starts it from the dashboard",
-			"matchPackageNames": ["ai", "@ai-sdk/**"],
 			"dependencyDashboardApproval": true
 		},
 		{

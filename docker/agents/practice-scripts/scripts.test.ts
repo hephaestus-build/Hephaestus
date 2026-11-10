@@ -567,7 +567,7 @@ void describe("every bundled practice script", async () => {
 			await runBundledReview(slug, MINIMAL_INPUTS[await kindOf(slug)]);
 		});
 
-		void it(`${slug} declares an empty meta: it needs no direct model`, async () => {
+		void it(`${slug} declares an empty meta`, async () => {
 			assert.deepEqual(await stagedMeta(slug), {});
 		});
 	}

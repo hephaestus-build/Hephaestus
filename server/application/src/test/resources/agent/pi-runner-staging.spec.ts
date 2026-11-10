@@ -1,19 +1,13 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import {
-	capturedLines,
-	privateModelProgram,
-	field,
-	runRunner,
-	stagePractices,
-} from "./program-host-runner.ts";
+import { capturedLines, field, runRunner, stagePractices } from "./program-host-runner.ts";
 
 void test("an unavailable practice stays open while completed work is staged for its retry", async () => {
 	const first = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-stage-outage-")));
@@ -102,31 +96,13 @@ for (const concurrent of [false, true]) {
 		try {
 			const address = server.address();
 			assert.ok(address !== null && typeof address !== "string");
-			// A direct model call is a private toolkit program, staged outside the guarded practices folder.
-			stagePractices(
-				cwd,
-				[
-					...(concurrent ? [{ slug: "a-waiting" }] : []),
-					{
-						slug: "b-direct",
-						program: privateModelProgram(`
-			await step("one call", () => generateText({
-				model: ctx.models.chat, prompt: "Say yes.", maxOutputTokens: 1000,
-			}));`),
-					},
-				],
-				"work/practice-scripts/toolkit-fixtures",
-			);
-			writeFileSync(
-				path.join(cwd, "practice-script-models.json"),
-				JSON.stringify({
-					chat: { protocol: "openai-completions", modelId: "chat-model" },
-				}),
-			);
+			stagePractices(cwd, [...(concurrent ? [{ slug: "a-waiting" }] : []), { slug: "b-lost" }]);
 
-			const interrupted = await runRunner(cwd, concurrent ? { "a-waiting": "hang" } : {}, {
-				LLM_PROXY_URL: `http://127.0.0.1:${address.port}`,
-			});
+			const interrupted = await runRunner(
+				cwd,
+				{ ...(concurrent ? { "a-waiting": "hang" } : {}), "b-lost": "gateway" },
+				{ LLM_PROXY_URL: `http://127.0.0.1:${address.port}` },
+			);
 
 			assert.equal(interrupted.status, 75, interrupted.stderr);
 			assert.equal(calls, 3);

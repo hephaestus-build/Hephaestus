@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
@@ -11,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
@@ -60,9 +58,6 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private AgentRuns agentRuns;
-
-    @Autowired
-    private LlmUsageEventRepository usageEvents;
 
     @Autowired
     private MentorTurnRepository turnRepository;
@@ -155,13 +150,8 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         Authentication authentication = Objects.requireNonNull(result.authentication());
         ProxyIdentity identity = (ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal());
         ProxyRouting routing = new ProxyRoutingService(
-                        jobRepository,
-                        turnRepository,
-                        objectMapper,
-                        usageEvents,
-                        mock(ReviewSnapshotQuery.class),
-                        agentRuns)
-                .resolve(identity, new MockHttpServletRequest("POST", "/internal/llm/responses"));
+                        jobRepository, turnRepository, objectMapper, Mockito.mock(ReviewSnapshotQuery.class), agentRuns)
+                .resolve(identity);
         ProxyRouting.BilledAttempt attempt = routing.attempt();
         assertThat(routing.workspaceId()).isEqualTo(workspace.getId());
         assertThat(routing.apiProtocol()).isEqualTo("openai-responses");

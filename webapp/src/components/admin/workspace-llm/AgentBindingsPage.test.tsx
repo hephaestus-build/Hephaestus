@@ -1,9 +1,7 @@
 import { fireEvent, type queries, render, screen, within } from "@testing-library/react";
-import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { renderWithRouter } from "@/test/router-harness";
 
-import type { AgentBinding, AvailableLlmModel, PracticeScriptSummary } from "@/api/types.gen";
+import type { AgentBinding, AvailableLlmModel } from "@/api/types.gen";
 
 import { AgentBindingsPage, type AgentBindingsPageProps } from "./AgentBindingsPage";
 
@@ -46,7 +44,6 @@ function Page(overrides: Partial<AgentBindingsPageProps>) {
 			availableModels={[inHouseModel, cloudModel]}
 			practicesEnabled
 			aiChoiceRequired={false}
-			practiceScriptNeeds={{ status: "ready", summaries: [] }}
 			ownProviderAllowed
 			pendingWrites={new Map()}
 			onSave={vi.fn()}
@@ -220,82 +217,5 @@ describe("AgentBindingsPage", () => {
 		fireEvent.click(clearAssignment);
 
 		expect(onTurnOff).toHaveBeenCalledWith({ purpose: "PRACTICE_REVIEW", tier: "IN_HOUSE" });
-	});
-});
-
-const expanded = (name: string) =>
-	screen.getByRole("button", { name: rowName(name) }).getAttribute("aria-expanded");
-
-describe("AgentBindingsPage rows", () => {
-	const decisionModel: AvailableLlmModel = {
-		...cloudModel,
-		id: 30,
-		displayName: "Decider",
-		purposes: ["PRACTICE_DECISION"],
-	};
-	const needs: PracticeScriptSummary[] = [
-		{
-			practiceSlug: "comment-quality",
-			practiceName: "Comment quality",
-			asOf: {
-				reviewId: "review-1",
-				jobId: "job-1",
-				finishedAt: new Date("2026-10-03T09:00:00"),
-			},
-			scriptChanged: false,
-			needs: [
-				{
-					slot: "decision",
-					need: "required",
-					unmetTiers: ["IN_HOUSE", "CLOUD", "UNDECLARED"],
-				},
-			],
-		},
-	];
-
-	it("opens a row for practice scripts whose required model some members lack, and says who", async () => {
-		await renderWithRouter(
-			<Page
-				availableModels={[inHouseModel, cloudModel, decisionModel]}
-				practiceScriptNeeds={{ status: "ready", summaries: needs }}
-			/>,
-			"/",
-		);
-		expect(expanded("Decision model")).toBe("true");
-		expect(expanded("Embedding model")).toBe("false");
-		expect(screen.getByRole("note").textContent).toBe(
-			"1 practice needs a decision model for In-house and Cloud members and members who have not chosen. Until you assign one, reviews of their work record no observation for this practice.",
-		);
-		screen.getByRole("button", { name: /Decision model.*Needs attention/u });
-	});
-
-	function NeedsArriveLater() {
-		const [practiceScriptNeeds, setPracticeScriptNeeds] = useState<
-			AgentBindingsPageProps["practiceScriptNeeds"]
-		>({ status: "loading" });
-		return (
-			<>
-				<button
-					type="button"
-					onClick={() => setPracticeScriptNeeds({ status: "ready", summaries: [...needs] })}
-				>
-					Needs arrive
-				</button>
-				<Page
-					availableModels={[inHouseModel, cloudModel, decisionModel]}
-					practiceScriptNeeds={practiceScriptNeeds}
-				/>
-			</>
-		);
-	}
-
-	it("opens a row for practice scripts once, when needs that arrive after the page ask for it", async () => {
-		await renderWithRouter(<NeedsArriveLater />, "/");
-		expect(expanded("Decision model")).toBe("false");
-		fireEvent.click(screen.getByRole("button", { name: "Needs arrive" }));
-		expect(expanded("Decision model")).toBe("true");
-		fireEvent.click(screen.getByRole("button", { name: /Decision model/u }));
-		fireEvent.click(screen.getByRole("button", { name: "Needs arrive" }));
-		expect(expanded("Decision model")).toBe("false");
 	});
 });

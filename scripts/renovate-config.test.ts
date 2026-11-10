@@ -296,7 +296,7 @@ void test("routine update groups preserve repository boundaries", () => {
 			["webapp/package.json", "extension/package.json"],
 		],
 		["server dependencies", ["gradle", "gradle-wrapper"], undefined],
-		["AI SDK and practice runtime", ["npm"], ["docker/agents/practice-scripts/package.json"]],
+		["Practice runtime", ["npm"], ["docker/agents/practice-scripts/package.json"]],
 		["CI and build tooling", undefined, [".github/**"]],
 	] as const;
 	for (const [groupName, managers, fileNames] of groups) {
@@ -339,12 +339,6 @@ void test("updates that need a port or a workflow decision wait for a maintainer
 			(rule) =>
 				Array.isArray(rule.matchFileNames) &&
 				rule.matchFileNames.includes("docker/agents/practice-scripts/package.json"),
-		),
-	);
-	assert.ok(
-		gated(
-			(rule) =>
-				Array.isArray(rule.matchPackageNames) && rule.matchPackageNames.includes("@ai-sdk/**"),
 		),
 	);
 	assert.ok(

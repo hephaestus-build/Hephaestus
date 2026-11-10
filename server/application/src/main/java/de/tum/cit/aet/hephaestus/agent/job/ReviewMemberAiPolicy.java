@@ -36,29 +36,11 @@ public class ReviewMemberAiPolicy {
     private final ReviewJobAssignments assignments;
 
     public Optional<WorkspaceAgentBinding> binding(ReviewJob job) {
-        return binding(job, AgentPurpose.PRACTICE_REVIEW);
-    }
-
-    public Optional<WorkspaceAgentBinding> practiceScriptBinding(ReviewJob job, AgentPurpose purpose) {
-        return binding(job, purpose);
-    }
-
-    private Optional<WorkspaceAgentBinding> binding(ReviewJob job, AgentPurpose purpose) {
         if (!permitsReview(job)) return Optional.empty();
-        return routing.bindingForPeople(job.getWorkspaceId(), purpose, people(job));
+        return routing.bindingForPeople(job.getWorkspaceId(), AgentPurpose.PRACTICE_REVIEW, people(job));
     }
 
     public Optional<WorkspaceAgentBinding> binding(long workspaceId, UUID reviewId, List<ReviewAssignmentId> selected) {
-        return binding(workspaceId, reviewId, selected, AgentPurpose.PRACTICE_REVIEW);
-    }
-
-    public Optional<WorkspaceAgentBinding> practiceScriptBinding(
-            long workspaceId, UUID reviewId, List<ReviewAssignmentId> selected, AgentPurpose purpose) {
-        return binding(workspaceId, reviewId, selected, purpose);
-    }
-
-    private Optional<WorkspaceAgentBinding> binding(
-            long workspaceId, UUID reviewId, List<ReviewAssignmentId> selected, AgentPurpose purpose) {
         var pinned = assignments.load(
                 workspaceId, reviewId, new ReviewJobInput(selected.getFirst().itemId(), selected));
         if (pinned.stream()
@@ -75,7 +57,7 @@ public class ReviewMemberAiPolicy {
         if (people.stream()
                 .anyMatch(person -> person != null
                         && !preferences.forDeveloper(workspaceId, person).permitsAi())) return Optional.empty();
-        return routing.bindingForPeople(workspaceId, purpose, people);
+        return routing.bindingForPeople(workspaceId, AgentPurpose.PRACTICE_REVIEW, people);
     }
 
     public boolean isProcessingSuppressed(ReviewJob job) {

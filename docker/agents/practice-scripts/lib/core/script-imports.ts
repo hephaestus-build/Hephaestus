@@ -27,7 +27,7 @@ function publicEntries(): ReadonlyMap<string, string> {
 
 /**
  * The folder that the server stages stored scripts in (`SandboxLayout`, pinned by `SandboxLayoutSyncTest`).
- * The import guard and the metadata refusal apply only there. Tests stage private toolkit programs elsewhere.
+ * The import guard applies only there.
  */
 const SCRIPT_FOLDER = "practices";
 

@@ -4,9 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRun;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRunRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
-import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
-import de.tum.cit.aet.hephaestus.practices.spi.PracticeScriptModelDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeScriptRunDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewScriptQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
@@ -14,13 +11,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptNoResultCause;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptStopReason;
-import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -48,9 +43,6 @@ public class ReviewPracticeScriptService implements ReviewScriptQuery {
                 .collect(Collectors.toMap(
                         ReviewRuntimeRepository.JobOfReview::jobId, ReviewRuntimeRepository.JobOfReview::reviewId));
         if (reviewOfJob.isEmpty()) return Map.of();
-        var byRun = runs.sumScriptCalls(workspaceId, reviewOfJob.keySet()).stream()
-                .collect(Collectors.groupingBy(
-                        row -> new ScriptRun.Id(row.getJobId(), row.getAttempt(), row.getPracticeId())));
         Map<UUID, List<PracticeScriptRunDTO>> byReview = new HashMap<>();
         runs.findByWorkspaceIdAndJobIdIn(workspaceId, reviewOfJob.keySet()).stream()
                 .sorted(Comparator.comparing(ScriptRun::getFinishedAt)
@@ -60,31 +52,12 @@ public class ReviewPracticeScriptService implements ReviewScriptQuery {
                     var reviewId =
                             Objects.requireNonNull(reviewOfJob.get(run.getId().getJobId()));
                     byReview.computeIfAbsent(reviewId, ignored -> new ArrayList<>())
-                            .add(present(run, Objects.requireNonNull(pinnedByReview.get(reviewId)), byRun));
+                            .add(present(run));
                 });
         return byReview;
     }
 
-    private PracticeScriptRunDTO present(
-            ScriptRun run,
-            List<PinnedPractice> practices,
-            Map<ScriptRun.Id, List<ScriptRunRepository.ScriptCalls>> byRun) {
-        var practice = practices.stream()
-                .filter(pinned -> pinned.practiceId() == run.getId().getPracticeId()
-                        && pinned.practiceVersionId() == run.getPracticeVersionId())
-                .findFirst();
-        List<PracticeScriptModelDTO> models = byRun.getOrDefault(run.getId(), List.of()).stream()
-                .sorted(Comparator.comparing(ScriptRunRepository.ScriptCalls::getModelKind))
-                .map(usage -> new PracticeScriptModelDTO(
-                        ModelKind.valueOf(usage.getModelKind()),
-                        modelId(practice.orElse(null), ModelKind.valueOf(usage.getModelKind())),
-                        tier(run, usage.getModelKind()),
-                        usage.getCalls(),
-                        usage.getInputTokens(),
-                        usage.getOutputTokens(),
-                        usage.getCacheReadTokens(),
-                        usage.getCacheWriteTokens()))
-                .toList();
+    private static PracticeScriptRunDTO present(ScriptRun run) {
         JsonNode sessions = reviewSessions(run);
         return new PracticeScriptRunDTO(
                 run.getId().getJobId(),
@@ -98,20 +71,7 @@ public class ReviewPracticeScriptService implements ReviewScriptQuery {
                 run.getFinishedAt(),
                 run.getDurationMs() == null ? null : run.getDurationMs().longValue(),
                 run.getError(),
-                models,
                 sessions == null ? null : sessions.path("modelCalls").asInt(0));
-    }
-
-    /** The data handling tier that the run recorded for its model of this kind; null when it recorded none. */
-    private static @Nullable DataHandlingTier tier(ScriptRun run, String kind) {
-        JsonNode models = run.getModels();
-        if (models == null) return null;
-        for (JsonNode model : models) {
-            JsonNode tier = model.path("tier");
-            if (kind.equals(model.path("slot").asString("")) && tier.isString())
-                return DataHandlingTier.valueOf(tier.asString());
-        }
-        return null;
     }
 
     /** The runner's review-session counts, as the recorder stored them; null for a run recorded without them. */
@@ -124,7 +84,7 @@ public class ReviewPracticeScriptService implements ReviewScriptQuery {
     /**
      * A built-in only calls the review, so its OFF_FORMAT can only be a review session that ended without an accepted
      * result. A counted schema refusal proves the wrong format, so the stop reason then stands alone. A custom script
-     * can also fail on its own direct model after its review, so the review-session counts prove nothing about it.
+     * runs its own code around its review sessions, so the review-session counts prove nothing about it.
      */
     static @Nullable ScriptNoResultCause noResultCause(ScriptRun run, @Nullable JsonNode sessions) {
         if (run.getScriptKind() != ScriptKind.BUILTIN
@@ -139,16 +99,5 @@ public class ReviewPracticeScriptService implements ReviewScriptQuery {
             return null;
         }
         return ScriptNoResultCause.SESSION_ENDED;
-    }
-
-    private static @Nullable String modelId(@Nullable PinnedPractice practice, ModelKind kind) {
-        if (practice == null) return null;
-        String slot = kind.name().toLowerCase(Locale.ROOT);
-        return practice.method().models().stream()
-                .filter(model -> model.slot().equals(slot))
-                .map(model -> model.model() == null ? null : model.model().modelId())
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
     }
 }

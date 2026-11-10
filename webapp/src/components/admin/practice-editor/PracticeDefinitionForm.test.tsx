@@ -326,7 +326,7 @@ describe("the unsaved-changes guard around a save", () => {
 });
 
 describe("the practice script section", () => {
-	it("waits closed as the built-in review, links its guide, and names AI models as words where the host has no link", async () => {
+	it("waits closed as the built-in review, and links its guide", async () => {
 		await renderCreateForm(vi.fn());
 		const section = screen.getByRole("button", { name: /^Script/u });
 		expect(section.getAttribute("aria-expanded")).toBe("false");
@@ -335,8 +335,6 @@ describe("the practice script section", () => {
 
 		const guide = await screen.findByRole("link", { name: /^Write a practice script/u });
 		expect(guide.getAttribute("href")).toBe("https://docs.hephaestus.build/admin/practice-scripts");
-		screen.getByText(/It can call the models on AI models\.$/u);
-		expect(screen.queryByRole("link", { name: "AI models" })).toBeNull();
 	});
 
 	it("opens with the script a practice already has", async () => {

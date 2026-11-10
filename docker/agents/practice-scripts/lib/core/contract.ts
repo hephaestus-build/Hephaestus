@@ -1,26 +1,5 @@
 /** The contract of a practice script, as the host parses it, and of the result it returns. */
-import type {
-	EmbeddingModelV4,
-	EmbeddingModelV4CallOptions,
-	EmbeddingModelV4Result,
-	Experimental_DecisionModelV4,
-	Experimental_DecisionModelV4CallOptions,
-	Experimental_DecisionModelV4Result,
-	LanguageModelV4,
-	LanguageModelV4CallOptions,
-	LanguageModelV4GenerateResult,
-	RerankingModelV4,
-	RerankingModelV4CallOptions,
-	RerankingModelV4Result,
-} from "@ai-sdk/provider";
 import { z } from "zod";
-
-import {
-	chatOptionsSchema,
-	decisionOptionsSchema,
-	embeddingOptionsSchema,
-	rerankingOptionsSchema,
-} from "./model-options.ts";
 
 export const NOT_A_DEFINITION_ERROR =
 	"The script's default export is not a practice script. Write it with definePracticeScript.";
@@ -51,41 +30,6 @@ export const CANDIDATE_LIMITS = {
 
 export const PRACTICE_SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 
-/**
- * The header that names the practice of every direct model call of a practice script, so the proxy
- * can attribute its usage.
- */
-export const PRACTICE_SCRIPT_PRACTICE_HEADER = "x-hephaestus-practice";
-
-/** The header that names which of the proxy's own rules refused a call (`LlmProxyService.REFUSAL_HEADER`). */
-export const PROXY_REFUSAL_HEADER = "hephaestus-proxy-refusal";
-
-/** The proxy's refusal of a call while its attempt already has its most model calls in flight. */
-export const CALLS_IN_FLIGHT_REFUSAL = "CALLS_IN_FLIGHT";
-
-/** What a practice script may ask a model to do directly. One slot, one kind of model. */
-export const MODEL_SLOTS = ["chat", "decision", "embedding", "reranking"] as const;
-export type ModelSlot = (typeof MODEL_SLOTS)[number];
-export const modelSlotSchema = z.enum(MODEL_SLOTS);
-
-/**
- * The most items that one call to a slot's model may hold: decision questions, embedding values and
- * rerank documents. The proxy refuses a larger call on the slot's own API (`LlmProxyService`), so the
- * host refuses it first, as "too-large", whatever the protocol of the slot's model.
- */
-export const MODEL_SLOT_CAPS = {
-	decision: 64,
-	embedding: 64,
-	reranking: 256,
-} as const;
-
-/**
- * "required": without a bound model the program does not run, and the practice is skipped.
- * "optional": the program runs without it and says what it could not rate.
- */
-const needSchema = z.enum(["required", "optional"]);
-export type Need = z.infer<typeof needSchema>;
-
 export const REASONS = [
 	"unavailable",
 	"budget",
@@ -95,8 +39,7 @@ export const REASONS = [
 	"refused",
 	"error",
 ] as const;
-const reasonSchema = z.enum(REASONS);
-export type Reason = z.infer<typeof reasonSchema>;
+export type Reason = (typeof REASONS)[number];
 
 /** One line of text: a newline would let a program write its own headings into the reviewer's turn. */
 const line = (max: number) =>
@@ -106,21 +49,8 @@ const line = (max: number) =>
 		.max(max)
 		.refine((text) => !/[\r\n]/u.test(text), "must be one line");
 
-export const metaSchema = z.strictObject({
-	models: z.partialRecord(modelSlotSchema, needSchema).optional(),
-});
-export type ParsedMeta = z.infer<typeof metaSchema>;
-
-export function parseMeta(meta: unknown): { meta: ParsedMeta } | { error: string } {
-	const parsed = metaSchema.safeParse(meta);
-	if (!parsed.success) {
-		const issue = parsed.error.issues[0];
-		return {
-			error: `meta: ${issue ? `${issue.path.join(".")} ${issue.message}`.trim() : "invalid"}`,
-		};
-	}
-	return { meta: parsed.data };
-}
+/** `meta` is empty: a script declares nothing to the host. */
+export const metaSchema = z.strictObject({});
 
 export const FACT_CHARS = 200;
 export const DIRECTION_CHARS = 300;
@@ -135,151 +65,6 @@ export const factsSchema = z
 	.record(z.string().regex(/^[A-Za-z][A-Za-z0-9]{0,63}$/u), scalar)
 	.refine((facts) => Object.keys(facts).length <= 32, "at most 32 facts");
 export type Facts = z.infer<typeof factsSchema>;
-
-const PROTOCOLS = [
-	"anthropic-messages",
-	"openai-completions",
-	"openai-responses",
-	"openai-decisions",
-	"openai-embeddings",
-	"cohere-rerank",
-] as const;
-const boundModelSchema = z.strictObject({
-	protocol: z.enum(PROTOCOLS),
-	modelId: z.string().min(1),
-	reasoningEffort: z.string().optional(),
-	forcedToolChoice: z.boolean().optional(),
-});
-export const boundModelsSchema = z.partialRecord(modelSlotSchema, boundModelSchema);
-export type BoundModels = z.infer<typeof boundModelsSchema>;
-
-interface SlotTypes {
-	chat: {
-		model: LanguageModelV4;
-		options: LanguageModelV4CallOptions;
-		result: LanguageModelV4GenerateResult;
-	};
-	decision: {
-		model: Experimental_DecisionModelV4;
-		options: Experimental_DecisionModelV4CallOptions;
-		result: Experimental_DecisionModelV4Result;
-	};
-	embedding: {
-		model: EmbeddingModelV4;
-		options: EmbeddingModelV4CallOptions;
-		result: EmbeddingModelV4Result;
-	};
-	reranking: {
-		model: RerankingModelV4;
-		options: RerankingModelV4CallOptions;
-		result: RerankingModelV4Result;
-	};
-}
-
-export type SlotModels = { [S in ModelSlot]: SlotTypes[S]["model"] };
-
-export type SlotAnswer<S extends ModelSlot = ModelSlot> = {
-	[K in S]: { slot: K; result: SlotTypes[K]["result"] };
-}[S];
-
-export interface SlotCall<S extends ModelSlot> {
-	/** Parsed program options exclude host-only provider configuration. */
-	options: z.ZodType<SlotTypes[S]["options"]>;
-	/** The items a call holds, and the most that one call may hold. */
-	items?: { count: (options: SlotTypes[S]["options"]) => number; max: number };
-	/** Call the model. The tokens are input and output together, or undefined when it reports none. */
-	call: (
-		model: SlotTypes[S]["model"],
-		options: SlotTypes[S]["options"],
-	) => Promise<{ value: SlotAnswer; tokens: number | undefined }>;
-}
-
-const sum = (...counts: (number | undefined)[]): number | undefined =>
-	counts.every((n) => n !== undefined && Number.isSafeInteger(n) && n >= 0)
-		? counts.reduce<number>((s, n) => s + (n ?? 0), 0)
-		: undefined;
-
-const tokenCount = z.int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const chatUsageReceipt = z.union([
-	z.object({ prompt_tokens: tokenCount, completion_tokens: tokenCount }),
-	z.object({ input_tokens: tokenCount, output_tokens: tokenCount }),
-]);
-const languageUsageReceipt = z
-	.object({
-		inputTokens: z.object({
-			total: tokenCount,
-			noCache: tokenCount.optional(),
-			cacheRead: tokenCount.optional(),
-			cacheWrite: tokenCount.optional(),
-		}),
-		outputTokens: z.object({
-			total: tokenCount,
-			text: tokenCount.optional(),
-			reasoning: tokenCount.optional(),
-		}),
-	})
-	.refine(
-		({ inputTokens, outputTokens }) =>
-			(inputTokens.cacheRead ?? 0) + (inputTokens.cacheWrite ?? 0) <= inputTokens.total &&
-			(outputTokens.reasoning ?? 0) <= outputTokens.total,
-	);
-
-export function hasLanguageUsageReceipt(usage: LanguageModelV4GenerateResult["usage"]): boolean {
-	return (
-		languageUsageReceipt.safeParse(usage).success &&
-		(usage.raw === undefined || chatUsageReceipt.safeParse(usage.raw).success)
-	);
-}
-
-export const MODEL_SLOT_CALLS = {
-	chat: {
-		options: chatOptionsSchema,
-		call: async (model, options) => {
-			const result = await model.doGenerate(options);
-			const { inputTokens, outputTokens } = result.usage;
-			return {
-				value: { slot: "chat", result },
-				// Compatible providers can normalize absent counts to zero; only their raw receipt proves presence.
-				tokens: hasLanguageUsageReceipt(result.usage)
-					? sum(inputTokens.total, outputTokens.total)
-					: undefined,
-			};
-		},
-	},
-	decision: {
-		options: decisionOptionsSchema,
-		items: {
-			count: (options) => Object.keys(options.questions).length,
-			max: MODEL_SLOT_CAPS.decision,
-		},
-		call: async (model, options) => {
-			const result = await model.doDecide(options);
-			return {
-				value: { slot: "decision", result },
-				tokens: sum(result.usage?.inputTokens, result.usage?.outputTokens),
-			};
-		},
-	},
-	embedding: {
-		options: embeddingOptionsSchema,
-		items: { count: (options) => options.values.length, max: MODEL_SLOT_CAPS.embedding },
-		call: async (model, options) => {
-			const result = await model.doEmbed(options);
-			return { value: { slot: "embedding", result }, tokens: result.usage?.tokens };
-		},
-	},
-	reranking: {
-		options: rerankingOptionsSchema,
-		items: {
-			count: (options) => options.documents.values.length,
-			max: MODEL_SLOT_CAPS.reranking,
-		},
-		call: async (model, options) => {
-			const result = await model.doRerank(options);
-			return { value: { slot: "reranking", result }, tokens: undefined };
-		},
-	},
-} satisfies { [S in ModelSlot]: SlotCall<S> };
 
 export const CONTRACT_VERSION = 3 as const;
 export const INPUTS_FILE_SUFFIX = ".inputs.json";
@@ -965,15 +750,9 @@ export const STOP_REASONS = [
 export type StopReason = (typeof STOP_REASONS)[number];
 export const PROGRAM_KINDS = ["builtin", "custom"] as const;
 export type ProgramKind = (typeof PROGRAM_KINDS)[number];
-export const EXECUTION_REPORT_SCHEMA_VERSION = 2;
+export const EXECUTION_REPORT_SCHEMA_VERSION = 3;
 
-const callsSchema = z.strictObject({
-	review: count,
-	chat: count,
-	decision: count,
-	embedding: count,
-	reranking: count,
-});
+const callsSchema = z.strictObject({ review: count });
 export type ProgramCalls = z.infer<typeof callsSchema>;
 const coverageReachedSchema = z.strictObject({
 	reads: count,
@@ -1003,14 +782,6 @@ export const executionEntrySchema = z
 				.regex(/^[0-9a-f]{64}$/u)
 				.nullable(),
 		}),
-		models: z.array(
-			z.strictObject({
-				slot: modelSlotSchema,
-				need: needSchema,
-				bound: z.boolean(),
-				failures: z.partialRecord(reasonSchema, count),
-			}),
-		),
 		status: z.enum(RUN_STATUSES),
 		stopReason: z.enum(STOP_REASONS).nullable(),
 		error: z

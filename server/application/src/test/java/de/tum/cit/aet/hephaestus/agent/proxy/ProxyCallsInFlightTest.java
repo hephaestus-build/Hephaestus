@@ -20,13 +20,13 @@ import org.junit.jupiter.api.Test;
 class ProxyCallsInFlightTest extends BaseUnitTest {
     private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
 
-    /** 2 × (3 + 1) + 4 at practice concurrency 3. */
+    /** A small cap, so the tests can fill it. */
     private static final int REVIEW_CALLS = 12;
 
-    private final ProxyCallsInFlight calls = new ProxyCallsInFlight(12);
+    private final ProxyCallsInFlight calls = new ProxyCallsInFlight(REVIEW_CALLS);
 
     @Test
-    @DisplayName("a review attempt keeps two calls for each session and its script calls, and no more")
+    @DisplayName("a review attempt keeps two calls for each session, and no more")
     void shouldRefuseTheCallPastTheCapWhenAReviewAttemptIsFull() {
         ProxyRouting.BilledAttempt review = attempt(UsageSourceType.REVIEW_JOB);
 
@@ -36,18 +36,6 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
         assertThat(open).noneMatch(ProxyCallsInFlight.Call::isOverCap);
         assertThat(past.isOverCap()).isTrue();
         assertThat(past.isCancelled()).isFalse();
-    }
-
-    @Test
-    @DisplayName("a review's practice script calls count against the same cap as its chat calls")
-    void shouldCountScriptCallsWhenTheyShareTheReviewAttempt() {
-        ProxyRouting.BilledAttempt chat = attempt(UsageSourceType.REVIEW_JOB);
-        begin(chat, REVIEW_CALLS - 1);
-        ProxyRouting.BilledAttempt script = new ProxyRouting.BilledAttempt(
-                UsageSourceType.PRACTICE_SCRIPT_DECISION, chat.sourceId(), chat.number(), LEASE);
-
-        assertThat(calls.begin(script).isOverCap()).isFalse();
-        assertThat(calls.begin(script).isOverCap()).isTrue();
     }
 
     @Test

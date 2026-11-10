@@ -472,11 +472,9 @@ the job's submission correlation ID, which is carried as the `hephaestus.job.sub
 attribute rather than as a parent span. The span names its agent run as `hephaestus.run.id`,
 `hephaestus.run.epoch` and `hephaestus.subject.key`. A gateway request for one run names the same attributes and `hephaestus.sandbox.name` on its server span.
 
-Sandbox proxy requests propagate the execution trace's sampling decision. A `gen_ai.chat`, `gen_ai.decision`, `gen_ai.embeddings` or
-`gen_ai.rerank` span covers each authenticated model request, streamed or not. It records the model,
+Sandbox proxy requests propagate the execution trace's sampling decision. A `gen_ai.chat` span covers each authenticated model request, streamed or not. It records the model,
 the HTTP outcome and the token usage that the provider reported, as `gen_ai.usage.input_tokens` and
-`gen_ai.usage.output_tokens`. A reranking call that a provider billed in search units records
-`hephaestus.usage.search_units` instead.
+`gen_ai.usage.output_tokens`.
 
 A provider event crosses the message broker between the webhook role and the server.
 The webhook role writes the trace context of its request into the message, as the W3C `traceparent` header.

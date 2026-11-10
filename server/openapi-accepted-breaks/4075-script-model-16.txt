@@ -1,0 +1,3 @@
+# #4075: Practice scripts call no decision, embedding or reranking model of their own.
+# Remove their model purposes, protocols, usage report, needs endpoint and model list.
+in API GET /workspaces/{workspaceSlug}/llm/usage removed the required property `byPractice` from the response with the `200` status

@@ -297,12 +297,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("now") Instant now,
             @Param("output") JsonNode output);
 
-    /** The practice of the workspace that a practice script call names by its slug. */
-    @Query(
-            value = "SELECT p.id FROM practice p WHERE p.workspace_id = :workspaceId AND p.slug = :slug",
-            nativeQuery = true)
-    Optional<Long> findPracticeId(@Param("workspaceId") long workspaceId, @Param("slug") String slug);
-
     /** The current database time, including time spent waiting for a row lock in this transaction. */
     @WorkspaceAgnostic("Reads the database clock for attempt leases")
     @Query(value = "SELECT clock_timestamp()", nativeQuery = true)

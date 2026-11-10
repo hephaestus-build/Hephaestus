@@ -91,13 +91,8 @@ public class PracticeModelTestFixtures {
                 .createdAt(now)
                 .build();
         manager.persist(review);
-        var models = List.of(
-                new BoundModelSlot("chat", ModelKind.CHAT, null),
-                new BoundModelSlot("decision", ModelKind.DECISION, null),
-                new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                new BoundModelSlot("reranking", ModelKind.RERANKING, null),
-                new BoundModelSlot(
-                        "review", ModelKind.CHAT, new FrozenModel("fixture", "OPENAI", "fixture", null, Map.of())));
+        var models = List.of(new BoundModelSlot(
+                "review", ModelKind.CHAT, new FrozenModel("fixture", "OPENAI", "fixture", null, Map.of())));
         String digest = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT review_model_digest(CAST(? AS jsonb))", String.class, mapper.writeValueAsString(models)));
         manager.persist(ReviewPractice.builder()

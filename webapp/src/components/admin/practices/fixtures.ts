@@ -110,12 +110,7 @@ export function mockPracticeOf({
 	};
 }
 
-type PracticeScriptModelSlots = Partial<
-	Record<"chat" | "decision" | "embedding" | "reranking", "required" | "optional">
->;
-
-export function practiceScript(models: PracticeScriptModelSlots = {}): string {
-	const declared = Object.entries(models).map(([slot, need]) => `${slot}: "${need}"`);
+export function practiceScript(): string {
 	return [
 		'import { definePracticeScript } from "@hephaestus/practice-scripts";',
 		'import { scm } from "@hephaestus/practice-scripts/scm";',
@@ -125,7 +120,7 @@ export function practiceScript(models: PracticeScriptModelSlots = {}): string {
 		"};",
 		"",
 		"export default definePracticeScript({",
-		declared.length > 0 ? `  meta: { models: { ${declared.join(", ")} } },` : "  meta: {},",
+		"  meta: {},",
 		"  async run(ctx) {",
 		'    const work = scm(ctx, "scm.pull_request");',
 		"    const { leads } = await work.sites(OPEN_WORK, { comments: true });",

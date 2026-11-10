@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import { cn } from "cn";
 import type { PracticeDefinition, PracticeDefinitionOptions } from "@/api/types.gen";
 import {
@@ -32,11 +30,6 @@ export interface PracticeDefinitionPreviewProps {
 	options: PracticeDefinitionOptions;
 	version?: number;
 	/**
-	 * What the practice script needs in this workspace, above its source. Only a workspace has
-	 * models to assign, so the catalog passes none.
-	 */
-	practiceScript?: ReactNode;
-	/**
 	 * `4` where the definition sits under a record sheet's `h3` section: its labels and folds take
 	 * `h4`, and the headings of the guide and of the criteria `h5`. Left out, it keeps the levels of
 	 * the practice pages.
@@ -62,7 +55,6 @@ export function PracticeDefinitionPreview({
 	definition,
 	options,
 	version,
-	practiceScript,
 	headingLevel,
 }: PracticeDefinitionPreviewProps) {
 	const itemType = options.itemTypes.find((candidate) => candidate.kind === kind);
@@ -190,9 +182,7 @@ export function PracticeDefinitionPreview({
 				{script !== null && (
 					<AccordionItem value="practice-script">
 						<AccordionTrigger headingLevel={headingLevel}>Practice script</AccordionTrigger>
-						{/* Gaps rather than margins: the panel's own paragraph margin would double them. */}
-						<AccordionContent className="flex flex-col gap-4 [&_p:not(:last-child)]:mb-0">
-							{practiceScript}
+						<AccordionContent>
 							<pre
 								// oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to scroll this region.
 								tabIndex={0}

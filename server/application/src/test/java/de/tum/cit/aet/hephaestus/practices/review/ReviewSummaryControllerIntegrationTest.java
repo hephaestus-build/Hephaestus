@@ -184,7 +184,6 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
             assertThat(reviewed.itemCounts().reviewed()).isOne();
             var script = Objects.requireNonNull(reviewed.script());
             assertThat(script.jobId()).isEqualTo(jobOfReview.get(result.getReviewId()));
-            assertThat(script.models()).hasSize(1);
         }
         assertThat(manyTrace.value().reviews()).hasSize(10);
         assertThat(manyList.cost().statements()).isEqualTo(fewList.cost().statements());

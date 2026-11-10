@@ -15,7 +15,6 @@ import { EvidenceReader, noReceipts, type EvidenceSources } from "./lib/core/evi
 import type { JobFiles } from "./lib/core/ipc.ts";
 import { isJsonObject } from "./lib/core/json.ts";
 import { renderReviewInput, resolveLeads } from "./lib/core/leads.ts";
-import { ModelBudget } from "./lib/core/models-host.ts";
 import { reasonOf, UnratedError, type UnratedReason } from "./lib/core/practice-script.ts";
 import {
 	notReached,
@@ -190,9 +189,6 @@ try {
 			},
 			{
 				reader: new EvidenceReader(sources, receipts),
-				models: {},
-				budget: new ModelBudget(0, 1),
-				awaitModel: () => () => undefined,
 				start: forkedProgram,
 				review: async (options) => {
 					const asked: AskedReview = { input: options };
@@ -250,7 +246,6 @@ const report = `${JSON.stringify(
 		status: outcome.status,
 		stopReason: outcome.stopReason,
 		...(error === undefined ? {} : { error }),
-		models: outcome.models,
 		calls: outcome.calls,
 		coverageReached: outcome.coverageReached,
 		durationMs: outcome.durationMs,

@@ -65,7 +65,6 @@ public final class AgentMetrics {
     public static final String LLM_POOL_UPSTREAM_THROTTLED = "llm.pool.upstream.throttled";
     public static final String LLM_PROXY_ERRORS = "llm.proxy.errors";
     public static final String LLM_PROXY_REFUSED = "llm.proxy.refused";
-    public static final String LLM_PROXY_PRACTICE_SCRIPT_UNATTRIBUTED = "llm.proxy.practice_script.unattributed";
     public static final String LLM_PROXY_UPSTREAM_STALLED = "llm.proxy.upstream.stalled";
     public static final String LLM_PROXY_STREAM_USAGE_UNSUPPORTED = "llm.proxy.stream.usage.unsupported";
     public static final String LLM_PROXY_USAGE_ACCUMULATE_FAILURE = "llm.proxy.usage.accumulate.failure";

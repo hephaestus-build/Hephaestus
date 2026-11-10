@@ -826,10 +826,7 @@ export const AgentBindingSchema = {
             type: 'string',
             enum: [
                 'PRACTICE_REVIEW',
-                'MENTOR',
-                'PRACTICE_DECISION',
-                'PRACTICE_EMBEDDING',
-                'PRACTICE_RERANKING'
+                'MENTOR'
             ]
         },
         ready: {
@@ -838,7 +835,7 @@ export const AgentBindingSchema = {
         },
         servedTiers: {
             type: 'array',
-            description: 'The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. A decision, embedding or reranking binding serves no member whose review model is stricter. Empty when the binding serves no member.',
+            description: 'The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the binding serves no member.',
             items: {
                 type: 'string',
                 enum: [
@@ -1157,10 +1154,7 @@ export const AvailableLlmModelSchema = {
                 type: 'string',
                 enum: [
                     'PRACTICE_REVIEW',
-                    'MENTOR',
-                    'PRACTICE_DECISION',
-                    'PRACTICE_EMBEDDING',
-                    'PRACTICE_RERANKING'
+                    'MENTOR'
                 ]
             }
         },
@@ -2733,10 +2727,7 @@ export const CreateLlmConnectionRequestSchema = {
             enum: [
                 'anthropic-messages',
                 'openai-completions',
-                'openai-responses',
-                'openai-decisions',
-                'openai-embeddings',
-                'cohere-rerank'
+                'openai-responses'
             ],
             example: 'openai-responses'
         },
@@ -3123,10 +3114,7 @@ export const CreateWorkspaceLlmConnectionRequestSchema = {
             enum: [
                 'anthropic-messages',
                 'openai-completions',
-                'openai-responses',
-                'openai-decisions',
-                'openai-embeddings',
-                'cohere-rerank'
+                'openai-responses'
             ],
             example: 'openai-responses'
         },
@@ -6528,10 +6516,7 @@ export const LlmConnectionSchema = {
             enum: [
                 'anthropic-messages',
                 'openai-completions',
-                'openai-responses',
-                'openai-decisions',
-                'openai-embeddings',
-                'cohere-rerank'
+                'openai-responses'
             ],
             example: 'openai-responses'
         },
@@ -6599,10 +6584,7 @@ export const LlmConnectionSchema = {
                 type: 'string',
                 enum: [
                     'PRACTICE_REVIEW',
-                    'MENTOR',
-                    'PRACTICE_DECISION',
-                    'PRACTICE_EMBEDDING',
-                    'PRACTICE_RERANKING'
+                    'MENTOR'
                 ]
             }
         },
@@ -7007,125 +6989,6 @@ export const LlmUsageByJobTypeSchema = {
         'outputTokens',
         'ownProviderTotalCostUsd',
         'totalCalls',
-        'unpricedEventCount'
-    ]
-} as const;
-
-export const LlmUsageByPracticeSchema = {
-    type: 'object',
-    description: 'The decision, embedding and reranking calls that one practice\'s script made this month. Each call names the practice that made it.',
-    properties: {
-        calls: {
-            type: 'integer',
-            format: 'int64'
-        },
-        inputTokens: {
-            type: 'integer',
-            format: 'int64'
-        },
-        instanceTotalCostUsd: {
-            type: 'number',
-            format: 'decimal',
-            description: 'This practice\'s spend on shared (instance) models, in USD.'
-        },
-        outputTokens: {
-            type: 'integer',
-            format: 'int64'
-        },
-        ownProviderTotalCostUsd: {
-            type: 'number',
-            format: 'decimal',
-            description: 'This practice\'s spend on this workspace\'s own provider(s), in USD.'
-        },
-        practiceName: {
-            type: 'string',
-            description: 'The practice name. Null when the slug names no current practice.'
-        },
-        practiceSlug: {
-            type: 'string',
-            description: 'The practice slug. Null for calls that name no practice: calls recorded before each call had its own row, and calls of a deleted practice.'
-        },
-        purposes: {
-            type: 'array',
-            description: 'The models for practice scripts that the script called.',
-            items: {
-                type: 'string',
-                enum: [
-                    'PRACTICE_REVIEW',
-                    'MENTOR',
-                    'PRACTICE_DECISION',
-                    'PRACTICE_EMBEDDING',
-                    'PRACTICE_RERANKING'
-                ]
-            }
-        },
-        reviews: {
-            type: 'integer',
-            format: 'int64',
-            description: 'Reviews in which the script called a model for practice scripts. A review with several practices counts for each of them.'
-        },
-        unpricedEventCount: {
-            type: 'integer',
-            format: 'int64',
-            description: 'Reviews with a call of this practice whose price is not yet known, each review counted once. Those calls are excluded from both totals above. A review with several practices counts for each of them.'
-        }
-    },
-    required: [
-        'calls',
-        'inputTokens',
-        'instanceTotalCostUsd',
-        'outputTokens',
-        'ownProviderTotalCostUsd',
-        'purposes',
-        'reviews',
-        'unpricedEventCount'
-    ]
-} as const;
-
-export const LlmUsagePracticeScriptTotalSchema = {
-    type: 'object',
-    description: 'The decision, embedding and reranking calls of this month, in total. calls, inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and unpricedEventCount do not: one review can count for several practices there.',
-    properties: {
-        calls: {
-            type: 'integer',
-            format: 'int64'
-        },
-        inputTokens: {
-            type: 'integer',
-            format: 'int64'
-        },
-        instanceTotalCostUsd: {
-            type: 'number',
-            format: 'decimal',
-            description: 'Confirmed practice script spend on shared (instance) models, in USD.'
-        },
-        outputTokens: {
-            type: 'integer',
-            format: 'int64'
-        },
-        ownProviderTotalCostUsd: {
-            type: 'number',
-            format: 'decimal',
-            description: 'Practice script spend on this workspace\'s own provider(s), in USD.'
-        },
-        reviews: {
-            type: 'integer',
-            format: 'int64',
-            description: 'Distinct reviews in which a practice script called a model for practice scripts.'
-        },
-        unpricedEventCount: {
-            type: 'integer',
-            format: 'int64',
-            description: 'Distinct reviews with a practice script call whose price is not yet known. Those rows are excluded from both totals above.'
-        }
-    },
-    required: [
-        'calls',
-        'inputTokens',
-        'instanceTotalCostUsd',
-        'outputTokens',
-        'ownProviderTotalCostUsd',
-        'reviews',
         'unpricedEventCount'
     ]
 } as const;
@@ -10344,130 +10207,6 @@ export const PracticeReviewSettingsSchema = {
     ]
 } as const;
 
-export const PracticeScriptAsOfSchema = {
-    type: 'object',
-    properties: {
-        finishedAt: {
-            type: 'string',
-            format: 'date-time'
-        },
-        jobId: {
-            type: 'string',
-            format: 'uuid'
-        },
-        reviewId: {
-            type: 'string',
-            format: 'uuid'
-        }
-    },
-    required: [
-        'finishedAt',
-        'jobId',
-        'reviewId'
-    ]
-} as const;
-
-export const PracticeScriptModelSchema = {
-    type: 'object',
-    properties: {
-        cacheReadTokens: {
-            type: 'integer',
-            format: 'int64'
-        },
-        cacheWriteTokens: {
-            type: 'integer',
-            format: 'int64'
-        },
-        calls: {
-            type: 'integer',
-            format: 'int64'
-        },
-        dataHandlingTier: {
-            type: [
-                'string',
-                'null'
-            ],
-            enum: [
-                'IN_HOUSE',
-                'CLOUD',
-                'UNDECLARED',
-                null
-            ]
-        },
-        inputTokens: {
-            type: 'integer',
-            format: 'int64'
-        },
-        kind: {
-            type: 'string',
-            enum: [
-                'CHAT',
-                'DECISION',
-                'EMBEDDING',
-                'RERANKING'
-            ]
-        },
-        modelId: {
-            type: [
-                'string',
-                'null'
-            ]
-        },
-        outputTokens: {
-            type: 'integer',
-            format: 'int64'
-        }
-    },
-    required: [
-        'cacheReadTokens',
-        'cacheWriteTokens',
-        'calls',
-        'dataHandlingTier',
-        'inputTokens',
-        'kind',
-        'modelId',
-        'outputTokens'
-    ]
-} as const;
-
-export const PracticeScriptNeedSchema = {
-    type: 'object',
-    properties: {
-        need: {
-            type: 'string',
-            enum: [
-                'required',
-                'optional'
-            ]
-        },
-        slot: {
-            type: 'string',
-            enum: [
-                'chat',
-                'decision',
-                'embedding',
-                'reranking'
-            ]
-        },
-        unmetTiers: {
-            type: 'array',
-            items: {
-                type: 'string',
-                enum: [
-                    'IN_HOUSE',
-                    'CLOUD',
-                    'UNDECLARED'
-                ]
-            }
-        }
-    },
-    required: [
-        'need',
-        'slot',
-        'unmetTiers'
-    ]
-} as const;
-
 export const PracticeScriptRunSchema = {
     type: 'object',
     properties: {
@@ -10495,12 +10234,6 @@ export const PracticeScriptRunSchema = {
         jobId: {
             type: 'string',
             format: 'uuid'
-        },
-        models: {
-            type: 'array',
-            items: {
-                $ref: '#/components/schemas/PracticeScriptModel'
-            }
         },
         noResultCause: {
             type: [
@@ -10574,7 +10307,6 @@ export const PracticeScriptRunSchema = {
         'error',
         'finishedAt',
         'jobId',
-        'models',
         'noResultCause',
         'practiceId',
         'practiceVersionId',
@@ -10582,44 +10314,6 @@ export const PracticeScriptRunSchema = {
         'scriptKind',
         'status',
         'stopReason'
-    ]
-} as const;
-
-export const PracticeScriptSummarySchema = {
-    type: 'object',
-    properties: {
-        asOf: {
-            anyOf: [
-                {
-                    $ref: '#/components/schemas/PracticeScriptAsOf'
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
-        needs: {
-            type: 'array',
-            items: {
-                $ref: '#/components/schemas/PracticeScriptNeed'
-            }
-        },
-        practiceName: {
-            type: 'string'
-        },
-        practiceSlug: {
-            type: 'string'
-        },
-        scriptChanged: {
-            type: 'boolean'
-        }
-    },
-    required: [
-        'asOf',
-        'needs',
-        'practiceName',
-        'practiceSlug',
-        'scriptChanged'
     ]
 } as const;
 
@@ -11074,10 +10768,7 @@ export const ProbeLlmConnectionRequestSchema = {
             enum: [
                 'anthropic-messages',
                 'openai-completions',
-                'openai-responses',
-                'openai-decisions',
-                'openai-embeddings',
-                'cohere-rerank'
+                'openai-responses'
             ]
         },
         authMode: {
@@ -20751,10 +20442,7 @@ export const WorkspaceLlmConnectionSchema = {
             enum: [
                 'anthropic-messages',
                 'openai-completions',
-                'openai-responses',
-                'openai-decisions',
-                'openai-embeddings',
-                'cohere-rerank'
+                'openai-responses'
             ],
             example: 'openai-responses'
         },
@@ -20822,10 +20510,7 @@ export const WorkspaceLlmConnectionSchema = {
                 type: 'string',
                 enum: [
                     'PRACTICE_REVIEW',
-                    'MENTOR',
-                    'PRACTICE_DECISION',
-                    'PRACTICE_EMBEDDING',
-                    'PRACTICE_RERANKING'
+                    'MENTOR'
                 ]
             }
         },
@@ -21080,13 +20765,6 @@ export const WorkspaceLlmUsageReportSchema = {
                 $ref: '#/components/schemas/LlmUsageByJobType'
             }
         },
-        byPractice: {
-            type: 'array',
-            description: 'The decision, embedding and reranking calls of practice scripts, one entry per practice, most spend first. Their spend is already part of byJobType. Chat calls of practice scripts are in each review\'s own cost and not here.',
-            items: {
-                $ref: '#/components/schemas/LlmUsageByPractice'
-            }
-        },
         fx: {
             $ref: '#/components/schemas/FxRateInfo',
             description: 'Display-only conversion when the instance has a display currency. Absent = show USD only.'
@@ -21154,10 +20832,6 @@ export const WorkspaceLlmUsageReportSchema = {
             $ref: '#/components/schemas/LlmUnmeasuredUsage',
             description: 'Own-provider calls this month whose usage was not measured, and the most they can cost. Not part of ownProviderTotalCostUsd.'
         },
-        practiceScriptTotal: {
-            $ref: '#/components/schemas/LlmUsagePracticeScriptTotal',
-            description: 'The byPractice entries in total, read from the ledger.'
-        },
         unpricedEventCount: {
             type: 'integer',
             format: 'int64',
@@ -21167,7 +20841,6 @@ export const WorkspaceLlmUsageReportSchema = {
     required: [
         'byDay',
         'byJobType',
-        'byPractice',
         'instanceBudgetVerdict',
         'instancePaused',
         'instanceTotalCostUsd',
@@ -21178,7 +20851,6 @@ export const WorkspaceLlmUsageReportSchema = {
         'ownProviderPaused',
         'ownProviderTotalCostUsd',
         'ownProviderUnmeasured',
-        'practiceScriptTotal',
         'unpricedEventCount'
     ]
 } as const;

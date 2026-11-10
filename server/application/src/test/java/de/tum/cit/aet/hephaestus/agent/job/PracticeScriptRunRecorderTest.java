@@ -16,7 +16,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -39,12 +38,12 @@ class PracticeScriptRunRecorderTest extends BaseUnitTest {
         var mapper = new JsonMapper();
         var meters = new SimpleMeterRegistry();
         byte[] report = """
-            {"schemaVersion":2,"truncated":false,"practices":[
-             {"practiceSlug":"clear-names","program":{"kind":"builtin","digest":null},"models":[],"status":"ok","stopReason":null,
-              "calls":{"review":1,"chat":0,"decision":0,"embedding":0,"reranking":0},"coverageReached":{"reads":0,"truncatedReads":0,"failedReads":0},"durationMs":1}]}
+            {"schemaVersion":3,"truncated":false,"practices":[
+             {"practiceSlug":"clear-names","program":{"kind":"builtin","digest":null},"status":"ok","stopReason":null,
+              "calls":{"review":1},"coverageReached":{"reads":0,"truncatedReads":0,"failedReads":0},"durationMs":1}]}
             """.getBytes(StandardCharsets.UTF_8);
         new PracticeScriptRunRecorder(new PiResultParser(mapper, meters), runs, meters, mapper, assignments)
-                .record(job, report, Map.of(), Instant.EPOCH);
+                .record(job, report, Instant.EPOCH);
         assertThat(recorded).hasSize(1);
         var run = recorded.getFirst();
         assertThat(run.getId().getPracticeId()).isEqualTo(31);
@@ -71,18 +70,18 @@ class PracticeScriptRunRecorderTest extends BaseUnitTest {
         var mapper = new JsonMapper();
         var meters = new SimpleMeterRegistry();
         byte[] report = """
-            {"schemaVersion":2,"truncated":false,"practices":[
-             {"practiceSlug":"clear-names","program":{"kind":"builtin","digest":null},"models":[],"status":"failed","stopReason":"off-format",
-              "calls":{"review":1,"chat":0,"decision":0,"embedding":0,"reranking":0},
+            {"schemaVersion":3,"truncated":false,"practices":[
+             {"practiceSlug":"clear-names","program":{"kind":"builtin","digest":null},"status":"failed","stopReason":"off-format",
+              "calls":{"review":1},
               "reviewSessions":{"modelCalls":6,"evidenceRefusals":4,"formatRefusals":1},
               "coverageReached":{"reads":0,"truncatedReads":0,"failedReads":0},"durationMs":1}]}
             """.getBytes(StandardCharsets.UTF_8);
         new PracticeScriptRunRecorder(new PiResultParser(mapper, meters), runs, meters, mapper, assignments)
-                .record(job, report, Map.of(), Instant.EPOCH);
+                .record(job, report, Instant.EPOCH);
 
         assertThat(recorded).hasSize(1);
         assertThat(recorded.getFirst().getCalls()).isEqualTo(mapper.readTree("""
-                    {"review":1,"chat":0,"decision":0,"embedding":0,"reranking":0,
+                    {"review":1,
                      "reviewSessions":{"modelCalls":6,"evidenceRefusals":4,"formatRefusals":1}}
                     """));
     }
@@ -94,7 +93,7 @@ class PracticeScriptRunRecorderTest extends BaseUnitTest {
         var mapper = new JsonMapper();
         var meters = new SimpleMeterRegistry();
         new PracticeScriptRunRecorder(new PiResultParser(mapper, meters), runs, meters, mapper, assignments)
-                .record(RuntimeReviewTestData.job(), null, Map.of(), Instant.EPOCH);
+                .record(RuntimeReviewTestData.job(), null, Instant.EPOCH);
         verifyNoInteractions(runs, assignments);
     }
 }

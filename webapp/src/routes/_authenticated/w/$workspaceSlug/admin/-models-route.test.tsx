@@ -14,7 +14,6 @@ import type {
 	AgentBinding,
 	AgentBindingRequest,
 	AvailableLlmModel,
-	PracticeScriptSummary,
 	WorkspaceLlmConnection,
 	WorkspaceLlmModel,
 	WorkspaceOnboarding,
@@ -25,7 +24,6 @@ import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { ConversationFake } from "@/test/conversation-server";
-import { levelsOpenedBy } from "@/test/detail-stack";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
@@ -94,11 +92,7 @@ function binding(
 	};
 }
 
-function mockModelsRoute(
-	bindings: () => AgentBinding[],
-	aiChoiceRequired = false,
-	needs: Wire<PracticeScriptSummary>[] = [],
-) {
+function mockModelsRoute(bindings: () => AgentBinding[], aiChoiceRequired = false) {
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json(ownMembership("ADMIN")),
@@ -125,9 +119,6 @@ function mockModelsRoute(
 			HttpResponse.json({ ownProviderAllowed: false }),
 		),
 		http.get("*/workspaces/:workspaceSlug/llm/connections", () => HttpResponse.json([])),
-		http.get("*/workspaces/:workspaceSlug/practices/practice-script-needs", () =>
-			HttpResponse.json(needs),
-		),
 		http.get("*/workspaces/:workspaceSlug/llm/usage", () => HttpResponse.json(USAGE)),
 		http.get("*/workspaces/:workspaceSlug", () => HttpResponse.json(WORKSPACE)),
 		http.get("*/workspaces", () => HttpResponse.json([WORKSPACE_LIST_ITEM])),
@@ -841,116 +832,29 @@ it("resets model drafts on workspace navigation while a previous workspace save 
 
 it("opens the purpose a link names, and drops the name from the address when the reader closes it", async () => {
 	mockModelsRoute(() => [binding("PRACTICE_REVIEW", 20)]);
-	const { router } = renderRouteAtWithRouter("/w/acme/admin/models?purpose=PRACTICE_RERANKING");
-	const reranking = await screen.findByRole(
+	const { router } = renderRouteAtWithRouter("/w/acme/admin/models?purpose=MENTOR");
+	const conversations = await screen.findByRole(
 		"button",
-		{ name: /Reranking model/u },
+		{ name: /^Conversations/u },
 		ROUTE_RENDER_WAIT,
 	);
-	expect(reranking.getAttribute("aria-expanded")).toBe("true");
+	expect(conversations.getAttribute("aria-expanded")).toBe("true");
 	expect(
-		screen.getByRole("button", { name: /Decision model/u }).getAttribute("aria-expanded"),
+		screen.getByRole("button", { name: /^Practice reviews/u }).getAttribute("aria-expanded"),
 	).toBe("false");
 
-	fireEvent.click(reranking);
+	fireEvent.click(conversations);
 
 	await waitFor(() => expect(router.state.location.searchStr).toBe(""));
-	expect(reranking.getAttribute("aria-expanded")).toBe("false");
+	expect(conversations.getAttribute("aria-expanded")).toBe("false");
 });
 
 it("ignores a purpose the page does not have", async () => {
 	mockModelsRoute(() => [binding("PRACTICE_REVIEW", 20)]);
 	const { router } = renderRouteAtWithRouter("/w/acme/admin/models?purpose=SOMETHING_ELSE");
-	await screen.findByRole("button", { name: /Reranking model/u }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("button", { name: /^Conversations/u }, ROUTE_RENDER_WAIT);
 	expect(router.state.location.search.purpose).toBeUndefined();
 	expect(screen.queryAllByRole("button", { expanded: true })).toStrictEqual([]);
-});
-
-it("counts the practices whose scripts use a model, from the workspace's practice script needs", async () => {
-	mockModelsRoute(() => [binding("PRACTICE_REVIEW", 20)], true, [
-		{
-			practiceSlug: "comment-quality",
-			practiceName: "Comment quality",
-			asOf: { reviewId: "review-1", jobId: "job-1", finishedAt: "2026-10-03T09:00:00Z" },
-			scriptChanged: false,
-			needs: [{ slot: "decision", need: "required", unmetTiers: ["IN_HOUSE"] }],
-		},
-	]);
-	renderRouteAt("/w/acme/admin/models");
-	const decision = await screen.findByRole(
-		"button",
-		{ name: /Decision model/u },
-		ROUTE_RENDER_WAIT,
-	);
-	await waitFor(() => expect(decision.getAttribute("aria-expanded")).toBe("true"));
-	const region = within(screen.getByRole("region", { name: "Decision model" }));
-	expect(levelsOpenedBy(region.getByRole("link", { name: "Comment quality" }))).toStrictEqual([
-		"practice:comment-quality",
-	]);
-	region.getByText(/^1 practice needs a decision model for In-house members\./u);
-	expect(
-		within(screen.getByRole("button", { name: /Embedding model/u })).queryByText(/Used by/u),
-	).toBeNull();
-});
-
-type UnmetTiers = PracticeScriptSummary["needs"][number]["unmetTiers"];
-
-const commentQualityNeeds = (unmetTiers: UnmetTiers): Wire<PracticeScriptSummary> => ({
-	practiceSlug: "comment-quality",
-	practiceName: "Comment quality",
-	asOf: { reviewId: "review-1", jobId: "job-1", finishedAt: "2026-10-03T09:00:00Z" },
-	scriptChanged: false,
-	needs: [{ slot: "decision", need: "required", unmetTiers }],
-});
-
-it("keeps the page usable when the practice script needs fail, and says so in their section only", async () => {
-	mockModelsRoute(() => [binding("PRACTICE_REVIEW", 20)]);
-	server.use(
-		http.get("*/workspaces/:workspaceSlug/practices/practice-script-needs", () =>
-			HttpResponse.json({ status: 500, title: "Internal Server Error" }, { status: 500 }),
-		),
-	);
-	renderRouteAt("/w/acme/admin/models");
-	await screen.findByText(
-		"We could not load which practices use these models",
-		undefined,
-		ROUTE_RENDER_WAIT,
-	);
-	expect(screen.queryByText("We could not load AI models")).toBeNull();
-	expect(saveButton("Practice reviews").disabled).toBe(false);
-	expect(
-		within(screen.getByRole("button", { name: /Decision model/u })).queryByText(/practice/u),
-	).toBeNull();
-});
-
-it("asks again which practices miss a model once a binding is saved", async () => {
-	let unmetTiers: UnmetTiers = ["IN_HOUSE"];
-	mockModelsRoute(() => [binding("PRACTICE_REVIEW", 20)], true);
-	server.use(
-		http.get("*/workspaces/:workspaceSlug/practices/practice-script-needs", () =>
-			HttpResponse.json([commentQualityNeeds(unmetTiers)]),
-		),
-		http.put("*/workspaces/acme/agents/PRACTICE_REVIEW", () => {
-			unmetTiers = [];
-			return HttpResponse.json(binding("PRACTICE_REVIEW", 20));
-		}),
-	);
-	renderRouteAt("/w/acme/admin/models");
-	const decision = await screen.findByRole(
-		"button",
-		{ name: /Decision model/u },
-		ROUTE_RENDER_WAIT,
-	);
-	await waitFor(() => expect(decision.getAttribute("aria-expanded")).toBe("true"));
-	within(screen.getByRole("region", { name: "Decision model" })).getByRole("note");
-
-	fireEvent.click(saveButton("Practice reviews"));
-
-	await waitFor(() =>
-		expect(
-			within(screen.getByRole("region", { name: "Decision model" })).queryByRole("note"),
-		).toBeNull(),
-	);
 });
 
 it("keeps a refusal of the chosen model's kind on the row that sent it", async () => {
@@ -961,7 +865,7 @@ it("keeps a refusal of the chosen model's kind on the row that sent it", async (
 					type: "about:blank",
 					title: "Bad Request",
 					status: 400,
-					detail: "This is an embedding model. Choose a chat model here.",
+					detail: "This model cannot run practice reviews. Choose another model.",
 				},
 				{ status: 400 },
 			),
@@ -972,7 +876,7 @@ it("keeps a refusal of the chosen model's kind on the row that sent it", async (
 	fireEvent.click(saveButton("Practice reviews", "In-house"));
 
 	const inHouse = row("Practice reviews", "In-house");
-	await within(inHouse).findByText("This is an embedding model. Choose a chat model here.");
+	await within(inHouse).findByText("This model cannot run practice reviews. Choose another model.");
 	expect(pickerOf(inHouse).getAttribute("aria-invalid")).toBe("true");
 });
 
@@ -981,9 +885,9 @@ const OWN_CONNECTION = {
 	slug: "own",
 	displayName: "Own OpenAI",
 	authMode: "BEARER",
-	apiProtocol: "openai-embeddings",
-	purposes: ["PRACTICE_EMBEDDING"],
-	baseUrl: "https://embed.example.test/v1",
+	apiProtocol: "openai-completions",
+	purposes: ["PRACTICE_REVIEW", "MENTOR"],
+	baseUrl: "https://llm.example.test/v1",
 	enabled: true,
 	hasApiKey: true,
 	createdAt: "2026-07-01T00:00:00Z",
@@ -1019,9 +923,9 @@ function mockOwnProviders(models: () => Wire<WorkspaceLlmModel>[]) {
 }
 
 const inHousePicker = () =>
-	within(
-		within(purposeRegion("Embedding model")).getByRole("group", { name: "In-house" }),
-	).getByRole("combobox");
+	within(within(purposeRegion("Conversations")).getByRole("group", { name: "In-house" })).getByRole(
+		"combobox",
+	);
 
 it("offers a model added under the workspace's own provider in the pickers above, without a reload", async () => {
 	const user = userEvent.setup();
@@ -1029,8 +933,9 @@ it("offers a model added under the workspace's own provider in the pickers above
 	mockOwnProviders(() => added);
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/llm/available-models", () =>
+			// Only a Cloud model is shared, so the In-house row has nothing to offer until one is added.
 			HttpResponse.json([
-				...MODELS,
+				...MODELS.filter((model) => model.dataHandlingTier === "CLOUD"),
 				...added.map((model) => ({
 					id: model.id,
 					scope: "WORKSPACE",
@@ -1038,12 +943,12 @@ it("offers a model added under the workspace's own provider in the pickers above
 					connectionDisplayName: model.connectionDisplayName,
 					pricingMode: model.pricingMode,
 					dataHandlingTier: model.dataHandlingTier,
-					purposes: ["PRACTICE_EMBEDDING"],
+					purposes: ["PRACTICE_REVIEW", "MENTOR"],
 				})),
 			]),
 		),
 		http.post("*/workspaces/acme/llm/connections/7/models", () => {
-			added = [ownModel(40, "Own embeddings")];
+			added = [ownModel(40, "Own chat")];
 			return HttpResponse.json(added[0]);
 		}),
 	);
@@ -1053,13 +958,13 @@ it("offers a model added under the workspace's own provider in the pickers above
 
 	await user.click(card.getByRole("button", { name: "Add model to Own OpenAI" }));
 	const dialog = within(await screen.findByRole("dialog"));
-	await user.type(dialog.getByLabelText("Display name"), "Own embeddings");
-	await user.type(dialog.getByLabelText("Upstream model ID"), "own-embed");
+	await user.type(dialog.getByLabelText("Display name"), "Own chat");
+	await user.type(dialog.getByLabelText("Upstream model ID"), "own-chat");
 	await user.click(dialog.getByRole("button", { name: "Add inactive model" }));
 
 	await waitFor(() => expect(inHousePicker().hasAttribute("disabled")).toBe(false));
 	await user.click(inHousePicker());
-	await screen.findByRole("option", { name: /Own embeddings/u });
+	await screen.findByRole("option", { name: /Own chat/u });
 });
 
 async function turnOffModel(name: string) {

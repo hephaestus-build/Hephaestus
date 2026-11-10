@@ -4828,9 +4828,6 @@ paths:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
-          - PRACTICE_DECISION
-          - PRACTICE_EMBEDDING
-          - PRACTICE_RERANKING
       - in: query
         name: dataHandlingTier
         required: false
@@ -4867,9 +4864,6 @@ paths:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
-          - PRACTICE_DECISION
-          - PRACTICE_EMBEDDING
-          - PRACTICE_RERANKING
       - in: query
         name: dataHandlingTier
         required: false
@@ -8043,30 +8037,6 @@ paths:
       summary: Trace reviews of an item
       tags:
       - item-trace
-  /workspaces/{workspaceSlug}/practices/practice-script-needs:
-    get:
-      operationId: listPracticeScriptNeeds
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PracticeScriptSummary"
-          description: OK
-      tags:
-      - practice-catalog
   /workspaces/{workspaceSlug}/practices/releases:
     get:
       operationId: listPracticeReleases
@@ -12561,9 +12531,6 @@ components:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
-          - PRACTICE_DECISION
-          - PRACTICE_EMBEDDING
-          - PRACTICE_RERANKING
         ready:
           type: boolean
           description: True when the bound model is available to run right now
@@ -12571,9 +12538,8 @@ components:
           type: array
           description: "The members this binding serves now, named by the tier of\
             \ their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED\
-            \ for the members who have not chosen. A decision, embedding or reranking\
-            \ binding serves no member whose review model is stricter. Empty when\
-            \ the binding serves no member."
+            \ for the members who have not chosen. Empty when the binding serves no\
+            \ member."
           items:
             type: string
             enum:
@@ -12807,9 +12773,6 @@ components:
             enum:
             - PRACTICE_REVIEW
             - MENTOR
-            - PRACTICE_DECISION
-            - PRACTICE_EMBEDDING
-            - PRACTICE_RERANKING
         reasoningEffort:
           type: string
           description: "Reasoning effort requested of the model; null sends none,\
@@ -13986,9 +13949,6 @@ components:
           - anthropic-messages
           - openai-completions
           - openai-responses
-          - openai-decisions
-          - openai-embeddings
-          - cohere-rerank
           example: openai-responses
         authMode:
           type: string
@@ -14286,9 +14246,6 @@ components:
           - anthropic-messages
           - openai-completions
           - openai-responses
-          - openai-decisions
-          - openai-embeddings
-          - cohere-rerank
           example: openai-responses
         authMode:
           type: string
@@ -16821,9 +16778,6 @@ components:
           - anthropic-messages
           - openai-completions
           - openai-responses
-          - openai-decisions
-          - openai-embeddings
-          - cohere-rerank
           example: openai-responses
         authMode:
           type: string
@@ -16881,9 +16835,6 @@ components:
             enum:
             - PRACTICE_REVIEW
             - MENTOR
-            - PRACTICE_DECISION
-            - PRACTICE_EMBEDDING
-            - PRACTICE_RERANKING
         slug:
           type: string
           description: Unique slug
@@ -17217,111 +17168,6 @@ components:
       - outputTokens
       - ownProviderTotalCostUsd
       - totalCalls
-      - unpricedEventCount
-    LlmUsageByPractice:
-      type: object
-      description: "The decision, embedding and reranking calls that one practice's\
-        \ script made this month. Each call names the practice that made it."
-      properties:
-        calls:
-          type: integer
-          format: int64
-        inputTokens:
-          type: integer
-          format: int64
-        instanceTotalCostUsd:
-          type: number
-          format: decimal
-          description: "This practice's spend on shared (instance) models, in USD."
-        outputTokens:
-          type: integer
-          format: int64
-        ownProviderTotalCostUsd:
-          type: number
-          format: decimal
-          description: "This practice's spend on this workspace's own provider(s),\
-            \ in USD."
-        practiceName:
-          type: string
-          description: The practice name. Null when the slug names no current practice.
-        practiceSlug:
-          type: string
-          description: "The practice slug. Null for calls that name no practice: calls\
-            \ recorded before each call had its own row, and calls of a deleted practice."
-        purposes:
-          type: array
-          description: The models for practice scripts that the script called.
-          items:
-            type: string
-            enum:
-            - PRACTICE_REVIEW
-            - MENTOR
-            - PRACTICE_DECISION
-            - PRACTICE_EMBEDDING
-            - PRACTICE_RERANKING
-        reviews:
-          type: integer
-          format: int64
-          description: Reviews in which the script called a model for practice scripts.
-            A review with several practices counts for each of them.
-        unpricedEventCount:
-          type: integer
-          format: int64
-          description: "Reviews with a call of this practice whose price is not yet\
-            \ known, each review counted once. Those calls are excluded from both\
-            \ totals above. A review with several practices counts for each of them."
-      required:
-      - calls
-      - inputTokens
-      - instanceTotalCostUsd
-      - outputTokens
-      - ownProviderTotalCostUsd
-      - purposes
-      - reviews
-      - unpricedEventCount
-    LlmUsagePracticeScriptTotal:
-      type: object
-      description: "The decision, embedding and reranking calls of this month, in\
-        \ total. calls, inputTokens, outputTokens and both costs equal the sums of\
-        \ the byPractice entries. reviews and unpricedEventCount do not: one review\
-        \ can count for several practices there."
-      properties:
-        calls:
-          type: integer
-          format: int64
-        inputTokens:
-          type: integer
-          format: int64
-        instanceTotalCostUsd:
-          type: number
-          format: decimal
-          description: "Confirmed practice script spend on shared (instance) models,\
-            \ in USD."
-        outputTokens:
-          type: integer
-          format: int64
-        ownProviderTotalCostUsd:
-          type: number
-          format: decimal
-          description: "Practice script spend on this workspace's own provider(s),\
-            \ in USD."
-        reviews:
-          type: integer
-          format: int64
-          description: Distinct reviews in which a practice script called a model
-            for practice scripts.
-        unpricedEventCount:
-          type: integer
-          format: int64
-          description: Distinct reviews with a practice script call whose price is
-            not yet known. Those rows are excluded from both totals above.
-      required:
-      - calls
-      - inputTokens
-      - instanceTotalCostUsd
-      - outputTokens
-      - ownProviderTotalCostUsd
-      - reviews
       - unpricedEventCount
     LoginProviderView:
       type: object
@@ -19700,96 +19546,6 @@ components:
       - reviewScope
       - revision
       - scopeSummary
-    PracticeScriptAsOf:
-      type: object
-      properties:
-        finishedAt:
-          type: string
-          format: date-time
-        jobId:
-          type: string
-          format: uuid
-        reviewId:
-          type: string
-          format: uuid
-      required:
-      - finishedAt
-      - jobId
-      - reviewId
-    PracticeScriptModel:
-      type: object
-      properties:
-        cacheReadTokens:
-          type: integer
-          format: int64
-        cacheWriteTokens:
-          type: integer
-          format: int64
-        calls:
-          type: integer
-          format: int64
-        dataHandlingTier:
-          type:
-          - string
-          - "null"
-          enum:
-          - IN_HOUSE
-          - CLOUD
-          - UNDECLARED
-          - null
-        inputTokens:
-          type: integer
-          format: int64
-        kind:
-          type: string
-          enum:
-          - CHAT
-          - DECISION
-          - EMBEDDING
-          - RERANKING
-        modelId:
-          type:
-          - string
-          - "null"
-        outputTokens:
-          type: integer
-          format: int64
-      required:
-      - cacheReadTokens
-      - cacheWriteTokens
-      - calls
-      - dataHandlingTier
-      - inputTokens
-      - kind
-      - modelId
-      - outputTokens
-    PracticeScriptNeed:
-      type: object
-      properties:
-        need:
-          type: string
-          enum:
-          - required
-          - optional
-        slot:
-          type: string
-          enum:
-          - chat
-          - decision
-          - embedding
-          - reranking
-        unmetTiers:
-          type: array
-          items:
-            type: string
-            enum:
-            - IN_HOUSE
-            - CLOUD
-            - UNDECLARED
-      required:
-      - need
-      - slot
-      - unmetTiers
     PracticeScriptRun:
       type: object
       properties:
@@ -19811,10 +19567,6 @@ components:
         jobId:
           type: string
           format: uuid
-        models:
-          type: array
-          items:
-            $ref: "#/components/schemas/PracticeScriptModel"
         noResultCause:
           type:
           - string
@@ -19876,7 +19628,6 @@ components:
       - error
       - finishedAt
       - jobId
-      - models
       - noResultCause
       - practiceId
       - practiceVersionId
@@ -19884,29 +19635,6 @@ components:
       - scriptKind
       - status
       - stopReason
-    PracticeScriptSummary:
-      type: object
-      properties:
-        asOf:
-          anyOf:
-          - $ref: "#/components/schemas/PracticeScriptAsOf"
-          - type: "null"
-        needs:
-          type: array
-          items:
-            $ref: "#/components/schemas/PracticeScriptNeed"
-        practiceName:
-          type: string
-        practiceSlug:
-          type: string
-        scriptChanged:
-          type: boolean
-      required:
-      - asOf
-      - needs
-      - practiceName
-      - practiceSlug
-      - scriptChanged
     PracticeStanding:
       type: object
       properties:
@@ -20246,9 +19974,6 @@ components:
           - anthropic-messages
           - openai-completions
           - openai-responses
-          - openai-decisions
-          - openai-embeddings
-          - cohere-rerank
         authMode:
           type: string
           description: Credential shape (default BEARER)
@@ -27327,9 +27052,6 @@ components:
           - anthropic-messages
           - openai-completions
           - openai-responses
-          - openai-decisions
-          - openai-embeddings
-          - cohere-rerank
           example: openai-responses
         authMode:
           type: string
@@ -27387,9 +27109,6 @@ components:
             enum:
             - PRACTICE_REVIEW
             - MENTOR
-            - PRACTICE_DECISION
-            - PRACTICE_EMBEDDING
-            - PRACTICE_RERANKING
         slug:
           type: string
           description: Unique slug within the workspace
@@ -27588,14 +27307,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LlmUsageByJobType"
-        byPractice:
-          type: array
-          description: "The decision, embedding and reranking calls of practice scripts,\
-            \ one entry per practice, most spend first. Their spend is already part\
-            \ of byJobType. Chat calls of practice scripts are in each review's own\
-            \ cost and not here."
-          items:
-            $ref: "#/components/schemas/LlmUsageByPractice"
         fx:
           $ref: "#/components/schemas/FxRateInfo"
           description: Display-only conversion when the instance has a display currency.
@@ -27672,9 +27383,6 @@ components:
           $ref: "#/components/schemas/LlmUnmeasuredUsage"
           description: "Own-provider calls this month whose usage was not measured,\
             \ and the most they can cost. Not part of ownProviderTotalCostUsd."
-        practiceScriptTotal:
-          $ref: "#/components/schemas/LlmUsagePracticeScriptTotal"
-          description: "The byPractice entries in total, read from the ledger."
         unpricedEventCount:
           type: integer
           format: int64
@@ -27687,7 +27395,6 @@ components:
       required:
       - byDay
       - byJobType
-      - byPractice
       - instanceBudgetVerdict
       - instancePaused
       - instanceTotalCostUsd
@@ -27698,7 +27405,6 @@ components:
       - ownProviderPaused
       - ownProviderTotalCostUsd
       - ownProviderUnmeasured
-      - practiceScriptTotal
       - unpricedEventCount
     WorkspaceMembership:
       type: object
