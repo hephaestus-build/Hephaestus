@@ -1758,13 +1758,13 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
             if (syncFinishedAfterCapture)
                 jdbc.update("UPDATE issue SET discussion_read_whole=TRUE WHERE id=?", pull.getId());
             var current = fingerprints.fingerprints(
-                    pullRef, captured.keySet().stream().map(SourceKind::new).collect(Collectors.toSet()), mapper);
+                    pullRef, captured.keySet().stream().map(SourceKind::new).collect(Collectors.toSet()), null, mapper);
             assertThat(current.entrySet().stream()
                             .collect(Collectors.toMap(entry -> entry.getKey().value(), Map.Entry::getValue)))
                     .isEqualTo(captured);
             var facts = mapper.createObjectNode();
             facts.set(ReviewCaptureDecision.SOURCE_FINGERPRINTS, mapper.valueToTree(captured));
-            var unchanged = freshness.check(pullRef.workspaceId(), pullRef.itemId(), facts);
+            var unchanged = freshness.check(pullRef.workspaceId(), pullRef.itemId(), null, facts);
             assertThat(unchanged.currentness()).isEqualTo(Currentness.CURRENT);
             assertThat(unchanged.changed()).isEmpty();
 
@@ -1779,7 +1779,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                     pull.getId(),
                     Timestamp.from(Instant.parse("2026-10-01T12:00:00Z")),
                     fixture.author().getId());
-            var changed = freshness.check(pullRef.workspaceId(), pullRef.itemId(), facts);
+            var changed = freshness.check(pullRef.workspaceId(), pullRef.itemId(), null, facts);
             assertThat(changed.currentness()).isEqualTo(Currentness.STALE);
             assertThat(changed.changed()).containsExactly(GeneralReviewCommentContentSource.KIND.value());
         }

@@ -283,12 +283,8 @@ public class LinkedWorkItemContentSource {
         if (issue.getClosedAt() != null)
             node.put("closedAt", issue.getClosedAt().toString());
         ArrayNode labels = node.putArray("labels");
-        Set<Label> labelSet = issue.getLabels();
-        if (labelSet != null) {
-            for (Label label : labelSet) {
-                if (label != null && label.getName() != null) labels.add(label.getName());
-            }
-        }
+        // A set has no order, and the source fingerprint reads the rendered order.
+        issue.getLabels().stream().map(Label::getName).sorted().forEach(labels::add);
         IssueRepository.ChildRollup children =
                 (issue.getSubIssuesTotal() == null || issue.getSubIssuesCompleted() == null) && issue.getId() != null
                         ? issueRepository.countChildrenByParentIssueId(issue.getId(), Issue.State.CLOSED)

@@ -148,6 +148,14 @@ An unavailable or hidden source does not establish a work change or item removal
 Each capture decision retains the fingerprints of every source the session could read.
 Selection, practice start, admission, delivery, and result presentation compare them with the current source records.
 Record comparisons use the capture renderer and omit the observation basis.
+
+Each comparison reads a source as the capture read it.
+The capture of an event review reads the record that its occasion kept, so the comparison reads that occasion too.
+A sync after the webhook fills the mirror's merge and check state, and that state is not in the occasion's record.
+When a newer version of the work replaces the occasion, the comparison reads the current work and finds the change.
+When the occasion's record expires, the comparison cannot read it, and the result is unverifiable.
+`ItemSource.recordFingerprints` is the one read for these comparisons.
+
 Git source fingerprints follow [ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md#freshness-by-source-fingerprints).
 
 A missing fingerprint or an unavailable current source makes the result unverifiable.

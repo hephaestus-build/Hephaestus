@@ -751,12 +751,12 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         facts.putObject("sourceFingerprints").put(kind.value(), "a".repeat(64));
         capture.setCaptureDecision(facts);
         pinnedPractices.saveAndFlush(capture);
-        doReturn(Map.of(kind, "a".repeat(64))).when(productItems).fingerprints(eq(ref), anySet());
+        doReturn(Map.of(kind, "a".repeat(64))).when(productItems).fingerprints(eq(ref), anySet(), any());
         var id = new ReviewAssignmentId(
                 pending.review().getId(), scenario.practice().getId(), ref.itemId());
         assertThat(reviewFreshness.start(ref.workspaceId(), id, pending.jobId(), 0))
                 .isTrue();
-        doReturn(Map.of(kind, "b".repeat(64))).when(productItems).fingerprints(eq(ref), anySet());
+        doReturn(Map.of(kind, "b".repeat(64))).when(productItems).fingerprints(eq(ref), anySet(), any());
         var other = admissions.pending(data.scenario(), Instant.now(), null);
 
         assertThat(reviewFreshness.start(ref.workspaceId(), id, pending.jobId(), 0))
@@ -795,7 +795,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         facts.putObject("sourceFingerprints").put("scm.pull-request.core", "a".repeat(64));
         capture.setCaptureDecision(facts);
         pinnedPractices.saveAndFlush(capture);
-        doReturn(Map.of()).when(productItems).fingerprints(eq(ref), anySet());
+        doReturn(Map.of()).when(productItems).fingerprints(eq(ref), anySet(), any());
         var id = new ReviewAssignmentId(
                 pending.review().getId(), scenario.practice().getId(), ref.itemId());
 
@@ -888,7 +888,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         var source = productItems.require(input.workspaceId(), input.itemId());
         doReturn(Map.of(new SourceKind("scm.pull-request.core"), "b".repeat(64)))
                 .when(productItems)
-                .fingerprints(eq(source), anySet());
+                .fingerprints(eq(source), anySet(), any());
         var other = data.scenario();
         var untouched = data.result(other, ResultOutcome.MET, at.minusSeconds(30));
         var changed = new ItemEventInput(

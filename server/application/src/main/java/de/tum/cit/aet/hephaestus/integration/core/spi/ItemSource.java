@@ -1,13 +1,19 @@
 package de.tum.cit.aet.hephaestus.integration.core.spi;
 
+import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 public interface ItemSource {
     boolean supports(ItemRef item);
@@ -39,4 +45,43 @@ public interface ItemSource {
     CaptureContribution capture(ItemSnapshot pinned, CaptureRequest request);
 
     JsonNode record(ItemSnapshot pinned, Map<String, byte[]> capturedFiles);
+
+    /**
+     * The fingerprints that a capture of {@code current} would record now for these record sources: each source read
+     * alone, as a review's capture reads it, under the occasion that the capture read. A capture of an event review
+     * reads its occasion's record, and the mirror's later status is not that record, so a read without the occasion
+     * would find unchanged work changed.
+     *
+     * @param source the source as injected, so its capture runs in its own transaction
+     */
+    static Map<SourceKind, String> recordFingerprints(
+            ItemSource source,
+            ItemSnapshot current,
+            Set<SourceKind> kinds,
+            @Nullable UUID occasion,
+            ObjectMapper mapper) {
+        var fingerprints = new HashMap<SourceKind, String>();
+        for (var kind : kinds) {
+            var contribution = source.capture(
+                    current,
+                    new CaptureRequest(
+                            new UUID(0, 0),
+                            new UUID(0, 0),
+                            0,
+                            Set.of(kind),
+                            ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE,
+                            3,
+                            null,
+                            Set.of(kind),
+                            occasion));
+            var cleanup = contribution.cleanup();
+            try (cleanup) {
+                var fingerprint = SourceFingerprint.of(mapper, kind, contribution);
+                if (fingerprint != null) fingerprints.put(kind, fingerprint);
+            } catch (Exception failure) {
+                throw new IllegalStateException("Could not release the current source read", failure);
+            }
+        }
+        return Map.copyOf(fingerprints);
+    }
 }

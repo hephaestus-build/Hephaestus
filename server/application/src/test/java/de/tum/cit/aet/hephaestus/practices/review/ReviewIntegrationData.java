@@ -151,7 +151,7 @@ public class ReviewIntegrationData {
                 .filter(contract -> contract.appliesTo(item.kind().value()))
                 .map(SourceContract::kind)
                 .collect(Collectors.toSet());
-        var sources = productItems.fingerprints(item, kinds);
+        var sources = productItems.fingerprints(item, kinds, null);
         var facts = json.createObjectNode();
         var fingerprints = facts.putObject("sourceFingerprints");
         sources.forEach((kind, fingerprint) -> fingerprints.put(kind.value(), fingerprint));

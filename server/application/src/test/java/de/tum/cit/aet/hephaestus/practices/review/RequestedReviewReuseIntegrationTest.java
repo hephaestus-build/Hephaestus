@@ -119,7 +119,7 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         when(authorization.permits(anyLong(), any(), any())).thenReturn(true);
         scenario = data.scenario();
-        doReturn(Map.of(CORE, SAME)).when(productItems).fingerprints(any(), any());
+        doReturn(Map.of(CORE, SAME)).when(productItems).fingerprints(any(), any(), any());
         var recordedAt = Instant.now().minusSeconds(120);
         earlier = data.result(
                 scenario,
@@ -249,7 +249,7 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldMeasureAgainWhenASourceChangedAtTheSameVersion() {
         var pending = requested(ReviewOrigin.REQUEST);
-        doReturn(Map.of(CORE, "b".repeat(64))).when(productItems).fingerprints(any(), any());
+        doReturn(Map.of(CORE, "b".repeat(64))).when(productItems).fingerprints(any(), any(), any());
         assertMeasures(pending, capture(pending, "b".repeat(64)));
     }
 
@@ -263,7 +263,7 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
                 earlier.getReviewId());
         doReturn(Map.of(CORE, SAME, COMMENTS, "c".repeat(64)))
                 .when(productItems)
-                .fingerprints(any(), any());
+                .fingerprints(any(), any(), any());
         var pending = requested(ReviewOrigin.REQUEST);
         assertMeasures(pending, capture(pending, SAME));
         assertThat(jdbc.queryForObject(
@@ -276,7 +276,7 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldMeasureAgainWhenCurrentProofIsUnavailable() {
-        doReturn(Map.of()).when(productItems).fingerprints(any(), any());
+        doReturn(Map.of()).when(productItems).fingerprints(any(), any(), any());
         var pending = requested(ReviewOrigin.REQUEST);
         assertMeasures(pending, capture(pending, SAME));
     }

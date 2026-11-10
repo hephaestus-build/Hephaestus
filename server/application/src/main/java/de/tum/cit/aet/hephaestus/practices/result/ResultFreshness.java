@@ -88,6 +88,7 @@ public class ResultFreshness {
                         capture -> new CaptureKey(capture.reviewId(), capture.practiceId(), capture.itemId()),
                         capture -> capture));
         var expected = new HashMap<UUID, Map<SourceKind, String>>();
+        var occasions = new HashMap<UUID, UUID>();
         var frozen = new HashSet<UUID>();
         for (var result : rows) {
             var producingCapture = Optional.ofNullable(
@@ -96,6 +97,9 @@ public class ResultFreshness {
             if (producingCapture
                     .filter(value -> value.reviewKind() == ReviewKind.SCAN)
                     .isPresent()) frozen.add(result.id());
+            producingCapture
+                    .map(ResultSourceCapture::occasion)
+                    .ifPresent(occasion -> occasions.put(result.id(), occasion));
             var decision = producingCapture.stream()
                     .map(ResultSourceCapture::decision)
                     .filter(Objects::nonNull)
@@ -107,12 +111,14 @@ public class ResultFreshness {
         for (var group : rows.stream()
                 .collect(Collectors.groupingBy(result -> new ReadScope(
                         result.itemId(),
-                        Objects.requireNonNull(expected.get(result.id())).keySet())))
+                        Objects.requireNonNull(expected.get(result.id())).keySet(),
+                        occasions.get(result.id()))))
                 .entrySet()) {
             var item = refs.get(group.getKey().itemId());
             var kinds = group.getKey().kinds();
-            var current =
-                    item == null || kinds.isEmpty() ? Map.<SourceKind, String>of() : items.fingerprints(item, kinds);
+            var current = item == null || kinds.isEmpty()
+                    ? Map.<SourceKind, String>of()
+                    : items.fingerprints(item, kinds, group.getKey().occasion());
             for (var result : group.getValue())
                 states.put(
                         result.id(),
@@ -129,7 +135,8 @@ public class ResultFreshness {
 
     private record CaptureKey(UUID reviewId, long practiceId, long itemId) {}
 
-    private record ReadScope(long itemId, Set<SourceKind> kinds) {}
+    private record ReadScope(
+            long itemId, Set<SourceKind> kinds, @Nullable UUID occasion) {}
 
     /** A requested review can reuse only the same readable footprint that its own capture recorded. */
     public boolean sameCapture(long workspaceId, Result result, UUID requestedReviewId) {
@@ -145,24 +152,25 @@ public class ResultFreshness {
         return !previous.isEmpty() && previous.equals(maps.get(requestedReviewId));
     }
 
-    public Currentness capture(long workspaceId, long itemId, @Nullable JsonNode facts) {
-        return check(workspaceId, itemId, facts).currentness();
+    public Currentness capture(long workspaceId, long itemId, @Nullable UUID occasion, @Nullable JsonNode facts) {
+        return check(workspaceId, itemId, occasion, facts).currentness();
     }
 
     /**
-     * Whether the sources that a capture fingerprinted still hold what it read, and which of them do not.
+     * Whether the sources that a capture fingerprinted still hold what it read, and which of them do not. The current
+     * sources are read under {@code occasion}, the occasion that the capture read.
      *
      * @param changed the sources whose current fingerprint differs from the captured one
      * @param unread the captured sources that cannot be fingerprinted now
      */
     public record Check(Currentness currentness, Set<String> changed, Set<String> unread) {}
 
-    public Check check(long workspaceId, long itemId, @Nullable JsonNode facts) {
+    public Check check(long workspaceId, long itemId, @Nullable UUID occasion, @Nullable JsonNode facts) {
         var captured = fingerprints(facts);
         var item = items.find(workspaceId, itemId);
         if (item.isEmpty()) return new Check(Currentness.STALE, Set.of(), Set.of());
         if (captured.isEmpty()) return new Check(Currentness.UNVERIFIABLE, Set.of(), Set.of());
-        var current = items.fingerprints(item.orElseThrow(), captured.keySet());
+        var current = items.fingerprints(item.orElseThrow(), captured.keySet(), occasion);
         var changed = new TreeSet<String>();
         var unread = new TreeSet<String>();
         captured.forEach((kind, fingerprint) -> {

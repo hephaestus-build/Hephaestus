@@ -299,7 +299,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .createdAt(now)
                 .checks(checks)
                 .build());
-        var queuedSources = request.kind() == ReviewKind.ITEM ? queuedSources(pinned, planned) : null;
+        var queuedSources = request.kind() == ReviewKind.ITEM ? queuedSources(pinned, planned, occasion) : null;
         for (var plan : planned) {
             var practice = plan.practice();
             var version = plan.version();
@@ -464,7 +464,7 @@ public class ReviewServiceImpl implements ReviewService {
                 : "ROLE_UNAVAILABLE";
     }
 
-    private JsonNode queuedSources(ItemSnapshot item, List<SelectedPractice> plans) {
+    private JsonNode queuedSources(ItemSnapshot item, List<SelectedPractice> plans, @Nullable UUID occasion) {
         var kinds = new HashSet<SourceKind>();
         for (var plan : plans) {
             if (plan.reason() != null) continue;
@@ -485,7 +485,8 @@ public class ReviewServiceImpl implements ReviewService {
         }
         var facts = json.createObjectNode();
         var fingerprints = facts.putObject(ReviewCaptureDecision.SOURCE_FINGERPRINTS);
-        items.fingerprints(item.item(), kinds).forEach((kind, value) -> fingerprints.put(kind.value(), value));
+        items.fingerprints(item.item(), kinds, occasion)
+                .forEach((kind, value) -> fingerprints.put(kind.value(), value));
         return facts;
     }
 

@@ -42,4 +42,18 @@ public record ReviewSnapshot(
             List<PinnedPractice> practices) {
         this(id, workspaceId, item, kind, version, origin, rolloutRevision, practices, null, null);
     }
+
+    /** {@link #occasion(ReviewKind, ReviewOrigin, UUID)} of this review. */
+    public @Nullable UUID occasion() {
+        return occasion(kind, origin, eventId);
+    }
+
+    /**
+     * The occasion that a review's capture reads, or null when the capture reads the work as it is. Every later read
+     * of the same sources, to start a practice or to keep its feedback, reads this occasion too, so unchanged work
+     * reads the same.
+     */
+    public static @Nullable UUID occasion(ReviewKind kind, ReviewOrigin origin, @Nullable UUID eventId) {
+        return kind == ReviewKind.ITEM && origin == ReviewOrigin.EVENT ? eventId : null;
+    }
 }
