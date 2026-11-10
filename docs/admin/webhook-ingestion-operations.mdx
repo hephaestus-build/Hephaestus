@@ -530,6 +530,20 @@ Wait for the StatefulSet rollout and check broker readiness before resuming traf
 A restart preserves the JetStream volume but interrupts active deliveries.
 [Which providers deliver again](#which-providers-deliver-again) describes the recovery limits.
 
+## Known limits
+
+- **A very large sync window does not finish.**
+  The daily sync of a GitHub repository reads only the work that changed since its last complete run.
+  It reads at most 10,000 pull requests and 25,000 issues.
+  If more changed, for example after a long outage, the sync of that repository stops with an error.
+  The next run reads the same window again, so it can stop again.
+  The repository's resource sync table shows the error ([Read sync errors](./integrations#read-sync-errors)).
+- **A new consumer can miss events of its first seconds.**
+  A consumer for a new connection or repository starts with the events that arrive after it starts.
+  Events that arrive in the seconds before that can be lost.
+  The first sync of the connection repairs the state of the work, such as open, merged or closed.
+  It does not repair activity that only the event carried, such as a review request at that moment.
+
 ## Where these settings live
 
 Stream bounds are read by beans that only exist on the **webhook** runtime role. Setting them on the
