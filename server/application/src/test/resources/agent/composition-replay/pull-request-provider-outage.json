@@ -1,0 +1,76 @@
+{
+  "description" : "The provider fails past the session's calls, a passing cause, so the attempt is handed on and nothing is withheld.",
+  "scenario" : "pull-request",
+  "copyCapabilities" : [ "SUMMARY", "LINE_NOTE", "PRACTICE_PAGE", "CONVERSATION" ],
+  "responses" : [ {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  }, {
+    "status" : 503
+  } ],
+  "expected" : {
+    "packages" : [ ],
+    "reviewStops" : [ "PROVIDER" ],
+    "handedOn" : "PROVIDER",
+    "calls" : [ {
+      "system" : "589e8428aef21d6493632f86116fe7c9ba11d8fe634c0174fab192f5b73a2830",
+      "tools" : "9274edada8ad6668294d6de24a0f4c331676413fc3ed4e83b1027887e72a080e",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "3e595903d3fdc2e24186d86d2dc931728a1cb23fb910e287e9e421b88aaaeb59",
+          "length" : 20354
+        }
+      } ]
+    }, {
+      "messages" : [ ]
+    }, {
+      "messages" : [ ]
+    }, {
+      "messages" : [ ]
+    }, {
+      "messages" : [ ]
+    }, {
+      "messages" : [ ]
+    }, {
+      "messages" : [ ]
+    }, {
+      "messages" : [ ]
+    }, {
+      "messages" : [ ]
+    }, {
+      "messages" : [ ]
+    }, {
+      "messages" : [ ]
+    }, {
+      "messages" : [ ]
+    } ]
+  }
+}

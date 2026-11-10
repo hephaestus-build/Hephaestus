@@ -1,0 +1,167 @@
+{
+  "description" : "An issue has no line notes, so the review on the work is a summary. Its practice page support is unavailable, so the page is handed on, and the conversation cannot carry handles-errors.",
+  "scenario" : "issue",
+  "copyCapabilities" : [ "SUMMARY", "PRACTICE_PAGE", "CONVERSATION" ],
+  "responses" : [ {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "30000000-0000-4000-8000-000000000001",
+        "disposition" : "RAISE"
+      }, {
+        "resultId" : "30000000-0000-4000-8000-000000000002",
+        "disposition" : "RAISE"
+      } ],
+      "summary" : {
+        "basedOn" : [ "30000000-0000-4000-8000-000000000001", "30000000-0000-4000-8000-000000000002" ],
+        "body" : "Record the caught failure, and say in the description why fetches now retry."
+      }
+    }
+  }, {
+    "tool" : "publish_package",
+    "arguments" : {
+      "draftId" : "${draftId}"
+    }
+  }, {
+    "tool" : "check_package",
+    "arguments" : {
+      "feedback" : [ {
+        "destination" : "CONVERSATION",
+        "practiceSlug" : "describes-changes",
+        "basedOn" : [ "30000000-0000-4000-8000-000000000002" ],
+        "action" : "WITHHOLD",
+        "withholdReason" : "BELOW_BAR",
+        "witnessIds" : [ ]
+      } ]
+    }
+  }, {
+    "tool" : "publish_package",
+    "arguments" : {
+      "draftId" : "${draftId}"
+    }
+  } ],
+  "expected" : {
+    "packages" : [ {
+      "basisResultIds" : [ "30000000-0000-4000-8000-000000000001", "30000000-0000-4000-8000-000000000002" ],
+      "composition" : [ {
+        "destination" : "ON_WORK",
+        "resultIds" : [ "30000000-0000-4000-8000-000000000001", "30000000-0000-4000-8000-000000000002" ],
+        "summary" : "Record the caught failure, and say in the description why fetches now retry.",
+        "notes" : [ ],
+        "withheldReason" : null,
+        "trace" : {
+          "copies" : [ {
+            "kind" : "SUMMARY",
+            "position" : 0,
+            "basedOn" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000001",
+              "problemId" : null
+            }, {
+              "resultId" : "30000000-0000-4000-8000-000000000002",
+              "problemId" : null
+            } ]
+          } ],
+          "withheld" : [ ],
+          "replacesId" : null,
+          "primaryResultId" : null
+        },
+        "page" : null
+      } ],
+      "publicComposition" : true,
+      "publicationContext" : null,
+      "editOf" : null
+    }, {
+      "basisResultIds" : [ "30000000-0000-4000-8000-000000000002" ],
+      "composition" : [ {
+        "destination" : "CONVERSATION",
+        "resultIds" : [ "30000000-0000-4000-8000-000000000002" ],
+        "summary" : null,
+        "notes" : [ ],
+        "withheldReason" : "COMPOSER_WITHHELD",
+        "trace" : {
+          "copies" : [ ],
+          "withheld" : [ {
+            "basedOn" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000002",
+              "problemId" : null
+            } ],
+            "reason" : "BELOW_BAR",
+            "witnessIds" : [ ]
+          } ],
+          "replacesId" : null,
+          "primaryResultId" : "30000000-0000-4000-8000-000000000002"
+        },
+        "page" : null
+      } ],
+      "publicComposition" : false,
+      "publicationContext" : null,
+      "editOf" : null
+    } ],
+    "reviewStops" : [ ],
+    "handedOn" : "ROUTING_UNAVAILABLE",
+    "calls" : [ {
+      "system" : "589e8428aef21d6493632f86116fe7c9ba11d8fe634c0174fab192f5b73a2830",
+      "tools" : "0d8ba4c113fc7fee06a8a68556b191fc81b4a559517db93410ba4d0f06cf8b7a",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "32aad91aae4e47a9bea9103d13cffb41d8784f775ba5e3ed29ff5c37aecd0b56",
+          "length" : 9834
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000001",
+              "disposition" : "RAISE"
+            }, {
+              "resultId" : "30000000-0000-4000-8000-000000000002",
+              "disposition" : "RAISE"
+            } ],
+            "summary" : {
+              "basedOn" : [ "30000000-0000-4000-8000-000000000001", "30000000-0000-4000-8000-000000000002" ],
+              "body" : "Record the caught failure, and say in the description why fetches now retry."
+            }
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "{\"draftId\":\"dbfdc826ab8abd4be4d83f65f2e9b8f77a93bd369dabbad6f69c7fc169b04cc9\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+      } ]
+    }, {
+      "system" : "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
+      "tools" : "5865ccc8a378eb2faffec36f1d411aa9ecfbe632bbe80321478ea9acc5f7183d",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "17fe7f0e91e2b03a7ed9e742b09cfa5d9e87f20dd0736c934174502335eec14a",
+          "length" : 8524
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "feedback" : [ {
+              "destination" : "CONVERSATION",
+              "practiceSlug" : "describes-changes",
+              "basedOn" : [ "30000000-0000-4000-8000-000000000002" ],
+              "action" : "WITHHOLD",
+              "withholdReason" : "BELOW_BAR",
+              "witnessIds" : [ ]
+            } ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "{\"draftId\":\"88da0a6891988ca1688828539621acbdafa3518a82836503325eac89e43a9103\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+      } ]
+    } ]
+  }
+}

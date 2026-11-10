@@ -1,0 +1,293 @@
+{
+  "description": "The live model's answers to resumed-private's basis, recorded.",
+  "scenario": "resumed",
+  "copyCapabilities": [
+    "SUMMARY",
+    "LINE_NOTE",
+    "PRACTICE_PAGE",
+    "CONVERSATION"
+  ],
+  "reviewedEarlier": true,
+  "earlierDecisions": {
+    "PRACTICE_PAGE": [
+      "30000000-0000-4000-8000-000000000002"
+    ],
+    "CONVERSATION": [
+      "30000000-0000-4000-8000-000000000002"
+    ]
+  },
+  "responses": [
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "I'm looking at a pattern claim for handles-errors across two pieces of work.",
+              "tool_calls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "check_package",
+                    "arguments": "{\"feedback\": [{\"destination\": \"PRACTICE_PAGE\", \"practiceSlug\": \"handles-errors\", \"basedOn\": [\"30000000-0000-4000-8000-000000000001\"], \"action\": \"NEW\", \"title\": \"Catches that drop the failure\", \"body\": \"In #5 the failure handler answered with an empty list, and in #7 the new catch around the client call returns null, so a fetch error vanishes either way. Silent fallbacks hide the fact that the fetch failed and make the failure hard to find. A future caller can tell success from a swallowed error only by guessing what an empty result means.\", \"nextStep\": \"When you write or edit a catch, decide what the caller should know: rethrow it, or record it with the context that explains what was being attempted.\"}]}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "The check passed. Publishing the accepted draft.",
+              "tool_calls": [
+                {
+                  "id": "call-2",
+                  "type": "function",
+                  "function": {
+                    "name": "publish_package",
+                    "arguments": "{\"draftId\": \"59083c0436668152bd1d6bdff80f81c80193b04909b76e0f526bab59a2ef96bf\"}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call-3",
+                  "type": "function",
+                  "function": {
+                    "name": "check_package",
+                    "arguments": "{\"feedback\": [{\"destination\": \"CONVERSATION\", \"practiceSlug\": \"handles-errors\", \"basedOn\": [\"30000000-0000-4000-8000-000000000001\", \"40000000-0000-4000-8000-000000000001\"], \"action\": \"NEW\", \"title\": \"Catch swallows the failure\", \"notes\": {\"situation\": \"In fetch, the new catch for IOException returns null without recording the error, so a failed call looks like a missing record and the failure disappears.\", \"capability\": \"The developer can check whether the code that reacts to a failure also leaves a trace: it records, reports or rethrows the exception instead of silently substituting a value.\", \"evidenceSummary\": \"The change in the retry branch (acme/app, PR #7) wraps client.get(id) in a try and its catch (IOException) returns null at the end of fetch, per the NOT_MET result on the swallowed failure.\", \"inConversationLearning\": \"Before the turn ends the developer states why a caught failure should be recorded or rethrown rather than turned into null, and names what fetch should do when the call fails.\"}}]}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call-4",
+                  "type": "function",
+                  "function": {
+                    "name": "publish_package",
+                    "arguments": "{\"draftId\": \"95100f5e3bb44dcb806f8f7412838e067e03ac7fe9c732335f432d6c2c8411c4\"}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "packages": [
+      {
+        "basisResultIds": [
+          "30000000-0000-4000-8000-000000000001"
+        ],
+        "composition": [
+          {
+            "destination": "PRACTICE_PAGE",
+            "resultIds": [
+              "30000000-0000-4000-8000-000000000001"
+            ],
+            "summary": null,
+            "notes": [],
+            "withheldReason": null,
+            "trace": {
+              "copies": [
+                {
+                  "kind": "SUMMARY",
+                  "position": 0,
+                  "basedOn": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "problemId": null
+                    }
+                  ]
+                }
+              ],
+              "withheld": [],
+              "replacesId": null,
+              "primaryResultId": "30000000-0000-4000-8000-000000000001"
+            },
+            "page": {
+              "title": "Catches that drop the failure",
+              "body": "In #5 the failure handler answered with an empty list, and in #7 the new catch around the client call returns null, so a fetch error vanishes either way. Silent fallbacks hide the fact that the fetch failed and make the failure hard to find. A future caller can tell success from a swallowed error only by guessing what an empty result means.",
+              "nextStep": "When you write or edit a catch, decide what the caller should know: rethrow it, or record it with the context that explains what was being attempted."
+            }
+          }
+        ],
+        "publicComposition": false,
+        "publicationContext": null,
+        "editOf": null
+      },
+      {
+        "basisResultIds": [
+          "30000000-0000-4000-8000-000000000001"
+        ],
+        "composition": [
+          {
+            "destination": "CONVERSATION",
+            "resultIds": [
+              "30000000-0000-4000-8000-000000000001"
+            ],
+            "summary": "Catch swallows the failure\n\nSituation: In fetch, the new catch for IOException returns null without recording the error, so a failed call looks like a missing record and the failure disappears.\n\nCapability: The developer can check whether the code that reacts to a failure also leaves a trace: it records, reports or rethrows the exception instead of silently substituting a value.\n\nEvidence: The change in the retry branch (acme/app, PR #7) wraps client.get(id) in a try and its catch (IOException) returns null at the end of fetch, per the NOT_MET result on the swallowed failure.\n\nIn conversation: Before the turn ends the developer states why a caught failure should be recorded or rethrown rather than turned into null, and names what fetch should do when the call fails.",
+            "notes": [],
+            "withheldReason": null,
+            "trace": {
+              "copies": [
+                {
+                  "kind": "CHAT_TURN",
+                  "position": 0,
+                  "basedOn": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "problemId": null
+                    },
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "problemId": "40000000-0000-4000-8000-000000000001"
+                    }
+                  ]
+                }
+              ],
+              "withheld": [],
+              "replacesId": null,
+              "primaryResultId": "30000000-0000-4000-8000-000000000001"
+            },
+            "page": null
+          }
+        ],
+        "publicComposition": false,
+        "publicationContext": null,
+        "editOf": null
+      }
+    ],
+    "reviewStops": [],
+    "handedOn": null,
+    "calls": [
+      {
+        "system": "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
+        "tools": "61d3ebe7e6e2dfd9d500a28f233ee909bc1caac5acbda6dd0e1a1e37e93add5a",
+        "messages": [
+          {
+            "role": "user",
+            "text": {
+              "sha256": "4ae8872e908c05d8198c8fc381ae9227efc0737633fbf70913276883384e421a",
+              "length": 15111
+            }
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "name": "check_package",
+                "arguments": {
+                  "feedback": [
+                    {
+                      "destination": "PRACTICE_PAGE",
+                      "practiceSlug": "handles-errors",
+                      "basedOn": [
+                        "30000000-0000-4000-8000-000000000001"
+                      ],
+                      "action": "NEW",
+                      "title": "Catches that drop the failure",
+                      "body": "In #5 the failure handler answered with an empty list, and in #7 the new catch around the client call returns null, so a fetch error vanishes either way. Silent fallbacks hide the fact that the fetch failed and make the failure hard to find. A future caller can tell success from a swallowed error only by guessing what an empty result means.",
+                      "nextStep": "When you write or edit a catch, decide what the caller should know: rethrow it, or record it with the context that explains what was being attempted."
+                    }
+                  ]
+                }
+              }
+            ],
+            "text": "I'm looking at a pattern claim for handles-errors across two pieces of work."
+          },
+          {
+            "role": "tool",
+            "text": "{\"draftId\":\"59083c0436668152bd1d6bdff80f81c80193b04909b76e0f526bab59a2ef96bf\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+          }
+        ]
+      },
+      {
+        "system": "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
+        "tools": "5865ccc8a378eb2faffec36f1d411aa9ecfbe632bbe80321478ea9acc5f7183d",
+        "messages": [
+          {
+            "role": "user",
+            "text": {
+              "sha256": "60234b72c227c7c11bdf2f6c06c90fe62221c8b2086bf0cdb0c6536bb2f07802",
+              "length": 12995
+            }
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "name": "check_package",
+                "arguments": {
+                  "feedback": [
+                    {
+                      "destination": "CONVERSATION",
+                      "practiceSlug": "handles-errors",
+                      "basedOn": [
+                        "30000000-0000-4000-8000-000000000001",
+                        "40000000-0000-4000-8000-000000000001"
+                      ],
+                      "action": "NEW",
+                      "title": "Catch swallows the failure",
+                      "notes": {
+                        "situation": "In fetch, the new catch for IOException returns null without recording the error, so a failed call looks like a missing record and the failure disappears.",
+                        "capability": "The developer can check whether the code that reacts to a failure also leaves a trace: it records, reports or rethrows the exception instead of silently substituting a value.",
+                        "evidenceSummary": "The change in the retry branch (acme/app, PR #7) wraps client.get(id) in a try and its catch (IOException) returns null at the end of fetch, per the NOT_MET result on the swallowed failure.",
+                        "inConversationLearning": "Before the turn ends the developer states why a caught failure should be recorded or rethrown rather than turned into null, and names what fetch should do when the call fails."
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "text": "{\"draftId\":\"95100f5e3bb44dcb806f8f7412838e067e03ac7fe9c732335f432d6c2c8411c4\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+          }
+        ]
+      }
+    ]
+  }
+}

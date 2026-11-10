@@ -1,0 +1,169 @@
+{
+  "description" : "An earlier attempt prepared the review on the work and decided one practice; this attempt composes the private destinations it left open.",
+  "scenario" : "resumed",
+  "copyCapabilities" : [ "SUMMARY", "LINE_NOTE", "PRACTICE_PAGE", "CONVERSATION" ],
+  "reviewedEarlier" : true,
+  "earlierDecisions" : {
+    "PRACTICE_PAGE" : [ "30000000-0000-4000-8000-000000000002" ],
+    "CONVERSATION" : [ "30000000-0000-4000-8000-000000000002" ]
+  },
+  "responses" : [ {
+    "tool" : "check_package",
+    "arguments" : {
+      "feedback" : [ {
+        "destination" : "PRACTICE_PAGE",
+        "practiceSlug" : "handles-errors",
+        "basedOn" : [ "30000000-0000-4000-8000-000000000001" ],
+        "action" : "NEW",
+        "title" : "Record each caught failure",
+        "body" : "Two changes return a default value from a catch and record nothing.",
+        "nextStep" : "Before you return from a catch, record or rethrow the failure."
+      } ]
+    }
+  }, {
+    "tool" : "publish_package",
+    "arguments" : {
+      "draftId" : "${draftId}"
+    }
+  }, {
+    "tool" : "check_package",
+    "arguments" : {
+      "feedback" : [ {
+        "destination" : "CONVERSATION",
+        "practiceSlug" : "handles-errors",
+        "basedOn" : [ "30000000-0000-4000-8000-000000000001" ],
+        "action" : "WITHHOLD",
+        "withholdReason" : "BELOW_BAR",
+        "witnessIds" : [ ]
+      } ]
+    }
+  }, {
+    "tool" : "publish_package",
+    "arguments" : {
+      "draftId" : "${draftId}"
+    }
+  } ],
+  "expected" : {
+    "packages" : [ {
+      "basisResultIds" : [ "30000000-0000-4000-8000-000000000001" ],
+      "composition" : [ {
+        "destination" : "PRACTICE_PAGE",
+        "resultIds" : [ "30000000-0000-4000-8000-000000000001" ],
+        "summary" : null,
+        "notes" : [ ],
+        "withheldReason" : null,
+        "trace" : {
+          "copies" : [ {
+            "kind" : "SUMMARY",
+            "position" : 0,
+            "basedOn" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000001",
+              "problemId" : null
+            } ]
+          } ],
+          "withheld" : [ ],
+          "replacesId" : null,
+          "primaryResultId" : "30000000-0000-4000-8000-000000000001"
+        },
+        "page" : {
+          "title" : "Record each caught failure",
+          "body" : "Two changes return a default value from a catch and record nothing.",
+          "nextStep" : "Before you return from a catch, record or rethrow the failure."
+        }
+      } ],
+      "publicComposition" : false,
+      "publicationContext" : null,
+      "editOf" : null
+    }, {
+      "basisResultIds" : [ "30000000-0000-4000-8000-000000000001" ],
+      "composition" : [ {
+        "destination" : "CONVERSATION",
+        "resultIds" : [ "30000000-0000-4000-8000-000000000001" ],
+        "summary" : null,
+        "notes" : [ ],
+        "withheldReason" : "COMPOSER_WITHHELD",
+        "trace" : {
+          "copies" : [ ],
+          "withheld" : [ {
+            "basedOn" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000001",
+              "problemId" : null
+            } ],
+            "reason" : "BELOW_BAR",
+            "witnessIds" : [ ]
+          } ],
+          "replacesId" : null,
+          "primaryResultId" : "30000000-0000-4000-8000-000000000001"
+        },
+        "page" : null
+      } ],
+      "publicComposition" : false,
+      "publicationContext" : null,
+      "editOf" : null
+    } ],
+    "reviewStops" : [ ],
+    "handedOn" : null,
+    "calls" : [ {
+      "system" : "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
+      "tools" : "61d3ebe7e6e2dfd9d500a28f233ee909bc1caac5acbda6dd0e1a1e37e93add5a",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "4ae8872e908c05d8198c8fc381ae9227efc0737633fbf70913276883384e421a",
+          "length" : 15111
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "feedback" : [ {
+              "destination" : "PRACTICE_PAGE",
+              "practiceSlug" : "handles-errors",
+              "basedOn" : [ "30000000-0000-4000-8000-000000000001" ],
+              "action" : "NEW",
+              "title" : "Record each caught failure",
+              "body" : "Two changes return a default value from a catch and record nothing.",
+              "nextStep" : "Before you return from a catch, record or rethrow the failure."
+            } ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "{\"draftId\":\"91c2a25770812b4a94e080ed01d02273d81a7dd368860c65b61c2bc17dede1e6\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+      } ]
+    }, {
+      "system" : "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
+      "tools" : "5865ccc8a378eb2faffec36f1d411aa9ecfbe632bbe80321478ea9acc5f7183d",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "60234b72c227c7c11bdf2f6c06c90fe62221c8b2086bf0cdb0c6536bb2f07802",
+          "length" : 12995
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "feedback" : [ {
+              "destination" : "CONVERSATION",
+              "practiceSlug" : "handles-errors",
+              "basedOn" : [ "30000000-0000-4000-8000-000000000001" ],
+              "action" : "WITHHOLD",
+              "withholdReason" : "BELOW_BAR",
+              "witnessIds" : [ ]
+            } ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "{\"draftId\":\"1b2ee522ee792291669ad17180dec80b2491339845fbf65aa3c68d5bb7d31930\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+      } ]
+    } ]
+  }
+}

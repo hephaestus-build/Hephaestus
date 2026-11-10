@@ -1,0 +1,621 @@
+{
+  "description": "The live model's answers to pull-request-published's basis, recorded.",
+  "scenario": "pull-request",
+  "copyCapabilities": [
+    "SUMMARY",
+    "LINE_NOTE",
+    "PRACTICE_PAGE",
+    "CONVERSATION"
+  ],
+  "responses": [
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "I'll analyze the two NOT_MET results and decide how to handle each.\n\n**Result 1 (`handles-errors`)**: The catch swallows the IOException. This was already communicated on this work \u2014 the reviewer comment 501 (\"Please do not swallow the IOException here.\") and the prior Hephaestus feedback both flagged it, and the developer replied \"Will change it.\" The current code at line 15-16 still shows the same swallow, so the advice is unchanged from what the work already received. This is `NO_MATERIAL_CHANGE`: the advice was already given on this work (witness `comment:context/comments.json:501` is `eligibleForPriorAdvice`) and the code hasn't changed since. So I'll withhold it and no text speaks about it or its problems.\n\nWait \u2014 but the current code still has the catch. The dev said \"Will change it\" but the captured code still shows the swallow. The advice is the same, so repeating it is NO_MATERIAL_CHANGE. I'll withhold.\n\n**Result 2 (`describes-changes`)**: The description omits the reason. This was NOT previously raised \u2014 no witness for it. This is a new concern worth raising. The description \"Wraps the client call.\" doesn't say why. This should go in the summary (no useful line note \u2014 the citation is the description, not anchorable as a code line).\n\nLet me decide:\n- Result 1: `NO_MATERIAL_CHANGE` with witness `comment:context/comments.json:501` (eligibleForPriorAdvice = true). The dev already was told and said they'd change it; the code still shows the swallow so the point is unchanged. No text speaks about it.\n- Result 2: `RAISE` \u2014 carry in summary.\n\nLet me write the summary for result 2. It should be about the description lacking the why. The description says \"Wraps the client call.\" and \"Closes #3.\" It names what but not why. The linked issue is \"Fetch fails silently\" / \"Fetch returns null.\" \u2014 so there's context, but the description itself doesn't explain why the retry is needed.\n\nLet me draft:\n\nSummary: \"The description says what changes (\"Wraps the client call.\") but not why the retry is needed. A line or two on the problem it solves \u2014 e.g. that a single failed fetch now succeeds on retry \u2014 would let a reader judge whether this is the right fix for #3 without reopening the diff.\"\n\nThat's about 300 chars. Good, one point.\n\nNow for result 1 withholding \u2014 since I'm withholding as NO_MATERIAL_CHANGE, no text about it. The summary must not mention the catch.\n\nLet me make sure the summary basedOn names only result 2's resultId (and maybe problem). I'll name result 30000000-0000-4000-8000-000000000002 and its problem 40000000-0000-4000-8000-000000000002.\n\nNo inline notes (result 2's citation isn't anchorable, and result 1 is withheld).",
+              "tool_calls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "check_package",
+                    "arguments": "{\"decisions\": [{\"resultId\": \"30000000-0000-4000-8000-000000000001\", \"disposition\": \"NO_MATERIAL_CHANGE\", \"witnessIds\": [\"comment:context/comments.json:501\"]}, {\"resultId\": \"30000000-0000-4000-8000-000000000002\", \"disposition\": \"RAISE\"}], \"inline\": [], \"summary\": {\"basedOn\": [\"30000000-0000-4000-8000-000000000002\", \"40000000-0000-4000-8000-000000000002\"], \"body\": \"The description says what changes (\u201cWraps the client call.\u201d) but not why the retry is needed. A sentence or two on the problem it solves \u2014 e.g. that a fetch failing once now succeeds on a retry \u2014 would let a reader judge whether this is the right fix for #3 without reopening the diff.\"}}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "The draft is accepted. Publishing it.",
+              "tool_calls": [
+                {
+                  "id": "call-2",
+                  "type": "function",
+                  "function": {
+                    "name": "publish_package",
+                    "arguments": "{\"draftId\": \"627ec6c6e33bce4e0c1c9a98d8a2bf12dd1575a2fd8c54aca4b3fc08a0f6faa8\"}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "I need to work through this.",
+              "tool_calls": [
+                {
+                  "id": "call-3",
+                  "type": "function",
+                  "function": {
+                    "name": "check_package",
+                    "arguments": "{\"feedback\": [{\"destination\": \"PRACTICE_PAGE\", \"practiceSlug\": \"handles-errors\", \"basedOn\": [\"30000000-0000-4000-8000-000000000001\", \"40000000-0000-4000-8000-000000000001\"], \"action\": \"NEW\", \"title\": \"Swallowed failures keep recurring\", \"body\": \"Across two fetch changes the catch block dropped the failure: in #5 it returned an empty list, and in #7, \\\"Retry record fetches\\\", the catch returns null without logging or rethrowing the IOException. Each time a caller sees only an empty result and cannot tell the fetch failed. A reviewer had to call this out on the work for it to surface.\", \"nextStep\": \"Before merging a handler, ask what the caller will do with the failure; if nothing, record it or rethrow instead of returning a default.\"}]}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call-4",
+                  "type": "function",
+                  "function": {
+                    "name": "publish_package",
+                    "arguments": "{\"draftId\": \"407a889e55f36c5844978b4f0d181fc283432642afc4941207a7a4e2505cdfc8\"}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "I've reviewed the admitted results, source, history, and open destinations. Here's my decision:\n\n- **describes-changes** \u2014 CONVERSATION is open and the current result is `NOT_MET` on the missing reason, and a prepared (not-yet-delivered) entry exists for this same destination and practice. I'll write notes and supersede that entry.\n- **handles-errors** \u2014 CONVERSATION is open, but the earlier card \"record each failure you catch\" was delivered on the practice page with a CURRENT claim, and the current concern is the same. Nothing material is added on this destination, so I'll record a WITHHOLD.",
+              "tool_calls": [
+                {
+                  "id": "call-5",
+                  "type": "function",
+                  "function": {
+                    "name": "check_package",
+                    "arguments": "{\"feedback\": [{\"destination\": \"CONVERSATION\", \"practiceSlug\": \"describes-changes\", \"basedOn\": [\"30000000-0000-4000-8000-000000000002\", \"40000000-0000-4000-8000-000000000002\"], \"action\": \"SUPERSEDE\", \"supersedesThreadKey\": \"60000000-0000-4000-8000-000000000002\", \"title\": \"Description names the change but not the reason\", \"notes\": {\"situation\": \"The PR description for the retry change says only what it does and closes #3, leaving the reason for the retry to the linked issue rather than stating it in the description.\", \"capability\": \"The developer can judge a description's adequacy by whether a reader who has not opened the issue can tell why the change is needed, not just what it touches.\", \"evidenceSummary\": \"In the \\\"Retry record fetches\\\" PR, the description's only lines are \\\"Wraps the client call.\\\" and \\\"Closes #3.\\\"; the purpose is not stated.\", \"inConversationLearning\": \"The developer states why this change is needed in a way a reader can judge without opening issue #3, or identifies what the description should add.\"}}]}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "The check requires a decision for every eligible practice on the open destination. I'll add the WITHHOLD for handles-errors.",
+              "tool_calls": [
+                {
+                  "id": "call-6",
+                  "type": "function",
+                  "function": {
+                    "name": "check_package",
+                    "arguments": "{\"feedback\": [{\"action\": \"SUPERSEDE\", \"basedOn\": [\"30000000-0000-4000-8000-000000000002\", \"40000000-0000-4000-8000-000000000002\"], \"destination\": \"CONVERSATION\", \"notes\": {\"capability\": \"The developer can judge a description's adequacy by whether a reader who has not opened the issue can tell why the change is needed, not just what it touches.\", \"evidenceSummary\": \"In the \\\"Retry record fetches\\\" PR, the description's only lines are \\\"Wraps the client call.\\\" and \\\"Closes #3.\\\"; the purpose is not stated.\", \"inConversationLearning\": \"The developer states why this change is needed in a way a reader can judge without opening issue #3, or identifies what the description should add.\", \"situation\": \"The PR description for the retry change says only what it does and closes #3, leaving the reason for the retry to the linked issue rather than stating it in the description.\"}, \"practiceSlug\": \"describes-changes\", \"supersedesThreadKey\": \"60000000-0000-4000-8000-000000000002\", \"title\": \"Description names the change but not the reason\"}, {\"action\": \"WITHHOLD\", \"basedOn\": [\"30000000-0000-4000-8000-000000000001\", \"40000000-0000-4000-8000-000000000001\"], \"destination\": \"CONVERSATION\", \"practiceSlug\": \"handles-errors\", \"witnessIds\": [], \"withholdReason\": \"NO_MATERIAL_CHANGE\"}]}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "The NO_MATERIAL_CHANGE reason can't rest on the practice-page card, since that was delivered on a different destination. CONVERSATION's own evidence doesn't support that reason, so I'll withhold handles-errors here with BELOW_BAR.",
+              "tool_calls": [
+                {
+                  "id": "call-7",
+                  "type": "function",
+                  "function": {
+                    "name": "check_package",
+                    "arguments": "{\"feedback\": [{\"action\": \"SUPERSEDE\", \"basedOn\": [\"30000000-0000-4000-8000-000000000002\", \"40000000-0000-4000-8000-000000000002\"], \"destination\": \"CONVERSATION\", \"notes\": {\"capability\": \"The developer can judge a description's adequacy by whether a reader who has not opened the issue can tell why the change is needed, not just what it touches.\", \"evidenceSummary\": \"In the \\\"Retry record fetches\\\" PR, the description's only lines are \\\"Wraps the client call.\\\" and \\\"Closes #3.\\\"; the purpose is not stated.\", \"inConversationLearning\": \"The developer states why this change is needed in a way a reader can judge without opening issue #3, or identifies what the description should add.\", \"situation\": \"The PR description for the retry change says only what it does and closes #3, leaving the reason for the retry to the linked issue rather than stating it in the description.\"}, \"practiceSlug\": \"describes-changes\", \"supersedesThreadKey\": \"60000000-0000-4000-8000-000000000002\", \"title\": \"Description names the change but not the reason\"}, {\"action\": \"WITHHOLD\", \"basedOn\": [\"30000000-0000-4000-8000-000000000001\", \"40000000-0000-4000-8000-000000000001\"], \"destination\": \"CONVERSATION\", \"practiceSlug\": \"handles-errors\", \"witnessIds\": [], \"withholdReason\": \"BELOW_BAR\"}]}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call-8",
+                  "type": "function",
+                  "function": {
+                    "name": "publish_package",
+                    "arguments": "{\"draftId\": \"0334a306ab18447960d9cd7a68e7aa13cc2fbc3f021580970526a4689c0e2124\"}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "packages": [
+      {
+        "basisResultIds": [
+          "30000000-0000-4000-8000-000000000002",
+          "30000000-0000-4000-8000-000000000001"
+        ],
+        "composition": [
+          {
+            "destination": "ON_WORK",
+            "resultIds": [
+              "30000000-0000-4000-8000-000000000002",
+              "30000000-0000-4000-8000-000000000001"
+            ],
+            "summary": "The description says what changes (\u201cWraps the client call.\u201d) but not why the retry is needed. A sentence or two on the problem it solves \u2014 e.g. that a fetch failing once now succeeds on a retry \u2014 would let a reader judge whether this is the right fix for #3 without reopening the diff.",
+            "notes": [],
+            "withheldReason": null,
+            "trace": {
+              "copies": [
+                {
+                  "kind": "SUMMARY",
+                  "position": 0,
+                  "basedOn": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000002",
+                      "problemId": null
+                    },
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000002",
+                      "problemId": "40000000-0000-4000-8000-000000000002"
+                    }
+                  ]
+                }
+              ],
+              "withheld": [
+                {
+                  "basedOn": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "problemId": null
+                    }
+                  ],
+                  "reason": "NO_MATERIAL_CHANGE",
+                  "witnessIds": [
+                    "comment:context/comments.json:501"
+                  ]
+                }
+              ],
+              "replacesId": null,
+              "primaryResultId": null
+            },
+            "page": null
+          }
+        ],
+        "publicComposition": true,
+        "publicationContext": "v1:7:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "editOf": null
+      },
+      {
+        "basisResultIds": [
+          "30000000-0000-4000-8000-000000000001"
+        ],
+        "composition": [
+          {
+            "destination": "PRACTICE_PAGE",
+            "resultIds": [
+              "30000000-0000-4000-8000-000000000001"
+            ],
+            "summary": null,
+            "notes": [],
+            "withheldReason": null,
+            "trace": {
+              "copies": [
+                {
+                  "kind": "SUMMARY",
+                  "position": 0,
+                  "basedOn": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "problemId": null
+                    },
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "problemId": "40000000-0000-4000-8000-000000000001"
+                    }
+                  ]
+                }
+              ],
+              "withheld": [],
+              "replacesId": null,
+              "primaryResultId": "30000000-0000-4000-8000-000000000001"
+            },
+            "page": {
+              "title": "Swallowed failures keep recurring",
+              "body": "Across two fetch changes the catch block dropped the failure: in #5 it returned an empty list, and in #7, \"Retry record fetches\", the catch returns null without logging or rethrowing the IOException. Each time a caller sees only an empty result and cannot tell the fetch failed. A reviewer had to call this out on the work for it to surface.",
+              "nextStep": "Before merging a handler, ask what the caller will do with the failure; if nothing, record it or rethrow instead of returning a default."
+            }
+          }
+        ],
+        "publicComposition": false,
+        "publicationContext": null,
+        "editOf": null
+      },
+      {
+        "basisResultIds": [
+          "30000000-0000-4000-8000-000000000002",
+          "30000000-0000-4000-8000-000000000001"
+        ],
+        "composition": [
+          {
+            "destination": "CONVERSATION",
+            "resultIds": [
+              "30000000-0000-4000-8000-000000000002"
+            ],
+            "summary": "Description names the change but not the reason\n\nSituation: The PR description for the retry change says only what it does and closes #3, leaving the reason for the retry to the linked issue rather than stating it in the description.\n\nCapability: The developer can judge a description's adequacy by whether a reader who has not opened the issue can tell why the change is needed, not just what it touches.\n\nEvidence: In the \"Retry record fetches\" PR, the description's only lines are \"Wraps the client call.\" and \"Closes #3.\"; the purpose is not stated.\n\nIn conversation: The developer states why this change is needed in a way a reader can judge without opening issue #3, or identifies what the description should add.",
+            "notes": [],
+            "withheldReason": null,
+            "trace": {
+              "copies": [
+                {
+                  "kind": "CHAT_TURN",
+                  "position": 0,
+                  "basedOn": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000002",
+                      "problemId": null
+                    },
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000002",
+                      "problemId": "40000000-0000-4000-8000-000000000002"
+                    }
+                  ]
+                }
+              ],
+              "withheld": [],
+              "replacesId": "60000000-0000-4000-8000-000000000002",
+              "primaryResultId": "30000000-0000-4000-8000-000000000002"
+            },
+            "page": null
+          },
+          {
+            "destination": "CONVERSATION",
+            "resultIds": [
+              "30000000-0000-4000-8000-000000000001"
+            ],
+            "summary": null,
+            "notes": [],
+            "withheldReason": "COMPOSER_WITHHELD",
+            "trace": {
+              "copies": [],
+              "withheld": [
+                {
+                  "basedOn": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "problemId": null
+                    },
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "problemId": "40000000-0000-4000-8000-000000000001"
+                    }
+                  ],
+                  "reason": "BELOW_BAR",
+                  "witnessIds": []
+                }
+              ],
+              "replacesId": null,
+              "primaryResultId": "30000000-0000-4000-8000-000000000001"
+            },
+            "page": null
+          }
+        ],
+        "publicComposition": false,
+        "publicationContext": null,
+        "editOf": null
+      }
+    ],
+    "reviewStops": [],
+    "handedOn": null,
+    "calls": [
+      {
+        "system": "589e8428aef21d6493632f86116fe7c9ba11d8fe634c0174fab192f5b73a2830",
+        "tools": "9274edada8ad6668294d6de24a0f4c331676413fc3ed4e83b1027887e72a080e",
+        "messages": [
+          {
+            "role": "user",
+            "text": {
+              "sha256": "3e595903d3fdc2e24186d86d2dc931728a1cb23fb910e287e9e421b88aaaeb59",
+              "length": 20354
+            }
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "name": "check_package",
+                "arguments": {
+                  "decisions": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "disposition": "NO_MATERIAL_CHANGE",
+                      "witnessIds": [
+                        "comment:context/comments.json:501"
+                      ]
+                    },
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000002",
+                      "disposition": "RAISE"
+                    }
+                  ],
+                  "inline": [],
+                  "summary": {
+                    "basedOn": [
+                      "30000000-0000-4000-8000-000000000002",
+                      "40000000-0000-4000-8000-000000000002"
+                    ],
+                    "body": "The description says what changes (\u201cWraps the client call.\u201d) but not why the retry is needed. A sentence or two on the problem it solves \u2014 e.g. that a fetch failing once now succeeds on a retry \u2014 would let a reader judge whether this is the right fix for #3 without reopening the diff."
+                  }
+                }
+              }
+            ],
+            "text": {
+              "sha256": "010cb1100d5fcef1c33447745da29c1a2b639c4a815fddb0c24ac0daeb92b1ef",
+              "length": 2675
+            }
+          },
+          {
+            "role": "tool",
+            "text": "{\"draftId\":\"627ec6c6e33bce4e0c1c9a98d8a2bf12dd1575a2fd8c54aca4b3fc08a0f6faa8\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+          }
+        ]
+      },
+      {
+        "system": "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
+        "tools": "61d3ebe7e6e2dfd9d500a28f233ee909bc1caac5acbda6dd0e1a1e37e93add5a",
+        "messages": [
+          {
+            "role": "user",
+            "text": {
+              "sha256": "74c59f8438e599169bb3c4efeaab52b7e0f3c3888aae0ddcd04fa32d0fd4d3d4",
+              "length": 17450
+            }
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "name": "check_package",
+                "arguments": {
+                  "feedback": [
+                    {
+                      "destination": "PRACTICE_PAGE",
+                      "practiceSlug": "handles-errors",
+                      "basedOn": [
+                        "30000000-0000-4000-8000-000000000001",
+                        "40000000-0000-4000-8000-000000000001"
+                      ],
+                      "action": "NEW",
+                      "title": "Swallowed failures keep recurring",
+                      "body": "Across two fetch changes the catch block dropped the failure: in #5 it returned an empty list, and in #7, \"Retry record fetches\", the catch returns null without logging or rethrowing the IOException. Each time a caller sees only an empty result and cannot tell the fetch failed. A reviewer had to call this out on the work for it to surface.",
+                      "nextStep": "Before merging a handler, ask what the caller will do with the failure; if nothing, record it or rethrow instead of returning a default."
+                    }
+                  ]
+                }
+              }
+            ],
+            "text": "I need to work through this."
+          },
+          {
+            "role": "tool",
+            "text": "{\"draftId\":\"407a889e55f36c5844978b4f0d181fc283432642afc4941207a7a4e2505cdfc8\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+          }
+        ]
+      },
+      {
+        "system": "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
+        "tools": "5865ccc8a378eb2faffec36f1d411aa9ecfbe632bbe80321478ea9acc5f7183d",
+        "messages": [
+          {
+            "role": "user",
+            "text": {
+              "sha256": "7653014ad1f197a5500dc2dddb4f3c8624c16ee7ada3f6ab00fa1bf4ec074db8",
+              "length": 15353
+            }
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "name": "check_package",
+                "arguments": {
+                  "feedback": [
+                    {
+                      "destination": "CONVERSATION",
+                      "practiceSlug": "describes-changes",
+                      "basedOn": [
+                        "30000000-0000-4000-8000-000000000002",
+                        "40000000-0000-4000-8000-000000000002"
+                      ],
+                      "action": "SUPERSEDE",
+                      "supersedesThreadKey": "60000000-0000-4000-8000-000000000002",
+                      "title": "Description names the change but not the reason",
+                      "notes": {
+                        "situation": "The PR description for the retry change says only what it does and closes #3, leaving the reason for the retry to the linked issue rather than stating it in the description.",
+                        "capability": "The developer can judge a description's adequacy by whether a reader who has not opened the issue can tell why the change is needed, not just what it touches.",
+                        "evidenceSummary": "In the \"Retry record fetches\" PR, the description's only lines are \"Wraps the client call.\" and \"Closes #3.\"; the purpose is not stated.",
+                        "inConversationLearning": "The developer states why this change is needed in a way a reader can judge without opening issue #3, or identifies what the description should add."
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "text": "I've reviewed the admitted results, source, history, and open destinations. Here's my decision:\n\n- **describes-changes** \u2014 CONVERSATION is open and the current result is `NOT_MET` on the missing reason, and a prepared (not-yet-delivered) entry exists for this same destination and practice. I'll write notes and supersede that entry.\n- **handles-errors** \u2014 CONVERSATION is open, but the earlier card \"record each failure you catch\" was delivered on the practice page with a CURRENT claim, and the current concern is the same. Nothing material is added on this destination, so I'll record a WITHHOLD."
+          },
+          {
+            "role": "tool",
+            "text": "Package not checked; nothing was accepted. #1: validated a CONVERSATION piece for describes-changes (SUPERSEDE); 1/1 used on that destination. Decide all eligible practices: {handles-errors=[CONVERSATION]}"
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "name": "check_package",
+                "arguments": {
+                  "feedback": [
+                    {
+                      "action": "SUPERSEDE",
+                      "basedOn": [
+                        "30000000-0000-4000-8000-000000000002",
+                        "40000000-0000-4000-8000-000000000002"
+                      ],
+                      "destination": "CONVERSATION",
+                      "notes": {
+                        "capability": "The developer can judge a description's adequacy by whether a reader who has not opened the issue can tell why the change is needed, not just what it touches.",
+                        "evidenceSummary": "In the \"Retry record fetches\" PR, the description's only lines are \"Wraps the client call.\" and \"Closes #3.\"; the purpose is not stated.",
+                        "inConversationLearning": "The developer states why this change is needed in a way a reader can judge without opening issue #3, or identifies what the description should add.",
+                        "situation": "The PR description for the retry change says only what it does and closes #3, leaving the reason for the retry to the linked issue rather than stating it in the description."
+                      },
+                      "practiceSlug": "describes-changes",
+                      "supersedesThreadKey": "60000000-0000-4000-8000-000000000002",
+                      "title": "Description names the change but not the reason"
+                    },
+                    {
+                      "action": "WITHHOLD",
+                      "basedOn": [
+                        "30000000-0000-4000-8000-000000000001",
+                        "40000000-0000-4000-8000-000000000001"
+                      ],
+                      "destination": "CONVERSATION",
+                      "practiceSlug": "handles-errors",
+                      "witnessIds": [],
+                      "withholdReason": "NO_MATERIAL_CHANGE"
+                    }
+                  ]
+                }
+              }
+            ],
+            "text": "The check requires a decision for every eligible practice on the open destination. I'll add the WITHHOLD for handles-errors."
+          },
+          {
+            "role": "tool",
+            "text": "Package not checked; nothing was accepted. #1: validated a CONVERSATION piece for describes-changes (SUPERSEDE); 1/1 used on that destination.\n#2: NO_MATERIAL_CHANGE rests on feedback recorded as delivered on CONVERSATION for handles-errors in the delivered-feedback history: not withdrawn, with its words, its claim still current, delivered before this work was captured, for each NOT_MET practice in basedOn. The history does not establish that prerequisite; prepared feedback and other destinations do not count. Decide this destination on its own evidence: the piece it supports, or WITHHOLD with BELOW_BAR. Skipped. Decide all eligible practices: {handles-errors=[CONVERSATION]}"
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "name": "check_package",
+                "arguments": {
+                  "feedback": [
+                    {
+                      "action": "SUPERSEDE",
+                      "basedOn": [
+                        "30000000-0000-4000-8000-000000000002",
+                        "40000000-0000-4000-8000-000000000002"
+                      ],
+                      "destination": "CONVERSATION",
+                      "notes": {
+                        "capability": "The developer can judge a description's adequacy by whether a reader who has not opened the issue can tell why the change is needed, not just what it touches.",
+                        "evidenceSummary": "In the \"Retry record fetches\" PR, the description's only lines are \"Wraps the client call.\" and \"Closes #3.\"; the purpose is not stated.",
+                        "inConversationLearning": "The developer states why this change is needed in a way a reader can judge without opening issue #3, or identifies what the description should add.",
+                        "situation": "The PR description for the retry change says only what it does and closes #3, leaving the reason for the retry to the linked issue rather than stating it in the description."
+                      },
+                      "practiceSlug": "describes-changes",
+                      "supersedesThreadKey": "60000000-0000-4000-8000-000000000002",
+                      "title": "Description names the change but not the reason"
+                    },
+                    {
+                      "action": "WITHHOLD",
+                      "basedOn": [
+                        "30000000-0000-4000-8000-000000000001",
+                        "40000000-0000-4000-8000-000000000001"
+                      ],
+                      "destination": "CONVERSATION",
+                      "practiceSlug": "handles-errors",
+                      "witnessIds": [],
+                      "withholdReason": "BELOW_BAR"
+                    }
+                  ]
+                }
+              }
+            ],
+            "text": "The NO_MATERIAL_CHANGE reason can't rest on the practice-page card, since that was delivered on a different destination. CONVERSATION's own evidence doesn't support that reason, so I'll withhold handles-errors here with BELOW_BAR."
+          },
+          {
+            "role": "tool",
+            "text": "{\"draftId\":\"0334a306ab18447960d9cd7a68e7aa13cc2fbc3f021580970526a4689c0e2124\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+          }
+        ]
+      }
+    ]
+  }
+}
