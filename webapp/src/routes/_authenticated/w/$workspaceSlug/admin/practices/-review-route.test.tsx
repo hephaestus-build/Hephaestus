@@ -53,6 +53,7 @@ const membership = (overrides: Partial<WorkspaceMembership>): WorkspaceMembershi
 	hidden: false,
 	reviewSelected: true,
 	eligibleForPracticeReview: true,
+	roleSource: "PROVIDER",
 	publicActivityAnswered: null,
 	...overrides,
 });

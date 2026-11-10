@@ -105,6 +105,7 @@ const membership: WorkspaceMembership = {
 	},
 	role: "MEMBER",
 	eligibleForPracticeReview: true,
+	roleSource: "PROVIDER",
 	publicActivityAnswered: null,
 	hidden: false,
 	reviewSelected: true,

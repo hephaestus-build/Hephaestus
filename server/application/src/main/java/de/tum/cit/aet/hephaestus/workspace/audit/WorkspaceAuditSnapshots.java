@@ -38,7 +38,9 @@ public final class WorkspaceAuditSnapshots {
             @Nullable String providerKind,
             @Nullable Instant rotatedAt) implements ConfigAuditSnapshot {}
 
-    public record RoleSnapshot(@Nullable String role, boolean hidden) implements ConfigAuditSnapshot {}
+    /** {@code roleSource} is null in rows written before the source was recorded. */
+    public record RoleSnapshot(
+            @Nullable String role, boolean hidden, @Nullable String roleSource) implements ConfigAuditSnapshot {}
 
     public record StatusSnapshot(@Nullable String status) implements ConfigAuditSnapshot {
         public static StatusSnapshot of(Workspace w) {

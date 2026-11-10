@@ -46,6 +46,7 @@ export function ownMembership(
 		hidden: false,
 		reviewSelected: true,
 		eligibleForPracticeReview: true,
+		roleSource: "PROVIDER",
 		publicActivityAnswered: null,
 		...overrides,
 	};

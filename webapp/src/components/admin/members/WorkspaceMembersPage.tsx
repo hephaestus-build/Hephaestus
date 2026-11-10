@@ -27,6 +27,9 @@ interface WorkspaceMembersPageProps {
 	onRoleChange?: (member: WorkspaceMemberRow, role: WorkspaceRole, trigger: HTMLElement) => void;
 	assignableRoles?: readonly WorkspaceRole[];
 	pendingRoleAccountId?: string;
+	providerLabel?: string;
+	onFollowProvider?: (member: WorkspaceMemberRow) => void;
+	pendingFollowAccountId?: string;
 	teamsError?: unknown;
 	teamsRetrying?: boolean;
 	onRetryTeams?: () => void;
@@ -51,6 +54,9 @@ export function WorkspaceMembersPage({
 	onRoleChange,
 	assignableRoles,
 	pendingRoleAccountId,
+	providerLabel,
+	onFollowProvider,
+	pendingFollowAccountId,
 	view,
 	onViewChange,
 	renderPageLink,
@@ -96,6 +102,9 @@ export function WorkspaceMembersPage({
 						onRoleChange={onRoleChange}
 						assignableRoles={assignableRoles}
 						pendingRoleAccountId={pendingRoleAccountId}
+						providerLabel={providerLabel}
+						onFollowProvider={onFollowProvider}
+						pendingFollowAccountId={pendingFollowAccountId}
 						view={view}
 						onViewChange={onViewChange}
 						renderPageLink={renderPageLink}

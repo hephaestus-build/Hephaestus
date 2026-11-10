@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794308989911-1" author="hephaestus">
+        <comment>A member's role records who decided it: provider sync (PROVIDER) or a person (PERSON). Sync applies only a PROVIDER role. An owner role was always kept from sync, so every existing owner starts as PERSON and every other role as PROVIDER, which is what sync did with it before.</comment>
+        <sql splitStatements="false">
+ALTER TABLE membership ADD COLUMN role_source varchar(16) DEFAULT 'PROVIDER' NOT NULL;
+UPDATE membership SET role_source = 'PERSON' WHERE role = 'OWNER';
+ALTER TABLE membership ADD CONSTRAINT ck_membership_role_source CHECK (role_source IN ('PROVIDER', 'PERSON'));
+ALTER TABLE membership ADD CONSTRAINT ck_membership_owner_role_source CHECK (role &lt;&gt; 'OWNER' OR role_source = 'PERSON');
+        </sql>
+        <rollback>
+ALTER TABLE membership DROP CONSTRAINT ck_membership_owner_role_source;
+ALTER TABLE membership DROP CONSTRAINT ck_membership_role_source;
+ALTER TABLE membership DROP COLUMN role_source;
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

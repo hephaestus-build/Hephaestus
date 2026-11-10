@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermissionsException;
 import de.tum.cit.aet.hephaestus.workspace.exception.InvalidWorkspaceSlugException;
 import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
+import de.tum.cit.aet.hephaestus.workspace.exception.OwnerRoleFollowsNoProviderException;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceSlugConflictException;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeBlockedException;
@@ -72,6 +73,14 @@ public class WorkspaceControllerAdvice {
                 HttpStatus.FORBIDDEN,
                 "Insufficient workspace permissions",
                 Objects.requireNonNullElse(exception.getMessage(), "Access denied"));
+    }
+
+    @ExceptionHandler(OwnerRoleFollowsNoProviderException.class)
+    ProblemDetail handleOwnerRoleFollowsNoProvider(OwnerRoleFollowsNoProviderException exception) {
+        return problem(
+                HttpStatus.CONFLICT,
+                "Owner role set by a person",
+                Objects.requireNonNullElse(exception.getMessage(), "An owner's role is always set by a person"));
     }
 
     @ExceptionHandler(LastOwnerRemovalException.class)

@@ -121,6 +121,7 @@ export { exchangeClientSignIn } from './sdk/exchangeClientSignIn.gen.js';
 export { exportScanSarif } from './sdk/exportScanSarif.gen.js';
 export { fileAllSavedProductFeedback } from './sdk/fileAllSavedProductFeedback.gen.js';
 export { fileSavedProductFeedback } from './sdk/fileSavedProductFeedback.gen.js';
+export { followProviderRole } from './sdk/followProviderRole.gen.js';
 export { getAccountAiChoice } from './sdk/getAccountAiChoice.gen.js';
 export { getActivityFacets } from './sdk/getActivityFacets.gen.js';
 export { getActivityPeople } from './sdk/getActivityPeople.gen.js';

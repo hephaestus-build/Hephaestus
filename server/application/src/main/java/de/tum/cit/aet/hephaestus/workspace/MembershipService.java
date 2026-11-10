@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermissionsException;
 import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
+import de.tum.cit.aet.hephaestus.workspace.exception.OwnerRoleFollowsNoProviderException;
 import java.time.Clock;
 import java.util.Collection;
 import java.util.HashMap;
@@ -93,7 +94,7 @@ public class MembershipService {
                 var member = existing.get();
                 var before = snapshot(member);
                 boolean rejoining = member.getLeftAt() != null;
-                if (member.getRole() != Membership.WorkspaceRole.OWNER) member.setRole(entry.getValue());
+                applyProviderRole(member, entry.getValue(), rejoining);
                 member.setLeftAt(null);
                 if (rejoining) recordProviderGrant(member);
                 else recordProviderRoleChange(member, before);
@@ -122,11 +123,21 @@ public class MembershipService {
             var member = existing.get();
             var before = snapshot(member);
             boolean rejoining = member.getLeftAt() != null;
-            member.setRole(role);
+            applyProviderRole(member, role, rejoining);
             member.setLeftAt(null);
             if (rejoining) recordProviderGrant(member);
             else recordProviderRoleChange(member, before);
         } else recordProviderGrant(createMembership(workspace, accountId, role));
+    }
+
+    /**
+     * Sets the provider's role unless a person decided this member's role. A member who comes back starts again from
+     * the provider's role: an override does not outlive the membership it was made for. An owner keeps the role.
+     */
+    private static void applyProviderRole(Membership member, Membership.WorkspaceRole role, boolean rejoining) {
+        if (member.getRole() == Membership.WorkspaceRole.OWNER) return;
+        if (rejoining) member.setRoleSource(Membership.RoleSource.PROVIDER);
+        if (member.getRoleSource() == Membership.RoleSource.PROVIDER) member.setRole(role);
     }
 
     private void recordProviderGrant(Membership member) {
@@ -162,6 +173,7 @@ public class MembershipService {
             var member = existing.get();
             if (member.getLeftAt() == null) throw new IllegalArgumentException("This account is already a member.");
             member.setLeftAt(null);
+            member.setRoleSource(Membership.RoleSource.PROVIDER);
             member.setRole(role);
             return memberships.save(member);
         }
@@ -180,6 +192,7 @@ public class MembershipService {
         authorizeRoleChange(workspace, accountId, existing.orElse(null), role);
         if (existing.isEmpty()) {
             var member = createMembership(workspace, accountId, role);
+            member.setRoleSource(Membership.RoleSource.PERSON);
             configAudit.record(ConfigAuditEntry.created(
                     ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, snapshot(member)));
             return member;
@@ -187,7 +200,29 @@ public class MembershipService {
         var member = existing.get();
         var before = snapshot(member);
         member.setRole(role);
+        member.setRoleSource(Membership.RoleSource.PERSON);
         member.setLeftAt(null);
+        configAudit.record(ConfigAuditEntry.updated(
+                ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, before, snapshot(member)));
+        return memberships.save(member);
+    }
+
+    /**
+     * Lets provider sync decide this member's role again. The role stays as it is until the next sync of the
+     * organization or group roster applies the provider's role. An owner role is a person's decision only: change
+     * it with {@link #assignRole} first, which keeps its own checks.
+     */
+    public Membership followProviderRole(Long workspaceId, Long accountId) {
+        var workspace = lockForMembershipChange(workspaceId);
+        var member = requireMembership(workspaceId, accountId);
+        if (member.getLeftAt() != null) throw new EntityNotFoundException("Membership", accountId);
+        if (member.getRole() == Membership.WorkspaceRole.OWNER)
+            throw new OwnerRoleFollowsNoProviderException(workspace.getWorkspaceSlug());
+        // The role itself does not change now; the next sync changes it, and sync never makes or unmakes an owner.
+        authorizeRoleChange(workspace, accountId, member, member.getRole());
+        if (member.getRoleSource() == Membership.RoleSource.PROVIDER) return member;
+        var before = snapshot(member);
+        member.setRoleSource(Membership.RoleSource.PROVIDER);
         configAudit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, before, snapshot(member)));
         return memberships.save(member);
@@ -323,6 +358,9 @@ public class MembershipService {
     }
 
     private static WorkspaceAuditSnapshots.RoleSnapshot snapshot(Membership member) {
-        return new WorkspaceAuditSnapshots.RoleSnapshot(member.getRole().name(), member.isHidden());
+        return new WorkspaceAuditSnapshots.RoleSnapshot(
+                member.getRole().name(),
+                member.isHidden(),
+                member.getRoleSource().name());
     }
 }

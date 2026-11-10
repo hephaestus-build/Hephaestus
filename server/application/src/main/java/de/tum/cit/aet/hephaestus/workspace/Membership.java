@@ -53,6 +53,12 @@ public class Membership {
     @Column(name = "role", nullable = false, length = 16)
     private WorkspaceRole role = WorkspaceRole.MEMBER;
 
+    /** Who decided {@link #role}: provider sync applies only a {@link RoleSource#PROVIDER} role. */
+    @Enumerated(EnumType.STRING)
+    @ColumnDefault("'PROVIDER'")
+    @Column(name = "role_source", nullable = false, length = 16)
+    private RoleSource roleSource = RoleSource.PROVIDER;
+
     @ColumnDefault("false")
     @Column(name = "hidden", nullable = false)
     private boolean hidden = false;
@@ -73,6 +79,12 @@ public class Membership {
 
     @Column(name = "left_at")
     private @Nullable Instant leftAt;
+
+    /** An owner role is always a person's decision, so setting it marks the role {@link RoleSource#PERSON}. */
+    public void setRole(WorkspaceRole role) {
+        this.role = role;
+        if (role == WorkspaceRole.OWNER) roleSource = RoleSource.PERSON;
+    }
 
     public @Nullable Long getAccountId() {
         return id.getAccountId();
@@ -98,6 +110,15 @@ public class Membership {
         @Nullable
         @Column(name = "account_id", nullable = false)
         private Long accountId;
+    }
+
+    /**
+     * Who decided a member's role. Provider sync sets a PROVIDER role from the organization or group roster and
+     * leaves a PERSON role alone. An owner role is always a person's decision.
+     */
+    public enum RoleSource {
+        PROVIDER,
+        PERSON
     }
 
     public enum WorkspaceRole {

@@ -170,6 +170,7 @@ export { exchangeClientSignInMutation } from './react-query/exchangeClientSignIn
 export { exportScanSarifOptions, exportScanSarifQueryKey } from './react-query/exportScanSarif.gen.js';
 export { fileAllSavedProductFeedbackMutation } from './react-query/fileAllSavedProductFeedback.gen.js';
 export { fileSavedProductFeedbackMutation } from './react-query/fileSavedProductFeedback.gen.js';
+export { followProviderRoleMutation } from './react-query/followProviderRole.gen.js';
 export { getAccountAiChoiceOptions, getAccountAiChoiceQueryKey } from './react-query/getAccountAiChoice.gen.js';
 export { getActivityFacetsOptions, getActivityFacetsQueryKey } from './react-query/getActivityFacets.gen.js';
 export { getActivityPeopleOptions, getActivityPeopleQueryKey } from './react-query/getActivityPeople.gen.js';

@@ -89,6 +89,18 @@ interface WorkspaceMembersTableProps {
 	assignableRoles?: readonly WorkspaceRole[];
 	/** The member whose role change is in flight; only that member's role control waits. */
 	pendingRoleAccountId?: string;
+	/**
+	 * The provider whose organization or group roster sets roles here, such as GitHub. Absent where
+	 * no provider sets roles, so the table names no source.
+	 */
+	providerLabel?: string;
+	/**
+	 * Present for an admin. Lets the provider set a role that someone set in Hephaestus; the role
+	 * changes at the next sync.
+	 */
+	onFollowProvider?: (member: WorkspaceMemberRow) => void;
+	/** The member whose role is about to follow the provider; only that member's action waits. */
+	pendingFollowAccountId?: string;
 	view: WorkspaceMembersTableView;
 	onViewChange: (patch: Partial<WorkspaceMembersTableView>) => void;
 	renderPageLink?: (page: number, props: ComponentProps<"a">) => ReactElement;
@@ -136,6 +148,38 @@ function MemberRoleSelect({ member, items, pending, onRoleChange }: MemberRoleSe
 				))}
 			</SelectContent>
 		</Select>
+	);
+}
+
+interface RoleSourceNoteProps {
+	member: WorkspaceMemberRow;
+	providerLabel: string;
+	onFollowProvider?: (member: WorkspaceMemberRow) => void;
+	pending: boolean;
+}
+
+/** Who set a member's role, and for a role set in Hephaestus, the way back to the provider's. */
+function RoleSourceNote({ member, providerLabel, onFollowProvider, pending }: RoleSourceNoteProps) {
+	const { role, roleSource } = member.membership;
+	if (roleSource === "PROVIDER") {
+		return <p className="text-xs text-muted-foreground">From {providerLabel}</p>;
+	}
+	return (
+		<div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+			<span>Set in Hephaestus</span>
+			{onFollowProvider && role !== "OWNER" && (
+				<Button
+					variant="link"
+					size="inline"
+					disabled={pending}
+					aria-label={`Use ${providerLabel} role for ${member.name}`}
+					onClick={() => onFollowProvider(member)}
+				>
+					{pending && <Spinner />}
+					Use {providerLabel} role
+				</Button>
+			)}
+		</div>
 	);
 }
 
@@ -194,6 +238,9 @@ export function WorkspaceMembersTable({
 	onRoleChange,
 	assignableRoles = ALL_ROLES,
 	pendingRoleAccountId,
+	providerLabel,
+	onFollowProvider,
+	pendingFollowAccountId,
 	view,
 	onViewChange,
 	renderPageLink,
@@ -252,16 +299,28 @@ export function WorkspaceMembersTable({
 				header: () => "Role",
 				cell: ({ row }) => {
 					const { account, role } = row.original.membership;
-					if (!onRoleChange || !assignableRoles.includes(role)) {
-						return WORKSPACE_ROLE_LABELS[role];
-					}
+					const manages = onRoleChange !== undefined && assignableRoles.includes(role);
 					return (
-						<MemberRoleSelect
-							member={row.original}
-							items={roleItems}
-							pending={pendingRoleAccountId === account.id}
-							onRoleChange={onRoleChange}
-						/>
+						<div className="space-y-1">
+							{manages ? (
+								<MemberRoleSelect
+									member={row.original}
+									items={roleItems}
+									pending={pendingRoleAccountId === account.id}
+									onRoleChange={onRoleChange}
+								/>
+							) : (
+								WORKSPACE_ROLE_LABELS[role]
+							)}
+							{providerLabel !== undefined && (
+								<RoleSourceNote
+									member={row.original}
+									providerLabel={providerLabel}
+									onFollowProvider={manages ? onFollowProvider : undefined}
+									pending={pendingFollowAccountId === account.id}
+								/>
+							)}
+						</div>
 					);
 				},
 			}),
@@ -326,7 +385,16 @@ export function WorkspaceMembersTable({
 					]
 				: []),
 		]);
-	}, [onToggleHidden, onRoleChange, assignableRoles, pendingRoleAccountId, showsPublicActivity]);
+	}, [
+		onToggleHidden,
+		onRoleChange,
+		assignableRoles,
+		pendingRoleAccountId,
+		providerLabel,
+		onFollowProvider,
+		pendingFollowAccountId,
+		showsPublicActivity,
+	]);
 
 	const sortedTeams = [...teams].sort((a, b) => a.name.localeCompare(b.name));
 

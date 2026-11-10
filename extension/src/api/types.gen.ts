@@ -7297,6 +7297,10 @@ export type WorkspaceMembership = {
     publicActivityAnswered: boolean | null;
     reviewSelected: boolean;
     role: 'OWNER' | 'ADMIN' | 'MEMBER';
+    /**
+     * Who decided the role: PROVIDER while the organization or group roster sets it at each sync, PERSON after a person set it. An owner role is always PERSON.
+     */
+    roleSource: 'PROVIDER' | 'PERSON';
 };
 
 /**
@@ -12177,6 +12181,37 @@ export type SetMemberHiddenResponses = {
 };
 
 export type SetMemberHiddenResponse = SetMemberHiddenResponses[keyof SetMemberHiddenResponses];
+
+export type FollowProviderRoleData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        accountId: string;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/members/{accountId}/role-override';
+};
+
+export type FollowProviderRoleErrors = {
+    /**
+     * The member is an owner, whose role is always set by a person
+     */
+    409: ProblemDetail;
+};
+
+export type FollowProviderRoleError = FollowProviderRoleErrors[keyof FollowProviderRoleErrors];
+
+export type FollowProviderRoleResponses = {
+    /**
+     * The member, whose role the provider sets from the next sync
+     */
+    200: WorkspaceMembership;
+};
+
+export type FollowProviderRoleResponse = FollowProviderRoleResponses[keyof FollowProviderRoleResponses];
 
 export type GetMentorConversationData = {
     body?: never;

@@ -45,6 +45,7 @@ function member(
 		hidden: false,
 		reviewSelected: true,
 		eligibleForPracticeReview: true,
+		roleSource: "PROVIDER",
 		publicActivityAnswered: null,
 		...overrides,
 	};
@@ -469,6 +470,39 @@ describe("workspace members route", () => {
 		);
 
 		await waitFor(() => expect(hidden).toStrictEqual({ accountId: "8", body: { hidden: true } }));
+	});
+
+	it("lets GitHub set a role again that someone set in Hephaestus", async () => {
+		let followed: string | undefined;
+		let members = [ADA, { ...SAM, roleSource: "PERSON" as const }];
+		mockMembersRoute();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/members", () =>
+				HttpResponse.json(membershipPage(members)),
+			),
+			http.delete("*/workspaces/:workspaceSlug/members/:accountId/role-override", ({ params }) => {
+				followed = String(params.accountId);
+				members = [ADA, SAM];
+				return HttpResponse.json(SAM);
+			}),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole(
+				"button",
+				{ name: "Use GitHub role for Sam Unclaimed" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+
+		await waitFor(() => expect(followed).toBe("8"));
+		await waitFor(() =>
+			expect(
+				screen.queryByRole("button", { name: "Use GitHub role for Sam Unclaimed" }),
+			).toBeNull(),
+		);
 	});
 
 	it("changes a role by account id and refreshes the list", async () => {
