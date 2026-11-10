@@ -1997,6 +1997,7 @@ Rehearse a restore on a copy of the instance before you need one.
 #### Recover the live installation
 
 1. Close traffic and provider reception. Stop application roles and sandboxes, and pause reconciliation.
+   Provider deliveries that arrive while reception is closed are lost. Step 10 recovers their effect.
 2. Keep a copy of the failed data and record the chosen recovery point and expected lost writes.
 3. Check whether `DATABASE_ADMIN_PASSWORD` changed after the recovery point. If it changed, restore the matching value in the Secret before startup.
    The migration Job sets the passwords of `hephaestus_owner` and `hephaestus_app` again.
@@ -2016,6 +2017,7 @@ Rehearse a restore on a copy of the instance before you need one.
 9. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the [silent checklist](./production-operations-runbook#silent-deployment-checklist).
    Restore the intended live control settings, provider reception and egress. Start the remaining roles and reopen traffic after the checks pass.
 10. Verify every connected provider and feedback destination. Resume reconciliation only after its release and apply mode match the recovered deployment.
+    Then recover the lost deliveries as steps 7 and 8 of [Recovering a wedged broker](./webhook-ingestion-operations#recovering-a-wedged-broker) describe.
 
 ## Upgrades
 
