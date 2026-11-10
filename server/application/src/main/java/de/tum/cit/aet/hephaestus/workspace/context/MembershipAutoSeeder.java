@@ -17,7 +17,7 @@ import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 /**
- * Local development only: makes the first signed-in visitor of a workspace with no members its ADMIN. It is off unless
+ * Makes the first signed-in visitor of a workspace with no members its ADMIN, for the e2e suites. It is off unless
  * {@code hephaestus.workspace.auto-seed-membership} is set, and the server refuses to start with it on under the
  * {@code prod} profile, because an unaudited ADMIN grant must not depend on a profile list being right.
  */

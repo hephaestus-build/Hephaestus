@@ -528,8 +528,7 @@ hephaestus:
             enabled: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:false}
             base-domain: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:}
         init-default: true
-        # Local development only: the first signed-in visitor of a workspace with no members becomes
-        # its ADMIN. The server refuses to start with it on under the prod profile.
+        # On only for the e2e suites (MembershipAutoSeeder).
         auto-seed-membership: false
         default:
             login: ${GITHUB_PAT_LOGIN:hephaestus-build}
