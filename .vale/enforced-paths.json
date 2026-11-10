@@ -237,6 +237,7 @@
 	"docs/decisions/0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md",
 	"docs/decisions/0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md",
 	"docs/decisions/0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md",
+	"docs/decisions/0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",

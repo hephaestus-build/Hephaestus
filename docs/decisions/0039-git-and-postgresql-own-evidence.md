@@ -1,6 +1,6 @@
 # ADR 0039: Git owns repository evidence; PostgreSQL owns captured payloads and references
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md)
 **Date:** 2026-08-30
 **Authors:** Hephaestus maintainers
 **Builds on:** [ADR 0020](0020-context-fabric-everything-is-an-integration.md),
