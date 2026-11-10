@@ -18,17 +18,15 @@ import org.hibernate.type.SqlTypes;
 import tools.jackson.databind.JsonNode;
 
 /**
- * A mounted copy outlives its source job or workspace until its owner acknowledges removal. These
- * stable coordinates deliberately have no cascading foreign keys: a deleted parent is not proof
- * that its server volume was erased. Content and exact identities are cleared after acknowledgement.
+ * The receipt of one attempt's copy of people's data in its folder. Erasure marks it {@code ERASED} in PostgreSQL, and
+ * every server then removes its own folders of the attempt within one reconcile pass. These stable coordinates
+ * deliberately have no cascading foreign keys: retention deletes a receipt only once it is erased. Content and exact
+ * identities are cleared when the erasure completes.
  */
 @Entity
 @Table(
         name = "person_evidence_copy",
-        indexes = {
-            @Index(name = "idx_person_evidence_copy_store", columnList = "store_id,state"),
-            @Index(name = "idx_person_evidence_copy_job", columnList = "job_id")
-        },
+        indexes = @Index(name = "idx_person_evidence_copy_job", columnList = "job_id"),
         uniqueConstraints =
                 @UniqueConstraint(
                         name = "uk_person_evidence_copy_workspace",
@@ -49,9 +47,6 @@ public class PersonEvidenceCopy {
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(name = "store_id", nullable = false)
-    private UUID storeId;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 24)
     private State state = State.CAPTURING;
@@ -59,8 +54,6 @@ public class PersonEvidenceCopy {
     public enum State {
         CAPTURING,
         READY,
-        ERASE_REQUESTED,
-        PURGE_REQUESTED,
         ERASED
     }
 

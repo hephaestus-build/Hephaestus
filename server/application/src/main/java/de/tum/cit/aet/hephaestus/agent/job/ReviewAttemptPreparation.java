@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
+import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -31,6 +32,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
@@ -217,6 +219,13 @@ public class ReviewAttemptPreparation {
         stamp.set(
                 JobEvidenceFiles.CHECKOUTS,
                 objectMapper.valueToTree(JobEvidenceFiles.checkoutDigests(inputDirectories)));
+        // Another server builds each checkout again from its key and checks it against the digest above.
+        var checkoutKeys = new TreeMap<String, CheckoutKey>();
+        for (EvidenceDirectory directory : inputDirectories) {
+            CheckoutKey key = directory.checkout();
+            if (key != null) checkoutKeys.put(directory.target(), key);
+        }
+        stamp.set(JobEvidenceFiles.CHECKOUT_KEYS, objectMapper.valueToTree(checkoutKeys));
         Integer updated = transactionTemplate.execute(
                 status -> jobRepository.updateCapture(jobId, workspaceId, fence.runId(), attempt, stamp));
         if (updated == null || updated != 1) {

@@ -454,7 +454,8 @@ public class ReviewAttemptResults {
     private static boolean transientCapture(@Nullable ItemCaptureException capture) {
         return capture != null
                 && switch (capture.code()) {
-                    case CAPTURE_FAILED, SOURCE_NOT_READY -> true;
+                    // A new attempt captures again on the server that runs it.
+                    case CAPTURE_FAILED, SOURCE_NOT_READY, CHECKOUT_UNVERIFIED -> true;
                     case ITEM_REMOVED,
                             ITEM_NOT_VISIBLE,
                             CONSENT_WITHHELD,

@@ -743,11 +743,10 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
 
     private void receipt(UUID job, String payload) {
         jdbc.update(
-                "INSERT INTO person_evidence_copy(id,workspace_id,job_id,store_id,state,payload) VALUES (?,?,?,?,'READY',CAST(? AS jsonb))",
+                "INSERT INTO person_evidence_copy(id,workspace_id,job_id,state,payload) VALUES (?,?,?,'READY',CAST(? AS jsonb))",
                 UUID.randomUUID(),
                 scenario.workspace().getId(),
                 job,
-                UUID.randomUUID(),
                 payload);
     }
 

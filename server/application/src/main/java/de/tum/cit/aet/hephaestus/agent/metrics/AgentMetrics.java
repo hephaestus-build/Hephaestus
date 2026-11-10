@@ -14,6 +14,8 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_STAGE_DURATION = "agent.job.stage.duration";
     public static final String AGENT_JOB_TOTAL = "agent.job.total";
     public static final String AGENT_RUN_REAPED = "agent.run.reaped";
+    public static final String EVIDENCE_RECONCILE_LAST_SUCCESS = "evidence.reconcile.last.success";
+    public static final String EVIDENCE_RECONCILE_FAILURES = "evidence.reconcile.failures";
     public static final String AGENT_RUN_REAPER_FAILURE = "agent.run.reaper.failure";
     /** Sandboxes taken back, by reason: {@code expired}, {@code start_limit}, {@code idle} or {@code orphan}. */
     public static final String AGENT_SANDBOX_REAPED = "agent.sandbox.reaped";

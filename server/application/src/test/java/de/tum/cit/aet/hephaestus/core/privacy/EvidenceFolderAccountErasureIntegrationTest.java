@@ -16,6 +16,8 @@ import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.CopyUnavailableException;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.ErasedFolders;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopy;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -83,6 +85,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -255,7 +258,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var catalog = catalog(root, recorder);
         catalog.beginCapture(job);
         try {
-            jdbc.update("UPDATE person_evidence_copy SET state='ERASE_REQUESTED' WHERE job_id=?", job.getId());
+            jdbc.update("UPDATE person_evidence_copy SET state='ERASED' WHERE job_id=?", job.getId());
             assertThatThrownBy(() -> recorder.recordCopiedJob(UUID.randomUUID()))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("Evidence capture ownership changed");
@@ -412,7 +415,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var legacy = legacyCopy(workspace, legacyQuoted);
 
         var vouched = jobIn(workspace);
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog, mock(AttemptInputs.class));
         files.beginPersonCapture(vouched);
         recorder.recordCopiedJob(indexed.getId());
         files.prepare(
@@ -595,7 +599,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
             assertThat(catalog.traceCustody(running.getId(), workspace.getId(), 0))
                     .isEqualTo(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
 
-            jdbc.update("UPDATE person_evidence_copy SET state='ERASE_REQUESTED' WHERE job_id=?", running.getId());
+            jdbc.update("UPDATE person_evidence_copy SET state='ERASED' WHERE job_id=?", running.getId());
             String before = payload(running).toString();
             assertThatThrownBy(() -> catalog.indexLateRead(
                             running.getId(),
@@ -607,7 +611,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                     .isInstanceOf(CopyUnavailableException.class);
             assertThat(jdbc.queryForObject(
                             "SELECT state FROM person_evidence_copy WHERE job_id=?", String.class, running.getId()))
-                    .isEqualTo("ERASE_REQUESTED");
+                    .isEqualTo("ERASED");
             assertThat(payload(running).toString()).isEqualTo(before);
             assertThat(catalog.traceCustody(running.getId(), workspace.getId(), 0))
                     .isEqualTo(EvidenceFolderPersonDataCatalog.TraceCustody.NOT_HELD);
@@ -634,7 +638,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 Map.of("attempt", 0, "identities", List.of(), "repositories", List.of(), "dependencies", "COMPLETE"));
         receipt(retried, "READY", Map.of("attempt", 1, "identities", List.of(), "repositories", List.of()));
         UUID retriedErasedReceipt = receipt(retried, "ERASED", Map.of());
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog, mock(AttemptInputs.class));
 
         try (var diagnostics = new Diagnostics()) {
             var vouched = captureCopying(files, recorder, workspace, indexed);
@@ -722,7 +727,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                     .as("refused words were never copied")
                     .isEqualTo("COMPLETE");
 
-            jdbc.update("UPDATE person_evidence_copy SET state='ERASE_REQUESTED' WHERE job_id=?", running.getId());
+            jdbc.update("UPDATE person_evidence_copy SET state='ERASED' WHERE job_id=?", running.getId());
             String before = payload(running).toString();
             assertThatThrownBy(() -> catalog.indexLateRead(
                             running.getId(),
@@ -737,7 +742,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                     .isEmpty();
             assertThat(jdbc.queryForObject(
                             "SELECT state FROM person_evidence_copy WHERE job_id=?", String.class, running.getId()))
-                    .isEqualTo("ERASE_REQUESTED");
+                    .isEqualTo("ERASED");
             assertThat(payload(running).toString()).isEqualTo(before);
         }
     }
@@ -809,12 +814,11 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
     private UUID receipt(ReviewJob job, String state, Map<String, Object> payload) {
         UUID id = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO person_evidence_copy(id,workspace_id,job_id,store_id,state,payload)"
-                        + " VALUES (?,?,?,?,?,CAST(? AS jsonb))",
+                "INSERT INTO person_evidence_copy(id,workspace_id,job_id,state,payload)"
+                        + " VALUES (?,?,?,?,CAST(? AS jsonb))",
                 id,
                 job.getWorkspaceId(),
                 job.getId(),
-                UUID.randomUUID(),
                 state,
                 mapper.writeValueAsString(payload));
         return id;
@@ -879,7 +883,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
             PersonDataCopyRecorder recorder,
             ReviewJob job,
             PersonCopyIdentity identity) {
-        var files = new JobEvidenceFiles(new FabricLayout(store.toString()), jobs, Clock.systemUTC(), catalog);
+        var files = new JobEvidenceFiles(
+                new FabricLayout(store.toString()), jobs, Clock.systemUTC(), catalog, mock(AttemptInputs.class));
         files.beginPersonCapture(job);
         recorder.recordIdentity(identity);
         return files.prepare(
@@ -907,7 +912,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var recorder = new ExactPersonDataCopyRecorder();
         var catalog = catalog(root, recorder);
         var job = job("folder-capture-race");
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog, mock(AttemptInputs.class));
         files.beginPersonCapture(job);
         recorder.recordIdentity(new PersonCopyIdentity("GITLAB", "https://capture-race.example", "42", null));
         var executor = Executors.newSingleThreadExecutor();
@@ -955,7 +961,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var recorder = new ExactPersonDataCopyRecorder();
         var catalog = catalog(root, recorder);
         var job = job("folder-read-only");
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog, mock(AttemptInputs.class));
         files.beginPersonCapture(job);
         try {
             var read = new TransactionTemplate(transactions);
@@ -990,7 +997,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldAcknowledgeOnlyAfterTheSandboxAndItsGatewayArchiveAreRemoved() throws Exception {
+    void shouldReconcileOnlyAfterTheSandboxAndItsGatewayArchiveAreRemoved() throws Exception {
         databaseTestUtils.cleanDatabase();
         var recorder = new ExactPersonDataCopyRecorder();
         var sandboxOwner = mock(AgentSandboxes.class);
@@ -1029,7 +1036,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         Path archive = Files.writeString(root.resolve("input.tar"), "personal evidence archive");
         gateway.register(job.getId(), "credential", archive, "out");
         jdbc.update(
-                "UPDATE person_evidence_copy SET state='ERASE_REQUESTED' WHERE job_id=? AND workspace_id=?",
+                "UPDATE person_evidence_copy SET state='ERASED' WHERE job_id=? AND workspace_id=?",
                 job.getId(),
                 job.getWorkspaceId());
         doAnswer(call -> {
@@ -1042,14 +1049,14 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 .when(sandboxOwner)
                 .release(job.getWorkspaceId(), sandboxId);
 
-        // A replica without the sandbox owner cannot acknowledge the runtime's physical copy.
-        catalog(root, recorder).removeLocalRequests();
+        // PostgreSQL erasure commits first; a replica without the sandbox owner retains the physical copy.
+        assertThat(catalog(root, recorder).removeErasedFolders()).isEqualTo(new ErasedFolders(0, 1));
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
                         String.class,
                         job.getId(),
                         job.getWorkspaceId()))
-                .isEqualTo("ERASE_REQUESTED");
+                .isEqualTo("ERASED");
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM agent_sandbox WHERE id=? AND workspace_id=?",
                         String.class,
@@ -1060,13 +1067,13 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(sandboxCopy).exists();
         assertThat(archive).exists();
 
-        assertThatThrownBy(owner::removeLocalRequests).isInstanceOf(IllegalStateException.class);
+        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(0, 1));
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
                         String.class,
                         job.getId(),
                         job.getWorkspaceId()))
-                .isEqualTo("ERASE_REQUESTED");
+                .isEqualTo("ERASED");
         assertThat(copiedPerson).exists();
         assertThat(sandboxCopy).exists();
         assertThat(archive).exists();
@@ -1089,19 +1096,19 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         Files.delete(archive);
         Files.createDirectory(archive);
         Path obstruction = Files.writeString(archive.resolve("retained"), "personal evidence");
-        assertThatThrownBy(owner::removeLocalRequests).isInstanceOf(UncheckedIOException.class);
+        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(0, 1));
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
                         String.class,
                         job.getId(),
                         job.getWorkspaceId()))
-                .isEqualTo("ERASE_REQUESTED");
+                .isEqualTo("ERASED");
         assertThat(sandboxCopy).doesNotExist();
         assertThat(copiedPerson).exists();
         assertThat(obstruction).exists();
 
         Files.delete(obstruction);
-        owner.removeLocalRequests();
+        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(1, 0));
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
                         String.class,
@@ -1128,7 +1135,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void waitsForTheRuntimeAndErasesEveryAttemptInTwoWorkspacesWithoutTouchingAnotherPerson() throws Exception {
+    void erasesEveryAttemptInTwoWorkspacesAtOnceAndRemovesTheFoldersOnceTheRuntimeReleasesThem() throws Exception {
         databaseTestUtils.cleanDatabase();
         var provider =
                 providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "https://folder.example"));
@@ -1152,7 +1159,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var otherFolder = root.resolve("jobs")
                 .resolve(Long.toString(unrelated.getWorkspaceId()))
                 .resolve(unrelated.getId().toString());
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog, mock(AttemptInputs.class));
         files.bind(first.getId(), 0, "synthetic-indexed-image")
                 .accept(Map.of(
                         "traces/manifest.json",
@@ -1182,18 +1190,25 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(catalog.jobsContaining(person)).containsExactlyInAnyOrder(first.getId(), second.getId());
         assertThat(mapper.writeValueAsString(store.export(selected, person)))
                 .doesNotContain("COPIED-PROFILE", "authorLogin", "authorName");
-        var pool = Executors.newSingleThreadExecutor();
         try {
-            var removal = pool.submit(() -> store.prepareErasure(selected));
-            awaitErasureRequest(first.getId());
-            assertThat(removal.isDone()).isFalse();
+            // The erasure waits for no server: the copies are erased in PostgreSQL when it returns.
+            store.prepareErasure(selected);
+            assertThat(jdbc.queryForList(
+                            "SELECT state FROM person_evidence_copy WHERE job_id=ANY(?)",
+                            String.class,
+                            new SqlArrayValue("uuid", first.getId(), second.getId())))
+                    .containsOnly("ERASED");
+            // The runtime still holds the folders, so this server's pass leaves them for the next one.
+            assertThat(catalog.removeErasedFolders())
+                    .as("both folders remain while their runtime holds them, and the pass says so")
+                    .isEqualTo(new ErasedFolders(0, 2));
             assertThat(firstFolder).exists();
             assertThat(secondFolder).exists();
             firstInputs.close();
             secondInputs.close();
-            removal.get(10, TimeUnit.SECONDS);
+            assertThat(catalog.removeErasedFolders()).isEqualTo(new ErasedFolders(2, 0));
             assertThat(trace)
-                    .as("the retained native transcript is removed before erasure acknowledgement")
+                    .as("the retained native transcript goes with its erased attempt")
                     .doesNotExist();
             assertThat(firstFolder).doesNotExist();
             assertThat(secondFolder).doesNotExist();
@@ -1210,7 +1225,6 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
             firstInputs.close();
             secondInputs.close();
             otherInputs.close();
-            pool.shutdownNow();
         }
     }
 
@@ -1230,7 +1244,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var recorder = new ExactPersonDataCopyRecorder();
         var owner = catalog(root, recorder);
         var identity = new PersonCopyIdentity("GITLAB", provider.getServerUrl(), "42", null);
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), owner);
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, Clock.systemUTC(), owner, mock(AttemptInputs.class));
         files.beginPersonCapture(job);
         recorder.recordIdentity(identity);
         try (var inputs = files.prepare(
@@ -1263,6 +1278,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 .contains("42");
 
         store.prepareErasure(selected);
+        assertThat(folder).as("this server removes it in its next pass").exists();
+        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(1, 0));
         assertThat(folder).doesNotExist();
         assertThat(jdbc.queryForObject(
                         "SELECT payload::text FROM person_evidence_copy WHERE job_id=?", String.class, job.getId()))
@@ -1304,7 +1321,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRemovePurgedWorkspaceCopiesAfterCommitWithoutLosingAnOfflineOwnersReceipt() throws Exception {
+    void shouldErasePurgedWorkspaceCopiesAtOnceAndRemoveTheirFoldersInTheNextPass() throws Exception {
         databaseTestUtils.cleanDatabase();
         var identity = new PersonCopyIdentity("GITLAB", "https://workspace-folder.example", "42", null);
         var recorder = new ExactPersonDataCopyRecorder();
@@ -1329,23 +1346,16 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 workspaces.findById(erased.getWorkspaceId()).orElseThrow().getWorkspaceSlug());
 
         assertThat(jobs.findById(erased.getId())).isEmpty();
-        assertThat(erasedFolder).exists();
-        assertThat(jdbc.queryForObject(
-                        "SELECT state FROM person_evidence_copy WHERE job_id=?", String.class, erased.getId()))
-                .isEqualTo("PURGE_REQUESTED");
-        assertThat(jdbc.queryForObject(
-                        "SELECT payload::text FROM person_evidence_copy WHERE job_id=?", String.class, erased.getId()))
-                .contains("42");
-        var restarted = catalog(mounted, new ExactPersonDataCopyRecorder());
-        restarted.removeLocalRequests();
-        restarted.removeLocalRequests();
-        assertThat(erasedFolder).doesNotExist();
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=?", String.class, erased.getId()))
                 .isEqualTo("ERASED");
         assertThat(jdbc.queryForObject(
                         "SELECT payload::text FROM person_evidence_copy WHERE job_id=?", String.class, erased.getId()))
                 .isEqualTo("{}");
+        assertThat(erasedFolder).as("the server removes it in its next pass").exists();
+        var restarted = catalog(mounted, new ExactPersonDataCopyRecorder());
+        assertThat(restarted.removeErasedFolders()).isEqualTo(new ErasedFolders(1, 0));
+        assertThat(erasedFolder).doesNotExist();
         assertThat(otherFolder).exists();
         assertThat(jobs.findById(other.getId())).isPresent();
         assertThat(jdbc.queryForObject(
@@ -1354,14 +1364,14 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void anOfflineMountedOwnerCannotBeAcknowledgedByAnEmptyServerFolderAndCanResumeAfterRestart() {
+    void anErasureCompletesWithoutTheServerThatWroteTheCopyWhichRemovesItsFolderInItsNextPass() {
         databaseTestUtils.cleanDatabase();
         var provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://offline-folder.example"));
         var identity = new PersonCopyIdentity("GITLAB", "https://offline-folder.example", "42", null);
         var recorder = new ExactPersonDataCopyRecorder();
-        Path mounted = root.resolve("worker-volume");
-        Path server = root.resolve("server-empty");
+        Path mounted = root.resolve("capturing-server-volume");
+        Path server = root.resolve("other-server-volume");
         var owner = catalog(mounted, recorder);
         var job = job("folder-offline");
         copy(mounted, owner, recorder, job, identity).close();
@@ -1370,19 +1380,16 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)), List.of());
         var selected = serverStore.select(selectedScope);
         assertThat(selected.rows()).hasSize(1);
-        assertThatThrownBy(() -> serverStore.prepareErasure(selected))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("not acknowledged");
-        assertThatThrownBy(() -> serverStore.erase(selected, selectedScope)).isInstanceOf(IllegalStateException.class);
-        jdbc.update("DELETE FROM review_job WHERE id=?", job.getId());
-        var restarted = catalog(mounted, new ExactPersonDataCopyRecorder());
-        restarted.removeLocalRequests();
         serverStore.prepareErasure(selected);
         assertThat(serverStore.erase(selected, selectedScope)).isEqualTo(1);
-        assertThat(mounted.resolve("jobs")
-                        .resolve(Long.toString(job.getWorkspaceId()))
-                        .resolve(job.getId().toString()))
-                .doesNotExist();
+        Path folder = mounted.resolve("jobs")
+                .resolve(Long.toString(job.getWorkspaceId()))
+                .resolve(job.getId().toString());
+        assertThat(folder).as("only the server that holds a folder removes it").exists();
+        assertThat(catalog(server, new ExactPersonDataCopyRecorder()).removeErasedFolders())
+                .isEqualTo(new ErasedFolders(0, 0));
+        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(1, 0));
+        assertThat(folder).doesNotExist();
     }
 
     @Test
@@ -1420,7 +1427,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 "UPDATE review_job SET output=CAST(? AS jsonb) WHERE id=?",
                 "{\"visible\":\"Another developer's recorded result\"}",
                 job.getId());
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog, mock(AttemptInputs.class));
         files.beginPersonCapture(job);
         recorder.recordRepository(998801L);
         files.prepare(
@@ -1480,7 +1488,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var recorder = new ExactPersonDataCopyRecorder();
         var catalog = catalog(root, recorder);
         var job = job("folder-same-copy-key");
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog, mock(AttemptInputs.class));
         files.beginPersonCapture(job);
         recorder.recordRepository(997801L);
         var prepared =
@@ -1515,17 +1524,5 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.PREVIEW);
         assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
         assertThat(copiedCache).exists();
-    }
-
-    private void awaitErasureRequest(UUID jobId) throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (System.nanoTime() < deadline) {
-            if (Boolean.TRUE.equals(jdbc.queryForObject(
-                    "SELECT EXISTS(SELECT 1 FROM person_evidence_copy WHERE job_id=? AND" + " state='ERASE_REQUESTED')",
-                    Boolean.class,
-                    jobId))) return;
-            Thread.sleep(10);
-        }
-        throw new AssertionError("Erasure request was not persisted");
     }
 }

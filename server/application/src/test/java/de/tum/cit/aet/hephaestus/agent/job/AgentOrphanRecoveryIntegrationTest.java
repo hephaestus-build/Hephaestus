@@ -507,7 +507,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         admitWithResult(jobId);
         Instant fresh = Instant.now().plus(Duration.ofHours(1));
         switch (why) {
-            case "erased receipt" -> keepOriginalInputs(jobId, 0, "ERASE_REQUESTED", "COMPLETE", fresh);
+            case "erased receipt" -> keepOriginalInputs(jobId, 0, "ERASED", "COMPLETE", fresh);
             case "suppressed person" -> {
                 keepOriginalInputs(jobId, 0, "READY", "COMPLETE", fresh);
                 jdbc.update(
@@ -1463,12 +1463,11 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             Map<String, byte[]> files) {
         UUID copyId = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO person_evidence_copy(id,workspace_id,job_id,store_id,state,payload) "
-                        + "VALUES (?,?,?,?,?,CAST(? AS jsonb))",
+                "INSERT INTO person_evidence_copy(id,workspace_id,job_id,state,payload) "
+                        + "VALUES (?,?,?,?,CAST(? AS jsonb))",
                 copyId,
                 workspace.getId(),
                 jobId,
-                UUID.randomUUID(),
                 receiptState,
                 objectMapper
                         .createObjectNode()

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -29,7 +30,8 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
 
     @Test
     void shouldRejectCredentialsThatDoNotIdentifyAReviewWorker() {
-        var controller = new ResultAdmissionController(mock(ResultAdmissionService.class));
+        var controller =
+                new ResultAdmissionController(mock(ResultAdmissionService.class), mock(AttemptCaptureFailures.class));
         var request = new SealResultsRequestDTO(3, UUID.randomUUID(), UUID.randomUUID(), 0);
         assertThatThrownBy(
                         () -> controller.admitResults(request, new TestingAuthenticationToken("mentor", "credential")))
@@ -60,7 +62,8 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
         var authentication = new JobTokenAuthentication(identity, jwt.scopes(), null);
         when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
                 .thenThrow(conflict);
-        assertThatThrownBy(() -> new ResultAdmissionController(admission).admitResults(request, authentication))
+        assertThatThrownBy(() -> new ResultAdmissionController(admission, mock(AttemptCaptureFailures.class))
+                        .admitResults(request, authentication))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));

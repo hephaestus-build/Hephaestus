@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceErasureNotifications;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
@@ -34,6 +35,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayOutputStream;
 import java.io.StringWriter;
 import java.nio.ByteBuffer;
@@ -82,9 +84,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         AutoCloseable released = () -> {};
         return Mockito.mock(
                 EvidenceFolderPersonDataCatalog.class,
-                invocation -> invocation.getMethod().getName().equals("finishCapture")
-                        ? released
-                        : Answers.RETURNS_DEFAULTS.answer(invocation));
+                invocation -> switch (invocation.getMethod().getName()) {
+                    case "finishCapture" -> released;
+                    case "removeErasedFolders" -> new EvidenceFolderPersonDataCatalog.ErasedFolders(0, 0);
+                    default -> Answers.RETURNS_DEFAULTS.answer(invocation);
+                });
     }
 
     @TempDir
@@ -111,7 +115,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var released = new AtomicBoolean();
         var inputs = new PreparedEvidence(
                 Map.of(), Map.of("context/large.jsonl", oversized), List.of(() -> released.set(true)), null);
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         assertThatThrownBy(() -> files.prepare(job(), inputs, null))
                 .isInstanceOf(WorkspaceBudgetExceededException.class)
                 .hasMessageContaining("WORKSPACE_BUDGET_EXCEEDED");
@@ -121,7 +126,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void shouldDeleteCommittedAdmissionWhileTheRuntimeIsStillRunning() {
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
         job.setStatus(ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
@@ -145,7 +151,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void shouldCleanUnknownAndFinishedFoldersImmediatelyAfterRestartButKeepRunningJobs() {
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
         var running = job();
@@ -176,7 +183,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         // SandboxSpec reads this map to give a review its program side.
         String program = SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX + "a-practice.ts";
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.resolve("evidence").toString()), jobs, clock, personCopies());
+                new FabricLayout(root.resolve("evidence").toString()),
+                jobs,
+                clock,
+                personCopies(),
+                mock(AttemptInputs.class));
         var inputs = PreparedJobInputsFixtures.inputs(
                 new PreparedEvidence(
                         Map.of(program, "export default {};".getBytes(StandardCharsets.UTF_8)),
@@ -200,7 +211,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         Files.setPosixFilePermissions(
                 script, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_EXECUTE));
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.resolve("evidence").toString()), jobs, clock, personCopies());
+                new FabricLayout(root.resolve("evidence").toString()),
+                jobs,
+                clock,
+                personCopies(),
+                mock(AttemptInputs.class));
         var inputs = PreparedJobInputsFixtures.inputs(
                 new PreparedEvidence(
                         Map.of(),
@@ -228,7 +243,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         Path checkout = Files.createDirectories(root.resolve("checkout"));
         Files.createSymbolicLink(checkout.resolve("escape"), root.resolve("outside"));
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.resolve("evidence").toString()), jobs, clock, personCopies());
+                new FabricLayout(root.resolve("evidence").toString()),
+                jobs,
+                clock,
+                personCopies(),
+                mock(AttemptInputs.class));
         var inputs = PreparedJobInputsFixtures.inputs(
                 new PreparedEvidence(
                         Map.of(), Map.of(), List.of(), null, List.of(new EvidenceDirectory("repo/", checkout))),
@@ -239,7 +258,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void shouldPrepareTheNextAttemptOfAReviewWhoseRefusedAttemptLeftItsEvidence() throws Exception {
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
         Path source = root.resolve("refused.txt");
         Files.writeString(source, "captured once\n");
@@ -257,7 +277,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void shouldRetainUnadmittedEvidenceForOneHourAfterTheOwningHandleCloses() throws Exception {
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
         Path source = root.resolve("source.txt");
         String content = "repeated quote\nwrong line\nrepeated quote\n";
@@ -284,7 +305,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                         new FabricLayout(root.toString()),
                         jobs,
                         Clock.offset(clock, Duration.ofHours(1)),
-                        personCopies())
+                        personCopies(),
+                        mock(AttemptInputs.class))
                 .cleanEndedAttempts();
         assertThat(read(files, job, "context/source.txt", sha)).isEmpty();
     }
@@ -292,7 +314,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     @Test
     void shouldRejectEscapingPathsAndSymbolicLinksDuringPreparation() throws Exception {
         var layout = new FabricLayout(root.toString());
-        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         assertThatThrownBy(() -> PreparedJobInputsFixtures.prepare(
                         files, job(), PreparedJobInputsFixtures.filesOnly(Map.of("../escape", new byte[0]))))
                 .isInstanceOf(IllegalStateException.class);
@@ -313,7 +335,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void shouldVerifyDigestAfterMatchingAcrossBuffersAndRejectChangedBytes() throws Exception {
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
         String quote = "é😀\n" + "quoted line\n".repeat(1000);
         byte[] bytes = ("x".repeat(8191) + quote).getBytes(StandardCharsets.UTF_8);
@@ -332,7 +355,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void shouldPreserveAnotherActiveWorkersFolderAndCleanLostAttemptsAfterGracePeriod() {
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
         job.setStatus(ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
@@ -343,7 +367,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         try {
             files.cleanEndedAttempts();
             var later = new JobEvidenceFiles(
-                    new FabricLayout(root.toString()), jobs, Clock.offset(clock, Duration.ofHours(2)), personCopies());
+                    new FabricLayout(root.toString()),
+                    jobs,
+                    Clock.offset(clock, Duration.ofHours(2)),
+                    personCopies(),
+                    mock(AttemptInputs.class));
             later.cleanEndedAttempts();
             assertThat(read(files, job, "inputs/source", sha)).contains(bytes);
             job.setStatus(ReviewJobStatus.CANCELLED);
@@ -353,7 +381,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                             new FabricLayout(root.toString()),
                             jobs,
                             Clock.offset(clock, Duration.ofHours(3)),
-                            personCopies())
+                            personCopies(),
+                            mock(AttemptInputs.class))
                     .cleanEndedAttempts();
             assertThat(read(files, job, "inputs/source", sha)).isEmpty();
             verify(jobs)
@@ -365,7 +394,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void shouldDeleteAdmittedFinalEvidenceImmediatelyWithoutDeletingAReplacementHandle() {
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
         job.setAdmissionAttempt(job.getAttempt());
         job.setAdmissionDigest("a".repeat(64));
@@ -391,8 +421,10 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     @Test
     void shouldCleanOrphanedPreparationAfterTheGracePeriod() throws Exception {
         var layout = new FabricLayout(root.toString());
-        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
+        job.setStatus(ReviewJobStatus.FAILED);
+        when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         Path parent = layout.jobsRoot().resolve("1").resolve(job.getId().toString());
         Files.createDirectories(parent);
         String identity = "0-" + ProvenanceDigest.sha256Hex(LEASE.toString().getBytes(StandardCharsets.UTF_8));
@@ -400,15 +432,38 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         Files.writeString(staging.resolve("partial"), "not published");
         files.cleanEndedAttempts();
         assertThat(staging).exists();
-        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies())
+        new JobEvidenceFiles(
+                        layout,
+                        jobs,
+                        Clock.offset(clock, Duration.ofHours(1)),
+                        personCopies(),
+                        mock(AttemptInputs.class))
                 .cleanEndedAttempts();
         assertThat(staging).doesNotExist();
     }
 
     @Test
+    void shouldRemoveTheFolderOfAJobWhoseRowIsGoneInTheNextPass() throws Exception {
+        var layout = new FabricLayout(root.toString());
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
+        var job = job();
+        Path parent = layout.jobsRoot().resolve("1").resolve(job.getId().toString());
+        String identity = "0-" + ProvenanceDigest.sha256Hex(LEASE.toString().getBytes(StandardCharsets.UTF_8));
+        Path attempt = Files.createDirectories(parent.resolve(identity));
+        Files.writeString(attempt.resolve("record"), "a purged workspace's copy");
+
+        files.cleanEndedAttempts();
+
+        assertThat(attempt)
+                .as("no grace: nothing can need the folder of a job without its row")
+                .doesNotExist();
+    }
+
+    @Test
     void shouldPreserveOwnedGitSnapshotsBeyondTheGracePeriod() throws Exception {
         var layout = new FabricLayout(root.toString());
-        var cleaner = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(2)), personCopies());
+        var cleaner = new JobEvidenceFiles(
+                layout, jobs, Clock.offset(clock, Duration.ofHours(2)), personCopies(), mock(AttemptInputs.class));
         var key = new RepositoryKey(1L, 1L);
         Path source = Files.createDirectories(root.resolve("source"));
         String sha;
@@ -458,11 +513,21 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             Files.setLastModifiedTime(entry, FileTime.from(clock.instant()));
         }
 
-        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofMinutes(59)), personCopies())
+        new JobEvidenceFiles(
+                        layout,
+                        jobs,
+                        Clock.offset(clock, Duration.ofMinutes(59)),
+                        personCopies(),
+                        mock(AttemptInputs.class))
                 .cleanEndedAttempts();
         assertThat(snapshot).exists();
 
-        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies())
+        new JobEvidenceFiles(
+                        layout,
+                        jobs,
+                        Clock.offset(clock, Duration.ofHours(1)),
+                        personCopies(),
+                        mock(AttemptInputs.class))
                 .cleanEndedAttempts();
         assertThat(snapshot).doesNotExist();
         assertThat(unrelated).as("only the Git spool is swept").exists();
@@ -470,7 +535,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void shouldVerifyDecodableLinesWhenAnotherLineIsNotUtf8() {
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
         byte[] bytes = concat(
                 "caf".getBytes(StandardCharsets.UTF_8),
@@ -502,14 +568,15 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     @Test
     void shouldRemoveExpiredEndedAttemptsWithoutServerScheduling() {
         var layout = new FabricLayout(root.toString());
-        var preparing = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var preparing = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
         var ended = endedAttempt(preparing, bytes);
         var running = job();
         running.setStatus(ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(running.getId(), 1L)).thenReturn(Optional.of(running));
-        var later = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies());
+        var later = new JobEvidenceFiles(
+                layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies(), mock(AttemptInputs.class));
         try (var active = PreparedJobInputsFixtures.prepare(
                 preparing, running, PreparedJobInputsFixtures.filesOnly(Map.of("context/quote", bytes)))) {
             // The runner publishes no ApplicationReadyEvent, so only the periodic sweep can remove a folder.
@@ -526,7 +593,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void shouldScheduleEachMaintenanceTaskOnceWithTheServerRoleAndCancelItOnClose() {
-        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var tasks = new ArrayList<ScheduledTask>();
         maintenance(files, personCopies())
                 .withPropertyValues("hephaestus.runtime.server.enabled=true")
@@ -534,7 +602,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                         .values()
                         .forEach(holder -> tasks.addAll(holder.getScheduledTasks())));
         assertThat(tasks)
-                .hasSize(2)
+                .hasSize(1)
                 .allSatisfy(task -> assertThat(task.nextExecution()).isNull());
     }
 
@@ -548,10 +616,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     void shouldNotMaintainEvidenceWithoutTheServerRoleOrInBuildOnlyProfiles(String setting) {
         var layout = new FabricLayout(root.toString());
         byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
-        var preparing = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var preparing = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         var ended = endedAttempt(preparing, bytes);
         var personCopies = personCopies();
-        var later = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies);
+        var later = new JobEvidenceFiles(
+                layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies, mock(AttemptInputs.class));
         maintenance(later, personCopies).withPropertyValues(setting).run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values().stream()
@@ -560,7 +629,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         });
         assertThat(read(preparing, ended, "context/quote", ProvenanceDigest.sha256Hex(bytes)))
                 .contains(bytes);
-        verify(personCopies, never()).removeLocalRequests();
+        verify(personCopies, never()).removeErasedFolders();
     }
 
     private static ApplicationContextRunner maintenance(
@@ -570,6 +639,15 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                 .withUserConfiguration(JobEvidenceMaintenanceConfiguration.class)
                 .withBean(JobEvidenceFiles.class, () -> files)
                 .withBean(EvidenceFolderPersonDataCatalog.class, () -> personCopies)
+                .withBean(
+                        EvidenceReconciler.class,
+                        () -> new EvidenceReconciler(
+                                files,
+                                personCopies,
+                                mock(AttemptInputs.class),
+                                Clock.systemUTC(),
+                                new SimpleMeterRegistry()))
+                .withBean(EvidenceErasureNotifications.class, () -> mock(EvidenceErasureNotifications.class))
                 .withPropertyValues("hephaestus.runtime.server.enabled=true");
     }
 
@@ -590,9 +668,10 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var layout = new FabricLayout(root.toString());
         byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         var ended = endedAttempt(files, bytes);
-        var later = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies());
+        var later = new JobEvidenceFiles(
+                layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies(), mock(AttemptInputs.class));
         var holder =
                 EvidenceFolderLease.tryAcquire(layout.root(), 1L, ended.getId()).orElseThrow();
         try (holder) {
@@ -611,7 +690,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var layout = new FabricLayout(root.toString());
         byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         var ended = endedAttempt(files, bytes);
         var entered = new CountDownLatch(1);
         var proceed = new CountDownLatch(1);
@@ -624,7 +703,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             }
             return Optional.of(ended);
         });
-        var periodic = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies());
+        var periodic = new JobEvidenceFiles(
+                layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies(), mock(AttemptInputs.class));
         try (var pool = Executors.newSingleThreadExecutor()) {
             var startup = pool.submit(() -> {
                 files.cleanAfterRestart();
@@ -645,7 +725,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     @Test
     void shouldRemoveAnAdmittedAttemptWhileItsRuntimeStillHoldsTheJobLease() {
         var layout = new FabricLayout(root.toString());
-        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
         job.setAdmissionAttempt(job.getAttempt());
         job.setAdmissionDigest("a".repeat(64));
@@ -654,7 +734,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         byte[] bytes = "verified quote".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
         var identity = new AdmissionIdentity(job.getId(), 1L, 0, LEASE);
-        var later = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies());
+        var later = new JobEvidenceFiles(
+                layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies(), mock(AttemptInputs.class));
         var prepared = PreparedJobInputsFixtures.prepare(
                 files, job, PreparedJobInputsFixtures.filesOnly(Map.of("context/quote", bytes)));
         // The runtime's capture lease, held until its inputs are released after the composition.
@@ -686,7 +767,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     @Test
     void shouldRemoveAnAdmittedAttemptOnceWhenAdmissionOverlapsItsRetirement() throws Exception {
         var layout = new FabricLayout(root.toString());
-        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
         job.setAdmissionAttempt(job.getAttempt());
         job.setAdmissionDigest("a".repeat(64));
@@ -804,7 +885,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             {"schemaVersion":8,"model":{"upstreamModelId":"Qwen/Qwen3.8-27B"},
              "upstreamModelId":"legacy-root-model"}
             """));
-        var files = new JobEvidenceFiles(layout, jobs, clock, copies);
+        var files = new JobEvidenceFiles(layout, jobs, clock, copies, mock(AttemptInputs.class));
         var upload = files.bind(job.getId(), 0, IMAGE);
         // Cancelled while it ran: the upload that still arrived is the attempt's.
         job.setStatus(ReviewJobStatus.CANCELLED);
@@ -923,7 +1004,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         when(copies.traceCustody(job.getId(), 1L, 0))
                 .thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.UNINDEXED_DEPENDENCY);
         if (snapshot != null) job.setConfigSnapshot(new JsonMapper().readTree(snapshot));
-        var files = new JobEvidenceFiles(layout, jobs, clock, copies);
+        var files = new JobEvidenceFiles(layout, jobs, clock, copies, mock(AttemptInputs.class));
         var upload = files.bind(job.getId(), 0, IMAGE);
         var traced = new HashMap<>(TRACED_UPLOAD);
         traced.put("traces/manifest.json", manifest.getBytes(StandardCharsets.UTF_8));
@@ -942,7 +1023,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var copies = personCopies();
         var job = launched();
         when(copies.traceCustody(job.getId(), 1L, 0)).thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
-        var files = new JobEvidenceFiles(layout, jobs, clock, copies);
+        var files = new JobEvidenceFiles(layout, jobs, clock, copies, mock(AttemptInputs.class));
         var upload = files.bind(job.getId(), 0, IMAGE);
         var forged = new HashMap<>(TRACED_UPLOAD);
         forged.put("traces/0001.jsonl", new byte[2 * 1024 * 1024 + 1]);
@@ -964,7 +1045,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var job = launched();
         when(copies.traceCustody(eq(job.getId()), eq(1L), anyInt()))
                 .thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
-        var files = new JobEvidenceFiles(layout, jobs, clock, copies);
+        var files = new JobEvidenceFiles(layout, jobs, clock, copies, mock(AttemptInputs.class));
         var earlier = files.bind(job.getId(), 0, IMAGE);
         // Requeued: the successor attempt runs on this worker and holds the job's lease.
         RuntimeJobTestData.attempt(job, 1);
@@ -991,7 +1072,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var copies = personCopies();
         var job = launched();
         when(copies.traceCustody(job.getId(), 1L, 0)).thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
-        var files = new JobEvidenceFiles(layout, jobs, clock, copies);
+        var files = new JobEvidenceFiles(layout, jobs, clock, copies, mock(AttemptInputs.class));
         var upload = files.bind(job.getId(), 0, IMAGE);
 
         upload.accept(TRACED_UPLOAD);
@@ -1015,17 +1096,19 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         when(copies.traceCustody(job.getId(), 1L, 0)).thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
         var lease = runtimeLease(layout, job);
         try (lease) {
-            new JobEvidenceFiles(layout, jobs, clock, copies)
+            new JobEvidenceFiles(layout, jobs, clock, copies, mock(AttemptInputs.class))
                     .bind(job.getId(), 0, IMAGE)
                     .accept(TRACED_UPLOAD);
         }
         job.setStatus(ReviewJobStatus.COMPLETED);
         Path trace = traceOf(layout, job, 0);
 
-        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(23)), copies).cleanAfterRestart();
+        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(23)), copies, mock(AttemptInputs.class))
+                .cleanAfterRestart();
         assertThat(trace.resolve("0001.jsonl")).exists();
 
-        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(24)), copies).cleanEndedAttempts();
+        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(24)), copies, mock(AttemptInputs.class))
+                .cleanEndedAttempts();
         assertThat(trace).doesNotExist();
     }
 
@@ -1039,7 +1122,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         when(copies.traceCustody(job.getId(), 1L, 0)).thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
         var lease = runtimeLease(layout, job);
         try (lease) {
-            new JobEvidenceFiles(layout, jobs, clock, copies)
+            new JobEvidenceFiles(layout, jobs, clock, copies, mock(AttemptInputs.class))
                     .bind(job.getId(), 0, IMAGE)
                     .accept(TRACED_UPLOAD);
         }
@@ -1049,9 +1132,12 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         assertThat(record.path("retention").asString()).isEqualTo("NATIVE_TRANSCRIPT");
         assertThat(Instant.parse(record.path("expiresAt").asString())).isEqualTo(deadline);
 
-        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofMinutes(59)), copies).cleanAfterRestart();
+        new JobEvidenceFiles(
+                        layout, jobs, Clock.offset(clock, Duration.ofMinutes(59)), copies, mock(AttemptInputs.class))
+                .cleanAfterRestart();
         assertThat(trace.resolve("0001.jsonl")).exists();
-        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), copies).cleanEndedAttempts();
+        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), copies, mock(AttemptInputs.class))
+                .cleanEndedAttempts();
         assertThat(trace).doesNotExist();
     }
 
@@ -1066,7 +1152,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         when(copies.traceCustody(job.getId(), 1L, 0)).thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
         var lease = runtimeLease(layout, job);
         try (lease) {
-            new JobEvidenceFiles(layout, jobs, clock, copies)
+            new JobEvidenceFiles(layout, jobs, clock, copies, mock(AttemptInputs.class))
                     .bind(job.getId(), 0, IMAGE)
                     .accept(TRACED_UPLOAD);
         }

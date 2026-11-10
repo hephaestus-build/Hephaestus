@@ -288,8 +288,9 @@ class RuntimeRoleContextIntegrationTest {
                 if (role == RuntimeRole.WEBHOOK) {
                     assertThat(result.getInt(1)).isZero();
                 } else {
-                    // The lazy ledger listener is the only dedicated connection outside Hikari.
-                    assertThat(result.getInt(1)).isBetween(maximum, maximum + 1);
+                    // The lazy ledger listener and the evidence erasure listener are the dedicated connections
+                    // outside Hikari.
+                    assertThat(result.getInt(1)).isBetween(maximum, maximum + 2);
                 }
             }
         } finally {

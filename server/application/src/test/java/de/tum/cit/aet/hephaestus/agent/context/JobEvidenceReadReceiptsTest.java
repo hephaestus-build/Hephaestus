@@ -62,7 +62,11 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
                         ? released
                         : Answers.RETURNS_DEFAULTS.answer(invocation));
         return new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(ReviewJobRepository.class), Clock.systemUTC(), copies);
+                new FabricLayout(root.toString()),
+                mock(ReviewJobRepository.class),
+                Clock.systemUTC(),
+                copies,
+                mock(AttemptInputs.class));
     }
 
     private ReviewJob job() {

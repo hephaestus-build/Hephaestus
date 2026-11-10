@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
+import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
@@ -83,7 +84,15 @@ public class RepositoryTreeContentSource {
                 onDisk,
                 snapshot,
                 snapshot.limitations().isEmpty() ? Map.of() : Map.of(KIND, List.copyOf(snapshot.limitations())),
-                List.of(new EvidenceDirectory("repos/reviewed/", snapshot.stagingDir())),
+                List.of(new EvidenceDirectory(
+                        "repos/reviewed/",
+                        snapshot.stagingDir(),
+                        new CheckoutKey(
+                                request.work().repositoryId(),
+                                snapshot.commitSha(),
+                                snapshot.treeSha(),
+                                request.work().number(),
+                                null))),
                 List.of(),
                 citable);
     }

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
@@ -128,7 +129,12 @@ class ScanAdmissionTest extends BaseUnitTest {
     }
 
     private JobEvidenceFiles files() {
-        return new JobEvidenceFiles(new FabricLayout(root.toString()), mock(ReviewJobRepository.class), clock, copies);
+        return new JobEvidenceFiles(
+                new FabricLayout(root.toString()),
+                mock(ReviewJobRepository.class),
+                clock,
+                copies,
+                mock(AttemptInputs.class));
     }
 
     @BeforeEach

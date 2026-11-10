@@ -498,6 +498,22 @@ groups:
         annotations:
           summary: A sandbox could still reach the Kubernetes API 10 seconds after it started, so its network policy does not hold
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A pass runs every 30 seconds and on each erasure; erased evidence leaves a running server within 2 minutes.
+      - alert: HephaestusEvidenceReconcileStalled
+        expr: time() - evidence_reconcile_last_success_seconds{job="hephaestus"} > 600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A server has not removed erased or ended evidence folders for ten minutes, so erased evidence can stay on it
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusCheckoutUnverified
+        expr: sum(increase(evidence_checkout_copies_total{job="hephaestus",outcome=~"mismatch|fetch_failed|unavailable"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A server could not build a captured checkout again, so a review attempt ended as a capture failure
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewFeedbackUnconfirmed
         expr: sum(increase(agent_job_composition_stopped_total{job="hephaestus",outcome="unrecorded"}[1h])) > 0
         labels:

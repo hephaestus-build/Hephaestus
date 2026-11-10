@@ -16,10 +16,12 @@ import de.tum.cit.aet.hephaestus.evidence.CapturedSource;
 import de.tum.cit.aet.hephaestus.evidence.CitationRequirement;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -32,6 +34,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -44,6 +47,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -64,7 +68,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -93,6 +100,19 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     /** The capture's checkout digest of each staged directory, by its target ({@link #checkoutDigests}). */
     public static final String CHECKOUTS = "checkouts";
+
+    /** The capture's {@link CheckoutKey} of each staged checkout, by its target: how another server builds it again. */
+    public static final String CHECKOUT_KEYS = "checkoutKeys";
+
+    private static final JsonMapper CHECKOUT_KEY_READER = new JsonMapper();
+
+    /** How long a rebuild waits for a folder lease that a sweep or a runtime holds. */
+    private static final Duration REBUILD_LEASE_WAIT = Duration.ofSeconds(10);
+
+    private static final Duration REBUILD_LEASE_POLL = Duration.ofMillis(50);
+
+    /** One rebuild for each folder in this JVM: a second caller waits for the first and then finds the folder. */
+    private final ConcurrentMap<Path, ReentrantLock> rebuilds = new ConcurrentHashMap<>();
 
     /** How long an attempt's debug transcript stays for next-day investigation. */
     public static final Duration TRACE_RETENTION = Duration.ofHours(24);
@@ -124,13 +144,19 @@ public class JobEvidenceFiles implements SandboxResultListener {
     private final ReviewJobRepository jobs;
     private final Clock clock;
     private final EvidenceFolderPersonDataCatalog personCopies;
+    private final AttemptInputs attemptInputs;
 
     public JobEvidenceFiles(
-            FabricLayout layout, ReviewJobRepository jobs, Clock clock, EvidenceFolderPersonDataCatalog personCopies) {
+            FabricLayout layout,
+            ReviewJobRepository jobs,
+            Clock clock,
+            EvidenceFolderPersonDataCatalog personCopies,
+            AttemptInputs attemptInputs) {
         this.layout = layout;
         this.jobs = jobs;
         this.clock = clock;
         this.personCopies = personCopies;
+        this.attemptInputs = attemptInputs;
     }
 
     public void beginPersonCapture(ReviewJob job) {
@@ -173,13 +199,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
                         staging,
                         directory.target().substring(0, directory.target().length() - 1));
                 copyDirectory(directory.source(), destination);
-                directories.add(new EvidenceDirectory(
-                        directory.target(),
-                        safePath(
-                                root,
-                                directory
-                                        .target()
-                                        .substring(0, directory.target().length() - 1))));
+                directories.add(directory.at(safePath(
+                        root, directory.target().substring(0, directory.target().length() - 1))));
             }
             for (var entry : inputs.files().entrySet()) {
                 Path target = safePath(staging, entry.getKey());
@@ -218,6 +239,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
             // rename(2) refuses a populated target, so two preparations of one attempt cannot both publish.
             Files.move(staging, root, StandardCopyOption.ATOMIC_MOVE);
             staging = null;
+            // Any server rebuilds this folder from these rows and the checkouts' recorded keys.
+            attemptInputs.record(job.getId(), job.getWorkspaceId(), job.getAttempt(), staged);
             inputs.close();
             var cleanups = new ArrayList<AutoCloseable>();
             var closed = new AtomicBoolean();
@@ -310,7 +333,139 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     public EvidenceDirectory verificationDirectory(ReviewJob job) {
+        ensureAttemptFolder(job);
         return new EvidenceDirectory("inputs/", directory(job));
+    }
+
+    /**
+     * Rebuilds the folder of the job's running attempt on this server when another server captured it: from the
+     * attempt's recorded files ({@link AttemptInputs}) and its checkouts, which this server builds from the recorded
+     * commit and tree and checks against the recorded checkout digest. A folder that exists stays as it is. One rebuild
+     * runs for each folder in this JVM; the others wait for it. An attempt whose copy is erased, or that ended, gets
+     * no folder.
+     *
+     * @throws CheckoutUnverifiedException when the folder cannot be rebuilt with the recorded identity, or the running
+     *     attempt's recorded files are missing: a capture failure, never missing evidence
+     * @throws AttemptFolderBusyException when another process holds the folder longer than a rebuild waits: retryable
+     */
+    public void ensureAttemptFolder(ReviewJob job) {
+        Path root = directory(job);
+        if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
+        JsonNode capture = job.getCapture();
+        if (capture == null) return;
+        var rebuild = rebuilds.computeIfAbsent(root, folder -> new ReentrantLock());
+        rebuild.lock();
+        try {
+            if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
+            var files = attemptInputs.list(job);
+            if (files.isEmpty()) {
+                // Only an erased copy or an ended attempt has no recorded files: the capture records them first.
+                if (job.getStatus() == ReviewJobStatus.RUNNING
+                        && personCopies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                    throw unverified(
+                            job,
+                            new CheckoutUnverifiedException(
+                                    CheckoutUnverifiedException.Reason.UNAVAILABLE,
+                                    "The running attempt has no recorded files"));
+                return;
+            }
+            var lease = acquireForRebuild(job);
+            try (lease) {
+                rebuild(job, root, capture, files);
+            }
+        } finally {
+            rebuild.unlock();
+            if (!rebuild.hasQueuedThreads()) rebuilds.remove(root, rebuild);
+        }
+    }
+
+    /** The job's folder lease, waited for while a sweep or a runtime of this or another process holds it briefly. */
+    private EvidenceFolderLease acquireForRebuild(ReviewJob job) {
+        long deadline = System.nanoTime() + REBUILD_LEASE_WAIT.toNanos();
+        while (true) {
+            var acquired = EvidenceFolderLease.tryAcquire(layout.root(), job.getWorkspaceId(), job.getId());
+            if (acquired.isPresent()) return acquired.get();
+            if (System.nanoTime() > deadline)
+                throw new AttemptFolderBusyException("Another process holds this evidence folder");
+            try {
+                Thread.sleep(REBUILD_LEASE_POLL.toMillis());
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new AttemptFolderBusyException("Interrupted while waiting for the evidence folder", interrupted);
+            }
+        }
+    }
+
+    private void rebuild(ReviewJob job, Path root, JsonNode capture, List<AttemptInputs.RecordedFile> files) {
+        Path staging = null;
+        try {
+            Files.createDirectories(root.getParent());
+            staging = Files.createTempDirectory(root.getParent(), "." + root.getFileName() + ".preparing-");
+            var directories = new ArrayList<String>();
+            for (JsonNode directory : capture.path("directories")) {
+                String target = directory.asString();
+                JsonNode key = capture.path(CHECKOUT_KEYS).path(target);
+                if (!key.isObject())
+                    throw new CheckoutUnverifiedException(
+                            CheckoutUnverifiedException.Reason.UNAVAILABLE, "The capture recorded no checkout key");
+                String digest = capture.path(CHECKOUTS).path(target).asString(null);
+                Path copy = safePath(staging, target.substring(0, target.length() - 1));
+                attemptInputs.copyCheckout(
+                        job.getWorkspaceId(),
+                        CHECKOUT_KEY_READER.treeToValue(key, CheckoutKey.class),
+                        copy,
+                        built -> digest == null
+                                || checkoutDigest(built, SEARCH_PROOF_BYTES).equals(Optional.of(digest)));
+                try (var built = Files.walk(copy)) {
+                    for (Path file : built.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                            .toList()) makeReadOnly(file, file);
+                }
+                directories.add(target);
+            }
+            for (var file : files) {
+                // One file in memory at a time: a folder can hold up to the workspace byte budget.
+                byte[] content = attemptInputs.content(job, file.path());
+                if (!file.sha256().equals(ProvenanceDigest.sha256Hex(content)))
+                    throw new CheckoutUnverifiedException(
+                            CheckoutUnverifiedException.Reason.MISMATCH, "A recorded file differs from its digest");
+                Path target = safePath(staging, file.path());
+                Files.createDirectories(target.getParent());
+                // A file inside a checkout, such as its recorded refs, is restored as the capture staged it.
+                boolean inCheckout = directories.stream().anyMatch(file.path()::startsWith);
+                if (inCheckout) Files.deleteIfExists(target);
+                Files.write(target, content, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+                Files.setPosixFilePermissions(target, PosixFilePermissions.fromString(file.permissions()));
+            }
+            try {
+                Files.move(staging, root, StandardCopyOption.ATOMIC_MOVE);
+                staging = null;
+            } catch (FileAlreadyExistsException | DirectoryNotEmptyException concurrent) {
+                // Another process published the same folder first.
+            }
+        } catch (CheckoutUnverifiedException failure) {
+            throw unverified(job, failure);
+        } catch (IllegalArgumentException | IllegalStateException malformed) {
+            // A recorded path or key that does not rebuild: a capture failure, never a coverage refusal.
+            throw unverified(
+                    job,
+                    new CheckoutUnverifiedException(
+                            CheckoutUnverifiedException.Reason.MISMATCH,
+                            "The recorded capture does not rebuild the folder",
+                            malformed));
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        } finally {
+            if (staging != null) delete(staging);
+        }
+    }
+
+    private static CheckoutUnverifiedException unverified(ReviewJob job, CheckoutUnverifiedException failure) {
+        log.warn(
+                "Captured checkout cannot be built here: jobId={}, attempt={}, reason={}",
+                job.getId(),
+                job.getAttempt(),
+                failure.reason().tag());
+        return failure;
     }
 
     /**
@@ -588,6 +743,9 @@ public class JobEvidenceFiles implements SandboxResultListener {
      */
     public Optional<Map<String, byte[]>> originalCompositionInputs(ResultAdmissionService.AdmissionIdentity identity) {
         Path root = directory(identity.workspaceId(), identity.jobId(), identity.attempt(), identity.runId());
+        jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
+                .filter(job -> directory(job).equals(root))
+                .ifPresent(this::ensureAttemptFolder);
         try {
             var files = new TreeMap<String, byte[]>();
             byte[] index = Files.readAllBytes(regularFile(root, SandboxLayout.MANIFEST_PATH));
@@ -864,13 +1022,20 @@ public class JobEvidenceFiles implements SandboxResultListener {
         cleanAttempts(true);
     }
 
-    public void cleanEndedAttempts() {
-        cleanAttempts(false);
+    /**
+     * Removes the folders of ended attempts and of deleted jobs.
+     *
+     * @return the folders of deleted jobs that stay because they could not be removed now, and the folders whose
+     *     removal failed: the reconcile counts them, and a later pass retries them
+     */
+    public int cleanEndedAttempts() {
+        return cleanAttempts(false);
     }
 
-    private void cleanAttempts(boolean restarting) {
+    private int cleanAttempts(boolean restarting) {
         cleanStaleGitSpool();
-        if (!Files.isDirectory(layout.jobsRoot())) return;
+        if (!Files.isDirectory(layout.jobsRoot())) return 0;
+        int remaining = 0;
         try (var paths = Files.walk(layout.jobsRoot(), 3)) {
             var roots = new HashSet<Path>();
             var traces = new HashSet<Path>();
@@ -894,8 +1059,11 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 Optional<EvidenceFolderLease> acquired;
                 try {
                     acquired = leaseJob(root);
+                    // A running attempt holds its folder; a deleted job's folder that someone still holds remains.
+                    if (acquired.isEmpty() && recordedJob(root).isEmpty()) remaining++;
                 } catch (RuntimeException exception) {
                     log.warn("Could not clean attempt folder {}", root, exception);
+                    remaining++;
                     continue;
                 }
                 if (acquired.isEmpty()) continue;
@@ -904,7 +1072,12 @@ public class JobEvidenceFiles implements SandboxResultListener {
                     // The holder before this one may have removed it; only a removal of our own is reported.
                     if (!present(root)) continue;
                     var job = recordedJob(root);
-                    if (job.isPresent() && matches(root, job.get())) {
+                    // Retention or a purge removed the job: nothing can need the folder, and a purge's bound holds.
+                    if (job.isEmpty()) {
+                        deleteAttempt(root);
+                        continue;
+                    }
+                    if (matches(root, job.get())) {
                         if (admitted(job.get())) {
                             deleteAttempt(root);
                             continue;
@@ -926,12 +1099,14 @@ public class JobEvidenceFiles implements SandboxResultListener {
                     }
                 } catch (RuntimeException | IOException exception) {
                     log.warn("Could not clean attempt folder {}", root, exception);
+                    remaining++;
                 }
             }
             traces.forEach(this::cleanTrace);
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
+        return remaining;
     }
 
     /**
@@ -1076,6 +1251,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     private Path sourceFile(ReviewJob job, String filePath) throws IOException {
+        ensureAttemptFolder(job);
         Path root = directory(job);
         Path sourceFile = safePath(root, filePath);
         if (!sourceFile.toRealPath().startsWith(root.toRealPath())

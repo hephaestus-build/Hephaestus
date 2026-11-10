@@ -998,6 +998,51 @@ tests:
               summary: A sandbox could still reach the Kubernetes API 10 seconds after it started, so its network policy does not hold
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  # Server A reconciles every minute; server B stops at minute 10.
+  - name: a server whose evidence reconcile stopped fires, a reconciling server does not
+    interval: 1m
+    input_series:
+      - series: 'evidence_reconcile_last_success_seconds{job="hephaestus",instance="server-a:9090"}'
+        values: "0+60x40"
+      - series: 'evidence_reconcile_last_success_seconds{job="hephaestus",instance="server-b:9090"}'
+        values: "0+60x10 600x30"
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: HephaestusEvidenceReconcileStalled
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: HephaestusEvidenceReconcileStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: hephaestus
+              instance: server-b:9090
+            exp_annotations:
+              summary: A server has not removed erased or ended evidence folders for ten minutes, so erased evidence can stay on it
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a checkout that a server cannot build again fires, cache hits and rebuilds do not
+    interval: 1m
+    input_series:
+      - series: 'evidence_checkout_copies_total{job="hephaestus",instance="server-a:9090",outcome="hit"}'
+        values: "0+3x60"
+      - series: 'evidence_checkout_copies_total{job="hephaestus",instance="server-a:9090",outcome="rebuilt"}'
+        values: "0+1x60"
+      - series: 'evidence_checkout_copies_total{job="hephaestus",instance="server-b:9090",outcome="mismatch"}'
+        values: "0x20 1x40"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HephaestusCheckoutUnverified
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: HephaestusCheckoutUnverified
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A server could not build a captured checkout again, so a review attempt ended as a capture failure
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a job that waits more than an hour fires, a shorter wait does not
     interval: 1m
     input_series:
