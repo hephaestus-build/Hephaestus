@@ -22,8 +22,9 @@ ISSUER=https://token.actions.githubusercontent.com
 MANIFESTS=/var/lib/rancher/k3s/server/manifests
 # The containerd configuration template of k3s, with the gVisor runtime.
 CONTAINERD_TEMPLATE=/var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl
-# k3s reads each *.yaml and *.yml file of this directory after config.yaml.
+# k3s reads each *.yaml and *.yml file of this directory after config.yaml. The installer writes only NODE_DROP_IN.
 DROP_INS=/etc/rancher/k3s/config.yaml.d
+NODE_DROP_IN=$DROP_INS/50-node.yaml
 NAMESPACE=hephaestus
 SANDBOXES=hephaestus-sandboxes
 SECRET=hephaestus-app
@@ -50,6 +51,8 @@ usage: sh k3s-install.sh --version X.Y.Z --host NAME --email ADDRESS [options]
   --email ADDRESS            the address that gets the expiry notices of Let's Encrypt
   --workspace-subdomains     enable workspace hosts; needs --dns01-issuer
   --dns01-issuer NAME         existing ClusterIssuer for a DNS-01 wildcard certificate
+  --node-ip ADDRESS          the node address of k3s, in /etc/rancher/k3s/config.yaml.d/50-node.yaml
+  --node-name NAME           the node name of k3s, in the same file
   --staging                  use the Let's Encrypt staging service: a certificate that no browser trusts
   --github-client-id ID      the client ID of the GitHub OAuth app, for a new site.yaml
   --bootstrap-admins LIST    for example github:1234567, for a new site.yaml
@@ -85,6 +88,8 @@ EMAIL=
 STAGING=false
 WORKSPACE_SUBDOMAINS=false
 DNS01_ISSUER=
+NODE_IP=
+NODE_NAME=
 GITHUB_CLIENT_ID=
 BOOTSTRAP_ADMINS=
 CERTIFICATES=
@@ -99,11 +104,13 @@ CHECK=false
 ALLOW_UNQUALIFIED_HOST=false
 while [ $# -gt 0 ]; do
 	case $1 in
-	--version | --host | --email | --dns01-issuer | --github-client-id | --bootstrap-admins | --certificates | --lock | --skip-check)
+	--version | --host | --email | --dns01-issuer | --node-ip | --node-name | --github-client-id | --bootstrap-admins | --certificates | --lock | --skip-check)
 		[ $# -ge 2 ] || usage
 		case $1 in
 		--version) VERSION=$2 ;;
 		--dns01-issuer) DNS01_ISSUER=$2 ;;
+		--node-ip) NODE_IP=$2 ;;
+		--node-name) NODE_NAME=$2 ;;
 		--host) HOST=$2 ;;
 		--email) EMAIL=$2 ;;
 		--github-client-id) GITHUB_CLIENT_ID=$2 ;;
@@ -235,6 +242,11 @@ if [ "$VERIFY" = false ]; then
 	[ "$STANDARD_CERTIFICATES" = false ] || [ -z "$CERTIFICATES" ] || die "--standard-certificates cannot be combined with --certificates"
 	[ -z "$DNS01_ISSUER" ] || [ "$WORKSPACE_SUBDOMAINS" = true ] || die "--dns01-issuer needs --workspace-subdomains"
 	[ -z "$LOCK" ] || [ -f "$LOCK" ] || die "--lock names no file: $LOCK"
+	# One address, or an IPv4 and an IPv6 address for a dual-stack node, as k3s takes them.
+	[ -z "$NODE_IP" ] || matches "$NODE_IP" '[0-9a-f.:]+(,[0-9a-f.:]+)?' ||
+		die "--node-ip takes an address, or two separated by a comma, such as 192.0.2.10 or 192.0.2.10,2001:db8::10"
+	[ -z "$NODE_NAME" ] || { [ "${#NODE_NAME}" -le 253 ] && matches "$NODE_NAME" "$LABEL(\\.$LABEL)*"; } ||
+		die "--node-name takes a lowercase DNS name, such as node-1"
 fi
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -359,6 +371,15 @@ platform_files() {
 	"$1" "$HERE/k3s-platform.yaml" "$MANIFESTS/k3s-platform.yaml" 0600
 	"$1" "$HERE/k3s-agent-sandbox.yaml" "$MANIFESTS/k3s-agent-sandbox.yaml" 0600
 	"$1" "$TEMP/certificates.yaml" "$MANIFESTS/hephaestus-certificates.yaml" 0600
+	# The node drop-in holds exactly the node options of this run. Without them, it is the site's own.
+	if [ -n "$NODE_IP$NODE_NAME" ]; then
+		render_node >"$TEMP/node.yaml"
+		"$1" "$TEMP/node.yaml" "$NODE_DROP_IN" 0600
+	fi
+}
+render_node() {
+	if [ -n "$NODE_IP" ]; then printf 'node-ip: "%s"\n' "$NODE_IP"; fi
+	if [ -n "$NODE_NAME" ]; then printf 'node-name: "%s"\n' "$NODE_NAME"; fi
 }
 
 if [ "$CHECK" = true ]; then
@@ -380,6 +401,27 @@ if [ "$CHECK" = true ]; then
 		DIFFERENCES=$((DIFFERENCES + 1))
 	}
 	platform_files compare
+	# A drop-in overrides config.yaml. Only the node drop-in can be the site's own.
+	drop_ins=$(sudo find "$DROP_INS" -maxdepth 1 \( -iname '*.yaml' -o -iname '*.yml' \) 2>/dev/null | LC_ALL=C sort)
+	while IFS= read -r drop_in; do
+		if [ -z "$drop_in" ]; then
+			continue
+		elif [ "$drop_in" = "$NODE_DROP_IN" ]; then
+			[ -z "$NODE_IP$NODE_NAME" ] || continue
+			say "$NODE_DROP_IN is the site's own, with the keys: $(sudo sed -n 's/^\([A-Za-z0-9_+-]*\):.*/\1/p' "$NODE_DROP_IN" | tr '\n' ' ')"
+			# Only the node keys, their list items, comments and blank lines. Name other keys, never a value.
+			others=$(sudo grep -Ev '^((node-ip|node-name):|[[:space:]]+- |[[:space:]]*(#.*)?$)' "$NODE_DROP_IN" | cut -d: -f1 | tr '\n' ' ' || true)
+			if [ -n "$others" ]; then
+				warn "$NODE_DROP_IN sets more than node-ip and node-name ($others), which overrides config.yaml: keep only those two keys"
+				DIFFERENCES=$((DIFFERENCES + 1))
+			fi
+		else
+			warn "$drop_in is no platform file, and it overrides config.yaml: remove it"
+			DIFFERENCES=$((DIFFERENCES + 1))
+		fi
+	done <<EOF
+$drop_ins
+EOF
 	installed=$(k3s --version 2>/dev/null | head -n 1 || true)
 	case $installed in
 	*" $K3S_VERSION "*) ;;
@@ -521,10 +563,14 @@ if command -v k3s >/dev/null 2>&1 && systemctl is-active --quiet k3s; then K3S_I
 
 # The node name of k3s after this run: the last node-name of the drop-ins, or else the host name.
 # k3s reads the drop-ins in byte order, so the sort uses the C locale. config.yaml becomes the
-# shipped file, which names no node.
+# shipped file, which names no node. Node options replace NODE_DROP_IN.
 next_node_name() {
-	next_name=$(sudo find "$DROP_INS" -maxdepth 1 \( -iname '*.yaml' -o -iname '*.yml' \) 2>/dev/null | LC_ALL=C sort | while IFS= read -r drop_in; do
-		sudo sed -En "s/^node-name:[[:space:]]*[\"']?([a-z0-9.-]+)[\"']?[[:space:]]*$/\\1/p" "$drop_in"
+	next_name=$({
+		sudo find "$DROP_INS" -maxdepth 1 \( -iname '*.yaml' -o -iname '*.yml' \) 2>/dev/null
+		[ -z "$NODE_IP$NODE_NAME" ] || printf '%s\n' "$NODE_DROP_IN"
+	} | LC_ALL=C sort -u | while IFS= read -r drop_in; do
+		if [ "$drop_in" = "$NODE_DROP_IN" ] && [ -n "$NODE_IP$NODE_NAME" ]; then render_node; else sudo cat "$drop_in"; fi |
+			sed -En "s/^node-name:[[:space:]]*[\"']?([a-z0-9.-]+)[\"']?[[:space:]]*$/\\1/p"
 	done | tail -n 1)
 	[ -n "$next_name" ] || next_name=$(hostname | tr '[:upper:]' '[:lower:]')
 	printf '%s\n' "$next_name"
@@ -552,7 +598,16 @@ if [ "$K3S_INSTALLED" = true ]; then
 	node=$1
 	next=$(next_node_name)
 	[ "$node" = "$next" ] ||
-		die "k3s runs the node $node, and this run would rename it to $next. A new name registers a second node, and the volumes stay with $node. Keep the name: put node-name: $node in $DROP_INS/50-node.yaml"
+		die "k3s runs the node $node, and this run would rename it to $next. A new name registers a second node, and the volumes stay with $node. Keep the name: give --node-name $node"
+fi
+# k3s does not start with an address that the host does not have.
+if [ -n "$NODE_IP" ]; then
+	command -v ip >/dev/null 2>&1 || die "ip is not on PATH: install iproute2 first"
+	addresses=$(ip -o addr show | sed -n 's/.* inet6\{0,1\} \([^/ ]*\).*/\1/p')
+	for address in $(printf '%s\n' "$NODE_IP" | tr ',' ' '); do
+		printf '%s\n' "$addresses" | grep -qxF "$address" ||
+			die "--node-ip $address is no address of this host: ip -o addr show lists them"
+	done
 fi
 
 say "Checking the host"
@@ -703,7 +758,7 @@ sudo systemctl kill --signal=SIGHUP systemd-logind
 if changed /etc/systemd/journald.conf.d/zz-hephaestus.conf; then sudo systemctl restart systemd-journald; fi
 # k3s reads these files only when it starts. It applies a changed manifest by itself.
 K3S_CONFIG_CHANGED=false
-if changed /etc/rancher/k3s/config.yaml || changed /etc/rancher/k3s/kubelet.yaml || changed "$CONTAINERD_TEMPLATE"; then K3S_CONFIG_CHANGED=true; fi
+if changed /etc/rancher/k3s/config.yaml || changed /etc/rancher/k3s/kubelet.yaml || changed "$CONTAINERD_TEMPLATE" || changed "$NODE_DROP_IN"; then K3S_CONFIG_CHANGED=true; fi
 
 if [ "$K3S_INSTALLED" = true ] && k3s --version | head -n 1 | grep -qF " $K3S_VERSION "; then
 	if [ "$K3S_CONFIG_CHANGED" = true ]; then
