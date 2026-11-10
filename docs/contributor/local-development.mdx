@@ -171,6 +171,14 @@ The first command writes that password to `server/.env` and prints a warning, so
 Run `vp run dev:reset` to replace it with a random password.
 This deletes the local data.
 
+### Compose project
+
+Each checkout has its own Compose project, so a command in one checkout never acts on the containers of another.
+The first `vp run dev`, `dev:compose` or `db:*` command writes `COMPOSE_PROJECT_NAME` to `server/.env`.
+The name holds the checkout's folder name and a hash of its path.
+A checkout whose `server/postgres-data` already exists keeps the name `server`, the name that its running containers have.
+A `COMPOSE_PROJECT_NAME` in your shell or in the file wins.
+
 ### Port overrides
 
 Every host-side port is configurable so multiple Hephaestus instances (or other services) can coexist on the same machine. Container-internal ports never change – only the `localhost` binding moves.

@@ -494,7 +494,7 @@ export default defineConfig({
 
 			// Local development
 			dev: run("mprocs"),
-			// `dev-env.ts` gives the checkout's database its password before Compose reads `server/.env`.
+			// `dev-env.ts` gives the checkout its Compose project and its database password before Compose reads `server/.env`.
 			"dev:compose": run("node ../scripts/dev-env.ts && docker compose up -d --wait", {
 				cwd: "server",
 			}),

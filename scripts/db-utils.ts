@@ -7,7 +7,7 @@ import { parseArgs } from "node:util";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
-import { ensureLocalDatabasePassword } from "./dev-env.ts";
+import { ensureLocalEnvironment } from "./dev-env.ts";
 import { migrationFilename, NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { isSet, positivePort, readEnvFile } from "./lib/env.ts";
 import { asArray, asRecord } from "./lib/json.ts";
@@ -31,7 +31,7 @@ const log = (message: string): void => console.log(`ℹ️  ${message}`);
 async function config(): Promise<Config> {
 	// Before anything moves `postgres-data`: the password must match the database that is there.
 	if (process.env.CI !== "true") {
-		await ensureLocalDatabasePassword();
+		await ensureLocalEnvironment();
 	}
 	const fileEnv = await readEnvFile(path.join(server, ".env"));
 	const env = { ...fileEnv, ...process.env };

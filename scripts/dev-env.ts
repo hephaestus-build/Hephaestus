@@ -1,5 +1,5 @@
-import { randomBytes } from "node:crypto";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { createHash, randomBytes } from "node:crypto";
+import { readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { isSet, readEnvFile } from "./lib/env.ts";
@@ -55,21 +55,68 @@ export async function ensureDatabasePassword({
 		return "present";
 	}
 	const password = legacy ? legacyPassword : randomBytes(24).toString("hex");
-	const line = `POSTGRES_PASSWORD=${password}`;
-	const current = await readFile(envFile, "utf8").catch(() => "");
-	const next = assignment.test(current)
-		? current.replace(assignment, () => line)
-		: `${current}${current === "" || current.endsWith("\n") ? "" : "\n"}${line}\n`;
-	await writeFile(envFile, next, { mode: 0o600 });
+	await setEnvLine(envFile, assignment, `POSTGRES_PASSWORD=${password}`);
 	return legacy ? "legacy" : "generated";
 }
 
-/** Ensures the password for this checkout and tells the developer what happened when it changed anything. */
-export async function ensureLocalDatabasePassword(): Promise<void> {
-	const outcome = await ensureDatabasePassword({
+/** Replaces the line that `pattern` matches, or appends one. The file holds secrets, so only its owner reads it. */
+async function setEnvLine(envFile: string, pattern: RegExp, line: string): Promise<void> {
+	const current = await readFile(envFile, "utf8").catch(() => "");
+	const next = pattern.test(current)
+		? current.replace(pattern, () => line)
+		: `${current}${current === "" || current.endsWith("\n") ? "" : "\n"}${line}\n`;
+	await writeFile(envFile, next, { mode: 0o600 });
+}
+
+/**
+ * Gives this checkout's Compose stack a project name of its own, once. Without one, Compose names
+ * every checkout's project after its folder, `server`, and a command in one checkout acts on the
+ * containers of another. A checkout whose database already exists keeps `server`: its running
+ * containers carry that name, and a new name would start a second stack on the same ports.
+ */
+export async function ensureComposeProject({
+	envFile,
+	dataDirectory,
+	checkout,
+	environment = process.env,
+}: {
+	envFile: string;
+	dataDirectory: string;
+	checkout: string;
+	environment?: NodeJS.ProcessEnv;
+}): Promise<string> {
+	const configured =
+		environment.COMPOSE_PROJECT_NAME ?? (await readEnvFile(envFile)).COMPOSE_PROJECT_NAME;
+	if (isSet(configured)) {
+		return configured;
+	}
+	let name = "server";
+	if (!(await hasData(dataDirectory))) {
+		const folder = path
+			.basename(checkout)
+			.toLowerCase()
+			.replaceAll(/[^a-z0-9_-]+/gu, "-");
+		const id = createHash("sha256")
+			.update(await realpath(checkout))
+			.digest("hex")
+			.slice(0, 8);
+		name = `hephaestus-${folder}-${id}`;
+	}
+	await setEnvLine(envFile, /^COMPOSE_PROJECT_NAME=.*$/mu, `COMPOSE_PROJECT_NAME=${name}`);
+	return name;
+}
+
+/**
+ * Ensures the Compose project and the password for this checkout, and tells the developer what
+ * happened when it changed the password.
+ */
+export async function ensureLocalEnvironment(): Promise<void> {
+	const paths = {
 		envFile: path.join(server, ".env"),
 		dataDirectory: path.join(server, "postgres-data"),
-	});
+	};
+	await ensureComposeProject({ ...paths, checkout: path.dirname(server) });
+	const outcome = await ensureDatabasePassword(paths);
 	if (outcome === "generated") {
 		console.log("ℹ️  Generated POSTGRES_PASSWORD in server/.env for this checkout's database.");
 	} else if (outcome === "legacy") {
@@ -82,5 +129,5 @@ export async function ensureLocalDatabasePassword(): Promise<void> {
 }
 
 if (import.meta.main) {
-	await ensureLocalDatabasePassword();
+	await ensureLocalEnvironment();
 }
