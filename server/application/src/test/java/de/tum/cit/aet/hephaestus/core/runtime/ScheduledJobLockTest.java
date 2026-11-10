@@ -58,7 +58,6 @@ class ScheduledJobLockTest {
             Map.entry("ConversationFeedbackTtlSweeper#sweep", "ROW"),
             Map.entry("FilingService#fileDue", "ROW"),
             Map.entry("FilingService#measureWaiting", "LOCAL"),
-            Map.entry("FollowService#promoteDue", "ROW"),
             Map.entry("RoutingService#routeAnswered", "ROW"));
 
     private static final URL MAIN_CLASSES =

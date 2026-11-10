@@ -4,16 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -117,6 +122,12 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ActionExecutor executor;
+
+    @Autowired
+    private FollowService follow;
+
+    @Autowired
+    private PublishReportAdapter publishAdapter;
 
     private @Nullable String previousPublic;
     private @Nullable String previousPrivate;
@@ -531,6 +542,221 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         var filed = filings.findById(id).orElseThrow();
         assertThat(filed.getState()).isEqualTo(FilingState.FILED);
         assertThat(filed.getIssueNumber()).isEqualTo(92L);
+    }
+
+    @Test
+    void shouldAnswerAPublishOfAReportTheReporterKeptPrivateOnceAndForgetTheCommand() {
+        UUID id = filedPrivately();
+        publishCommented(id);
+
+        ActionTestSupport.drain(executor, jdbc);
+        ActionTestSupport.drain(executor, jdbc);
+
+        verify(updates, times(1))
+                .comment(eq(PRIVATE_REPOSITORY), eq(92L), contains("The reporter did not allow public"));
+        verify(issues, never()).create(eq(PUBLIC_REPOSITORY), anyString(), anyString(), any());
+        assertThat(filings.findById(id).orElseThrow().getPublishRequestedBy()).isNull();
+    }
+
+    @Test
+    void shouldHoldAPublishWhileFilingIsPausedAndAnswerItAfterTheResume() {
+        UUID id = filedPrivately();
+        publishCommented(id);
+        ProductFeedbackDestination paused = destination();
+        paused.setPaused(true);
+        destinationRows.save(paused);
+
+        ActionTestSupport.drain(executor, jdbc);
+
+        verify(updates, never()).comment(any(), anyLong(), anyString());
+        paused.setPaused(false);
+        destinationRows.save(paused);
+        ActionTestSupport.drain(executor, jdbc);
+
+        verify(updates, times(1)).comment(eq(PRIVATE_REPOSITORY), eq(92L), anyString());
+    }
+
+    @Test
+    void shouldKeepOnePublicationCommentWhenAPartialPublishIsPausedAndResumed() {
+        UUID id = publishable();
+        String lane = "file_issue:" + id;
+        var issue = new ProductFeedbackIssues.Issue(301, "I_301", "https://github.com/acme/feedback-public/issues/301");
+        when(issues.create(eq(PUBLIC_REPOSITORY), anyString(), anyString(), any()))
+                .thenReturn(issue);
+        doThrow(new ProductFeedbackIssues.Unknown("close timed out", null))
+                .doNothing()
+                .when(updates)
+                .close(PRIVATE_REPOSITORY, 92L, "completed");
+        publishCommented(id);
+
+        assertThat(ActionTestSupport.runLane(executor, jdbc, lane, publishAdapter)
+                        .orElseThrow())
+                .isInstanceOf(ActionResult.Reread.class);
+        var body = ArgumentCaptor.forClass(String.class);
+        verify(updates).comment(eq(PRIVATE_REPOSITORY), eq(92L), body.capture());
+        when(issues.findByMarker(
+                        eq(PUBLIC_REPOSITORY),
+                        eq(IssueRenderer.promotionMarker(id).toString()),
+                        any()))
+                .thenReturn(Optional.of(issue));
+        when(updates.states(anyList()))
+                .thenReturn(List.of(new ProductFeedbackIssues.IssueState(
+                        "I_92",
+                        true,
+                        null,
+                        List.of(new ProductFeedbackIssues.Comment(1_001L, "app", true, body.getValue(), Instant.now())),
+                        null)));
+        var paused = destination();
+        paused.setPaused(true);
+        destinationRows.save(paused);
+        ActionTestSupport.due(jdbc, lane);
+
+        assertThat(ActionTestSupport.runLane(executor, jdbc, lane, publishAdapter)
+                        .orElseThrow())
+                .isInstanceOf(ActionResult.Defer.class);
+        assertThat(jdbc.queryForObject(
+                        "SELECT write_started_at IS NULL FROM agent_action WHERE lane_key = ? AND kind = 'PUBLISH_REPORT'",
+                        Boolean.class,
+                        lane))
+                .isTrue();
+        paused.setPaused(false);
+        destinationRows.save(paused);
+        ActionTestSupport.due(jdbc, lane);
+
+        assertThat(ActionTestSupport.runLane(executor, jdbc, lane, publishAdapter)
+                        .orElseThrow())
+                .isInstanceOf(ActionResult.Done.class);
+        verify(updates, times(1)).comment(eq(PRIVATE_REPOSITORY), eq(92L), anyString());
+        verify(issues, times(1)).create(eq(PUBLIC_REPOSITORY), anyString(), anyString(), any());
+        verify(updates, times(2)).close(PRIVATE_REPOSITORY, 92L, "completed");
+        assertThat(filings.findById(id).orElseThrow().getRoute()).isEqualTo(FilingRoute.PUBLIC);
+    }
+
+    @Test
+    void shouldPublishAReportTheReporterAllowedAsOnePublicIssueAndCloseThePrivateOne() {
+        UUID id = publishable();
+        when(issues.create(eq(PUBLIC_REPOSITORY), anyString(), anyString(), any()))
+                .thenReturn(new ProductFeedbackIssues.Issue(
+                        301, "I_301", "https://github.com/acme/feedback-public/issues/301"));
+        publishCommented(id);
+
+        ActionTestSupport.drain(executor, jdbc);
+
+        verify(issues, times(1)).create(eq(PUBLIC_REPOSITORY), anyString(), anyString(), any());
+        verify(updates, times(1))
+                .comment(eq(PRIVATE_REPOSITORY), eq(92L), contains("Published as acme/feedback-public#301"));
+        verify(updates, times(1)).close(PRIVATE_REPOSITORY, 92L, "completed");
+        var published = filings.findById(id).orElseThrow();
+        assertThat(published.getRoute()).isEqualTo(FilingRoute.PUBLIC);
+        assertThat(published.getIssueNumber()).isEqualTo(301L);
+        assertThat(published.getPublishRequestedBy()).isNull();
+    }
+
+    @Test
+    void shouldFindThePublicIssueByItsMarkerInsteadOfPublishingItAgainWhenGitHubsAnswerWasLost() {
+        UUID id = publishable();
+        when(issues.create(eq(PUBLIC_REPOSITORY), anyString(), anyString(), any()))
+                .thenThrow(new ProductFeedbackIssues.Unknown("read timed out", null));
+        publishCommented(id);
+        ActionTestSupport.drain(executor, jdbc);
+
+        when(issues.findByMarker(
+                        eq(PUBLIC_REPOSITORY),
+                        eq(IssueRenderer.promotionMarker(id).toString()),
+                        any()))
+                .thenReturn(Optional.of(new ProductFeedbackIssues.Issue(
+                        301, "I_301", "https://github.com/acme/feedback-public/issues/301")));
+        jdbc.update(
+                "UPDATE agent_action SET leased_until = now() - interval '1 second'"
+                        + " WHERE lane_key = ? AND state = 'EXECUTING'",
+                "file_issue:" + id);
+        executor.runDue();
+
+        verify(issues, times(1)).create(eq(PUBLIC_REPOSITORY), anyString(), anyString(), any());
+        assertThat(filings.findById(id).orElseThrow().getIssueNumber()).isEqualTo(301L);
+    }
+
+    @Test
+    void shouldLookForAnUncertainPublishSinceTheFirstCommandWhenAMaintainerAsksAgain() {
+        UUID id = publishable();
+        when(issues.create(eq(PUBLIC_REPOSITORY), anyString(), anyString(), any()))
+                .thenThrow(new ProductFeedbackIssues.Unknown("read timed out", null));
+        publishCommented(id, 1_000L);
+        Instant first =
+                Objects.requireNonNull(filings.findById(id).orElseThrow().getPublishRequestedAt());
+        jdbc.update(
+                "UPDATE agent_action SET attempts = max_attempts - 1 WHERE lane_key = ? AND state = 'ADMITTED'",
+                "file_issue:" + id);
+        ActionTestSupport.drain(executor, jdbc);
+        assertThat(filings.findById(id).orElseThrow().getPublishRequestedBy())
+                .as("the uncertain command is released")
+                .isNull();
+
+        publishCommented(id, 1_001L);
+        ActionTestSupport.drain(executor, jdbc);
+
+        verify(issues, atLeastOnce())
+                .findByMarker(
+                        eq(PUBLIC_REPOSITORY),
+                        eq(IssueRenderer.promotionMarker(id).toString()),
+                        eq(first.minusSeconds(60)));
+    }
+
+    /** A private issue whose reporter allows public, with a current consent and a draft. */
+    private UUID publishable() {
+        UUID id = filedPrivately();
+        jdbc.update(
+                "UPDATE product_feedback_filing SET allow_public = true, drafted_at = now(), draft = ? WHERE feedback_id = ?",
+                routing.write(new Draft(
+                        Draft.Disposition.ISSUE,
+                        Draft.Type.BUG,
+                        "The list jumps",
+                        "The list jumps when it loads",
+                        "The list stays in place",
+                        List.of("Open the list"),
+                        "",
+                        "",
+                        List.of(),
+                        "",
+                        null,
+                        false,
+                        false,
+                        true,
+                        Draft.Confidence.HIGH)),
+                id);
+        when(updates.permission(any(), eq("maintainer"))).thenReturn("write");
+        return id;
+    }
+
+    /** A private issue, filed for a report whose reporter kept it private. */
+    private UUID filedPrivately() {
+        UUID id = privateReportDue();
+        when(issues.create(any(), anyString(), anyString(), any()))
+                .thenReturn(new ProductFeedbackIssues.Issue(
+                        92, "I_92", "https://github.com/acme/feedback-private/issues/92"));
+        fileDueAndDrain();
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.FILED);
+        return id;
+    }
+
+    private void publishCommented(UUID id) {
+        publishCommented(id, 1_000L);
+    }
+
+    /** A maintainer comments {@code /publish} on the private issue, and the follow-up reads it. */
+    private void publishCommented(UUID id, long commentId) {
+        jdbc.update("UPDATE product_feedback_filing SET followed_at = NULL WHERE feedback_id = ?", id);
+        when(updates.states(anyList()))
+                .thenReturn(List.of(new ProductFeedbackIssues.IssueState(
+                        "I_92",
+                        true,
+                        null,
+                        List.of(new ProductFeedbackIssues.Comment(
+                                commentId, "maintainer", false, "/publish", Instant.now())),
+                        null)));
+        // Past the scheduler lock, which skips a second run within its minimum hold.
+        AopTestUtils.<FollowService>getUltimateTargetObject(follow).followDue();
+        assertThat(filings.findById(id).orElseThrow().getPublishRequestedBy()).isEqualTo("maintainer");
     }
 
     @Test

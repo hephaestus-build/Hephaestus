@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -15,5 +17,10 @@ class FileIssueQueue {
 
     void enqueue(FileIssueAdapter.Payload payload, @Nullable Long accountId) {
         actions.enqueue(FileIssueAdapter.request(mapper, payload, accountId));
+    }
+
+    /** Queues a {@code /publish} command, in the report's lane, after its filing. */
+    void publish(UUID feedbackId, Instant requestedAt, @Nullable Long accountId) {
+        actions.enqueue(PublishReportAdapter.request(mapper, feedbackId, requestedAt, accountId));
     }
 }

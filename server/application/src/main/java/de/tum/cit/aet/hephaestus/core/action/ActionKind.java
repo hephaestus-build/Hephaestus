@@ -33,7 +33,13 @@ public enum ActionKind {
      * One Slack message of Hephaestus: the reply to a Slack turn, or a weekly digest's note. Each carries its entry in
      * its metadata, so an attempt whose post may have reached Slack reads the history first.
      */
-    SLACK_POST(false, false);
+    SLACK_POST(false, false),
+
+    /**
+     * Publishes a private product-feedback issue as a new public one, for the instance, on a maintainer's
+     * {@code /publish}. The new issue carries a marker, so an attempt whose write may have started looks for it first.
+     */
+    PUBLISH_REPORT(false, true);
 
     private final boolean atMostOnce;
     private final boolean instanceLevel;

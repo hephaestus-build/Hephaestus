@@ -67,12 +67,6 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
                     """, nativeQuery = true)
     Optional<UUID> claimableFiling(@Param("now") Instant now);
 
-    @Query(
-            value = "SELECT feedback_id FROM product_feedback_filing WHERE publish_requested_by IS NOT NULL"
-                    + " AND (lease_until IS NULL OR lease_until < :now) ORDER BY publish_requested_at LIMIT 20",
-            nativeQuery = true)
-    List<UUID> withPublishRequest(@Param("now") Instant now);
-
     /** Filed issues whose follow-up is due, oldest first. A closed issue stays followed, so a reopen is seen. */
     @Query(value = """
                     SELECT * FROM product_feedback_filing
