@@ -207,7 +207,7 @@ public class ReviewJobClaimService {
                         : jobRepository.lockQueuedByRun(fence.runId());
         if (locked.isEmpty()) {
             // A lifecycle write holds the review or its job; the run waits for the next pull.
-            runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY);
+            runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY, null);
             return Optional.empty();
         }
         ReviewJob job = locked.get();
@@ -225,13 +225,11 @@ public class ReviewJobClaimService {
                 yield Optional.empty();
             }
             case PoolWait waiting -> {
-                runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY);
+                runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY, null);
                 yield Optional.empty();
             }
             case ClaimOutcome.BUDGET_HELD -> {
-                job.setHoldReason(ReviewJob.HOLD_REASON_BUDGET);
-                jobRepository.save(job);
-                runs.requeue(fence, AgentRuns.Charge.FREE, BUDGET_HOLD_INTERVAL);
+                runs.requeue(fence, AgentRuns.Charge.FREE, BUDGET_HOLD_INTERVAL, AgentRunHold.BUDGET);
                 yield Optional.empty();
             }
             case ClaimOutcome other -> throw new IllegalStateException("A sandbox's claim cannot be " + other);

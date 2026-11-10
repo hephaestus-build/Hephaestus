@@ -420,7 +420,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @WorkspaceAgnostic("ID-based fenced hand-on; the caller holds the attempt's run")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.runId = :nextRunId, j.startedAt = null,"
-            + " j.executionStartedAt = null, j.holdReason = null, j.llmCalls = 0, j.llmInputTokens = 0,"
+            + " j.executionStartedAt = null, j.llmCalls = 0, j.llmInputTokens = 0,"
             + " j.llmOutputTokens = 0, j.llmReasoningTokens = 0, j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0"
             + " WHERE j.id = :id AND j.status = 'RUNNING' AND j.runId = :runId AND j.attempt = :attempt")
     int queueOnNextRun(
