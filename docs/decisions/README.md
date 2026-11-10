@@ -100,7 +100,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0023](0023-outline-documentation-integration.md) | Outline documentation integration — a content source, not a detection surface | Accepted |
 | [0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md) | Integration sync lifecycle — drift tombstones and mirror erasure are two different operations | Accepted |
 | [0025](0025-agent-job-queue-on-postgresql.md) | Agent job queue moves off NATS onto PostgreSQL | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
-| [0026](0026-per-purpose-agent-bindings-and-llm-governance.md) | Per-purpose agent bindings and governed OpenAI-compatible LLM catalog | Accepted |
+| [0026](0026-per-purpose-agent-bindings-and-llm-governance.md) | Per-purpose agent bindings and governed OpenAI-compatible LLM catalog | Superseded by [0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) |
 | [0027](0027-dialog-lifetime-and-where-a-write-outcome-lands.md) | Dialog lifetime, and where a write's outcome lands when the dialog is gone | Accepted |
 | [0028](0028-source-synced-practice-catalog.md) | Source-synced practice catalog with sparse instance overrides | Accepted |
 | [0029](0029-measurement-intervention-seam-and-channel-levels.md) | Separate measurement from intervention and derive level from channel | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
@@ -157,6 +157,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0080](0080-provider-events-go-to-a-postgresql-inbox.md) | Provider events go to a PostgreSQL inbox, and the server receives them | Accepted |
 | [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) | One server role runs Hephaestus, and agent work runs in sandboxes that reach only the server | Accepted |
 | [0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) | A developer has one Heph conversation, and its ledger is Heph's memory | Accepted |
+| [0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) | Each purpose uses one governed model within the member's AI choice, and every model call is counted | Accepted |
 | [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) | Each module owns its aggregates, declares its dependencies, and changes a lifecycle only through the aggregate | Accepted |
 | [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
 
