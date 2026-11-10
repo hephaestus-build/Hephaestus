@@ -3,10 +3,10 @@
 | Key | Type | Default | Required in object | Constraints |
 | --- | --- | --- | --- | --- |
 | `observability.alertRules.configMap` | boolean | `false` |  | Render a ConfigMap with the rule file as it is. |
-| `observability.alertRules.labels` | object | `{}` |  | Labels for the ConfigMap and the PrometheusRule, for the rule selector of your Prometheus. |
+| `observability.alertRules.labels` | object | `{}` |  | Labels for the ConfigMap and the PrometheusRule, for the rule selector of your Prometheus.<br />`additionalProperties: {"type":"string","maxLength":63}` |
 | `observability.alertRules.prometheusRule` | boolean | `false` |  | Render a PrometheusRule with the groups of the rule file. The CRD of the Prometheus Operator must exist. |
-| `observability.stack.alertmanager.configSecret` | string | `""` |  | The Secret with the key alertmanager.yml. Required when the stack is enabled. |
+| `observability.stack.alertmanager.configSecret` | string | `""` |  | The Secret with the key alertmanager.yml. Required when the stack is enabled.<br />`pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
 | `observability.stack.enabled` | boolean | `false` |  | — |
-| `observability.stack.persistence.size` | string | `"5Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `observability.stack.persistence.size` | string | `"5Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `observability.stack.persistence.storageClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
-| `observability.stack.retention` | string | `"30d"` |  | How long VictoriaMetrics keeps samples, in days or weeks. |
+| `observability.stack.retention` | string | `"30d"` |  | Sample retention, parsed by VictoriaMetrics retentionPeriod. Use a positive integer followed by d for days or w for weeks.<br />`pattern: "^[1-9][0-9]*[dw]$"` |

@@ -4,15 +4,15 @@
 | --- | --- | --- | --- | --- |
 | `postgresql.backup.clientTlsSecret` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
 | `postgresql.backup.enabled` | boolean | `false` | yes | — |
-| `postgresql.backup.resources.limits.cpu` | string | `"1"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.backup.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.backup.resources.limits.memory` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.backup.resources.requests.cpu` | string | `"100m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.backup.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.backup.resources.requests.memory` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.backup.resources.limits.cpu` | string | `"1"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.backup.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.backup.resources.limits.memory` | string | `"512Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.backup.resources.requests.cpu` | string | `"100m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.backup.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.backup.resources.requests.memory` | string | `"512Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `postgresql.backup.restore.enabled` | boolean | `false` | yes | — |
 | `postgresql.backup.restore.time` | string | `""` | yes | `pattern: "^(?:[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?[+-][0-9]{2}(?::?[0-9]{2})?)?$"` |
-| `postgresql.backup.retentionFull` | integer | `2` | yes | `minimum: 1. maximum: 52` |
+| `postgresql.backup.retentionFull` | integer | `2` | yes | Number of full backups, parsed as an integer by pgBackRest repo1-retention-full.<br />`minimum: 1. maximum: 52` |
 | `postgresql.backup.s3.bucket` | string | `""` | yes | `pattern: "^(?:[a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$"` |
 | `postgresql.backup.s3.cidr` | string | `""` | yes | `pattern: "^(?:\|[0-9]{1,3}(?:\\.[0-9]{1,3}){3}/[0-9]{1,2}\|[0-9a-fA-F:]+/[0-9]{1,3})$"` |
 | `postgresql.backup.s3.endpoint` | string | `""` | yes | `pattern: "^[A-Za-z0-9.-]{0,253}(?::[0-9]{1,5})?$"` |
@@ -28,29 +28,29 @@
 | `postgresql.external.host` | string | `""` | yes | `pattern: "^[A-Za-z0-9.-]{0,253}$"` |
 | `postgresql.external.port` | integer | `5432` | yes | `minimum: 1. maximum: 65535` |
 | `postgresql.metrics.enabled` | boolean | `false` | yes | — |
-| `postgresql.metrics.resources.limits.cpu` | string | `"200m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.metrics.resources.limits.ephemeral-storage` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.metrics.resources.limits.memory` | string | `"96Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.metrics.resources.requests.cpu` | string | `"10m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.metrics.resources.requests.ephemeral-storage` | string | `"16Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.metrics.resources.requests.memory` | string | `"32Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.metrics.statementLimit` | integer | `20` | yes | The statements with the most total execution time that the exporter reports, by query id only. |
+| `postgresql.metrics.resources.limits.cpu` | string | `"200m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.metrics.resources.limits.ephemeral-storage` | string | `"64Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.metrics.resources.limits.memory` | string | `"96Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.metrics.resources.requests.cpu` | string | `"10m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.metrics.resources.requests.ephemeral-storage` | string | `"16Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.metrics.resources.requests.memory` | string | `"32Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.metrics.statementLimit` | integer | `20` | yes | The statements with the most total execution time that the exporter reports, by query id only.<br />`minimum: 1. maximum: 100` |
 | `postgresql.parameters.autovacuum_max_workers` | integer | `supplied by release or operator` |  | `minimum: 1. maximum: 16` |
-| `postgresql.parameters.autovacuum_work_mem` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
-| `postgresql.parameters.effective_cache_size` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.autovacuum_work_mem` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.effective_cache_size` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
 | `postgresql.parameters.hash_mem_multiplier` | number | `supplied by release or operator` |  | `minimum: 1. maximum: 10` |
-| `postgresql.parameters.maintenance_work_mem` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.maintenance_work_mem` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
 | `postgresql.parameters.max_connections` | integer | `supplied by release or operator` |  | `minimum: 4` |
 | `postgresql.parameters.max_parallel_workers_per_gather` | integer | `supplied by release or operator` |  | `minimum: 0. maximum: 16` |
-| `postgresql.parameters.max_wal_size` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
-| `postgresql.parameters.shared_buffers` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
-| `postgresql.parameters.work_mem` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
-| `postgresql.persistence.size` | string | `"20Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.parameters.max_wal_size` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.shared_buffers` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.work_mem` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.persistence.size` | string | `"20Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `postgresql.persistence.storageClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
-| `postgresql.resources.limits.cpu` | string | `"2"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.resources.limits.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `postgresql.resources.requests.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.resources.limits.cpu` | string | `"2"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.resources.limits.memory` | string | `"2Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.resources.requests.cpu` | string | `"250m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.resources.requests.memory` | string | `"2Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `postgresql.tls.existingSecret` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)?$"` |
