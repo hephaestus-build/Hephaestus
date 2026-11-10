@@ -4,6 +4,8 @@
         type = org.springframework.modulith.ApplicationModule.Type.OPEN,
         allowedDependencies = {
             "core::security",
+            // Hephaestus's Slack posts are outbox actions.
+            "core::action",
             // A paused or revoked channel tells running Heph turns that their context changed.
             "core::event",
             "integration.chat::item",

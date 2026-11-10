@@ -432,6 +432,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "GitLabUserService", // Always present for the GitLab processors; its GraphQL client beans exist
                     // only
                     // when GitLab is enabled (@ConditionalOnProperty)
+                    "SlackPostAdapter", // Breaks the executor -> its adapters -> this adapter -> projector ->
+                    // executor cycle; the projector exists only with Slack (@ConditionalOnProperty)
                     "GitLabDataSyncScheduler", // Optional GitLab beans gated by @ConditionalOnProperty
                     "GitLabHistoricalBackfillService", // Optional GitLab beans gated by @ConditionalOnProperty
                     "HistoricalBackfillScheduler", // Optional GitLab backfill service gated by @ConditionalOnProperty

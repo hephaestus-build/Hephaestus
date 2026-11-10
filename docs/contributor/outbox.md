@@ -5,8 +5,7 @@ page_type: reference
 ---
 
 An effect on the outside world is one action in the `agent_action` table.
-Email, product-feedback issues (`FILE_ISSUE`) and feedback on the reviewed work (`DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`) are the kinds of action in this release.
-Slack replies still use their own delivery code until they move here.
+Email, product-feedback issues (`FILE_ISSUE`), feedback on the reviewed work (`DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`) and Hephaestus's Slack posts (`SLACK_POST`) are the kinds of action in this release.
 One executor carries out the actions on every server replica.
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) records why there is one outbox.
 The code is in `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/action/`.
@@ -128,6 +127,14 @@ The copies keep their own write fences.
 A send calls `beginWrite` before it fences a copy.
 While a copy's write may have reached the provider, the send returns `Reread`, and the next attempt reads the copy back by its marker.
 The `ended` hook also projects the copies of a send that ended without its own settlement.
+
+## Carry out an effect at once
+
+A caller that holds what only it knows, such as the stream of a Slack reply, can own an effect.
+It creates the action with `AgentActions.enqueueNew` and a delay, and carries it out with `ActionExecutor.runNow` and its own adapter.
+If the caller dies first, the executor of any server takes the action when the delay ends, with the kind's own adapter.
+That adapter does not have what the caller held, so it reads the provider back first.
+The Slack reply works like this ([Slack replies](./unified-pi-runtime.mdx)).
 
 ## Retention and erasure
 

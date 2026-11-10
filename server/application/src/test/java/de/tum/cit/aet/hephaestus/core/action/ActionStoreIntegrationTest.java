@@ -279,6 +279,23 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldLetItsOwnerTakeAWaitingLaneHeadAtOnceAndNothingElse() {
+        String lane = "owned:" + UUID.randomUUID();
+        UUID head = actions.enqueueNew(request(lane, lane + ":1", null, 3), Duration.ofDays(1))
+                .orElseThrow();
+        UUID next = actions.enqueue(request(lane, lane + ":2", null, 3));
+
+        assertThat(actions.enqueueNew(request(lane, lane + ":1", null, 3), Duration.ZERO))
+                .as("another caller created it: that caller owns it")
+                .isEmpty();
+        assertThat(store.claim(next, LEASE)).as("it waits for its lane").isEmpty();
+        assertThat(store.claim(head, LEASE))
+                .as("held back for a day, its owner takes it now")
+                .hasValueSatisfying(claim -> assertThat(claim.attempts()).isOne());
+        assertThat(store.claim(head, LEASE)).as("taken once").isEmpty();
+    }
+
+    @Test
     void shouldKeepTheFenceAndTakeTheActionAgainToReadBack() {
         UUID id = actions.enqueue(fileIssue("key:" + UUID.randomUUID(), 3));
         var first = claimOwn(List.of(id)).getFirst();

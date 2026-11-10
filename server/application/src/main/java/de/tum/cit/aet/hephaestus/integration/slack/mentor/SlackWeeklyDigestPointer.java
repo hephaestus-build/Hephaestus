@@ -16,6 +16,12 @@ import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscript
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestTransport;
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestWritten;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.action.ActionAdapter;
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -24,10 +30,12 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorSlackReplies;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -68,6 +76,21 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
     private final WeeklyDigestSubscriptions subscriptions;
     private final WorkspaceSummaryQuery workspaces;
     private final SlackHephaestusUiLinks links;
+    private final MentorSlackReplies replies;
+    private final ActionExecutor executor;
+
+    /** Carries out the notes this server writes. */
+    private final ActionAdapter ownNotes = new ActionAdapter() {
+        @Override
+        public ActionKind kind() {
+            return ActionKind.SLACK_POST;
+        }
+
+        @Override
+        public ActionResult execute(ActionAttempt attempt) {
+            return SlackWeeklyDigestPointer.this.attempt(attempt, replies.payload(attempt));
+        }
+    };
 
     public SlackWeeklyDigestPointer(
             SlackMessageService slack,
@@ -78,7 +101,9 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
             WeeklyDigestNotes notes,
             WeeklyDigestSubscriptions subscriptions,
             WorkspaceSummaryQuery workspaces,
-            SlackHephaestusUiLinks links) {
+            SlackHephaestusUiLinks links,
+            MentorSlackReplies replies,
+            ActionExecutor executor) {
         this.slack = slack;
         this.connections = connections;
         this.identities = identities;
@@ -88,6 +113,8 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
         this.subscriptions = subscriptions;
         this.workspaces = workspaces;
         this.links = links;
+        this.replies = replies;
+        this.executor = executor;
     }
 
     @Override
@@ -103,28 +130,34 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
                 .isPresent();
     }
 
-    /** Posts the note once. */
+    /** Posts the note once, as an outbox action that this server carries out now ({@link MentorSlackReplies}). */
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(WeeklyDigestWritten event) {
         if (event.pointer() != WeeklyDigestPointer.SLACK) {
             return;
         }
-        send(event.workspaceId(), event.entryId(), false);
+        notes.note(event.workspaceId(), event.entryId())
+                .flatMap(note -> replies.digest(event.workspaceId(), note.accountId(), event.entryId()))
+                .ifPresent(action -> executor.runNow(action, ownNotes));
     }
 
     /**
-     * Settles a note whose post was taken and not settled, by one read of the DM's history: it is there, or it failed.
-     * It is never posted again ({@link SlackMentorPoster#reconcile}).
+     * Carries out one attempt of a note's post. An attempt after one whose post may have reached Slack reads the DM's
+     * history instead: the note is there, or it failed, and it is never posted again.
      */
-    public void reconcile(long workspaceId, UUID entryId) {
-        send(workspaceId, entryId, true);
+    ActionResult attempt(ActionAttempt attempt, MentorSlackReplies.Payload payload) {
+        if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+        return send(
+                Objects.requireNonNull(attempt.workspaceId()),
+                payload.entryId(),
+                payload.taken() || attempt.writeStarted());
     }
 
     /** Posts the note if the account still wants it: a later opt-in does not revive an older note. */
-    private void send(long workspaceId, UUID entryId, boolean reconciling) {
+    private ActionResult send(long workspaceId, UUID entryId, boolean reconciling) {
         Optional<WeeklyDigestNotes.Note> found = notes.note(workspaceId, entryId);
         if (found.isEmpty()) {
-            return;
+            return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
         }
         WeeklyDigestNotes.Note note = found.get();
         Optional<String> teamId = teamId(workspaceId);
@@ -132,11 +165,11 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
         Optional<WorkspaceSummaryQuery.WorkspaceSummary> workspace = workspaces.findById(workspaceId);
         if (teamId.isEmpty() || slackUserId.isEmpty() || workspace.isEmpty()) {
             log.debug("Weekly digest note not posted to Slack, no Slack identity: workspaceId={}", workspaceId);
-            return;
+            return new ActionResult.Cancelled(ActionStopReason.RECIPIENT_UNAVAILABLE);
         }
         Optional<Instant> since = subscriptions.enabledSince(note.accountId());
         if (since.isEmpty() || since.get().isAfter(note.writtenAt())) {
-            return;
+            return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
         }
         MentorConversation main = conversations.require(workspaceId, note.conversationId());
         String knownChannel =
@@ -149,27 +182,26 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
         String text = text(note);
         SlackMentorPoster.Post post =
                 new SlackMentorPoster.Post(channel, null, blocks(note, workspace.get()), text, entryId);
-        Optional<SlackMentorPoster.Result> result;
+        SlackMentorPoster.Result result;
         if (!reconciling) {
-            result = poster.post(workspaceId, entryId, post);
+            result = poster.send(workspaceId, entryId, post);
         } else if (knownDm) {
             // The note cannot be older than its digest.
-            result = Optional.of(poster.reconcile(workspaceId, entryId, post, SlackTs.ofInstant(note.writtenAt())));
+            result = poster.reconcile(workspaceId, entryId, post, SlackTs.ofInstant(note.writtenAt()));
         } else {
             // The DM's channel was never learned, so its history cannot be read: the note stays uncertain.
             log.warn(
                     "Weekly digest note stays uncertain, its DM is unknown: workspaceId={}, entryId={}",
                     workspaceId,
                     entryId);
-            result = Optional.empty();
+            return new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED);
         }
-        String landedIn = result.filter(posted -> posted.outcome() == SlackMentorPoster.Outcome.DELIVERED)
-                .map(SlackMentorPoster.Result::channelId)
-                .orElse(null);
+        String landedIn = result.outcome() == SlackMentorPoster.Outcome.DELIVERED ? result.channelId() : null;
         if (landedIn != null && main.getSlackChannelId() == null) {
             // The thread on the note must find this conversation by its Slack DM.
             conversations.bindSlackIdentity(workspaceId, main.getId(), teamId.get(), slackUserId.get(), landedIn);
         }
+        return SlackMentorPoster.result(result.outcome());
     }
 
     private Optional<String> teamId(long workspaceId) {

@@ -337,8 +337,10 @@ A turn asked in the app never reaches Slack.
 The reply is what the app shows for the turn (`SlackMentorPosts.reply`).
 It has each message that Hephaestus wrote, followed by the quoted words of each result, problem, and piece of feedback that it showed.
 
-One server projects a turn: the server whose `MentorSlackDelivery.claim` sets the question's `slack_delivery` from empty to `PENDING`.
-The question's `slack_delivery` is the state of the whole reply: `PENDING`, `DELIVERED`, `UNCERTAIN`, or `FAILED`.
+One server projects a turn: the server that creates the reply's outbox action ([A reply without its server](#a-reply-without-its-server)).
+While that action runs, it is the state of the whole reply: the app shows `PENDING` or `UNCERTAIN`.
+When it ends, the question records how the reply ended in `slack_delivery`: `DELIVERED`, `UNCERTAIN`, or `FAILED`.
+
 Hephaestus's answer entry carries only `slack_ts`, the message that shows it, so that a Slack thread on that message finds it.
 Every post carries Slack metadata with the entry id (event type `heph_entry`).
 A notice to the developer, such as a refusal, carries the event type `heph_notice`.
@@ -493,39 +495,42 @@ The shown part is what the stream sent, or the part of a post or a `chat.update`
 | The same, but Slack does not show the feedback. | `FAILED` |
 | Slack refused the reply. | `DELIVERED` if a stream already showed it, otherwise `FAILED` |
 | Silent Mode kept the reply from Slack (`MentorTurnCompletion.recordSilenced`). | `DELIVERED` if a stream already showed it, otherwise `FAILED` |
-| The reply is `UNCERTAIN` on the projecting server. | It stays `UNCONFIRMED` until the reconciler reads the history. |
+| The reply is `UNCERTAIN` on the projecting server. | It stays `UNCONFIRMED` until a read of the history decides. |
 | The reply can no longer reach Slack. | It stays `UNCONFIRMED`. |
 
 A turn asked in Slack that ended `STOPPED` or `FAILED` settles its feedback at the end, as an app turn does ([Delivery of shown feedback](#delivery-of-shown-feedback)).
 Only a `DONE` turn's Slack projection publishes feedback receipts. A later stream, post, Silent Mode refusal, or disconnected-reply reconciliation cannot replace the end's cutoff receipt.
 
-### Reconciler
+### A reply without its server
 
-`SlackMentorReconciler` (server role, every minute) finishes each reply that no server settled.
-The projecting server died, missed the end of the turn, or left the reply `UNCERTAIN`.
-The reconciler takes a reply 2 minutes after the turn ended, and up to 1 day after.
-One run reads at most 50 due posts, and at most 5 of each workspace.
-A run stops taking posts after 5 minutes.
+The reply is an outbox action of kind `SLACK_POST`, keyed by the question (`slack_reply:<question id>`, [The outbox](./outbox.md)).
+The server that projects a turn creates the action while the turn runs (`MentorSlackReplies.own`), and the action waits for one day.
+The end of the turn makes the action due within 2 minutes (`MentorSlackReplies.ended`).
+If no server took the reply, the end creates the action itself.
+The projecting server carries out the action at once with its own stream (`ActionExecutor.runNow`).
+When that server died or missed the end, the executor of any server takes the action after the 2 minutes.
 
-The reconciler takes each unsettled post once (`SlackMentorReconciler.MAX_ATTEMPTS` is 1).
-It never posts again what Slack can hold:
+That server has no stream of the reply, and it never posts again what Slack can hold:
 
-- A reply that no server took is claimed as the projecting server claims it, and sent now. If a server claimed it after the reconciler selected it, the claim fails and the reconciler skips the reply.
-- A post that a server took gets one read of the history of the direct message, by its metadata (`SlackMentorPoster.reconcile`).
+- A reply that no server took is sent now.
+- A reply that a server took gets a read of the history of the direct message, by its metadata (`SlackMentorPoster.reconcile`).
   - The post is there: the reply is `DELIVERED`, and its feedback settles as for a post that reached Slack.
-  - The post is not there, and Slack has no more pages: `slack_delivery` is `FAILED`, and the feedback that the reply claimed is `FAILED`. The reply is never posted again. The app shows "Not fully delivered to Slack. The full answer is here." under the answer.
-  - The history cannot be read: the reply stays `UNCERTAIN`, and its feedback is `UNCONFIRMED` (`MentorTurnCompletion.recordUncertain`).
-  - The post is not on the page that the reconciler reads, and Slack has more pages: the reply stays `UNCERTAIN`.
+  - The post is not there, and Slack has no more pages: the reply is `FAILED`.
+    The feedback that the reply claimed is `FAILED` too, and the reply is never posted again.
+    The app shows "Not fully delivered to Slack. The full answer is here." under the answer.
+  - The history cannot be read, or Slack has more pages than the one it returned: the reply stays `UNCERTAIN`.
+    Its feedback is `UNCONFIRMED` (`MentorTurnCompletion.recordUncertain`).
+    The history is read again a minute later, for 3 attempts in all.
 - A stream that another server left is never posted again, because its shown part is unknown.
-  For a turn that ended `DONE`, the reconciler ends the stream with "… The full answer is in Hephaestus.", and the feedback of the reply is `UNCONFIRMED`.
-  If Slack already ended that stream, the reconciler replaces the message with the whole reply (`chat.update`).
+  For a turn that ended `DONE`, that server ends the stream with "… The full answer is in Hephaestus.", and the feedback of the reply is `UNCONFIRMED`.
+  If Slack already ended that stream, it replaces the message with the whole reply (`chat.update`).
   The feedback then settles as for a replaced message.
-  For a stopped turn, the reconciler ends the stream where it is.
+  For a stopped turn, it ends the stream where it is.
   For a failed turn, it ends the stream with the reason.
   If Slack already ended the stream, it replaces the message with the reason.
+- An attempt after one whose post may have reached Slack reads the history first, in the same way.
 
-The reconciler does not take a post a second time.
-The Slack note of a weekly digest gets the same single history read.
+The Slack note of a weekly digest is an action of the same kind (`slack_digest:<digest id>`), and gets the same history read.
 A note whose direct message Hephaestus never learned stays `UNCERTAIN`.
 
 ### Slack disconnect

@@ -5,7 +5,9 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -14,6 +16,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** The outbox's short transactions: each one statement of {@link AgentActionRepository}, mapped to records. */
@@ -64,18 +67,53 @@ class ActionStore {
     /** Adds the action in the caller's transaction, or returns the one already enqueued under its key. */
     @Transactional
     public UUID enqueue(ActionRequest request) {
-        return actions.insertAdmitted(
-                        TimeOrderedIds.next(),
-                        request.workspaceId(),
-                        request.kind().name(),
-                        request.laneKey(),
-                        request.idempotencyKey(),
-                        mapper.writeValueAsString(request.payload()),
-                        request.subjectAccountId(),
-                        request.maxAttempts(),
-                        request.expiresAt())
+        return add(request, Duration.ZERO)
                 .or(() -> actions.findIdByIdempotencyKey(request.idempotencyKey()))
                 .orElseThrow(() -> new IllegalStateException("An action under this key is being enqueued"));
+    }
+
+    /** Adds the action, due after {@code delay}; empty when its key was already enqueued. */
+    @Transactional
+    public Optional<UUID> insert(ActionRequest request, Duration delay) {
+        return add(request, delay);
+    }
+
+    private Optional<UUID> add(ActionRequest request, Duration delay) {
+        return actions.insertAdmitted(
+                TimeOrderedIds.next(),
+                request.workspaceId(),
+                request.kind().name(),
+                request.laneKey(),
+                request.idempotencyKey(),
+                mapper.writeValueAsString(request.payload()),
+                request.subjectAccountId(),
+                request.maxAttempts(),
+                request.expiresAt(),
+                delay.toSeconds());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void advance(long workspaceId, String idempotencyKey, Duration delay) {
+        actions.advance(workspaceId, idempotencyKey, delay.toSeconds());
+    }
+
+    /** Takes one admitted lane head now ({@link AgentActionRepository#claimById}). */
+    @Transactional
+    public Optional<Claim> claim(UUID id, Duration lease) {
+        return actions.claimById(id, lease.toSeconds()).map(ActionStore::claim);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<JsonNode> admittedPayload(long workspaceId, String idempotencyKey) {
+        return actions.findAdmittedPayload(workspaceId, idempotencyKey).map(mapper::readTree);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, LaneAction> byKeys(long workspaceId, Collection<String> keys) {
+        if (keys.isEmpty()) return Map.of();
+        var found = new HashMap<String, LaneAction>();
+        for (var row : actions.findByKeys(workspaceId, keys)) found.put(row.getIdempotencyKey(), lane(row));
+        return found;
     }
 
     /**
@@ -147,20 +185,22 @@ class ActionStore {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<LaneAction> newestInLane(long workspaceId, String laneKey) {
-        return actions.newestInLane(workspaceId, laneKey).map(row -> {
-            String reason = row.getStopReason();
-            return new LaneAction(
-                    row.getId(),
-                    ActionKind.valueOf(row.getKind()),
-                    row.getIdempotencyKey(),
-                    ActionState.valueOf(row.getState()),
-                    row.getAttempts(),
-                    row.getRereading(),
-                    row.getNextAttemptAt(),
-                    reason == null ? null : ActionStopReason.valueOf(reason),
-                    row.getCreatedAt(),
-                    row.getUpdatedAt());
-        });
+        return actions.newestInLane(workspaceId, laneKey).map(ActionStore::lane);
+    }
+
+    private static LaneAction lane(AgentActionRepository.LaneRow row) {
+        String reason = row.getStopReason();
+        return new LaneAction(
+                row.getId(),
+                ActionKind.valueOf(row.getKind()),
+                row.getIdempotencyKey(),
+                ActionState.valueOf(row.getState()),
+                row.getAttempts(),
+                row.getRereading(),
+                row.getNextAttemptAt(),
+                reason == null ? null : ActionStopReason.valueOf(reason),
+                row.getCreatedAt(),
+                row.getUpdatedAt());
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

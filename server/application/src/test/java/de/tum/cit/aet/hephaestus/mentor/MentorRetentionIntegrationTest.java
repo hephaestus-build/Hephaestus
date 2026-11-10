@@ -105,11 +105,11 @@ class MentorRetentionIntegrationTest extends AbstractWorkspaceIntegrationTest {
         UUID id = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO mentor_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
-                                          slack_attempts, created_at)
+                                          created_at)
                 VALUES (?, ?, ?, ?, 'SUMMARY', 'APP', 'words-summary',
                         jsonb_build_object('type', 'compaction', 'id', 'pi-' || ?, 'summary', 'words-summary',
                             'fromSeq', 1, 'toSeq', ?),
-                        0, now())
+                        now())
                 """, id, conversation.getWorkspaceId(), conversation.getId(), seq + 1, id.toString(), seq);
         seq++;
         return id;
@@ -121,13 +121,13 @@ class MentorRetentionIntegrationTest extends AbstractWorkspaceIntegrationTest {
         jdbc.update(
                 """
                 INSERT INTO mentor_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
-                                          slack_attempts, created_at)
+                                          created_at)
                 VALUES (?, ?, ?, ?, ?, 'APP', ?,
                         jsonb_build_object('type', 'message', 'id', 'pi-' || ?, 'message',
                             jsonb_build_object('role', CASE WHEN ? = 'TOOL_RESULT' THEN 'toolResult' ELSE 'user' END,
                                 'toolName', ?, 'toolCallId', 'call-' || ?,
                                 'content', jsonb_build_array(jsonb_build_object('type', 'text', 'text', ?)))),
-                        0, ?)
+                        ?)
                 """,
                 id,
                 conversation.getWorkspaceId(),
@@ -172,12 +172,12 @@ class MentorRetentionIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldEraseABacklogLargerThanOneBatch() {
         jdbc.update("""
                 INSERT INTO mentor_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
-                                          slack_attempts, created_at)
+                                          created_at)
                 SELECT gen_random_uuid(), ?, ?, s, 'USER', 'APP', 'words-backlog',
                        jsonb_build_object('type', 'message', 'id', 'pi-' || s, 'message',
                            jsonb_build_object('role', 'user', 'content', jsonb_build_array(
                                jsonb_build_object('type', 'text', 'text', 'words-backlog')))),
-                       0, now() - interval '500 days'
+                       now() - interval '500 days'
                 FROM generate_series(?, ?) s
                 """, workspace.getId(), main.getId(), seq + 1, seq + MentorRetentionSweeper.BATCH + 100);
 

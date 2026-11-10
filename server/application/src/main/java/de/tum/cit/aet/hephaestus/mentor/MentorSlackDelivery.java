@@ -2,8 +2,6 @@ package de.tum.cit.aet.hephaestus.mentor;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -11,18 +9,14 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The ledger's part of projecting Slack turns into Slack: where a turn's reply goes, and the intent, effect and
- * outcome of every Slack post ({@link MentorEntry.SlackDelivery}).
- *
- * <p>A post first takes its intent ({@link #claim}: no state to {@code PENDING}, won by one caller only), then calls
- * Slack, then records the outcome ({@link #settle}). A crash between the call and the outcome leaves {@code PENDING};
- * the reconciler takes it again ({@link #retry}) and reads the Slack history once to decide. It never posts again
- * what Slack may hold: a post the history does not show is {@code FAILED}, and one whose history cannot be read
- * stays {@code UNCERTAIN}.
+ * The ledger's part of projecting Slack turns into Slack: where a turn's reply goes, and what a post's outcome records
+ * in the ledger. The post itself is an outbox action ({@link MentorSlackReplies}), which owns its intent, attempts and
+ * outcome.
  *
  * <p>The question of a Slack turn carries the state of the whole reply to it, and the server that claims it projects
  * the turn. Heph's answer carries only the {@code ts} of the Slack message that shows it, so a Slack thread on that
@@ -52,6 +46,7 @@ public class MentorSlackDelivery {
      */
     public record SlackTurn(
             MentorTurn turn,
+            long accountId,
             String channelId,
             @Nullable String threadTs,
             MentorEntry question,
@@ -110,6 +105,7 @@ public class MentorSlackDelivery {
         MentorEntry question = entries.findQuestion(turn.getWorkspaceId(), turn.getId());
         return Optional.of(new SlackTurn(
                 turn,
+                conversation.get().getAccountId(),
                 channelId,
                 threadTs,
                 question,
@@ -224,30 +220,15 @@ public class MentorSlackDelivery {
         return partial == null ? null : MentorTurnPartialDTO.from(partial).stage();
     }
 
-    /** Takes the intent to post an entry. Only the first caller gets {@code true}. */
-    @Transactional
-    public boolean claim(long workspaceId, UUID entryId) {
-        return deliveries.claimSlackDelivery(workspaceId, entryId) == 1;
+    /** Records how an entry's post ended, in the transaction that ended its action. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void ended(long workspaceId, UUID entryId, MentorEntry.SlackDelivery outcome) {
+        deliveries.setSlackDelivery(workspaceId, entryId, outcome);
     }
 
-    /** Leaves a taken post whose outcome is unknown to the reconciler. */
+    /** Records the receipts that a post's outcome decides, in one transaction. */
     @Transactional
-    public void markUncertain(long workspaceId, UUID entryId) {
-        deliveries.markSlackDeliveryUncertain(workspaceId, entryId);
-    }
-
-    @Transactional
-    public void settle(long workspaceId, UUID entryId, MentorEntry.SlackDelivery outcome) {
-        deliveries.settleSlackDelivery(workspaceId, entryId, outcome);
-    }
-
-    /**
-     * Settles a post and records, in the same transaction, the receipts its outcome decides, so the receipts are due
-     * exactly when the outcome is stored.
-     */
-    @Transactional
-    public void settle(long workspaceId, UUID entryId, MentorEntry.SlackDelivery outcome, Runnable receipts) {
-        deliveries.settleSlackDelivery(workspaceId, entryId, outcome);
+    public void settle(Runnable receipts) {
         receipts.run();
     }
 
@@ -258,21 +239,21 @@ public class MentorSlackDelivery {
      *     answer; {@code null} for a message that shows no entry, such as the reason a turn failed
      */
     @Transactional
-    public void delivered(long workspaceId, UUID entryId, @Nullable UUID shows, String ts) {
-        deliveries.settleSlackDelivery(workspaceId, entryId, MentorEntry.SlackDelivery.DELIVERED);
-        if (shows != null) {
-            deliveries.setSlackTs(workspaceId, shows, ts);
-        }
+    public void delivered(long workspaceId, @Nullable UUID shows, String ts) {
+        show(workspaceId, shows, ts);
     }
 
-    /** As {@link #delivered(long, UUID, UUID, String)}, with the receipts it decides in the same transaction. */
+    /** As {@link #delivered(long, UUID, String)}, with the receipts it decides in the same transaction. */
     @Transactional
-    public void delivered(long workspaceId, UUID entryId, @Nullable UUID shows, String ts, Runnable receipts) {
-        deliveries.settleSlackDelivery(workspaceId, entryId, MentorEntry.SlackDelivery.DELIVERED);
+    public void delivered(long workspaceId, @Nullable UUID shows, String ts, Runnable receipts) {
+        show(workspaceId, shows, ts);
+        receipts.run();
+    }
+
+    private void show(long workspaceId, @Nullable UUID shows, String ts) {
         if (shows != null) {
             deliveries.setSlackTs(workspaceId, shows, ts);
         }
-        receipts.run();
     }
 
     /**
@@ -293,43 +274,6 @@ public class MentorSlackDelivery {
      */
     @Transactional
     public void giveUp(long workspaceId, UUID turnId, Runnable receipts) {
-        turns.findByIdAndWorkspaceId(turnId, workspaceId)
-                .map(turn -> entries.findQuestion(workspaceId, turn.getId()))
-                .ifPresent(question -> {
-                    deliveries.settleSlackDelivery(workspaceId, question.getId(), MentorEntry.SlackDelivery.FAILED);
-                    receipts.run();
-                });
-    }
-
-    /**
-     * Takes a post that a server took ({@link Unsettled#taken}) and did not settle, for one more try. {@code false} when
-     * it was settled meanwhile. A post that no server took is claimed ({@link #claim}), so that it is sent only once.
-     */
-    @Transactional
-    public boolean retry(long workspaceId, UUID entryId) {
-        return deliveries.retrySlackDelivery(workspaceId, entryId) == 1;
-    }
-
-    /**
-     * An unsettled Slack post: a Slack turn's reply, on its question, or a weekly digest's note.
-     *
-     * @param turnId the turn whose reply it is; {@code null} for a weekly digest
-     * @param taken whether a server took the post's intent: Slack may hold the post. An untaken reply was never sent.
-     */
-    public record Unsettled(
-            long workspaceId, UUID entryId, @Nullable UUID turnId, boolean taken) {}
-
-    /**
-     * The unsettled Slack posts that are due and that the reconciler took fewer than {@code maxAttempts} times. See
-     * {@link MentorSlackDeliveryRepository#findDueSlackDeliveries} for the order and the backoff.
-     */
-    @Transactional(readOnly = true)
-    public List<Unsettled> due(
-            Instant floor, Instant now, Duration delay, int maxAttempts, int perWorkspace, int limit) {
-        return deliveries
-                .findDueSlackDeliveries(floor, now, delay.toMillis() / 1000.0, maxAttempts, perWorkspace, limit)
-                .stream()
-                .map(row -> new Unsettled(row.getWorkspaceId(), row.getEntryId(), row.getTurnId(), row.getTaken()))
-                .toList();
+        if (turns.findByIdAndWorkspaceId(turnId, workspaceId).isPresent()) receipts.run();
     }
 }
