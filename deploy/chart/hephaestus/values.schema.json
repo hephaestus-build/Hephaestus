@@ -5,6 +5,7 @@
 	"additionalProperties": false,
 	"required": ["release", "images", "host", "trustedProxies", "secret"],
 	"definitions": {
+		"webhookStreamName": { "type": "string", "enum": ["github", "gitlab", "slack", "outline"] },
 		"databasePool": {
 			"type": "object",
 			"additionalProperties": false,
@@ -598,22 +599,20 @@
 				"stream": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": [
-						"maxAge",
-						"maxBytes",
-						"maxBytesGithub",
-						"allowDestructiveLimitUpdates",
-						"limitUpdateTimeout"
-					],
+					"required": ["maxAge", "maxBytes", "allowDestructiveLimitUpdates", "limitUpdateTimeout"],
 					"properties": {
 						"maxAge": { "$ref": "#/definitions/duration" },
 						"maxAgeByStream": {
 							"type": "object",
-							"propertyNames": { "enum": ["github", "gitlab", "slack", "outline"] },
+							"propertyNames": { "$ref": "#/definitions/webhookStreamName" },
 							"additionalProperties": { "$ref": "#/definitions/duration" }
 						},
 						"maxBytes": { "$ref": "#/definitions/dataSize" },
-						"maxBytesGithub": { "$ref": "#/definitions/dataSize" },
+						"maxBytesByStream": {
+							"type": "object",
+							"propertyNames": { "$ref": "#/definitions/webhookStreamName" },
+							"additionalProperties": { "$ref": "#/definitions/dataSize" }
+						},
 						"allowDestructiveLimitUpdates": { "type": "boolean" },
 						"limitUpdateTimeout": { "$ref": "#/definitions/duration" }
 					}

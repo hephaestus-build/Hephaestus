@@ -209,7 +209,7 @@ Each stream carries two bounds:
   Consumers acknowledge a delivery within seconds.
   The age decides only how long a deployment that is offline can resume from the stream.
 - `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES` (default `1GB`, and
-  `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` at `10GB`) is the disk-safety bound behind it.
+  `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB` at `10GB`) is the disk-safety bound behind it.
   At this bound, the broker deletes the oldest message on every publish.
 
 **A stream's retention is the shorter of its age bound and what its byte bound holds.**
@@ -338,7 +338,7 @@ To apply a withheld change deliberately:
    ```
 
 2. Decide whether the size is legitimate for your traffic.
-3. If it is, raise `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` (or `..._MAX_BYTES`) instead.
+3. If it is, raise `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB` (or `..._MAX_BYTES`) instead.
 4. Keep the four bounds under `NATS_JS_MAX_FILE_BYTES`.
 5. If the size is not legitimate, set `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true`.
 6. If the size is not legitimate, restart the receiver **once**.

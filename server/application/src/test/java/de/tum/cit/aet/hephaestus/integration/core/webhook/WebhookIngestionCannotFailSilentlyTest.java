@@ -253,7 +253,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
         Binder chart = chartDefaults();
         Duration chartAge = DurationStyle.detectAndParse(
                 chart.bind("webhook.stream.max-age", String.class).get());
-        long chartBytes = DataSize.parse(chart.bind("webhook.stream.max-bytes-github", String.class)
+        long chartBytes = DataSize.parse(chart.bind("webhook.stream.max-bytes-by-stream.github", String.class)
                         .get())
                 .toBytes();
         assertThat(busyBytesHeldFor(chartAge))
@@ -272,7 +272,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
         long perStream = DataSize.parse(
                         chart.bind("webhook.stream.max-bytes", String.class).get())
                 .toBytes();
-        long github = DataSize.parse(chart.bind("webhook.stream.max-bytes-github", String.class)
+        long github = DataSize.parse(chart.bind("webhook.stream.max-bytes-by-stream.github", String.class)
                         .get())
                 .toBytes();
         long total = github + perStream * (WebhookJetStreamBootstrap.STREAMS.length - 1);

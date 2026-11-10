@@ -98,8 +98,10 @@ spec:
             {{- end }}
             - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES
               value: {{ $stream.maxBytes | quote }}
-            - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB
-              value: {{ $stream.maxBytesGithub | quote }}
+            {{- range $provider, $maxBytes := $stream.maxBytesByStream }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_{{ $provider | upper }}
+              value: {{ $maxBytes | quote }}
+            {{- end }}
             - name: HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES
               value: {{ $stream.allowDestructiveLimitUpdates | quote }}
             - name: HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT

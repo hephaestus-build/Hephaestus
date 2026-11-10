@@ -17,7 +17,8 @@ webhook:
   stream:
     maxAge: 72h
     maxBytes: 128MB
-    maxBytesGithub: 512MB
+    maxBytesByStream:
+      github: 512MB
   resources:
     requests: { cpu: 100m, memory: 1536Mi, ephemeral-storage: 128Mi }
     limits: { cpu: "1", memory: 1536Mi, ephemeral-storage: 512Mi }

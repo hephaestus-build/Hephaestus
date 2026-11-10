@@ -953,7 +953,7 @@ function startWebhookReceiver(name: string, image: string, database: string): nu
 		"--env",
 		"HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES=128MB",
 		"--env",
-		"HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB=128MB",
+		"HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB=128MB",
 		"--env",
 		"HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET=512MB",
 		"--env",
