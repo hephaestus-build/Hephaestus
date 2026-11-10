@@ -983,8 +983,19 @@ export async function runReviewJob(): Promise<void> {
 		writeFileSync(REVIEW_STATE_PATH, JSON.stringify(admissionRequest(), null, 2));
 	}
 
+	/**
+	 * A practice that its start withheld because its sources changed has its answer: the server recorded why. A run
+	 * whose every practice was withheld at its start therefore ends with its empty result, not as a failed run.
+	 */
+	function everyPracticeWithheld(): boolean {
+		return (
+			practiceIndex.length > 0 &&
+			practiceIndex.every((practice) => skippedPractices.has(practice.slug))
+		);
+	}
+
 	function maybeWriteResultFile(): boolean {
-		if (reviewState.size === 0) {
+		if (reviewState.size === 0 && !everyPracticeWithheld()) {
 			return false;
 		}
 		writeFileSync(RESULT_PATH, JSON.stringify(admissionRequest(), null, 2));
@@ -3476,7 +3487,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		if (stagingFailure !== undefined) {
 			throw stagingFailure.error;
 		}
-		if (!maybeWriteResultFile() && skippedPractices.size !== allSlugs.length) {
+		if (!maybeWriteResultFile()) {
 			if (lostSides.size > 0) {
 				finalizeOutput();
 				process.exit(SIDE_LOST_EXIT);

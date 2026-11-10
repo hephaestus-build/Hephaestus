@@ -2470,6 +2470,12 @@ if (scenario !== undefined && scenario !== "") {
 						);
 						assert.equal(seal.results, undefined);
 						assert.equal(seal.nonResults, undefined);
+						// Every practice has its answer, so the run ends with its empty result, not as a failed run.
+						const written = recordOf(
+							JSON.parse(readFileSync(nodePath.join(cwd, "out/result.json"), "utf8")),
+						);
+						assert.deepEqual(written.results, []);
+						assert.deepEqual(written.nonResults, []);
 						return;
 					}
 					assert.ok(existsSync(nodePath.join(cwd, "out/practice-coverage.json")), child.stderr);

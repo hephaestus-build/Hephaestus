@@ -122,11 +122,9 @@ final class RunnerStubSandbox implements SandboxBackend {
         }
         post(proxy + "/admit-results", token, envelope(task));
 
-        // As the runner does, a review without a result writes no result file.
-        byte[] output = tar(
-                results.isEmpty()
-                        ? Map.of()
-                        : Map.of("result.json", mapper.writeValueAsBytes(admission(task, results))));
+        // As the runner does, a review whose practices each started or were withheld at their start writes its result,
+        // which is empty when every start was withheld.
+        byte[] output = tar(Map.of("result.json", mapper.writeValueAsBytes(admission(task, results))));
         var uploaded = http.send(
                 HttpRequest.newBuilder(URI.create(runtime + "/result"))
                         .header("Authorization", "Bearer " + token)

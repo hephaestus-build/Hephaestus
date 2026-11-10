@@ -139,7 +139,7 @@ export const REVIEW_STOP_REASON_SENTENCES: Record<ReviewStopReason, string> = {
 	PERSON_DATA_ERASED: "A person’s data was erased.",
 	STALE_ROLLOUT_REVISION: "Review settings changed while it waited.",
 	CANCELLED_BY_ADMIN: "A workspace admin cancelled it.",
-	REPLACED: "A newer review of the same work replaced it.",
+	REPLACED: "The work changed, so its next review measures what this one did not.",
 	LEGACY_FAILURE: "It was cancelled before Hephaestus recorded why.",
 	EXECUTION_INCOMPLETE: "The review did not record an observation for every selected practice.",
 	COMPOSITION_UNCONFIRMED:

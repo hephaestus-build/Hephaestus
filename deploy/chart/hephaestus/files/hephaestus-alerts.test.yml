@@ -2016,6 +2016,8 @@ tests:
         values: "0+1x60"
       - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="partial",reason="budget"}'
         values: "0+1x60"
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="partial",reason="replaced"}'
+        values: "0+1x60"
       - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="cancelled",reason="cancelled"}'
         values: "0+1x60"
       - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="scan",status="partial",reason="enumeration_limit"}'
