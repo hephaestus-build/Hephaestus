@@ -3,6 +3,7 @@
 
 import type { KindRunner } from "./driver.ts";
 import { composeReview } from "./review-composer.ts";
+import { measureReview } from "./review-measure.ts";
 
 /** The feedback composer of a sealed review: it composes, then the driver ends or hands on the run. */
 const reviewCompose: KindRunner = async ({ assignment, gateway, signal }) => {
@@ -18,4 +19,7 @@ const reviewCompose: KindRunner = async ({ assignment, gateway, signal }) => {
 	return { leaseLost: false, outcome: outcome.handedOn === null ? "completed" : "handed_on" };
 };
 
-export const KINDS: Readonly<Record<string, KindRunner>> = { REVIEW_COMPOSE: reviewCompose };
+export const KINDS: Readonly<Record<string, KindRunner>> = {
+	REVIEW: measureReview,
+	REVIEW_COMPOSE: reviewCompose,
+};

@@ -8,7 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import type { FileEntry } from "@earendil-works/pi-coding-agent";
 
-import { present } from "./gateway-capabilities.ts";
+import { claimHeaders, present } from "./gateway-capabilities.ts";
 
 // The worker follows SIGTERM with SIGKILL after its stop timeout; the child gets this much of it and
 // the upload of whatever out/ holds by then gets the rest.
@@ -18,6 +18,9 @@ const MAX_UPLOAD_BACKOFF_MS = 30_000;
 const UPLOAD_GRACE_MS = 10 * 60_000;
 const EXIT_UPLOAD_FAILED = 43;
 const EXIT_WORK_TIMEOUT = 124;
+/** How the runner ended, for the gateway of a sandbox's run (ReviewSandboxRuns). */
+const EXIT_CODE_HEADER = "x-sandbox-exit-code";
+const TIMED_OUT_HEADER = "x-sandbox-timed-out";
 
 function exitCodeOf(code: number | null, signal: NodeJS.Signals | null): number {
 	if (code !== null) {
@@ -62,6 +65,7 @@ export async function upload(
 	archive: string,
 	deadline = Date.now() + UPLOAD_GRACE_MS,
 	signal?: AbortSignal,
+	headers: Readonly<Record<string, string>> = {},
 ): Promise<void> {
 	const hash = createHash("sha256");
 	for await (const chunk of createReadStream(archive)) {
@@ -88,6 +92,7 @@ export async function upload(
 						? AbortSignal.timeout(remaining)
 						: AbortSignal.any([signal, AbortSignal.timeout(remaining)]),
 				headers: {
+					...headers,
 					Authorization: `Bearer ${token}`,
 					"Content-Type": "application/x-tar",
 					"Content-Digest": contentDigest,
@@ -708,7 +713,12 @@ async function main() {
 			throw new Error("Could not package sandbox result");
 		}
 		try {
-			await upload(new URL(`${endpoint}/result`), token, archive, uploadDeadline);
+			// A sandbox's run reports how its runner ended with the result; a review Job's Pod reports it itself.
+			await upload(new URL(`${endpoint}/result`), token, archive, uploadDeadline, undefined, {
+				...claimHeaders(process.env.LLM_PROXY_CLAIM),
+				[EXIT_CODE_HEADER]: String(exitCode),
+				[TIMED_OUT_HEADER]: String(workTimeout.signal.aborted),
+			});
 		} catch (error) {
 			console.error(error);
 			process.exitCode = EXIT_UPLOAD_FAILED;
