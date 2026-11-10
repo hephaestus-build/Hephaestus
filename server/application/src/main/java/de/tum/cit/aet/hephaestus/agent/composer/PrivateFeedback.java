@@ -346,7 +346,8 @@ final class PrivateFeedback {
             if (!recorded) continue;
             var witness = new ReviewOnWork.Witness(
                     "CURRENT".equals(currentness) && ReviewOnWork.deliveredBy(entry.path("deliveredAt"), capturedAt),
-                    ReviewOnWork.deliveredBy(entry.path("deliveredAt"), readAt));
+                    ReviewOnWork.deliveredBy(entry.path("deliveredAt"), readAt),
+                    ReviewOnWork.practices(entry.path("basedOn")));
             for (JsonNode support : listOf(entry.path("basedOn")))
                 if (isRecord(support) && "NOT_MET".equals(string(support.path("outcome"))))
                     witnesses.put(

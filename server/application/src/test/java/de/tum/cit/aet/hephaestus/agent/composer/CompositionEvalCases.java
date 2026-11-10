@@ -205,6 +205,21 @@ final class CompositionEvalCases {
                 maxOutputTokens);
     }
 
+    /** The review on the work of the eval case with this id, as a replay case names it. */
+    static ComposerReplay.Basis basis(String caseId) throws IOException {
+        try {
+            var scenario = load().stream()
+                    .filter(candidate -> candidate.id().equals(caseId))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("No composition eval case " + caseId));
+            return basis(scenario, null, 4_000);
+        } catch (IOException | RuntimeException failed) {
+            throw failed;
+        } catch (Exception failed) {
+            throw new IOException(failed);
+        }
+    }
+
     /**
      * A private case as the composer's server side reads it: the item supports only the case's destination, and the
      * review on the work was decided earlier, so only that destination composes.

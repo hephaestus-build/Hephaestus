@@ -161,8 +161,13 @@ final class ComposerReplay {
             @Nullable ReasoningEffort reasoningEffort,
             int maxOutputTokens) {}
 
-    /** The basis that a case file names: a golden scenario, the item's copy forms and what was decided earlier. */
+    /**
+     * The basis that a case file names: a composition eval case's review on the work, or a golden scenario with the
+     * item's copy forms and what was decided earlier.
+     */
     static Basis basis(JsonNode replay) throws IOException {
+        if (replay.hasNonNull("evalCase"))
+            return CompositionEvalCases.basis(replay.path("evalCase").asString());
         Path scenario = SCENARIOS.resolve(replay.path("scenario").asString());
         var capabilities = new HashSet<CopyCapability>();
         replay.path("copyCapabilities").forEach(name -> capabilities.add(CopyCapability.valueOf(name.asString())));

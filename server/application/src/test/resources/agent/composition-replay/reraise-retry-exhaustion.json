@@ -1,0 +1,116 @@
+{
+  "description" : "Composition eval case gh-c-02-retry-exhaustion-untested: the model raises a gap that still-current earlier advice on its practice already named, as a live model did on 2026-10-31. The check asks it back, and it withholds the result as NO_MATERIAL_CHANGE with the earlier advice as its witness.",
+  "evalCase" : "gh-c-02-retry-exhaustion-untested",
+  "responses" : [ {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "c4bfac7c-2473-34d8-9688-857065cfb00c",
+        "disposition" : "RAISE"
+      } ],
+      "summary" : {
+        "basedOn" : [ "c4bfac7c-2473-34d8-9688-857065cfb00c" ],
+        "body" : "The only test in the diff covers a retry that succeeds on the second call; no test reaches the `ErrExhausted` return. Add a test where the function always fails and assert the result wraps `ErrExhausted`."
+      },
+      "inline" : [ ]
+    }
+  }, {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "c4bfac7c-2473-34d8-9688-857065cfb00c",
+        "disposition" : "NO_MATERIAL_CHANGE",
+        "witnessIds" : [ "feedback:d5295e7f-3f55-3e62-8af3-4973f4673916" ]
+      } ],
+      "summary" : null,
+      "inline" : [ ]
+    }
+  }, {
+    "tool" : "publish_package",
+    "arguments" : {
+      "draftId" : "${draftId}"
+    }
+  } ],
+  "expected" : {
+    "packages" : [ {
+      "basisResultIds" : [ "c4bfac7c-2473-34d8-9688-857065cfb00c" ],
+      "composition" : [ {
+        "destination" : "ON_WORK",
+        "resultIds" : [ "c4bfac7c-2473-34d8-9688-857065cfb00c" ],
+        "summary" : null,
+        "notes" : [ ],
+        "withheldReason" : "COMPOSER_WITHHELD",
+        "trace" : {
+          "copies" : [ ],
+          "withheld" : [ {
+            "basedOn" : [ {
+              "resultId" : "c4bfac7c-2473-34d8-9688-857065cfb00c",
+              "problemId" : null
+            } ],
+            "reason" : "NO_MATERIAL_CHANGE",
+            "witnessIds" : [ "feedback:d5295e7f-3f55-3e62-8af3-4973f4673916" ]
+          } ],
+          "replacesId" : null,
+          "primaryResultId" : null
+        },
+        "page" : null
+      } ],
+      "publicComposition" : true,
+      "publicationContext" : "v1:7:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "editOf" : null
+    } ],
+    "reviewStops" : [ ],
+    "handedOn" : "ROUTING_UNAVAILABLE",
+    "calls" : [ {
+      "system" : "589e8428aef21d6493632f86116fe7c9ba11d8fe634c0174fab192f5b73a2830",
+      "tools" : "30c088c3dc001c9cdcfe13bbdeafaed463225a7b9de456a8f83216c4fdee2cfe",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "ec63c0e9605a50cb810eb0ae6aa62293d94b2cd9a62635e45eaaef128c45fa92",
+          "length" : 19591
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "c4bfac7c-2473-34d8-9688-857065cfb00c",
+              "disposition" : "RAISE"
+            } ],
+            "summary" : {
+              "basedOn" : [ "c4bfac7c-2473-34d8-9688-857065cfb00c" ],
+              "body" : "The only test in the diff covers a retry that succeeds on the second call; no test reaches the `ErrExhausted` return. Add a test where the function always fails and assert the result wraps `ErrExhausted`."
+            },
+            "inline" : [ ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "review refused, nothing was stored:\n- decisions #1: feedback:d5295e7f-3f55-3e62-8af3-4973f4673916 already gave still-current advice on ships-tests-with-the-change to this work. If it gave this advice, decide ALREADY_SAID or NO_MATERIAL_CHANGE with witnessIds [feedback:d5295e7f-3f55-3e62-8af3-4973f4673916]. If this result makes a point it did not, keep RAISE and add newSince: what this result says that the earlier advice did not"
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "c4bfac7c-2473-34d8-9688-857065cfb00c",
+              "disposition" : "NO_MATERIAL_CHANGE",
+              "witnessIds" : [ "feedback:d5295e7f-3f55-3e62-8af3-4973f4673916" ]
+            } ],
+            "summary" : null,
+            "inline" : [ ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "{\"draftId\":\"c4dfa23379d2f95f37247885584b3ebd774671c43da8715bbd281f1a76c44ad4\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+      } ]
+    } ]
+  }
+}
