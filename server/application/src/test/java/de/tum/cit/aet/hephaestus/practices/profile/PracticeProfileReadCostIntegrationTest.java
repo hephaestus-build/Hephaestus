@@ -142,7 +142,7 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     void setUp() {
         databaseTestUtils.cleanDatabase();
         when(sourceFingerprints.supports(any())).thenReturn(true);
-        when(sourceFingerprints.fingerprints(any(), any(), any()))
+        when(sourceFingerprints.fingerprints(any(), any(), any(), any()))
                 .thenReturn(Map.of(new SourceKind("scm.pull-request.diff"), "a".repeat(64)));
         scenario = data.scenario();
         works = List.of(scenario, onNewWork(), onNewWork());

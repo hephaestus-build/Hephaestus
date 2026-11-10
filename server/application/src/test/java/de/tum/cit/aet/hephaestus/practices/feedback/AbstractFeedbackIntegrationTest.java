@@ -167,6 +167,7 @@ public abstract class AbstractFeedbackIntegrationTest extends AbstractWorkspaceI
                 .when(productItems)
                 .fingerprints(
                         eq(new ItemRef(workspace.getId(), itemId, new ItemKind("scm.pull_request"), 42L, null, null)),
+                        any(),
                         any());
         var slots = List.of(
                 new BoundModelSlot("chat", ModelKind.CHAT, null),

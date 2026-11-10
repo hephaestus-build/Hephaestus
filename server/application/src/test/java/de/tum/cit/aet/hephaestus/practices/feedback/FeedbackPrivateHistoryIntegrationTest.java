@@ -199,7 +199,7 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                         .build()));
         doReturn(Map.of(new SourceKind("scm.pull-request.core"), "a".repeat(64)))
                 .when(productItems)
-                .fingerprints(any(), any());
+                .fingerprints(any(), any(), any());
         scenario = data.scenario();
         jdbc.update(
                 "UPDATE practice SET feedback_mode='AUTOMATIC' WHERE workspace_id=? AND id=?",

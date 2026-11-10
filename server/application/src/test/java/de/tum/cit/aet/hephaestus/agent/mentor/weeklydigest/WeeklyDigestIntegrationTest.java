@@ -194,7 +194,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         when(evidenceAuthorization.permitsForNewDelivery(anyLong(), anyCollection(), any()))
                 .thenAnswer(invocation -> sameWorkspace(invocation.getArgument(0), invocation.getArgument(1)));
         when(sourceFingerprints.supports(any())).thenReturn(true);
-        when(sourceFingerprints.fingerprints(any(), any(), any()))
+        when(sourceFingerprints.fingerprints(any(), any(), any(), any()))
                 .thenReturn(Map.of(new SourceKind("scm.pull-request.diff"), "a".repeat(64)));
         scenario = data.scenario();
         workspaceId = scenario.workspace().getId();

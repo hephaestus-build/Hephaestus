@@ -151,7 +151,7 @@ public class DefaultReviewExecutionHandler {
                                         .context()));
         }
         // An event review captures what its occasion retained, never the work as it changed since.
-        var occasion = review.kind() == ReviewKind.ITEM ? review.eventId() : null;
+        var occasion = review.occasion();
         var snapshot = occasion == null
                 ? source.pin(item, pinned.getFirst().version())
                 : source.pinOccasion(item, pinned.getFirst().version(), occasion);

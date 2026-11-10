@@ -162,7 +162,7 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
                 workspace.getId(),
                 reviewId,
                 unavailable.getPracticeId());
-        doReturn(Map.of()).when(productItems).fingerprints(eq(supportedItem), eq(Set.of(CORE, comments)));
+        doReturn(Map.of()).when(productItems).fingerprints(eq(supportedItem), eq(Set.of(CORE, comments)), any());
         when(authorization.permitsForNewDelivery(
                         eq(workspace.getId()), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                 .thenAnswer(invocation -> invocation.<Collection<Result>>getArgument(1).stream()
@@ -186,7 +186,7 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     void shouldWithholdUnavailableCurrentProofWithoutClaimingTheWorkChanged() {
         var result = resultWithStateFilter("state", "open");
         supportOnWorkFeedback(result);
-        doReturn(Map.of()).when(productItems).fingerprints(eq(supportedItem), any());
+        doReturn(Map.of()).when(productItems).fingerprints(eq(supportedItem), any(), any());
         var check = check();
         assertThat(check.allowed()).isFalse();
         assertThat(check.reason()).isEqualTo(FeedbackStopReason.UNCORROBORATED);
@@ -202,9 +202,9 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     void shouldRefuseChangedWorkAndClosedWorkAgainstThePersistedStateFilter() {
         supportOnWorkFeedback();
         when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "open", "v2")));
-        doReturn(Map.of(CORE, "b".repeat(64))).when(productItems).fingerprints(eq(supportedItem), any());
+        doReturn(Map.of(CORE, "b".repeat(64))).when(productItems).fingerprints(eq(supportedItem), any(), any());
         assertThat(check().reason()).isEqualTo(FeedbackStopReason.REVIEWED_VERSION_CHANGED);
-        doReturn(CURRENT_SOURCES).when(productItems).fingerprints(eq(supportedItem), any());
+        doReturn(CURRENT_SOURCES).when(productItems).fingerprints(eq(supportedItem), any(), any());
         when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "closed", "v1")));
         var check = check();
         assertThat(check.reason()).isEqualTo(FeedbackStopReason.ITEM_STATE_INELIGIBLE);

@@ -620,7 +620,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                         recorded.developerId());
                 var core = new SourceKind("scm.issue.core");
                 var captured = currentItems.fingerprints(
-                        currentItems.require(savedWorkspace.getId(), recorded.itemId()), Set.of(core));
+                        currentItems.require(savedWorkspace.getId(), recorded.itemId()), Set.of(core), null);
                 assertThat(captured).containsKey(core);
                 fixtureJdbc.update(
                         "UPDATE review_practice SET capture_decision=?::jsonb WHERE workspace_id=? AND review_id=?",

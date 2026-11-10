@@ -22,17 +22,25 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxCache
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestChecksRecord;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
@@ -40,6 +48,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeReads;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -77,8 +87,11 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -87,6 +100,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.TestSocketUtils;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -134,7 +148,20 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     enum Between {
         NOTHING,
         THE_DISCUSSION_SYNC_FINISHES,
-        A_REMARK_ARRIVES
+        /**
+         * The provider's sync reads the head's merge state and its checks: GitHub's empty status-check rollup or
+         * GitLab's report that the head has no pipeline. A webhook carries neither, so the occasion did not hold them.
+         */
+        THE_SYNC_READS_THE_HEAD_STATUS,
+        A_REMARK_ARRIVES,
+        /** A new head replaces the version that the occasion recorded. */
+        A_COMMIT_IS_PUSHED
+    }
+
+    /** How the review was asked for: by a person, or by a provider event whose occasion the review then reads. */
+    enum Asked {
+        BY_REQUEST,
+        BY_EVENT
     }
 
     @Autowired
@@ -191,6 +218,18 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private UserRepository users;
+
+    @Autowired
+    private ResultFreshness freshness;
+
+    @Autowired
+    private ApplicationEventPublisher publisher;
+
+    @Autowired
+    private TransactionTemplate transactions;
+
     @BeforeAll
     static void startProvider() throws IOException {
         PROVIDER.setDispatcher(new Dispatcher() {
@@ -221,11 +260,16 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     /**
-     * What the review left: the practice's status and reason, its results, the requests that reached the model
+     * What the review left: the practice's status and reason, its results and whether each still describes the work,
+     * the requests that reached the model
      * provider, and what the runner sent and got.
      */
     private record Reviewed(
-            Map<String, @Nullable Object> practice, List<@Nullable String> outcomes, int modelRequests, String calls) {}
+            Map<String, @Nullable Object> practice,
+            List<@Nullable String> outcomes,
+            List<Currentness> currentness,
+            int modelRequests,
+            String calls) {}
 
     @Test
     void shouldMeasureThePracticeWhenTheWorkDidNotChange() {
@@ -239,7 +283,42 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldWithholdThePracticeAsReplacedWhenARemarkArrivesAfterTheCapture() {
-        var reviewed = review(Between.A_REMARK_ARRIVES);
+        assertReplaced(review(Between.A_REMARK_ARRIVES));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldMeasureTheEventPracticeWhenTheWorkDidNotChange(IdentityProviderType provider) {
+        assertMeasured(review(provider, Asked.BY_EVENT, Between.NOTHING));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldMeasureTheEventPracticeWhenTheSyncReadsTheHeadStatusAfterTheOccasion(IdentityProviderType provider) {
+        assertMeasured(review(provider, Asked.BY_EVENT, Between.THE_SYNC_READS_THE_HEAD_STATUS));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldWithholdTheEventPracticeAsReplacedWhenARemarkArrivesAfterTheCapture(IdentityProviderType provider) {
+        assertReplaced(review(provider, Asked.BY_EVENT, Between.A_REMARK_ARRIVES));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldWithholdTheEventPracticeAsReplacedWhenACommitReplacesTheOccasion(IdentityProviderType provider) {
+        assertReplaced(review(provider, Asked.BY_EVENT, Between.A_COMMIT_IS_PUSHED));
+    }
+
+    private void assertReplaced(Reviewed reviewed) {
         assertThat(sandbox.calls)
                 .as("the practice does not start on work it no longer shows: %s", reviewed.calls())
                 .anySatisfy(call -> assertThat(call.path() + " " + call.body())
@@ -264,15 +343,25 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .anySatisfy(call -> assertThat(call.path()).isEqualTo("admit-results"));
         assertThat(reviewed.practice()).as(reviewed.calls()).containsEntry("status", "DONE");
         assertThat(reviewed.outcomes()).as(reviewed.calls()).containsExactly("MET");
+        assertThat(reviewed.currentness())
+                .as("the feedback still describes the work, so it can be delivered and shown")
+                .containsExactly(Currentness.CURRENT);
         assertThat(reviewed.modelRequests())
                 .as("the proxy reached the provider once")
                 .isEqualTo(1);
     }
 
     private Reviewed review(Between between) {
-        User developer = persistUser("review-end-to-end-" + UUID.randomUUID());
-        Workspace workspace = workspace(developer);
-        Repository repository = repository(workspace);
+        return review(IdentityProviderType.GITHUB, Asked.BY_REQUEST, between);
+    }
+
+    private Reviewed review(IdentityProviderType type, Asked asked, Between between) {
+        var provider = type == IdentityProviderType.GITHUB ? ensureGitHubProvider() : ensureGitLabProvider();
+        User persisted = persistUser("review-end-to-end-" + UUID.randomUUID());
+        persisted.setProvider(provider);
+        User developer = users.saveAndFlush(persisted);
+        Workspace workspace = workspace(developer, provider);
+        Repository repository = repository(workspace, provider);
         PullRequest pull = pullRequest(repository, developer);
         ItemRef holder = itemWriter.upsert(new ItemRegistration(
                 workspace.getId(), new ItemKind("scm.repository"), repository.getId(), null, null));
@@ -288,33 +377,23 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 // The sync finishes and finds nothing new: the work did not change.
                 case THE_DISCUSSION_SYNC_FINISHES ->
                     jdbc.update("UPDATE issue SET discussion_read_whole=TRUE WHERE id=?", pull.getId());
+                case THE_SYNC_READS_THE_HEAD_STATUS ->
+                    jdbc.update(
+                            "UPDATE issue SET merge_state_status='CLEAN', head_check_state=?, head_check_sha=?"
+                                    + " WHERE id=?",
+                            type == IdentityProviderType.GITHUB ? "NONE" : "NO_PIPELINE",
+                            pull.getHeadRefOid(),
+                            pull.getId());
                 case A_REMARK_ARRIVES -> remark(pull, developer, "A later remark", "2026-10-01T12:00:00Z");
+                case A_COMMIT_IS_PUSHED ->
+                    jdbc.update("UPDATE issue SET head_ref_oid=? WHERE id=?", "c".repeat(40), pull.getId());
             }
         });
         int providerRequests = PROVIDER.getRequestCount();
 
-        var pinned = itemSources.stream()
-                .filter(source -> source.supports(item))
-                .findFirst()
-                .orElseThrow()
-                .current(item)
-                .orElseThrow();
-        UUID reviewId = reviews.request(new ReviewRequest(
-                workspace.getId(),
-                item.itemId(),
-                ReviewKind.ITEM,
-                pinned.version(),
-                ReviewOrigin.REQUEST,
-                null,
-                accountId(developer),
-                null,
-                null,
-                null,
-                null,
-                List.of(practice.getId()),
-                false,
-                Set.of(),
-                null));
+        UUID reviewId = asked == Asked.BY_EVENT
+                ? opened(workspace, item, pull, type, developer)
+                : requested(workspace, item, practice, developer);
 
         // The worker ends the run; the server's completion, which its scheduler runs and the test profile does not,
         // then settles each practice of the review.
@@ -343,8 +422,94 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         String.class,
                         reviewId,
                         practice.getId()),
+                List.copyOf(freshness
+                        .statesFor(
+                                workspace.getId(),
+                                jdbc.query(
+                                        "SELECT id FROM result WHERE review_id = ? AND practice_id = ? AND ended_at IS NULL",
+                                        (row, index) -> new ResultFreshness.Claim(
+                                                row.getObject("id", UUID.class),
+                                                workspace.getId(),
+                                                reviewId,
+                                                practice.getId(),
+                                                item.itemId(),
+                                                null),
+                                        reviewId,
+                                        practice.getId()))
+                        .values()),
                 PROVIDER.getRequestCount() - providerRequests,
                 sandbox.calls.toString());
+    }
+
+    private UUID requested(Workspace workspace, ItemRef item, Practice practice, User developer) {
+        var pinned = itemSources.stream()
+                .filter(source -> source.supports(item))
+                .findFirst()
+                .orElseThrow()
+                .current(item)
+                .orElseThrow();
+        return reviews.request(new ReviewRequest(
+                workspace.getId(),
+                item.itemId(),
+                ReviewKind.ITEM,
+                pinned.version(),
+                ReviewOrigin.REQUEST,
+                null,
+                accountId(developer),
+                null,
+                null,
+                null,
+                null,
+                List.of(practice.getId()),
+                false,
+                Set.of(),
+                null));
+    }
+
+    /**
+     * The provider reports the pull request as opened. Its occasion keeps the work as the webhook stored it, and the
+     * occasion's review follows at once: the test profile has no quiet window.
+     */
+    private UUID opened(Workspace workspace, ItemRef item, PullRequest pull, IdentityProviderType type, User author) {
+        var context = new EventContext(
+                UUID.randomUUID(),
+                Instant.now(),
+                workspace.getId(),
+                null,
+                DataSource.WEBHOOK,
+                "opened",
+                UUID.randomUUID().toString(),
+                type,
+                author.getId());
+        transactions.executeWithoutResult(ignored -> publisher.publishEvent(
+                new ScmDomainEvent.PullRequestCreated(ScmEventPayload.PullRequestData.from(pull), context)));
+        try {
+            return await().atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(100))
+                    .until(
+                            () -> jdbc
+                                    .queryForList(
+                                            "SELECT r.id FROM review r JOIN item_event e ON e.workspace_id=r.workspace_id"
+                                                    + " AND e.id=r.event_id"
+                                                    + " WHERE r.workspace_id=? AND r.item_id=?"
+                                                    + " AND e.evidence->'record' IS NOT NULL",
+                                            UUID.class,
+                                            workspace.getId(),
+                                            item.itemId())
+                                    .stream()
+                                    .findFirst()
+                                    .orElse(null),
+                            reviewId -> reviewId != null);
+        } catch (ConditionTimeoutException timeout) {
+            throw new AssertionError(
+                    "The occasion did not start a review: "
+                            + jdbc.queryForList(
+                                    "SELECT name, state, reason, evidence->>'unretained' AS unretained FROM item_event"
+                                            + " WHERE workspace_id=? AND item_id=?",
+                                    workspace.getId(),
+                                    item.itemId()),
+                    timeout);
+        }
     }
 
     private String state(UUID reviewId) {
@@ -356,7 +521,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         """, reviewId).toString();
     }
 
-    private Workspace workspace(User developer) {
+    private Workspace workspace(User developer, IdentityProvider provider) {
         InstanceLlmSettings settings = instanceLlmSettings.findById((short) 1).orElseGet(() -> {
             InstanceLlmSettings created = new InstanceLlmSettings();
             created.setId((short) 1);
@@ -372,7 +537,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         workspace = workspaces.saveAndFlush(workspace);
         ensureAdminMembership(workspace);
         ensureMembership(workspace, developer, Membership.WorkspaceRole.MEMBER);
-        connectActivitySource(workspace, ensureGitHubProvider());
+        connectActivitySource(workspace, provider);
         WorkspaceContext context =
                 WorkspaceContext.fromWorkspace(workspace, Set.of(Membership.WorkspaceRole.ADMIN), null);
         WorkspaceContextHolder.setContext(context);
@@ -416,13 +581,13 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return workspace;
     }
 
-    private Repository repository(Workspace workspace) {
+    private Repository repository(Workspace workspace, IdentityProvider provider) {
         var repository = new Repository();
         repository.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
-        repository.setProvider(ensureGitHubProvider());
+        repository.setProvider(provider);
         repository.setName("quiet");
         repository.setNameWithOwner(workspace.getAccountLogin() + "/quiet");
-        repository.setHtmlUrl("https://github.com/" + workspace.getAccountLogin() + "/quiet");
+        repository.setHtmlUrl(provider.getServerUrl() + "/" + workspace.getAccountLogin() + "/quiet");
         repository.setDefaultBranch("main");
         repository.setVisibility(Repository.Visibility.PUBLIC);
         repository = repositories.saveAndFlush(repository);
@@ -498,7 +663,8 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 new PracticeReadSource(
                                         new SourceKind("scm.general-review-comments"), ReadNeed.OPTIONAL),
                                 new PracticeReadSource(new SourceKind("scm.review-threads"), ReadNeed.OPTIONAL),
-                                new PracticeReadSource(new SourceKind("scm.linked-work-items"), ReadNeed.OPTIONAL))),
+                                new PracticeReadSource(new SourceKind("scm.linked-work-items"), ReadNeed.OPTIONAL),
+                                new PracticeReadSource(PullRequestChecksRecord.KIND, ReadNeed.OPTIONAL))),
                 base.reviewedBy(),
                 base.criteria(),
                 base.script(),

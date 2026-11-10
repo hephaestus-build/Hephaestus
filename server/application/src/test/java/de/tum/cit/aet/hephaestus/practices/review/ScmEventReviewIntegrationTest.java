@@ -759,7 +759,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                             return canonical;
                         })
                         .when(productItems)
-                        .fingerprints(eq(item), any());
+                        .fingerprints(eq(item), any(), any());
             }
             Future<?> sourceWrite;
             Future<AdmissionReceipt> admitted;
@@ -991,7 +991,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     private void recordSources(ItemRef item, UUID reviewId, long practiceId, Set<SourceKind> kinds) {
-        var captured = productItems.fingerprints(item, kinds);
+        var captured = productItems.fingerprints(item, kinds, null);
         assertThat(captured.keySet()).containsAll(kinds);
         var facts = new JsonMapper().createObjectNode();
         var fingerprints = facts.putObject("sourceFingerprints");

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
+import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
@@ -9,9 +10,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import java.time.Clock;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -50,7 +53,7 @@ public class ReviewFreshnessService implements ReviewFreshness {
                 fingerprints.set(entry.getKey(), entry.getValue());
             }
         }
-        return freshness.capture(workspaceId, review.getItemId(), combined);
+        return freshness.capture(workspaceId, review.getItemId(), occasion(review), combined);
     }
 
     @Override
@@ -67,7 +70,7 @@ public class ReviewFreshnessService implements ReviewFreshness {
             throw new IllegalArgumentException("The invocation does not own this practice");
         if (member.getState() != ReviewItemState.LISTED) return false;
         if (review.getKind() == ReviewKind.SCAN) return true;
-        var check = freshness.check(workspaceId, id.itemId(), assignment.getCaptureDecision());
+        var check = freshness.check(workspaceId, id.itemId(), occasion(review), assignment.getCaptureDecision());
         var state = check.currentness();
         log.info(
                 "Practice start: reviewId={}, practiceId={}, currentness={}, changedSources={}, unreadSources={}",
@@ -90,5 +93,9 @@ public class ReviewFreshnessService implements ReviewFreshness {
         assignment.setStatus(ReviewPracticeStatus.WITHHELD);
         assignment.setReason(reason);
         return false;
+    }
+
+    private static @Nullable UUID occasion(Review review) {
+        return ReviewSnapshot.occasion(review.getKind(), review.getOrigin(), review.getEventId());
     }
 }

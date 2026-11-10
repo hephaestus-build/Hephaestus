@@ -1,10 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
-import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecksSource;
@@ -15,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemUrlResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -121,8 +119,12 @@ public class ProductItemQuery {
         }
     }
 
-    /** Fingerprints of the currently readable source records, without a sandbox or a provider write. */
-    public Map<SourceKind, String> fingerprints(ItemRef item, Set<SourceKind> kinds) {
+    /**
+     * Fingerprints of the currently readable source records, without a sandbox or a provider write.
+     *
+     * @param occasion the occasion that the capture being compared read: {@link ReviewSnapshot#occasion()}
+     */
+    public Map<SourceKind, String> fingerprints(ItemRef item, Set<SourceKind> kinds, @Nullable UUID occasion) {
         if (kinds.isEmpty()) return Map.of();
         var matching =
                 sources.stream().filter(candidate -> candidate.supports(item)).toList();
@@ -132,36 +134,15 @@ public class ProductItemQuery {
                     .filter(reader -> reader.supports(item))
                     .toList();
             if (readers.size() > 1) return Map.of();
-            if (!readers.isEmpty()) return readers.getFirst().fingerprints(item, kinds, mapper);
-            return recordFingerprints(matching.getFirst(), item, kinds);
+            if (!readers.isEmpty()) return readers.getFirst().fingerprints(item, kinds, occasion, mapper);
+            var source = matching.getFirst();
+            var current = source.current(item);
+            return current.isEmpty()
+                    ? Map.of()
+                    : ItemSource.recordFingerprints(source, current.orElseThrow(), kinds, occasion, mapper);
         } catch (ItemCaptureException unavailable) {
             return Map.of();
         }
-    }
-
-    private Map<SourceKind, String> recordFingerprints(ItemSource source, ItemRef item, Set<SourceKind> kinds) {
-        var snapshot = source.current(item);
-        if (snapshot.isEmpty()) return Map.of();
-        var fingerprints = new HashMap<SourceKind, String>();
-        for (var kind : kinds) {
-            var contribution = source.capture(
-                    snapshot.orElseThrow(),
-                    new CaptureRequest(
-                            new UUID(0, 0),
-                            new UUID(0, 0),
-                            0,
-                            Set.of(kind),
-                            ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE,
-                            3));
-            var cleanup = contribution.cleanup();
-            try (cleanup) {
-                var fingerprint = SourceFingerprint.of(mapper, kind, contribution);
-                if (fingerprint != null) fingerprints.put(kind, fingerprint);
-            } catch (Exception failure) {
-                throw new IllegalStateException("Could not release the current source read", failure);
-            }
-        }
-        return Map.copyOf(fingerprints);
     }
 
     public sealed interface CurrentWorkVersion

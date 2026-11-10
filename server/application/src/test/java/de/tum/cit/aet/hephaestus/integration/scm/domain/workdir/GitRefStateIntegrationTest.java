@@ -194,9 +194,9 @@ class GitRefStateIntegrationTest extends BaseIntegrationTest {
                                         .name())));
                 var otherHost = manager("other-host");
                 assertThat(otherHost.isRepositoryCloned(scope.key())).isFalse();
-                assertThat(items.fingerprints(scope.item(), Set.of(kind))).containsEntry(kind, captured);
+                assertThat(items.fingerprints(scope.item(), Set.of(kind), null)).containsEntry(kind, captured);
                 otherHost.ensureRepository(scope.key(), upstreamPath.toUri().toString(), null);
-                assertThat(items.fingerprints(scope.item(), Set.of(kind))).containsEntry(kind, captured);
+                assertThat(items.fingerprints(scope.item(), Set.of(kind), null)).containsEntry(kind, captured);
                 upstream.tagDelete().setTags("v1").call();
                 upstream.tag()
                         .setName("v1")
@@ -205,7 +205,7 @@ class GitRefStateIntegrationTest extends BaseIntegrationTest {
                         .setSigned(false)
                         .call();
                 otherHost.ensureRepository(scope.key(), upstreamPath.toUri().toString(), null);
-                assertThat(items.fingerprints(scope.item(), Set.of(kind)).get(kind))
+                assertThat(items.fingerprints(scope.item(), Set.of(kind), null).get(kind))
                         .isNotEqualTo(captured);
                 assertThat(GitRepositoryManager.treeIdentity(capture))
                         .isEqualTo(capturedIdentity)

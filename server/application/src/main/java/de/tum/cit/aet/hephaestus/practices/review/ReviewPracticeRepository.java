@@ -28,7 +28,7 @@ public interface ReviewPracticeRepository extends JpaRepository<ReviewPractice, 
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.practices.result.ResultSourceCapture(
-          m.reviewId,m.practiceId,m.itemId,r.kind,p.captureDecision,m.detail)
+          m.reviewId,m.practiceId,m.itemId,r.kind,r.origin,r.eventId,p.captureDecision,m.detail)
         FROM ReviewItem m JOIN ReviewPractice p ON p.workspaceId=m.workspaceId
           AND p.reviewId=m.reviewId AND p.practiceId=m.practiceId
         JOIN Review r ON r.workspaceId=m.workspaceId AND r.id=m.reviewId
