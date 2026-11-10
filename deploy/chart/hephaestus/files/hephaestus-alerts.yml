@@ -60,6 +60,15 @@ groups:
         annotations:
           summary: An integration event outlived the handler timeout and returned to its stream
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A publication that its listener can never complete is retried every five minutes without a limit.
+      - alert: HephaestusEventPublicationsOverdue
+        expr: max by (listener) (event_publications_overdue{job="hephaestus"}) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Durable server work has stayed incomplete for more than an hour and keeps retrying
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # The gauge exists only while the job is enabled. A queue that does not shrink means provider answers stopped.
       - alert: HephaestusCommitIdentityResolutionStalled
         expr: commit_identity_pending{job="hephaestus"} > 0 and delta(commit_identity_pending{job="hephaestus"}[6h]) >= 0
