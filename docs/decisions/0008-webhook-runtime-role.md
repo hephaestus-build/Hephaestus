@@ -1,6 +1,6 @@
 # ADR 0008: Webhook as a third runtime role (`webhook-server` container)
 
-**Status:** Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected; 2026-09-26 — the loss counter is withdrawn; 2026-10-09 — mentor schedulers, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-26 — the receiver has no database, [ADR 0066](0066-the-webhook-receiver-has-no-database.md); 2026-10-27 — one publish deadline)
+**Status:** Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected; 2026-09-26 — the loss counter is withdrawn; 2026-10-09 — mentor schedulers, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-26 — the receiver has no database, [ADR 0066](0066-the-webhook-receiver-has-no-database.md); 2026-10-27 — one publish deadline; 2026-11-10 — superseded by [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md): the server receives deliveries into a PostgreSQL inbox)
 **Date:** 2026-05-20
 **Authors:** Webhook substrate epic (#1110)
 
@@ -648,3 +648,9 @@ An existing stream gets the new window at the first start, as a limit update.
 
 A poll slower than 2 seconds doubles the delay to the next one, up to two intervals.
 Two intervals keep the poll age below `HephaestusStreamPollStale`, so that alert still means that the receiver cannot read the broker.
+
+## Update — 2026-11-10: superseded by a PostgreSQL inbox
+
+[ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md) supersedes the separate `webhook-server` container and JetStream as the event buffer.
+The server receives each delivery, verifies it and inserts it into the PostgreSQL inbox before it answers.
+The context above still holds: GitHub and GitLab do not redeliver push events. ADR 0080 accepts the loss during a database outage, and the routine sync and a GitHub redelivery job bound it.

@@ -1,6 +1,6 @@
 # ADR 0079: One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain
 
-**Status:** Accepted (2026-11-09). Amended 2026-11-09: [outbox erasure](#update--2026-11-09-erasure-deletes-the-actions-of-an-account), [sandbox token](#update--2026-11-09-a-tool-may-hold-the-sandbox-token), [run kinds](#update--2026-11-09-the-review-run-kinds-are-review-and-review_compose).
+**Status:** Accepted (2026-11-09). Amended 2026-11-09: [outbox erasure](#update--2026-11-09-erasure-deletes-the-actions-of-an-account), [sandbox token](#update--2026-11-09-a-tool-may-hold-the-sandbox-token), [run kinds](#update--2026-11-09-the-review-run-kinds-are-review-and-review_compose), [no NATS or webhook role](#update--2026-11-10-provider-events-go-to-a-postgresql-inbox).
 **Date:** 2026-11-09
 **Authors:** Felix T.J. Dietrich
 
@@ -650,6 +650,13 @@ This update changes the names of two run kinds in § Data model and § Interacti
 - The compose run kind is `REVIEW_COMPOSE`.
 - A rename of `REVIEW` would need a data migration around the trigger that keeps a run's kind fixed. It would also change the `kind` label of the run metrics that the review alerts read.
 - A `REVIEW_COMPOSE` run continues the `REVIEW` run of the same review (`AgentRuns.continueAs`). Its epochs go on, and it spends no attempt.
+
+## Update — 2026-11-10: provider events go to a PostgreSQL inbox
+
+[ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md) amends § Runtime components and the diagram in § Decision.
+There is no webhook role and no NATS JetStream. The server receives provider deliveries into the `provider_event` inbox.
+Events use the same claim, lease and reaper model as runs and actions, and the order is one leased event per scope.
+The open item "Ordered provider events across server replicas" closes with that claim.
 
 ## Sources
 

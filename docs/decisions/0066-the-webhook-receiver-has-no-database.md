@@ -1,6 +1,6 @@
 # ADR 0066: The webhook receiver has no database
 
-**Status:** Accepted
+**Status:** Accepted. Superseded 2026-11-10 by [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md).
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
@@ -117,3 +117,10 @@ Option (b) was rejected for Slack: a webhook stream keeps a message for 7 days, 
 ## Revisit trigger
 
 A provider whose deliveries cannot be verified without per-tenant data that the server can neither derive from instance configuration nor publish to NATS without a secret.
+
+## Update — 2026-11-10: superseded by ADR 0080
+
+[ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md) supersedes this ADR.
+The receiver now runs in the server and writes to PostgreSQL. It reads the Slack channel consent and the active Outline routes from PostgreSQL, so the two NATS key-value projections and their rebuilds go.
+The Outline secret stays derived from the routing secret and the route, as decided above.
+The rejected option 4 and the lazy DataSource stay rejected: the receiver is not a separate process any more.
