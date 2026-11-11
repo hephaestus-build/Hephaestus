@@ -23,7 +23,8 @@ const requiredJobs = [
 	"Build / Webapp: E2E",
 	"Docker / Images / Build linux/amd64 images",
 	"Docker / Images / Build linux/arm64 images",
-	"Test / App Server: Unit and architecture",
+	"Test / App Server: Unit",
+	"Test / App Server: Architecture",
 	"Test / App Server: Integration (review)",
 	...["1", "2", "3", "4", "5", "6", "7", "8"].map(
 		(shard) => `Test / App Server: Integration (${shard})`,
@@ -93,23 +94,27 @@ await test("caller matrix names preserve exact-commit build reuse and reject mis
 		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
 	const aliases = new Map<string, string>();
-	for (const shard of ["unit", "review", "1", "2", "3", "4", "5", "6", "7", "8"]) {
+	for (const shard of ["unit", "architecture", "review", "1", "2", "3", "4", "5", "6", "7", "8"]) {
 		const caller = String(ci.getIn(["jobs", "Test", "name"])).replace(
 			`\${{ matrix.shard }}`,
 			shard,
 		);
-		const worker = String(
-			tests.getIn([
-				"jobs",
-				shard === "unit" ? "server-verification" : "server-integration",
-				"name",
-			]),
-		).replace(`\${{ inputs.shard }}`, shard);
+		const tier = { unit: "Unit", architecture: "Architecture" }[shard];
+		const worker =
+			tier === undefined
+				? String(tests.getIn(["jobs", "server-integration", "name"])).replace(
+						`\${{ inputs.shard }}`,
+						shard,
+					)
+				: String(tests.getIn(["jobs", "server-verification", "name"])).replace(
+						`\${{ inputs.shard == 'unit' && 'Unit' || 'Architecture' }}`,
+						tier,
+					);
 		const name = `${caller} / ${worker}`;
 		const canonical =
-			shard === "unit"
-				? "Test / App Server: Unit and architecture"
-				: `Test / App Server: Integration (${shard})`;
+			tier === undefined
+				? `Test / App Server: Integration (${shard})`
+				: `Test / App Server: ${tier}`;
 		assert.equal(canonicalCiJobName(name), canonical);
 		aliases.set(canonical, name);
 	}

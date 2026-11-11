@@ -229,7 +229,7 @@ That endpoint verifies a route credential and calls `WebhookIngestPipeline#publi
 - **ArchUnit guards the primitives**: `HexEncodingArchTest` (only `HexFormat.of()`),
   `LocaleSafetyArchTest` (no `Locale.getDefault()`). `application/build.gradle.kts` sets per-package JaCoCo branch floors.
   The unit coverage task and `verification` check them.
-  These checks run through `test:server:unit`, `test:server:verification`, and the _App Server: Unit and architecture_ CI job. Raise a floor when
+  These checks run through `test:server:unit`, `test:server:verification`, and the _App Server: Unit_ CI job. Raise a floor when
   its package clears the next step.
 
 ## Container image

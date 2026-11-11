@@ -23,7 +23,7 @@ on:
         type: string
         default: "false"
       shard:
-        description: "The unit tier, or the integration shard `review` or a numbered one, selected by the caller"
+        description: "The unit or architecture tier, or the integration shard `review` or a numbered one, selected by the caller"
         required: true
         type: string
       queue_tier:
@@ -39,9 +39,12 @@ env:
   ORG_GRADLE_PROJECT_packagedServer: "true"
 
 jobs:
+  # The unit and the architecture tier run in jobs of their own: the unit tier is the longest
+  # chain after the package job, and in one job its forks would share two workers with the
+  # architecture tier. ci-cd.mdx § Parallelism and concurrency.
   server-verification:
-    name: "App Server: Unit and architecture"
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.shard == 'unit'
+    name: "App Server: ${{ inputs.shard == 'unit' && 'Unit' || 'Architecture' }}"
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && (inputs.shard == 'unit' || inputs.shard == 'architecture')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -59,14 +62,18 @@ jobs:
         with:
           artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
       - name: Verify test tier and shard discovery
+        if: inputs.shard == 'architecture'
         run: vp run test:server:selection
-      - name: Run unit and architecture tests with coverage floors
-        run: vp run test:server:verification
+      # The unit tier also checks the coverage floors.
+      - name: Run the tier's tests
+        env:
+          TASK: test:server:${{ inputs.shard }}
+        run: vp run "$TASK"
       - name: Upload test results
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
-          name: "Test Results - App Server Verification"
+          name: "Test Results - App Server ${{ inputs.shard }}"
           path: "server/application/build/test-results/*/TEST-*.xml"
           reporter: java-junit
           list-suites: failed
@@ -78,14 +85,14 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: server-verification-reports-${{ github.run_attempt }}
+          name: server-${{ inputs.shard }}-reports-${{ github.run_attempt }}
           path: server/application/build/test-results
           retention-days: 14
           if-no-files-found: warn
 
   server-integration:
     name: "App Server: Integration (${{ inputs.shard }})"
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.shard != 'unit' && (inputs.queue_tier == 'true' || inputs.shard == 'review')
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.shard != 'unit' && inputs.shard != 'architecture' && (inputs.queue_tier == 'true' || inputs.shard == 'review')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

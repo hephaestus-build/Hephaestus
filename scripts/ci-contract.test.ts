@@ -950,7 +950,7 @@ void describe("CI contract", () => {
 		const workflow = parseDocument(await readFile(".github/workflows/ci-tests.yml", "utf8"));
 		const caller = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		assert.deepEqual(
-			serverShards(caller, true).filter((shard) => shard !== "unit"),
+			serverShards(caller, true).filter((shard) => !SERVER_TIERS.has(shard)),
 			integrationShards(),
 		);
 		assert.equal(
@@ -982,7 +982,7 @@ void describe("CI contract", () => {
 
 	void test("weekly server profiles run CI's integration shards, never the whole tier", async () => {
 		const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-		const shards = serverShards(ci, true).filter((shard) => shard !== "unit");
+		const shards = serverShards(ci, true).filter((shard) => !SERVER_TIERS.has(shard));
 		for (const [file, name, selectorAt] of [
 			[".github/workflows/ci-profile.yml", "server-integration", undefined],
 			[
@@ -2100,7 +2100,10 @@ void describe("CI contract", () => {
 			"Every Gradle invocation in the suites consumes the restored classes",
 		);
 		for (const [name, command] of [
-			["server-verification", /vp run test:server:verification/u],
+			[
+				"server-verification",
+				/TASK: test:server:\$\{\{ inputs\.shard \}\}\n\s+run: vp run "\$TASK"/u,
+			],
 			["server-integration", /vp run test:server:integration/u],
 		] as const) {
 			const suite = job(tests, name);
@@ -4840,6 +4843,9 @@ function expandExpressions(value: unknown, context: Record<string, unknown>): st
 	);
 }
 
+/** The matrix entries of `ci-tests.yml` that run a whole tier rather than an integration shard. */
+const SERVER_TIERS = new Set(["unit", "architecture"]);
+
 /** `review`, then the numbered shards that the committed integration test durations define. */
 function integrationShards(): string[] {
 	return ["review", ...Array.from({ length: committedShards() }, (_, index) => `${index + 1}`)];
@@ -6372,8 +6378,8 @@ void test("each worker can cancel a merge group without waiting for unrelated wo
 		}
 	}
 	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-	assert.deepEqual(serverShards(ci, false), ["unit", "review"]);
-	assert.deepEqual(serverShards(ci, true), ["unit", ...integrationShards()]);
+	assert.deepEqual(serverShards(ci, false), [...SERVER_TIERS, "review"]);
+	assert.deepEqual(serverShards(ci, true), [...SERVER_TIERS, ...integrationShards()]);
 });
 
 void test("manifest publication waits for all platform builds and still signs wholly reused images", async () => {

@@ -58,8 +58,9 @@ export function isFullVerification(jobs: readonly { name: string }[]) {
 		name.startsWith("Test / App Server: Integration ("),
 	);
 	return (
+		(names.has("Test / App Server: Unit and architecture") ||
+			(names.has("Test / App Server: Unit") && names.has("Test / App Server: Architecture"))) &&
 		[
-			"Test / App Server: Unit and architecture",
 			"Quality / Webapp: Stories",
 			"Build / Webapp: E2E",
 			"Build / App Server: Database",
@@ -96,7 +97,9 @@ export const QUEUE_TIER_JOBS = [
 export function isFastTier(jobs: readonly { name: string }[]) {
 	return (
 		jobs.some(
-			(job) => canonicalCiJobName(job.name) === "Test / App Server: Unit and architecture",
+			(job) =>
+				canonicalCiJobName(job.name) === "Test / App Server: Unit" ||
+				canonicalCiJobName(job.name) === "Test / App Server: Unit and architecture",
 		) && !jobs.some((job) => QUEUE_TIER_JOBS.some((pattern) => pattern.test(job.name)))
 	);
 }
