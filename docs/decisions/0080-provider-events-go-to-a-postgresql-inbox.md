@@ -8,7 +8,7 @@
 
 **Amends:** [ADR 0079](0079-one-agent-system.md) § Runtime components (no webhook role, no NATS).
 
-**Amended by:** ADR 0100 ([#4135](https://github.com/hephaestus-build/Hephaestus/pull/4135)). The server serves the web app, so the nginx web app image of § The runtime that follows goes.
+**Amended by:** [ADR 0100](0100-the-server-serves-the-web-app.md). The server serves the web app, so the nginx web app image of § The runtime that follows goes.
 
 ## Context
 
