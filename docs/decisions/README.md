@@ -119,5 +119,6 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0078](0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md) | Lifecycles are explicit, and rigor follows the damage | Accepted (2026-11-06) |
 | [0079](0079-one-agent-system.md) | One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain | Accepted (2026-11-09). Supersedes 0007, and parts of 0005, 0006, 0025, 0026, 0044, 0057, 0061, 0063, 0068, 0069, 0073 and 0074. Amends 0070. Amended 2026-11-10 by [0080](0080-provider-events-go-to-a-postgresql-inbox.md). |
 | [0080](0080-provider-events-go-to-a-postgresql-inbox.md) | Provider events go to a PostgreSQL inbox, and the server receives them | Accepted (2026-11-10). Supersedes 0066, and parts of 0005 and 0008. Amends 0079. |
+| [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted (2026-11-11). Amends 0080. |
 
 Template: [0000-template.md](0000-template.md).
