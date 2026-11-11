@@ -108,7 +108,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0031](0031-agent-image-follows-the-deployments-own-tag.md) | The agent image reference follows the deployment's own image tag | Superseded by [0034](0034-signed-release-image-lock.md) |
 | [0032](0032-generated-clients-build-boundary.md) | Generated clients have an independent build boundary | Superseded by [0043](0043-gradle-java-build.md) |
 | [0033](0033-bun-is-the-javascript-runtime-and-package-manager.md) | Bun is the JavaScript runtime and package manager | Superseded by [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) |
-| [0034](0034-signed-release-image-lock.md) | Production consumes one signed release image lock | Accepted |
+| [0034](0034-signed-release-image-lock.md) | Production consumes one signed release image lock | Superseded by [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) |
 | [0035](0035-pull-request-previews-are-label-gated.md) | Pull request previews are label-gated and driven from the default branch | Accepted |
 | [0036](0036-agent-runtime-runs-on-node-24.md) | Agent runtime runs on Node.js 24 with bounded resources | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) | Node.js 24 and pnpm 12 are the JavaScript toolchain | Superseded by [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) |
@@ -116,7 +116,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0039](0039-git-and-postgresql-own-evidence.md) | Git owns repository evidence; PostgreSQL owns captured payloads and references | Superseded by [0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) |
 | [0040](0040-vite-plus-is-the-command-surface.md) | Vite+ is the command surface; pnpm stays the package manager | Superseded by [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) |
 | [0041](0041-compose-1x-kubernetes-2.md) | Compose for 1.x; Kubernetes only for 2.0 | Superseded by [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) |
-| [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Accepted |
+| [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Superseded by [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) |
 | [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
 | [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Accepted |
 | [0045](0045-activity-counts-work-and-never-ranks-people.md) | Activity counts and lists work; it never scores or ranks people | Accepted |
@@ -165,5 +165,6 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) | Pinned Node.js and pnpm install the repository, and Vite+ runs every command | Accepted |
 | [0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) | A practice review cites only bytes that the server captured, admission verifies each citation once, and Hephaestus keeps the verdict, not the bytes | Accepted |
 | [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) | The signed Helm chart is the only supported deployment, and one host runs it on k3s | Accepted |
+| [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) | CI builds each image once, a release signs one lock that names it, and hosts pull that lock | Accepted |
 
 Template: [0000-template.md](0000-template.md).
