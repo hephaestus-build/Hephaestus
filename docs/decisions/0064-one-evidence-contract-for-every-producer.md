@@ -59,6 +59,12 @@ The [pipeline](../contributor/practice-review-pipeline.mdx#admit-results) owns a
 - Claimed coverage has no type from 1.0. A stored result that holds it reads as no coverage. A custom script that returns coverage stops as an invalid result.
 - Per-criterion absence checks (`criterion.where`) and classifier receipts with a calibration gate are the next parts of this contract. They need the practice definition to name its criteria. The maintainers own the criteria.
 
+## Confirmation
+
+`CandidateParser` refuses a candidate that claims its coverage, and `ResultCoverage` permits only host coverage.
+`ReviewOutputServiceTest` and `ScanAdmissionTest` fail if a Met passes without measured coverage.
+`docker/agents/practice-scripts/lib/core/program-host.test.ts` fails if code gets a Met after a failed or partial read.
+
 ## Revisit trigger
 
 Revisit when a producer cannot report reads through the host, for example a hermetic analyser in the agent image.

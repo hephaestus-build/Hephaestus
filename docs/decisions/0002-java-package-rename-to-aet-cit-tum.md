@@ -46,6 +46,11 @@ all 1,121 Java source files in one mechanical commit.
   it with the chosen package (e.g. `hephaestus.aet.cit.tum.de`) is a deploy-side decision
   with DNS, certificate, and link-rot implications — tracked separately from this rename.
 
+## Confirmation
+
+Not enforced.
+Review catches a new Java class outside `de.tum.cit.aet.hephaestus`.
+
 ## Revisit trigger
 
 A future chair reorganisation, or a decision to move the deploy domain (which would close
@@ -60,9 +65,7 @@ moved, and the package stays `de.tum.cit.aet.hephaestus`.
   `hephaestus-build` (`README.md`); `hephaestus.host-url` in
   `server/application/src/main/resources/application.yml` defaults to
   `${APPLICATION_HOST_URL:http://localhost:4200}`, so no application host URL names a TUM chair.
-- `aet.cit.tum.de` survives as the base package, as the `$id` of the artifact-source and
-  practice-catalog JSON schemas (`server/application/src/main/resources/contracts/`,
-  `practices/default-catalog.schema.json`, read by `scripts/validate-item-source-contracts.ts`),
-  as the commented `HEPHAESTUS_AUTH_ISSUER` example in `server/.env.example`, and in
-  `docker/.env.example` as the `APP_HOSTNAME` example (`hephaestus.cit.tum.de`) and as the
-  deployment the `tumaet` legal profile describes (`hephaestus.aet.cit.tum.de`).
+- `aet.cit.tum.de` survives as the base package and as the `$id` of these JSON schemas:
+  - the artifact-source schemas (`server/application/src/main/resources/contracts/`)
+  - the practice-catalog schema (`practices/default-catalog.schema.json`)
+  - the feedback evaluation schema (`scripts/feedback-eval/compositions.schema.json`)

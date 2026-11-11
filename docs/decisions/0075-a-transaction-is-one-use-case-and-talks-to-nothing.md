@@ -59,7 +59,13 @@ Option 1 leaves the next defect to code review.
 - Later changes move the account export, the provider teardown and the activity listeners to the registry.
   They delete `TransactionCallbacks`, and a test then refuses `registerSynchronization`.
 - More events write a publication row. Completed rows are deleted (`completion-mode: delete`).
-- At-least-once delivery can repeat an email after a crash. ADR 0044 accepts this.
+- Email is at most once ([ADR 0079](0079-one-agent-system.md)). A send whose result is uncertain is never repeated.
+
+## Confirmation
+
+`SpringCorrectnessArchitectureTest#shouldRunAfterCompletionListenersOutsideTheFinishedTransaction` fails for an after-commit listener without `@Async`, `REQUIRES_NEW` or `NOT_SUPPORTED`.
+The `*SyncOutsideTransactionsIntegrationTest` classes for GitHub and GitLab and `SlackIngestOutsideTransactionsIntegrationTest` fail when those provider calls run in a transaction.
+No test refuses a network call in a transaction on other paths. `HttpRequestsInTransactionsIntegrationTest` checks only the meter that counts them, and review catches a new one.
 
 ## Revisit trigger
 

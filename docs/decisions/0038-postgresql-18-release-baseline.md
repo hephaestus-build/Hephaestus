@@ -14,9 +14,9 @@ versioned `PGDATA` below `/var/lib/postgresql`, which determines the persistent 
   with the repository-managed image; maintenance remains application-scheduled as decided in
   [ADR 0018](0018-pg-partman-for-auth-event-partitioning.md).
 - Use the same PostgreSQL major for releases, local development, previews, and CI.
-- Mount persistence at `/var/lib/postgresql`. Keep stable Compose volume names:
-  `postgresql-data` for self-hosting and `postgres-data` for previews. Renaming a volume can silently
-  initialize an empty database instead of exposing an incompatible existing cluster.
+- Mount persistence at `/var/lib/postgresql`. Keep the name of the chart's PostgreSQL volume claim
+  template (`data`) stable. A renamed volume can silently initialize an empty database.
+  An incompatible existing cluster then stays hidden.
 - Recover from a verified logical backup, not an in-place image swap. Rehearse backup and restore
   with `scripts/postgres-backup-restore-test.ts`.
 
@@ -24,8 +24,13 @@ versioned `PGDATA` below `/var/lib/postgresql`, which determines the persistent 
 
 Older PostgreSQL installations must migrate before deploying this release. The
 [backup and restore guide](../admin/backup-restore.mdx#unsupported-postgresql-versions) links to the
-prior-release migration procedure. A successful restore rehearsal and an off-host backup are
-required before deleting a data volume; listing an archive does not prove recovery works.
+[compatibility policy](../admin/compatibility-policy.mdx), which owns the upgrade prerequisites.
+A successful restore rehearsal and an off-host backup are required before deleting a data volume; listing an archive does not prove recovery works.
+
+## Confirmation
+
+The global precondition in `db/master.xml` halts every migration on a PostgreSQL major other than 18.
+The CI backup-restore drill (`scripts/postgres-backup-restore-test.ts`) fails when its source or target is not PostgreSQL 18.
 
 ## Sources
 
@@ -33,3 +38,8 @@ required before deleting a data volume; listing an archive does not prove recove
 - [PostgreSQL major-upgrade documentation](https://www.postgresql.org/docs/18/upgrading.html)
 - [Official image `PGDATA` contract](https://github.com/docker-library/docs/blob/master/postgres/README.md#pgdata)
 - [pg_partman 5.5 release notes](https://github.com/pgpartman/pg_partman/releases/tag/v5.5.0)
+
+## Update — 2026-11-11: the support policy after 1.0
+
+An external PostgreSQL must be major version 18 for the 1.0 release.
+After that release, Hephaestus supports the newest major version and the one before it. A CI leg tests the older one.

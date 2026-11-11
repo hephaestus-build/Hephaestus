@@ -40,7 +40,7 @@ The effective instance catalog is computed from:
 1. bundled defaults versioned in Git; and
 2. sparse instance overrides keyed by durable slug.
 
-An override row may hold a custom definition, inclusion policy, accepted bundled digest, or custom
+An override row may hold a custom definition, inclusion policy, the accepted bundled definition, or custom
 position. No row means the bundled definition and order apply. Updating Hephaestus therefore updates
 untouched entries automatically; customized entries retain their saved definition until an
 administrator applies or acknowledges the new default.
@@ -63,6 +63,12 @@ fingerprint, not a foreign key to an override. Later instance changes never rewr
 - Catalog history and diff views are not stored separately. Git retains bundled history. The audit
   ledger records audited definition and inclusion changes but hashes criteria and scripts, so complete
   historical custom definitions are not retained.
+
+## Confirmation
+
+`CatalogEntryServiceIntegrationTest` fails if a changed bundled default overwrites a customized entry or a stale precondition writes.
+`CatalogAdminControllerIntegrationTest#shouldRejectAStaleWriteWithoutDisclosingTheCurrentETag` checks the ETag on writes.
+Review catches a foreign key from a workspace practice to an override row.
 
 ## Revisit trigger
 

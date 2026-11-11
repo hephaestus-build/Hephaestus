@@ -49,6 +49,13 @@ consumers. [CI documentation](../contributor/ci-cd.mdx#caches) owns cache trust 
   checksums records downloaded bytes but does not establish publisher trust.
 - HTTP contracts and released Liquibase migrations do not change.
 
+## Confirmation
+
+`vp run test:server:selection` runs in CI (`ci-tests.yml`). It fails when a test has no tier or two integration shards overlap.
+`scripts/check-gradle-verification-metadata.ts` runs in CI (`ci-quality-leg.yml`) and fails on an unused verification entry.
+The strict lock mode in `server/build.gradle.kts` fails a build on an unlocked dependency version.
+Review catches a Maven file that comes back.
+
 ## Alternatives
 
 Keeping Maven was viable and avoided migration risk, but retained the local-installation workflow

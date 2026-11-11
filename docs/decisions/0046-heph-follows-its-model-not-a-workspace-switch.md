@@ -45,6 +45,12 @@ Slack direct messages, within each member's AI choice. Workspace admins manage t
   Heph model rows.
 - Which Heph rows were on before the upgrade is not recorded; undoing it needs a pre-upgrade backup.
 
+## Confirmation
+
+`DefaultMentorReadinessQueryTest` fails if Heph counts as ready without an enabled binding that resolves to a model.
+`-conversation-panel-availability-route.test.tsx` checks that the floating panel stays away where no Heph model is ready.
+`restore-clone-lockdown.sql` turns off every Heph model row. Review catches a new workspace switch for Heph.
+
 ## Revisit trigger
 
 A workspace that needs Heph unavailable while its Heph model rows stay on.

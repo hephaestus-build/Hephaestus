@@ -53,6 +53,7 @@ Rigor rises with the damage of a wrong transition.
 
 A formal model is optional, because our evidence does not yet show that one finds a defect that the other levels miss.
 We try one small model of a concurrent protocol and keep it outside CI.
+No model exists in the repository yet.
 A model states a design. It does not prove the code. We do not check traces of the code against it.
 
 ## Consequences
@@ -61,6 +62,12 @@ A model states a design. It does not prove the code. We do not check traces of t
 - A CHECK on old rows needs a data repair first. Pre-1.0 rows can break a rule that today's code keeps.
 - Rollups stay outside any CHECK, so level 5 carries them. A metric only shows a defect after it happens.
 - A transition table beside compare-and-set SQL is a second statement of each rule. Tests keep them the same.
+
+## Confirmation
+
+Not enforced as a whole.
+Each CHECK constraint refuses a stored state outside its list.
+No test finds a lifecycle without its CHECK or its table. Review against the levels in [Lifecycles](../contributor/lifecycles.md) catches it.
 
 ## Revisit trigger
 

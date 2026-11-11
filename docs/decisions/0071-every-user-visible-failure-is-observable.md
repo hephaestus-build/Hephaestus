@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-10-31
 **Authors:** Felix T.J. Dietrich
-**Relates to:** ADR 0005 and ADR 0008 (runtime roles), ADR 0058 (supported deployment).
+**Relates to:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md) and [ADR 0008](0008-webhook-runtime-role.md) (runtime roles), [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) (supported deployment).
 
 ## Context
 
@@ -85,7 +85,7 @@ We measured the sizes on 2026-10-31 with esbuild 0.25 (ESM, minified, gzip -9, R
    A gate checks each part that a machine can check.
 
 When this ADR was accepted, main had only page experience metrics.
-The browser fault reporter, the reference on error views, and the source map output come in later changes.
+The browser fault reporter and the reference on error views came in later changes.
 
 ## Consequences
 
@@ -97,8 +97,31 @@ The browser fault reporter, the reference on error views, and the source map out
 - We maintain the reporter: capture, deduplication and limits. Its scope stays the closed set of fault kinds.
 - A readable stack needs the source maps of the release and a contributor's checkout. Operators read the closed fields.
 
+## Confirmation
+
+`BrowserFaultsControllerIntegrationTest` and `BrowserFaultRecorderTest` check the closed values, the trace id rule and the one log event and counter per fault.
+`BrowserFaultsSwitchTest` and `WebVitalsSwitchTest` check that each purpose is off until the operator turns it on.
+`webapp/Dockerfile` fails the build when a `.map` file appears in the output.
+`vp run test:alerts` (`scripts/check-alert-rules.ts`) fails when an alert has no runbook row or no rule test. Review catches the other parts of decision 6.
+
 ## Revisit when
 
 - The OpenTelemetry browser SDK is stable and its errors and fetch instrumentation are near 10 KB gzipped.
 - The Digital Omnibus changes the ePrivacy exemptions for security or for the controller's own measurement.
 - Operators need an issue UI that a log query cannot replace.
+
+## Update — 2026-11-11: no source maps
+
+Decision 4 does not hold for 1.0. The release ships no source maps, hidden or served.
+The webapp build emits none, and `webapp/Dockerfile` fails the build if a `.map` file appears.
+[Release management](../contributor/release-management.mdx) § Browser source maps states this.
+
+A browser fault carries the build commit as `browser.release`.
+To decode its frames, a contributor rebuilds that tagged commit with source maps turned on.
+Nothing checks that this rebuild matches the shipped scripts byte for byte.
+
+We chose this because CI builds the image once, and the release promotes that one artifact.
+Maps kept with the release need a second build output, a signed handoff from CI to the release, and their own contract tests.
+
+`docs/admin/production-operations-runbook.mdx:711` still tells operators to decode frames with the release's source maps.
+Follow-up ADR-4 in the 1.0 ledger corrects that line (PR #4105).

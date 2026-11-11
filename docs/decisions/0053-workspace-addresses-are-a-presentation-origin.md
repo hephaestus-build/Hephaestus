@@ -67,13 +67,14 @@ Option 6 for the address, and option 3 for TLS.
   The response allows credentials and sends `Vary: Origin`.
 - A workspace host cannot read the apex CSRF cookie.
   Thus, an endpoint returns the raw CSRF token.
-  The web app fetches it again after each sign-in and sign-out.
+  The web app loads it once per page load, and sign-in and sign-out end in a new page load.
+  After a CSRF refusal, the web app loads the token again and retries once.
 - `ReturnToValidator` stays relative-only.
 - A slug is a valid DNS label in ASCII: letters, digits and inner hyphens, with no `--`.
   Reserved names include `www`, `api`, `docs`, `admin`, `auth`, `login`, `mail`, `status`, `staging`, `preview`, `pr<digits>`, and the RFC 2142 mailbox names.
   A used slug is never given to another workspace.
   A rename redirects through the slug history.
-- Each origin keeps its own browser state: cookie choices, theme, and the admin **View as user** session.
+- Each origin keeps its own browser state: the theme and the admin **View as user** session.
   The theme changed with the amendment of 2026-10-26 below.
   The Slack connect flow carries its return slug in the signed OAuth state.
 - The base domain must not be on the Public Suffix List.
@@ -102,12 +103,19 @@ Option 6 for the address, and option 3 for TLS.
   A leak of the token lets an attacker issue certificates for the zone or redirect it.
   Thus, the token stays scoped to the one zone and is stored as a secret.
 - The certificate logs show only the wildcard, never a workspace slug.
-- A reader answers the cookie choice once on each workspace host.
+- A reader answers no cookie choice on a workspace host, because the web app sets no optional cookie.
 - The decision is reversible.
   Turn off the instance switch, and `/w/<slug>` is the address again.
   No schema or stored data depends on the host.
   If central sign-in stops working, the ADR 0048 handoff can give a workspace host its own session.
   That needs no new auth system.
+
+## Confirmation
+
+`WorkspaceSubdomainCorsTest` fails when CORS allows an origin that is not one unreserved label under the base domain, or reveals a workspace.
+`WorkspaceSubdomainAuthIntegrationTest` fails when the path redirect or the raw CSRF token flow breaks on a workspace host.
+`WorkspaceSubdomainPropertiesTest` and `WorkspaceSubdomainDatabaseTest` fail on a bad base domain or a reused slug.
+`k3s-platform.test.ts` fails when the workspace wildcard certificate does not use DNS-01.
 
 ## Revisit trigger
 
@@ -131,7 +139,7 @@ The theme is now one preference on the registrable domain:
 - A reader accepts only the three known values.
   Every host under the base domain can set the cookie, so a sibling host can change only the theme.
 
-Cookie choices and the admin **View as user** session stay with each origin.
+The admin **View as user** session stays with each origin.
 The auth cookies stay host-only, with the `__Host-` prefix.
 
 A host-only cookie and a `Domain=` cookie can have the same name.
