@@ -6691,6 +6691,15 @@ void test("merged workflow lint retains Zizmor after an Actionlint failure and i
 	assert.ok(isSeq(sequence));
 	const zizmor = sequence.items.find((item) => isMap(item) && item.get("id") === "zizmor");
 	assert.ok(isMap(zizmor));
+	const condition = asString(zizmor.get("if"), "Zizmor guard").replaceAll(
+		/^\$\{\{\s*|\s*\}\}$/gu,
+		"",
+	);
+	const parsed = new Parser(
+		new Lexer(condition).lex().tokens,
+		["steps"],
+		[{ name: "cancelled", minArgs: 0, maxArgs: 0 }],
+	).parse();
 	for (const cancelled of [false, true]) {
 		const functions = new Map([
 			[
@@ -6698,15 +6707,7 @@ void test("merged workflow lint retains Zizmor after an Actionlint failure and i
 				{ name: "cancelled", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(cancelled) },
 			],
 		]);
-		const condition = asString(zizmor.get("if"), "Zizmor guard").replaceAll(
-			/^\$\{\{\s*|\s*\}\}$/gu,
-			"",
-		);
-		const parsed = new Parser(
-			new Lexer(condition).lex().tokens,
-			["steps"],
-			[...functions.values()],
-		).parse();
+
 		const context: unknown = JSON.parse(
 			JSON.stringify({
 				steps: { checkout: { outcome: "success" }, native: { outcome: "failure" } },

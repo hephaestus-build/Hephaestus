@@ -139,7 +139,6 @@ env:
     type=raw,value=${{ format('pr-{0}', github.event.number) }},enable=${{ github.event_name == 'pull_request' }}
 
 jobs:
-
   build:
     name: linux/amd64
     # Builds every selected image that the push does not reuse from the merge queue.

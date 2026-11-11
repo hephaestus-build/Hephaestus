@@ -36,7 +36,6 @@ env:
   ORG_GRADLE_PROJECT_packagedServer: "true"
 
 jobs:
-
   server-verification:
     name: Unit
     if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true'

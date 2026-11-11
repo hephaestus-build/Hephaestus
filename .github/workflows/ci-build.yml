@@ -35,7 +35,6 @@ env:
 # Consumers must not recompile: API checks, browser tests and buildpacks share the package job's JAR.
 # docs/contributor/ci-cd.mdx § Build once owns the artifact contract.
 jobs:
-
   server-api:
     name: Generated API
     if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true'

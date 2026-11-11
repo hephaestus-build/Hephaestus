@@ -57,7 +57,6 @@ on:
 permissions: {}
 
 jobs:
-
   quality:
     name: Server
     if: inputs.should_skip != 'true' && (inputs.application_server_changed == 'true' || inputs.pmd_canary == 'true')

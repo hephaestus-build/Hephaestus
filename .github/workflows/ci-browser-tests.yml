@@ -40,7 +40,6 @@ env:
 # Consumers must not recompile: API checks, browser tests and buildpacks share the package job's JAR.
 # docs/contributor/ci-cd.mdx § Build once owns the artifact contract.
 jobs:
-
   webapp-e2e:
     name: Webapp
     if: inputs.should_skip != 'true' && inputs.e2e_changed == 'true' && inputs.queue_tier == 'true'
