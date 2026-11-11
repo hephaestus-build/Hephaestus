@@ -102,7 +102,7 @@ class AuthPropertiesTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"8080, http://localhost:8080", "8097, http://localhost:8097"})
+    @CsvSource({"8080, http://localhost:8080/api", "8097, http://localhost:8097/api"})
     void shouldPinLocalCallbackToConfiguredServerPortWhenIssuerIsUnset(String port, String expected)
             throws IOException {
         var sources = new MutablePropertySources();
@@ -122,24 +122,6 @@ class AuthPropertiesTest extends BaseUnitTest {
                 ConfigurationPropertySources.from(sources), new PropertySourcesPlaceholdersResolver(sources));
         var configured = binder.bindOrCreate("hephaestus.auth", Bindable.of(AuthProperties.class));
         assertThat(configured.apiBaseUrl()).isEqualTo(expected);
-    }
-
-    @ParameterizedTest
-    @CsvSource(
-            value = {
-                "/api | /api",
-                "api | /api",
-                "//api | /api",
-                "/api/ | /api",
-                "/api/v2/ | /api/v2",
-                "'' | ''",
-                "/ | ''",
-                "'  /api/  ' | /api",
-            },
-            delimiterString = "|",
-            emptyValue = "")
-    void apiBasePath_isNormalizedToLeadingSlashNoTrailingSlash(String raw, String expected) {
-        assertThat(AuthPropertiesFixture.withApiBasePath(raw).apiBasePath()).isEqualTo(expected);
     }
 
     @Nested

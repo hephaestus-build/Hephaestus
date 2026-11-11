@@ -64,7 +64,7 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .expectStatus()
                 .isEqualTo(HttpStatus.PERMANENT_REDIRECT)
                 .expectHeader()
-                .valueEquals("Location", "/workspaces/chain-current?range=1y")
+                .valueEquals("Location", "/api/workspaces/chain-current?range=1y")
                 .expectBody(Void.class);
     }
 
@@ -88,7 +88,7 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .expectStatus()
                 .isEqualTo(HttpStatus.PERMANENT_REDIRECT)
                 .expectHeader()
-                .valueEquals("Location", "/workspaces/migrated-current")
+                .valueEquals("Location", "/api/workspaces/migrated-current")
                 .expectBody(Void.class);
     }
 

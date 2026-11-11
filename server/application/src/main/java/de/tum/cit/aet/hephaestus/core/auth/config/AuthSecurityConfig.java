@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.config;
 
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.OAuthLoginPaths;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookie;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepository;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.GitHubEmailOAuth2UserService;
@@ -14,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import java.security.SecureRandom;
 import java.util.Base64;
 import javax.crypto.SecretKey;
@@ -132,7 +134,7 @@ public class AuthSecurityConfig {
      */
     static OAuth2AuthorizationRequestResolver pkceResolver(ClientRegistrationRepository repo) {
         DefaultOAuth2AuthorizationRequestResolver resolver =
-                new DefaultOAuth2AuthorizationRequestResolver(repo, "/oauth2/authorization");
+                new DefaultOAuth2AuthorizationRequestResolver(repo, OAuthLoginPaths.AUTHORIZATION);
         resolver.setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce());
         return resolver;
     }
@@ -212,13 +214,14 @@ public class AuthSecurityConfig {
             AuthRateLimitFilter authRateLimitFilter,
             ClientRegistrationRepository clientRegistrationRepository)
             throws Exception {
-        http.securityMatcher("/oauth2/authorization/**", "/login/oauth2/code/**", "/auth/login", "/auth/error")
+        http.securityMatcher(
+                        OAuthLoginPaths.AUTHORIZATION + "/**",
+                        OAuthLoginPaths.CALLBACK + "/**",
+                        ApiPath.of("/auth/login"),
+                        ApiPath.of("/auth/error"))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(req -> {
-                    req.requestMatchers("/auth/error").permitAll();
-                    req.anyRequest().permitAll(); // oauth2Login handles the actual auth
-                })
+                .authorizeHttpRequests(req -> req.anyRequest().permitAll()) // oauth2Login handles the actual auth
                 .oauth2Login(oauth -> {
                     oauth.tokenEndpoint(token -> token.accessTokenResponseClient(guardedTokenClient()));
                     // Explicit loginPage: the SPA owns the login UI, and without this Spring Security's
@@ -230,6 +233,7 @@ public class AuthSecurityConfig {
                     oauth.loginPage("/login");
                     oauth.authorizationEndpoint(endpoint -> endpoint.authorizationRequestRepository(cookieRepo)
                             .authorizationRequestResolver(pkceResolver(clientRegistrationRepository)));
+                    oauth.redirectionEndpoint(endpoint -> endpoint.baseUri(OAuthLoginPaths.CALLBACK + "/*"));
                     // GitHub: enrich attributes with the primary+verified email from /user/emails so
                     // VerifiedEmailResolver can stamp primaryEmailVerifiedAt. OIDC providers are untouched.
                     oauth.userInfoEndpoint(userInfo -> userInfo.userService(oauthUserService()));

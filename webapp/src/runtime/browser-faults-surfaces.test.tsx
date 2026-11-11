@@ -188,13 +188,13 @@ const surfaces = {
 	REQUEST_FAILED: {
 		"the generated client": async (faults) => {
 			failing("/failing", 503, TRACE);
-			const client = createClient({ baseUrl: "http://localhost:8080" });
+			const client = createClient({ baseUrl: "http://localhost:3000/api" });
 			reportFailedRequests(client, faults);
 			await client.get({ url: "/failing" });
 		},
 		"a route's loader that shows the failed request": async (faults) => {
 			failing("/failing", 503, TRACE);
-			const client = createClient({ baseUrl: "http://localhost:8080" });
+			const client = createClient({ baseUrl: "http://localhost:3000/api" });
 			reportFailedRequests(client, faults);
 			await renderRoute(faults, async () => {
 				await client.get({ url: "/failing", throwOnError: true });
@@ -258,7 +258,7 @@ describe("how a failed request is reported", () => {
 			http.get("*/unreachable", () => HttpResponse.error()),
 			http.post("*/web-vitals", () => new HttpResponse(null, { status: 503 })),
 		);
-		const client = createClient({ baseUrl: "http://localhost:8080" });
+		const client = createClient({ baseUrl: "http://localhost:3000/api" });
 		reportFailedRequests(client, faults);
 		const aborted = new AbortController();
 		aborted.abort();

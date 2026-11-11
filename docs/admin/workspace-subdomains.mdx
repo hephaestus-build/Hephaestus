@@ -36,7 +36,6 @@ hephaestus:
     url: https://hephaestus.build
   auth:
     issuer: https://hephaestus.build
-    api-base-path: /api
 ```
 
 The server switch alone does not configure DNS, TLS, redirects, or SPA routes.
@@ -126,7 +125,7 @@ See [MDN's site definition](https://developer.mozilla.org/en-US/docs/Glossary/Si
 ## Register exact OAuth callbacks
 
 Every login provider uses one callback on the configured auth issuer's origin.
-The server adds `api-base-path` and `/login/oauth2/code/<registrationId>`.
+The server adds `/api/login/oauth2/code/<registrationId>`.
 Neither `Host` nor `X-Forwarded-Host` can change that callback.
 Instance administration shows the same callback that authentication uses.
 

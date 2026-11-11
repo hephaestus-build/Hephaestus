@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.observability;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -29,6 +31,9 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 // An own context: the shared one also holds the meters of other classes, so its series depend on the class order.
 @TestPropertySource(properties = "hephaestus.test.context=scrape-contract")
 class ScrapeContractIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private ApplicationContext context;
 
     private static final Path RULES = Path.of("../../deploy/chart/hephaestus/files/hephaestus-alerts.yml");
     private static final Path DASHBOARDS = Path.of("../../deploy/chart/hephaestus/files/dashboards");
@@ -146,7 +151,7 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
     void shouldOfferTheBucketsThatTheRulesDivideByAndStayWithinTheSeriesBudget() throws IOException {
         webTestClient
                 .get()
-                .uri("/livez")
+                .uri(ApiWebTestClient.root(context, "/livez"))
                 .exchange()
                 .expectStatus()
                 .isOk()

@@ -122,9 +122,6 @@ hephaestus:
         # always sets the env var, so it gets the real issuer.
         issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:${SERVER_PORT:8080}}
         state-cookie-key: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY}
-        # The Gateway strips /api before the request reaches the app (see deploy/chart/hephaestus), and
-        # native forward-headers can't restore the prefix — re-add it to the browser-facing OAuth URLs.
-        api-base-path: /api
         passkeys:
             rp-id: ${HEPHAESTUS_AUTH_PASSKEYS_RP_ID:}
             allowed-origins: ${HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS:}

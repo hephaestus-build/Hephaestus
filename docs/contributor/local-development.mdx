@@ -240,23 +240,10 @@ The application server automatically picks up the new port from the same `.env` 
 SERVER_PORT=18080
 ```
 
-If the webapp also needs to reach the server at the new port, edit the runtime-environment stub the
-webapp loads before its bundle:
-
-```js
-// webapp/public/env-config.js
-window.__ENV__ = { APPLICATION_SERVER_URL: "http://localhost:18080" };
-```
-
-:::caution[Keep it local]
-`env-config.js` is committed as an empty stub and overwritten by the Docker entrypoint in
-production. Treat a local override the way you treat `application-local.yml`: do not commit it.
-:::
-
-The webapp has no Vite-level environment variables — `vite.config.ts` does not call `loadEnv`, sets
-no `envPrefix`, and nothing in `src/` reads `import.meta.env` beyond `DEV`. A `webapp/.env` file has
-no effect on the application's configuration, and there is no `VITE_`-prefixed setting for the server
-URL.
+The webapp calls the API under `/api` of its own origin, as in production.
+The Vite dev server sends `/api` to the server port.
+It reads `SERVER_PORT` from `server/.env`, and the shell environment overrides it.
+The webapp has no other Vite-level environment variable.
 
 **Changing the webapp port:**
 
@@ -267,7 +254,7 @@ and not `server/.env`):
 WEBAPP_PORT=5200 vp run dev:webapp
 ```
 
-When changing the webapp port, the server's CORS origin must also be updated so API calls are not rejected:
+When you change the webapp port, also change the web app URL that the server uses for links back into the web app:
 
 ```bash
 # server/.env
@@ -280,8 +267,8 @@ Changing a port in one place may require updates elsewhere. This table shows the
 
 | When you change... | Also update...                                             | Why                                      |
 | ------------------ | ---------------------------------------------------------- | ---------------------------------------- |
-| `WEBAPP_PORT`      | `APPLICATION_HOST_URL` in `.env`                           | CORS origin must match                   |
-| `SERVER_PORT`      | Webapp's `APPLICATION_SERVER_URL` (if connecting directly) | API base URL changes                     |
+| `WEBAPP_PORT`      | `APPLICATION_HOST_URL` in `.env`                           | Links back into the web app must match   |
+| `SERVER_PORT`      | The OAuth callbacks of your login providers                | The callback contains the server port    |
 | `POSTGRES_PORT`    | Nothing (automatic)                                        | Both Compose and Spring read from `.env` |
 
 ### GitHub configuration
@@ -395,14 +382,13 @@ environment.
 
 ### Authentication (local)
 
-Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md)). The server federates to GitHub (and optionally GitLab — gitlab.com or a self-hosted instance) through Spring Security `oauth2Login`, then issues its own short-lived ES256 cookie-session JWT. The webapp reads `GET /user` and redirects to `/auth/login` — there is no token in the browser.
+Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md)). The server federates to GitHub (and optionally GitLab — gitlab.com or a self-hosted instance) through Spring Security `oauth2Login`, then issues its own short-lived ES256 cookie-session JWT. The webapp reads `GET /api/user` and redirects to `/api/auth/login` — there is no token in the browser.
 
 #### Configure GitHub login
 
-1. [Create a GitHub OAuth application](https://github.com/settings/developers) with the callback URL `http://localhost:8080/login/oauth2/code/github` (replace `8080` with your `SERVER_PORT`).
+1. [Create a GitHub OAuth application](https://github.com/settings/developers) with the callback URL `http://localhost:8080/api/login/oauth2/code/github` (replace `8080` with your `SERVER_PORT`).
    The local auth issuer defaults to `http://localhost:${SERVER_PORT:8080}`.
    If you set `HEPHAESTUS_AUTH_ISSUER`, register its origin instead.
-   Add `HEPHAESTUS_AUTH_API_BASE_PATH` before `/login` if you set an API prefix.
 2. Copy `server/.env.example` to `server/.env` and set the credentials:
 
    ```bash
@@ -413,7 +399,7 @@ Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://gith
    ```
 
 3. (Optional) To enable local GitLab login, register an OAuth application on your GitLab instance.
-   Use callback `http://localhost:<SERVER_PORT>/login/oauth2/code/gitlab` and scope `read_user`.
+   Use callback `http://localhost:<SERVER_PORT>/api/login/oauth2/code/gitlab` and scope `read_user`.
    Apply the same issuer and API-prefix settings as for GitHub.
    Set `GITLAB_OAUTH_CLIENT_ID` / `GITLAB_OAUTH_CLIENT_SECRET`.
    Point `GITLAB_OAUTH_BASE_URL` at the instance.
@@ -441,7 +427,7 @@ Manual database edits are a last resort.
 #### Troubleshooting auth
 
 - **401 after login:** check that `GITHUB_OAUTH_CLIENT_ID/SECRET` are set.
-  Check that the provider callback matches `HEPHAESTUS_AUTH_ISSUER`, or `http://localhost:<SERVER_PORT>` when it is unset, plus the configured API prefix.
+  Check that the provider callback matches `HEPHAESTUS_AUTH_ISSUER`, or `http://localhost:<SERVER_PORT>` when it is unset, plus `/api/login/oauth2/code/<registrationId>`.
 - **Logins do not survive a server restart locally:** set `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` (base64 32-byte. `openssl rand -base64 32`) in `server/.env` — otherwise an ephemeral per-boot key is used.
 - **Reset everything:** `vp run dev:reset` (see Running the stack). On next login the account and identity link are recreated.
 

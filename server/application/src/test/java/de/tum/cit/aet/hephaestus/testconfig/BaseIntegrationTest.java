@@ -21,6 +21,7 @@ import org.springframework.test.context.TestPropertySource;
 // Allow bounded waits for database transactions in request tests.
 @AutoConfigureWebTestClient(timeout = "30s")
 @Import({
+    ApiWebTestClient.class,
     TestSecurityConfig.class,
     TestAsyncConfiguration.class,
     RecordingScmEventListener.class,

@@ -24,6 +24,7 @@ import type { Wire } from "@/lib/dates";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { apiPathOf } from "@/test/api-path";
 import { deferred } from "@/test/async";
 import {
 	ROUTE_RENDER_WAIT,
@@ -134,7 +135,7 @@ describe("workspace settings route", () => {
 function serveSetupReads(workspaceSlug: string) {
 	const reads: string[] = [];
 	const record = (request: Request) => {
-		reads.push(new URL(request.url).pathname);
+		reads.push(apiPathOf(request.url));
 	};
 	server.use(
 		http.get(`*/workspaces/${workspaceSlug}/connections/catalog`, ({ request }) => {
@@ -934,7 +935,7 @@ describe("workspace settings lifetime", () => {
 				HttpResponse.json([]),
 			),
 			http.patch("*/workspaces/acme/public-activity", async ({ request }) => {
-				requests.push(new URL(request.url).pathname);
+				requests.push(apiPathOf(request.url));
 				return response.promise;
 			}),
 		);
@@ -1085,7 +1086,7 @@ describe("workspace settings lifetime", () => {
 				http.patch(
 					"*/workspaces/:workspaceSlug/activity/people/11/public-visibility",
 					async ({ request }) => {
-						shown.push(new URL(request.url).pathname);
+						shown.push(apiPathOf(request.url));
 						return response.promise;
 					},
 				),
@@ -1157,7 +1158,7 @@ describe("workspace settings lifetime", () => {
 				HttpResponse.json([]),
 			),
 			http.patch("*/workspaces/:workspaceSlug/public-activity", ({ request }) => {
-				changes.push(new URL(request.url).pathname);
+				changes.push(apiPathOf(request.url));
 				return HttpResponse.json({
 					enabled: true,
 					allowSearchEngines: false,
@@ -1307,7 +1308,7 @@ describe("instance administrator workspace settings", () => {
 			http.get("*/workspaces", () => HttpResponse.json({ status: 503 }, { status: 503 })),
 			http.get("*/workspaces/tutors", () => HttpResponse.json({ status: 403 }, { status: 403 })),
 			http.all("*/workspaces/acme/*", ({ request }) => {
-				otherRequests.push(new URL(request.url).pathname);
+				otherRequests.push(apiPathOf(request.url));
 				return HttpResponse.json({ status: 503 }, { status: 503 });
 			}),
 		);

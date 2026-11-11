@@ -37,7 +37,7 @@ export const requestSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("configure-instance"),
 		origin: z.string().max(2048),
-		// Only a development build asks for it: a local API server does not serve the web app.
+		// Only a development build asks for it: a local web app can run on its own development server.
 		webAppOrigin: z.string().max(2048).optional(),
 	}),
 	z.object({ type: z.literal("resolve-instance-origin"), origin: z.string().max(2048) }),

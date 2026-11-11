@@ -180,12 +180,6 @@
       "sourceType": "de.tum.cit.aet.hephaestus.core.database.MigratedSchemaWait"
     },
     {
-      "name": "hephaestus.dev.trigger-enabled",
-      "type": "java.lang.Boolean",
-      "description": "Lets requests to paths under /api/dev/ pass the security filter without sign-in. Use it only in local development, never in production.",
-      "sourceType": "de.tum.cit.aet.hephaestus.SecurityConfig"
-    },
-    {
       "name": "hephaestus.fabric.root",
       "type": "java.lang.String",
       "description": "Local directory for the bare Git mirrors and the evidence folders of running reviews. The process must be able to write to it. Its contents are not durable application state.",

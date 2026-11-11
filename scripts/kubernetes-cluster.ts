@@ -2044,7 +2044,7 @@ export async function turnRoll(
 			throw error;
 		}
 		forward = await portForward(signIn, 8080);
-		const base = `http://127.0.0.1:${forward.port}`;
+		const base = `http://127.0.0.1:${forward.port}/api`;
 		const token = await syntheticSession(base, ROLL_ADMIN, true);
 		await psql(
 			await readFile(path.join(ROOT, "scripts", "capacity-bench", "seed-identities.sql"), "utf8"),

@@ -30,6 +30,7 @@ import {
 	reviewHandlers,
 	feedbackCountHandlers,
 } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
+import { apiPathOf } from "@/test/api-path";
 import { deferred, sleep } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
@@ -82,7 +83,7 @@ const record = ({ request }: { request: Request }) => {
 };
 
 function requestsTo(pathname: string): URL[] {
-	return requested.filter((url) => url.pathname === `/workspaces/acme${pathname}`);
+	return requested.filter((url) => apiPathOf(url) === `/workspaces/acme${pathname}`);
 }
 
 beforeEach(() => {
@@ -548,11 +549,11 @@ describe("the trace and a record over it", () => {
 			await act(async () =>
 				router.history.push(`/w/other/admin/practices/reviews?detail=${TRACE}&developerId=7`),
 			);
-			const otherReads = () => requested.filter((url) => url.pathname.startsWith(`${OTHER}/`));
+			const otherReads = () => requested.filter((url) => apiPathOf(url).startsWith(`${OTHER}/`));
 			await waitFor(() => {
 				expect(otherReads().some((url) => url.pathname.endsWith("/lineage"))).toBe(true);
 				expect(
-					otherReads().filter((url) => url.pathname === `${OTHER}/practices/reviews`),
+					otherReads().filter((url) => apiPathOf(url) === `${OTHER}/practices/reviews`),
 				).not.toHaveLength(0);
 			}, ROUTE_RENDER_WAIT);
 			const tabs = document.querySelector('nav[aria-label="Practice review sections"]');

@@ -40,7 +40,7 @@ events.on("error", () => {
 	abort.abort();
 });
 const result = await runCapacityChat({
-	base: "http://127.0.0.1:8080/workspaces/capacity-bench-course/mentor",
+	base: "http://127.0.0.1:8080/api/workspaces/capacity-bench-course/mentor",
 	tokens,
 	runLabel: process.env.CAPACITY_RUN_LABEL,
 	signal: abort.signal,

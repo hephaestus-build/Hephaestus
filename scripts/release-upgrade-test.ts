@@ -228,6 +228,17 @@ async function waitUntilReady(
 }
 
 /**
+ * Where a release answers its API. The server serves it under `/api` since 1.0; an earlier release answered at the
+ * root, behind a proxy that removed the prefix. The previous release can be either.
+ */
+async function apiOf(port: number): Promise<string> {
+	const origin = `http://127.0.0.1:${port}`;
+	const prefixed = await fetchWithTimeout(`${origin}/api/identity-providers`);
+	await prefixed.body?.cancel();
+	return prefixed.ok ? `${origin}/api` : origin;
+}
+
+/**
  * One signed-in caller. A request that changes something sends the CSRF token twice — as a cookie
  * and as the header it is compared against — so the two travel together rather than as a cookie a
  * caller can pair and forget. `SecurityConfig` owns when that is required.
@@ -248,8 +259,8 @@ function cookieNamed(response: Response, suffix: string): string | undefined {
 		?.split(";", 1)[0];
 }
 
-async function login(port: number, username: string): Promise<Session> {
-	const response = await fetchWithTimeout(`http://127.0.0.1:${port}/auth/dev-login`, {
+async function login(api: string, username: string): Promise<Session> {
+	const response = await fetchWithTimeout(`${api}/auth/dev-login`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify({
@@ -267,7 +278,7 @@ async function login(port: number, username: string): Promise<Session> {
 	}
 	// Fetch a CSRF cookie for the signed-in caller before any write. Dev login is not asked for one,
 	// so it returns none to pair with.
-	const probe = await fetchWithTimeout(`http://127.0.0.1:${port}/user`, {
+	const probe = await fetchWithTimeout(`${api}/user`, {
 		headers: { cookie: authCookie },
 	});
 	if (!probe.ok) {
@@ -287,8 +298,8 @@ async function login(port: number, username: string): Promise<Session> {
 	};
 }
 
-async function completeTransparencyNotice(port: number, session: Session): Promise<void> {
-	const status = await fetchWithTimeout(`http://127.0.0.1:${port}/user/consent`, {
+async function completeTransparencyNotice(api: string, session: Session): Promise<void> {
+	const status = await fetchWithTimeout(`${api}/user/consent`, {
 		headers: { cookie: session.cookie },
 	});
 	if (!status.ok) {
@@ -306,7 +317,7 @@ async function completeTransparencyNotice(port: number, session: Session): Promi
 	if ("completed" in statusBody && statusBody.completed === true) {
 		return;
 	}
-	const completed = await fetchWithTimeout(`http://127.0.0.1:${port}/user/consent`, {
+	const completed = await fetchWithTimeout(`${api}/user/consent`, {
 		method: "PUT",
 		headers: {
 			"content-type": "application/json",
@@ -328,8 +339,8 @@ async function completeTransparencyNotice(port: number, session: Session): Promi
 	}
 }
 
-async function assertCoreReads(port: number, session: Session): Promise<void> {
-	const user = await fetchWithTimeout(`http://127.0.0.1:${port}/user`, {
+async function assertCoreReads(api: string, session: Session): Promise<void> {
+	const user = await fetchWithTimeout(`${api}/user`, {
 		headers: { cookie: session.cookie },
 	});
 	if (!user.ok) {
@@ -345,7 +356,7 @@ async function assertCoreReads(port: number, session: Session): Promise<void> {
 		throw new Error("Core read /user did not return the seeded account");
 	}
 
-	const providers = await fetchWithTimeout(`http://127.0.0.1:${port}/identity-providers`);
+	const providers = await fetchWithTimeout(`${api}/identity-providers`);
 	if (!providers.ok) {
 		throw new Error(
 			`Core read /identity-providers returned ${providers.status}: ${await providers.text()}`,
@@ -355,7 +366,7 @@ async function assertCoreReads(port: number, session: Session): Promise<void> {
 	if (!Array.isArray(providerBody) || providerBody.length === 0) {
 		throw new Error("Core read /identity-providers returned no providers");
 	}
-	const workspaces = await fetchWithTimeout(`http://127.0.0.1:${port}/workspaces`, {
+	const workspaces = await fetchWithTimeout(`${api}/workspaces`, {
 		headers: { cookie: session.cookie },
 	});
 	if (!workspaces.ok) {
@@ -378,8 +389,8 @@ async function assertCoreReads(port: number, session: Session): Promise<void> {
 	}
 }
 
-async function seedWorkspace(port: number, session: Session, workspaceSlug: string): Promise<void> {
-	const response = await fetchWithTimeout(`http://127.0.0.1:${port}/workspaces`, {
+async function seedWorkspace(api: string, session: Session, workspaceSlug: string): Promise<void> {
+	const response = await fetchWithTimeout(`${api}/workspaces`, {
 		method: "POST",
 		headers: {
 			"content-type": "application/json",
@@ -400,10 +411,10 @@ async function seedWorkspace(port: number, session: Session, workspaceSlug: stri
 	}
 }
 
-async function assertInstalledCatalog(port: number, session: Session): Promise<void> {
-	const root = await login(port, "root");
-	await completeTransparencyNotice(port, root);
-	const response = await fetchWithTimeout(`http://127.0.0.1:${port}/admin/practice-catalog`, {
+async function assertInstalledCatalog(api: string, session: Session): Promise<void> {
+	const root = await login(api, "root");
+	await completeTransparencyNotice(api, root);
+	const response = await fetchWithTimeout(`${api}/admin/practice-catalog`, {
 		headers: { cookie: root.cookie },
 	});
 	if (!response.ok) {
@@ -419,7 +430,7 @@ async function assertInstalledCatalog(port: number, session: Session): Promise<v
 		throw new Error("Instance catalog has no offered practices");
 	}
 	const installedResponse = await fetchWithTimeout(
-		`http://127.0.0.1:${port}/workspaces/${ADOPTION_WORKSPACE_SLUG}/practices`,
+		`${api}/workspaces/${ADOPTION_WORKSPACE_SLUG}/practices`,
 		{ headers: { cookie: session.cookie } },
 	);
 	if (!installedResponse.ok) {
@@ -663,11 +674,12 @@ async function assertPreviousReleaseRuns(database: string, schema: string): Prom
 			agentImage: previousAgentImage,
 		});
 		await waitUntilReady(name, port, ["/readyz", "/actuator/health/readiness"]);
-		const session = await login(port, "alice");
-		await completeTransparencyNotice(port, session);
-		await assertCoreReads(port, session);
-		await seedWorkspace(port, session, PREVIOUS_RELEASE_WORKSPACE_SLUG);
-		const modelId = await bindReviewModel(port, session);
+		const api = await apiOf(port);
+		const session = await login(api, "alice");
+		await completeTransparencyNotice(api, session);
+		await assertCoreReads(api, session);
+		await seedWorkspace(api, session, PREVIOUS_RELEASE_WORKSPACE_SLUG);
+		const modelId = await bindReviewModel(api, session);
 		withFixture(database, () => queueReview(database, modelId));
 		console.log(
 			`The previous release claimed the queued review on ${schema}: ${await claimedReview(database)}.`,
@@ -712,13 +724,13 @@ function seedReview(database: string): void {
 }
 
 async function write(
-	port: number,
+	api: string,
 	session: Session,
 	method: "POST" | "PUT" | "PATCH",
 	path: string,
 	body: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-	const response = await fetchWithTimeout(`http://127.0.0.1:${port}${path}`, {
+	const response = await fetchWithTimeout(`${api}${path}`, {
 		method,
 		headers: {
 			"content-type": "application/json",
@@ -738,10 +750,10 @@ async function write(
  * Creates an AI model on a connection that nothing answers, and binds it to practice reviews in the review's
  * workspace, through the previous release's own API. Returns the model id.
  */
-async function bindReviewModel(port: number, alice: Session): Promise<number> {
-	const root = await login(port, "root");
-	await completeTransparencyNotice(port, root);
-	const connection = await write(port, root, "POST", "/admin/llm/connections", {
+async function bindReviewModel(api: string, alice: Session): Promise<number> {
+	const root = await login(api, "root");
+	await completeTransparencyNotice(api, root);
+	const connection = await write(api, root, "POST", "/admin/llm/connections", {
 		displayName: "Upgrade test",
 		baseUrl: "http://127.0.0.1:9/v1",
 		apiProtocol: "openai-completions",
@@ -749,20 +761,20 @@ async function bindReviewModel(port: number, alice: Session): Promise<number> {
 		enabled: true,
 	});
 	const model = await write(
-		port,
+		api,
 		root,
 		"POST",
 		`/admin/llm/connections/${String(connection.id)}/models`,
 		{ displayName: "Upgrade model", upstreamModelId: "upgrade-model" },
 	);
 	const modelId = Number(model.id);
-	await write(port, root, "PUT", `/admin/llm/models/${modelId}/price`, {
+	await write(api, root, "PUT", `/admin/llm/models/${modelId}/price`, {
 		pricingMode: "NO_CHARGE",
 		note: "Self-hosted test model",
 	});
-	await write(port, root, "PATCH", `/admin/llm/models/${modelId}`, { enabled: true });
-	await write(port, root, "PUT", `/admin/llm/models/${modelId}/sharing`, { visibility: "PUBLIC" });
-	await write(port, alice, "PUT", `/workspaces/${REVIEW_WORKSPACE}/agents/PRACTICE_REVIEW`, {
+	await write(api, root, "PATCH", `/admin/llm/models/${modelId}`, { enabled: true });
+	await write(api, root, "PUT", `/admin/llm/models/${modelId}/sharing`, { visibility: "PUBLIC" });
+	await write(api, alice, "PUT", `/workspaces/${REVIEW_WORKSPACE}/agents/PRACTICE_REVIEW`, {
 		instanceModelId: modelId,
 		maxConcurrentJobs: 1,
 		enabled: true,
@@ -963,12 +975,13 @@ try {
 	let port = startApplication(application, previousImage);
 	// A previous release without the management port answers readiness only on the actuator path.
 	await waitUntilReady(application, port, ["/readyz", "/actuator/health/readiness"]);
-	const previousSession = await login(port, "alice");
-	await completeTransparencyNotice(port, previousSession);
-	await login(port, "root");
+	let api = await apiOf(port);
+	const previousSession = await login(api, "alice");
+	await completeTransparencyNotice(api, previousSession);
+	await login(api, "root");
 	linkWorkspaceIdentity();
-	await seedWorkspace(port, previousSession, WORKSPACE_SLUG);
-	await assertCoreReads(port, previousSession);
+	await seedWorkspace(api, previousSession, WORKSPACE_SLUG);
+	await assertCoreReads(api, previousSession);
 	docker("stop", "--time", "30", application);
 	docker("rm", application);
 	const preserved = preservedPeople();
@@ -998,6 +1011,7 @@ try {
 	application = `${runId}-candidate`;
 	port = startApplication(application, candidateImage, "hephaestus", false);
 	await waitUntilReady(application, port);
+	api = await apiOf(port);
 	const upgradedData = dataFingerprint(preserved);
 	executeFixture("assert-migrated.sql");
 	if (upgradedData !== seededData) {
@@ -1015,18 +1029,19 @@ try {
 			`Liquibase history shrank during upgrade: before=${previousChanges}, after=${candidateChanges}`,
 		);
 	}
-	const candidateSession = await login(port, "alice");
-	await completeTransparencyNotice(port, candidateSession);
-	await assertCoreReads(port, candidateSession);
+	const candidateSession = await login(api, "alice");
+	await completeTransparencyNotice(api, candidateSession);
+	await assertCoreReads(api, candidateSession);
 
-	await seedWorkspace(port, candidateSession, ADOPTION_WORKSPACE_SLUG);
-	await assertInstalledCatalog(port, candidateSession);
+	await seedWorkspace(api, candidateSession, ADOPTION_WORKSPACE_SLUG);
+	await assertInstalledCatalog(api, candidateSession);
 	const installedPractices = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
 	docker("restart", "--time", "30", application);
 	port = publishedPort(application);
 	await waitUntilReady(application, port);
-	const restartedSession = await login(port, "alice");
-	await assertInstalledCatalog(port, restartedSession);
+	api = await apiOf(port);
+	const restartedSession = await login(api, "alice");
+	await assertInstalledCatalog(api, restartedSession);
 	if (
 		workspacePracticeCount(WORKSPACE_SLUG) !== upgradedPractices ||
 		workspacePracticeCount(ADOPTION_WORKSPACE_SLUG) !== installedPractices

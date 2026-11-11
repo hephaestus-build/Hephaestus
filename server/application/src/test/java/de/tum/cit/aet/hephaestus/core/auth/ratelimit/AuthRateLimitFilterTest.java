@@ -74,11 +74,11 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     void shouldShareThePublicActivityLimitAcrossWorkspaceSlugsButNotClientIps() throws Exception {
         var limited = filter(props());
         for (int i = 0; i < 60; i++) {
-            var request = new MockHttpServletRequest("GET", "/public/workspaces/alpha/activity");
+            var request = new MockHttpServletRequest("GET", "/api/public/workspaces/alpha/activity");
             request.setRemoteAddr("192.0.2.1");
             limited.doFilter(request, new MockHttpServletResponse(), mock(FilterChain.class));
         }
-        var request = new MockHttpServletRequest("GET", "/public/workspaces/bravo/activity/people/developer");
+        var request = new MockHttpServletRequest("GET", "/api/public/workspaces/bravo/activity/people/developer");
         request.setRemoteAddr("192.0.2.1");
         var blocked = new MockHttpServletResponse();
         limited.doFilter(request, blocked, mock(FilterChain.class));
@@ -109,12 +109,12 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 defaults.browserReports());
         var limited = filter(configured);
         limited.doFilter(
-                new MockHttpServletRequest("GET", "/public/workspaces/alpha/activity"),
+                new MockHttpServletRequest("GET", "/api/public/workspaces/alpha/activity"),
                 new MockHttpServletResponse(),
                 mock(FilterChain.class));
         var blocked = new MockHttpServletResponse();
         limited.doFilter(
-                new MockHttpServletRequest("HEAD", "/public/workspaces/alpha/activity/people/developer/work"),
+                new MockHttpServletRequest("HEAD", "/api/public/workspaces/alpha/activity/people/developer/work"),
                 blocked,
                 mock(FilterChain.class));
         assertThat(blocked.getStatus()).isEqualTo(429);
@@ -124,7 +124,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     void shouldNotChargeSignedInPublicReadsToTheAnonymousIpBudget() throws Exception {
         var limited = filter(props());
         authenticateAs("campus-member");
-        var request = new MockHttpServletRequest("HEAD", "/public/workspaces/alpha/activity");
+        var request = new MockHttpServletRequest("HEAD", "/api/public/workspaces/alpha/activity");
         limited.doFilter(request, new MockHttpServletResponse(), mock(FilterChain.class));
         assertThat(store).isEmpty();
         SecurityContextHolder.clearContext();
@@ -182,7 +182,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
 
     @Test
     void nonMatchingPathPassesThrough() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/workspaces");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/workspaces");
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
@@ -207,7 +207,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)));
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/auth/refresh");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/refresh");
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
@@ -224,10 +224,13 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         authenticateAs("reader");
         for (int i = 0; i < 2; i++) {
             filter(props())
-                    .doFilter(new MockHttpServletRequest("POST", "/web-vitals"), new MockHttpServletResponse(), chain);
+                    .doFilter(
+                            new MockHttpServletRequest("POST", "/api/web-vitals"),
+                            new MockHttpServletResponse(),
+                            chain);
         }
         MockHttpServletResponse blocked = new MockHttpServletResponse();
-        filter(props()).doFilter(new MockHttpServletRequest("POST", "/web-vitals"), blocked, chain);
+        filter(props()).doFilter(new MockHttpServletRequest("POST", "/api/web-vitals"), blocked, chain);
 
         assertThat(blocked.getStatus()).isEqualTo(429);
         assertThat(store).containsOnlyKeys("browser-reports:acct:reader");
@@ -241,7 +244,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                         },
                         objectMapper,
                         metrics)
-                .doFilter(new MockHttpServletRequest("POST", "/web-vitals"), unavailable, chain);
+                .doFilter(new MockHttpServletRequest("POST", "/api/web-vitals"), unavailable, chain);
         assertThat(unavailable.getStatus()).isEqualTo(200);
         verify(chain, times(3)).doFilter(any(), any());
     }
@@ -253,7 +256,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         for (MockHttpServletResponse response : List.of(new MockHttpServletResponse(), refused)) {
             response.setHeader("X-Request-Id", "4bf92f3577b34da6a3ce929d0e0e4736");
             filter.doFilter(
-                    new MockHttpServletRequest("GET", "/oauth2/authorization/github"),
+                    new MockHttpServletRequest("GET", "/api/oauth2/authorization/github"),
                     response,
                     mock(FilterChain.class));
         }
@@ -268,7 +271,8 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         FilterChain chain = mock(FilterChain.class);
         List<Integer> statuses = new ArrayList<>();
         List<ILoggingEvent> warnings = rateLimitWarnings(() -> {
-            for (String path : List.of("/web-vitals", "/browser-faults", "/browser-faults", "/browser-faults")) {
+            for (String path :
+                    List.of("/api/web-vitals", "/api/browser-faults", "/api/browser-faults", "/api/browser-faults")) {
                 MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
                 request.setRemoteAddr("198.51.100.9");
                 MockHttpServletResponse response = new MockHttpServletResponse();
@@ -289,12 +293,12 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(2, Duration.ofMinutes(1))));
         FilterChain chain = mock(FilterChain.class);
-        for (String path : List.of("/auth/client/token", "/auth/client/refresh")) {
+        for (String path : List.of("/api/auth/client/token", "/api/auth/client/refresh")) {
             MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
             request.setRemoteAddr("198.51.100.7");
             filter.doFilter(request, new MockHttpServletResponse(), chain);
         }
-        MockHttpServletRequest third = new MockHttpServletRequest("POST", "/auth/client/logout");
+        MockHttpServletRequest third = new MockHttpServletRequest("POST", "/api/auth/client/logout");
         third.setRemoteAddr("198.51.100.7");
         MockHttpServletResponse blocked = new MockHttpServletResponse();
         filter.doFilter(third, blocked, chain);
@@ -302,7 +306,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         assertThat(blocked.getStatus()).isEqualTo(429);
         assertThat(store).containsKey("client-session:ip:198.51.100.7");
 
-        MockHttpServletRequest discovery = new MockHttpServletRequest("GET", "/auth/client/configuration");
+        MockHttpServletRequest discovery = new MockHttpServletRequest("GET", "/api/auth/client/configuration");
         discovery.setRemoteAddr("198.51.100.7");
         MockHttpServletResponse passed = new MockHttpServletResponse();
         filter.doFilter(discovery, passed, chain);
@@ -316,7 +320,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         AuthRateLimitFilter f = filter(p);
 
         for (int i = 0; i < 2; i++) {
-            MockHttpServletRequest req = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+            MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
             req.setRemoteAddr("203.0.113.7");
             MockHttpServletResponse res = new MockHttpServletResponse();
             FilterChain chain = mock(FilterChain.class);
@@ -326,7 +330,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         }
 
         // third request from the same IP is rejected
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
         req.setRemoteAddr("203.0.113.7");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -349,13 +353,13 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         AuthRateLimitProperties p = props(new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)));
         AuthRateLimitFilter f = filter(p);
 
-        MockHttpServletRequest a = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+        MockHttpServletRequest a = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
         a.setRemoteAddr("198.51.100.1");
         MockHttpServletResponse ra = new MockHttpServletResponse();
         FilterChain ca = mock(FilterChain.class);
         f.doFilter(a, ra, ca);
 
-        MockHttpServletRequest b = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+        MockHttpServletRequest b = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
         b.setRemoteAddr("198.51.100.2");
         MockHttpServletResponse rb = new MockHttpServletResponse();
         FilterChain cb = mock(FilterChain.class);
@@ -371,7 +375,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         authenticateAs("4242");
         AuthRateLimitFilter f = filter(props());
 
-        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/auth/refresh");
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/auth/refresh");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
         f.doFilter(req, res, chain);
@@ -388,7 +392,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     void refreshFallsBackToIpWhenUnauthenticated() throws Exception {
         AuthRateLimitFilter f = filter(props());
 
-        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/auth/refresh");
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/auth/refresh");
         req.setRemoteAddr("192.0.2.55");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -401,9 +405,9 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "/workspaces/demo/mentor/turns",
-                "/workspaces/demo/practices/review-requests",
-                "/workspaces/demo/connections/7/sync/jobs"
+                "/api/workspaces/demo/mentor/turns",
+                "/api/workspaces/demo/practices/review-requests",
+                "/api/workspaces/demo/connections/7/sync/jobs"
             })
     void expensiveEndpointsUseAccountBuckets(String path) throws Exception {
         authenticateAs("42");
@@ -423,18 +427,19 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         AuthRateLimitFilter f = filter(props());
 
         f.doFilter(
-                new MockHttpServletRequest("GET", "/workspaces/example/user-view/users/1"),
+                new MockHttpServletRequest("GET", "/api/workspaces/example/user-view/users/1"),
                 new MockHttpServletResponse(),
                 mock(FilterChain.class));
         MockHttpServletRequest activity =
-                new MockHttpServletRequest("GET", "/workspaces/example/activity/members/alex/open-work");
+                new MockHttpServletRequest("GET", "/api/workspaces/example/activity/members/alex/open-work");
         activity.addHeader("X-User-View-Account", "1");
         f.doFilter(activity, new MockHttpServletResponse(), mock(FilterChain.class));
         MockHttpServletRequest conversation =
-                new MockHttpServletRequest("GET", "/workspaces/other/mentor/conversation");
+                new MockHttpServletRequest("GET", "/api/workspaces/other/mentor/conversation");
         conversation.addHeader("X-User-View-Account", "2");
         f.doFilter(conversation, new MockHttpServletResponse(), mock(FilterChain.class));
-        f.doFilter(new MockHttpServletRequest("GET", "/user"), new MockHttpServletResponse(), mock(FilterChain.class));
+        f.doFilter(
+                new MockHttpServletRequest("GET", "/api/user"), new MockHttpServletResponse(), mock(FilterChain.class));
 
         assertThat(store).containsOnlyKeys("user-view:acct:99");
     }
@@ -448,13 +453,13 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         for (int i = 0; i < 3; i++) {
             MockHttpServletResponse res = new MockHttpServletResponse();
             FilterChain chain = mock(FilterChain.class);
-            f.doFilter(new MockHttpServletRequest("DELETE", "/user"), res, chain);
+            f.doFilter(new MockHttpServletRequest("DELETE", "/api/user"), res, chain);
             assertThat(res.getStatus()).isEqualTo(HttpStatus.OK.value());
         }
 
         MockHttpServletResponse blocked = new MockHttpServletResponse();
         FilterChain blockedChain = mock(FilterChain.class);
-        f.doFilter(new MockHttpServletRequest("DELETE", "/user"), blocked, blockedChain);
+        f.doFilter(new MockHttpServletRequest("DELETE", "/api/user"), blocked, blockedChain);
 
         verify(blockedChain, never()).doFilter(any(), any());
         assertThat(blocked.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
@@ -486,12 +491,12 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         // can influence the bucket key — getRemoteAddr() is authoritative.
         AuthRateLimitFilter f = filter(props());
 
-        MockHttpServletRequest single = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+        MockHttpServletRequest single = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
         single.addHeader("X-Forwarded-For", "203.0.113.7");
         single.setRemoteAddr("10.0.0.1");
         f.doFilter(single, new MockHttpServletResponse(), mock(FilterChain.class));
 
-        MockHttpServletRequest multiHop = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+        MockHttpServletRequest multiHop = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
         multiHop.addHeader("X-Forwarded-For", "1.1.1.1, 2.2.2.2, 203.0.113.50");
         multiHop.setRemoteAddr("10.0.0.2");
         f.doFilter(multiHop, new MockHttpServletResponse(), mock(FilterChain.class));
@@ -506,7 +511,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         // SAME bucket (keyed by the unforgeable remote address) and get 429 on the second attempt.
         AuthRateLimitFilter f = filter(props(new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1))));
 
-        MockHttpServletRequest first = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+        MockHttpServletRequest first = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
         first.addHeader("X-Forwarded-For", "9.9.9.1, 203.0.113.50");
         first.setRemoteAddr("10.0.0.1");
         MockHttpServletResponse firstRes = new MockHttpServletResponse();
@@ -514,7 +519,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         f.doFilter(first, firstRes, firstChain);
         verify(firstChain, times(1)).doFilter(first, firstRes);
 
-        MockHttpServletRequest second = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+        MockHttpServletRequest second = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
         second.addHeader("X-Forwarded-For", "9.9.9.2, 203.0.113.50"); // rotated spoof, same socket peer
         second.setRemoteAddr("10.0.0.1");
         MockHttpServletResponse secondRes = new MockHttpServletResponse();
@@ -534,7 +539,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         AuthMetrics mockMetrics = mock(AuthMetrics.class);
         AuthRateLimitFilter f = new AuthRateLimitFilter(props(), throwing, objectMapper, mockMetrics);
 
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
         req.setRemoteAddr("203.0.113.7");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -546,9 +551,9 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"POST,/workspaces/demo/mentor/turns", "GET,/public/workspaces/demo/activity"})
+    @CsvSource({"POST,/api/workspaces/demo/mentor/turns", "GET,/api/public/workspaces/demo/activity"})
     void costlyRequestFailsClosedWhenBucketBackendThrows(String method, String path) throws Exception {
-        if (!path.startsWith("/public/")) authenticateAs("42");
+        if (!path.startsWith("/api/public/")) authenticateAs("42");
         BucketResolver throwing = (key, config) -> {
             throw new RuntimeException("bucket store down");
         };
@@ -571,7 +576,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         };
         AuthRateLimitFilter filter = new AuthRateLimitFilter(props(), throwing, objectMapper, metrics);
         MockHttpServletRequest request =
-                new MockHttpServletRequest("GET", "/workspaces/demo/activity/members/alex/open-work");
+                new MockHttpServletRequest("GET", "/api/workspaces/demo/activity/members/alex/open-work");
         request.addHeader("X-User-View-Account", "7");
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -592,14 +597,14 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
             authenticateAs(ACCOUNT_CANARY);
             for (int i = 0; i < 3; i++) {
                 f.doFilter(
-                        new MockHttpServletRequest("DELETE", "/user"),
+                        new MockHttpServletRequest("DELETE", "/api/user"),
                         new MockHttpServletResponse(),
                         mock(FilterChain.class));
             }
-            f.doFilter(new MockHttpServletRequest("DELETE", "/user"), accountBlocked, mock(FilterChain.class));
+            f.doFilter(new MockHttpServletRequest("DELETE", "/api/user"), accountBlocked, mock(FilterChain.class));
             SecurityContextHolder.clearContext();
             for (MockHttpServletResponse response : List.of(new MockHttpServletResponse(), ipBlocked)) {
-                MockHttpServletRequest request = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+                MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
                 request.setRemoteAddr(IP_CANARY);
                 f.doFilter(request, response, mock(FilterChain.class));
             }
@@ -629,9 +634,9 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
 
         List<ILoggingEvent> warnings = rateLimitWarnings(() -> {
             authenticateAs(ACCOUNT_CANARY);
-            f.doFilter(new MockHttpServletRequest("POST", "/auth/refresh"), refresh, mock(FilterChain.class));
+            f.doFilter(new MockHttpServletRequest("POST", "/api/auth/refresh"), refresh, mock(FilterChain.class));
             SecurityContextHolder.clearContext();
-            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
             request.setRemoteAddr(IP_CANARY);
             f.doFilter(request, authorization, mock(FilterChain.class));
         });
@@ -680,14 +685,14 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         AuthRateLimitFilter f = filter(props());
 
         f.doFilter(
-                new MockHttpServletRequest("POST", "/user/exports"),
+                new MockHttpServletRequest("POST", "/api/user/exports"),
                 new MockHttpServletResponse(),
                 mock(FilterChain.class));
         assertThat(store).hasSize(1);
         assertThat(store.keySet().iterator().next()).contains("acct-42");
 
         store.clear();
-        MockHttpServletRequest dl = new MockHttpServletRequest("GET", "/user/exports/abc/download");
+        MockHttpServletRequest dl = new MockHttpServletRequest("GET", "/api/user/exports/abc/download");
         MockHttpServletResponse dlRes = new MockHttpServletResponse();
         FilterChain dlChain = mock(FilterChain.class);
         f.doFilter(dl, dlRes, dlChain);

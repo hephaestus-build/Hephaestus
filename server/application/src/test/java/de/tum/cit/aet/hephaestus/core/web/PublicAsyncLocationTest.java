@@ -22,8 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -54,29 +53,27 @@ class PublicAsyncLocationTest extends BaseUnitTest {
         RequestContextHolder.resetRequestAttributes();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"", "/api", "/edge/api"})
-    void shouldPublishTheExportStatusOnTheConfiguredApiOrigin(String prefix) {
+    @Test
+    void shouldPublishTheExportStatusOnTheConfiguredApiOrigin() {
         var service = mock(AccountExportService.class);
         var export = new AccountExport();
         export.setId(13L);
         export.setAccountId(41L);
         when(service.requestExport(41L)).thenReturn(export);
-        var controller = new AccountExportController(service, urls(prefix));
+        var controller = new AccountExportController(service, urls());
 
         var response = controller.requestExport();
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         assertThat(response.getHeaders().getLocation())
-                .isEqualTo(URI.create("https://public.example.test" + prefix + "/user/exports/13"));
+                .isEqualTo(URI.create("https://public.example.test/api/user/exports/13"));
         assertThat(response.getBody())
                 .isNotNull()
                 .satisfies(body -> assertThat(body.id()).isEqualTo(13L));
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"", "/api", "/edge/api"})
-    void shouldPublishTheScanStatusOnTheConfiguredApiOrigin(String prefix) {
+    @Test
+    void shouldPublishTheScanStatusOnTheConfiguredApiOrigin() {
         var requests = mock(ScanRequestService.class);
         var request = mock(StartScanRequestDTO.class);
         var summary = mock(ScanSummaryDTO.class);
@@ -87,7 +84,7 @@ class PublicAsyncLocationTest extends BaseUnitTest {
         when(requests.start(7L, 41L, key, request)).thenReturn(summary);
         var controller = new ScanController(
                 mock(ScanQueryService.class),
-                urls(prefix),
+                urls(),
                 mock(ScanExportService.class),
                 requests,
                 mock(ScanReportItemsService.class));
@@ -96,12 +93,11 @@ class PublicAsyncLocationTest extends BaseUnitTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         assertThat(response.getHeaders().getLocation())
-                .isEqualTo(URI.create(
-                        "https://public.example.test" + prefix + "/workspaces/workspace/practices/scans/" + scan));
+                .isEqualTo(URI.create("https://public.example.test/api/workspaces/workspace/practices/scans/" + scan));
         assertThat(response.getBody()).isSameAs(summary);
     }
 
-    private static PublicApiUrls urls(String prefix) {
-        return new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://public.example.test"), prefix));
+    private static PublicApiUrls urls() {
+        return new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create("https://public.example.test")));
     }
 }

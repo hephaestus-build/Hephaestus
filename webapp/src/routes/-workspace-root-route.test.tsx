@@ -22,6 +22,7 @@ import { consentOutstanding, unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { workspaceRewrite } from "@/runtime/workspace-address";
+import { apiPathOf } from "@/test/api-path";
 import { deferred, sleep } from "@/test/async";
 import { precedes } from "@/test/dom";
 import { ObserverStub } from "@/test/observers";
@@ -810,7 +811,7 @@ describe("a signed-in person who is not a member", () => {
 		const { requests } = visit();
 		const paths: string[] = [];
 		server.events.on("request:start", ({ request }) => {
-			paths.push(new URL(request.url).pathname);
+			paths.push(apiPathOf(request.url));
 		});
 		renderRouteAtWithRouter("/w/acme");
 
@@ -1004,7 +1005,7 @@ describe("tenant workspace root", () => {
 		expect(router.state.location.pathname).toBe("/w/acme");
 		expect(router.history.location.href).toBe("/?range=30d");
 		expect(reads).toHaveLength(1);
-		expect(reads[0]?.pathname).toBe("/public/workspaces/acme/activity");
+		expect(reads.map(apiPathOf)[0]).toBe("/public/workspaces/acme/activity");
 		expect(router.state.matches.at(-1)?.loaderData).toMatchObject({
 			status: "ready",
 			page: { workspaceName: "Acme" },

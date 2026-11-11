@@ -57,8 +57,7 @@ Do not round the asset before upload.
 | `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET`         | Required on the server when Slack is enabled, for both the Events API and interactivity. A blank value prevents startup.               |
 
 Register `https://<host>/api/oauth/callback/slack` as a Redirect URL on the Slack app.
-Hephaestus derives this address from its configured issuer origin and public API prefix.
-For a different public prefix, use that prefix in the registered address.
+Hephaestus derives this address from its configured issuer origin and the API path `/api`.
 Authorization and code exchange send the same address, as required by [Slack's OAuth flow](https://docs.slack.dev/authentication/installing-with-oauth/).
 
 OAuth issues per-workspace bot tokens.
@@ -66,8 +65,7 @@ The `connection` table stores them encrypted at rest.
 There is no global bot token.
 
 When Slack is enabled, configure one Slack app.
-OAuth URLs use the public application-server base URL, including any proxy path prefix.
-In the Helm chart, that base is `https://<host>/api`.
+OAuth URLs use the public API base URL, `https://<host>/api`.
 
 1. Add `<api-public-base-url>/oauth/callback/slack` to **OAuth redirect URLs** for workspace app installation.
 2. Add `<api-public-base-url>/login/oauth2/code/slack` for member account linking.
@@ -87,12 +85,10 @@ The Helm chart routes all of `/webhooks` this way on the public host.
 
 Route OAuth and account-linking paths to the application-server role:
 
-- `/oauth/callback/slack`.
-- `/auth/login`.
-- `/oauth2/authorization/*`.
-- `/login/oauth2/code/slack`.
-
-Include the same public prefix where applicable.
+- `/api/oauth/callback/slack`.
+- `/api/auth/login`.
+- `/api/oauth2/authorization/*`.
+- `/api/login/oauth2/code/slack`.
 
 The bot token scope set stays minimal — every scope maps to a feature the code exercises:
 
@@ -216,7 +212,7 @@ You can add the provider later under **Instance administration → Login provide
 
 1. Set **Redirect URI** to `https://<host>/api/login/oauth2/code/outline`.
    Outline matches exact strings.
-   Include your proxy's API path prefix, without a trailing slash.
+   Do not add a trailing slash.
    It allows 1–10 URIs, all HTTPS except loopback.
 2. Set **Scope** to `read`.
    Outline uses plain OAuth2, not OIDC.
@@ -665,8 +661,7 @@ A GET never changes subscriptions.
 The local HTTP Mailpit loop deliberately omits the HTTPS-only one-click header.
 
 1. Set the auth issuer (`HEPHAESTUS_AUTH_ISSUER`) and webapp URL to externally reachable **HTTPS** addresses.
-   One-click links use the issuer origin and `hephaestus.auth.api-base-path`.
-   The Helm chart sets the production prefix to `/api`.
+   One-click links use the issuer origin and the API path `/api`.
    Confirmation links use the webapp URL.
 2. Configure relay DKIM signatures to include **both `List-Unsubscribe` and `List-Unsubscribe-Post`** headers.
 3. Keep SPF, DKIM, and DMARC aligned with the sender.

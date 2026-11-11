@@ -8,6 +8,7 @@ import type { AuthEventView, ConfigAuditEntryView } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { apiPathOf } from "@/test/api-path";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // The real routes mount the shared admin chrome and lazily imported route modules.
@@ -95,11 +96,11 @@ describe("audit detail follows the read it was opened from", () => {
 		const paths: string[] = [];
 		server.use(
 			http.get("*/workspaces/acme/config-audit", ({ request }) => {
-				paths.push(new URL(request.url).pathname);
+				paths.push(apiPathOf(request.url));
 				return HttpResponse.json(auditPage([settingsChange(1, "Acme operator", "SUSPENDED")]));
 			}),
 			http.get("*/workspaces/other/config-audit", ({ request }) => {
-				paths.push(new URL(request.url).pathname);
+				paths.push(apiPathOf(request.url));
 				return HttpResponse.json(auditPage([settingsChange(2, "Other operator", "ARCHIVED")]));
 			}),
 		);

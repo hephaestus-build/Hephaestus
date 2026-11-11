@@ -41,6 +41,7 @@ import { browserTimeZone } from "@/lib/dates";
 import { itemName } from "@/lib/item-kinds";
 import { server } from "@/mocks/server";
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
+import { apiPathOf } from "@/test/api-path";
 import { deferred, pending } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
@@ -59,7 +60,7 @@ const record = ({ request }: { request: Request }) => {
 
 /** Every request to one endpoint so far, oldest first. */
 function requestsTo(pathname: string): URL[] {
-	return requested.filter((url) => url.pathname === `/workspaces/acme${pathname}`);
+	return requested.filter((url) => apiPathOf(url) === `/workspaces/acme${pathname}`);
 }
 
 /** A repeatable param's values, whether the client repeated it or joined it with commas. */

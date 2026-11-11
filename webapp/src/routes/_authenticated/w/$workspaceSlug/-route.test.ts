@@ -9,6 +9,7 @@ import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
+import { apiPathOf } from "@/test/api-path";
 import { deferred } from "@/test/async";
 
 // `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
@@ -153,7 +154,7 @@ describe("workspace route gate", () => {
 		);
 		const started: string[] = [];
 		const record = ({ request }: { request: Request }) => {
-			started.push(new URL(request.url).pathname);
+			started.push(apiPathOf(request.url));
 		};
 		server.events.on("request:start", record);
 		const landing = land(WORKSPACE_HOME);
@@ -185,11 +186,11 @@ describe("workspace route gate", () => {
 		const scoped: string[] = [];
 		server.use(
 			http.get("*/workspaces/foreign/*", ({ request }) => {
-				scoped.push(new URL(request.url).pathname);
+				scoped.push(apiPathOf(request.url));
 				return new HttpResponse(null, { status: 401 });
 			}),
 			http.get("*/workspaces/foreign/*/*", ({ request }) => {
-				scoped.push(new URL(request.url).pathname);
+				scoped.push(apiPathOf(request.url));
 				return new HttpResponse(null, { status: 401 });
 			}),
 		);

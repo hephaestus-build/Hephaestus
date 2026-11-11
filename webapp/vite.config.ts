@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import Terminal from "vite-plugin-terminal";
-import { configDefaults, defineConfig } from "vite-plus";
+import { configDefaults, defineConfig, loadEnv } from "vite-plus";
 
 import { bundleBudget } from "./tools/bundle-budget/bundle-budget-plugin.ts";
 import { BUNDLE_LICENSE_FILE, bundlePackages } from "./tools/bundle-packages.ts";
@@ -10,6 +10,12 @@ import { loadLintConfig } from "./tools/oxlint/load-config.ts";
 import { appSourcePlugins } from "./vite.shared.ts";
 
 const lint = loadLintConfig(new URL(".oxlintrc.json", import.meta.url));
+// Each worktree's server port lives in `server/.env`; the shell environment overrides it.
+const { SERVER_PORT = "8080" } = loadEnv(
+	"",
+	path.resolve(import.meta.dirname, "../server"),
+	"SERVER_PORT",
+);
 
 const viteConfig = defineConfig({
 	root: import.meta.dirname,
@@ -77,6 +83,8 @@ const viteConfig = defineConfig({
 	server: {
 		port: Number.parseInt(process.env.WEBAPP_PORT ?? "", 10) || 4200,
 		strictPort: true,
+		// The app and its API share one origin, as they do in production.
+		proxy: { "/api": `http://localhost:${SERVER_PORT}` },
 		// Storybook writes a separate site inside this root; rebuilding it must not reload the app.
 		watch: { ignored: ["**/storybook-static/**"] },
 		fs: {

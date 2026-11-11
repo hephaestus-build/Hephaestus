@@ -185,20 +185,18 @@ in both trees. There is no second copy of a label.
 ### Two origins locally, one in production
 
 In production, the web app and API share one origin.
-The reverse proxy serves the API under `/api` and removes the prefix before the server sees it (`hephaestus.auth.api-base-path`).
+The server serves the API under `/api` of that origin.
 The user enters that origin in the extension.
 
 Locally they are two origins. The Spring server
-listens on `http://localhost:<SERVER_PORT>` and serves the API at its root, with no `/api` prefix. The
+listens on `http://localhost:<SERVER_PORT>` and serves the API under `/api`, as in production. The
 web app runs on `http://localhost:<WEBAPP_PORT>`, which `APPLICATION_HOST_URL` names and the server
 uses for every link back into the web app. Read both ports from `server/.env`.
 
 The worker resolves what you enter on the options page (`extension/src/background/instance.ts`). It
-first tries the API under `<address>/api`. If that answers, the address is a deployed instance and
-also the web app's address. Only a development build, and only for a loopback address, then tries
-the address itself as a bare API server.
+asks for the API under `<address>/api`. The address is also the web app's address, unless a
+development build names a separate web app address for a loopback server.
 
-That case needs the web app's address separately.
 Every extension link goes to the web app, never the API server, where it would return a Spring `404`.
 These links include **Open in Hephaestus**, the consent step, review pages, and practice pages. So a
 development build's setup form shows a second field, **Web app address (local server only)**.
@@ -424,9 +422,9 @@ JAR. Read `SERVER_PORT` and `WEBAPP_PORT` from `server/.env`. The defaults are `
    The extension's workspace belongs to the developer created by the web app's seed:
 
    ```bash
-   curl --fail -X POST http://localhost:<SERVER_PORT>/auth/dev-login \
+   curl --fail -X POST http://localhost:<SERVER_PORT>/api/auth/dev-login \
      -H 'content-type: application/json' -d '{"username":"e2e","admin":true}'
-   curl --fail -X POST http://localhost:<SERVER_PORT>/auth/dev-login \
+   curl --fail -X POST http://localhost:<SERVER_PORT>/api/auth/dev-login \
      -H 'content-type: application/json' -d '{"username":"e2e-dev","admin":false}'
    docker compose -f server/compose.yaml exec -T postgres \
      psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql

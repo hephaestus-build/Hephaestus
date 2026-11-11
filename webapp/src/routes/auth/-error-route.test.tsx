@@ -95,7 +95,7 @@ describe("recent sign-in before linking", () => {
 
 		expect(assigned).toHaveLength(1);
 		const kickoff = new URL(String(assigned[0]));
-		expect(kickoff.pathname).toBe("/auth/login");
+		expect(kickoff.pathname).toBe("/api/auth/login");
 		expect(kickoff.searchParams.get("provider")).toBe("gitlab-lrz");
 		expect(kickoff.searchParams.get("returnTo")).toBe(ONBOARDING);
 		expect(kickoff.searchParams.has("mode")).toBe(false);

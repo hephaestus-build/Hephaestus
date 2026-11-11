@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -17,9 +18,9 @@ import org.springframework.test.context.TestPropertySource;
         properties = {
             "hephaestus.workspace.subdomains.enabled=true",
                     "hephaestus.workspace.subdomains.base-domain=hephaestus.build",
-            "hephaestus.webapp.url=https://hephaestus.build", "hephaestus.auth.issuer=https://hephaestus.build",
-            "hephaestus.auth.api-base-path=/api"
+            "hephaestus.webapp.url=https://hephaestus.build", "hephaestus.auth.issuer=https://hephaestus.build"
         })
+@Import(ApiWebTestClient.class)
 // A hang guard, not a latency budget: the 5s default failed whole suites whenever one request
 // crossed it under CI load, reported as "Timeout on blocking read" with no failing assertion.
 @AutoConfigureWebTestClient(timeout = "30s")

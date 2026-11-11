@@ -30,7 +30,7 @@ try {
 	await Promise.all(
 		sessions.map(async (token, index) => {
 			const response = await fetch(
-				"http://127.0.0.1:8080/workspaces/capacity-bench-course/mentor/events",
+				"http://127.0.0.1:8080/api/workspaces/capacity-bench-course/mentor/events",
 				{
 					headers: { authorization: `Bearer ${token}` },
 					signal: abort.signal,

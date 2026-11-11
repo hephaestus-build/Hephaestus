@@ -63,7 +63,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
                 oauthClient,
                 workspaceContentEraser,
                 "client-id",
-                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://app.test"), "/api")));
+                new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create("https://app.test"))));
     }
 
     private static ConnectionStrategy.ProviderFootprint footprint(String token) {
@@ -205,7 +205,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
                 oauthClient,
                 workspaceContentEraser,
                 "",
-                new PublicApiUrls(AuthPropertiesFixture.withApiBasePath("/api")));
+                new PublicApiUrls(AuthPropertiesFixture.defaults()));
 
         assertThatThrownBy(() -> misconfigured.initiate(new InitiateRequest(42L, IntegrationKind.SLACK, Map.of(), 42L)))
                 .isInstanceOf(IllegalStateException.class)
@@ -215,20 +215,19 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     @ParameterizedTest
     @CsvSource(
             value = {
-                "https://api.example.test | /api | https://api.example.test/api/oauth/callback/slack",
-                "https://api.example.test/old | /edge/api/ | https://api.example.test/edge/api/oauth/callback/slack",
-                "http://localhost:8080 | '' | http://localhost:8080/oauth/callback/slack"
+                "https://api.example.test | https://api.example.test/api/oauth/callback/slack",
+                "https://api.example.test/old | https://api.example.test/api/oauth/callback/slack",
+                "http://localhost:8080 | http://localhost:8080/api/oauth/callback/slack"
             },
             delimiter = '|')
-    void shouldUseTheSameCanonicalCallbackForAuthorizationAndCodeExchange(
-            String issuer, String prefix, String expected) {
+    void shouldUseTheSameCanonicalCallbackForAuthorizationAndCodeExchange(String issuer, String expected) {
         var callbackStrategy = new SlackConnectionStrategy(
                 oauthStateService,
                 connectionService,
                 oauthClient,
                 workspaceContentEraser,
                 "client-id",
-                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(issuer), prefix)));
+                new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create(issuer))));
         when(oauthStateService.issue(42L, IntegrationKind.SLACK, 42L)).thenReturn("state");
         when(oauthClient.exchangeCode("code", expected)).thenThrow(new SlackOAuthException("invalid_code"));
 

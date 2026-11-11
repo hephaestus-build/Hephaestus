@@ -108,7 +108,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     private GitLabWebhookService service(GitLabRouteCredential credential) {
         return new GitLabWebhookService(
                 webhookClientProvider,
-                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN + "/api"), "/api")),
+                new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create(API_ORIGIN + "/api"))),
                 credential,
                 workspaceRepository,
                 connectionService,
@@ -498,7 +498,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                     WebhookPropertiesFixture.configured("", new WebhookProperties.Routing(null, null));
             var service = new GitLabWebhookService(
                     webhookClientProvider,
-                    new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN), "/api")),
+                    new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create(API_ORIGIN))),
                     new GitLabRouteCredential(unconfigured),
                     workspaceRepository,
                     connectionService,

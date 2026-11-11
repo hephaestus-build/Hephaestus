@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import io.github.bucket4j.ConsumptionProbe;
 import jakarta.servlet.FilterChain;
@@ -147,18 +148,19 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Maps {@code (method, path)} to the configured limit, or {@code null} if none applies. Webhook and
-     * actuator paths are explicitly excluded (defence in depth — they live on another chain).
+     * Maps {@code (method, path)} to the configured limit, or {@code null} if none applies. Only API paths carry a
+     * limit here; webhook and actuator paths are excluded (defence in depth — they live on another chain).
      */
     @Nullable
     private static Endpoint match(HttpServletRequest request) {
-        String path = request.getServletPath();
-        if (path == null || path.isEmpty()) {
-            path = request.getRequestURI();
+        String servletPath = request.getServletPath();
+        if (servletPath == null || servletPath.isEmpty()) {
+            servletPath = request.getRequestURI();
         }
-        if (path.startsWith("/webhooks/") || path.startsWith("/actuator/")) {
+        if (!servletPath.startsWith(ApiPath.PREFIX + "/")) {
             return null;
         }
+        String path = servletPath.substring(ApiPath.PREFIX.length());
         String method = request.getMethod();
         if (!"GET".equals(method) && path.startsWith("/user/passkeys")) {
             return Endpoint.PASSKEY;

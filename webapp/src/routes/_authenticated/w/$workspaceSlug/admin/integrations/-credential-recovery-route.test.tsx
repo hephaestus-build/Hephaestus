@@ -32,6 +32,7 @@ import { zGitLabRepositorySelection } from "@/api/zod.gen";
 import type { Wire } from "@/lib/dates";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { apiPathOf } from "@/test/api-path";
 import { type Deferred, deferred } from "@/test/async";
 import {
 	ROUTE_RENDER_WAIT,
@@ -419,7 +420,7 @@ function serveMonitored(initial: string[]) {
 	const command = (request: Request) => {
 		const url = new URL(request.url);
 		const name = url.searchParams.get("nameWithOwner") ?? "";
-		commands.push(`${request.method} ${url.pathname} ${name}`);
+		commands.push(`${request.method} ${apiPathOf(url)} ${name}`);
 		return name;
 	};
 	server.use(
@@ -1104,7 +1105,7 @@ function recordWrites() {
 	const writes: string[] = [];
 	const record = ({ request }: { request: Request }) => {
 		if (request.method !== "GET") {
-			writes.push(`${request.method} ${new URL(request.url).pathname}`);
+			writes.push(`${request.method} ${apiPathOf(request.url)}`);
 		}
 	};
 	server.events.on("request:start", record);
@@ -1516,7 +1517,7 @@ describe("Slack credential recovery", () => {
 			expect(
 				requests
 					.filter((request) => request.method !== "GET")
-					.map((request) => `${request.method} ${new URL(request.url).pathname}`),
+					.map((request) => `${request.method} ${apiPathOf(request.url)}`),
 			).toStrictEqual(["POST /workspaces/acme/connections"]);
 		} finally {
 			server.events.removeListener("request:start", record);

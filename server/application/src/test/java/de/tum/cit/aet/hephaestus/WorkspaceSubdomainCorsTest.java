@@ -35,7 +35,6 @@ class WorkspaceSubdomainCorsTest extends BaseUnitTest {
                 beans.getBeanProvider(WorkspaceOriginPolicy.class),
                 new MockEnvironment(),
                 false,
-                false,
                 true,
                 AuthProperties.DEFAULT_COOKIE_NAME);
         return security.corsConfigurationSource();

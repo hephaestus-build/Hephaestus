@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceOriginPolicy;
 import jakarta.servlet.FilterChain;
@@ -56,7 +57,6 @@ import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.AndRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -73,7 +73,6 @@ public class SecurityConfig {
     private final CorsProperties corsProperties;
     private final ObjectProvider<InstalledClientRegistry> installedClients;
     private final ObjectProvider<WorkspaceOriginPolicy> workspaceOrigins;
-    private final boolean devTriggerEnabled;
     private final boolean devLoginEnabled;
     private final boolean cookieSecure;
     private final String authCookieName;
@@ -83,7 +82,6 @@ public class SecurityConfig {
             ObjectProvider<InstalledClientRegistry> installedClients,
             ObjectProvider<WorkspaceOriginPolicy> workspaceOrigins,
             Environment environment,
-            @Value("${hephaestus.dev.trigger-enabled:false}") boolean devTriggerEnabled,
             @Value("${hephaestus.auth.dev-login-enabled:false}") boolean devLoginEnabled,
             @Value("${hephaestus.auth.cookie-secure:true}") boolean cookieSecure,
             @Value("${hephaestus.auth.cookie-name:" + AuthProperties.DEFAULT_COOKIE_NAME + "}") String authCookieName) {
@@ -94,7 +92,6 @@ public class SecurityConfig {
         this.corsProperties = corsProperties;
         this.installedClients = installedClients;
         this.workspaceOrigins = workspaceOrigins;
-        this.devTriggerEnabled = devTriggerEnabled;
         this.devLoginEnabled = devLoginEnabled;
         this.cookieSecure = cookieSecure;
         this.authCookieName = authCookieName;
@@ -206,7 +203,7 @@ public class SecurityConfig {
                         "/webhooks/slack",
                         "/webhooks/slack/interactivity",
                         "/webhooks/outline/**",
-                        "/oauth/callback/**")
+                        ApiPath.of("/oauth/callback/**"))
                 .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -226,7 +223,6 @@ public class SecurityConfig {
      * ADR 0017) → wire the OAuth2 resource server with the full native-auth rules (security headers,
      * auth rate limiting, the public auth-discovery permit list). Absent (the {@code specs} profile
      * that boots without a decoder) → deny everything.
-     * The {@code hephaestus.dev.trigger-enabled} carve-out applies in both modes.
      */
     @Bean
     SecurityFilterChain appSecurityFilterChain(
@@ -251,9 +247,6 @@ public class SecurityConfig {
                 // The specs profile needs these endpoints without a JwtDecoder.
                 requests.requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll();
-                if (devTriggerEnabled) {
-                    requests.requestMatchers("/api/dev/**").permitAll();
-                }
                 requests.anyRequest().denyAll();
             });
             // Same security headers as the resource-server chain — a no-decoder pod still serves
@@ -331,18 +324,14 @@ public class SecurityConfig {
             // ORIGINAL status is preserved. The error view carries no sensitive data.
             requests.requestMatchers("/error").permitAll();
             requests.requestMatchers(EMAIL_UNSUBSCRIBE_MATCHER).permitAll();
-            // NOTE: /webhooks/**, /oauth/callback/** and /actuator/health|info are
+            // NOTE: /webhooks/**, /api/oauth/callback/** and /actuator/health|info are
             // claimed by higher-precedence chains and NEVER reach this fallback chain:
-            //   - /webhooks/** + /oauth/callback/**  → ingressSecurityFilterChain (the
+            //   - /webhooks/** + /api/oauth/callback/**  → ingressSecurityFilterChain (the
             //     highest-precedence chain that matches by path)
-            //   - /oauth2/authorization/** + /login/oauth2/code/** + /auth/login|error → AuthSecurityConfig
+            //   - the OAuth sign-in endpoints (OAuthLoginPaths) + /api/auth/login|error → AuthSecurityConfig
             // Spring dispatches to the FIRST matching SecurityFilterChain only, so permitAll rules for
             // those paths here would be dead code. Their controller-layer auth (HMAC, shared token,
             // signed state) is unaffected.
-            // Dev-only: permit the dev trigger endpoint when explicitly enabled (defaults to false).
-            if (devTriggerEnabled) {
-                requests.requestMatchers(DEV_TRIGGER_MATCHER).permitAll();
-            }
             // Dev-only: permit the passwordless dev sign-in (pre-auth POST) when explicitly enabled
             // (defaults to false; fail-closed in prod — see DevLoginService). Same canonical matcher as
             // the CSRF carve-out below so they cannot drift.
@@ -353,32 +342,40 @@ public class SecurityConfig {
             // OpenAPI documentation endpoints (public for spec generation and dev access)
             requests.requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
                     .permitAll();
+            var api = ApiPath.matchers();
             // Public auth discovery (core.auth module, ADR 0017): identity-provider list for the
             // login UI plus OIDC issuer metadata + JWKS. The OAuth login kickoff/callback paths
-            // (/auth/login, /auth/error, /oauth2/authorization/**, /login/oauth2/code/**) are owned
+            // (/auth/login, /auth/error and OAuthLoginPaths) are owned
             // by AuthSecurityConfig's higher-precedence chain and never reach this one.
-            requests.requestMatchers(HttpMethod.GET, "/identity-providers", "/auth/csrf")
+            requests.requestMatchers(
+                            api.matcher(HttpMethod.GET, "/identity-providers"),
+                            api.matcher(HttpMethod.GET, "/auth/csrf"))
                     .permitAll();
-            requests.requestMatchers(HttpMethod.GET, "/.well-known/**").permitAll();
+            requests.requestMatchers(api.matcher(HttpMethod.GET, "/.well-known/**"))
+                    .permitAll();
             // Installed-client sessions authenticate with a secret in the body (a handoff code with its
             // PKCE verifier, or a refresh secret), never with a cookie; see ClientSessionController.
             // Exact matchers, so a later endpoint under /auth/client never inherits public access.
             requests.requestMatchers(CLIENT_CONFIGURATION_MATCHER).permitAll();
             requests.requestMatchers(CLIENT_SESSION_MATCHER).permitAll();
             // Public workspace provider discovery (workspace creation UI)
-            requests.requestMatchers(HttpMethod.GET, "/workspaces/providers").permitAll();
+            requests.requestMatchers(api.matcher(HttpMethod.GET, "/workspaces/providers"))
+                    .permitAll();
             requests.requestMatchers(PublicActivityReadRequestMatcher.MATCHER).permitAll();
             // A broken sign-in page is a fault too, so a reader need not be signed in to report one.
-            requests.requestMatchers(HttpMethod.POST, "/browser-faults").permitAll();
+            requests.requestMatchers(api.matcher(HttpMethod.POST, "/browser-faults"))
+                    .permitAll();
             // Registry/listing stays authenticated to avoid leaking tenant directory.
-            requests.requestMatchers(HttpMethod.GET, "/workspaces", "/workspaces/")
+            requests.requestMatchers(
+                            api.matcher(HttpMethod.GET, "/workspaces"), api.matcher(HttpMethod.GET, "/workspaces/"))
                     .authenticated();
             // Non-GET workspace operations still require authentication.
-            requests.requestMatchers("/workspaces/**").authenticated();
+            requests.requestMatchers(api.matcher("/workspaces/**")).authenticated();
             // Public endpoints
-            requests.requestMatchers(HttpMethod.GET, "/contributors").permitAll();
+            requests.requestMatchers(api.matcher(HttpMethod.GET, "/contributors"))
+                    .permitAll();
             // User account management requires authentication
-            requests.requestMatchers("/user/**").authenticated();
+            requests.requestMatchers(api.matcher("/user/**")).authenticated();
             // Default: require authentication for all other endpoints
             requests.anyRequest().authenticated();
         });
@@ -417,24 +414,14 @@ public class SecurityConfig {
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
 
     /**
-     * Single canonical matcher for the optional dev-trigger surface, shared by the authorize rules and
-     * the CSRF predicate so they cannot diverge. The webhook / OAuth-callback / {@code /login/oauth2/code/}
-     * paths need no CSRF skip here: they are owned by the higher-precedence ingress and oauth2Login
-     * chains and never reach this chain.
-     */
-    static final RequestMatcher DEV_TRIGGER_MATCHER =
-            PathPatternRequestMatcher.withDefaults().matcher("/api/dev/**");
-
-    /**
      * Single canonical matcher for the optional passwordless dev sign-in, shared by the authorize rule
      * and the CSRF predicate. This development-only bypass is absent in production.
      */
-    static final RequestMatcher DEV_LOGIN_MATCHER =
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/dev-login");
+    static final RequestMatcher DEV_LOGIN_MATCHER = ApiPath.matchers().matcher(HttpMethod.POST, "/auth/dev-login");
 
     /** Installed-client discovery; public so a client can tell whether this instance lets it sign in. */
     static final RequestMatcher CLIENT_CONFIGURATION_MATCHER =
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/auth/client/configuration");
+            ApiPath.matchers().matcher(HttpMethod.GET, "/auth/client/configuration");
 
     /**
      * The installed-client session endpoints, shared by the authorize rule and the CSRF predicate. CSRF
@@ -442,21 +429,22 @@ public class SecurityConfig {
      * and refuse the session cookie, so there is nothing for a forged request to ride.
      */
     static final RequestMatcher CLIENT_SESSION_MATCHER = new OrRequestMatcher(
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/client/token"),
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/client/refresh"),
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/client/logout"));
+            ApiPath.matchers().matcher(HttpMethod.POST, "/auth/client/token"),
+            ApiPath.matchers().matcher(HttpMethod.POST, "/auth/client/refresh"),
+            ApiPath.matchers().matcher(HttpMethod.POST, "/auth/client/logout"));
 
     /** An installed client's dev sign-in (a safe GET ending in a handoff redirect); absent in production. */
     static final RequestMatcher DEV_CLIENT_LOGIN_MATCHER =
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/auth/dev-login/client");
+            ApiPath.matchers().matcher(HttpMethod.GET, "/auth/dev-login/client");
 
     // This capability only disables one subscription; RFC 8058 receivers have no session or CSRF token.
     static final RequestMatcher EMAIL_UNSUBSCRIBE_MATCHER =
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/notifications/unsubscribe/{token}");
+            ApiPath.matchers().matcher(HttpMethod.POST, "/notifications/unsubscribe/{token}");
 
     /**
      * Unsafe requests require CSRF unless they use only bearer auth, only an installed-client session
-     * secret, or an enabled dev endpoint.
+     * secret, or an enabled dev sign-in. The webhook, OAuth callback and sign-in paths need no CSRF skip
+     * here: the higher-precedence ingress and oauth2Login chains own them.
      */
     private boolean requiresCsrf(HttpServletRequest request) {
         if (EMAIL_UNSUBSCRIBE_MATCHER.matches(request) || SAFE_METHODS.contains(request.getMethod())) {
@@ -468,9 +456,6 @@ public class SecurityConfig {
             return false;
         }
         if (CLIENT_SESSION_MATCHER.matches(request) && !hasAuthCookie(request)) {
-            return false;
-        }
-        if (devTriggerEnabled && DEV_TRIGGER_MATCHER.matches(request)) {
             return false;
         }
         if (devLoginEnabled && DEV_LOGIN_MATCHER.matches(request)) {

@@ -37,6 +37,8 @@
             "core::runtime",
             // One consent projection update or rebuild at a time, on every server.
             "core::lock",
+            // The account-linking button opens the sign-in endpoint under the API path.
+            "core::web",
             // Shared core infra: @WorkspaceAgnostic on the inbound Slack-events controller (this path resolves the
             // workspace from the payload's team_id, not the URL).
             "core",

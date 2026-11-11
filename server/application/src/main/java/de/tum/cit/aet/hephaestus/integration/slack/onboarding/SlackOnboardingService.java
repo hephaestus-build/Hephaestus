@@ -9,6 +9,7 @@ import static com.slack.api.model.block.element.BlockElements.asElements;
 import static com.slack.api.model.block.element.BlockElements.button;
 
 import com.slack.api.model.block.LayoutBlock;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,13 +27,9 @@ public class SlackOnboardingService {
     private static final String LINK_ACTION_ID = "link_slack_identity";
 
     private final String hostUrl;
-    private final String authBasePath;
 
-    public SlackOnboardingService(
-            @Value("${hephaestus.webapp.url:}") String hostUrl,
-            @Value("${hephaestus.auth.api-base-path:}") String authBasePath) {
+    public SlackOnboardingService(@Value("${hephaestus.webapp.url:}") String hostUrl) {
         this.hostUrl = hostUrl;
-        this.authBasePath = authBasePath;
     }
 
     public List<LayoutBlock> linkCtaBlocks() {
@@ -50,10 +47,6 @@ public class SlackOnboardingService {
     /** The authenticated link-mode deep link. Slack opens it in the browser where the session cookie lives. */
     String linkUrl() {
         String base = hostUrl == null ? "" : hostUrl.trim().replaceAll("/+$", "");
-        String prefix = authBasePath == null
-                ? ""
-                : authBasePath.trim().replaceAll("^/+", "").replaceAll("/+$", "");
-        String apiPrefix = prefix.isBlank() ? "" : "/" + prefix;
-        return base + apiPrefix + "/auth/login?provider=slack&mode=link&returnTo=/settings";
+        return base + ApiPath.of("/auth/login?provider=slack&mode=link&returnTo=/settings");
     }
 }
