@@ -135,6 +135,23 @@ gradle.projectsEvaluated {
 				errors: 0,
 			},
 			{
+				name: "private context, optional login, and misleading organization names",
+				source: `public class Canary {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Canary.class);
+    public void log(de.tum.cit.aet.hephaestus.integration.scm.domain.user.User orgMember,
+            String organizationMemberLogin, String safeSlug,
+            de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext context) {
+        logger.info("Member {}", orgMember.getLogin());
+        logger.info("Member {}", organizationMemberLogin);
+        logger.info("Scope {}", context.slug());
+        logger.info("Actor {}", de.tum.cit.aet.hephaestus.core.security.SecurityUtils.getCurrentUserLogin().orElse("system"));
+        logger.info("Scope {}", safeSlug);
+    }
+}`,
+				violations: Array.from({ length: 5 }, () => "NoPersonalLogArgument"),
+				errors: 0,
+			},
+			{
 				name: "private arguments through Lombok's logger",
 				source: `@lombok.extern.slf4j.Slf4j
 public class Canary {

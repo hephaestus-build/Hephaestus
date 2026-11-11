@@ -250,7 +250,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
             assertThat(result.registered()).isFalse();
-            assertThat(result.failureReason()).contains("Not a GitLab");
+            assertThat(result.reason()).isEqualTo(WebhookSetupResult.Reason.NOT_GITLAB);
         }
 
         @Test
@@ -260,7 +260,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
             assertThat(result.registered()).isFalse();
-            assertThat(result.failureReason()).contains("not available");
+            assertThat(result.reason()).isEqualTo(WebhookSetupResult.Reason.CLIENT_UNAVAILABLE);
         }
 
         @Test
@@ -431,7 +431,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             assertThat(result.registered()).isFalse();
             assertThat(result.reason()).isEqualTo(WebhookSetupResult.Reason.ROUTING_SECRET_MISSING);
-            assertThat(result.failureReason()).contains("routing secret");
+            assertThat(result.reason()).isEqualTo(WebhookSetupResult.Reason.ROUTING_SECRET_MISSING);
             assertThat(registered).isEmpty();
         }
 
@@ -453,7 +453,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             try {
                 WebhookSetupResult result = webhookService.registerWebhook(workspace);
                 assertThat(result.registered()).isFalse();
-                assertThat(result.failureReason()).isEqualTo("GitLab API error (HTTP 500)");
+                assertThat(result.reason()).isEqualTo(WebhookSetupResult.Reason.API_ERROR);
+                assertThat(result.httpStatus()).isEqualTo(500);
                 var failures = appender.list.stream()
                         .filter(event -> event.getLevel() == Level.WARN)
                         .toList();
@@ -498,9 +499,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                 WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
                 assertThat(result.registered()).isFalse();
-                assertThat(result.failureReason())
-                        .contains("Insufficient permissions")
-                        .doesNotContain("private-account-login-canary");
+                assertThat(result.reason()).isEqualTo(WebhookSetupResult.Reason.PERMISSION_DENIED);
+                assertThat(result.httpStatus()).isEqualTo(403);
                 assertThat(appender.list)
                         .anySatisfy(
                                 event -> assertThat(event.getKeyValuePairs()).anySatisfy(pair -> {

@@ -100,9 +100,9 @@ public class GitLabTeamProcessor {
         Team saved = teamRepository.save(team);
 
         if (isNew) {
-            log.debug("Created GitLab team: teamId={}, slug={}, name={}", saved.getId(), slug, group.name());
+            log.debug("Created GitLab team: teamId={}", saved.getId());
         } else {
-            log.debug("Updated GitLab team: teamId={}, slug={}, name={}", saved.getId(), slug, group.name());
+            log.debug("Updated GitLab team: teamId={}", saved.getId());
         }
 
         return saved;
@@ -173,9 +173,9 @@ public class GitLabTeamProcessor {
         Team saved = teamRepository.save(team);
 
         if (isNew) {
-            log.debug("Created GitLab root team: teamId={}, slug={}, name={}", saved.getId(), slug, group.name());
+            log.debug("Created GitLab root team: teamId={}", saved.getId());
         } else {
-            log.debug("Updated GitLab root team: teamId={}, slug={}, name={}", saved.getId(), slug, group.name());
+            log.debug("Updated GitLab root team: teamId={}", saved.getId());
         }
 
         return saved;

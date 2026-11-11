@@ -428,10 +428,10 @@ public class GitHubDataSyncScheduler {
                 throw e;
             }
         } catch (Exception e) {
-            log.error("Failed to sync scope: scopeId={}", session.scopeId(), e);
             if (handle != null) {
                 throw new IllegalStateException("Failed to sync GitHub scope " + session.scopeId(), e);
             }
+            log.error("Failed to sync scope: scopeId={}", session.scopeId(), e);
         } finally {
             syncContextProvider.clearContext();
         }

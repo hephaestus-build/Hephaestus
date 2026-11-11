@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -18,6 +19,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -77,6 +81,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -196,6 +201,25 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 new ConnectionConfig.GitLabConfig("https://gitlab.com", 1L, null, Set.of(), null));
         ReflectionTestUtils.setField(connection, "id", CONNECTION_ID);
         return connection;
+    }
+
+    @Test
+    void shouldLeaveTrackedFailureLoggingToTheJobBoundary() {
+        var failure = new IllegalStateException("synthetic sync failure");
+        when(syncServiceHolderProvider.getIfAvailable()).thenThrow(failure);
+        Logger logger = (Logger) LoggerFactory.getLogger(GitLabDataSyncScheduler.class);
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            assertThatThrownBy(() -> scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasCause(failure);
+            assertThat(appender.list).noneMatch(event -> event.getThrowableProxy() != null);
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
     }
 
     @Test

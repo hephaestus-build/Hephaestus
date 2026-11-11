@@ -204,7 +204,7 @@ public class GitHubTeamProcessor {
                 orgLogin, teamSlug, Objects.requireNonNull(context.providerId()));
         if (conflicting.isEmpty()) {
             // Conflict resolved concurrently
-            log.debug("Team slug conflict resolved concurrently: org={}, slug={}", orgLogin, teamSlug);
+            log.debug("Team slug conflict resolved concurrently: teamNativeId={}", dto.id());
             return teamRepository.save(team);
         }
 

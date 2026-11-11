@@ -103,7 +103,7 @@ public class ScmWorkspaceContentEraser {
         int teamsErased = eraseOrgTierIfLastWorkspace(workspace);
 
         log.info(
-                "scm.audit: mirror erase — actor={}, workspaceId={}, erasedRepositories={},"
+                "scm.audit: mirror erase — actorAccountId={}, workspaceId={}, erasedRepositories={},"
                         + " sharedRepositoriesSkipped={}, erasedTeams={}",
                 SecurityUtils.getCurrentAccountId().map(id -> "account " + id).orElse("system"),
                 workspaceId,

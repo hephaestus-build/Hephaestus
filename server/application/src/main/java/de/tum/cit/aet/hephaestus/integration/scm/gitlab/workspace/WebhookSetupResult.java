@@ -27,30 +27,16 @@ public record WebhookSetupResult(
     }
 
     public enum Reason {
-        REGISTERED("Registered"),
-        NOT_GITLAB("Not a GitLab workspace"),
-        ROUTING_SECRET_MISSING("The webhook routing secret is not configured."),
-        CLIENT_UNAVAILABLE(
-                "The GitLab webhook client is not available because hephaestus.integration.gitlab.enabled is false."),
-        GROUP_PATH_MISSING("GitLab group path is missing"),
-        CONNECTION_NOT_CONFIGURED("GitLab instance is not configured on the connection"),
-        ROUTING_KEY_UNKNOWN("Webhook is registered under a routing key this server does not know"),
-        SUPERSEDED("Another registration recorded a different webhook"),
-        PERMISSION_DENIED(
-                "Insufficient permissions. You need the Owner role on the GitLab group with the Premium tier."),
-        API_ERROR("GitLab API error");
-
-        private final String description;
-
-        Reason(String description) {
-            this.description = description;
-        }
-    }
-
-    /** The same fixed explanation for people, with no provider payload or account name. */
-    public @Nullable String failureReason() {
-        if (registered()) return null;
-        return reason.description + (httpStatus == null ? "" : " (HTTP " + httpStatus + ")");
+        REGISTERED,
+        NOT_GITLAB,
+        ROUTING_SECRET_MISSING,
+        CLIENT_UNAVAILABLE,
+        GROUP_PATH_MISSING,
+        CONNECTION_NOT_CONFIGURED,
+        ROUTING_KEY_UNKNOWN,
+        SUPERSEDED,
+        PERMISSION_DENIED,
+        API_ERROR,
     }
 
     /** Convenience: returns {@code true} when the webhook was successfully registered or already existed. */

@@ -175,9 +175,9 @@ public class ProcessingContextFactory {
             }
             // Organization lookup failed - fall through to repository-based lookup
             log.debug(
-                    "Organization lookup failed for repo, trying repository-based lookup: repo={}, org={}",
-                    sanitizeForLog(repository.getNameWithOwner()),
-                    sanitizeForLog(orgLogin));
+                    "Organization lookup failed for repo, trying repository-based lookup: repositoryId={}, organizationId={}",
+                    repository.getId(),
+                    repository.getOrganization().getId());
         }
 
         // Personal repo or fallback: lookup by repository nameWithOwner

@@ -67,13 +67,11 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
         }
 
         log.debug(
-                "Received membership event: action={}, userNativeId={}, teamName={}, orgLogin={}",
+                "Received membership event: action={}, userNativeId={}, teamNativeId={}, organizationNativeId={}",
                 event.action(),
                 memberDto.getDatabaseId(),
-                sanitizeForLog(teamDto.name()),
-                event.organization() != null
-                        ? sanitizeForLog(event.organization().login())
-                        : "unknown");
+                teamDto.id(),
+                event.organization() != null ? event.organization().id() : null);
 
         // Resolve GitHub provider ID for user upsert
         Long providerId = Objects.requireNonNull(gitProviderRepository

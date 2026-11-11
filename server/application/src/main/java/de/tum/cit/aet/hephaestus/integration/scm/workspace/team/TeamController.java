@@ -38,7 +38,7 @@ public class TeamController {
     @GetMapping
     @Operation(summary = "List teams", description = "Returns all teams in the workspace organization")
     public ResponseEntity<List<TeamInfoDTO>> getAllTeams(WorkspaceContext workspaceContext) {
-        log.info("Listing teams: workspaceSlug={}", workspaceContext.slug());
+        log.debug("Listing teams: workspaceId={}", workspaceContext.id());
         Workspace workspace = workspaceResolver.requireWorkspace(workspaceContext);
         List<TeamInfoDTO> teams = teamService.getAllTeams(workspace);
         return ResponseEntity.ok(teams);
@@ -51,7 +51,7 @@ public class TeamController {
     @AuditExempt(reason = "team visibility is a reporting view; teams are SCM-synced, not configured" + " here")
     public ResponseEntity<Void> updateTeamVisibility(
             WorkspaceContext workspaceContext, @PathVariable Long id, @Valid @RequestBody VisibilityUpdateDTO request) {
-        log.info("Updating team visibility: teamId={}, workspaceSlug={}", id, workspaceContext.slug());
+        log.info("Updating team visibility: teamId={}, workspaceId={}", id, workspaceContext.id());
         Workspace workspace = workspaceResolver.requireWorkspace(workspaceContext);
 
         boolean updated = teamService.updateTeamVisibility(workspace, id, request.hidden());
@@ -67,10 +67,10 @@ public class TeamController {
             @PathVariable Long repositoryId,
             @Valid @RequestBody VisibilityUpdateDTO request) {
         log.info(
-                "Updating repository visibility: repositoryId={}, teamId={}, workspaceSlug={}",
+                "Updating repository visibility: repositoryId={}, teamId={}, workspaceId={}",
                 repositoryId,
                 teamId,
-                workspaceContext.slug());
+                workspaceContext.id());
         Workspace workspace = workspaceResolver.requireWorkspace(workspaceContext);
 
         boolean updated = teamService.updateRepositoryVisibility(workspace, teamId, repositoryId, request.hidden());

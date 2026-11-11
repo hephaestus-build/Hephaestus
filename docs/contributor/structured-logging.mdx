@@ -78,6 +78,7 @@ Use a class-only stack trace when frames help diagnosis. The shipped encoder rem
 Never log a person's login, name, email address, or work text. Use an ID.
 
 PMD checks known personal-data accessors and variable names on typed SLF4J logger and builder calls.
+The rule does not follow messages through local variables or check `String.format`.
 The test log scan checks the records that a test emits.
 These checks do not trace arbitrary text through the application. Review each logged value at its source.
 

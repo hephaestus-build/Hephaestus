@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
@@ -57,10 +56,7 @@ public class WorkspaceTeamLabelService {
 
     public List<UserTeamsDTO> getUsersWithTeams(String slug) {
         Workspace workspace = requireWorkspace(slug);
-        log.debug(
-                "Retrieved users with teams: workspaceId={}, workspaceSlug={}",
-                workspace.getId(),
-                LoggingUtils.sanitizeForLog(slug));
+        log.debug("Retrieved users with teams: workspaceId={}", workspace.getId());
         List<User> users = workspaceMembershipRepository.findHumanUsersWithTeamsByWorkspaceId(workspace.getId());
         Set<Long> hiddenTeamIds = workspaceTeamSettingsService.getHiddenTeamIds(workspace.getId());
         Set<Long> hiddenMemberIds = workspaceMembershipRepository.findHiddenUserIdsByWorkspaceId(workspace.getId());

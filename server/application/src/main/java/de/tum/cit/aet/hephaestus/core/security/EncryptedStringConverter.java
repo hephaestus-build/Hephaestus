@@ -77,7 +77,6 @@ public class EncryptedStringConverter implements AttributeConverter<String, Stri
 
             return PREFIX + Base64.getEncoder().encodeToString(combined);
         } catch (Exception e) {
-            log.error("Failed to encrypt value", e);
             throw new EncryptionException("Encryption failed", e);
         }
     }
@@ -113,7 +112,6 @@ public class EncryptedStringConverter implements AttributeConverter<String, Stri
             byte[] plainText = cipher.doFinal(cipherText);
             return new String(plainText, StandardCharsets.UTF_8);
         } catch (Exception e) {
-            log.error("Failed to decrypt value", e);
             throw new EncryptionException("Decryption failed", e);
         }
     }

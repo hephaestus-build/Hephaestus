@@ -676,12 +676,10 @@ public class GitHubDataSyncService {
             return;
         }
 
-        String safeOrgLogin = sanitizeForLog(organizationLogin);
-
         try {
             var organization = organizationSyncService.syncOrganization(scopeId, organizationLogin);
             if (organization != null) {
-                log.debug("Synced organization: scopeId={}, orgLogin={}", scopeId, safeOrgLogin);
+                log.debug("Synced organization: scopeId={}", scopeId);
 
                 organizationMembershipListener.onOrganizationMembershipsSynced(
                         new OrganizationSyncedEvent(organization.getId(), organizationLogin, false));
@@ -694,23 +692,17 @@ public class GitHubDataSyncService {
             switch (classification.category()) {
                 case AUTH_ERROR ->
                     log.error(
-                            "Organization sync failed - auth error: scopeId={}, orgLogin={}, error={}",
+                            "Organization sync failed - auth error: scopeId={}, error={}",
                             scopeId,
-                            safeOrgLogin,
                             classification.message());
                 case RATE_LIMITED ->
                     log.warn(
-                            "Organization sync failed - rate limited: scopeId={}, orgLogin={}, error={}",
+                            "Organization sync failed - rate limited: scopeId={}, error={}",
                             scopeId,
-                            safeOrgLogin,
                             classification.message());
                 default ->
                     log.error(
-                            "Failed to sync organization: scopeId={}, orgLogin={}, error={}",
-                            scopeId,
-                            safeOrgLogin,
-                            classification.message(),
-                            e);
+                            "Failed to sync organization: scopeId={}, error={}", scopeId, classification.message(), e);
             }
         }
     }
@@ -772,13 +764,11 @@ public class GitHubDataSyncService {
             return;
         }
 
-        String safeOrgLogin = sanitizeForLog(organizationLogin);
-
         try {
             int teamsCount = retryOnTransientFailure(
                     () -> teamSyncService.syncTeamsForOrganization(scopeId, organizationLogin),
                     "team sync for scopeId=" + scopeId);
-            log.debug("Synced teams: scopeId={}, orgLogin={}, teamCount={}", scopeId, safeOrgLogin, teamsCount);
+            log.debug("Synced teams: scopeId={}, teamCount={}", scopeId, teamsCount);
             syncTargetProvider.updateTeamsSyncTimestamp(scopeId, Instant.now());
         } catch (InstallationNotFoundException e) {
             throw e;
@@ -786,24 +776,12 @@ public class GitHubDataSyncService {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
             switch (classification.category()) {
                 case AUTH_ERROR ->
-                    log.error(
-                            "Team sync failed - auth error: scopeId={}, orgLogin={}, error={}",
-                            scopeId,
-                            safeOrgLogin,
-                            classification.message());
+                    log.error("Team sync failed - auth error: scopeId={}, error={}", scopeId, classification.message());
                 case RATE_LIMITED ->
                     log.warn(
-                            "Team sync failed - rate limited: scopeId={}, orgLogin={}, error={}",
-                            scopeId,
-                            safeOrgLogin,
-                            classification.message());
+                            "Team sync failed - rate limited: scopeId={}, error={}", scopeId, classification.message());
                 default ->
-                    log.error(
-                            "Failed to sync teams: scopeId={}, orgLogin={}, error={}",
-                            scopeId,
-                            safeOrgLogin,
-                            classification.message(),
-                            e);
+                    log.error("Failed to sync teams: scopeId={}, error={}", scopeId, classification.message(), e);
             }
         }
     }

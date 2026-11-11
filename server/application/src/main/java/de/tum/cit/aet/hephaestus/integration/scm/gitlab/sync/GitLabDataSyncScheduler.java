@@ -358,10 +358,10 @@ public class GitLabDataSyncScheduler {
 
             log.info("Completed GitLab workspace sync: scopeId={}", scopeId);
         } catch (Exception e) {
-            log.error("Failed GitLab workspace sync: scopeId={}", scopeId, e);
             if (handle != null) {
                 throw new IllegalStateException("Failed to sync GitLab scope " + scopeId, e);
             }
+            log.error("Failed GitLab workspace sync: scopeId={}", scopeId, e);
         } finally {
             syncContextProvider.clearContext();
         }

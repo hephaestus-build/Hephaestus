@@ -104,14 +104,16 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
         }
 
         log.debug(
-                "Received team event: action={}, teamName={}, orgLogin={}",
+                "Received team event: action={}, teamNativeId={}, organizationNativeId={}",
                 event.action(),
-                sanitizeForLog(teamDto.name()),
-                sanitizeForLog(orgLogin));
+                teamDto.id(),
+                (event.organization() == null ? null : event.organization().id()));
 
         Long scopeId = scopeIdResolver.findScopeIdByOrgLogin(orgLogin).orElse(null);
         if (scopeId == null) {
-            log.debug("Skipped team event: reason=noAssociatedScope, orgLogin={}", sanitizeForLog(orgLogin));
+            log.debug(
+                    "Skipped team event: reason=noAssociatedScope, organizationNativeId={}",
+                    (event.organization() == null ? null : event.organization().id()));
             return;
         }
         IdentityProvider gitHubProvider = gitProviderRepository

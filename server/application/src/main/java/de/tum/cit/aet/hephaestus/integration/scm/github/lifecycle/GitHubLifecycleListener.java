@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle;
 
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
@@ -376,11 +375,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             Organization org = organizationService.upsertIdentity(
                     accountId, Objects.requireNonNull(accountLogin), githubProviderId());
             workspace.setOrganizationId(org.getId());
-            log.debug(
-                    "Linked organization to workspace: orgId={}, orgLogin={}, workspaceId={}",
-                    org.getId(),
-                    LoggingUtils.sanitizeForLog(org.getLogin()),
-                    workspace.getId());
+            log.debug("Linked organization to workspace: orgId={}, workspaceId={}", org.getId(), workspace.getId());
         }
 
         Workspace saved = workspaceRepository.save(workspace);

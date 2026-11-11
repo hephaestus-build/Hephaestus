@@ -48,19 +48,14 @@
                 <value><![CDATA[
                     //MethodCall[@MethodName = ('trace', 'debug', 'info', 'warn', 'error', 'log', 'setMessage', 'addArgument', 'addKeyValue')]
                       [*[1][pmd-java:typeIs('org.slf4j.Logger') or pmd-java:typeIs('org.slf4j.spi.LoggingEventBuilder')]]
-                      /ArgumentList/descendant::*[self::MethodCall or self::VariableAccess][pmd-java:typeIs('java.lang.String')][
+                      /ArgumentList/descendant::*[self::MethodCall or self::VariableAccess][pmd-java:typeIs('java.lang.String') or self::MethodCall[@MethodName = 'getCurrentUserLogin']][
                         self::MethodCall[
                           matches(@MethodName, '(login|username|email|workspaceslug|scopeslug)$', 'i')
-                          and not(@MethodName = ('getLogin', 'login') and *[1]/descendant-or-self::*[
-                            self::VariableAccess[matches(@Name, 'org', 'i')]
-                            or self::MethodCall[matches(@MethodName, 'org', 'i')]
-                          ])
+
                         ]
-                        or self::MethodCall[@MethodName = 'slug'][*[1][pmd-java:typeIs('de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession')]]
+                        or self::MethodCall[@MethodName = 'slug'][*[1][pmd-java:typeIs('de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession') or pmd-java:typeIs('de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext')]]
                         or self::VariableAccess[
-                          matches(@Name, '(^login$|^username$|^email$|Login$|Username$|Email$|WorkspaceSlug$|ScopeSlug$)', 'i')
-                          and not(contains(@Name, 'By'))
-                          and not(matches(@Name, 'org.*Login$', 'i'))
+                          matches(@Name, '(^login$|^username$|^email$|Login$|Username$|Email$|WorkspaceSlug$|ScopeSlug$|^slug$|^safeSlug$|^oldSlug$|^newSlug$)', 'i')
                         ]
                       ]
                 ]]></value>

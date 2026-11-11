@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.organization;
 
-import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
-
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
@@ -80,11 +78,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
             return;
         }
 
-        log.debug(
-                "Received organization event: action={}, orgId={}, orgLogin={}",
-                event.action(),
-                orgDto.id(),
-                sanitizeForLog(orgDto.login()));
+        log.debug("Received organization event: action={}, orgId={}", event.action(), orgDto.id());
 
         // Resolve GitHub provider ID for user upsert
         Long providerId = Objects.requireNonNull(gitProviderRepository
@@ -107,9 +101,8 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
                     OrganizationMemberRole role = parseRole(event.membership().role());
                     membershipRepository.upsertMembership(organizationId, userId, role);
                     log.info(
-                            "Added member to organization: orgId={}, orgLogin={}, userNativeId={}, role={}",
+                            "Added member to organization: orgId={}, userNativeId={}, role={}",
                             organizationId,
-                            sanitizeForLog(orgDto.login()),
                             userDto.getDatabaseId(),
                             role);
 
@@ -139,11 +132,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
                     }
                     Long userId = Objects.requireNonNull(user.get().getId());
                     membershipRepository.deleteByOrganizationIdAndUserIdIn(organizationId, List.of(userId));
-                    log.info(
-                            "Removed member from organization: orgId={}, orgLogin={}, userId={}",
-                            organizationId,
-                            sanitizeForLog(orgDto.login()),
-                            userId);
+                    log.info("Removed member from organization: orgId={}, userId={}", organizationId, userId);
 
                     // Notify listeners about membership change
                     membershipListener.onMemberRemoved(
