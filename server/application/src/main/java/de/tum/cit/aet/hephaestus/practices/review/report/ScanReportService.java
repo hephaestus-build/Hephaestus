@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review.report;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.FeedbackRetentionProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
@@ -28,7 +29,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
-import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -54,7 +55,6 @@ import tools.jackson.databind.json.JsonMapper;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ScanReportService {
-    public static final Duration RETENTION = Duration.ofDays(400);
     private static final int READ_BATCH = 256;
     private final ReviewRepository reviews;
     private final ReviewPracticeRepository assignments;
@@ -65,6 +65,7 @@ public class ScanReportService {
     private final ScanComparisonService pairComparison;
     private final ScanReportRepository rows;
     private final JsonMapper json;
+    private final FeedbackRetentionProperties retention;
     private final Clock clock;
 
     @PersistenceContext
@@ -91,9 +92,14 @@ public class ScanReportService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The scan does not exist."));
     }
 
+    /** When a completed scan's raw proof expires: the retention of what Hephaestus says about a person. */
+    public @Nullable Instant expiresAt(Review review) {
+        return review.getCompletedAt() == null ? null : review.getCompletedAt().plus(retention.feedbackRetention());
+    }
+
     public boolean expired(Review review) {
-        return (review.getCompletedAt() != null
-                        && !clock.instant().isBefore(review.getCompletedAt().plus(RETENTION)))
+        Instant expiresAt = expiresAt(review);
+        return (expiresAt != null && !clock.instant().isBefore(expiresAt))
                 || (review.getReport() != null
                         && review.getReport().path("expired").asBoolean());
     }

@@ -190,8 +190,8 @@ spec:
               value: {{ $config.email.replyTo | quote }}
             - name: HEPHAESTUS_LLM_USAGE_RETENTION
               value: {{ $config.llmUsageRetention | quote }}
-            - name: HEPHAESTUS_MENTOR_CONVERSATION_RETENTION
-              value: {{ $config.conversationRetention | quote }}
+            - name: HEPHAESTUS_FEEDBACK_RETENTION
+              value: {{ $config.feedbackRetention | quote }}
             - name: HEPHAESTUS_RELEASE_CHECK_ENABLED
               value: {{ $config.releaseCheckEnabled | quote }}
             - name: HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_ENABLED

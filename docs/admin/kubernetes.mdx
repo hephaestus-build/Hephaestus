@@ -621,7 +621,7 @@ Use a network plugin that encrypts traffic between nodes, for example WireGuard 
 | Server Git mirrors | `emptyDir` size limit on the node | `server.gitCache.sizeLimit` |
 | Worker Git mirrors | `emptyDir` size limit on the node, per worker | `worker.gitCache.sizeLimit` |
 | AI spend ledger | Retention | `config.llmUsageRetention` |
-| Conversations with Hephaestus | Retention | `config.conversationRetention` |
+| Conversations, feedback and practice results | Retention | `config.feedbackRetention` |
 | Temporary files | `emptyDir` size limit | Fixed in the templates |
 
 One value sets both the broker `max_file` and the webhook role's stream storage budget.

@@ -876,7 +876,7 @@
 				"releaseCheckEnabled",
 				"commitIdentityResolutionEnabled",
 				"llmUsageRetention",
-				"conversationRetention",
+				"feedbackRetention",
 				"llmDisplayCurrency",
 				"llmPrivateHosts",
 				"llmPrivateHostsAllowHttp",
@@ -905,7 +905,7 @@
 					"pattern": "^P[0-9]+D$",
 					"description": "Retention in whole days, parsed by Spring Boot Duration from ISO-8601 P followed by an integer and D, such as P400D."
 				},
-				"conversationRetention": {
+				"feedbackRetention": {
 					"type": "string",
 					"pattern": "^P(1[5-9]|[2-9][0-9]|[1-9][0-9]{2,})D$",
 					"description": "Retention of at least 15 whole days, parsed by Spring Boot Duration from ISO-8601 P followed by an integer and D, such as P400D."

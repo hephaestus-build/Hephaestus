@@ -26,6 +26,36 @@ import tools.jackson.databind.JsonNode;
 @Transactional
 public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSpecificationExecutor<Feedback> {
 
+    /** Workspaces with feedback past the retention: delivered by {@code cutoff}, or undelivered and created by it. */
+    @WorkspaceAgnostic("Retention enumerates the workspaces first; each workspace erases in its own transaction")
+    @Query(value = """
+        SELECT DISTINCT workspace_id FROM feedback WHERE COALESCE(delivered_at, created_at) <= :cutoff
+        ORDER BY workspace_id
+        """, nativeQuery = true)
+    List<Long> workspacesWithExpiredFeedback(@Param("cutoff") Instant cutoff);
+
+    /**
+     * Expired feedback that can be erased now. A feedback with a copy whose write started and never posted waits for
+     * that copy's cleanup receipt, as {@link FeedbackCopyCleanupCustody} requires of every erasure.
+     */
+    @Query(value = """
+        SELECT f.id FROM feedback f WHERE f.workspace_id = :workspaceId
+        AND COALESCE(f.delivered_at, f.created_at) <= :cutoff
+        AND NOT EXISTS(SELECT 1 FROM feedback_copy c WHERE c.workspace_id = f.workspace_id AND c.feedback_id = f.id
+            AND c.posted_at IS NULL AND (c.write_started_at IS NOT NULL OR c.state = 'WRITE_STARTED')
+            AND NOT (c.state = 'FAILED' AND c.readback = 'ABSENT'))
+        ORDER BY f.id LIMIT :limit
+        """, nativeQuery = true)
+    List<UUID> expiredIds(
+            @Param("workspaceId") long workspaceId, @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+
+    /** Its basis, copies, sends, decisions and responses go with it; a newer feedback that replaced it keeps no link. */
+    @Modifying
+    @Query(
+            value = "DELETE FROM feedback WHERE workspace_id = :workspaceId AND id = ANY(CAST(:ids AS uuid[]))",
+            nativeQuery = true)
+    int deleteByWorkspaceIdAndIds(@Param("workspaceId") long workspaceId, @Param("ids") UUID[] ids);
+
     Optional<Feedback> findByIdAndWorkspaceId(UUID id, long workspaceId);
 
     List<Feedback> findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(long workspaceId, UUID reviewId);

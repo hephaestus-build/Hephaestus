@@ -318,7 +318,7 @@ The feedback becomes `WITHHELD` with the stop reason `CONVERSATION_EXPIRED`.
 A later `show_feedback` call for it gets `422`.
 
 `MentorRetentionSweeper` and `SlackRetentionSweeper#sweepCopies` (server role, every Sunday) erase entries through `MentorRedaction`, up to two weeks before their limit, so a missed run keeps the limit.
-The first erases every entry that reaches `hephaestus.mentor.conversation-retention`.
+The first erases every entry that reaches `hephaestus.feedback-retention`, the window that feedback and results share.
 The second erases each tool result of `COPIES_PERSON_DATA` that reaches the Slack retention, because no record says which source it copied.
 An erased entry erases each summary that covers it, and coverage starts at the first entry of a conversation.
 Thus a long conversation loses its summary after each run and pays for one compaction on its next turn.
