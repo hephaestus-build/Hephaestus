@@ -255,6 +255,14 @@ If you are a workspace admin:
 Each error clears after its affected sync path succeeds.
 A skipped pass keeps its error.
 
+### Hephaestus could not confirm the browser of a connection
+
+Hephaestus finishes a GitHub or Slack connection only in the browser that started it, within 10 minutes.
+If the provider sends you back in another browser, if the connection took longer, or if you reload a finished connection, Hephaestus connects nothing.
+
+1. Open Hephaestus in the browser that you use to sign in to the provider.
+2. Open **Administration → Integrations** and start the connection again.
+
 ### A team is missing
 
 1. Confirm that the team exists in the connected source platform.

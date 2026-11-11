@@ -130,8 +130,34 @@ Any of:
   branching may itself benefit from a registry-as-`ClientRegistrationRepository`
   refactor, evaluated against Spring's then-current shape.
 
+## Update 2026-11-11: the callback is bound to the browser that started it
+
+The signed state proves who started a connect flow, not which browser returns with it.
+A link to a started flow, opened in another browser, could connect that browser's provider account to the starter's workspace.
+RFC 9700 §2.1 requires "one-time use CSRF tokens carried in the state parameter that are securely bound to the user agent".
+OWASP ASVS 5.0 10.1.2 requires values that "are securely bound to both the client and the user agent session".
+
+- `ConnectionController.initiate` sets a host-only `__Host-CONNECT_<hash>` cookie when it redirects to a provider.
+  The cookie holds the SHA-256 of the state, never the state itself, and lives as long as the state (`hephaestus.integration.oauth-state.ttl`).
+- `OAuthCallbackController` accepts a state only with that cookie, before it consumes the state.
+  Without the cookie, the callback answers `browser_unconfirmed` and leaves the state for the browser that started the flow.
+  The Slack cancellation, which consumes a state to return to its workspace, also needs the cookie.
+  Each callback that carries a state clears the cookie.
+- The API and the callback share the apex host (ADR 0053), and the provider's redirect is a top-level navigation, so a `SameSite=Lax` cookie reaches the callback.
+- No legitimate flow returns with a state in another browser.
+  A GitHub installation that an organization owner approves arrives without a state and takes the setup path.
+
+PKCE is not used: no connect flow starts an authorization request that the provider documents with `code_challenge`.
+GitHub starts the user authorization itself: "GitHub will start the web application flow immediately after a user installs your app", and that authorize URL carries only `client_id`.
+Slack's authorize parameters list no `code_challenge`.
+GitLab and Outline use pasted tokens.
+The state cookie gives the browser binding that PKCE would give (RFC 9700 §2.1.1 recommends PKCE for confidential clients).
+
 ## References
 
 - [RFC 7636 — PKCE](https://www.rfc-editor.org/info/rfc7636)
 - [RFC 9700 — Best Current Practice for OAuth 2.0 Security (Jan 2025)](https://www.rfc-editor.org/rfc/rfc9700.html)
 - [spring-security/#12862 — Multi-tenant ClientRegistration enhancement request](https://github.com/spring-projects/spring-security/issues/12862)
+- [OWASP ASVS 5.0 — V10 OAuth and OIDC](https://github.com/OWASP/ASVS/blob/master/5.0/en/0x19-V10-OAuth-and-OIDC.md)
+- [GitHub Docs — Generating a user access token for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app)
+- [Slack — Installing with OAuth](https://docs.slack.dev/authentication/installing-with-oauth)

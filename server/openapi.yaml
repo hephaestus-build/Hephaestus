@@ -2699,21 +2699,6 @@ paths:
         schema:
           type: string
       - in: query
-        name: state
-        required: false
-        schema:
-          type: string
-      - in: query
-        name: error
-        required: false
-        schema:
-          type: string
-      - in: query
-        name: error_description
-        required: false
-        schema:
-          type: string
-      - in: query
         name: allParams
         required: true
         schema:
@@ -2735,21 +2720,6 @@ paths:
       - in: path
         name: kind
         required: true
-        schema:
-          type: string
-      - in: query
-        name: state
-        required: false
-        schema:
-          type: string
-      - in: query
-        name: error
-        required: false
-        schema:
-          type: string
-      - in: query
-        name: error_description
-        required: false
         schema:
           type: string
       - in: query
