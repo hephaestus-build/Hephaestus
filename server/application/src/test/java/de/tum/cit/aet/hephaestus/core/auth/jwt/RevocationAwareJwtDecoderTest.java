@@ -443,7 +443,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
     @Test
     void shouldRecordARotatedBrowserTokenPresentedAgainOnceAsReuse() {
         RequestContextHolder.setRequestAttributes(
-                new ServletRequestAttributes(new MockHttpServletRequest("POST", "/auth/refresh")));
+                new ServletRequestAttributes(new MockHttpServletRequest("POST", "/api/auth/refresh")));
         UUID jti = UUID.randomUUID();
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
         when(repo.findActive(eq(jti), any())).thenReturn(Optional.empty());
@@ -484,13 +484,13 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         String lateReason = revokedReason == IssuedJwt.RevokedReason.ROTATE
                 ? "rotated_token_presented"
                 : "superseded_token_presented";
-        var late = new MockHttpServletRequest("GET", "/user");
+        var late = new MockHttpServletRequest("GET", "/api/user");
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(late));
         assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(BadJwtException.class);
         assertThat(recordedEvents()).extracting(AuthEventData::failureReason).containsExactly(lateReason);
         assertThat(output.getAll()).doesNotContain("a retired browser token was presented for refresh");
 
-        var replay = new MockHttpServletRequest("POST", "/auth/refresh");
+        var replay = new MockHttpServletRequest("POST", "/api/auth/refresh");
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(replay));
         assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(BadJwtException.class);
         assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(BadJwtException.class);
@@ -532,7 +532,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
                     .mapToObj(ignored -> pool.submit(() -> {
                         assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
                         RequestContextHolder.setRequestAttributes(
-                                new ServletRequestAttributes(new MockHttpServletRequest("POST", "/auth/refresh")));
+                                new ServletRequestAttributes(new MockHttpServletRequest("POST", "/api/auth/refresh")));
                         try {
                             assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(BadJwtException.class);
                             return true;

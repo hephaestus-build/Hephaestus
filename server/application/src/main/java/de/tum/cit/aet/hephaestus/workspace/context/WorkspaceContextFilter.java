@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
-import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry.ActorProfile;
 import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceElevationAudit;
@@ -9,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.security.WorkspaceElevationContext;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.workspace.CurrentAccountUsers;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -26,6 +26,7 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +45,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.stereotype.Component;
 import org.springframework.web.ErrorResponseException;
+import org.springframework.web.util.UriUtils;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -76,7 +78,6 @@ public class WorkspaceContextFilter implements Filter {
     private final WorkspaceElevationAudit elevationAudit;
     private final WorkspaceActorSelector actorSelector;
     private final AdminPasskeyAccess passkeyAccess;
-    private final String apiBasePath;
 
     public WorkspaceContextFilter(
             WorkspaceRepository workspaceRepository,
@@ -86,8 +87,7 @@ public class WorkspaceContextFilter implements Filter {
             ObjectMapper objectMapper,
             WorkspaceElevationAudit elevationAudit,
             WorkspaceActorSelector actorSelector,
-            AdminPasskeyAccess passkeyAccess,
-            AuthProperties authProperties) {
+            AdminPasskeyAccess passkeyAccess) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.currentAccountUsers = currentAccountUsers;
@@ -96,7 +96,6 @@ public class WorkspaceContextFilter implements Filter {
         this.elevationAudit = elevationAudit;
         this.actorSelector = actorSelector;
         this.passkeyAccess = passkeyAccess;
-        this.apiBasePath = authProperties.apiBasePath();
     }
 
     @Override
@@ -108,10 +107,10 @@ public class WorkspaceContextFilter implements Filter {
             return;
         }
 
-        String path = httpRequest.getRequestURI();
+        String path = ApiPath.relative(httpRequest);
 
-        // The workspace registry root carries no slug.
-        if ("/workspaces".equals(path) || "/workspaces/".equals(path)) {
+        // A path outside the API, and the workspace registry root, carry no slug.
+        if (path == null || "/workspaces".equals(path) || "/workspaces/".equals(path)) {
             chain.doFilter(request, response);
             return;
         }
@@ -301,9 +300,10 @@ public class WorkspaceContextFilter implements Filter {
         }
 
         String newSlug = workspace.getWorkspaceSlug();
-        String suffix = remainingPath == null ? "" : remainingPath;
+        // The path was decoded to match it, so it is encoded again for the header.
+        String suffix = remainingPath == null ? "" : UriUtils.encodePath(remainingPath, StandardCharsets.UTF_8);
         String queryString = request.getQueryString();
-        String location = apiBasePath + request.getContextPath() + "/workspaces/" + newSlug + suffix;
+        String location = ApiPath.of("/workspaces/" + newSlug + suffix);
         if (queryString != null && !queryString.isBlank()) {
             location += '?' + queryString;
         }

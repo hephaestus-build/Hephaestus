@@ -45,7 +45,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 @Tag("unit")
 class ProviderResourceAdaptersTest {
     private static final PublicApiUrls URLS =
-            new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://receiver.example.test"), "/api"));
+            new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create("https://receiver.example.test")));
     private static final BearerToken TOKEN = new BearerToken("test-provider-token", null);
 
     @Test

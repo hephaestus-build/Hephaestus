@@ -2,7 +2,7 @@ import type { APIRequestContext, APIResponse, BrowserContext, Page } from "@play
 import { z } from "zod";
 
 import { expect, loginAsDevAdmin, test } from "./fixtures";
-import { E2E_SERVER_URL } from "./urls.ts";
+import { E2E_API_URL, E2E_SERVER_URL } from "./urls.ts";
 
 const userSchema = z.looseObject({ accessTokenExpiresAt: z.number() });
 
@@ -92,7 +92,7 @@ test("a session persists across browser contexts with a full-day cookie lifetime
 	expect(cookie.expires - Date.now() / 1000).toBeGreaterThan(23 * 60 * 60);
 	const restored = await browser.newContext({ storageState: await context.storageState() });
 	try {
-		const response = await restored.request.get(`${E2E_SERVER_URL}/user`);
+		const response = await restored.request.get(`${E2E_API_URL}/user`);
 		expect(response.status()).toBe(200);
 	} finally {
 		await restored.close();
@@ -127,10 +127,10 @@ test("two tabs renew without losing their shared session and old tokens stay rev
 	const renewedCookie = await accessCookie(context);
 	const cookieChanged = renewedCookie.value !== oldCookie.value;
 	expect(cookieChanged).toBe(true);
-	expect(await statusOf(context.request.get(`${E2E_SERVER_URL}/user`))).toBe(200);
+	expect(await statusOf(context.request.get(`${E2E_API_URL}/user`))).toBe(200);
 	expect(
 		await statusOf(
-			context.request.get(`${E2E_SERVER_URL}/user`, {
+			context.request.get(`${E2E_API_URL}/user`, {
 				headers: { Cookie: `${oldCookie.name}=${oldCookie.value}` },
 			}),
 		),
@@ -154,13 +154,13 @@ test("a temporary renewal outage preserves the page and later activity recovers"
 	await page.clock.fastForward(61_000);
 	await failed;
 	await expect(page).toHaveURL(/\/settings$/u);
-	expect(await statusOf(context.request.get(`${E2E_SERVER_URL}/user`))).toBe(200);
+	expect(await statusOf(context.request.get(`${E2E_API_URL}/user`))).toBe(200);
 	const renewed = waitForRefresh(page, 204);
 	await page.clock.fastForward(11_000);
 	await page.mouse.click(5, 5);
 	await renewed;
 	await expect(page).toHaveURL(/\/settings$/u);
-	expect(await statusOf(context.request.get(`${E2E_SERVER_URL}/user`))).toBe(200);
+	expect(await statusOf(context.request.get(`${E2E_API_URL}/user`))).toBe(200);
 });
 
 test("logout requires CSRF protection and revoked sessions cannot renew", async ({
@@ -171,23 +171,21 @@ test("logout requires CSRF protection and revoked sessions cannot renew", async 
 	await loginAsDevAdmin(page, "session-logout");
 	const signedInCookie = await accessCookie(context);
 	await scheduleRenewal(page);
-	expect(await statusOf(context.request.post(`${E2E_SERVER_URL}/auth/logout`))).toBe(403);
-	expect(await statusOf(context.request.get(`${E2E_SERVER_URL}/user`))).toBe(200);
+	expect(await statusOf(context.request.post(`${E2E_API_URL}/auth/logout`))).toBe(403);
+	expect(await statusOf(context.request.get(`${E2E_API_URL}/user`))).toBe(200);
 	const csrf = await accessCookie(context, "XSRF-TOKEN");
 	const headers = { "X-XSRF-TOKEN": decodeURIComponent(csrf.value) };
-	expect(await statusOf(context.request.post(`${E2E_SERVER_URL}/auth/logout`, { headers }))).toBe(
-		204,
-	);
+	expect(await statusOf(context.request.post(`${E2E_API_URL}/auth/logout`, { headers }))).toBe(204);
 	expect(
 		await statusOf(
-			context.request.get(`${E2E_SERVER_URL}/user`, {
+			context.request.get(`${E2E_API_URL}/user`, {
 				headers: { Cookie: `${signedInCookie.name}=${signedInCookie.value}` },
 			}),
 		),
 	).toBe(401);
 	expect(
 		await statusOf(
-			context.request.get(`${E2E_SERVER_URL}/identity-providers`, {
+			context.request.get(`${E2E_API_URL}/identity-providers`, {
 				headers: { Cookie: `${signedInCookie.name}=${signedInCookie.value}` },
 			}),
 		),
@@ -195,7 +193,7 @@ test("logout requires CSRF protection and revoked sessions cannot renew", async 
 	const renewalCsrf = await accessCookie(context, "XSRF-TOKEN");
 	expect(
 		await statusOf(
-			context.request.post(`${E2E_SERVER_URL}/auth/refresh`, {
+			context.request.post(`${E2E_API_URL}/auth/refresh`, {
 				headers: { "X-XSRF-TOKEN": decodeURIComponent(renewalCsrf.value) },
 			}),
 		),
@@ -225,7 +223,7 @@ test("signing out in another tab cannot be undone by a delayed renewal response"
 		held.release();
 	}
 	await expect(other).toHaveURL((url) => url.pathname === "/");
-	expect(await statusOf(context.request.get(`${E2E_SERVER_URL}/user`))).toBe(401);
+	expect(await statusOf(context.request.get(`${E2E_API_URL}/user`))).toBe(401);
 });
 
 test("failed sign-out reports the failure and allows a successful retry", async ({
@@ -241,11 +239,11 @@ test("failed sign-out reports the failure and allows a successful retry", async 
 		page.getByText("We could not confirm that you signed out. Try again."),
 	).toBeVisible();
 	await expect(page).toHaveURL(/\/settings$/u);
-	expect(await statusOf(context.request.get(`${E2E_SERVER_URL}/user`))).toBe(200);
+	expect(await statusOf(context.request.get(`${E2E_API_URL}/user`))).toBe(200);
 	await page.getByRole("button", { name: /^Account/u }).click();
 	await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
 	await expect(page).toHaveURL((url) => url.pathname === "/");
-	expect(await statusOf(context.request.get(`${E2E_SERVER_URL}/user`))).toBe(401);
+	expect(await statusOf(context.request.get(`${E2E_API_URL}/user`))).toBe(401);
 });
 
 test("a cold identity outage shows the existing retry screen instead of signing out", async ({
@@ -267,15 +265,15 @@ async function postRetiredEndpoint(page: Page, context: BrowserContext, path: st
 	await loginAsDevAdmin(page, "session-administrator");
 	const administrator = z
 		.object({ id: z.number() })
-		.parse(await jsonOf(context.request.get(`${E2E_SERVER_URL}/user`)));
+		.parse(await jsonOf(context.request.get(`${E2E_API_URL}/user`)));
 	const csrf = await accessCookie(context, "XSRF-TOKEN");
-	const response = await context.request.post(`${E2E_SERVER_URL}${path}`, {
+	const response = await context.request.post(`${E2E_API_URL}${path}`, {
 		headers: { "X-XSRF-TOKEN": decodeURIComponent(csrf.value) },
 		data: { targetAccountId: administrator.id, reason: "Retired endpoint regression" },
 	});
 	const signedIn = z
 		.object({ id: z.number() })
-		.parse(await jsonOf(context.request.get(`${E2E_SERVER_URL}/user`)));
+		.parse(await jsonOf(context.request.get(`${E2E_API_URL}/user`)));
 	return { status: response.status(), administratorId: administrator.id, signedInId: signedIn.id };
 }
 

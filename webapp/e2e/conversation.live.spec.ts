@@ -30,7 +30,9 @@ test.describe.configure({ mode: "serial", timeout: 2 * ANSWER_TIMEOUT });
 
 async function adminApi(): Promise<APIRequestContext> {
 	const signIn = await playwrightRequest.newContext({ baseURL: E2E_SERVER_URL });
-	const login = await signIn.post("/auth/dev-login", { data: { username: "e2e", admin: true } });
+	const login = await signIn.post("/api/auth/dev-login", {
+		data: { username: "e2e", admin: true },
+	});
 	expect(login.ok()).toBe(true);
 	const cookie = login.headers()["set-cookie"] ?? "";
 	const token = /HEPHAESTUS_AT=(?<value>[^;]+)/u.exec(cookie)?.groups?.value ?? "";
@@ -51,7 +53,7 @@ async function body(response: Awaited<ReturnType<APIRequestContext["get"]>>): Pr
 /** `context` as the shared provisioner calls the API. */
 function apiOf(context: APIRequestContext): Api {
 	return async (method, path, data) =>
-		body(await context.fetch(path, { method, ...(data === undefined ? {} : { data }) }));
+		body(await context.fetch(`/api${path}`, { method, ...(data === undefined ? {} : { data }) }));
 }
 
 async function bindConversation(
@@ -60,7 +62,7 @@ async function bindConversation(
 ): Promise<void> {
 	await body(
 		await context.put(
-			"/workspaces/e2e/model-assignments/CONVERSATION?dataHandlingTier=UNDECLARED",
+			"/api/workspaces/e2e/model-assignments/CONVERSATION?dataHandlingTier=UNDECLARED",
 			{
 				data: { instanceModelId, enabled: true, timeoutSeconds: 300 },
 			},

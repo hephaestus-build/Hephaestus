@@ -6,7 +6,7 @@ import { z } from "zod";
 import { problemType } from "@/lib/problem-detail";
 
 import { expect, loginAsDevAdmin, test } from "./fixtures";
-import { E2E_BASE_URL, E2E_SERVER_URL } from "./urls";
+import { E2E_BASE_URL, E2E_API_URL, E2E_SERVER_URL } from "./urls";
 
 const statusSchema = z.object({
 	protectionEnabled: z.boolean(),
@@ -16,7 +16,7 @@ const statusSchema = z.object({
 });
 
 async function passkeyStatus(context: BrowserContext) {
-	const response = await context.request.get(`${E2E_SERVER_URL}/user/passkeys`);
+	const response = await context.request.get(`${E2E_API_URL}/user/passkeys`);
 	expect(response.status()).toBe(200);
 	const body: unknown = await response.json();
 	return statusSchema.parse(body);
@@ -32,7 +32,7 @@ async function csrfHeaders(context: BrowserContext) {
 }
 
 async function expectAdminAccess(context: BrowserContext, allowed: boolean) {
-	const response = await context.request.get(`${E2E_SERVER_URL}/admin/users?page=0&size=1`);
+	const response = await context.request.get(`${E2E_API_URL}/admin/users?page=0&size=1`);
 	expect(response.status()).toBe(allowed ? 200 : 403);
 	if (!allowed) {
 		const body: unknown = await response.json();
@@ -51,7 +51,7 @@ async function submitFromSettings(
 		page.waitForResponse(
 			(value) =>
 				value.request().method() === "POST" &&
-				value.url() === `${E2E_SERVER_URL}/user/passkeys${path}`,
+				value.url() === `${E2E_API_URL}/user/passkeys${path}`,
 		),
 		scope.getByRole("button", { name: button, exact: true }).click(),
 	]);
@@ -98,7 +98,7 @@ test("real user verification grants admin access and recovery requires re-enroll
 		expect(enrolled.credentials).toHaveLength(1);
 		await expectAdminAccess(context, false);
 		const unverifiedProtection = await context.request.patch(
-			`${E2E_SERVER_URL}/user/passkeys/protection`,
+			`${E2E_API_URL}/user/passkeys/protection`,
 			{
 				headers: await csrfHeaders(context),
 				data: { enabled: true },
@@ -118,14 +118,14 @@ test("real user verification grants admin access and recovery requires re-enroll
 
 		await submitFromSettings(page, "/verification", "Verify passkey");
 		expect(await passkeyStatus(context)).toMatchObject({ verified: true, recoveryRequired: false });
-		const protection = await context.request.patch(`${E2E_SERVER_URL}/user/passkeys/protection`, {
+		const protection = await context.request.patch(`${E2E_API_URL}/user/passkeys/protection`, {
 			headers: await csrfHeaders(context),
 			data: { enabled: true },
 		});
 		expect(protection.status()).toBe(200);
 		await expectAdminAccess(context, true);
 		const codesResponse = await context.request.post(
-			`${E2E_SERVER_URL}/user/passkeys/recovery-codes`,
+			`${E2E_API_URL}/user/passkeys/recovery-codes`,
 			{
 				headers: await csrfHeaders(context),
 			},
@@ -164,7 +164,7 @@ test("real user verification grants admin access and recovery requires re-enroll
 		expect(recovered).toMatchObject({ recoveryRequired: true, verified: false });
 		expect(recovered.credentials).toHaveLength(0);
 		await expectAdminAccess(context, false);
-		const replay = await context.request.post(`${E2E_SERVER_URL}/user/passkeys/recovery`, {
+		const replay = await context.request.post(`${E2E_API_URL}/user/passkeys/recovery`, {
 			headers: await csrfHeaders(context),
 			data: { code: recoveryCode },
 		});

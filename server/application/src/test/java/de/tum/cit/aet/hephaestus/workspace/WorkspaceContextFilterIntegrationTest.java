@@ -336,7 +336,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .expectStatus()
                 .isPermanentRedirect()
                 .expectHeader()
-                .valueEquals(HttpHeaders.LOCATION, "/workspaces/new-space/context-echo?foo=bar")
+                .valueEquals(HttpHeaders.LOCATION, "/api/workspaces/new-space/context-echo?foo=bar")
                 .expectBody()
                 .isEmpty();
     }
@@ -368,7 +368,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .expectStatus()
                 .isPermanentRedirect()
                 .expectHeader()
-                .valueEquals(HttpHeaders.LOCATION, "/workspaces/new-space-post/context-echo?payload=yes")
+                .valueEquals(HttpHeaders.LOCATION, "/api/workspaces/new-space-post/context-echo?payload=yes")
                 .expectBody()
                 .isEmpty();
     }

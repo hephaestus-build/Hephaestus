@@ -94,7 +94,6 @@ for (const resource of resources) {
 			const explicit = structuredClone(production);
 			const hephaestus = asRecord(explicit.hephaestus, "hephaestus");
 			asRecord(hephaestus.workspace, "workspace")["creation-policy"] = "ADMIN_ONLY";
-			hephaestus.dev = { "trigger-enabled": `\${HEPHAESTUS_DEV_TRIGGER_ENABLED:false}` };
 			hephaestus.llm = {
 				egress: { "allow-loopback": `\${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:false}` },
 			};

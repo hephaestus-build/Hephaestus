@@ -1,8 +1,7 @@
 {{- /*
 The platform owns the Gateway API resources, the controller, the Gateway, its TLS certificate and
-the HTTP to HTTPS redirect. This route needs two HTTPRoute filters from that controller: URLRewrite
-with ReplacePrefixMatch, and ResponseHeaderModifier for HSTS. The other security headers come from
-the responses themselves.
+the HTTP to HTTPS redirect. This route needs one HTTPRoute filter from that controller:
+ResponseHeaderModifier for HSTS. The other security headers come from the responses themselves.
 */}}
 {{- if and .Values.workspaceSubdomains.enabled (gt (len .Values.host) 189) }}
 {{- fail "workspace subdomains need a host of at most 189 characters" }}
@@ -35,18 +34,12 @@ spec:
       backendRefs:
         - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
           port: 8080
-    # The server serves the API without the /api prefix. The auth
-    # layer adds the prefix back to the browser-facing OAuth URLs.
+    # The server serves the API under /api itself, so no path is rewritten.
     - matches:
         - path:
             type: PathPrefix
             value: /api
       filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /
         - {{ toJson $hsts }}
       # The conversation live stream under /api stays open far longer than one request. Zero
       # asks the controller to disable each deadline; a controller that cannot may use its longest

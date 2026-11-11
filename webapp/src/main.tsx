@@ -39,7 +39,7 @@ import * as TanstackQuery from "./runtime/tanstack-query/root-provider";
 // No global timeout: aborting a request does not cancel a server-side mutation.
 client.setConfig({
 	baseUrl: environment.serverUrl,
-	// Development serves the SPA and API on different origins.
+	// A workspace address serves the SPA on its own origin and calls the API on the apex.
 	credentials: "include",
 	fetch: csrfFetch,
 });

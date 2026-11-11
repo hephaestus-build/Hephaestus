@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
@@ -578,7 +579,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         assertThat(UserViewSessionFilter.READ_PATHS)
                 .extracting(PathPattern::getPatternString)
-                .allSatisfy(path -> assertThat(getRoutes).contains(path));
+                .allSatisfy(path -> assertThat(getRoutes).contains(ApiPath.of(path)));
     }
 
     private long userViewRowsFor(User user) {
