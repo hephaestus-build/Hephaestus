@@ -374,6 +374,9 @@ interface TierRun {
 	readonly pullRequest?: Readonly<Record<string, unknown>>;
 	readonly action?: string;
 	readonly releaseCandidate?: string;
+	/** The opt-in step's light-tier decision for a layer of a stack. */
+	readonly light?: string;
+	readonly attempt?: number;
 }
 
 /** A `detect-changes` tier output for one event and run. */
@@ -384,12 +387,14 @@ function evaluateTierOutput(source: string, event: string, run: TierRun = {}): s
 	const optIn = {
 		...(run.full === undefined ? {} : { full: run.full }),
 		...(run.preview === undefined ? {} : { preview: run.preview }),
+		...(run.light === undefined ? {} : { light: run.light }),
 	};
 	const context: unknown = JSON.parse(
 		JSON.stringify({
 			github: {
 				event_name: event,
 				repository: "owner/repo",
+				run_attempt: run.attempt ?? 1,
 				event: { action: run.action ?? "synchronize", pull_request: run.pullRequest ?? {} },
 			},
 			steps: {
@@ -1070,6 +1075,35 @@ void describe("CI contract", () => {
 				`duplicate skip, ${event} ${label}`,
 			);
 		}
+		// A layer of a stack runs the light tier: no queue tier, even when its inputs changed.
+		assert.equal(
+			evaluateTierOutput(decision, "pull_request", {
+				full: "false",
+				light: "true",
+				filter: { "queue-tier-inputs": "true" },
+			}),
+			"false",
+		);
+		const tests = String(orchestrator.getIn(["jobs", "detect-changes", "outputs", "server-tests"]));
+		assert.equal(
+			evaluateTierOutput(tests, "pull_request", {
+				light: "true",
+				filter: { "application-server": "true" },
+			}),
+			"false",
+		);
+		assert.equal(
+			evaluateTierOutput(tests, "pull_request", {
+				light: "false",
+				filter: { "application-server": "true" },
+			}),
+			"true",
+		);
+		// A re-run, such as the one after a retarget, is never skipped as a duplicate.
+		assert.equal(
+			evaluateTierOutput(skip, "pull_request", { full: "false", preview: "false", attempt: 2 }),
+			"false",
+		);
 		// A labelled preview repeats a tree whose earlier run may have published no image.
 		assert.equal(
 			evaluateTierOutput(skip, "pull_request", { full: "false", preview: "true" }),
@@ -6120,6 +6154,7 @@ function simulateRun(workflow: Document, event: string, security: string): Recor
 		should_skip: "false",
 		draft: "false",
 		"queue-images-complete": "false",
+		"light-tier": "false",
 		"queue-run": "",
 		"alias-base": "",
 	};
@@ -6300,6 +6335,8 @@ void test("no workflow, action or script force-cancels a run", async () => {
 
 // `actions: write` also dispatches workflows, re-runs runs, and deletes caches and artifacts.
 const ACTIONS_WRITE_GRANTS: Record<string, string> = {
+	".github/workflows/retarget.yml#rerun":
+		"It re-runs a retargeted pull request's CI/CD run, so the layer leaves the light tier.",
 	".github/workflows/continuous-staging.yml#follow-main":
 		"It dispatches the promotion workflow for the build that passed CI on main.",
 };

@@ -534,6 +534,7 @@ The required checks are job names, so a display name does not change them.
 | `dependency-graph.yml`                | PR changing a dependency input, push to main                                  | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |
 | `submit-dependency-graph.yml`         | Successful dependency-graph workflow                                          | Submits snapshot data without executing code from the originating run                                                                                                                                                            |
 | `verify-changesets.yml`               | Called by cicd.yml                                                            | Tests changeset and version-sync policy, enforces release-note presence, and requires a note that names each removed chart value                                                                                                 |
+| `retarget.yml`                        | PR edited so that its base becomes the default branch                         | Runs the head's CI/CD run again, so a stacked layer leaves the light tier. See [Light tier for stacked layers](#light-tier-for-stacked-layers)                                                                                    |
 | `fail-fast.yml`                       | Called by cicd.yml when a leg of a merge group fails                          | Cancels the run gracefully, so the gate still fails and the queue removes the entry. See [Fail fast in the merge queue](#fail-fast-in-the-merge-queue)                                                                           |
 | `openapi-autocommit.yml`              | `autocommit-openapi` label                                                    | Regenerates the OpenAPI spec and client and commits them to the pull request                                                                                                                                                     |
 | `security-mutation.yml`               | PR touching the suite's inputs, manual                                        | Runs the security mutation suite                                                                                                                                                                                                 |
@@ -770,6 +771,24 @@ groups in the last 14 days in which a queue-tier job failed. It counts the group
 fast-tier jobs failed apart, and it gives no share for fewer than 20 groups. If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
 should have caught. Then run the queue tier on pull requests again: change `queue-tier` in
 `detect-changes` to `true` for every event.
+
+### Light tier for stacked layers
+
+A layer of a stack is a pull request whose base is another pull request's branch.
+It never merges on its own: it enters the queue as part of its stack, and the merge group runs everything.
+Thus, such a layer runs the **light tier**: `Detect changes`, the quality legs except Windows and Stories, Security, Changesets, Actionlint and Zizmor.
+These are format, lint, types, prose and the quality legs' own tests.
+It packages no server, so it runs no server suite, no artifact gate, no image build and no cluster leg.
+`CI Status Gate` passes on that result.
+
+`Detect changes` reads the base from the pull request when it runs, not from the event, and publishes `light-tier`.
+The `ci:full` label and a release candidate run the full tier on a layer too.
+An unreadable pull request also runs the full tier.
+
+When the layer below merges and the layer is retargeted to the default branch, `CI / Retarget` runs the head's CI/CD run again.
+The new attempt reads the new base and runs the full tier.
+A re-run is never skipped as a duplicate, because the earlier run of the same tree may have run only the light tier.
+A push to the retargeted pull request runs the full tier as well.
 
 ## Path filters
 

@@ -1,0 +1,49 @@
+name: CI / Retarget
+
+# A layer of a stack runs the light tier while its base is another pull request's branch. When the
+# layer below merges and this pull request is retargeted to the default branch, no push may follow,
+# so the CI/CD run of its head is run again. `Detect changes` reads the base from the pull request,
+# not from the event, so the new attempt runs the full tier: ci-cd.mdx § Light tier for stacked layers.
+
+on:
+  pull_request:
+    types: [edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+jobs:
+  rerun:
+    name: "Run CI again on the new base"
+    # A fork's token cannot re-run a workflow; a push to the fork runs the full tier.
+    if: >-
+      github.event.changes.base != null &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write # re-run this pull request's CI/CD run
+    steps:
+      - name: Run the head's CI/CD run again
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow cicd.yml --event pull_request --commit "$HEAD_SHA" \
+            --limit 1 --json databaseId,status --jq '.[0] // empty | "\(.databaseId) \(.status)"')
+          if [ -z "$run" ]; then
+            echo "No CI/CD run of $HEAD_SHA yet; the next push runs the full tier."
+            exit 0
+          fi
+          read -r id status <<< "$run"
+          # A run cannot be run again before it ends. A light run of a pull request carries no merge verdict.
+          if [ "$status" != completed ]; then
+            gh run cancel "$id" --repo "$GITHUB_REPOSITORY"
+            gh run watch "$id" --repo "$GITHUB_REPOSITORY" --interval 10 > /dev/null || true
+          fi
+          gh run rerun "$id" --repo "$GITHUB_REPOSITORY"
