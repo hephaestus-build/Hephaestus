@@ -50,6 +50,8 @@ Each writes an **Account blocked or unblocked** audit record with the admin and 
 
 ```mermaid
 stateDiagram-v2
+    accTitle: Account access states
+    accDescr: An instance admin can block an active account or unblock a blocked account. Other account states cannot use these transitions.
     ACTIVE --> BLOCKED: Block account
     BLOCKED --> ACTIVE: Unblock account
 ```
