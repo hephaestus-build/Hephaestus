@@ -19,6 +19,7 @@ Personal choices cannot weaken either requirement.
 | `HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED` | `false` | Require passkeys for all workspace administration. |
 | `HEPHAESTUS_AUTH_PASSKEYS_RP_ID` | Instance hostname | The stable domain that owns the credentials. |
 | `HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS` | Instance origin | Comma-separated trusted HTTPS browser origins. |
+| `HEPHAESTUS_AUTH_PASSKEYS_ADMIN_MAX_AGE` | `6h` | How long one passkey verification opens protected admin access. |
 
 Configure the actual SPA origin, not an internal API address.
 Use the narrowest RP ID that serves the application.
@@ -31,6 +32,11 @@ An admin can still use ordinary member access without admin verification.
 Instance-admin elevation and user views require the same protection.
 Installed clients cannot use browser passkey assurance.
 Use the web app for protected administration.
+
+A passkey verification opens protected admin access for six hours by default.
+After that, the admin verifies a passkey again.
+The session continues, and member access stays open.
+The six-hour window matches GitLab Admin Mode and stays inside the NIST SP 800-63B-4 AAL2 limit of 24 hours.
 
 ## Test instances without additional confirmation
 
