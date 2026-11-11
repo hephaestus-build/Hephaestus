@@ -11201,6 +11201,8 @@ paths:
       tags:
       - workspace
     patch:
+      description: Omitted or null fields stay unchanged. Turning the page off resets
+        search indexing and the choice to name contributors without an account.
       operationId: updatePublicActivity
       parameters:
       - description: Workspace slug
@@ -11225,8 +11227,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityWorkspaceSettings"
           description: Workspace updated
-      summary: "Turn the public activity page, search indexing and contributors without\
-        \ an account on or off"
+      summary: Change the supplied public activity settings
       tags:
       - workspace
   /workspaces/{workspaceSlug}/repositories:
@@ -26635,17 +26636,21 @@ components:
       - required
     UpdateWorkspacePublicActivityRequest:
       type: object
+      description: Only supplied non-null settings change. Turning the page off resets
+        the other settings.
       properties:
         allowSearchEngines:
-          type: boolean
+          type:
+          - boolean
+          - "null"
         contributorsWithoutAccount:
-          type: boolean
+          type:
+          - boolean
+          - "null"
         publicActivityEnabled:
-          type: boolean
-      required:
-      - allowSearchEngines
-      - contributorsWithoutAccount
-      - publicActivityEnabled
+          type:
+          - boolean
+          - "null"
     UpdateWorkspaceStatusRequest:
       type: object
       description: Request to update the workspace lifecycle status

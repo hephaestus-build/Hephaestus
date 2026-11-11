@@ -1,4 +1,9 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
-/** A workspace's public activity page settings as an administrator sets them. */
-public record PublicActivityChoice(boolean enabled, boolean allowSearchEngines, boolean contributorsWithoutAccount) {}
+import org.jspecify.annotations.Nullable;
+
+/** An administrator's changes to public activity. A null field leaves the saved choice unchanged. */
+public record PublicActivityChoice(
+        @Nullable Boolean enabled,
+        @Nullable Boolean allowSearchEngines,
+        @Nullable Boolean contributorsWithoutAccount) {}

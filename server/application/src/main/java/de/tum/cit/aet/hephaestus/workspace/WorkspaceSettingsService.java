@@ -81,12 +81,21 @@ public class WorkspaceSettingsService {
 
     @Transactional
     public Workspace updatePublicActivity(Long workspaceId, PublicActivityChoice choice) {
-        Workspace workspace = requireWorkspace(workspaceId);
+        Workspace workspace = workspaceRepository
+                .findByIdForUpdate(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
         // A page that is off has no choices, so publishing again starts from "not listed" and "not named".
-        boolean published = choice.enabled();
+        boolean published =
+                choice.enabled() != null ? choice.enabled() : Boolean.TRUE.equals(workspace.getPublicActivityEnabled());
         Boolean publicActivityEnabled = published;
-        boolean searchEngines = published && choice.allowSearchEngines();
-        boolean withoutAccount = published && choice.contributorsWithoutAccount();
+        boolean searchEngines = published
+                && (choice.allowSearchEngines() != null
+                        ? choice.allowSearchEngines()
+                        : workspace.isPublicActivitySearchEngines());
+        boolean withoutAccount = published
+                && (choice.contributorsWithoutAccount() != null
+                        ? choice.contributorsWithoutAccount()
+                        : workspace.isPublicActivityContributorsWithoutAccount());
         var beforeVis = new WorkspaceAuditSnapshots.VisibilitySnapshot(
                 workspace.getPublicActivityEnabled(),
                 workspace.isPublicActivitySearchEngines(),

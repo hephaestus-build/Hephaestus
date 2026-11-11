@@ -7,7 +7,9 @@ import { updatePublicActivity } from '../../sdk/updatePublicActivity.gen.js';
 import type { UpdatePublicActivityData, UpdatePublicActivityResponse } from '../../types.gen.js';
 
 /**
- * Turn the public activity page, search indexing and contributors without an account on or off
+ * Change the supplied public activity settings
+ *
+ * Omitted or null fields stay unchanged. Turning the page off resets search indexing and the choice to name contributors without an account.
  */
 export const updatePublicActivityMutation = (options?: Partial<Options<UpdatePublicActivityData>>): UseMutationOptions<UpdatePublicActivityResponse, DefaultError, Options<UpdatePublicActivityData>> => {
     const mutationOptions: UseMutationOptions<UpdatePublicActivityResponse, DefaultError, Options<UpdatePublicActivityData>> = {

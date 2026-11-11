@@ -1,9 +1,10 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
-import jakarta.validation.constraints.NotNull;
-import org.jspecify.annotations.NonNull;
+import io.swagger.v3.oas.annotations.media.Schema;
+import org.jspecify.annotations.Nullable;
 
+@Schema(description = "Only supplied non-null settings change. Turning the page off resets the other settings.")
 public record UpdateWorkspacePublicActivityRequestDTO(
-        @NonNull @NotNull Boolean publicActivityEnabled,
-        @NonNull @NotNull Boolean allowSearchEngines,
-        @NonNull @NotNull Boolean contributorsWithoutAccount) {}
+        @Schema(nullable = true) @Nullable Boolean publicActivityEnabled,
+        @Schema(nullable = true) @Nullable Boolean allowSearchEngines,
+        @Schema(nullable = true) @Nullable Boolean contributorsWithoutAccount) {}

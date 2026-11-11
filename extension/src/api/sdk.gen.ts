@@ -3313,7 +3313,9 @@ export const getWorkspacePublicActivitySettings = <ThrowOnError extends boolean 
 });
 
 /**
- * Turn the public activity page, search indexing and contributors without an account on or off
+ * Change the supplied public activity settings
+ *
+ * Omitted or null fields stay unchanged. Turning the page off resets search indexing and the choice to name contributors without an account.
  */
 export const updatePublicActivity = <ThrowOnError extends boolean = false>(options: Options<UpdatePublicActivityData, ThrowOnError>): RequestResult<UpdatePublicActivityResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdatePublicActivityResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

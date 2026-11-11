@@ -8,4 +8,4 @@ Turning that choice on asks for confirmation before it publishes names. Turning 
 
 The public activity page also no longer sends the logins of the people who helped most, which no page showed. In instance administration, the product feedback entry is now called Reports.
 
-**Operators:** API clients that change the public activity page settings must now send `contributorsWithoutAccount`.
+Public activity settings save only the choice you change, so one save cannot restore names that another save hid. API clients can omit settings they do not change.

@@ -106,6 +106,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.StatusAssertions;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -1184,6 +1185,48 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             patchPublicActivity(false, false, true);
             patchPublicActivity(true, false, false);
             assertThat(page().unlistedContributors()).isEqualTo(nobodyNamed.unlistedContributors());
+        }
+
+        @Test
+        void shouldChangeOnlyThePublicActivitySettingsSuppliedByTheAdministrator() {
+            ensureAdminMembership(workspace);
+            patchPublicActivity(true, false, true);
+            for (var change :
+                    List.of(Map.of("contributorsWithoutAccount", false), Map.of("allowSearchEngines", true))) {
+                webTestClient
+                        .patch()
+                        .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
+                        .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                        .bodyValue(change)
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody()
+                        .jsonPath("$.enabled")
+                        .isEqualTo(true)
+                        .jsonPath("$.contributorsWithoutAccount")
+                        .isEqualTo(false);
+            }
+            var saved = workspaceRepository.findById(workspace.getId()).orElseThrow();
+            assertThat(saved.isPublicActivitySearchEngines()).isTrue();
+            assertThat(saved.isPublicActivityContributorsWithoutAccount()).isFalse();
+            webTestClient
+                    .patch()
+                    .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
+                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(
+                            "{\"publicActivityEnabled\":null,\"allowSearchEngines\":null,\"contributorsWithoutAccount\":null}")
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.enabled")
+                    .isEqualTo(true)
+                    .jsonPath("$.allowSearchEngines")
+                    .isEqualTo(true)
+                    .jsonPath("$.contributorsWithoutAccount")
+                    .isEqualTo(false);
         }
 
         @Test

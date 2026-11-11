@@ -121,28 +121,14 @@ export function useWorkspacePublicActivity({
 		},
 	});
 
-	const change = (
-		requested: PublicActivityChange,
-		patch: Partial<UpdateWorkspacePublicActivityRequest>,
-	) => {
+	const change = (requested: PublicActivityChange, patch: UpdateWorkspacePublicActivityRequest) => {
 		if (current.data === undefined) {
 			return;
 		}
-		const body = {
-			publicActivityEnabled: current.data.enabled,
-			allowSearchEngines: current.data.allowSearchEngines,
-			contributorsWithoutAccount: current.data.contributorsWithoutAccount,
-			...patch,
-		};
-		// A page that is off has no choices: the server forgets them, so this says the same.
 		update.mutate({
 			change: requested,
 			path,
-			body: {
-				...body,
-				allowSearchEngines: body.publicActivityEnabled && body.allowSearchEngines,
-				contributorsWithoutAccount: body.publicActivityEnabled && body.contributorsWithoutAccount,
-			},
+			body: patch,
 		});
 	};
 
@@ -246,7 +232,7 @@ function announce(
 	{ publicActivityEnabled }: UpdateWorkspacePublicActivityRequest,
 	workspaceSlug: string,
 ) {
-	if (publicActivityEnabled) {
+	if (publicActivityEnabled !== false) {
 		toast.success("Public activity settings saved", { description: inWorkspace(workspaceSlug) });
 		return;
 	}

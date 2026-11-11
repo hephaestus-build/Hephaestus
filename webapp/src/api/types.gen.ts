@@ -6554,10 +6554,13 @@ export type UpdateWorkspacePasskeyPolicy = {
     required: boolean;
 };
 
+/**
+ * Only supplied non-null settings change. Turning the page off resets the other settings.
+ */
 export type UpdateWorkspacePublicActivityRequest = {
-    allowSearchEngines: boolean;
-    contributorsWithoutAccount: boolean;
-    publicActivityEnabled: boolean;
+    allowSearchEngines?: boolean | null;
+    contributorsWithoutAccount?: boolean | null;
+    publicActivityEnabled?: boolean | null;
 };
 
 /**

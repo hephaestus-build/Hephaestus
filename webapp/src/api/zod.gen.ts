@@ -5841,10 +5841,13 @@ export const zUpdateWorkspacePasskeyPolicy = z.object({
     required: z.boolean()
 });
 
+/**
+ * Only supplied non-null settings change. Turning the page off resets the other settings.
+ */
 export const zUpdateWorkspacePublicActivityRequest = z.object({
-    allowSearchEngines: z.boolean(),
-    contributorsWithoutAccount: z.boolean(),
-    publicActivityEnabled: z.boolean()
+    allowSearchEngines: z.boolean().nullish(),
+    contributorsWithoutAccount: z.boolean().nullish(),
+    publicActivityEnabled: z.boolean().nullish()
 });
 
 /**

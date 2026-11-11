@@ -2,7 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type JsonBodyType, type PathParams } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	getPublicActivityHiddenCountQueryKey,
@@ -352,6 +352,19 @@ describe("the public activity page setting", () => {
 	let settings = { enabled: false, allowSearchEngines: false, contributorsWithoutAccount: false };
 	let changes: unknown[] = [];
 
+	function savePublicActivity(body: UpdateWorkspacePublicActivityRequest) {
+		settings = {
+			enabled: body.publicActivityEnabled ?? settings.enabled,
+			allowSearchEngines: body.allowSearchEngines ?? settings.allowSearchEngines,
+			contributorsWithoutAccount:
+				body.contributorsWithoutAccount ?? settings.contributorsWithoutAccount,
+		};
+		if (!settings.enabled) {
+			settings.allowSearchEngines = false;
+			settings.contributorsWithoutAccount = false;
+		}
+	}
+
 	beforeEach(() => {
 		settings = { enabled: false, allowSearchEngines: false, contributorsWithoutAccount: false };
 		changes = [];
@@ -362,11 +375,7 @@ describe("the public activity page setting", () => {
 				async ({ request }) => {
 					const body = await request.json();
 					changes.push(body);
-					settings = {
-						enabled: body.publicActivityEnabled,
-						allowSearchEngines: body.allowSearchEngines,
-						contributorsWithoutAccount: body.contributorsWithoutAccount,
-					};
+					savePublicActivity(body);
 					return HttpResponse.json(settings);
 				},
 			),
@@ -391,15 +400,7 @@ describe("the public activity page setting", () => {
 		server.use(http.get("*/workspaces", async () => listed.promise));
 		await user.click(within(dialog).getByRole("button", { name: "Make public" }));
 
-		await waitFor(() =>
-			expect(changes).toStrictEqual([
-				{
-					publicActivityEnabled: true,
-					allowSearchEngines: false,
-					contributorsWithoutAccount: false,
-				},
-			]),
-		);
+		await waitFor(() => expect(changes).toStrictEqual([{ publicActivityEnabled: true }]));
 		try {
 			// The save is acknowledged at once; the address waits for the list to confirm the page.
 			await screen.findByText("Public activity settings saved");
@@ -429,15 +430,7 @@ describe("the public activity page setting", () => {
 		await user.click(
 			await screen.findByRole("switch", { name: "Publish the page" }, ROUTE_RENDER_WAIT),
 		);
-		await waitFor(() =>
-			expect(changes).toStrictEqual([
-				{
-					publicActivityEnabled: false,
-					allowSearchEngines: false,
-					contributorsWithoutAccount: false,
-				},
-			]),
-		);
+		await waitFor(() => expect(changes).toStrictEqual([{ publicActivityEnabled: false }]));
 		expect(screen.queryByRole("alertdialog")).toBeNull();
 
 		await user.click(screen.getByRole("switch", { name: "Publish the page" }));
@@ -446,11 +439,7 @@ describe("the public activity page setting", () => {
 		await user.click(within(dialog).getByRole("button", { name: "Make public" }));
 
 		await waitFor(() => expect(changes).toHaveLength(2));
-		expect(changes[1]).toStrictEqual({
-			publicActivityEnabled: true,
-			allowSearchEngines: false,
-			contributorsWithoutAccount: false,
-		});
+		expect(changes[1]).toStrictEqual({ publicActivityEnabled: true });
 		const searchEngines = await screen.findByRole("switch", { name: "Allow search engines" });
 		expect(searchEngines.getAttribute("aria-checked")).toBe("false");
 		expect(
@@ -469,15 +458,7 @@ describe("the public activity page setting", () => {
 			await screen.findByRole("switch", { name: "Allow search engines" }, ROUTE_RENDER_WAIT),
 		);
 
-		await waitFor(() =>
-			expect(changes).toStrictEqual([
-				{
-					publicActivityEnabled: true,
-					allowSearchEngines: true,
-					contributorsWithoutAccount: false,
-				},
-			]),
-		);
+		await waitFor(() => expect(changes).toStrictEqual([{ allowSearchEngines: true }]));
 	});
 
 	it("names contributors without an account, and counts them again when turned off", async () => {
@@ -499,23 +480,70 @@ describe("the public activity page setting", () => {
 				name: "Show contributors",
 			}),
 		);
-		await waitFor(() =>
-			expect(changes).toStrictEqual([
-				{ publicActivityEnabled: true, allowSearchEngines: true, contributorsWithoutAccount: true },
-			]),
-		);
+		await waitFor(() => expect(changes).toStrictEqual([{ contributorsWithoutAccount: true }]));
 		await screen.findByText(
 			"On. People without an account are named on the page until they object.",
 		);
 
 		await user.click(screen.getByRole("switch", { name }));
 		await waitFor(() => expect(changes).toHaveLength(2));
-		expect(changes[1]).toStrictEqual({
-			publicActivityEnabled: true,
-			allowSearchEngines: true,
-			contributorsWithoutAccount: false,
-		});
+		expect(changes[1]).toStrictEqual({ contributorsWithoutAccount: false });
 		await screen.findByText("Off. People without an account are counted on the page, not named.");
+	});
+
+	it("keeps contributor names off when search indexing changes before the first save replies", async () => {
+		const user = userEvent.setup();
+		const queryClient = testQueryClient();
+		const firstArrived = deferred();
+		const secondArrived = deferred();
+		const firstReply = deferred();
+		const secondReply = deferred();
+		const flights = [
+			{ arrived: firstArrived, reply: firstReply },
+			{ arrived: secondArrived, reply: secondReply },
+		];
+		settings = { enabled: true, allowSearchEngines: false, contributorsWithoutAccount: true };
+		server.use(
+			http.patch<PathParams, UpdateWorkspacePublicActivityRequest>(
+				"*/workspaces/acme/public-activity",
+				async ({ request }) => {
+					const body = await request.json();
+					const flight = flights.shift();
+					assert(flight, "Unexpected settings write");
+					changes.push(body);
+					savePublicActivity(body);
+					const saved = { ...settings };
+					flight.arrived.resolve();
+					await flight.reply.promise;
+					return HttpResponse.json(saved);
+				},
+			),
+		);
+		renderSettingsRoute(false, [], queryClient);
+		const name = "Show contributors without an account";
+		try {
+			await user.click(await screen.findByRole("switch", { name }, ROUTE_RENDER_WAIT));
+			await firstArrived.promise;
+			await user.click(screen.getByRole("switch", { name: "Allow search engines" }));
+			await secondArrived.promise;
+			expect(changes).toStrictEqual([
+				{ contributorsWithoutAccount: false },
+				{ allowSearchEngines: true },
+			]);
+			secondReply.resolve();
+			await screen.findByText("Off. People without an account are counted on the page, not named.");
+			firstReply.resolve();
+			await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+			expect(settings.contributorsWithoutAccount).toBe(false);
+			expect(screen.queryAllByText("The public activity page is off")).toHaveLength(0);
+			expect(screen.getByRole("switch", { name }).getAttribute("aria-checked")).toBe("false");
+			expect(
+				screen.getByRole("switch", { name: "Allow search engines" }).getAttribute("aria-checked"),
+			).toBe("true");
+		} finally {
+			firstReply.resolve();
+			secondReply.resolve();
+		}
 	});
 
 	it("keeps the changed switch pending when a fresh read already contains its new value", async () => {
@@ -602,15 +630,7 @@ describe("the public activity page setting", () => {
 		await within(page).findByText("We could not load hidden people");
 		expect(control.getAttribute("aria-checked")).toBe("true");
 		await user.click(screen.getByRole("switch", { name: "Allow search engines" }));
-		await waitFor(() =>
-			expect(changes).toStrictEqual([
-				{
-					publicActivityEnabled: true,
-					allowSearchEngines: true,
-					contributorsWithoutAccount: false,
-				},
-			]),
-		);
+		await waitFor(() => expect(changes).toStrictEqual([{ allowSearchEngines: true }]));
 		within(page).getByText("We could not load hidden people");
 		server.use(
 			http.get("*/workspaces/acme/activity/hidden-contributors", async () => {
@@ -790,15 +810,7 @@ describe("the public activity page setting", () => {
 			await user.click(
 				await screen.findByRole("switch", { name: "Allow search engines" }, ROUTE_RENDER_WAIT),
 			);
-			await waitFor(() =>
-				expect(writes).toStrictEqual([
-					{
-						publicActivityEnabled: true,
-						allowSearchEngines: true,
-						contributorsWithoutAccount: false,
-					},
-				]),
-			);
+			await waitFor(() => expect(writes).toStrictEqual([{ allowSearchEngines: true }]));
 
 			settingsRead.answer = { status: 403 };
 			await reread(queryClient, getWorkspacePublicActivitySettingsQueryKey(ACME));

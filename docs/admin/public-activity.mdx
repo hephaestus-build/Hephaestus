@@ -144,7 +144,7 @@ Turning the setting off stops all public activity pages on the next request.
 A workspace administrator can read `GET /workspaces/{slug}/public-activity` and change
 `PATCH /workspaces/{slug}/public-activity`.
 The PATCH body is `{"publicActivityEnabled": true, "allowSearchEngines": false, "contributorsWithoutAccount": false}`.
-All three fields are required.
+Send only the settings that you change. Omitted or null fields stay unchanged. Turning the page off resets the other two settings.
 Changes are audited.
 
 The page is available only when the instance allows it and the active workspace enables it.

@@ -19858,22 +19858,27 @@ export const UpdateWorkspacePasskeyPolicySchema = {
 
 export const UpdateWorkspacePublicActivityRequestSchema = {
     type: 'object',
+    description: 'Only supplied non-null settings change. Turning the page off resets the other settings.',
     properties: {
         allowSearchEngines: {
-            type: 'boolean'
+            type: [
+                'boolean',
+                'null'
+            ]
         },
         contributorsWithoutAccount: {
-            type: 'boolean'
+            type: [
+                'boolean',
+                'null'
+            ]
         },
         publicActivityEnabled: {
-            type: 'boolean'
+            type: [
+                'boolean',
+                'null'
+            ]
         }
-    },
-    required: [
-        'allowSearchEngines',
-        'contributorsWithoutAccount',
-        'publicActivityEnabled'
-    ]
+    }
 } as const;
 
 export const UpdateWorkspaceStatusRequestSchema = {

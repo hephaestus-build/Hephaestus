@@ -334,13 +334,8 @@ public class WorkspaceService {
         return updateToken(requireSlug(workspaceContext), personalAccessToken);
     }
 
-    public Workspace updatePublicActivity(String slug, PublicActivityChoice choice) {
-        Workspace workspace = requireWorkspace(slug);
-        return workspaceSettingsService.updatePublicActivity(workspace.getId(), choice);
-    }
-
     public Workspace updatePublicActivity(WorkspaceContext workspaceContext, PublicActivityChoice choice) {
-        return updatePublicActivity(requireSlug(workspaceContext), choice);
+        return workspaceSettingsService.updatePublicActivity(workspaceContext.id(), choice);
     }
 
     public Workspace updateFeatures(WorkspaceContext workspaceContext, UpdateWorkspaceFeaturesRequestDTO request) {
