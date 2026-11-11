@@ -10,8 +10,7 @@ import org.jspecify.annotations.Nullable;
  *
  * @param issueUrl the public issue the email links to; null for a private issue, whose address names the private
  *     repository
- * @param detail the release for {@link Kind#INCLUDED_IN_RELEASE}, the original issue's URL for {@link Kind#DUPLICATE},
- *     or null
+ * @param detail the original issue's URL for {@link Kind#DUPLICATE}, or null
  */
 public record ProductFeedbackUpdatedEvent(
         UUID feedbackId,
@@ -36,8 +35,6 @@ public record ProductFeedbackUpdatedEvent(
         /** The issue was closed as a duplicate; Hephaestus now follows the original. */
         DUPLICATE,
         REOPENED,
-        /** The change that closed the issue is in a published release. */
-        INCLUDED_IN_RELEASE,
         /** The person's public issue moved to the private repository. */
         MADE_PRIVATE
     }

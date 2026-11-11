@@ -111,7 +111,6 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
             case CLOSED_NOT_PLANNED -> "Your issue was closed as not planned";
             case DUPLICATE -> "Your issue was closed as a duplicate. Hephaestus now follows the original";
             case REOPENED -> "Your issue was reopened";
-            case INCLUDED_IN_RELEASE -> "The change that closed your issue is in release v1.0.0-rc.1";
             case MADE_PRIVATE ->
                 "Your issue moved to the private repository. Copies made while it was public can remain.";
         };
@@ -262,7 +261,6 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
     private static ProductFeedbackUpdatedEvent event(UUID id, Account reporter, Kind kind, boolean publicIssue) {
         String detail = switch (kind) {
             case DUPLICATE -> ORIGINAL;
-            case INCLUDED_IN_RELEASE -> "v1.0.0-rc.1";
             default -> null;
         };
         return new ProductFeedbackUpdatedEvent(
