@@ -28,7 +28,7 @@ Hephaestus supports the chart on a cluster with these items:
   [ADR 0060](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0060-the-kubernetes-floor-follows-upstream-support.md) gives the reason.
 - A network plugin that enforces NetworkPolicy for egress and for ingress, also on traffic to a Service address.
   The worker's isolation probe stops the worker on a plugin that does not ([Sandbox prerequisites](#sandbox-prerequisites)).
-- A Gateway API controller for `HTTPRoute` `v1` with the four features in [Gateway routes](#gateway-routes).
+- A Gateway API controller for `HTTPRoute` `v1` with the two features in [Gateway routes](#gateway-routes).
 - A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL and NATS.
 - With the worker enabled, the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller with its extensions, at the version that the release pins ([Sandbox templates](#sandbox-templates)).
 
@@ -363,24 +363,23 @@ Both conditions must be `True`: `Accepted=True` and `ResolvedRefs=True`.
 The server serves the API without the `/api` prefix.
 A standard `Ingress` cannot remove a path prefix, so the chart does not use one.
 
-The Gateway controller must support these `HTTPRoute` features:
+The Gateway controller must support the core `HTTPRoute` features and these two extended features:
 
 - `URLRewrite` with `ReplacePrefixMatch`, for `/api`.
 - `ResponseHeaderModifier`, for `Strict-Transport-Security` on each rule.
-- `HTTPRouteRequestTimeout`, for `timeouts.request` on `/api`.
-- `HTTPRouteBackendTimeout`, for `timeouts.backendRequest` on `/api`.
 
-If the controller does not support a feature, the route does not work as described.
-The chart cannot detect this. Confirm all four features for the controller that you select.
+If the controller does not support one of them, the route does not work as described.
+The chart cannot detect this. Confirm both features for the controller that you select.
 
-The `/api` rule sets both `timeouts.request` and `timeouts.backendRequest` to `0s`.
-The Hephaestus live stream stays open for much longer than one request.
-The two timeouts are separate: the request timeout covers the client request, and the backend timeout covers the full backend response.
-If a rule omits one of them, the controller selects that behavior.
+The live streams of Hephaestus stay open for much longer than one request.
+They do not need a route timeout. Instead, the server sends an event on each live stream at least every 20 seconds.
+Thus, the controller and each proxy in front of it must keep a response open while it receives an event every 20 seconds.
+Set each idle timeout on that path above 20 seconds.
 
-A zero value asks the controller to disable the timeout.
-A controller that cannot disable it can use its longest possible value instead.
-Thus, the `0s` values do not guarantee a stream without a time limit.
+The `/api` rule also sets `timeouts.request` and `timeouts.backendRequest` to `0s`, which asks the controller for no time limit.
+A controller with the `HTTPRouteRequestTimeout` and `HTTPRouteBackendTimeout` features applies them.
+The Traefik of the one-host platform does not have these features, so it does not apply the values.
+A controller that limits the total time of a response, and does not apply the values, ends each live stream at that limit.
 The other three rules set no timeout and no retry.
 
 Set `trustedProxies` to a Tomcat regular expression that matches only the Gateway data plane addresses.
@@ -2429,4 +2428,4 @@ The worker's `/actuator/prometheus` on its management port shows the same tier i
 A successful install in CI does not show that your cluster isolates sandboxes.
 The worker's isolation probe checks that on your cluster, at each start and on its schedule.
 CI does not qualify your Gateway controller.
-Check its four `HTTPRoute` features, its body limit and its idle timeout yourself, and rehearse a [restore](#restore) on your own cluster.
+Check its two `HTTPRoute` features, its body limit and its idle timeout yourself, and rehearse a [restore](#restore) on your own cluster.
