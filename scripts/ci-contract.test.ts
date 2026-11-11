@@ -4522,13 +4522,22 @@ void describe("CI contract", () => {
 
 	void test("resolves every commit's author without checking out the pull request", async () => {
 		const identity = job(
-			await readFile(".github/workflows/pull-request.yml", "utf8"),
+			await readFile(".github/workflows/pull-request-policy.yml", "utf8"),
 			"validate-pr",
 		);
-		// The workflow's trigger is justified to Zizmor by the claim that it checks out and runs no
+		// The workflow_run trigger is justified to Zizmor by the claim that it checks out and runs no
 		// pull-request code; a job that reads the pull request's own commits is where that slips.
 		assert.match(identity, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/u);
 		assert.match(identity, /uses: actions\/github-script@/u);
+	});
+
+	// GitHub blocks pull_request_target in public repositories by default. The pull request policy
+	// records on pull_request and judges on workflow_run instead; a new pull_request_target would
+	// also be a Zizmor dangerous-triggers finding, which this test keeps an ignore comment from hiding.
+	void test("no workflow runs on pull_request_target", async () => {
+		for (const [file, source] of await workflowSources()) {
+			assert.equal(parseDocument(source).hasIn(["on", "pull_request_target"]), false, file);
+		}
 	});
 
 	void test("never invokes a repository-local action before checkout", async () => {
@@ -4859,8 +4868,6 @@ const UNCANCELLED_PULL_REQUEST_RUNS: Record<string, string> = {
 		"It deletes the docs and Storybook previews; a teardown cancelled halfway leaves them published.",
 	".github/workflows/openapi-autocommit.yml":
 		"Any label starts it, so an unrelated label would cancel the run that commits the regeneration.",
-	".github/workflows/review-policy.yml":
-		"It writes approvals; a newer run waits and re-reads the current head instead.",
 };
 
 /** A workflow value as the runner expands it: each `${{ }}` evaluated against `context`. */

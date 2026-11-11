@@ -1,8 +1,12 @@
-name: Repo / Pull request policy
+name: Repo / Pull request
+
+# The unprivileged half of the pull request policy. It runs with the pull request's own workflow
+# files and no permissions, and records only which pull request it ran for and why.
+# pull-request-policy.yml runs the policy from the default branch when this run completes, and
+# treats this record as untrusted data. docs/contributor/ci-cd.mdx § Pull request policy.
 
 on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers] No pull-request code is checked out or executed.
-    branches: [main]
+  pull_request:
     types:
       - opened
       - edited
@@ -18,272 +22,21 @@ concurrency:
 permissions: {}
 
 jobs:
-  validate-pr:
-    name: "Validate PR"
+  record:
+    name: "Record the pull request"
     timeout-minutes: 15
     runs-on: ubuntu-slim
-    if: ${{ !github.event.pull_request.draft }}
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
-      - name: Load trusted PR policies
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
-          # package.json is what makes the policy module load as ESM; without it Node parses it as
-          # CommonJS first and warns on the reparse.
-          sparse-checkout: |
-            commitlint.config.ts
-            package.json
-            scripts/review-policy.ts
-            scripts/lib/model-attribution.ts
-          sparse-checkout-cone-mode: false
-
-      - name: Read title policy and validate header limits
-        id: policy
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          retries: 2
-          script: |
-            const { pathToFileURL } = await import("node:url");
-            const { pullRequestTitlePolicy: policy } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/commitlint.config.ts`).href);
-            for (const [name, value] of Object.entries(policy)) core.setOutput(name, value);
-            // A rerun keeps its original payload even after the title has been edited.
-            const { data: { title } } = await github.rest.pulls.get({
-              ...context.repo, pull_number: context.payload.pull_request.number,
-            });
-            // The action below reads a header pattern and a subject pattern; what those cannot
-            // express is checked here, against the same policy the commit-msg hook enforces.
-            const problem = title.length > policy.headerMaxLength
-              ? `The title is ${title.length} characters long; the limit is ${policy.headerMaxLength}.`
-              : /[\r\n]/.test(title)
-                ? 'The title must be a single line.'
-                : new RegExp(policy.breakingMarkerPattern).test(title)
-                  ? 'A breaking change is carried by a changeset, so the title takes no ! marker.'
-                  : '';
-            if (problem) {
-              core.setOutput('error_message', problem);
-              core.setFailed(problem);
-            }
-
-      - name: Validate PR title
-        id: title
-        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
-        continue-on-error: true
+      - name: Write the pull request number and the event action
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          types: ${{ steps.policy.outputs.types }}
-          scopes: ${{ steps.policy.outputs.scopes }}
-          headerPattern: ${{ steps.policy.outputs.headerPattern }}
-          headerPatternCorrespondence: type, scope, subject
-          subjectPattern: ${{ steps.policy.outputs.subjectPattern }}
-
-      # Through the environment and a file: the message quotes the title, which is the author's text.
-      - name: Explain the validation failure
-        id: explain
-        if: ${{ !cancelled() && (steps.policy.outputs.error_message != '' || steps.title.outputs.error_message != '') }}
-        env:
-          POLICY_ERROR: ${{ steps.policy.outputs.error_message }}
-          TITLE_ERROR: ${{ steps.title.outputs.error_message }}
-          GUIDANCE: >-
-            Use `type(scope): description`, at most ${{ steps.policy.outputs.headerMaxLength }}
-            characters, with no final period and no breaking-change `!` marker. The allowed types and
-            scopes are in [the contribution guidelines](${{ steps.policy.outputs.helpUrl }}).
+          NUMBER: ${{ github.event.pull_request.number }}
+          ACTION: ${{ github.event.action }}
         run: |
-          {
-            printf '## PR title validation failed\n\n'
-            printf '%s\n\n' "${POLICY_ERROR:-$TITLE_ERROR}"
-            printf '%s\n' "$GUIDANCE"
-          } > "$RUNNER_TEMP/title-error.md"
-
-      - name: Comment on PR with validation error
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
-        if: ${{ !cancelled() && steps.explain.outcome == 'success' }}
+          mkdir -p "$RUNNER_TEMP/pull-request"
+          printf '%s\n%s\n' "$NUMBER" "$ACTION" > "$RUNNER_TEMP/pull-request/record"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          header: pr-title-lint-error
-          path: ${{ runner.temp }}/title-error.md
-
-      - name: Remove error comment on success
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
-        if: steps.title.outcome == 'success'
-        with:
-          header: pr-title-lint-error
-          delete: true
-
-      - name: Fail workflow if title validation failed
-        if: steps.title.outcome == 'failure'
-        run: exit 1
-
-      - name: "Resolve the author of every commit"
-        id: identity
-        if: ${{ !cancelled() }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        continue-on-error: true
-        env:
-          MAINTAINERS: ${{ vars.REVIEW_POLICY_MAINTAINERS }}
-        with:
-          retries: 2
-          script: |
-            const { writeFile } = require("node:fs/promises");
-            const { pathToFileURL } = await import("node:url");
-            const { parseMaintainers } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/review-policy.ts`).href);
-            const maintainers = parseMaintainers(process.env.MAINTAINERS);
-
-            // `authors(first:1)` is the primary author alone: a co-author after the first is a
-            // credit, not the identity the commit is attributed to.
-            const query = `query($owner:String!,$name:String!,$number:Int!,$after:String){
-              repository(owner:$owner,name:$name){ pullRequest(number:$number){
-                author{ __typename login }
-                commits(first:100,after:$after){ pageInfo{hasNextPage endCursor}
-                  nodes{ commit{ abbreviatedOid message authors(first:1){ nodes{ email name user{ login } } } } } } } } }`;
-
-            const pull = context.payload.pull_request;
-            const nodes = [];
-            let author;
-            let after = null;
-            do {
-              const page = await github.graphql(query, {
-                owner: context.repo.owner,
-                name: context.repo.repo,
-                number: pull.number,
-                after,
-              });
-              const data = page.repository.pullRequest;
-              author = data.author;
-              nodes.push(...data.commits.nodes);
-              after = data.commits.pageInfo.hasNextPage ? data.commits.pageInfo.endCursor : null;
-            } while (after);
-
-            // The REST commit list stops at 250. Reuse this complete GraphQL walk for attribution.
-            await writeFile(`${process.env.RUNNER_TEMP}/commit-messages.json`, JSON.stringify(
-              nodes.map(({ commit }) => ({ sha: commit.abbreviatedOid, message: commit.message })),
-            ));
-
-            // A `Bot` author's login carries no suffix while the account its commits resolve to
-            // does: Renovate opens a pull request as `renovate` and signs its commits as
-            // `renovate[bot]`. Deriving the one from the other keeps bots under the same rule
-            // rather than exempting them.
-            const expected = author.__typename === "Bot" ? `${author.login}[bot]` : author.login;
-            const offenders = nodes.filter(({ commit }) => {
-              const resolved = commit.authors.nodes[0]?.user?.login?.toLowerCase();
-              return resolved === undefined || (resolved !== expected.toLowerCase() && !maintainers.has(resolved));
-            });
-            if (offenders.length === 0) return;
-
-            const listed = offenders.map(({ commit }) => {
-              const [commitAuthor] = commit.authors.nodes;
-              const resolved = commitAuthor?.user ? `@${commitAuthor.user.login}` : "no GitHub account";
-              return `    ${commit.abbreviatedOid}  ${commitAuthor?.email ?? "no author email"}  ${resolved}`;
-            });
-            await writeFile(
-              `${process.env.RUNNER_TEMP}/identity-comment.md`,
-              [
-                "## Commit identity check failed",
-                "",
-                `Every commit's primary author must resolve to @${expected} or a maintainer listed`,
-                "in REVIEW_POLICY_MAINTAINERS. These do not:",
-                "",
-                ...listed,
-                "",
-                "For your own commits, use an email address registered to your GitHub account.",
-                "Preserve other contributors' authorship when making corrections.",
-                "",
-              ].join("\n"),
-            );
-            core.setOutput("violations", "true");
-            core.setFailed(`${offenders.length} commit(s) do not resolve to @${expected} or a listed maintainer.`);
-
-      - name: "Comment on PR with the offending commits"
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
-        if: ${{ !cancelled() && steps.identity.outputs.violations == 'true' }}
-        with:
-          header: pr-commit-identity-error
-          path: ${{ runner.temp }}/identity-comment.md
-
-      - name: "Remove error comment on success"
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
-        if: steps.identity.outcome == 'success'
-        with:
-          header: pr-commit-identity-error
-          delete: true
-
-      - name: "Fail workflow if a commit did not resolve"
-        if: steps.identity.outcome == 'failure'
-        run: exit 1
-
-      - name: "Refuse model attribution in pull requests and commits"
-        id: attribution
-        if: ${{ !cancelled() }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        continue-on-error: true
-        with:
-          retries: 2
-          script: |
-            const { readFile, writeFile } = require("node:fs/promises");
-            const { pathToFileURL } = await import("node:url");
-            const { findModelAttribution } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/lib/model-attribution.ts`).href);
-            const pull_number = context.payload.pull_request.number;
-            // Reruns keep an old event payload. Read the current description and every commit.
-            const { data: { title, body } } = await github.rest.pulls.get({ ...context.repo, pull_number });
-            const commits = JSON.parse(await readFile(`${process.env.RUNNER_TEMP}/commit-messages.json`, 'utf8'));
-            if (!Array.isArray(commits) || commits.length === 0 || commits.some(commit =>
-              typeof commit?.sha !== 'string' || typeof commit?.message !== 'string')) {
-              throw new Error('Missing validated commit messages');
-            }
-            const violations = [
-              ...findModelAttribution(title).map((reason) => `Title: ${reason}`),
-              ...findModelAttribution(body ?? "").map((reason) => `Body: ${reason}`),
-              ...commits.flatMap(({ sha, message }) => findModelAttribution(message)
-                .map((reason) => `Commit ${sha.slice(0, 7)}: ${reason}`)),
-            ];
-            if (violations.length === 0) return;
-            await writeFile(
-              `${process.env.RUNNER_TEMP}/attribution-comment.md`,
-              [
-                "## Attribution check failed",
-                "",
-                "Remove harness and tool markers from the title, body, and commit messages.",
-                "A `Co-authored-by:` trailer that names a model is allowed. AGENTS.md § Pull requests defines this policy.",
-                "",
-                ...violations.map((violation) => `- ${violation}`),
-                "",
-              ].join("\n"),
-            );
-            core.setOutput("violations", "true");
-            core.setFailed("The pull request or its commits carry model attribution.");
-
-      - name: "Comment on PR with the attribution violations"
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
-        if: ${{ !cancelled() && steps.attribution.outputs.violations == 'true' }}
-        with:
-          header: pr-attribution-error
-          path: ${{ runner.temp }}/attribution-comment.md
-
-      - name: "Remove attribution error comment on success"
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
-        if: steps.attribution.outcome == 'success'
-        with:
-          header: pr-attribution-error
-          delete: true
-
-      - name: "Fail workflow if the attribution check failed"
-        if: steps.attribution.outcome == 'failure'
-        run: exit 1
-
-  assign-author:
-    name: "Assign author"
-    timeout-minutes: 15
-    runs-on: ubuntu-slim
-    permissions:
-      pull-requests: write
-    if: github.event.action == 'opened' && github.event.sender.type == 'User'
-    steps:
-      - name: Assign the author
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          ASSIGNEE: ${{ github.event.sender.login }}
-        run: gh api --silent --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/assignees" -f "assignees[]=$ASSIGNEE"
+          name: pull-request
+          path: ${{ runner.temp }}/pull-request/record
+          retention-days: 1
+          if-no-files-found: error

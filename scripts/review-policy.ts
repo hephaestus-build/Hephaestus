@@ -1,7 +1,7 @@
 /**
  * Supplies the maintainer exception to GitHub's native review requirement.
  * Policy: docs/contributor/ci-cd.mdx#merge-policy.
- * Only the default branch's copy runs under pull_request_target; no pull-request code is executed.
+ * Only the default branch's copy runs, from pull-request-policy.yml on workflow_run; no pull-request code is executed.
  */
 
 type ApiMethod<T> = (params: Record<string, unknown>) => Promise<{ data: T }>;

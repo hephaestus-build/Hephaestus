@@ -306,7 +306,7 @@ independent maintainer review is available.
 After approving the current commit, the workflow attempts
 to minimize superseded automatic reviews. A minimization failure is a warning, not a failed approval.
 
-The approval workflow runs on `pull_request_target` with `pull-requests: write`. It loads the evaluator
+The approval job runs in `pull-request-policy.yml` with `pull-requests: write`, as [Pull request policy](#pull-request-policy) describes. It loads the evaluator
 from `scripts/` on the default branch, reads current pull-request metadata and reviews from GitHub,
 and executes no pull-request code. An empty allow-list approves nobody.
 
@@ -314,6 +314,33 @@ It has no `branches:` filter.
 A stacked layer gets approval while it still targets the layer below.
 After that layer merges, retargeting to `main` must not depend on another event. The `edited` trigger also
 re-evaluates explicit base changes.
+
+### Pull request policy
+
+The title, commit identity and attribution checks, the maintainer approval and the author assignment need write access to the pull request.
+They do not run on `pull_request_target`.
+GitHub blocks that event by default in public repositories from 2026-12-02 ([GitHub changelog](https://github.blog/changelog/2026-11-02-pull_request_target-blocked-by-default-december-2)).
+Instead, two workflows split the work, as GitHub Security Lab recommends ([Preventing pwn requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)):
+
+1. `pull-request.yml` runs on `pull_request`, with the pull request's own workflow files and no permissions.
+   It records the pull request number and the event action as the `pull-request` artifact. It checks out nothing.
+2. `pull-request-policy.yml` runs on `workflow_run` when that run succeeds.
+   GitHub runs it from the default branch, with the permissions that each job declares.
+   It checks out only the default branch's policy files and runs no pull-request code.
+
+The artifact is untrusted data. `scripts/pull-request-policy.ts` accepts only a number and a known action.
+It reads the pull request from the API and acts only while the pull request's head is the commit that the recording run tested.
+A run for a replaced head does nothing, and the newer run decides.
+A pull request can thus point the policy at itself only. It cannot change the policy or what the policy reads.
+
+A `workflow_run` job reports on the default branch, not on the pull request.
+Thus, the judging job posts its verdict on the pull request's head commit as the `Validate PR` check, with the Checks API.
+The ruleset does not require `Validate PR` or the approval job.
+The native review requirement needs the approval, so a maintainer's pull request cannot merge without this workflow.
+
+Zizmor reports every `pull_request_target` and `workflow_run` trigger as `dangerous-triggers`, and the Zizmor job fails on any finding.
+`pull-request-policy.yml` carries an ignore comment with its reason.
+`scripts/ci-contract.test.ts` also refuses any workflow that runs on `pull_request_target`, so an ignore comment cannot admit one.
 
 A merge group uses a synthetic ref, not the Version PR branch name. If its aggregate tree changes `package.json`'s version relative to the group's base, it is a release candidate.
 It builds every release image on both platforms and must pass release evidence preflight on that exact tree.
@@ -519,8 +546,8 @@ The required checks are job names, so a display name does not change them.
 | Workflow                              | Trigger                                                                       | Purpose                                                                                                                                                                                                                          |
 | ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cicd.yml`                            | PR, merge group, push to main, manual                                         | Validates changes before merge and publishes final-SHA images after merge. The release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
-| `review-policy.yml`                   | PR opened, reopened, synchronized, ready for review, edited                   | Approves a listed maintainer's pull request so the ruleset's required approval is met. Does nothing for anyone else                                                                                                              |
-| `pull-request.yml`                    | PR opened, edited, synchronized, reopened, ready for review                   | Validates the title against the exported policy in `commitlint.config.ts`, without installing the workspace. Applies the commit identity policy in the checks table above. Assigns the author when the pull request opens        |
+| `pull-request.yml`                    | PR opened, edited, synchronized, reopened, ready for review                   | Records the pull request number and event action as an artifact, with no permissions. Checks out and runs nothing                                                                                                               |
+| `pull-request-policy.yml`             | `pull-request.yml` completed successfully                                     | From the default branch: validates the title against the exported policy in `commitlint.config.ts`, applies the commit identity and attribution policies, and posts the `Validate PR` check. Approves a listed maintainer's pull request. Assigns the author when the pull request opens |
 | `ci-quality-gates.yml`                | Called by cicd.yml                                                            | Selects quality legs, clean-install verification and story tests                                                                                                                                                                 |
 | `ci-quality-leg.yml`                  | Called by ci-quality-gates.yml                                                | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg                                                                                                                                     |
 | `cache-toolchain.yml`                 | Main push changing install inputs or setup                                    | Seeds trusted Linux and Windows install caches without repeating quality gates                                                                                                                                                   |
@@ -1110,7 +1137,7 @@ Right after a merge, that run is still building, so the pull request builds ever
   Thus, the build jobs start when `App Server: Package` uploads it, and the Dockerfile images wait with them.
 - A push to a pull request cancels the earlier runs of that pull request, and no other runs.
   A superseded run validates a commit that nobody merges, and it holds runners that other pull requests wait for.
-  Each workflow that runs on `pull_request` or `pull_request_target` declares this at the top level:
+  Each workflow that runs on `pull_request` declares this at the top level:
 
   ```yaml
   concurrency:
@@ -1118,7 +1145,7 @@ Right after a merge, that run is still building, so the pull request builds ever
     cancel-in-progress: ${{ github.event_name == 'pull_request' }}
   ```
 
-  Equivalent groups are permitted. A `pull_request_target` run has the base branch as its ref, so its group must name the pull request number, as in `pull-request.yml`.
+  Equivalent groups are permitted, such as the pull request number in `pull-request.yml`.
   A group must not use the head branch name alone, because two forks can push branches with the same name.
   A reusable workflow declares no lane of its own.
   In a called workflow, `github.workflow` is the caller's name, so a group there would join the caller's lane.
@@ -1126,7 +1153,7 @@ Right after a merge, that run is still building, so the pull request builds ever
 
   Some workflows do not cancel, because a run cancelled halfway leaves state that no later run replaces.
   That state is a deploy, a teardown, a commit, or an approval.
-  A sticky comment that the next run rewrites is not such state, so `pull-request.yml` cancels.
+  The policy runs only after a successful `pull-request.yml` run, so a cancelled run leaves no verdict, and that workflow cancels.
   `UNCANCELLED_PULL_REQUEST_RUNS` in `scripts/ci-contract.test.ts` lists the workflows that do not cancel, with their reasons.
 
   The test evaluates each group. It fails when a workflow lacks the rule or when one pull request cancels another.
@@ -1534,8 +1561,8 @@ baseline. Nor do snapshot and test counts share a promised equality: the gate ch
 structured evidence instead of subtracting counters. Review this contract when updating the action.
 
 For visual verification of a fork contribution, a maintainer can review it and run a trusted
-same-repository branch. Do not expose project secrets to forks or use `pull_request_target`
-to bypass the policy.
+same-repository branch. Do not expose project secrets to forks. No workflow runs on `pull_request_target`
+([Pull request policy](#pull-request-policy)).
 
 ### Recovering quota and the baseline
 
