@@ -2397,14 +2397,7 @@ void describe("CI contract", () => {
 			job(source, "detect-changes"),
 			/version-bump: \$\{\{ steps\.version_bump\.outputs\.changed \}\}/u,
 		);
-		for (const name of [
-			"workflow-lint",
-			"zizmor",
-			"Quality",
-			"upstream-images",
-			"Security",
-			"Test",
-		]) {
+		for (const name of ["workflow-lint", "Quality", "upstream-images", "Security", "Test"]) {
 			const needs = {
 				"upstream-images": /needs: \[detect-changes, vulnerability-database\]/u,
 				Test: /needs: \[detect-changes, server-package, Security\]/u,
@@ -2517,14 +2510,7 @@ void describe("CI contract", () => {
 
 		// Asserted on the condition, not the whole job: a `with:` input the condition never reads
 		// must not satisfy it.
-		for (const name of [
-			"workflow-lint",
-			"zizmor",
-			"Quality",
-			"server-package",
-			"Security",
-			"Docker",
-		]) {
+		for (const name of ["workflow-lint", "Quality", "server-package", "Security", "Docker"]) {
 			assert.match(
 				String(workflow.getIn(["jobs", name, "if"])),
 				/needs\.detect-changes\.outputs\.unfiltered == 'true'/u,
@@ -5876,7 +5862,7 @@ void test("a cluster leg is named for its distribution, minor and architecture, 
 	for (const entry of jobs.items) {
 		assert.doesNotMatch(name(String(entry.key)), /sha256|@|\d+\.\d+\.\d+/u);
 	}
-	assert.equal(name("schema"), "Chart");
+	assert.equal(workflow.hasIn(["jobs", "schema"]), false);
 	assert.equal(name("k3d"), "k3s 1.37 amd64");
 	const minors = [
 		...new Set(
@@ -6049,7 +6035,7 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	}
 
 	// kubeconform validates the render on the lowest and the latest minor of the legs.
-	const schemaSteps = kubernetes.getIn(["jobs", "schema", "steps"]);
+	const schemaSteps = kubernetes.getIn(["jobs", "k3d", "steps"]);
 	assert.ok(isSeq(schemaSteps));
 	const lintStep = schemaSteps.items.find(
 		(item) => isMap(item) && String(item.get("name")).startsWith("Lint the chart"),
@@ -6625,4 +6611,89 @@ void test("the flattened signer preserves its published digest output contract",
 			`\${{ steps.digest.outputs.${image} }}`,
 		);
 	}
+});
+
+void test("chart lint runs once in its latest-k3s consumer with its parser dependencies installed", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
+	const jobs = asRecord(asRecord(workflow.toJSON(), "Kubernetes").jobs, "jobs");
+	let linters = 0;
+	for (const [key, value] of Object.entries(jobs)) {
+		if (!key.startsWith("k3d")) continue;
+		const job = asRecord(value, key);
+		const environment = asRecord(job.env, "environment");
+		const steps = asArray(job.steps, "steps").map((step) => asRecord(step, "step"));
+		const selected = steps
+			.filter(
+				(step) =>
+					step.uses === "./.github/actions/setup-toolchain" ||
+					(typeof step.run === "string" && step.run.includes("node scripts/crd-schemas.ts")),
+			)
+			.filter(
+				(step) =>
+					step.if === undefined ||
+					expandExpressions(`\${{ ${String(step.if).replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "")} }}`, {
+						env: environment,
+						inputs: {},
+						github: { event_name: "pull_request" },
+					}) === "true",
+			);
+		const toolchain = selected.filter((step) => step.uses === "./.github/actions/setup-toolchain");
+		assert.equal(toolchain.length, 1, key);
+		const lint = selected.find(
+			(step) => typeof step.run === "string" && step.run.includes("node scripts/crd-schemas.ts"),
+		);
+		assert.equal(Boolean(lint), key === "k3d", key);
+		assert.equal(
+			asRecord(toolchain[0]?.with, "toolchain inputs").install,
+			lint ? "frozen" : "none",
+		);
+		if (lint) {
+			linters++;
+			assert.ok(selected.indexOf(toolchain[0] ?? {}) < selected.indexOf(lint));
+		}
+	}
+	assert.equal(linters, 1);
+});
+
+void test("merged workflow lint retains Zizmor after an Actionlint failure and its original skip selection", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const worker = ["jobs", "workflow-lint"];
+	assert.equal(workflow.getIn([...worker, "name"]), "Workflow lint");
+	assert.equal(workflow.hasIn(["jobs", "zizmor"]), false);
+	const sequence = workflow.getIn([...worker, "steps"]);
+	assert.ok(isSeq(sequence));
+	const zizmor = sequence.items.find((item) => isMap(item) && item.get("id") === "zizmor");
+	assert.ok(isMap(zizmor));
+	for (const cancelled of [false, true]) {
+		const functions = new Map([
+			[
+				"cancelled",
+				{ name: "cancelled", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(cancelled) },
+			],
+		]);
+		const condition = asString(zizmor.get("if"), "Zizmor guard").replaceAll(
+			/^\$\{\{\s*|\s*\}\}$/gu,
+			"",
+		);
+		const parsed = new Parser(
+			new Lexer(condition).lex().tokens,
+			["steps"],
+			[...functions.values()],
+		).parse();
+		const context: unknown = JSON.parse(
+			JSON.stringify({
+				steps: { checkout: { outcome: "success" }, native: { outcome: "failure" } },
+			}),
+			data.reviver,
+		);
+		assert.ok(context instanceof data.Dictionary);
+		assert.equal(
+			new Evaluator(parsed, context, functions).evaluate().coerceString(),
+			String(!cancelled),
+		);
+	}
+	assert.equal(
+		namedStep(workflow, worker, "Validate workflows with GitHub's parser").get("if"),
+		"needs.detect-changes.outputs.should_skip != 'true'",
+	);
 });

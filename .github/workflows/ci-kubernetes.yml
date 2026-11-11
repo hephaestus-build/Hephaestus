@@ -33,7 +33,6 @@ on:
         type: string
         default: ""
 
-
 permissions: {}
 
 env:
@@ -42,45 +41,8 @@ env:
   CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/501527ab9c40c827144c8f45945b25a023e344ce/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 
 jobs:
-
-  schema:
-    name: "Chart"
-    permissions:
-      contents: read
-      packages: read
-    timeout-minutes: 15
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.ref }}
-          persist-credentials: false
-      # crd-schemas.ts reads YAML with the repository's parser.
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "frozen"
-      - uses: ./.github/actions/setup-helm
-      - uses: ./.github/actions/setup-kubernetes-tools
-      # The render runs `helm lint --strict` on each set of values before it renders them.
-      - name: Lint the chart and validate every rendered resource on the lowest and the latest Kubernetes
-        run: |
-          set -euo pipefail
-          node scripts/kubernetes-cluster.ts render > manifests.yaml
-          # No public catalog carries the agent-sandbox kinds: their schemas come from the pinned definitions.
-          node scripts/crd-schemas.ts deploy/platform/k3s-agent-sandbox.yaml platform-schemas
-          for version in 1.35.0 1.37.0; do
-            kubeconform -strict -summary -kubernetes-version "$version" \
-              -schema-location "$KUBERNETES_SCHEMAS" \
-              -schema-location "platform-schemas/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
-              -schema-location "$CRD_SCHEMAS" manifests.yaml
-          done
-
-  # A leg's name is its distribution, minor and architecture, so its check history survives an
-  # image update. The pinned image, which Renovate updates within the minor, is in the summary.
-
   k3d:
     name: k3s 1.37 amd64
-    needs: schema
     permissions:
       contents: read
       actions: read
@@ -111,10 +73,32 @@ jobs:
           ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
+        if: ${{ !(env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64') }}
         with:
           install: "none"
+      - uses: ./.github/actions/setup-toolchain
+        if: env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64'
+        with:
+          install: "frozen"
       - uses: ./.github/actions/setup-helm
       - uses: ./.github/actions/setup-kubernetes-tools
+      # The render runs `helm lint --strict` on each set of values before it renders them.
+      - name: Lint the chart and validate every rendered resource on the lowest and the latest Kubernetes
+        if: env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64'
+        run: |
+          set -euo pipefail
+          node scripts/kubernetes-cluster.ts render > manifests.yaml
+          # No public catalog carries the agent-sandbox kinds: their schemas come from the pinned definitions.
+          node scripts/crd-schemas.ts deploy/platform/k3s-agent-sandbox.yaml platform-schemas
+          for version in 1.35.0 1.37.0; do
+            kubeconform -strict -summary -kubernetes-version "$version" \
+              -schema-location "$KUBERNETES_SCHEMAS" \
+              -schema-location "platform-schemas/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+              -schema-location "$CRD_SCHEMAS" manifests.yaml
+          done
+
+      # A leg's name is its distribution, minor and architecture, so its check history survives an
+      # image update. The pinned image, which Renovate updates within the minor, is in the summary.
       - uses: ./.github/actions/setup-caches
         if: ${{ inputs.application-artifact != '' && env.DRILLS == 'true' }}
       - uses: ./.github/actions/restore-server-build
@@ -224,7 +208,6 @@ jobs:
 
   k3d-1-35-amd64:
     name: k3s 1.35 amd64
-    needs: schema
     if: inputs.queue
     permissions:
       contents: read
@@ -254,7 +237,6 @@ jobs:
 
   k3d-1-35-arm64:
     name: k3s 1.35 arm64
-    needs: schema
     if: inputs.queue && inputs.arm64
     permissions:
       contents: read
@@ -284,7 +266,6 @@ jobs:
 
   calico:
     name: "kind 1.35 Calico"
-    needs: schema
     if: inputs.queue
     permissions:
       contents: read
@@ -376,21 +357,6 @@ jobs:
           kubectl -n agent-sandbox-system logs deployment/agent-sandbox-controller --tail=200 || true
           kubectl -n hephaestus-sandboxes get events --sort-by=.lastTimestamp || true
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
-
-  fail-fast-schema:
-    name: Stop the merge group early
-    needs: [schema]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.schema.result == 'failure' }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
-    permissions:
-      actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
 
   fail-fast-k3d:
     name: Stop the merge group early

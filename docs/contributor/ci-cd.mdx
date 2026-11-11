@@ -60,14 +60,14 @@ The run uses stage names and static worker names:
 
 ```text
 Changes
-Workflow lint / actionlint, zizmor
+Workflow lint
 Security / Dependencies, secrets and policy, Image advisories, Pinned upstream images
 Quality / Server, Webapp, Extension, Tooling and docs, Tooling and docs (tests 1 of 2), Tooling and docs (tests 2 of 2), Windows, Clean install, Webapp stories
 Build / Server package, Generated API, Database migrations, PostgreSQL drills
 Server tests / Unit, Architecture, Integration (review), Integration (1 of 8) … Integration (8 of 8)
 Browser tests / Webapp, Extension
 Images / linux/amd64, linux/arm64, Manifest, Tag unchanged images
-Kubernetes / Chart, k3s 1.37 amd64, k3s 1.35 amd64, k3s 1.35 arm64, kind 1.35 Calico
+Kubernetes / k3s 1.37 amd64, k3s 1.35 amd64, k3s 1.35 arm64, kind 1.35 Calico
 CI Status Gate
 ```
 
@@ -75,7 +75,7 @@ A path-filtered stage can be skipped.
 A selected stage shows its workers directly, including static names for skipped workers.
 The tooling gates and the two halves of the tooling tests remain three jobs.
 Each worker keeps its isolated cancel callback, named `Stop the merge group early`.
-The removed placeholder entries allocated no runner, so the layout change saves no runner jobs.
+The removed placeholder entries allocated no runner. Combining workflow linters saves one runner job when lint is selected. Folding chart lint into the latest k3s worker saves one runner job when Kubernetes is selected. The checks remain the same.
 
 GitHub displays every job of a [reused workflow](https://docs.github.com/en/actions/concepts/workflows-and-actions/reusing-workflow-configurations).
 A skipped job remains a [skipped check](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions).
@@ -83,7 +83,7 @@ We use one stage workflow per group and [YAML step aliases](https://docs.github.
 The image signing steps stay in `reusable-docker-build.yml`, which is part of the signature identity.
 
 `CI Status Gate` keeps its required context name.
-The workflow lint jobs remain prerequisites of `CI Status Gate`.
+The workflow lint job remains a prerequisite of `CI Status Gate`.
 The gate continues to judge native results.
 
 ## Quality gates
@@ -280,7 +280,7 @@ List the break or restore the endpoint, then run the job again.
 ### Merge policy
 
 Pull requests targeting `main` merge through GitHub's merge queue after the GitHub Actions
-context `CI Status Gate` passes. Its prerequisites include both workflow lint jobs. Required
+context `CI Status Gate` passes. Its prerequisites include all workflow lint checks. Required
 workflows run again for the merge group, which includes the current base and queued changes ahead of
 the pull request. Each required context is bound to the GitHub Actions integration rather than
 accepting a same-named external status.
@@ -1218,7 +1218,7 @@ It does not qualify snapshot replay with PostgreSQL rollback, external delivery,
 
 ## Workflow validation
 
-`Workflow lint / actionlint` runs two validators in one job and blocks through `CI Status Gate`.
+`Workflow lint` runs GitHub's parser, Actionlint and Zizmor in one job and blocks through `CI Status Gate`.
 
 1. `scripts/check-workflows.ts` loads GitHub's workflow parser and language service.
    It validates every workflow and composite action: schema, expressions, contexts, `needs`,

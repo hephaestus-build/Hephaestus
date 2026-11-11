@@ -32,7 +32,6 @@ concurrency:
 permissions: {}
 
 jobs:
-
   detect-changes:
     name: Changes
     runs-on: ubuntu-latest
@@ -710,38 +709,42 @@ jobs:
               - 'server/gradlew*'
               - 'scripts/check-gradle-verification-metadata.ts'
 
-
   Changesets:
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/verify-changesets.yml
     permissions:
       contents: read
 
-
   workflow-lint:
-    name: Workflow lint / actionlint
+    name: Workflow lint
     timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: [detect-changes]
     if: |
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      needs.detect-changes.outputs.should_skip != 'true' && (
+      (
         needs.detect-changes.outputs.ci-config == 'true' ||
         needs.detect-changes.outputs.unfiltered == 'true'
       )
     permissions:
       contents: read
       packages: read
+      security-events: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-toolchain
+      - id: toolchain
+        if: needs.detect-changes.outputs.should_skip != 'true'
+        uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
 
-      - uses: ./.github/actions/setup-ci-tool
+      - id: shellcheck
+        if: needs.detect-changes.outputs.should_skip != 'true'
+        uses: ./.github/actions/setup-ci-tool
         with:
           tool: shellcheck
 
@@ -749,6 +752,7 @@ jobs:
       # cannot read. docs/contributor/ci-cd.mdx § Workflow validation says which check owns what.
       - name: Validate workflows with GitHub's parser
         id: native
+        if: needs.detect-changes.outputs.should_skip != 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-workflows.ts
@@ -763,24 +767,8 @@ jobs:
           fail_level: error
           filter_mode: nofilter
           reporter: github-annotations
-
-
-  zizmor:
-    name: Workflow lint / zizmor
-    timeout-minutes: 15
-    runs-on: ubuntu-latest
-    needs: [detect-changes]
-    if: |
-      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.ci-config == 'true')
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - id: zizmor
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99 # v0.6.3
         with:
           min-confidence: medium
@@ -788,6 +776,7 @@ jobs:
           version: 1.29.0
 
       - name: Enforce Zizmor findings
+        if: ${{ !cancelled() && steps.zizmor.outcome == 'success' }}
         env:
           ZIZMOR_SARIF: ${{ steps.zizmor.outputs.output-file }}
         run: jq -e '[.runs[]?.results[]?] | length == 0' "$ZIZMOR_SARIF"
@@ -907,7 +896,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-
   Quality:
     uses: ./.github/workflows/ci-quality-gates.yml
     needs: [detect-changes, Security]
@@ -939,7 +927,6 @@ jobs:
       light_tier: ${{ needs.detect-changes.outputs.light-tier }}
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       gradle_dependencies: ${{ needs.detect-changes.outputs.gradle-dependencies }}
-
 
   # Package once; artifact checks and the image independently consume the same JAR. A run that
   # publishes every image packages even when its diff holds no code, such as a bot's pin bump in
@@ -1029,7 +1016,6 @@ jobs:
           # A re-run of failed jobs keeps this artifact; a re-run of all jobs replaces it.
           overwrite: true
 
-
   Build:
     uses: ./.github/workflows/ci-build.yml
     needs: [detect-changes, server-package]
@@ -1046,7 +1032,6 @@ jobs:
       contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
-
 
   Test:
     name: Server tests
@@ -1088,7 +1073,6 @@ jobs:
       extension_e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.extension-e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
-
 
   # Every image of the run: one build job per platform and one manifest job. The application-server
   # image is built from the package job's executable JAR, so the job waits for it.
@@ -1176,7 +1160,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-
 
   # Validate the built images before release; signatures and attestations are added at publication.
   # Every release candidate needs evidence for its own tree, including a merge group's aggregate.
@@ -1290,7 +1273,6 @@ jobs:
         detect-changes,
         vulnerability-database,
         workflow-lint,
-        zizmor,
         Quality,
         server-package,
         Build,
@@ -1318,7 +1300,6 @@ jobs:
           set -o pipefail
           echo "detect-changes: ${{ needs.detect-changes.result }}"
           echo "workflow-lint: ${{ needs.workflow-lint.result }}"
-          echo "zizmor:        ${{ needs.zizmor.result }}"
           echo "Quality:        ${{ needs.Quality.result }}"
           echo "Package:        ${{ needs.server-package.result }}"
           echo "Browser tests: ${{ needs.Browser-tests.result }}"
@@ -1472,7 +1453,6 @@ jobs:
             An image build or scan failure also first shows here; add the `preview` label to build
             the images on the pull request.
 
-
   # These caller callbacks also cover failures before a worker or its nested callback can run.
   # Fail fast in a merge group: when a leg fails, its job below cancels the run, so a group that has
   # already lost frees its runners and leaves the queue early. Each job needs only its own leg, so it
@@ -1498,21 +1478,6 @@ jobs:
   fail-fast-workflow-lint:
     name: Stop the merge group early
     needs: [workflow-lint]
-    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
-    permissions:
-      actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
-
-  fail-fast-zizmor:
-    name: Stop the merge group early
-    needs: [zizmor]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-slim
     timeout-minutes: 15
