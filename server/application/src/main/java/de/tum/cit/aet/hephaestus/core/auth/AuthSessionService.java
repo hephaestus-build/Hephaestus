@@ -247,11 +247,17 @@ public class AuthSessionService {
     public void revokeSession(Long accountId, UUID jti) {
         UUID sessionId =
                 issuedJwtRepository.findSessionIdOwnedBy(jti, accountId).orElse(null);
-        if (sessionId != null) {
-            clientSessionService.endSession(accountId, sessionId, RevokedReason.SELF_REVOKE);
-            return;
+        boolean revoked = sessionId != null
+                ? clientSessionService.endSession(accountId, sessionId, RevokedReason.SELF_REVOKE)
+                : revokeBrowserChain(accountId, jti, RevokedReason.SELF_REVOKE) > 0;
+        if (revoked) {
+            authEventLogger
+                    .event(AuthEvent.EventType.JWT_REVOKED, AuthEvent.Result.SUCCESS)
+                    .account(accountId)
+                    .actingAccount(accountId)
+                    .details("{\"reason\":\"SELF_REVOKE\"}")
+                    .record();
         }
-        revokeBrowserChain(accountId, jti, RevokedReason.SELF_REVOKE);
     }
 
     /**
@@ -260,11 +266,17 @@ public class AuthSessionService {
      */
     @Transactional
     public void revokeAllExcept(Long accountId, UUID currentJti, @Nullable UUID currentSessionId) {
-        sessionRevocation.revokeAccount(
+        int revoked = sessionRevocation.revokeAccount(
                 accountId,
                 RevokedReason.SIGN_OUT_EVERYWHERE,
                 currentSessionId == null ? currentJti : null,
                 currentSessionId);
+        authEventLogger
+                .event(AuthEvent.EventType.JWT_REVOKED, AuthEvent.Result.SUCCESS)
+                .account(accountId)
+                .actingAccount(accountId)
+                .details("{\"reason\":\"SIGN_OUT_EVERYWHERE\",\"count\":" + revoked + "}")
+                .record();
     }
 
     /** Ends an owned browser chain, including when a passkey replaces its current token. */

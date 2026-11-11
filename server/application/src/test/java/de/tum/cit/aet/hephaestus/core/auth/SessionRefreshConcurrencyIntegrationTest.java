@@ -175,6 +175,25 @@ class SessionRefreshConcurrencyIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
+    void shouldRevokeASuccessorCommittedWhileInstanceWideSignOutWaitsForIssuance() throws Exception {
+        var held = issue();
+        Long accountId = tokens.findById(held.jti()).orElseThrow().getAccountId();
+
+        inOrder(() -> refresh(accountId, held.jti()), () -> {
+            jdbc.execute("LOCK TABLE account IN EXCLUSIVE MODE");
+            jdbc.update("UPDATE client_sign_in_handoff SET consumed_at = now() WHERE consumed_at IS NULL");
+            jdbc.update("UPDATE client_session SET revoked_at = now(), revoked_reason = 'ADMIN_REVOKE'"
+                    + " WHERE revoked_at IS NULL");
+            jdbc.update("UPDATE issued_jwt SET revoked_at = now(), revoked_reason = 'ADMIN_REVOKE'"
+                    + " WHERE revoked_at IS NULL");
+            return true;
+        });
+
+        assertThat(tokens.findActiveByAccountId(accountId, Instant.now())).isEmpty();
+        assertThat(admission.admit(held.jti(), Instant.now())).isNotNull();
+    }
+
+    @Test
     void shouldEndTheChainWhenLogoutWaitsBehindTheSuccessorsFirstUse() throws Exception {
         var held = issue();
         Long accountId = tokens.findById(held.jti()).orElseThrow().getAccountId();

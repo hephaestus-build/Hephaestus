@@ -7,6 +7,9 @@ import type { RevokeOtherSessionsData, RevokeOtherSessionsResponses } from '../t
 
 /**
  * Revoke all sessions except the current one
+ *
+ * Ending other sessions, individually or together, needs a recent sign-in (ASVS 5.0 V7.5.2).
+ * The account menu's sign-out remains available without a recent sign-in.
  */
 export const revokeOtherSessions = <ThrowOnError extends boolean = false>(options?: Options<RevokeOtherSessionsData, ThrowOnError>): RequestResult<RevokeOtherSessionsResponses, unknown, ThrowOnError> => (options?.client ?? client).delete<RevokeOtherSessionsResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

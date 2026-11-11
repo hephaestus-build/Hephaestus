@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.auth.web;
 
+import de.tum.cit.aet.hephaestus.core.AuditLedger;
+import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.auth.AuthSessionService;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -87,9 +90,12 @@ public class SessionWebController {
     }
 
     @DeleteMapping("/{jti}")
+    @RequiresRecentSignIn
+    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "JWT_REVOKED")
     @Operation(
             summary = "Revoke a single session",
-            description = "Any token of an installed-client session, even one it rotated away, ends that session.",
+            description =
+                    "Requires a recent sign-in. Any token of an installed-client session, even one it rotated away, ends that session.",
             operationId = "revokeSession")
     @ApiResponse(responseCode = "204", description = "Session revoked")
     public ResponseEntity<Void> revoke(@PathVariable UUID jti) {
@@ -97,7 +103,13 @@ public class SessionWebController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Ending other sessions, individually or together, needs a recent sign-in (ASVS 5.0 V7.5.2).
+     * The account menu's sign-out remains available without a recent sign-in.
+     */
     @DeleteMapping
+    @RequiresRecentSignIn
+    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "JWT_REVOKED")
     @Operation(summary = "Revoke all sessions except the current one", operationId = "revokeOtherSessions")
     @ApiResponse(responseCode = "204", description = "Other sessions revoked")
     public ResponseEntity<Void> revokeAllOthers() {

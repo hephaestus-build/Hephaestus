@@ -8,7 +8,7 @@ import type { RevokeSessionData, RevokeSessionResponses } from '../types.gen.js'
 /**
  * Revoke a single session
  *
- * Any token of an installed-client session, even one it rotated away, ends that session.
+ * Requires a recent sign-in. Any token of an installed-client session, even one it rotated away, ends that session.
  */
 export const revokeSession = <ThrowOnError extends boolean = false>(options: Options<RevokeSessionData, ThrowOnError>): RequestResult<RevokeSessionResponses, unknown, ThrowOnError> => (options.client ?? client).delete<RevokeSessionResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

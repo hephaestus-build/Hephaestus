@@ -3619,6 +3619,9 @@ paths:
       - public-activity-onboarding
   /user/sessions:
     delete:
+      description: |-
+        Ending other sessions, individually or together, needs a recent sign-in (ASVS 5.0 V7.5.2).
+         The account menu's sign-out remains available without a recent sign-in.
       operationId: revokeOtherSessions
       responses:
         "204":
@@ -3642,8 +3645,8 @@ paths:
       - Account
   /user/sessions/{jti}:
     delete:
-      description: "Any token of an installed-client session, even one it rotated\
-        \ away, ends that session."
+      description: "Requires a recent sign-in. Any token of an installed-client session,\
+        \ even one it rotated away, ends that session."
       operationId: revokeSession
       parameters:
       - in: path

@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
@@ -93,9 +94,14 @@ class RecentSignInByDefaultArchTest extends HephaestusArchitectureTest {
      * only fail at request time, on the very endpoint it is protecting.
      */
     @Test
-    void everyGatedMutationDeclaresAnAuthEventTypeToRecordTheRefusalOn() {
-        List<String> unrecordable = instanceAdminMutations()
-                .filter(m -> m.isAnnotatedWith(RequiresRecentSignIn.class))
+    void everyGatedEndpointDeclaresAnAuthEventTypeToRecordTheRefusalOn() {
+        List<String> unrecordable = classes.stream()
+                .filter(AuditByDefaultArchTest::isController)
+                .flatMap(c -> c.getMethods().stream())
+                .filter(m -> Optional.ofNullable(
+                                AnnotatedElementUtils.findMergedAnnotation(m.reflect(), RequiresRecentSignIn.class))
+                        .filter(a -> a.value() == RequiresRecentSignIn.When.EVERY_CALL)
+                        .isPresent())
                 .flatMap(m -> malformedReason(m).map(reason -> name(m) + ": " + reason).stream())
                 .sorted()
                 .toList();
@@ -107,7 +113,8 @@ class RecentSignInByDefaultArchTest extends HephaestusArchitectureTest {
     }
 
     private static Optional<String> malformedReason(JavaMethod method) {
-        Optional<Audited> audited = method.tryGetAnnotationOfType(Audited.class);
+        Optional<Audited> audited =
+                Optional.ofNullable(AnnotatedElementUtils.findMergedAnnotation(method.reflect(), Audited.class));
         if (audited.isEmpty()) {
             return Optional.of("no @Audited");
         }

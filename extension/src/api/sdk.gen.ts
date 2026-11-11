@@ -1456,6 +1456,9 @@ export const answerPublicActivityOnboarding = <ThrowOnError extends boolean = fa
 
 /**
  * Revoke all sessions except the current one
+ *
+ * Ending other sessions, individually or together, needs a recent sign-in (ASVS 5.0 V7.5.2).
+ * The account menu's sign-out remains available without a recent sign-in.
  */
 export const revokeOtherSessions = <ThrowOnError extends boolean = false>(options?: Options<RevokeOtherSessionsData, ThrowOnError>): RequestResult<RevokeOtherSessionsResponses, unknown, ThrowOnError> => (options?.client ?? client).delete<RevokeOtherSessionsResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -1475,7 +1478,7 @@ export const listSessions = <ThrowOnError extends boolean = false>(options?: Opt
 /**
  * Revoke a single session
  *
- * Any token of an installed-client session, even one it rotated away, ends that session.
+ * Requires a recent sign-in. Any token of an installed-client session, even one it rotated away, ends that session.
  */
 export const revokeSession = <ThrowOnError extends boolean = false>(options: Options<RevokeSessionData, ThrowOnError>): RequestResult<RevokeSessionResponses, unknown, ThrowOnError> => (options.client ?? client).delete<RevokeSessionResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
