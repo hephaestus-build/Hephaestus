@@ -13,7 +13,6 @@ import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/tes
 
 beforeAll(async () => {
 	await loadRouteCode("/w/acme/conversation", "/w/acme/teams");
-	await import("@/routes/-GlobalConversationPanel");
 }, ROUTE_RENDER_WAIT.timeout);
 
 it("keeps an existing conversation readable under No AI and restores its composer after opting in", async () => {

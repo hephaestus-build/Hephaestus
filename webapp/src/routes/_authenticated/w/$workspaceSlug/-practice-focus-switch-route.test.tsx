@@ -142,13 +142,15 @@ describe("going between the Practice profile and Practices across the workspace"
 		const router = await openWorkspaceGroup();
 		const origin = router.history.length;
 
-		await switchTo(TO_PROFILE, PROFILE, router);
-		expect(router.state.location.search).toMatchObject({ detail: GROUP });
-		await switchTo(TO_WORKSPACE, WORKSPACE_PAGE, router);
-		expect(router.state.location.search).toMatchObject({ detail: GROUP });
-		// One step for the first switch, none for every switch after it.
-		expect(router.history).toHaveLength(origin + 1);
-		expect(screen.getAllByRole("dialog")).toHaveLength(1);
+		for (let trip = 0; trip < 2; trip += 1) {
+			await switchTo(TO_PROFILE, PROFILE, router);
+			expect(router.state.location.search).toMatchObject({ detail: GROUP });
+			await switchTo(TO_WORKSPACE, WORKSPACE_PAGE, router);
+			expect(router.state.location.search).toMatchObject({ detail: GROUP });
+			// One step for the first switch, none for every switch after it.
+			expect(router.history).toHaveLength(origin + 1);
+			expect(screen.getAllByRole("dialog")).toHaveLength(1);
+		}
 
 		// Each page read its data once; coming back asks for nothing again.
 		expect(readsOf("/practices/workspace-overview")).toBe(1);
@@ -169,23 +171,25 @@ describe("going between the Practice profile and Practices across the workspace"
 		await screen.findByRole("button", { name: TO_OWN_GROUPS }, ROUTE_RENDER_WAIT);
 		const origin = router.history.length;
 
-		await userEvent.click(await screen.findByRole("button", { name: TO_OWN_GROUPS }));
-		await waitFor(() => {
-			expect(router.state.location.pathname).toBe(PROFILE);
-		}, ROUTE_RENDER_WAIT);
-		expect(router.state.location.search).toMatchObject({ detail: ALL_GROUPS });
-		await screen.findByRole("dialog", { name: "All practice groups" }, ROUTE_RENDER_WAIT);
+		for (let trip = 0; trip < 2; trip += 1) {
+			await userEvent.click(await screen.findByRole("button", { name: TO_OWN_GROUPS }));
+			await waitFor(() => {
+				expect(router.state.location.pathname).toBe(PROFILE);
+			}, ROUTE_RENDER_WAIT);
+			expect(router.state.location.search).toMatchObject({ detail: ALL_GROUPS });
+			await screen.findByRole("dialog", { name: "All practice groups" }, ROUTE_RENDER_WAIT);
 
-		await userEvent.click(
-			await screen.findByRole("button", { name: TO_ALL_GROUPS }, ROUTE_RENDER_WAIT),
-		);
-		await waitFor(() => {
-			expect(router.state.location.pathname).toBe(WORKSPACE_PAGE);
-		}, ROUTE_RENDER_WAIT);
-		expect(router.state.location.search.detail).toBeUndefined();
-		// One step for the first switch, none for every switch after it, and no level open.
-		expect(router.history).toHaveLength(origin + 1);
-		expect(screen.queryAllByRole("dialog")).toHaveLength(0);
+			await userEvent.click(
+				await screen.findByRole("button", { name: TO_ALL_GROUPS }, ROUTE_RENDER_WAIT),
+			);
+			await waitFor(() => {
+				expect(router.state.location.pathname).toBe(WORKSPACE_PAGE);
+			}, ROUTE_RENDER_WAIT);
+			expect(router.state.location.search.detail).toBeUndefined();
+			// One step for the first switch, none for every switch after it, and no level open.
+			expect(router.history).toHaveLength(origin + 1);
+			expect(screen.queryAllByRole("dialog")).toHaveLength(0);
+		}
 
 		router.history.back();
 		await waitFor(() => {

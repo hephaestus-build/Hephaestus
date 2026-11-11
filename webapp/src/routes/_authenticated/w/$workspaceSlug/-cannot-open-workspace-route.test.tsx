@@ -9,7 +9,6 @@ import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/tes
 
 beforeAll(async () => {
 	await loadRouteCode("/w/acme/activity", "/");
-	await import("@/routes/-GlobalConversationPanel");
 }, ROUTE_RENDER_WAIT.timeout);
 
 const NOTICE = "You cannot open the workspace “foreign”.";

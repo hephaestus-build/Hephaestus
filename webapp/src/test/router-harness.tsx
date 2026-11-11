@@ -94,6 +94,8 @@ export function testQueryClient(): QueryClient {
  * rendering behavior once the matched code is available.
  */
 export async function loadRouteCode(...paths: string[]): Promise<void> {
+	// The root layout mounts this React.lazy module outside the router's split route chunks.
+	await import("@/routes/-GlobalConversationPanel");
 	const router = createRouter({
 		...ROUTER_SEARCH,
 		routeTree,

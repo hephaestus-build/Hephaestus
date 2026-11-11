@@ -21,7 +21,6 @@ beforeAll(async () => {
 		"/w/acme/conversation",
 		"/w/acme/feedback/433",
 	);
-	await import("@/routes/-GlobalConversationPanel");
 }, ROUTE_RENDER_WAIT.timeout);
 
 function mockConversationPanel(preference: WorkspaceOnboarding) {
