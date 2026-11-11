@@ -151,7 +151,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                         ProxyAttempt.Caller.REVIEW,
                         job.getId(),
                         job.getWorkspaceId(),
-                        job.getAttempt(),
+                        run.fence().epoch(),
                         job.getRunId(),
                         measurement.workDeadline())));
     }
