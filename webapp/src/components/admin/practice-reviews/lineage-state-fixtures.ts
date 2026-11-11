@@ -614,7 +614,7 @@ export const richReviewFixture = (() => {
 			sends: [],
 			decisions: [],
 			checks: [],
-			response: null,
+			answer: null,
 			copyCounts: {
 				planned: 0,
 				writeStarted: 0,

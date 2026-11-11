@@ -1471,6 +1471,18 @@ export type FeedbackAccountRef = {
     id: number;
 };
 
+/**
+ * A developer's answer to feedback: the resolution, and the explanation only for a disagreement
+ */
+export type FeedbackAnswer = {
+    /**
+     * Only for a disagreement
+     */
+    comment: string | null;
+    createdAt: string;
+    resolution: 'ADDRESSED' | 'DISAGREE' | 'NOT_APPLICABLE';
+};
+
 export type FeedbackBasis = {
     ordinal: number;
     problemId: string | null;
@@ -4950,6 +4962,10 @@ export type ReviewFeedbackCounts = {
 };
 
 export type ReviewFeedbackDetail = {
+    /**
+     * The developer's current answer; absent when there is none, or only a rating
+     */
+    answer: FeedbackAnswer | null;
     basis: Array<FeedbackBasis>;
     body: string | null;
     bodyPreview: string | null;
@@ -4968,7 +4984,6 @@ export type ReviewFeedbackDetail = {
     item: ItemRef | null;
     location: 'GITHUB' | 'GITLAB' | 'OTHER_WORK' | 'HEPH' | 'SLACK' | 'NEXT_CONVERSATION' | 'PRACTICE_PAGES';
     replacesId: string | null;
-    response: FeedbackResponse | null;
     resultCount: number;
     reviewId: string;
     sends: Array<FeedbackSend>;

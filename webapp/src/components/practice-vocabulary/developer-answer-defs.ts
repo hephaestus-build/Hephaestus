@@ -1,9 +1,9 @@
 import { MessageSquareIcon, MessageSquareWarningIcon } from "lucide-react";
 
-import type { FeedbackResponse } from "@/api/types.gen";
+import type { FeedbackAnswer } from "@/api/types.gen";
 import type { StatusDefs } from "@/components/common/status-def";
 
-// Admins may read a disagreement reason; usefulness and private notes remain the developer's.
+// Admins read the answer and a disagreement's explanation; the server never sends them the rating or other notes.
 export type DeveloperAnswer = "ANSWERED" | "DISAGREED";
 
 export const DEVELOPER_ANSWER_DEFS: StatusDefs<DeveloperAnswer> = {
@@ -22,12 +22,9 @@ export const DEVELOPER_ANSWER_DEFS: StatusDefs<DeveloperAnswer> = {
 	},
 };
 
-export function developerAnswer(response: FeedbackResponse | null): DeveloperAnswer | undefined {
-	if (response === null || response.createdAt === null) {
+export function developerAnswer(answer: FeedbackAnswer | null): DeveloperAnswer | undefined {
+	if (answer === null) {
 		return undefined;
 	}
-	if (response.resolution === "DISAGREE") {
-		return "DISAGREED";
-	}
-	return response.resolution === null && response.usefulness === null ? undefined : "ANSWERED";
+	return answer.resolution === "DISAGREE" ? "DISAGREED" : "ANSWERED";
 }

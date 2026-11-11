@@ -5,9 +5,9 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.dto.FeedbackDecisionDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackAnswerDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackCheckDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackCopyDTO;
-import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackSendDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackDetailDTO;
@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -106,12 +107,21 @@ public class FeedbackReadService {
                 actualCopies,
                 activeSend,
                 decisionHistory(workspaceId, id),
-                responses
-                        .findCurrent(workspaceId, id)
-                        .map(FeedbackResponseDTO::from)
-                        .orElse(null),
+                answer(workspaceId, id),
                 checks(row),
                 readable ? digests.current(workspaceId, id) : null);
+    }
+
+    private @Nullable FeedbackAnswerDTO answer(long workspaceId, UUID id) {
+        var answeredAt = responses.responseTimes(workspaceId, List.of(id)).stream()
+                .map(FeedbackResponseRepository.ResponseTime::answeredAt)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+        return responses
+                .findCurrent(workspaceId, id)
+                .map(response -> FeedbackAnswerDTO.of(response, answeredAt))
+                .orElse(null);
     }
 
     public List<FeedbackDecisionDTO> decisionHistory(long workspaceId, UUID id) {

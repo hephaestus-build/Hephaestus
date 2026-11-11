@@ -4173,6 +4173,37 @@ export const FeedbackAccountRefSchema = {
     ]
 } as const;
 
+export const FeedbackAnswerSchema = {
+    type: 'object',
+    description: 'A developer\'s answer to feedback: the resolution, and the explanation only for a disagreement',
+    properties: {
+        comment: {
+            type: [
+                'string',
+                'null'
+            ],
+            description: 'Only for a disagreement'
+        },
+        createdAt: {
+            type: 'string',
+            format: 'date-time'
+        },
+        resolution: {
+            type: 'string',
+            enum: [
+                'ADDRESSED',
+                'DISAGREE',
+                'NOT_APPLICABLE'
+            ]
+        }
+    },
+    required: [
+        'comment',
+        'createdAt',
+        'resolution'
+    ]
+} as const;
+
 export const FeedbackBasisSchema = {
     type: 'object',
     properties: {
@@ -14551,6 +14582,18 @@ export const ReviewFeedbackCountsSchema = {
 export const ReviewFeedbackDetailSchema = {
     type: 'object',
     properties: {
+        answer: {
+            anyOf: [
+                {
+                    $ref: '#/components/schemas/FeedbackAnswer',
+                    description: 'The developer\'s current answer; absent when there is none, or only a rating'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            description: 'The developer\'s current answer; absent when there is none, or only a rating'
+        },
         basis: {
             type: 'array',
             items: {
@@ -14661,16 +14704,6 @@ export const ReviewFeedbackDetailSchema = {
             ],
             format: 'uuid'
         },
-        response: {
-            anyOf: [
-                {
-                    $ref: '#/components/schemas/FeedbackResponse'
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
         resultCount: {
             type: 'integer',
             format: 'int32'
@@ -14757,6 +14790,7 @@ export const ReviewFeedbackDetailSchema = {
         }
     },
     required: [
+        'answer',
         'basis',
         'body',
         'bodyPreview',
@@ -14775,7 +14809,6 @@ export const ReviewFeedbackDetailSchema = {
         'item',
         'location',
         'replacesId',
-        'response',
         'resultCount',
         'reviewId',
         'sends',

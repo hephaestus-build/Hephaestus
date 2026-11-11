@@ -1129,6 +1129,19 @@ export const zFeedbackAccountRef = z.object({
     id: z.int()
 });
 
+/**
+ * A developer's answer to feedback: the resolution, and the explanation only for a disagreement
+ */
+export const zFeedbackAnswer = z.object({
+    comment: z.string().nullable(),
+    createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+    resolution: z.enum([
+        'ADDRESSED',
+        'DISAGREE',
+        'NOT_APPLICABLE'
+    ])
+});
+
 export const zFeedbackCheckFacts = z.object({
     admittedRolloutRevision: z.string(),
     approvalCurrent: z.boolean(),
@@ -3797,6 +3810,7 @@ export const zReviewFeedbackCounts = z.object({
 });
 
 export const zReviewFeedbackDetail = z.object({
+    answer: zFeedbackAnswer.nullable(),
     basis: z.array(zFeedbackBasis),
     body: z.string().nullable(),
     bodyPreview: z.string().nullable(),
@@ -3827,7 +3841,6 @@ export const zReviewFeedbackDetail = z.object({
         'PRACTICE_PAGES'
     ]),
     replacesId: z.uuid().nullable(),
-    response: zFeedbackResponse.nullable(),
     resultCount: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     reviewId: z.uuid(),
     sends: z.array(zFeedbackSend),

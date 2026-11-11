@@ -9,7 +9,7 @@ import type {
 	FeedbackCopyCounts,
 	FeedbackDecision,
 	FeedbackDisagreement,
-	FeedbackResponse,
+	FeedbackAnswer,
 	FeedbackSend,
 	ItemEvent,
 	ItemFacts,
@@ -482,9 +482,9 @@ interface DecisionSpec {
 	note?: string;
 }
 
+/** The developer's answer as an admin reads it: no rating, and an explanation only for a disagreement. */
 interface ResponseSpec {
-	resolution: FeedbackResponse["resolution"];
-	usefulness?: FeedbackResponse["usefulness"];
+	resolution: FeedbackAnswer["resolution"];
 	comment?: string;
 	at: string;
 }
@@ -947,7 +947,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 				deliveredAt: "2026-07-28T13:43:00Z",
 				from: ["55555555-5555-5555-5555-555555555555"],
 				decisions: [{ action: "APPROVE", by: reviewAccounts.grace, at: "2026-07-28T13:42:40Z" }],
-				response: { resolution: null, usefulness: "HELPFUL", at: "2026-07-28T15:20:00Z" },
+				response: { resolution: "ADDRESSED", at: "2026-07-28T15:20:00Z" },
 			},
 			LONG_FEEDBACK,
 			{
@@ -2143,13 +2143,12 @@ function checksOf(spec: FeedbackSpec): FeedbackCheck[] {
 	return checks;
 }
 
-function responseOf(spec: FeedbackSpec): FeedbackResponse | null {
+function answerOf(spec: FeedbackSpec): FeedbackAnswer | null {
 	return spec.response === undefined
 		? null
 		: {
 				resolution: spec.response.resolution,
-				usefulness: spec.response.usefulness ?? null,
-				comment: spec.response.comment ?? null,
+				comment: spec.response.resolution === "DISAGREE" ? (spec.response.comment ?? null) : null,
 				createdAt: new Date(spec.response.at),
 			};
 }
@@ -2218,7 +2217,7 @@ export function feedbackDetail(
 		copies,
 		sends: sendsOf(item, copies),
 		decisions: decisionsOf(item),
-		response: responseOf(item),
+		answer: answerOf(item),
 		checks: checksOf(item),
 		contentDigest: contentDigestOf(item),
 		...(typeof input === "string" ? {} : input),

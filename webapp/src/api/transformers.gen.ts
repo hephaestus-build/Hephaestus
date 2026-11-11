@@ -1783,6 +1783,11 @@ export const listReviewFeedbackResponseTransformer = async (data: any): Promise<
     return data;
 };
 
+const feedbackAnswerSchemaResponseTransformer = (data: any) => {
+    data.createdAt = new Date(data.createdAt);
+    return data;
+};
+
 const reviewBoundResultSchemaResponseTransformer = (data: any) => {
     data.item = itemRefSchemaResponseTransformer(data.item);
     data.recordedAt = new Date(data.recordedAt);
@@ -1822,6 +1827,9 @@ const feedbackSendSchemaResponseTransformer = (data: any) => {
 };
 
 const reviewFeedbackDetailSchemaResponseTransformer = (data: any) => {
+    if (data.answer) {
+        data.answer = feedbackAnswerSchemaResponseTransformer(data.answer);
+    }
     data.basis = data.basis.map((item: any) => feedbackBasisSchemaResponseTransformer(item));
     data.checks = data.checks.map((item: any) => feedbackCheckSchemaResponseTransformer(item));
     data.copies = data.copies.map((item: any) => feedbackCopySchemaResponseTransformer(item));
@@ -1835,9 +1843,6 @@ const reviewFeedbackDetailSchemaResponseTransformer = (data: any) => {
     }
     if (data.item) {
         data.item = itemRefSchemaResponseTransformer(data.item);
-    }
-    if (data.response) {
-        data.response = feedbackResponseSchemaResponseTransformer(data.response);
     }
     data.sends = data.sends.map((item: any) => feedbackSendSchemaResponseTransformer(item));
     return data;

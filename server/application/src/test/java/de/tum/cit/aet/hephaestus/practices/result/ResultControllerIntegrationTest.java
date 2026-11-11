@@ -153,6 +153,17 @@ class ResultControllerIntegrationTest extends BaseIntegrationTest {
         assertThat(presentation.disagreements(result))
                 .singleElement()
                 .satisfies(row -> assertThat(row.comment()).isEqualTo("This is already covered."));
+        // A new private rating on the same disagreement does not move the time an admin reads.
+        jdbc.sql("INSERT INTO feedback_response(id,workspace_id,feedback_id,resolution,usefulness,comment,created_at)"
+                        + " VALUES(:id,:ws,:feedback,'DISAGREE','UNHELPFUL','This is already covered.',:at)")
+                .param("id", UUID.randomUUID())
+                .param("ws", ws)
+                .param("feedback", feedback)
+                .param("at", Timestamp.from(at.plusMillis(500)))
+                .update();
+        assertThat(presentation.disagreements(result))
+                .singleElement()
+                .satisfies(row -> assertThat(row.respondedAt()).isEqualTo(at));
         // The developer's own result leaves a withdrawn piece out; the admin's bound read above keeps it.
         get("/practices/results/" + result.getId())
                 .expectStatus()
