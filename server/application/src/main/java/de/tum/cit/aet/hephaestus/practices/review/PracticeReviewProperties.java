@@ -15,8 +15,8 @@ import org.springframework.validation.annotation.Validated;
  *
  * <p>Binds to the {@code hephaestus.practice-review} prefix in application configuration.
  *
- * @param deliverToMerged     Posts feedback on pull requests that are already merged. Other destinations do not
- *                            change.
+ * @param deliverToMerged     Posts feedback on work that is already merged or closed. Without it, that feedback stops
+ *                            as ITEM_MERGED or ITEM_CLOSED. The practice page and the conversation do not change.
  * @param cooldownMinutes     minimum minutes between reviews for the same PR. 0 disables cooldown.
  * @param maxRequestsPerRequesterPerHour
  *                            manual review requests per person, workspace and hour. 0 disables the limit.

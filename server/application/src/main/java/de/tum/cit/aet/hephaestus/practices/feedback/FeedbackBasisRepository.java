@@ -142,7 +142,8 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
         SELECT w.status AS workspaceStatus,w.practices_enabled AS enabled,
           w.practice_delivery_status AS deliveryStatus,w.practice_rollout_revision AS rolloutRevision,
           w.review_scope_people AS peopleScope,m.review_selected AS selected,m.left_at AS leftAt,
-          a.status AS accountStatus,a.ai_choice AS aiChoice,a.feedback_delivery_enabled AS deliveryEnabled
+          a.status AS accountStatus,a.ai_choice AS aiChoice,a.feedback_delivery_enabled AS deliveryEnabled,
+          w.practice_deliver_to_merged AS deliverToMerged
         FROM workspace w JOIN membership m ON m.workspace_id=w.id JOIN account a ON a.id=m.account_id
         WHERE w.id=:workspaceId AND a.id=:developerId
         """, nativeQuery = true)
@@ -170,6 +171,10 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
         AiChoice getAiChoice();
 
         boolean getDeliveryEnabled();
+
+        /** The workspace's "Post feedback after merge" choice; null inherits the instance default. */
+        @Nullable
+        Boolean getDeliverToMerged();
     }
 
     @Query(value = """

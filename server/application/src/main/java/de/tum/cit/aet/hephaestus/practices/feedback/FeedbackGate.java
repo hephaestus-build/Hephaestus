@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
@@ -75,6 +76,7 @@ public class FeedbackGate {
     private final Clock clock;
     private final FeedbackContentDigest digests;
     private final FeedbackRepairApproval repairApproval;
+    private final PracticeReviewProperties reviewProperties;
 
     @Transactional(readOnly = true)
     public FeedbackCheck evaluate(Feedback feedback, FeedbackCheckStage stage, boolean checkApproval) {
@@ -230,6 +232,12 @@ public class FeedbackGate {
                 current,
                 approvalCurrent,
                 hasWriteFence);
+        var workState = workStateRefusal(
+                feedback,
+                support,
+                itemSnapshot,
+                reads,
+                policy.map(this::deliversAfterMerge).orElse(false));
         FeedbackStopReason refusal = null;
         if (review.isEmpty() || review.get().getStatus() == ReviewStatus.CANCELLED)
             refusal = FeedbackStopReason.REVIEW_CANCELLED;
@@ -254,8 +262,7 @@ public class FeedbackGate {
                                     !reads.current(result) || sourceStates.get(result.getId()) == Currentness.STALE)
                     ? FeedbackStopReason.REVIEWED_VERSION_CHANGED
                     : FeedbackStopReason.UNCORROBORATED;
-        else if (!eligibleState(feedback, support, itemSnapshot, reads))
-            refusal = FeedbackStopReason.ITEM_STATE_INELIGIBLE;
+        else if (workState != null) refusal = workState;
         else if (!authorized) refusal = FeedbackStopReason.EVIDENCE_NOT_PERMITTED;
         else if (!approvalCurrent) refusal = FeedbackStopReason.APPROVAL_STALE;
         else if (policy.get().getDeliveryStatus() == PracticeDeliveryStatus.PAUSED)
@@ -318,10 +325,34 @@ public class FeedbackGate {
         return matching.size() == 1 ? matching.getFirst().current(ref) : Optional.empty();
     }
 
-    private static boolean eligibleState(
-            Feedback feedback, List<Result> support, Optional<ItemSnapshot> snapshot, GateReads reads) {
-        if (feedback.getDestination() != FeedbackDestination.ON_WORK || feedback.getItemId() == null) return true;
-        if (snapshot.isEmpty()) return false;
+    private boolean deliversAfterMerge(FeedbackBasisRepository.PolicyRow policy) {
+        var workspaceChoice = policy.getDeliverToMerged();
+        return workspaceChoice != null ? workspaceChoice : reviewProperties.deliverToMerged();
+    }
+
+    /**
+     * Why the work, as it is now, takes no feedback on it, or null when it does. Only feedback on the work is held:
+     * the practice page and the conversation reach the developer alone, so they stay open on merged and draft work.
+     * Merged or closed work takes none unless the workspace posts after merge, because a note there can no longer
+     * change it. A draft takes none: review bots wait for the work to be marked ready, and the ready event starts a
+     * review of every practice again.
+     */
+    private static @Nullable FeedbackStopReason workStateRefusal(
+            Feedback feedback,
+            List<Result> support,
+            Optional<ItemSnapshot> snapshot,
+            GateReads reads,
+            boolean deliversAfterMerge) {
+        if (feedback.getDestination() != FeedbackDestination.ON_WORK || feedback.getItemId() == null) return null;
+        if (snapshot.isEmpty()) return FeedbackStopReason.ITEM_STATE_INELIGIBLE;
+        var state = snapshot.get().state();
+        if (!deliversAfterMerge && "MERGED".equals(state.get("state"))) return FeedbackStopReason.ITEM_MERGED;
+        if (!deliversAfterMerge && "CLOSED".equals(state.get("state"))) return FeedbackStopReason.ITEM_CLOSED;
+        if ("DRAFT".equals(state.get("draftStatus"))) return FeedbackStopReason.ITEM_STATE_INELIGIBLE;
+        return eligibleState(support, snapshot.get(), reads) ? null : FeedbackStopReason.ITEM_STATE_INELIGIBLE;
+    }
+
+    private static boolean eligibleState(List<Result> support, ItemSnapshot snapshot, GateReads reads) {
         for (var result : support) {
             if (result.getPracticeVersionId() == null) return false;
             var version = reads.version(result.getPracticeVersionId());
@@ -330,7 +361,7 @@ public class FeedbackGate {
             if (!required.isObject()) return false;
             for (String key : required.propertyNames()) {
                 var allowed = required.path(key);
-                String value = snapshot.get().state().get(key);
+                String value = snapshot.state().get(key);
                 if (value == null || !allowed.isArray()) return false;
                 boolean matches = false;
                 for (var candidate : allowed)

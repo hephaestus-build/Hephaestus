@@ -52,6 +52,14 @@ Feedback mode controls delivery independently:
 | Approve first | Eligible feedback on the work waits for admin approval. Private destinations keep their own checks. |
 | Automatic     | Eligible feedback on the work can proceed after all normal checks.                                  |
 
+Feedback on the work also depends on the state of the work when it is sent:
+
+- **Draft:** no feedback on the work. The practice page and the conversation can still get theirs. Marking the work ready starts a review of each practice that reviews on **Ready**, and that review can comment.
+- **Merged or closed:** no feedback on the work, unless **Post feedback after merge** is on. It is off by default. The practice page and the conversation can still get theirs. With the setting on, feedback on the work still follows each practice's own state conditions.
+
+Withheld feedback appears under **The work moved on**, with a sentence that says why.
+GitHub Copilot code review, CodeRabbit and GitLab Duo Code Review also wait until a draft is ready by default.
+
 A practice can inherit from its group and workspace.
 Reset an override to inherit again.
 A settings change never approves an old proposal implicitly.
