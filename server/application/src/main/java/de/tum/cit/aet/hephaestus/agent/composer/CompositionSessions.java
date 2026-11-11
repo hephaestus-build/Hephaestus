@@ -411,6 +411,11 @@ public class CompositionSessions {
                 publicationContext);
     }
 
+    /** Whether this is the review's last attempt: a passing cause then withholds instead of handing the run on. */
+    public boolean lastAttempt(ReviewJob job) {
+        return job.spentAttempts() >= agentCapacity.reviewRetries();
+    }
+
     /** Records why the review on the work stopped, so that its readback correction is not pending any more. */
     public void stop(ReviewJob job, String reason) {
         repairs.stop(job.getWorkspaceId(), job.getReviewId(), reason);
@@ -783,7 +788,8 @@ public class CompositionSessions {
             Map<FeedbackDestination, CompositionStop> stops) {
         var plan = plan(job, identity);
         if (plan == null) return null;
-        boolean last = job.spentAttempts() >= agentCapacity.reviewRetries();
+        boolean last = lastAttempt(job);
+        var confirmed = confirmed(job, plan, stops);
         CompositionStop handedOn = null;
         for (var open : open(job, plan)) {
             var stop = open.routingUnavailable()
@@ -791,7 +797,7 @@ public class CompositionSessions {
                     : stop(
                             identity,
                             open.destination(),
-                            stops.getOrDefault(open.destination(), CompositionStop.NO_DECISION));
+                            confirmed.getOrDefault(open.destination(), CompositionStop.NO_DECISION));
             if (stop.cause().passing() && !last) {
                 if (handedOn == null) handedOn = stop.cause();
                 continue;
@@ -802,6 +808,31 @@ public class CompositionSessions {
         }
         if (handedOn != null) count(handedOn, "handed_on");
         return handedOn;
+    }
+
+    /**
+     * The stops as the server confirms them. A loop reports that the inputs are gone only because the server said so; a
+     * report the retained inputs contradict counts as a failure of the loop, never as an erasure.
+     */
+    private Map<FeedbackDestination, CompositionStop> confirmed(
+            ReviewJob job, Plan plan, Map<FeedbackDestination, CompositionStop> stops) {
+        if (stops.values().stream()
+                .noneMatch(stop -> stop == CompositionStop.INPUTS_GONE || stop == CompositionStop.INPUTS_ERASED))
+            return stops;
+        CompositionStop actual;
+        try {
+            basis(job, plan);
+            actual = CompositionStop.UNEXPECTED;
+        } catch (ReviewCompositionContinuation.InputsUnavailableException unavailable) {
+            actual = unavailable.erased() ? CompositionStop.INPUTS_ERASED : CompositionStop.INPUTS_GONE;
+        }
+        var confirmed = new LinkedHashMap<FeedbackDestination, CompositionStop>();
+        for (var entry : stops.entrySet()) {
+            boolean inputs = entry.getValue() == CompositionStop.INPUTS_GONE
+                    || entry.getValue() == CompositionStop.INPUTS_ERASED;
+            confirmed.put(entry.getKey(), inputs ? actual : entry.getValue());
+        }
+        return confirmed;
     }
 
     /** Closes every open destination with one cause, without composing. */

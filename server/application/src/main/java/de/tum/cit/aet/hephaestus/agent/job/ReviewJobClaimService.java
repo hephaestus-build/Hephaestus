@@ -118,6 +118,11 @@ public class ReviewJobClaimService {
         LOCKED,
         QUOTA_FULL,
         BUDGET_HELD,
+        /**
+         * An admitted review that a measuring attempt lost after its admission left on its review run: the claim handed
+         * it on to the run that composes it, and nothing runs here.
+         */
+        HANDED_ON,
     }
 
     /**
@@ -181,6 +186,14 @@ public class ReviewJobClaimService {
                     // A hold runs nothing, so it takes no attempt: the claim rolls back and the hold is written apart.
                     status.setRollbackOnly();
                     heldForBudget.set(new AgentRunRef(lease.runId(), lease.workspaceId()));
+                }
+                case ClaimResult started
+                when ResultAdmissionService.isContinuation(started.job()) -> {
+                    // Only the review's composition run composes, in the review's sandbox, and its own claim decides
+                    // whether the attempt composes or withholds.
+                    if (reviewRuns.continueToCompose(job.getId(), fence).isEmpty())
+                        throw new IllegalStateException("The claimed attempt lost its job under its lock");
+                    return ClaimOutcome.HANDED_ON;
                 }
                 default -> {}
             }
@@ -336,7 +349,8 @@ public class ReviewJobClaimService {
             jobRepository.save(job);
             return new TerminalClaim(job, ReviewJobStatus.FAILED);
         }
-        if (job.spentAttempts() > maxRetries && retained)
+        // Past the retry limit, a composition and a review with staged results withhold what is open, without a model.
+        if (job.spentAttempts() > maxRetries && (composing || retained))
             return claimToWithhold(job, fence, CompositionStop.RETRIES_EXHAUSTED);
 
         LlmBudgetBlockReason blockReason =

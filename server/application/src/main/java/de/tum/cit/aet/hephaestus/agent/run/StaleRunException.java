@@ -14,6 +14,12 @@ public class StaleRunException extends RuntimeException {
         this.fence = fence;
     }
 
+    /** @param cause the stale write that found the claim gone */
+    public StaleRunException(AgentRunFence fence, Throwable cause) {
+        super("The run is no longer held under this claim", cause);
+        this.fence = fence;
+    }
+
     public AgentRunFence fence() {
         return fence;
     }

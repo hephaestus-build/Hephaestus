@@ -2,9 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
-import de.tum.cit.aet.hephaestus.agent.composer.CompositionHandedOnException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
-import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
@@ -235,8 +233,6 @@ public class ReviewJobExecutor {
     private final Phaser inFlight = new Phaser(1); // 1 = the executor itself; deregistered on stop
     // The attempt and lease each locally running job runs, so a later attempt of the same job is never mistaken for it.
     private final Map<UUID, LocalAttempt> localRunningJobs = new ConcurrentHashMap<>();
-    // The locally running jobs whose sandbox has ended, or that never start one: they compose and hold no sandbox slot.
-    private final Set<UUID> composingJobs = ConcurrentHashMap.newKeySet();
 
     /**
      * Claimed jobs that still prepare their sandbox, which the runtime's room does not count yet. A job leaves at its
@@ -249,13 +245,6 @@ public class ReviewJobExecutor {
     private final int sandboxSlots;
 
     private final Optional<WorkerCapacityState> capacityState;
-
-    private @Nullable WorkerFeedbackComposer feedbackComposer;
-
-    @Autowired(required = false)
-    void setFeedbackComposer(WorkerFeedbackComposer feedbackComposer) {
-        this.feedbackComposer = feedbackComposer;
-    }
 
     @Autowired
     public ReviewJobExecutor(
@@ -527,9 +516,8 @@ public class ReviewJobExecutor {
     /** Stops the sandbox of each attempt that lost its lease and still runs here; see {@link #renewLeases()}. */
     public void stopEndedAttempts(Map<UUID, LocalAttempt> ended) {
         ended.forEach((jobId, local) -> {
-            // A later attempt of the job that this worker claimed since the renewal is not the one that ended, and an
-            // attempt that composes has no sandbox left: its own end writes the row.
-            if (local.equals(localRunningJobs.get(jobId)) && !composingJobs.contains(jobId))
+            // A later attempt of the job that this worker claimed since the renewal is not the one that ended.
+            if (local.equals(localRunningJobs.get(jobId)))
                 cancelLocalJob(jobId, "its attempt no longer holds its lease");
         });
     }
@@ -654,22 +642,16 @@ public class ReviewJobExecutor {
         return anyStarted;
     }
 
-    // The sandbox slots bound the jobs that hold a sandbox; a job that composes holds none. Every local job composes
-    // in the end, so bounding all of them bounds the compositions.
+    // The sandbox slots bound the jobs that run here: each one measures in a sandbox, or hands its review on at once.
     int computeCapacity() {
         if (!sandboxManager.ready()) {
             return 0;
         }
-        long holding = localRunningJobs.keySet().stream()
-                .filter(jobId -> !composingJobs.contains(jobId))
-                .count();
-        long free = Math.min(
-                sandboxSlots - holding, agentProperties.maxConcurrentCompositions() - (long) localRunningJobs.size());
+        long free = sandboxSlots - (long) localRunningJobs.size();
         if (free <= 0) {
             return 0;
         }
-        // Review quota is checked at claim, so compositions remain eligible when that quota is full.
-        return (int) Math.min(Math.max(0, free), agentProperties.claimBatchSize());
+        return (int) Math.min(free, agentProperties.claimBatchSize());
     }
 
     // Jitter prevents replicas from polling together and amplifying claim contention. A queued run wakes it early.
@@ -852,8 +834,10 @@ public class ReviewJobExecutor {
                     ReviewJobTelemetry.ResultOutcome.STARTED,
                     queueDuration);
 
-            // An admitted review measures nothing again: its attempt composes what an earlier attempt left open.
-            // The row must still carry this attempt's lease: a seal or interruption acts for whoever holds it.
+            // A review whose staged practices this attempt seals measures nothing again, and an admitted seal hands the
+            // review on to the run that composes it, in the review's sandbox. A claim never starts an admitted review:
+            // it hands it on. The row must still carry this attempt's lease: a seal or interruption acts for whoever
+            // holds it.
             ReviewJob current;
             try {
                 current = ownRow(jobId);
@@ -872,18 +856,25 @@ public class ReviewJobExecutor {
                                 : claim.withholdOnly() == CompositionStop.MODEL_UNAVAILABLE
                                         ? ReviewStopReason.MODEL_UNAVAILABLE
                                         : ReviewStopReason.EXECUTION_INCOMPLETE);
-            if (sealOnly || ResultAdmissionService.isContinuation(current) || handler.completeStaged(current)) {
+            if (sealOnly || handler.completeStaged(current)) {
+                boolean admitted;
+                try {
+                    admitted = ResultAdmissionService.isAdmitted(ownRow(jobId));
+                } catch (ResultAdmissionService.StaleAttemptException lost) {
+                    metricOutcome = "OWNERSHIP_LOST";
+                    return;
+                }
+                if (admitted) {
+                    metricOutcome = handOnToCompose(jobId, current.getAttempt(), null) ? "HANDED_ON" : "OWNERSHIP_LOST";
+                    return;
+                }
+                // A seal that admitted nothing leaves no feedback to compose: the attempt ends here.
                 preparationStage.set(PreparationFailure.Stage.EXECUTION_FENCE);
                 if (!markExecutionStarted(jobId, current.getAttempt(), claim)) {
                     metricOutcome = "OWNERSHIP_LOST";
                     return;
                 }
                 sandboxExecutionStarted = true;
-                if (!composeFeedback(
-                        jobId, claim.job().getAttempt(), claim.snapshot(), true, null, claim.withholdOnly())) {
-                    metricOutcome = "REQUEUED_OR_OWNERSHIP_LOST";
-                    return;
-                }
                 recordedTerminal = persistComposedTerminal(jobId, current.getAttempt());
                 metricOutcome = recordedTerminal == null ? "OWNERSHIP_LOST" : recordedTerminal.name();
                 return;
@@ -952,7 +943,7 @@ public class ReviewJobExecutor {
             try {
                 recordAttemptOutcome(job, claim.itemKind(), metricOutcome, recordedTerminal, startTime, stagedInputs);
             } finally {
-                if (!composingJobs.remove(jobId)) releaseCapacity();
+                releaseCapacity();
                 localRunningJobs.computeIfPresent(
                         jobId, (id, local) -> local.fence().equals(claim.fence()) ? null : local);
                 preparingJobs.remove(jobId);
@@ -1080,14 +1071,18 @@ public class ReviewJobExecutor {
                     job.getAttempt() + 1);
             return null;
         }
-        // The sandbox has ended; whatever it admitted is composed here, before the attempt ends.
-        if (!composeFeedback(
-                jobId,
-                job.getAttempt(),
-                ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper),
-                false,
-                result.outputFiles().get(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE),
-                null)) return null;
+        // The sandbox has ended. A review that admitted results keeps what this attempt measured and is handed on to
+        // the run that composes its feedback in the review's sandbox.
+        ReviewJob measured;
+        try {
+            measured = ownRow(jobId);
+        } catch (ResultAdmissionService.StaleAttemptException lost) {
+            return null;
+        }
+        if (ResultAdmissionService.isAdmitted(measured)) {
+            handOnToCompose(jobId, job.getAttempt(), new Measured(agentResult, result));
+            return null;
+        }
 
         ReviewJobStatus terminalStatus = persistTerminalState(jobId, job.getAttempt(), agentResult, result);
         if (terminalStatus != null) forgetCompositionInputs(job);
@@ -1099,88 +1094,73 @@ public class ReviewJobExecutor {
         terminal.forgetCompositionInputs(job);
     }
 
+    /** What a measuring attempt's sandbox reported, which the attempt keeps when it hands its review on. */
+    private record Measured(AgentResult agentResult, SandboxResult sandboxResult) {}
+
     /**
-     * Composes the feedback of the admitted review this worker runs, while the attempt still owns it, after it frees
-     * its sandbox slot for another claim. The composer withholds what it cannot finish. A passing cause, or a failure
-     * that leaves it unable to record its withholdings, hands the attempt on with its inputs kept, so the next attempt
-     * composes what is still open.
+     * Hands the admitted review of the attempt that runs here on to the run that composes its feedback in the review's
+     * sandbox ({@link ReviewRunKind#continueToCompose}). An attempt that measured keeps its output, exit code, usage
+     * and practice-script runs first, in the same transaction, because no later attempt reports them again.
      *
-     * @param scriptReport the practice-script report of the sandbox that measured, recorded if the attempt is handed on,
-     *     because no later attempt reports those runs again
-     * @param withholdOnly the cause a claim check met: the attempt composes nothing and withholds what is open with it
-     * @return false when this worker no longer ends the attempt: it was lost or handed on
+     * @return false when the attempt no longer holds its job
      */
-    private boolean composeFeedback(
-            UUID jobId,
-            int attempt,
-            ConfigSnapshot snapshot,
-            boolean resumed,
-            byte @Nullable [] scriptReport,
-            @Nullable CompositionStop withholdOnly) {
-        if (composingJobs.add(jobId)) releaseCapacity();
-        WorkerFeedbackComposer composer = feedbackComposer;
-        LocalAttempt local = localRunningJobs.get(jobId);
-        // A thread of an attempt that a later claim of this worker replaced composes nothing for that claim.
-        if (composer == null || local == null || local.attempt() != attempt) return true;
-        UUID lease = local.fence().runId();
-        ReviewJob current = jobRepository.findById(jobId).orElse(null);
-        if (current == null
-                || !ReviewRunKind.holds(current, local.fence())
-                || !ResultAdmissionService.isAdmitted(current)) return true;
-        Instant notAfter = local.renewUntil();
-        var composition = jobTelemetry.stage(ReviewStageTelemetry.Stage.COMPOSITION);
+    private boolean handOnToCompose(UUID jobId, int attempt, @Nullable Measured measured) {
         try {
-            if (withholdOnly != null) composer.withholdResumed(current, lease, withholdOnly);
-            else if (resumed) composer.composeResumed(current, lease, notAfter);
-            else composer.composeAfterMeasurement(current, lease, notAfter);
-        } catch (ResultAdmissionService.StaleAttemptException lost) {
-            composition.end(ReviewStageTelemetry.Outcome.FAILED);
-            log.info("Feedback composition stopped: the attempt no longer holds its lease: jobId={}", jobId);
-        } catch (CompositionHandedOnException handedOn) {
-            composition.end(ReviewStageTelemetry.Outcome.HANDED_ON);
-            log.warn(
-                    "Feedback composition is handed on to another attempt: jobId={}, cause={}",
-                    jobId,
-                    handedOn.stop().tag());
-            handOn(current, snapshot, scriptReport);
-            return false;
-        } catch (RuntimeException failed) {
-            composition.end(ReviewStageTelemetry.Outcome.FAILED);
-            log.warn("Feedback composition failed, so the attempt is handed on: jobId={}", jobId, failed);
-            handOn(current, snapshot, scriptReport);
-            return false;
+            return Boolean.TRUE.equals(terminalPersistRetries.execute(named(
+                    "Hand-on to composition for jobId=" + jobId,
+                    () -> transactionTemplate.execute(status -> {
+                        AgentRunFence fence = ownFence(jobId, attempt);
+                        if (measured != null && !keepMeasurement(jobId, attempt, measured)) return false;
+                        return reviewRuns.continueToCompose(jobId, fence).isPresent();
+                    }))));
+        } catch (RetryException e) {
+            throw new TerminalPersistenceException(e);
         }
-        composition.end(ReviewStageTelemetry.Outcome.OK);
+    }
+
+    /** Keeps a measuring attempt's report on its job, settles the attempt with it, and records its script runs. */
+    private boolean keepMeasurement(UUID jobId, int attempt, Measured measured) {
+        ReviewJob locked = jobRepository.lockById(jobId).orElse(null);
+        if (locked == null || locked.getStatus() != ReviewJobStatus.RUNNING || locked.getAttempt() != attempt)
+            return false;
+        JsonNode output = objectMapper.valueToTree(measured.agentResult().output());
+        boolean storable = textRepresentableInJsonb(output);
+        ReviewJobLlmUsage proxyCounts = jobRepository.findLlmUsageById(jobId).orElse(null);
+        ConfigSnapshot snapshot = ConfigSnapshot.fromJson(locked.getConfigSnapshot(), objectMapper);
+        ObjectNode kept = storable && output instanceof ObjectNode report
+                ? report
+                : objectMapper.createObjectNode().put("resultNotStored", UNSTORABLE_TEXT);
+        ReviewJobStatus determined = determineTerminalStatus(measured.sandboxResult(), measured.agentResult(), locked);
+        ReviewJobStatus status =
+                !storable && determined == ReviewJobStatus.COMPLETED ? ReviewJobStatus.FAILED : determined;
+        // The composition run ends the job with what this attempt measured, so a timed-out measurement is not complete.
+        if (status != ReviewJobStatus.COMPLETED)
+            kept.set(
+                    ReviewJobTerminal.MEASURED,
+                    objectMapper
+                            .createObjectNode()
+                            .put("status", status.name())
+                            .put("error", terminalError(status, measured.sandboxResult(), storable)));
+        locked.setOutput(kept);
+        locked.setExitCode(measured.sandboxResult().exitCode());
+        // A later settlement of the same attempt, as the hand-on's own, keeps this report.
+        attemptUsage.settleAttempt(
+                locked,
+                FrozenCharge.admitted(snapshot, admittedPrice(snapshot)),
+                measured.agentResult().usage(),
+                proxyCounts);
+        jobRepository.saveAndFlush(locked);
+        practiceScriptRuns.record(
+                locked,
+                measured.sandboxResult().outputFiles().get(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE),
+                snapshot.practiceScriptModels(),
+                Instant.now());
         return true;
     }
 
     /**
-     * Hands the attempt on as the run reaper hands on a lost one. If that fails too, the attempt stays RUNNING: its
-     * lease expires, the reaper settles it, and an admitted review keeps its results whatever happens to its feedback.
-     */
-    private void handOn(ReviewJob job, ConfigSnapshot snapshot, byte @Nullable [] scriptReport) {
-        try {
-            transactionTemplate.execute(status -> {
-                if (scriptReport != null)
-                    practiceScriptRuns.record(job, scriptReport, snapshot.practiceScriptModels(), Instant.now());
-                return reviewRuns.requeue(
-                        job.getId(),
-                        ownFence(job.getId(), job.getAttempt()),
-                        AgentRuns.Charge.SPEND,
-                        Duration.ZERO,
-                        null);
-            });
-        } catch (RuntimeException failed) {
-            log.error(
-                    "Could not hand the attempt on; its lease expires and the reaper hands it on: jobId={}",
-                    job.getId(),
-                    failed);
-        }
-    }
-
-    /**
-     * Ends an attempt that composed and measured nothing: it completes, and bills the model calls it made, which the
-     * proxy counted on the attempt.
+     * Ends an attempt that measured nothing and whose seal admitted nothing: it completes, and bills the model calls it
+     * made, which the proxy counted on the attempt.
      */
     private @Nullable ReviewJobStatus persistComposedTerminal(UUID jobId, int attempt) {
         ReviewJobStatus status;
@@ -1856,16 +1836,7 @@ public class ReviewJobExecutor {
             ReviewJobStatus determined = determineTerminalStatus(sandboxResult, agentResult, locked);
             ReviewJobStatus terminalStatus =
                     !storable && determined == ReviewJobStatus.COMPLETED ? ReviewJobStatus.FAILED : determined;
-            String failureMessage = sandboxResult.exitCode() == 0
-                    ? "The runner did not return a valid result."
-                    : sandboxResult.exitCode() == SandboxLayout.EXIT_SERVER_ERROR
-                            ? "The server answered the review's results with its own error."
-                            : "The container exited with code " + sandboxResult.exitCode() + ".";
-            String errorMessage = switch (terminalStatus) {
-                case TIMED_OUT -> "The container timed out.";
-                case FAILED -> storable ? failureMessage : UNSTORABLE_RESULT_MESSAGE;
-                default -> null;
-            };
+            String errorMessage = terminalError(terminalStatus, sandboxResult, storable);
             Instant finishedAt = Instant.now();
             int updated = transitionTerminal(jobId, attempt, terminalStatus, finishedAt, errorMessage);
             if (updated == 0) {
@@ -1917,6 +1888,23 @@ public class ReviewJobExecutor {
                     finishedAt);
             return terminalStatus;
         });
+    }
+
+    /** What a measuring attempt that ended with {@code status} reports as its error; null for a completed one. */
+    private static @Nullable String terminalError(
+            ReviewJobStatus status, SandboxResult sandboxResult, boolean storable) {
+        return switch (status) {
+            case TIMED_OUT -> "The container timed out.";
+            case FAILED ->
+                !storable
+                        ? UNSTORABLE_RESULT_MESSAGE
+                        : sandboxResult.exitCode() == 0
+                                ? "The runner did not return a valid result."
+                                : sandboxResult.exitCode() == SandboxLayout.EXIT_SERVER_ERROR
+                                        ? "The server answered the review's results with its own error."
+                                        : "The container exited with code " + sandboxResult.exitCode() + ".";
+            default -> null;
+        };
     }
 
     static final String UNSTORABLE_RESULT_MESSAGE =

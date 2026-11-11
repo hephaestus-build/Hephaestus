@@ -3,17 +3,20 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
-import de.tum.cit.aet.hephaestus.agent.composer.CompositionCapacity;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
-import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
@@ -31,9 +34,9 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
-import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
@@ -44,6 +47,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.ComposeRunGateway;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
@@ -117,6 +121,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
+import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
@@ -149,6 +154,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
@@ -156,6 +162,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
@@ -169,6 +176,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.BootstrapUtils;
@@ -335,6 +343,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewCompositionBasisRepository compositionBases;
+
+    @Autowired
+    private ApplicationContext context;
 
     @BeforeEach
     void deliverPublicCopies() {
@@ -1670,15 +1681,24 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     mapper,
                     mock(FeedbackRepair.class),
                     mock(CompositionToolTrace.class));
-            var composer = new WorkerFeedbackComposer(
-                    sessions,
-                    continuation,
-                    mock(ReviewModelGateway.class),
-                    agentRuns.capacity(),
-                    meters,
-                    mapper,
-                    new CompositionCapacity(4));
-            composer.composeResumed(job, job.getRunId(), Instant.now());
+            // The sandbox's composer loop finds no time left before its first call, so it closes every destination
+            // with the deadline; on the last attempt the server withholds them instead of handing them on.
+            var identity = new ResultAdmissionService.AdmissionIdentity(
+                    job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
+            // The restored folder holds the attempt's person-copy receipt, which the withholdings' reads index.
+            var restored = continuation.restore(job);
+            try {
+                assertThat(sessions.close(
+                                job,
+                                identity,
+                                Map.of(
+                                        FeedbackDestination.ON_WORK, CompositionStop.DEADLINE,
+                                        FeedbackDestination.PRACTICE_PAGE, CompositionStop.DEADLINE,
+                                        FeedbackDestination.CONVERSATION, CompositionStop.DEADLINE)))
+                        .isNull();
+            } finally {
+                restored.close();
+            }
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
                             review.workspaceId(), review.reviewId()))
@@ -2234,6 +2254,152 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             // The review on the work is decided, so closing records nothing for it and hands nothing on.
             assertThat(sessions.close(job, review.identity(), Map.of())).isNull();
         }
+    }
+
+    @Test
+    void shouldComposeThroughTheSandboxGatewayAndCompleteTheReviewWhenTheComposeRunEnds() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            review.inputs().close();
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            UUID composeRun = composeRun(job);
+            UUID result = response.admitted().getFirst().resultId();
+            var calls = new AtomicInteger();
+            var custody = new ReviewAttemptCustody(agentRuns);
+
+            try (var gateway = new ComposeRunGateway(context, composingPolicy(true), custody, request -> {
+                calls.incrementAndGet();
+                return composerAnswer(request, result);
+            })) {
+                String token = gateway.sandbox(review.workspaceId(), subjectOf(composeRun));
+                assertThat(gateway.drive(token)).isEqualTo("{\"ended\":204}");
+                assertThat(gateway.drive(token)).isEqualTo("{\"idle\":true}");
+            }
+
+            var completed = jobs.findById(job.getId()).orElseThrow();
+            assertThat(completed.getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+            assertThat(completed.getProcessingStatus()).isEqualTo(ProcessingStatus.PENDING);
+            assertThat(runState(composeRun)).isEqualTo("ENDED");
+            assertThat(calls).hasPositiveValue();
+            assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
+                            review.workspaceId(), review.reviewId()))
+                    .filteredOn(row -> row.getDestination() == FeedbackDestination.ON_WORK)
+                    .singleElement()
+                    .satisfies(onWork -> {
+                        assertThat(onWork.getState()).isNotEqualTo(FeedbackState.WITHHELD);
+                        assertThat(onWork.getBody()).contains(SUMMARY);
+                    });
+            // The run's end released the inputs it held: holding the attempt again prepares anew.
+            var released = new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null);
+            var attempt = new ResultAdmissionService.AdmissionIdentity(
+                    job.getId(), review.workspaceId(), completed.getAttempt(), composeRun);
+            assertThat(custody.hold(attempt, () -> released)).isSameAs(released);
+        }
+    }
+
+    @Test
+    void shouldWithholdWithoutAModelCallWhenTheComposeRunsClaimFindsAIDeclined() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admitStaged(review.identity(), request(review));
+            review.inputs().close();
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            UUID composeRun = composeRun(job);
+            var calls = new AtomicInteger();
+
+            try (var gateway = new ComposeRunGateway(
+                    context, composingPolicy(false), new ReviewAttemptCustody(agentRuns), request -> {
+                        calls.incrementAndGet();
+                        return mapper.createObjectNode();
+                    })) {
+                String token = gateway.sandbox(review.workspaceId(), subjectOf(composeRun));
+                assertThat(gateway.drive(token)).isEqualTo("{\"ended\":204}");
+            }
+
+            assertThat(calls).hasValue(0);
+            assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+            assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
+                            review.workspaceId(), review.reviewId()))
+                    .isNotEmpty()
+                    .allSatisfy(withheld -> {
+                        assertThat(withheld.getState()).isEqualTo(FeedbackState.WITHHELD);
+                        assertThat(withheld.getStopReason()).isEqualTo(FeedbackStopReason.NO_AI);
+                    })
+                    .extracting(Feedback::getDestination)
+                    .contains(FeedbackDestination.ON_WORK);
+        }
+    }
+
+    private UUID composeRun(ReviewJob job) {
+        var fence = new AgentRunFence(job.getRunId(), job.getWorkspaceId(), ReviewRunKind.epoch(job.getAttempt()));
+        return Objects.requireNonNull(transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), fence)))
+                .orElseThrow()
+                .id();
+    }
+
+    /** A developer who allows AI reviews, or not, bound to the model that the review's job froze. */
+    private static ReviewMemberAiPolicy composingPolicy(boolean permits) {
+        var policy = mock(ReviewMemberAiPolicy.class);
+        when(policy.permitsReview(any())).thenReturn(permits);
+        when(policy.binding(any())).thenReturn(Optional.of(new WorkspaceAgentBinding()));
+        return policy;
+    }
+
+    private String subjectOf(UUID run) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, run));
+    }
+
+    private String runState(UUID run) {
+        return Objects.requireNonNull(jdbc.queryForObject("SELECT state FROM agent_run WHERE id=?", String.class, run));
+    }
+
+    /**
+     * The model of the review on the work: it checks a package that raises the admitted result with the summary,
+     * publishes the draft that the check returned, and has nothing to add after that, nor for the private feedback.
+     */
+    private ObjectNode composerAnswer(JsonNode request, UUID result) {
+        var messages = request.path("messages");
+        boolean asked = false;
+        String draftId = null;
+        for (JsonNode message : messages) {
+            if (!message.path("role").asString().equals("tool")) continue;
+            asked = true;
+            String checked = mapper.readTree(message.path("content").asString("{}"))
+                    .path("draftId")
+                    .asString(null);
+            if (checked != null) draftId = checked;
+        }
+        boolean published = false;
+        for (JsonNode message : messages)
+            for (JsonNode call : message.path("tool_calls"))
+                if (call.path("function").path("name").asString().equals("publish_package")) published = true;
+        var message = mapper.createObjectNode().put("role", "assistant");
+        if (!asked && messages.toString().contains(QUOTE)) {
+            call(message, "check_package", """
+                    {"decisions":[{"resultId":"%1$s","disposition":"RAISE"}],
+                     "summary":{"basedOn":["%1$s"],"body":"%2$s"}}
+                    """.formatted(result, SUMMARY));
+        } else if (draftId != null && !published) {
+            call(
+                    message,
+                    "publish_package",
+                    mapper.createObjectNode().put("draftId", draftId).toString());
+        } else message.put("content", "Done.");
+        var answer = mapper.createObjectNode();
+        answer.putArray("choices").addObject().put("finish_reason", "stop").set("message", message);
+        answer.putObject("usage").put("prompt_tokens", 10).put("completion_tokens", 5);
+        return answer;
+    }
+
+    private void call(ObjectNode message, String tool, String arguments) {
+        message.putNull("content");
+        message.putArray("tool_calls")
+                .addObject()
+                .put("id", "call-" + UUID.randomUUID())
+                .put("type", "function")
+                .putObject("function")
+                .put("name", tool)
+                .put("arguments", arguments);
     }
 
     private ObjectNode draft(String draftId) {

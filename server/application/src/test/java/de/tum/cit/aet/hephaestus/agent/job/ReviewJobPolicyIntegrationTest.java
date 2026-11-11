@@ -234,8 +234,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 1,
                 properties.heartbeatInterval(),
                 properties.payloadRetention(),
-                properties.rowRetention(),
-                properties.maxConcurrentCompositions());
+                properties.rowRetention());
         var sandboxes = mock(SandboxManager.class);
         when(sandboxes.ready()).thenReturn(true);
         when(sandboxes.roomFor(any())).thenReturn(1);
@@ -451,7 +450,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldResumeCompositionWithoutReviewQuotaOrBacklogAdmission() {
+    void shouldHandAContinuationOnToItsCompositionRunWithoutReviewQuotaOrBacklogAdmission() {
         var selected = binding(DataHandlingTier.IN_HOUSE);
         var job = queued(selected);
         RuntimeJobTestData.passAttempt(jdbc, job);
@@ -466,12 +465,36 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         when(sandboxes.roomFor(any())).thenThrow(new IllegalStateException("review quota must not be observed"));
         when(sandboxes.ready()).thenReturn(true);
         var polling = pooledExecutor(properties, capacity, sandboxes);
+        int spent = jobs.findById(job.getId()).orElseThrow().spentAttempts();
 
         assertThat(polling.computeCapacity()).isPositive();
-        assertThat(polling.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-        var claimed = jobs.findById(job.getId()).orElseThrow();
-        assertThat(claimed.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
-        assertThat(claimed.getAttempt()).isEqualTo(1);
+        // The worker's claim hands the review on to the run that composes it, and starts nothing here.
+        assertThat(polling.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(runKind(waiting)).isEqualTo("REVIEW_COMPOSE");
+        assertThat(waiting.spentAttempts()).as("a hand-on spends no attempt").isEqualTo(spent);
+
+        assertThat(claimLeased(waiting)).isPresent();
+        assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+    }
+
+    @Test
+    void shouldWithholdWithoutAModelWhenACompositionRunIsClaimedPastTheRetryLimit() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var started = claimLeased(job).orElseThrow();
+        jdbc.update(
+                "UPDATE review_job SET admission_attempt=0, admission_digest=? WHERE id=?",
+                "a".repeat(64),
+                job.getId());
+        var composing = Objects.requireNonNull(
+                        transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), started.fence())))
+                .orElseThrow();
+        jdbc.update("UPDATE agent_run SET attempt=? WHERE id=?", runs().reviewRetries() + 1, composing.id());
+
+        var claimed = claimLeased(jobs.findById(job.getId()).orElseThrow()).orElseThrow();
+
+        assertThat(claimed.withholdOnly()).isEqualTo(CompositionStop.RETRIES_EXHAUSTED);
     }
 
     @Test
@@ -545,11 +568,25 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
     /** Leases the job's run as its sandbox's pull does, and starts the job in the same transaction. */
     private Optional<ReviewJobClaimService.ClaimResult> claimLeased(ReviewJob job) {
+        return claimLeased(job, claimService(jobs));
+    }
+
+    private Optional<ReviewJobClaimService.ClaimResult> claimLeased(ReviewJob job, ReviewJobClaimService claims) {
+        UUID run = jobs.findById(job.getId()).orElseThrow().getRunId();
         String subject = Objects.requireNonNull(
-                jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, job.getRunId()));
+                jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, run));
+        var kind = AgentRunKind.valueOf(Objects.requireNonNull(
+                jdbc.queryForObject("SELECT kind FROM agent_run WHERE id=?", String.class, run)));
         return Objects.requireNonNull(transactions.execute(status -> agentRuns
-                .claimSubject(job.getWorkspaceId(), subject, Set.of(AgentRunKind.REVIEW))
-                .flatMap(lease -> claimService(jobs).claimLeased(lease.fence()))));
+                .claimSubject(job.getWorkspaceId(), subject, Set.of(kind))
+                .flatMap(lease -> claims.claimLeased(lease.fence()))));
+    }
+
+    private String runKind(ReviewJob job) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT kind FROM agent_run WHERE id=?",
+                String.class,
+                jobs.findById(job.getId()).orElseThrow().getRunId()));
     }
 
     @Test
@@ -1021,14 +1058,14 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 agentRuns,
                 reviewRuns);
 
-        assertThat(claims.claimNext(Set.of(), () -> true))
-                .isInstanceOfSatisfying(
-                        ReviewJobClaimService.ClaimResult.class,
-                        claim -> assertThat(claim.withholdOnly()).isEqualTo(CompositionStop.BUDGET));
+        // The worker's claim hands the review on; the composition run's own claim decides to withhold only.
+        assertThat(claims.claimNext(Set.of(), () -> true)).isEqualTo(ReviewJobClaimService.ClaimOutcome.HANDED_ON);
+        assertThat(claimLeased(job, claims))
+                .hasValueSatisfying(claim -> assertThat(claim.withholdOnly()).isEqualTo(CompositionStop.BUDGET));
 
         var claimed = jobs.findById(job.getId()).orElseThrow();
         assertThat(claimed.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
-        assertThat(claimed.getAttempt()).isEqualTo(1);
+        assertThat(runKind(claimed)).isEqualTo("REVIEW_COMPOSE");
         assertThat(claimed.getExecutionStartedAt()).isNull();
         assertThat(leasedUntil(claimed))
                 .as("the claim leases the attempt for one lease from now")

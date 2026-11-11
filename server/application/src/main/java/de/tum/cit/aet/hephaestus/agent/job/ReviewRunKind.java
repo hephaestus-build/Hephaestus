@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHandler;
@@ -259,7 +260,10 @@ public class ReviewRunKind implements AgentRunHandler {
                 .orElse(null);
         if (resumable == null) return false;
         AgentRunRef ended = new AgentRunRef(resumable.getRunId(), workspaceId);
-        AgentRunRef next = runs.continueAfter(ended, resumable.getEpoch());
+        // A review that composed on its review run, before composition had a run of its own, resumes on one.
+        AgentRunRef next = runs.find(ended).map(AgentRun::getKind).orElseThrow() == AgentRunKind.REVIEW_COMPOSE
+                ? runs.continueAfter(ended, resumable.getEpoch())
+                : runs.continueAs(ended, resumable.getEpoch(), AgentRunKind.REVIEW_COMPOSE);
         jobs.queueOnRun(resumable.getId(), workspaceId, next.id());
         runs.retire(ended);
         return true;

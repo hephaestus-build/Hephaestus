@@ -58,7 +58,7 @@ public class ProxyAccounting {
                 .register(meterRegistry);
         // Registered up front, so a rate of refusals starts from zero.
         for (SandboxGatewayRefusal refusal : SandboxGatewayRefusal.values()) gatewayRefusedCounter(refusal);
-        for (ReviewModelGateway.Refusal refusal : ReviewModelGateway.Refusal.values()) refusedCounter(refusal);
+        for (ProxyRefusal refusal : ProxyRefusal.values()) refusedCounter(refusal);
         this.gatewayLimiterErrors = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_LIMITER_ERRORS)
                 .description("Sandbox gateway requests served without a rate-limit decision")
                 .register(meterRegistry);
@@ -93,11 +93,11 @@ public class ProxyAccounting {
      * A call that the proxy refused before it reached a provider. A model that declines to answer is no refusal here: it
      * is the {@code refused} outcome of its call.
      */
-    public void refused(ReviewModelGateway.Refusal refusal) {
+    public void refused(ProxyRefusal refusal) {
         refusedCounter(refusal).increment();
     }
 
-    private Counter refusedCounter(ReviewModelGateway.Refusal refusal) {
+    private Counter refusedCounter(ProxyRefusal refusal) {
         return Counter.builder(AgentMetrics.LLM_PROXY_REFUSED)
                 .description("Model calls that the proxy refused before they reached their provider")
                 .tag("refusal", refusal.name().toLowerCase(Locale.ROOT))

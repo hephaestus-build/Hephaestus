@@ -26,7 +26,7 @@ class AgentPropertiesTest extends BaseUnitTest {
 
     private static AgentProperties props(
             Duration pollInterval, Duration heartbeatInterval, Duration payloadRetention, Duration rowRetention) {
-        return new AgentProperties(false, pollInterval, 5, heartbeatInterval, payloadRetention, rowRetention, 16);
+        return new AgentProperties(false, pollInterval, 5, heartbeatInterval, payloadRetention, rowRetention);
     }
 
     static Stream<Arguments> invalidConfigurations() {

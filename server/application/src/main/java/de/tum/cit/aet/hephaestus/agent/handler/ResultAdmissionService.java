@@ -16,7 +16,9 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateProgressDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
@@ -429,6 +431,33 @@ public class ResultAdmissionService {
                 read -> new JobEvidenceFiles.LateCopies(read.copies()));
         return retained.response();
     }
+
+    /**
+     * The job that a run drives and the identity its writes are fenced on, read under the run's current lease. The
+     * job's {@code run_id} is its current run, and its attempt is the claim's epoch less one, for either run kind.
+     *
+     * @throws StaleAttemptException when the run no longer holds its lease or drives no job
+     */
+    public Composing composing(AgentRunFence fence) {
+        UUID jobId = jobs.findIdByRun(fence.runId(), fence.workspaceId()).orElseThrow(StaleAttemptException::new);
+        var identity =
+                new AdmissionIdentity(jobId, fence.workspaceId(), ReviewRunKind.attempt(fence.epoch()), fence.runId());
+        var job = Objects.requireNonNull(transactions.execute(status -> ownedJob(identity)));
+        var deadline = runs.find(new AgentRunRef(fence.runId(), fence.workspaceId()))
+                .map(AgentRun::getDeadline)
+                .orElse(null);
+        return new Composing(job, identity, deadline);
+    }
+
+    /**
+     * A run's job, and the identity its writes are fenced on.
+     *
+     * @param deadline when the run ends whatever its lease; null for none
+     */
+    public record Composing(
+            ReviewJob job,
+            AdmissionIdentity identity,
+            @Nullable Instant deadline) {}
 
     public ReviewJob ownedJob(AdmissionIdentity identity) {
         var retained = jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())

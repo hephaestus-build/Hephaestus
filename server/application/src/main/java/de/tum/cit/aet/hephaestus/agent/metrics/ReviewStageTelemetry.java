@@ -48,9 +48,7 @@ public final class ReviewStageTelemetry {
         CAPTURE,
         /** The sandbox that runs the practice sessions, from its launch to its result. */
         SANDBOX,
-        /** The wait for a composition slot. */
-        COMPOSITION_WAIT,
-        /** The composition of the feedback after the sandbox, including its wait for a slot. */
+        /** The composition of the feedback, from the claim of its run in the review's sandbox to the run's end. */
         COMPOSITION;
 
         final String tag = name().toLowerCase(Locale.ROOT);
@@ -86,6 +84,18 @@ public final class ReviewStageTelemetry {
             }
             timers.put(stage, byOutcome);
         }
+    }
+
+    /** Records a stage that spans requests, such as the run that composes a review, once it ended. */
+    public void record(Stage stage, Duration duration, Outcome outcome) {
+        Objects.requireNonNull(Objects.requireNonNull(timers.get(stage)).get(outcome))
+                .record(duration);
+        log.atInfo()
+                .addKeyValue("event.name", "practice_review.stage.ended")
+                .addKeyValue("review.stage", stage.tag)
+                .addKeyValue("review.stage.outcome", outcome.tag)
+                .addKeyValue("duration.ms", duration.toMillis())
+                .log("Review stage ended");
     }
 
     /** Starts a stage on this thread. End it on the same thread. */

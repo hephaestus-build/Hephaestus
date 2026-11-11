@@ -456,10 +456,12 @@ The [data model](./practice-feedback-schema.md) owns current-result identity and
 
 ## Compose feedback
 
-[ADR 0061](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0061-review-seals-then-feedback-composes.md) records why composition runs on the worker.
+[ADR 0061](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0061-review-seals-then-feedback-composes.md) records why composition follows the seal, and its update of 2026-11-10 records where it runs.
 
-The worker composes after the sandbox ends: the sandbox measures and admits, and never composes.
-Composition runs in the attempt that admitted the results, before the attempt ends.
+The review run measures and admits, and never composes.
+A review that admitted results then hands on to a `review_compose` run in the same review sandbox.
+That run's composer loop calls the model and every composer tool through the gateway.
+The composition run continues the review's attempt count.
 It reads the inputs that admission retained, the admitted results, and the server's reads of routing and history.
 It first composes the review on the work, then the private feedback, which reads the review it follows.
 

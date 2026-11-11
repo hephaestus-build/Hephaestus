@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -23,16 +22,12 @@ import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
-import de.tum.cit.aet.hephaestus.agent.composer.CompositionHandedOnException;
-import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
-import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
-import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
@@ -45,6 +40,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
@@ -94,8 +90,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -126,7 +120,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private final AttemptTokenIssuer jwtIssuer = mock(AttemptTokenIssuer.class);
     private Optional<WorkerCapacityState> capacity = Optional.empty();
     private SandboxProperties sandboxProperties = SandboxTestLimits.PROPERTIES;
-    private int maxConcurrentCompositions = 16;
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final PracticeScriptRunRecorder practiceScriptRuns = mock(PracticeScriptRunRecorder.class);
     private final LlmUsageRecorder usageRecorder = mock(LlmUsageRecorder.class);
@@ -146,13 +139,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
     private AgentProperties properties() {
         return new AgentProperties(
-                true,
-                Duration.ofSeconds(1),
-                5,
-                Duration.ofSeconds(25),
-                Duration.ofDays(14),
-                Duration.ofDays(90),
-                maxConcurrentCompositions);
+                true, Duration.ofSeconds(1), 5, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90));
     }
 
     /** The executor runs the attempt as the worker that claimed it, under the attempt's own claim. */
@@ -643,90 +630,73 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldComposeAnAdmittedRunOnTheWorkerBeforeItsTerminalWriteAndForgetItsInputs() {
+    void shouldHandAnAdmittedRunOnToItsCompositionWithWhatItMeasured() {
         var job = admittedJob();
         var kept = mock(ReviewCompositionContinuation.class);
-        var composer = mock(WorkerFeedbackComposer.class);
         terminalWriteOf(job, ReviewJobStatus.COMPLETED);
+        when(reviewRuns.continueToCompose(eq(job.getId()), any()))
+                .thenReturn(Optional.of(new AgentRunRef(UUID.randomUUID(), job.getWorkspaceId())));
         var executor = admittedExecutor(kept);
-        executor.setFeedbackComposer(composer);
-
-        assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
-                .isEqualTo(ReviewJobStatus.COMPLETED);
-
-        // The worker composes, then the attempt ends once.
-        var order = inOrder(composer, jobs, kept);
-        order.verify(composer).composeAfterMeasurement(eq(job), any(UUID.class), any());
-        order.verify(jobs)
-                .transitionStatusOwnedBy(
-                        eq(job.getId()), eq(ReviewJobStatus.COMPLETED), any(), eq(null), any(UUID.class), anyInt());
-        order.verify(kept).forget(job);
-        verify(usageRecorder).project(eq(job.getWorkspaceId()), any());
-        verify(practiceScriptRuns).record(eq(job), aryEq(scriptReport()), any(), any());
-        // This run exits 1 although it admitted results, so its sandbox stage reads as failed.
-        assertThat(stageCount("sandbox", "failed")).isEqualTo(1);
-        assertThat(stageCount("composition", "ok")).isEqualTo(1);
-    }
-
-    @Test
-    void shouldComposeATimedOutAdmittedRunAndEndItAsTimedOut() {
-        var job = admittedJob();
-        var kept = mock(ReviewCompositionContinuation.class);
-        var composer = mock(WorkerFeedbackComposer.class);
-        terminalWriteOf(job, ReviewJobStatus.TIMED_OUT);
-        var executor = runExecutor(kept, timedOutResult(true), false);
-        executor.setFeedbackComposer(composer);
-
-        assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
-                .isEqualTo(ReviewJobStatus.TIMED_OUT);
-
-        verify(composer).composeAfterMeasurement(eq(job), any(UUID.class), any());
-        assertThat(job.getExitCode()).isEqualTo(124);
-        verify(kept).forget(job);
-    }
-
-    @Test
-    void shouldHandOnAnAdmittedRunWithItsInputsKeptWhenItsCompositionFails() {
-        var job = admittedJob();
-        var kept = mock(ReviewCompositionContinuation.class);
-        var composer = mock(WorkerFeedbackComposer.class);
-        doThrow(new IllegalStateException("database unavailable"))
-                .when(composer)
-                .composeAfterMeasurement(any(), any(), any());
-        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        reviewRuns = mock(ReviewRunKind.class);
-        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
-        var measured = new SandboxResult(
-                0,
-                Map.of(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE, scriptReport()),
-                "done",
-                false,
-                Duration.ofSeconds(1));
-        var executor = runExecutor(kept, measured, true);
-        executor.setFeedbackComposer(composer);
 
         assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
                 .isNull();
-        // No later attempt reports the sandbox's practice-script runs, so the hand-on records them.
-        verify(practiceScriptRuns).record(eq(job), aryEq(scriptReport()), any(), any());
-        verify(reviewRuns).requeue(eq(job.getId()), any(), eq(AgentRuns.Charge.SPEND), any(), any());
+
+        // The attempt keeps what it measured and settles it, then hands the review on; the composition run ends it.
+        var order = inOrder(practiceScriptRuns, reviewRuns);
+        order.verify(practiceScriptRuns).record(eq(job), aryEq(scriptReport()), any(), any());
+        order.verify(reviewRuns).continueToCompose(eq(job.getId()), any());
+        verify(usageRecorder).project(eq(job.getWorkspaceId()), any());
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
+        verify(kept, never()).forget(any());
+        assertThat(job.getOutput()).isNotNull();
+        // This run exits 1 although it admitted results, so its sandbox stage reads as failed.
+        assertThat(stageCount("sandbox", "failed")).isEqualTo(1);
+    }
+
+    @Test
+    void shouldHandOnATimedOutAdmittedRunAndKeepItsExitCode() {
+        var job = admittedJob();
+        var kept = mock(ReviewCompositionContinuation.class);
+        terminalWriteOf(job, ReviewJobStatus.TIMED_OUT);
+        when(reviewRuns.continueToCompose(eq(job.getId()), any()))
+                .thenReturn(Optional.of(new AgentRunRef(UUID.randomUUID(), job.getWorkspaceId())));
+        var executor = runExecutor(kept, timedOutResult(true), false);
+
+        assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
+                .isNull();
+
+        verify(reviewRuns).continueToCompose(eq(job.getId()), any());
+        assertThat(job.getExitCode()).isEqualTo(124);
+        verify(kept, never()).forget(any());
+    }
+
+    @Test
+    void shouldWriteNothingTerminalWhenTheAttemptLostItsJobBeforeItsHandOn() {
+        var job = admittedJob();
+        var kept = mock(ReviewCompositionContinuation.class);
+        terminalWriteOf(job, ReviewJobStatus.COMPLETED);
+        // The hand-on finds another claim on the job, so it moves nothing.
+        when(reviewRuns.continueToCompose(eq(job.getId()), any())).thenReturn(Optional.empty());
+        var executor = admittedExecutor(kept);
+
+        assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
+                .isNull();
+
         verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
         verify(kept, never()).forget(any());
     }
 
     @Test
-    void shouldComposeNothingForARunThatAdmittedNothing() {
+    void shouldHandNothingOnForARunThatAdmittedNothing() {
         var job = admittedJob();
         job.setAdmissionAttempt(null);
         job.setAdmissionDigest(null);
-        var composer = mock(WorkerFeedbackComposer.class);
         terminalWriteOf(job, ReviewJobStatus.FAILED);
         var executor = runExecutor(mock(ReviewCompositionContinuation.class), timedOutResult(false), false);
-        executor.setFeedbackComposer(composer);
 
         assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
                 .isEqualTo(ReviewJobStatus.FAILED);
-        verifyNoInteractions(composer);
+        verify(reviewRuns, never()).continueToCompose(any(), any());
     }
 
     @Test
@@ -955,113 +925,38 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldFreeTheSandboxSlotWhileComposingAndHandTheAttemptOnWhenTheWorkerDrains() {
+    void shouldHandAContinuedReviewOnToItsCompositionWithoutMeasuringIt() {
         var job = continuedJob();
-        reviewRuns = mock(ReviewRunKind.class);
-        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
-        when(reviewRuns.requeue(eq(job.getId()), any(), eq(AgentRuns.Charge.FREE), any(), any()))
-                .thenReturn(true);
-        var executor = executor(inlinePool());
-        var composer = mock(WorkerFeedbackComposer.class);
-        var freeWhileComposing = new AtomicInteger(-1);
-        var drained = new AtomicBoolean();
-        doAnswer(invocation -> {
-                    freeWhileComposing.set(executor.computeCapacity());
-                    drained.set(executor.cancelInFlight(ReviewJobCancellationReason.DRAIN_GRACEFUL));
-                    // The drain handed the attempt on, so the proxy fences the composer's next call.
-                    throw new ResultAdmissionService.StaleAttemptException();
-                })
-                .when(composer)
-                .composeResumed(any(), any(), any());
-        executor.setFeedbackComposer(composer);
+        when(reviewRuns.continueToCompose(eq(job.getId()), any()))
+                .thenReturn(Optional.of(new AgentRunRef(UUID.randomUUID(), job.getWorkspaceId())));
+        var pool = mock(AsyncTaskExecutor.class);
+        var executor = executor(pool);
 
-        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        // The claim hands the review on to its composition run, so nothing starts on this worker.
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
 
-        assertThat(freeWhileComposing.get()).isEqualTo(properties().claimBatchSize());
-        assertThat(drained).isTrue();
-        verify(reviewRuns).requeue(eq(job.getId()), any(), eq(AgentRuns.Charge.FREE), any(), any());
+        verify(reviewRuns).continueToCompose(eq(job.getId()), any());
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
+        verifyNoInteractions(sandbox, pool);
+        assertThat(stageCount("sandbox", "ok") + stageCount("capture", "ok")).isZero();
+        // The attempt holds no slot after it handed the review on.
         assertThat(executor.computeCapacity()).isEqualTo(properties().claimBatchSize());
     }
 
     @Test
-    void shouldClaimNothingWhileTheMostCompositionsRun() {
-        maxConcurrentCompositions = 1;
-        continuedJob();
-        var executor = executor(inlinePool());
-        var composer = mock(WorkerFeedbackComposer.class);
-        var freeWhileComposing = new AtomicInteger(-1);
-        doAnswer(invocation -> {
-                    freeWhileComposing.set(executor.computeCapacity());
-                    return null;
-                })
-                .when(composer)
-                .composeResumed(any(), any(), any());
-        executor.setFeedbackComposer(composer);
-
-        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-
-        assertThat(freeWhileComposing.get()).isZero();
-        assertThat(executor.computeCapacity()).isEqualTo(1);
-    }
-
-    @Test
-    void shouldEndWithoutHandingOnWhenTheJobIsCancelledWhileItComposes() {
-        var job = continuedJob();
-        reviewRuns = mock(ReviewRunKind.class);
-        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
-        var executor = executor(inlinePool());
-        var composer = mock(WorkerFeedbackComposer.class);
-        doAnswer(invocation -> {
-                    // The cancellation ended the attempt; only its container, long gone, is stopped here.
-                    assertThat(executor.cancelLocalJob(job.getId(), "cancelled"))
-                            .isTrue();
-                    throw new ResultAdmissionService.StaleAttemptException();
-                })
-                .when(composer)
-                .composeResumed(any(), any(), any());
-        executor.setFeedbackComposer(composer);
-
-        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-
-        // The cancellation owns the outcome: nothing hands the attempt on, and its fenced terminal write changes
-        // nothing.
-        verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void shouldHandOnAnAttemptWhoseCompositionAPassingCauseStopped() {
-        var job = continuedJob();
-        reviewRuns = mock(ReviewRunKind.class);
-        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
-        var executor = executor(inlinePool());
-        var composer = mock(WorkerFeedbackComposer.class);
-        doThrow(new CompositionHandedOnException(CompositionStop.PROVIDER, null))
-                .when(composer)
-                .composeResumed(any(), any(), any());
-        executor.setFeedbackComposer(composer);
-
-        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-
-        verify(reviewRuns).requeue(eq(job.getId()), any(), eq(AgentRuns.Charge.SPEND), any(), any());
-        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
-        // A resumed attempt composes without a capture or a sandbox of its own.
-        assertThat(stageCount("composition", "handed_on")).isEqualTo(1);
-        assertThat(stageCount("sandbox", "ok") + stageCount("capture", "ok")).isZero();
-    }
-
-    @Test
-    void shouldWithholdInsteadOfCancellingAHandedOnReviewWhoseDeveloperDeclinedAi() {
+    void shouldHandOnInsteadOfCancellingAContinuedReviewWhoseDeveloperDeclinedAi() {
         var job = continuedJob();
         when(policy.permitsReview(job)).thenReturn(false);
-        var executor = executor(inlinePool());
-        var composer = mock(WorkerFeedbackComposer.class);
-        executor.setFeedbackComposer(composer);
+        var pool = mock(AsyncTaskExecutor.class);
+        var executor = executor(pool);
 
-        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        // The claim hands the review on to its composition run, so nothing starts on this worker.
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
 
-        verify(composer).withholdResumed(any(), any(UUID.class), eq(CompositionStop.NO_AI));
-        verify(composer, never()).composeResumed(any(), any(), any());
-        assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        // Its composition run withholds what is open with the same cause, without a model call.
+        verify(reviewRuns).continueToCompose(eq(job.getId()), any());
+        verifyNoInteractions(pool);
+        assertThat(job.getStatus()).isNotEqualTo(ReviewJobStatus.CANCELLED);
     }
 
     @Test
@@ -1084,12 +979,11 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 })
                 .when(handler)
                 .finishInterrupted(job, ReviewStopReason.MODEL_UNAVAILABLE);
-        var composer = mock(WorkerFeedbackComposer.class);
         var executor = executor(inlinePool());
-        executor.setFeedbackComposer(composer);
         assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
         verify(handler).finishInterrupted(job, ReviewStopReason.MODEL_UNAVAILABLE);
-        verify(composer).withholdResumed(any(), eq(job.getRunId()), eq(CompositionStop.MODEL_UNAVAILABLE));
+        // The sealed review is handed on; its composition run withholds the rest as MODEL_UNAVAILABLE.
+        verify(reviewRuns).continueToCompose(eq(job.getId()), any());
         verifyNoInteractions(sandbox);
     }
 
@@ -1108,15 +1002,14 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         when(assignments.hasStaged(job)).thenReturn(true);
-        var composer = mock(WorkerFeedbackComposer.class);
         var executor = executor(inlinePool());
-        executor.setFeedbackComposer(composer);
 
         assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         verify(handler, never()).finishInterrupted(any(), any());
         verify(handler, never()).completeStaged(any());
-        verifyNoInteractions(composer, sandbox);
+        verify(reviewRuns, never()).continueToCompose(any(), any());
+        verifyNoInteractions(sandbox);
     }
 
     @Test
@@ -1145,9 +1038,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         lenient().when(handler.hasStaged(later)).thenReturn(true);
         reviewRuns = mock(ReviewRunKind.class);
         lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
-        var composer = mock(WorkerFeedbackComposer.class);
         var executor = executorThatReachesTheSandbox(job);
-        executor.setFeedbackComposer(composer);
 
         assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
@@ -1164,7 +1055,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verify(handler).completeStaged(any());
         verify(handler, never()).finishInterrupted(any(), any());
         verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
-        verifyNoInteractions(composer);
+        verify(reviewRuns, never()).continueToCompose(any(), any());
     }
 
     /** An admitted job queued again to compose what its lost attempt left open, claimable by this worker. */
@@ -1411,7 +1302,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldResumeAnAdmittedReviewOnTheWorkerWithoutStartingASandbox() {
+    void shouldHandAnAdmittedReviewOnWithoutStartingASandbox() {
         var job = configuredJob();
         job.setSubmittedAt(Instant.now().minusSeconds(2));
         RuntimeJobTestData.attempt(job, 1);
@@ -1419,15 +1310,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         job.setAdmissionDigest("admitted");
         offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        // The claim hands the row to this worker; the mock repository returns the same entity.
-        when(jobs.markExecutionStarted(eq(job.getId()), any(UUID.class), eq(1), any()))
-                .thenAnswer(invocation -> {
-                    job.setExecutionStartedAt(invocation.getArgument(3));
-                    return 1;
-                });
-        when(jobs.transitionStatusOwnedBy(
-                        eq(job.getId()), eq(ReviewJobStatus.COMPLETED), any(), eq(null), any(UUID.class), eq(1)))
-                .thenReturn(1);
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
         when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
@@ -1435,29 +1317,21 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         var pool = mock(AsyncTaskExecutor.class);
-        doAnswer(invocation -> {
-                    Runnable work = invocation.getArgument(0);
-                    work.run();
-                    return null;
-                })
-                .when(pool)
-                .execute(any(Runnable.class));
-        var composer = mock(WorkerFeedbackComposer.class);
         var kept = mock(ReviewCompositionContinuation.class);
         keptInputs = kept;
+        when(reviewRuns.continueToCompose(eq(job.getId()), any()))
+                .thenReturn(Optional.of(new AgentRunRef(UUID.randomUUID(), job.getWorkspaceId())));
         var executor = executor(pool);
-        executor.setFeedbackComposer(composer);
 
-        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        // The claim hands the review on to its composition run, so nothing starts on this worker.
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
 
-        // It measures nothing again: no inputs are captured and no sandbox starts; it composes, then completes.
-        verifyNoInteractions(handler, sandbox);
-        verify(composer).composeResumed(eq(job), any(UUID.class), any());
-        verify(jobs)
-                .transitionStatusOwnedBy(
-                        eq(job.getId()), eq(ReviewJobStatus.COMPLETED), any(), eq(null), any(UUID.class), anyInt());
-        assertThat(job.getProcessingStatus()).isEqualTo(ProcessingStatus.PENDING);
-        verify(kept).forget(job);
+        // It measures nothing again: no inputs are captured and no sandbox starts; it hands the review on, and its
+        // composition run composes and completes it with the inputs kept.
+        verifyNoInteractions(handler, sandbox, pool);
+        verify(reviewRuns).continueToCompose(eq(job.getId()), any());
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
+        verify(kept, never()).forget(any());
     }
 
     @Test

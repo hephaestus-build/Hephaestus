@@ -117,7 +117,6 @@ import reactor.netty.http.server.HttpServer;
 import tools.jackson.databind.ObjectMapper;
 
 class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
-    private static final UUID OTHER_RUN = UUID.fromString("0d04a54e-90c7-5859-a7f8-4d339567192d");
 
     private static final String PRACTICE = "comment-quality";
 
@@ -977,59 +976,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     service, job, "/internal/llm/practice-script/decision/decisions", PRACTICE, "{}");
             assertThat(refused.status()).isEqualTo(402);
             assertThat(upstream.getRequestCount()).isEqualTo(1);
-        }
-    }
-
-    @Test
-    void shouldServeAWorkerCallOnlyForTheRunningAttemptOfItsLeaseAndBillIt() throws Exception {
-        try (MockWebServer upstream = new MockWebServer()) {
-            upstream.start();
-            upstream.enqueue(json("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"ok\"}}],"
-                    + "\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}"));
-            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            var gateway = new ReviewModelGateway(
-                    new ProxyRoutingService(
-                            jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots, agentRuns),
-                    proxyService(200_000),
-                    objectMapper);
-            byte[] body = "{\"model\":\"any\",\"messages\":[{\"role\":\"user\",\"content\":\"Compose.\"}]}"
-                    .getBytes(StandardCharsets.UTF_8);
-            Instant deadline = Instant.now().plusSeconds(60);
-
-            var served = gateway.call(
-                    new ReviewModelGateway.Attempt(job.getId(), workspace.getId(), 0, job.getRunId(), deadline), body);
-            var staleAttempt = gateway.call(
-                    new ReviewModelGateway.Attempt(job.getId(), workspace.getId(), 1, job.getRunId(), deadline), body);
-            var otherLease = gateway.call(
-                    new ReviewModelGateway.Attempt(job.getId(), workspace.getId(), 0, OTHER_RUN, deadline), body);
-            var late = gateway.call(
-                    new ReviewModelGateway.Attempt(
-                            job.getId(),
-                            workspace.getId(),
-                            0,
-                            job.getRunId(),
-                            Instant.now().minusSeconds(1)),
-                    body);
-
-            assertThat(served.owned()).isTrue();
-            assertThat(served.status()).isEqualTo(200);
-            assertThat(served.refusal()).isNull();
-            RecordedRequest sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
-            assertThat(sent.getUrl().encodedPath()).isEqualTo("/v1/chat/completions");
-            assertThat(objectMapper
-                            .readTree(Objects.requireNonNull(sent.getBody()).utf8())
-                            .path("model")
-                            .asString())
-                    .isEqualTo("chat-upstream");
-            assertThat(staleAttempt.owned()).isFalse();
-            assertThat(otherLease.owned()).isFalse();
-            assertThat(late.status()).isEqualTo(403);
-            // The proxy names its own rule, so the worker need not read the refusal's words.
-            assertThat(late.refusal()).isEqualTo(ReviewModelGateway.Refusal.WORK_TIME);
-            assertThat(upstream.getRequestCount()).isEqualTo(1);
-            // The call bills the attempt that made it, as the attempt's sandbox calls do.
-            assertThat(jobRepository.findById(job.getId()).orElseThrow().getLlmCalls())
-                    .isEqualTo(1);
         }
     }
 

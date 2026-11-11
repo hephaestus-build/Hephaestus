@@ -12,11 +12,20 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionService;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelService;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
+import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingService;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesIsolationProbe;
 import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxCache;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
@@ -74,6 +83,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -175,6 +185,15 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private SandboxGatewayConnector gateway;
+
+    @Autowired
+    private ReviewComposeSandboxKind composeKind;
+
+    @Autowired
+    private CompositionSessions compositionSessions;
+
+    @Autowired
+    private AgentRuns agentRuns;
 
     @Autowired
     private InstanceLlmSettingsRepository instanceLlmSettings;
@@ -324,6 +343,36 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertReplaced(review(provider, Asked.BY_EVENT, Between.A_COMMIT_IS_PUSHED));
     }
 
+    /**
+     * Runs each queued composition of the review as its review sandbox's loop would, with a model that decides nothing:
+     * the run withholds what is open and ends, so the review can end.
+     */
+    private void composeQueued(UUID reviewId) {
+        var queued = jdbc.queryForList(
+                "SELECT r.workspace_id, r.concurrency_key FROM agent_run r JOIN review_job j ON j.run_id = r.id"
+                        + " WHERE j.review_id = ? AND r.kind = 'REVIEW_COMPOSE' AND r.state = 'QUEUED'",
+                reviewId);
+        for (var row : queued) {
+            long workspaceId = ((Number) Objects.requireNonNull(row.get("workspace_id"))).longValue();
+            String subject = (String) Objects.requireNonNull(row.get("concurrency_key"));
+            // The lease and the claim commit together, as the gateway's next does.
+            var run = transactions.execute(status -> agentRuns
+                    .claimSubject(workspaceId, subject, Set.of(AgentRunKind.REVIEW_COMPOSE))
+                    .map(lease -> new SandboxRun(
+                            new AgentSandboxes.LiveSandbox(
+                                    UUID.randomUUID(), workspaceId, subject, AgentSandboxKind.REVIEW),
+                            lease.fence(),
+                            AgentRunKind.REVIEW_COMPOSE,
+                            lease.attempt()))
+                    .filter(composeKind::claimed)
+                    .orElse(null));
+            if (run == null) continue;
+            var composing = composeKind.prepare(run);
+            compositionSessions.withholdOpen(composing.job(), composing.identity(), CompositionStop.NO_DECISION);
+            transactions.executeWithoutResult(status -> composeKind.end(run, SandboxRunKind.Outcome.COMPLETED));
+        }
+    }
+
     private void assertReplaced(Reviewed reviewed) {
         assertThat(sandbox.calls)
                 .as("the practice does not start on work it no longer shows: %s", reviewed.calls())
@@ -435,6 +484,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
             await().atMost(Duration.ofMinutes(2))
                     .pollInterval(Duration.ofMillis(250))
                     .until(() -> {
+                        composeQueued(reviewId);
                         completion.tick();
                         // A practice withheld at its start is final before the review that held it ends.
                         return !jdbc.queryForList(

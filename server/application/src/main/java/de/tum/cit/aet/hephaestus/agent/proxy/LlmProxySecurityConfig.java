@@ -288,8 +288,7 @@ class LlmProxySecurityConfig {
                 if (!budget.tryHold(contentLength)) {
                     accounting.gatewayRefused(SandboxGatewayRefusal.BODY_BUDGET);
                     // The refusal that a direct model call waits out; a limit of the gateway is no provider's answer.
-                    response.setHeader(
-                            LlmProxyService.REFUSAL_HEADER, ReviewModelGateway.Refusal.CALLS_IN_FLIGHT.name());
+                    response.setHeader(LlmProxyService.REFUSAL_HEADER, ProxyRefusal.CALLS_IN_FLIGHT.name());
                     RateLimitResponse.writeTooManyRequests(request, response, BODY_BUDGET_RETRY_SECONDS, objectMapper);
                     return;
                 }

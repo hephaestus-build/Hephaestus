@@ -972,3 +972,10 @@ The command does not bypass the checks that option 7 named:
 - A delivered comment that arrives again starts no second review.
 
 On GitLab, the answer goes in the comment's discussion. On GitHub, it is a new comment on the pull request.
+
+## Update — 2026-11-10: the composer runs only in the review's sandbox
+
+The update of 2026-11-09 is implemented.
+The composer runs only as a `review_compose` run in the review's sandbox, after the seal ([ADR 0061](0061-review-seals-then-feedback-composes.md), update of 2026-11-10).
+The worker composes nothing, and the worker's composer loop and its capacity settings are gone.
+D16 holds as stated in the update of 2026-11-09.

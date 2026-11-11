@@ -22,7 +22,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.MissingNode;
 
 /**
  * The terminal writes of a review attempt, in the caller's transaction: whoever ends the attempt, the worker or the
@@ -35,6 +37,12 @@ import tools.jackson.databind.ObjectMapper;
 public class ReviewJobTerminal {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewJobTerminal.class);
+
+    /**
+     * The key of a job's output under which a measuring attempt that handed its admitted review on records how its
+     * measurement ended, when it did not complete: {@code {"status": "TIMED_OUT", "error": "..."}}.
+     */
+    public static final String MEASURED = "measured";
 
     private final ReviewJobRepository jobs;
     private final AgentRuns runs;
@@ -87,18 +95,28 @@ public class ReviewJobTerminal {
     }
 
     /**
-     * Completes an attempt that composed its review's feedback: the job and its run end, its delivery waits, and the
-     * attempt is settled at its admitted charge. After the commit, or at once outside a synchronized transaction, the
-     * inputs that the composition kept go.
+     * Ends an attempt that composed its review's feedback: the job and its run end, and the attempt is settled at its
+     * admitted charge. The job ends with what its measuring attempt recorded under {@link #MEASURED}, such as a timeout,
+     * and otherwise completes, and its delivery waits. After the commit, or at once outside a synchronized transaction,
+     * the inputs that the composition kept go.
      *
      * @return false when the attempt no longer owns the job
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean completeComposed(UUID jobId, AgentRunFence fence) {
-        if (end(jobId, fence, ReviewJobStatus.COMPLETED, Instant.now(), null) == 0) return false;
+        JsonNode measured = jobs.findById(jobId)
+                .map(ReviewJob::getOutput)
+                .map(output -> output.path(MEASURED))
+                .orElse(MissingNode.getInstance());
+        ReviewJobStatus status = measured.isObject()
+                ? ReviewJobStatus.valueOf(measured.path("status").asString())
+                : ReviewJobStatus.COMPLETED;
+        String error =
+                measured.path("error").isString() ? measured.path("error").asString() : null;
+        if (end(jobId, fence, status, Instant.now(), error) == 0) return false;
         ReviewJob completed = jobs.findById(jobId).orElseThrow();
         ConfigSnapshot snapshot = ConfigSnapshot.fromJson(completed.getConfigSnapshot(), objectMapper);
-        completed.setProcessingStatus(ProcessingStatus.PENDING);
+        if (status == ReviewJobStatus.COMPLETED) completed.setProcessingStatus(ProcessingStatus.PENDING);
         attemptUsage.settleAttempt(
                 completed,
                 FrozenCharge.admitted(snapshot, admittedPrice(snapshot)),

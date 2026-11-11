@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.composer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmCredentials;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmTest;
 import java.nio.charset.StandardCharsets;
@@ -64,14 +63,14 @@ class ComposerReplayLiveTest {
             basis.remove("expected");
             var structures = new ArrayList<JsonNode>();
             for (int run = 0; run < runs; run++) {
-                var answers = new ArrayList<ReviewModelGateway.Answer>();
-                var outcome = ComposerReplay.jvm(basis, live(transport, creds.model(), answers));
+                var answers = new ArrayList<ModelSession.Answer>();
+                var outcome = ComposerReplay.node(basis, live(transport, creds.model(), answers));
                 structures.add(structure(outcome.packages(), outcome.handedOn()));
                 if (run > 0) continue;
                 var recorded = basis.deepCopy();
                 recorded.put("description", "The live model's answers to " + base + "'s basis, recorded.");
                 recorded.set("responses", ComposerReplay.recorded(answers));
-                var replayed = ComposerReplay.jvm(recorded, ComposerReplay.replayed(recorded));
+                var replayed = ComposerReplay.node(recorded, ComposerReplay.replayed(recorded));
                 if (!replayed.toJson().equals(outcome.toJson())) notReplayed.add(base);
                 recorded.set("expected", outcome.toJson());
                 if (record) ComposerReplay.write(recordedName(basis), recorded);
@@ -141,13 +140,13 @@ class ComposerReplayLiveTest {
     }
 
     /** Sends each call to the live model under its own name, and keeps every answer, a failed call's too. */
-    private static Function<byte[], ReviewModelGateway.Answer> live(
-            LiveChatTransport transport, String model, List<ReviewModelGateway.Answer> answers) {
+    private static Function<byte[], ModelSession.Answer> live(
+            LiveChatTransport transport, String model, List<ModelSession.Answer> answers) {
         return body -> {
             var request = (ObjectNode) ComposerReplay.MAPPER.readTree(body);
             request.put("model", model);
             var sent = transport.call(ComposerReplay.MAPPER.writeValueAsBytes(request));
-            var answer = new ReviewModelGateway.Answer(sent.status(), sent.body(), true, null);
+            var answer = new ModelSession.Answer(sent.status(), sent.body(), true, null);
             answers.add(answer);
             return answer;
         };

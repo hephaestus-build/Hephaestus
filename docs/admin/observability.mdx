@@ -869,8 +869,7 @@ existing execution metric.
 | --- | --- | --- |
 | `capture` | The start of the evidence capture | The inputs of every practice are ready |
 | `sandbox` | The launch of the sandbox that runs the practice sessions | Its result |
-| `composition_wait` | The request for a composition slot | The slot |
-| `composition` | The start of the feedback composition, including `composition_wait` | Its end, or its hand-on to another attempt |
+| `composition` | The claim of the `review_compose` run in the review's sandbox | The run's end, or its hand-on to another attempt |
 
 Its `outcome` is `ok`, `failed`, `partial` or `handed_on`.
 `handed_on` means that composition stopped for a passing cause, and another attempt continues it.
@@ -878,9 +877,10 @@ A sandbox that exits with any other code than 0 or the partial-review code 78 is
 A sandbox that left a practice without a result and staged the rest is `partial`. Another attempt can continue the review.
 A sandbox that had no room is not a sample: the attempt waits in the queue.
 
+A composition run that loses its lease is not a sample: the run reaper queues it again.
 The stages do not add up to the attempt.
 An attempt that resumes a composition has a `composition` sample, but no `capture` and no `sandbox` sample.
-Each stage is also a span, `practice_review.<stage>`, under the attempt's `practice_review.execute` span.
+The `capture` and `sandbox` stages are also spans, `practice_review.<stage>`, under the attempt's `practice_review.execute` span.
 
 The runner admits results through two worker routes.
 Their durations are in `http_server_requests_seconds`:
