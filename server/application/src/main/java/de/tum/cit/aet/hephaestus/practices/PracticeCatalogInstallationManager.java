@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.events.WorkspaceCreatedEvent;
 import java.time.Instant;
 import java.util.Set;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,8 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @ConditionalOnServerRole
 public class PracticeCatalogInstallationManager {
-    private final boolean enabled;
-
     private final CatalogService catalog;
     private final CatalogLock lock;
     private final WorkspaceRepository workspaces;
@@ -27,7 +24,6 @@ public class PracticeCatalogInstallationManager {
     private final PracticeRepository practiceRepository;
 
     public PracticeCatalogInstallationManager(
-            @Value("${hephaestus.practices.seed-default-catalog:true}") boolean enabled,
             CatalogService catalog,
             CatalogLock lock,
             WorkspaceRepository workspaces,
@@ -35,7 +31,6 @@ public class PracticeCatalogInstallationManager {
             PracticeGroupRepository groupRepository,
             PracticeService practices,
             PracticeRepository practiceRepository) {
-        this.enabled = enabled;
         this.catalog = catalog;
         this.lock = lock;
         this.workspaces = workspaces;
@@ -57,7 +52,6 @@ public class PracticeCatalogInstallationManager {
     }
 
     private void installCatalog(Long workspaceId) {
-        if (!enabled) return;
         lock.acquire();
         var workspace = workspaces.findByIdForUpdate(workspaceId).orElseThrow();
         if (workspace.getPracticeCatalogInstalledAt() != null) return;

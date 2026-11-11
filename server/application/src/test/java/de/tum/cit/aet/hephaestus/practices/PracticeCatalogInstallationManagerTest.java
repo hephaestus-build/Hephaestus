@@ -21,7 +21,6 @@ class PracticeCatalogInstallationManagerTest extends BaseUnitTest {
         workspace.setPracticeCatalogInstalledAt(Instant.parse("2026-10-01T12:00:00Z"));
         when(workspaces.findByIdForUpdate(10L)).thenReturn(Optional.of(workspace));
         var installer = new PracticeCatalogInstallationManager(
-                true,
                 mock(CatalogService.class),
                 mock(CatalogLock.class),
                 workspaces,

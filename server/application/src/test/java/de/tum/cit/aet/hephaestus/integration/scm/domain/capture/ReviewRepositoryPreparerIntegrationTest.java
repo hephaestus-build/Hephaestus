@@ -158,7 +158,6 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
         tokens = mock(ScmTokenSource.class);
         when(tokens.kind()).thenReturn(IntegrationKind.GITLAB);
         when(tokens.serverUrl(workspaceId)).thenReturn(Optional.of(serverUrl));
-        when(tokens.recordsReviewDiffBase()).thenReturn(true);
         when(tokens.accessToken(workspaceId)).thenReturn(Optional.of("private-token"));
         var git = mock(GitRepositoryManager.class);
         when(git.commitExists(any(), anyString())).thenReturn(true);

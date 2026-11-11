@@ -76,7 +76,7 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
     record KindNames(String repository, String file, String review, String pullRequest, String issue) {}
 
     @Query(value = """
-                SELECT i.id, work.id AS pull_id, work.issue_type, work.is_merged, work.merged_at, work.repository_id,
+                SELECT i.id, work.id AS pull_id, work.issue_type, work.merged_at, work.repository_id,
                     repository_item.id AS repository_item_id
                 FROM item i
                 LEFT JOIN item parent ON parent.id=i.parent_id AND parent.workspace_id=i.workspace_id
@@ -227,8 +227,6 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
 
         @Nullable
         Long getRepositoryItemId();
-
-        boolean getIsMerged();
 
         @Nullable
         Instant getMergedAt();

@@ -9,12 +9,4 @@ public enum ResultOutcome {
     public boolean isMet() {
         return this == MET;
     }
-
-    public boolean isNotMet() {
-        return this == NOT_MET;
-    }
-
-    public boolean isDecided() {
-        return this == MET || this == NOT_MET;
-    }
 }

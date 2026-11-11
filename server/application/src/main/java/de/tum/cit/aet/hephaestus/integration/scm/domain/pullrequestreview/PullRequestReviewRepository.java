@@ -27,13 +27,7 @@ public interface PullRequestReviewRepository extends JpaRepository<PullRequestRe
     @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
     List<PullRequestReview> findAll();
 
-    boolean existsByIdAndPullRequest_IdAndAuthor_Id(long id, long pullRequestId, long authorId);
-
-    Optional<PullRequestReview> findByIdAndPullRequestId(Long id, Long pullRequestId);
-
     Optional<PullRequestReview> findByNativeIdAndProviderId(Long nativeId, Long providerId);
-
-    List<PullRequestReview> findAllByPullRequestIdAndProviderId(Long pullRequestId, Long providerId);
 
     /**
      * Per-repository review count for the sync-observability breakdown, batched over every repository of
@@ -54,28 +48,6 @@ public interface PullRequestReviewRepository extends JpaRepository<PullRequestRe
     List<RepositoryItemCountProjection> countGroupedByRepositoryIds(
             @Param("repositoryIds") Collection<Long> repositoryIds);
 
-    /**
-     * All review DECISIONS for a pull request, with the review author eagerly fetched.
-     *
-     * <p>Used by the cross-context {@code ReviewThreadContentSource} to surface review-decision
-     * state (CHANGES_REQUESTED / APPROVED) — the signal a "merged past unresolved request-changes"
-     * lesson is grounded in, which neither inline comments nor the diff carry. Read-only context
-     * materialisation; the caller establishes workspace scope.
-     *
-     * <p>Ordered most-recent-first ({@code submittedAt DESC, id DESC}) so the consumer's
-     * {@code MAX_DECISIONS} truncation keeps the LATEST decisions: on a heavily-reviewed PR a
-     * superseding final APPROVE must not be dropped, which would manufacture a false "merged past
-     * unresolved request-changes" observation. {@code id} breaks ties on equal/null timestamps.
-     */
-    @Query("""
-        SELECT prr
-        FROM PullRequestReview prr
-        LEFT JOIN FETCH prr.author
-        WHERE prr.pullRequest.id = :pullRequestId
-        ORDER BY prr.submittedAt DESC, prr.id DESC
-        """)
-    List<PullRequestReview> findAllByPullRequestIdWithAuthor(@Param("pullRequestId") Long pullRequestId);
-
     @Query("""
         SELECT prr FROM PullRequestReview prr LEFT JOIN FETCH prr.author
         WHERE prr.pullRequest.id = :pullRequestId AND prr.state NOT IN :excludedStates
@@ -90,15 +62,4 @@ public interface PullRequestReviewRepository extends JpaRepository<PullRequestRe
             @Param("pullRequestId") Long pullRequestId,
             @Param("excludedStates") Collection<PullRequestReview.State> excludedStates,
             Pageable pageable);
-
-    /** Reviews by id, each with its pull request, that pull request's author and its repository. */
-    @Query("""
-        SELECT prr
-        FROM PullRequestReview prr
-        LEFT JOIN FETCH prr.pullRequest pr
-        LEFT JOIN FETCH pr.author
-        LEFT JOIN FETCH pr.repository
-        WHERE prr.id IN :ids
-        """)
-    List<PullRequestReview> findAllByIdWithRelations(@Param("ids") Collection<Long> ids);
 }

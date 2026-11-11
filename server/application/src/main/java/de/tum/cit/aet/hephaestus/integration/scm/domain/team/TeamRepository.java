@@ -17,12 +17,6 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
 
     List<Team> findAllByNativeIdInAndProviderId(Collection<Long> nativeIds, Long providerId);
 
-    /**
-     * Provider-scoped name lookup — the workspace-safe form. A same-named team on a different
-     * provider (whose {@code organization} string collides) cannot leak into path resolution.
-     */
-    List<Team> findAllByNameAndProviderId(String name, Long providerId);
-
     /** Provider-scoped organization enumeration — matches the {@code (provider_id, organization)} key prefix. */
     List<Team> findAllByOrganizationIgnoreCaseAndProviderId(String organization, Long providerId);
 

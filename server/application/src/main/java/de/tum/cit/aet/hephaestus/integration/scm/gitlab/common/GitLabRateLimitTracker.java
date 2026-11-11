@@ -229,11 +229,6 @@ public class GitLabRateLimitTracker {
         return getRemaining(scopeId) < CRITICAL_REMAINING_THRESHOLD;
     }
 
-    /** Checks if the rate limit is below the low threshold. */
-    public boolean isLow(Long scopeId) {
-        return getRemaining(scopeId) < LOW_REMAINING_THRESHOLD;
-    }
-
     /**
      * Waits if the rate limit is critical, blocking until reset.
      *
@@ -297,39 +292,6 @@ public class GitLabRateLimitTracker {
         }
         ScopeRateLimitState state = stateByScope.get(scopeId);
         return state != null ? state.resetAt.get() : null;
-    }
-
-    /**
-     * Gets recommended delay based on rate limit state.
-     *
-     * @return recommended delay, or Duration.ZERO if no throttling needed
-     */
-    public Duration getRecommendedDelay(Long scopeId) {
-        int currentRemaining = getRemaining(scopeId);
-
-        if (currentRemaining >= LOW_REMAINING_THRESHOLD) {
-            return Duration.ZERO;
-        }
-
-        Instant reset = getResetAt(scopeId);
-        if (reset == null || reset.isBefore(Instant.now())) {
-            return Duration.ZERO;
-        }
-
-        Duration timeUntilReset = Duration.between(Instant.now(), reset);
-
-        if (currentRemaining <= 0) {
-            return timeUntilReset.compareTo(MAX_WAIT_DURATION) > 0 ? MAX_WAIT_DURATION : timeUntilReset;
-        }
-
-        // Distribute remaining points evenly across remaining time
-        int effectiveRemaining = Math.max(1, currentRemaining - CRITICAL_REMAINING_THRESHOLD);
-        long delayMillis = timeUntilReset.toMillis() / effectiveRemaining;
-
-        delayMillis = Math.max(MIN_WAIT_DURATION.toMillis(), delayMillis);
-        delayMillis = Math.min(MAX_WAIT_DURATION.toMillis(), delayMillis);
-
-        return Duration.ofMillis(delayMillis);
     }
 
     /** Gets the number of tracked scopes (for monitoring/debugging). */

@@ -43,6 +43,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -96,9 +97,7 @@ class DocumentItemSourceTest extends BaseUnitTest {
     @Test
     void shouldUseTheOwningConnectionAndWholeBodyWhenTheDocumentIsVisible() {
         readyDocument();
-        when(projection.documentById(7L, 19L))
-                .thenReturn(Optional.of(
-                        ProjectedDocument.withoutAuthors("collection", "document", "Document", "Full body", false)));
+        when(projection.documentById(7L, 19L)).thenReturn(Optional.of(projected("Full body")));
         var pinned = source.pin(item, null);
         assertThat(pinned.integration().instanceKey()).isEqualTo("team-a");
         var capture = source.capture(pinned, request());
@@ -141,9 +140,7 @@ class DocumentItemSourceTest extends BaseUnitTest {
     void shouldPreserveEvictedContentAsUnavailableRatherThanAnEmptyBody() {
         readyDocument();
         var pinned = source.pin(item, null);
-        when(projection.documentById(7L, 19L))
-                .thenReturn(Optional.of(
-                        ProjectedDocument.withoutAuthors("collection", "document", "Document", null, false)));
+        when(projection.documentById(7L, 19L)).thenReturn(Optional.of(projected(null)));
         var capture = source.capture(pinned, request());
         assertThat(capture.files()).isEmpty();
         assertThat(capture.citableTexts()).isEmpty();
@@ -198,9 +195,7 @@ class DocumentItemSourceTest extends BaseUnitTest {
     @Test
     void shouldReturnTheGovernedDocumentRecordEvenAfterTheMirrorChanges() {
         readyDocument();
-        when(projection.documentById(7L, 19L))
-                .thenReturn(Optional.of(
-                        ProjectedDocument.withoutAuthors("collection", "document", "Document", "Full body", false)));
+        when(projection.documentById(7L, 19L)).thenReturn(Optional.of(projected("Full body")));
         var pinned = source.pin(item, null);
         var captured = source.capture(pinned, request());
         document.setTitle("New title after capture");
@@ -268,6 +263,29 @@ class DocumentItemSourceTest extends BaseUnitTest {
         assertThat(capture.citableTexts())
                 .extracting(CitableText::path)
                 .contains("context/document.json#/createdAt", "context/document.json#/updatedAt");
+    }
+
+    private static ProjectedDocument projected(@Nullable String body) {
+        return new ProjectedDocument(
+                "collection",
+                "document",
+                "Document",
+                body,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                false,
+                null,
+                null,
+                null,
+                null);
     }
 
     private static CaptureRequest request() {

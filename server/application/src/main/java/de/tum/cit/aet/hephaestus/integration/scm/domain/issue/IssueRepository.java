@@ -169,21 +169,6 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
     Optional<Issue> findByIdWithAuthorAndRepository(@Param("id") long id);
 
     /**
-     * Fetches an issue with the associations {@code ReviewGate.evaluateIssue} needs:
-     * repository (workspace resolution) and assignees (role check). Restricted to {@code TYPE(i) = Issue}
-     * so a pull-request row never enters the issue review path.
-     *
-     * <p>The author comes along because the same load feeds
-     * {@code ReviewRequestAuthority}, which asks whether the requester is the person the review is
-     * <em>about</em>. Author is a lazy {@code @ManyToOne} and this graph is read outside a session, so
-     * without the fetch that question is answered by a {@code LazyInitializationException} — or, worse
-     * under a future session, by a null that refuses an issue's own author a review of their own work.
-     */
-    @Query(
-            "SELECT i FROM Issue i LEFT JOIN FETCH i.repository LEFT JOIN FETCH i.author LEFT JOIN FETCH i.assignees WHERE TYPE(i) = Issue AND i.id = :id")
-    Optional<Issue> findByIdWithRepositoryAndAssignees(@Param("id") long id);
-
-    /**
      * Repository-wide list of pure issues — {@code TYPE(i) = Issue} excludes the {@code PullRequest}
      * subclass rows that share this table under single-table inheritance.
      *
@@ -293,28 +278,6 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
             @Param("repositoryId") Long repositoryId,
             @Param("numbers") Collection<Integer> numbers,
             @Param("deletedAt") Instant deletedAt);
-
-    /** Returns bounded issue metadata, excluding pull requests and tombstones; the author is fetched to avoid per-row loads. */
-    @Query(
-            "SELECT i FROM Issue i LEFT JOIN FETCH i.author LEFT JOIN FETCH i.milestone WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL ORDER BY i.number DESC")
-    List<Issue> findIssueInventoryByRepositoryId(@Param("repositoryId") long repositoryId, Pageable pageable);
-
-    /**
-     * How many of a repository's issues carry at least one label, and which label names are in use — the
-     * two facts that say whether the project has a labelling convention at all, without fetching the label
-     * collection of every inventory row.
-     */
-    @Query(
-            "SELECT COUNT(DISTINCT i.id) FROM Issue i JOIN i.labels l WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL")
-    long countLabelledIssuesByRepositoryId(@Param("repositoryId") long repositoryId);
-
-    @Query(
-            "SELECT COUNT(i) FROM Issue i WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL")
-    long countIssuesByRepositoryId(@Param("repositoryId") long repositoryId);
-
-    @Query(
-            "SELECT DISTINCT l.name FROM Issue i JOIN i.labels l WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL ORDER BY l.name")
-    List<String> findLabelNamesInUseByRepositoryId(@Param("repositoryId") long repositoryId);
 
     /**
      * Nullifies milestone references on all issues that reference the given milestone.

@@ -72,30 +72,5 @@ public interface DocumentProjection {
                 String subject,
                 @Nullable String name,
                 @Nullable Long accountId) {}
-
-        /** No substrate captured, or tombstoned — every author/collection field {@code null}. */
-        public static ProjectedDocument withoutAuthors(
-                String collectionSlug, String slug, String title, @Nullable String bodyMarkdown, boolean deleted) {
-            return new ProjectedDocument(
-                    collectionSlug,
-                    slug,
-                    title,
-                    bodyMarkdown,
-                    deleted,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    List.of(),
-                    false,
-                    null,
-                    null,
-                    null,
-                    null);
-        }
     }
 }

@@ -289,12 +289,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public Optional<UserSyncState> getUserSyncState(Long scopeId) {
-        return workspaceRepository.findById(scopeId).map(ws -> new UserSyncState(ws.getId(), ws.getUsersSyncedAt()));
-    }
-
-    @Override
     @Transactional
     public void updateUsersSyncTimestamp(Long scopeId, Instant syncedAt) {
         workspaceRepository
@@ -307,22 +301,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                         () -> log.warn(
                                 "Failed to update users sync timestamp:" + " reason=workspaceNotFound, workspaceId={}",
                                 scopeId));
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<TeamSyncState> getTeamSyncState(Long scopeId) {
-        return workspaceRepository.findById(scopeId).map(ws -> {
-            var orgNames = ws.getRepositoriesToMonitor().stream()
-                    // Apply repository filter to derive org names only from
-                    // allowed repositories
-                    .filter(workspaceScopeFilter::isRepositoryAllowed)
-                    .map(RepositoryToMonitor::getNameWithOwner)
-                    .map(s -> s.split("/", -1)[0])
-                    .distinct()
-                    .toList();
-            return new TeamSyncState(ws.getId(), ws.getTeamsSyncedAt(), orgNames);
-        });
     }
 
     @Override

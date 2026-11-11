@@ -16,7 +16,6 @@ import jakarta.persistence.Table;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
-import java.util.Locale;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -113,18 +112,6 @@ public class Membership {
 
         public static WorkspaceRole highest(WorkspaceRole first, WorkspaceRole second) {
             return first.compareTo(second) <= 0 ? first : second;
-        }
-
-        /** Unknown organization roles receive MEMBER access. */
-        public static WorkspaceRole fromOrganizationRole(String organizationRole) {
-            if (organizationRole == null) {
-                return MEMBER;
-            }
-            return switch (organizationRole.toUpperCase(Locale.ROOT)) {
-                case "OWNER" -> OWNER;
-                case "ADMIN" -> ADMIN;
-                default -> MEMBER;
-            };
         }
     }
 }

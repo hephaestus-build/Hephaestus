@@ -327,7 +327,6 @@ class GitHubExceptionClassifierTest {
             assertNotNull(result);
             assertThat(result.category()).isEqualTo(expected);
             assertThat(result.message()).doesNotContain("Synthetic provider diagnostic");
-            assertThat(GitHubGraphQlErrorUtils.hasAnyNotFoundError(response)).isEqualTo(type.equals("NOT_FOUND"));
         }
 
         @Test

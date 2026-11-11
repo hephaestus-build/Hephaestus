@@ -73,18 +73,6 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRejectAnotherGitLabInstance() {
-        var provider = new IdentityProvider(IdentityProviderType.GITLAB, "https://other.example");
-        provider.setId(7L);
-        when(identities.activeLinksForAccount(42L))
-                .thenReturn(List.of(new AccountIdentityQuery.IdentityView(10L, 7L, "90001", "")));
-        when(providers.findById(7L)).thenReturn(Optional.of(provider));
-        assertThatThrownBy(() -> service.resolveCurrentGitLabUser("https://gitlab.example"))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Connect your GitLab account");
-    }
-
-    @Test
     void shouldReturnEmptyForAnUnlinkedAccount() {
         assertThat(service.resolveCurrentUser()).isEmpty();
     }

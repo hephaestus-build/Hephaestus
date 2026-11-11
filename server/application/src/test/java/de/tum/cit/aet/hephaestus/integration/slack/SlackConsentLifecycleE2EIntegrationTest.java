@@ -20,7 +20,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackMonitoredChannelDTO;
-import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationCandidateSource;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -283,11 +282,11 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         UUID u2Obs = u2Conv.resultId();
         UUID u2Fb = u2Conv.feedbackId();
 
-        var candidate = new SlackConversationCandidateSource(threadRepository, messageRepository)
-                .candidateById(workspaceId, settledThreadId)
+        var candidate = threadRepository
+                .findConsentedCandidateRow(workspaceId, settledThreadId)
                 .orElseThrow();
-        assertThat(candidate.workspaceId()).isEqualTo(workspaceId);
-        assertThat(candidate.participantAccountIds()).containsExactlyInAnyOrder(u1MemberId, u2MemberId);
+        assertThat(candidate.getWorkspaceId()).isEqualTo(workspaceId);
+        assertThat(candidate.getParticipantAccountIds()).containsExactlyInAnyOrder(u1MemberId, u2MemberId);
 
         handler.handleBlockActions(optOut("U1"));
         assertThat(participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(

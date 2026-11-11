@@ -50,8 +50,6 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
             "SELECT c.sha FROM Commit c WHERE c.repository.id = :repositoryId AND c.sha IN :shas AND c.gitDetailsCapturedAt IS NOT NULL")
     Set<String> findGitDetailsCapturedShas(@Param("repositoryId") Long repositoryId, @Param("shas") List<String> shas);
 
-    long countByRepositoryId(Long repositoryId);
-
     void deleteByRepositoryId(Long repositoryId);
 
     /** Distinct author emails on commits with no linked user yet ({@code author_id IS NULL}). */
@@ -163,18 +161,6 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
         ) sub
         """, nativeQuery = true)
     List<Object[]> findRepresentativeShasByUnresolvedEmail(@Param("repositoryId") Long repositoryId);
-
-    @Query(value = """
-        SELECT gc.sha FROM git_commit gc
-        WHERE gc.repository_id = :repositoryId AND gc.author_id IS NULL
-        """, nativeQuery = true)
-    List<String> findShasWithNullAuthorByRepositoryId(@Param("repositoryId") Long repositoryId);
-
-    @Query(value = """
-        SELECT gc.sha FROM git_commit gc
-        WHERE gc.repository_id = :repositoryId AND gc.committer_id IS NULL
-        """, nativeQuery = true)
-    List<String> findShasWithNullCommitterByRepositoryId(@Param("repositoryId") Long repositoryId);
 
     /**
      * Upsert a commit by SHA and repository_id.

@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.BeforeEach;
@@ -158,31 +157,6 @@ class GitLabRateLimitTrackerTest extends BaseUnitTest {
     }
 
     @Nested
-    class IsLow {
-
-        @Test
-        void shouldReturnTrueWhenBelowLowThreshold() {
-            Long scopeId = 1L;
-            tracker.updateFromHeaders(
-                    scopeId, createHeaders(10, 100, Instant.now().plusSeconds(60), 5));
-            assertThat(tracker.isLow(scopeId)).isTrue();
-        }
-
-        @Test
-        void shouldReturnFalseWhenAtLowThreshold() {
-            Long scopeId = 1L;
-            tracker.updateFromHeaders(
-                    scopeId, createHeaders(15, 100, Instant.now().plusSeconds(60), 5));
-            assertThat(tracker.isLow(scopeId)).isFalse();
-        }
-
-        @Test
-        void shouldReturnFalseForUnknownScope() {
-            assertThat(tracker.isLow(999L)).isFalse();
-        }
-    }
-
-    @Nested
     class WaitIfNeeded {
 
         @Test
@@ -207,39 +181,6 @@ class GitLabRateLimitTrackerTest extends BaseUnitTest {
             Instant pastResetTime = Instant.now().minusSeconds(30);
             tracker.updateFromHeaders(scopeId, createHeaders(3, 100, pastResetTime, 10));
             assertThat(tracker.waitIfNeeded(scopeId)).isFalse();
-        }
-    }
-
-    @Nested
-    class GetRecommendedDelay {
-
-        @Test
-        void shouldReturnZeroWhenAboveLowThreshold() {
-            Long scopeId = 1L;
-            tracker.updateFromHeaders(
-                    scopeId, createHeaders(80, 100, Instant.now().plusSeconds(60), 5));
-            assertThat(tracker.getRecommendedDelay(scopeId)).isEqualTo(Duration.ZERO);
-        }
-
-        @Test
-        void shouldReturnZeroWhenResetTimeInPast() {
-            Long scopeId = 1L;
-            tracker.updateFromHeaders(
-                    scopeId, createHeaders(10, 100, Instant.now().minusSeconds(30), 5));
-            assertThat(tracker.getRecommendedDelay(scopeId)).isEqualTo(Duration.ZERO);
-        }
-
-        @Test
-        void shouldReturnPositiveDelayWhenLow() {
-            Long scopeId = 1L;
-            tracker.updateFromHeaders(
-                    scopeId, createHeaders(10, 100, Instant.now().plusSeconds(30), 5));
-            assertThat(tracker.getRecommendedDelay(scopeId)).isPositive();
-        }
-
-        @Test
-        void shouldReturnZeroForUnknownScope() {
-            assertThat(tracker.getRecommendedDelay(999L)).isEqualTo(Duration.ZERO);
         }
     }
 
@@ -293,8 +234,6 @@ class GitLabRateLimitTrackerTest extends BaseUnitTest {
             // Every decision API that reads the throttle state.
             tracker.getRemaining(scopeId);
             tracker.isCritical(scopeId);
-            tracker.isLow(scopeId);
-            tracker.getRecommendedDelay(scopeId);
             assertThatNoException().isThrownBy(() -> tracker.waitIfNeeded(scopeId));
 
             var gauge0 = meterRegistry

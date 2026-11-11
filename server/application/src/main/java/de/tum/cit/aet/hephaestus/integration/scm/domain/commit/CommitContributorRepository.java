@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.commit;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -15,17 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Repository
 public interface CommitContributorRepository extends JpaRepository<CommitContributor, Long> {
-    /**
-     * Find all contributors for a commit, ordered by role and ordinal.
-     */
-    @Query("""
-        SELECT cc FROM CommitContributor cc
-        LEFT JOIN FETCH cc.user
-        WHERE cc.commit.id = :commitId
-        ORDER BY cc.role, cc.ordinal
-        """)
-    List<CommitContributor> findByCommitIdWithUser(@Param("commitId") Long commitId);
-
     /**
      * Upsert a commit contributor. On conflict (same commit, email, role),
      * updates the name, ordinal, and user_id if a better resolution is available.

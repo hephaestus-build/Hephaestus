@@ -286,17 +286,6 @@ public class Issue extends BaseGitServiceEntity {
     }
 
     /**
-     * Removes an assignee from this issue.
-     *
-     * @param assignee the user to remove
-     */
-    public void removeAssignee(User assignee) {
-        if (assignee != null) {
-            this.assignees.remove(assignee);
-        }
-    }
-
-    /**
      * Adds a comment to this issue and maintains bidirectional consistency.
      *
      * @param comment the comment to add
@@ -305,42 +294,6 @@ public class Issue extends BaseGitServiceEntity {
         if (comment != null) {
             this.comments.add(comment);
             comment.setIssue(this);
-        }
-    }
-
-    /**
-     * Removes a comment from this issue and maintains bidirectional consistency.
-     *
-     * @param comment the comment to remove
-     */
-    public void removeComment(IssueComment comment) {
-        if (comment != null) {
-            this.comments.remove(comment);
-            comment.setIssue(null);
-        }
-    }
-
-    /**
-     * Adds a blocking relationship (this issue blocks the given issue).
-     *
-     * @param blockedIssue the issue that this issue blocks
-     */
-    public void addBlocking(Issue blockedIssue) {
-        if (blockedIssue != null) {
-            blockedIssue.getBlockedBy().add(this);
-            this.blocking.add(blockedIssue);
-        }
-    }
-
-    /**
-     * Removes a blocking relationship (this issue no longer blocks the given issue).
-     *
-     * @param blockedIssue the issue that this issue no longer blocks
-     */
-    public void removeBlocking(Issue blockedIssue) {
-        if (blockedIssue != null) {
-            blockedIssue.getBlockedBy().remove(this);
-            this.blocking.remove(blockedIssue);
         }
     }
 }

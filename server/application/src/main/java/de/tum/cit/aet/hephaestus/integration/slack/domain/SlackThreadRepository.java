@@ -212,27 +212,6 @@ public interface SlackThreadRepository extends JpaRepository<SlackThread, Long> 
     List<Long> findActiveThreadIds(
             @Param("workspaceId") long workspaceId, @Param("threadIds") Collection<Long> threadIds);
 
-    @Query(value = """
-        SELECT EXISTS (
-            SELECT 1
-            FROM slack_thread t
-            JOIN slack_monitored_channel c
-              ON c.workspace_id = t.workspace_id AND c.slack_channel_id = t.slack_channel_id
-            WHERE t.id = :threadId
-              AND t.workspace_id = :workspaceId
-              AND t.slack_channel_id = :channelId
-              AND t.slack_thread_ts = :threadTs
-              AND c.consent_state = 'ACTIVE'
-              AND :participantId = ANY(t.participant_account_ids)
-        )
-        """, nativeQuery = true)
-    boolean existsDeliverableThread(
-            @Param("threadId") long threadId,
-            @Param("workspaceId") long workspaceId,
-            @Param("channelId") String channelId,
-            @Param("threadTs") String threadTs,
-            @Param("participantId") long participantId);
-
     /**
      * Agent-owned {@code ConversationThreadProjection} SPI (participant-firewalled thread listing): threads in the
      * workspace whose channel consent is {@code ACTIVE} and whose participant set contains {@code audienceAccountId},

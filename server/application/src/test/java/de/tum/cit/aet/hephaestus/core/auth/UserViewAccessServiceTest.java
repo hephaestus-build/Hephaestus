@@ -11,15 +11,9 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
-import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
-import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
-import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
-import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.RecentSignInPolicy;
 import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyAssurancePolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -36,10 +30,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Tag("unit")
 class UserViewAccessServiceTest extends BaseUnitTest {
-    private final IdentityRepository identityLinks = mock(IdentityRepository.class);
     private final AuthEventWriter writer = mock(AuthEventWriter.class);
     private final UserViewAccessService service = new UserViewAccessService(
-            identityLinks,
             new AuthEventLogger(writer),
             new JsonMapper(),
             mock(RecentSignInPolicy.class),
@@ -112,24 +104,6 @@ class UserViewAccessServiceTest extends BaseUnitTest {
                         ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
         verifyNoInteractions(writer);
-    }
-
-    @Test
-    void shouldMapByProviderSubjectRatherThanCachedActorId() {
-        var account = new Account("Viewed account");
-        account.setId(3L);
-        account.setStatus(Account.Status.DELETING);
-        var link = new Identity();
-        link.setAccount(account);
-        link.setProviderId(55L);
-        link.setProviderUserKey("123");
-        when(identityLinks.findActiveScmLinks(List.of(55L), List.of("123", "124")))
-                .thenReturn(List.of(link));
-
-        assertThat(service.linkedAccounts(List.of(
-                        new UserViewAccess.ActorIdentity(99L, 55L, "123"),
-                        new UserViewAccess.ActorIdentity(100L, 55L, "124"))))
-                .containsExactly(Map.entry(99L, new UserViewAccess.LinkedAccount(3L, "DELETING")));
     }
 
     private AuthEventData written() {

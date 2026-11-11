@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.chat.item;
 
 import java.util.List;
-import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 public interface ConversationCandidateSource {
@@ -11,15 +10,6 @@ public interface ConversationCandidateSource {
      * and enqueue are the caller's job.
      */
     List<ConversationThreadCandidate> settledCandidates(int minMessageCount);
-
-    /**
-     * One thread by its own id, gated by the same {@code ACTIVE}-channel consent as {@link #settledCandidates}.
-     *
-     * <p>Used by the reaper, which knows only a workspace and thread id from the ledger row. Empty covers
-     * both "no such thread" and "channel consent was withdrawn since the row was written" — a withdrawn
-     * channel must not be re-read even though the recorded item event is still retryable.
-     */
-    Optional<ConversationThreadCandidate> candidateById(long workspaceId, long threadId);
 
     long liveTurnCount(long workspaceId, String channelId, String threadTs);
 

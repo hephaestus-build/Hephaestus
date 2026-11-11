@@ -226,9 +226,6 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
 
     List<ReviewItem> findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(long workspaceId, UUID reviewId);
 
-    List<ReviewItem> findByWorkspaceIdAndReviewIdAndStateOrderByPracticeIdAscItemIdAsc(
-            long workspaceId, UUID reviewId, ReviewItemState state);
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM ReviewItem i WHERE i.workspaceId = :workspaceId AND i.reviewId = :reviewId AND i.practiceId"
             + " = :practiceId AND i.itemId = :itemId")
@@ -240,6 +237,4 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
 
     boolean existsByWorkspaceIdAndReviewIdAndJobIdAndState(
             long workspaceId, UUID reviewId, UUID jobId, ReviewItemState state);
-
-    long countByWorkspaceIdAndReviewIdAndState(long workspaceId, UUID reviewId, ReviewItemState state);
 }

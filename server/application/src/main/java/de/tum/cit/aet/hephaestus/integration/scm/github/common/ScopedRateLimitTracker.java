@@ -53,7 +53,7 @@ public class ScopedRateLimitTracker implements RateLimitTracker, RateLimitObserv
 
     /**
      * Conservative assumed ceiling for an <em>unobserved</em> scope, used only by the throttle-decision
-     * APIs ({@link #getRemaining}, {@link #getLimit}, {@link #waitIfNeeded}, {@link #getRecommendedDelay}).
+     * APIs ({@link #getRemaining}, {@link #getLimit}, {@link #waitIfNeeded}).
      *
      * <p>It is a guess, not a fact: GitHub's real GraphQL ceiling is 5,000 points/hour for a plain
      * installation but scales to 12,500 for installations with more than 20 repositories and is 10,000 on
@@ -164,11 +164,6 @@ public class ScopedRateLimitTracker implements RateLimitTracker, RateLimitObserv
     }
 
     @Override
-    public boolean isLow(Long scopeId) {
-        return getRemaining(scopeId) < DEFAULT_LOW_THRESHOLD;
-    }
-
-    @Override
     public boolean waitIfNeeded(Long scopeId) throws InterruptedException {
         int currentRemaining = getRemaining(scopeId);
 
@@ -226,36 +221,6 @@ public class ScopedRateLimitTracker implements RateLimitTracker, RateLimitObserv
         }
         ScopeRateLimitState state = stateByScope.get(scopeId);
         return state != null ? state.resetAt.get() : null;
-    }
-
-    @Override
-    public Duration getRecommendedDelay(Long scopeId) {
-        int currentRemaining = getRemaining(scopeId);
-
-        if (currentRemaining >= DEFAULT_LOW_THRESHOLD) {
-            return Duration.ZERO;
-        }
-
-        Instant reset = getResetAt(scopeId);
-        if (reset == null || reset.isBefore(Instant.now())) {
-            return Duration.ZERO;
-        }
-
-        Duration timeUntilReset = Duration.between(Instant.now(), reset);
-
-        if (currentRemaining <= 0) {
-            return timeUntilReset.compareTo(MAX_WAIT_DURATION) > 0 ? MAX_WAIT_DURATION : timeUntilReset;
-        }
-
-        // Distribute remaining points evenly across remaining time; subtracting CRITICAL_THRESHOLD
-        // leaves a buffer so the delay doesn't shrink to zero right before the limit is exhausted.
-        int effectiveRemaining = Math.max(1, currentRemaining - CRITICAL_THRESHOLD);
-        long delayMillis = timeUntilReset.toMillis() / effectiveRemaining;
-
-        delayMillis = Math.max(MIN_WAIT_DURATION.toMillis(), delayMillis);
-        delayMillis = Math.min(MAX_WAIT_DURATION.toMillis(), delayMillis);
-
-        return Duration.ofMillis(delayMillis);
     }
 
     /**

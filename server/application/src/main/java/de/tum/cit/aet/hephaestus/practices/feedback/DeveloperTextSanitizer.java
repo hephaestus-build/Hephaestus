@@ -49,10 +49,6 @@ public final class DeveloperTextSanitizer {
 
     private static final Pattern ENVELOPE_TAIL = Pattern.compile("[\"'\\\\]*[}\\]][\"'\\\\]+\\s*$");
 
-    public static boolean isGradingMeta(@Nullable String text) {
-        return text != null && GRADING_SENTENCE.matcher(text).find();
-    }
-
     public static String sanitize(@Nullable String text) {
         if (text == null || text.isBlank()) {
             return text == null ? "" : text;

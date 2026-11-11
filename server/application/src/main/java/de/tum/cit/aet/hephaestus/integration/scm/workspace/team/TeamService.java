@@ -6,8 +6,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermissionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmMemberRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceTeamScope;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceTeamScopeResolver;
@@ -26,7 +24,6 @@ public class TeamService {
 
     private final TeamRepository teamRepository;
     private final WorkspaceTeamScopeResolver workspaceTeamScopeResolver;
-    private final TeamRepositoryPermissionRepository permissionRepository;
     private final WorkspaceTeamSettingsService workspaceTeamSettingsService;
     private final ScmMemberRepository workspaceMembershipService;
     private final RepositoryRepository repositoryRepository;
@@ -34,13 +31,11 @@ public class TeamService {
     public TeamService(
             TeamRepository teamRepository,
             WorkspaceTeamScopeResolver workspaceTeamScopeResolver,
-            TeamRepositoryPermissionRepository permissionRepository,
             WorkspaceTeamSettingsService workspaceTeamSettingsService,
             ScmMemberRepository workspaceMembershipService,
             RepositoryRepository repositoryRepository) {
         this.teamRepository = teamRepository;
         this.workspaceTeamScopeResolver = workspaceTeamScopeResolver;
-        this.permissionRepository = permissionRepository;
         this.workspaceTeamSettingsService = workspaceTeamSettingsService;
         this.workspaceMembershipService = workspaceMembershipService;
         this.repositoryRepository = repositoryRepository;
@@ -99,17 +94,6 @@ public class TeamService {
                 .findById(teamId)
                 .filter(team -> belongsToWorkspace(team, workspace))
                 .orElseThrow(() -> new EntityNotFoundException("Team", teamId));
-    }
-
-    /** Refuses a missing permission or a team outside the workspace with {@link EntityNotFoundException}. */
-    @Transactional(readOnly = true)
-    public TeamRepositoryPermission getTeamRepositoryPermission(Workspace workspace, Long teamId, Long repositoryId) {
-        return permissionRepository
-                .findWithTeamByTeam_IdAndRepository_Id(teamId, repositoryId)
-                .filter(permission -> belongsToWorkspace(permission.getTeam(), workspace))
-                .filter(permission -> repositoryRepository.isMonitored(workspace.getId(), repositoryId))
-                .orElseThrow(
-                        () -> new EntityNotFoundException("TeamRepositoryPermission", teamId + "/" + repositoryId));
     }
 
     private boolean belongsToWorkspace(@Nullable Team team, Workspace workspace) {

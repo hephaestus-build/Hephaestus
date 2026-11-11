@@ -62,22 +62,6 @@ public interface PullRequestReviewCommentRepository extends JpaRepository<PullRe
     List<RepositoryItemCountProjection> countGroupedByRepositoryIds(
             @Param("repositoryIds") Collection<Long> repositoryIds);
 
-    /**
-     * Fetch all review comments for a pull request with their authors eagerly loaded.
-     *
-     * @param pullRequestId the pull request ID
-     * @return comments with author eagerly loaded, ordered by creation time
-     */
-    @Query("""
-        SELECT prrc
-        FROM PullRequestReviewComment prrc
-        LEFT JOIN FETCH prrc.author
-        WHERE prrc.pullRequest.id = :pullRequestId
-        ORDER BY prrc.createdAt ASC
-        """)
-    List<PullRequestReviewComment> findByPullRequestIdWithAuthorOrderByCreatedAt(
-            @Param("pullRequestId") Long pullRequestId);
-
     /** The newest comments with their author, thread and parent. The caller applies delivery provenance. */
     @Query("SELECT prrc FROM PullRequestReviewComment prrc LEFT JOIN FETCH prrc.author "
             + "LEFT JOIN FETCH prrc.thread LEFT JOIN FETCH prrc.inReplyTo "
@@ -85,17 +69,6 @@ public interface PullRequestReviewCommentRepository extends JpaRepository<PullRe
             + "ORDER BY prrc.createdAt DESC, prrc.id DESC")
     List<PullRequestReviewComment> findRecentWithContextByPullRequestId(
             @Param("pullRequestId") Long pullRequestId, Pageable pageable);
-
-    @Query("""
-        SELECT prrc
-        FROM PullRequestReviewComment prrc
-        LEFT JOIN FETCH prrc.author
-        LEFT JOIN FETCH prrc.pullRequest pr
-        LEFT JOIN FETCH pr.author
-        LEFT JOIN FETCH pr.repository
-        WHERE prrc.id IN :ids
-        """)
-    List<PullRequestReviewComment> findAllByIdWithRelations(@Param("ids") Collection<Long> ids);
 
     Optional<PullRequestReviewComment> findFirstByThreadIdOrderByCreatedAtAsc(Long threadId);
 }

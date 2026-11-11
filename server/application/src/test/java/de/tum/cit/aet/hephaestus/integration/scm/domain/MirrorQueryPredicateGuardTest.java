@@ -3,9 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.scm.context.MentorContextQueryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -104,30 +102,6 @@ class MirrorQueryPredicateGuardTest extends BaseUnitTest {
             assertThat(offenders)
                     .as("every monitored mentor range must be on the connected instance and not hidden. "
                             + "Offending method -> the predicate it is missing")
-                    .isEmpty();
-        }
-    }
-
-    @Nested
-    @DisplayName("project inventory")
-    class ProjectInventory {
-
-        @Test
-        void bothProjectInventoryQueriesExcludeTombstones() {
-            Map<String, String> offenders = new LinkedHashMap<>();
-
-            collectUnguardedRanges(
-                    "findIssueInventoryByRepositoryId",
-                    queryOf(IssueRepository.class, "findIssueInventoryByRepositoryId"),
-                    offenders);
-            collectUnguardedRanges(
-                    "findPullRequestInventoryByRepositoryId",
-                    queryOf(PullRequestRepository.class, "findPullRequestInventoryByRepositoryId"),
-                    offenders);
-
-            assertThat(offenders)
-                    .as("the project inventory must exclude tombstones, or a review is handed an index of work "
-                            + "that is no longer in the project. Offending method -> the predicate it is missing")
                     .isEmpty();
         }
     }

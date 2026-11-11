@@ -30,11 +30,6 @@ public class PracticeVersionService {
     @PersistenceContext
     private @Nullable EntityManager entityManager;
 
-    @Transactional(readOnly = true)
-    public PracticeVersion forReview(Practice practice) {
-        return practice.getCurrentVersion();
-    }
-
     public PracticeDefinition definitionOf(PracticeVersion version) {
         return mapper.treeToValue(version.getDefinition(), PracticeDefinition.class);
     }

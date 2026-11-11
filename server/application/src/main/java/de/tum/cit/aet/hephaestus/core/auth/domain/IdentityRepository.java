@@ -104,14 +104,4 @@ public interface IdentityRepository extends JpaRepository<Identity, Long> {
            AND il.disabledAt IS NULL
         """)
     List<Identity> findActiveByAccountIdForUpdate(@Param("accountId") Long accountId);
-
-    @Query("""
-        SELECT il FROM Identity il JOIN FETCH il.account
-         WHERE il.providerId IN :providerIds
-           AND il.providerUserKey IN :subjects
-           AND il.teamKey = ''
-           AND il.disabledAt IS NULL
-        """)
-    List<Identity> findActiveScmLinks(
-            @Param("providerIds") Collection<Long> providerIds, @Param("subjects") Collection<String> subjects);
 }

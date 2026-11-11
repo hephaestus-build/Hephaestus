@@ -29,8 +29,6 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     List<WorkspaceListData> findListDataByIds(
             @Param("ids") Collection<Long> ids, @Param("includeInactive") boolean includeInactive);
 
-    Optional<Workspace> findFirstByOrderByIdAsc();
-
     /** Serialize the before-snapshot and update so concurrent admin changes cannot revert fields or misstate the audit trail. */
     @WorkspaceAgnostic("Locking read of the tenant root itself, by its own id")
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -147,8 +145,6 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
         """)
     long countOtherActiveWorkspacesForOrganization(
             @Param("organizationId") Long organizationId, @Param("excludedWorkspaceId") Long excludedWorkspaceId);
-
-    List<Workspace> findByStatusNot(Workspace.WorkspaceStatus status);
 
     List<Workspace> findByStatus(Workspace.WorkspaceStatus status);
 
