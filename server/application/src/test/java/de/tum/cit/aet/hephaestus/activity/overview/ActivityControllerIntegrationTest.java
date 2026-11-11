@@ -248,6 +248,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         @BeforeEach
         void publish() {
             workspace.setPublicActivityEnabled(true);
+            // Most fixtures have no account; the tests of the default turn this off again.
+            workspace.setPublicActivityContributorsWithoutAccount(true);
             workspaceRepository.save(workspace);
             monitored.setVisibility(Repository.Visibility.PUBLIC);
             monitored.setPrivate(false);
@@ -300,7 +302,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .contains(shown.getLogin())
                     .doesNotContain(hidden.getLogin(), unanswered.getLogin());
             assertThat(page.highlights().firstContributors()).doesNotContain(hidden.getLogin(), unanswered.getLogin());
-            assertThat(page.highlights().mostPeopleHelped()).doesNotContain(shown.getLogin());
             // The review stays the reviewer's work, but a person who has not answered is nobody they helped.
             var shownDetail = person(shown);
             assertThat(shownDetail.person().login()).isEqualTo(shown.getLogin());
@@ -360,7 +361,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 assertThat(excluded.people()).isEmpty();
                 assertThat(excluded.repositories()).isEmpty();
                 assertThat(excluded.highlights().firstContributors()).isEmpty();
-                assertThat(excluded.highlights().mostPeopleHelped()).isEmpty();
                 assertThat(excluded.coverage().totalRepositories()).isZero();
                 assertThat(excluded.from()).isNotEqualTo(DAY);
                 jdbc.update(
@@ -1032,7 +1032,13 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .patch()
                     .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
-                    .bodyValue(Map.of("publicActivityEnabled", false, "allowSearchEngines", false))
+                    .bodyValue(Map.of(
+                            "publicActivityEnabled",
+                            false,
+                            "allowSearchEngines",
+                            false,
+                            "contributorsWithoutAccount",
+                            false))
                     .exchange()
                     .expectStatus()
                     .isForbidden()
@@ -1041,7 +1047,13 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .patch()
                     .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
                     .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
-                    .bodyValue(Map.of("publicActivityEnabled", true, "allowSearchEngines", true))
+                    .bodyValue(Map.of(
+                            "publicActivityEnabled",
+                            true,
+                            "allowSearchEngines",
+                            true,
+                            "contributorsWithoutAccount",
+                            true))
                     .exchange()
                     .expectStatus()
                     .isOk()
@@ -1078,7 +1090,13 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .patch()
                     .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
                     .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
-                    .bodyValue(Map.of("publicActivityEnabled", false, "allowSearchEngines", false))
+                    .bodyValue(Map.of(
+                            "publicActivityEnabled",
+                            false,
+                            "allowSearchEngines",
+                            false,
+                            "contributorsWithoutAccount",
+                            false))
                     .exchange()
                     .expectStatus()
                     .isOk()
@@ -1102,17 +1120,70 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         private void patchPublicActivity(boolean enabled, boolean searchEngines) {
+            patchPublicActivity(enabled, searchEngines, true);
+        }
+
+        private void patchPublicActivity(boolean enabled, boolean searchEngines, boolean withoutAccount) {
             webTestClient
                     .patch()
                     .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
                     .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
-                    .bodyValue(Map.of("publicActivityEnabled", enabled, "allowSearchEngines", searchEngines))
+                    .bodyValue(Map.of(
+                            "publicActivityEnabled",
+                            enabled,
+                            "allowSearchEngines",
+                            searchEngines,
+                            "contributorsWithoutAccount",
+                            withoutAccount))
                     .exchange()
                     .expectStatus()
                     .isOk()
                     .expectBody()
                     .jsonPath("$.allowSearchEngines")
-                    .isEqualTo(enabled && searchEngines);
+                    .isEqualTo(enabled && searchEngines)
+                    .jsonPath("$.contributorsWithoutAccount")
+                    .isEqualTo(enabled && withoutAccount);
+        }
+
+        @Test
+        void shouldCountButNotNameContributorsWithoutAnAccountUntilTheWorkspaceListsThem() {
+            ensureAdminMembership(workspace);
+            var guest = persistUser("public-guest");
+            var pull = pullRequest(guest, monitored, work -> work);
+            record(guest, ActivityEventType.PULL_REQUEST_OPENED, ActivityTargetType.PULL_REQUEST, pull.getId(), DAY);
+
+            patchPublicActivity(true, false, true);
+            var listed = page();
+            assertThat(listed.people()).extracting(p -> p.login()).contains(guest.getLogin());
+            assertThat(listed.unlistedContributors()).isZero();
+
+            patchPublicActivity(true, false, false);
+            var unnamed = page();
+            assertThat(unnamed.people()).extracting(p -> p.login()).doesNotContain(guest.getLogin());
+            // Each contributor is either named or counted, never both and never neither.
+            assertThat(unnamed.people().size() + unnamed.unlistedContributors())
+                    .isEqualTo(listed.people().size());
+            assertThat(unnamed.unlistedContributors()).isPositive();
+            for (String suffix : List.of("", "/work")) {
+                personRead(guest, suffix, uri -> uri).isNotFound().expectBody(Void.class);
+            }
+
+            // With nobody named, the whole period still counts, so the page does not read as empty.
+            publicationChoice.setVisible(accountId(ada), false);
+            publicationChoice.setVisible(accountId(zoe), false);
+            patchPublicActivity(true, false, true);
+            var everyone = page();
+            patchPublicActivity(true, false, false);
+            var nobodyNamed = page();
+            assertThat(nobodyNamed.people()).isEmpty();
+            assertThat(nobodyNamed.unlistedContributors())
+                    .isEqualTo(everyone.people().size());
+            assertThat(nobodyNamed.from()).isEqualTo(everyone.from());
+
+            // A page that is turned off forgets the choice, so publishing again counts them again.
+            patchPublicActivity(false, false, true);
+            patchPublicActivity(true, false, false);
+            assertThat(page().unlistedContributors()).isEqualTo(nobodyNamed.unlistedContributors());
         }
 
         @Test

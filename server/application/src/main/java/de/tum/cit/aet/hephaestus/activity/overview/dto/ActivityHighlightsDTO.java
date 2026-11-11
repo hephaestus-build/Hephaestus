@@ -4,5 +4,4 @@ import java.util.List;
 import org.jspecify.annotations.NonNull;
 
 /** Identifiers refer only to the people in the same response. */
-public record ActivityHighlightsDTO(
-        @NonNull List<Long> firstContributors, @NonNull List<Long> mostPeopleHelped) {}
+public record ActivityHighlightsDTO(@NonNull List<Long> firstContributors) {}

@@ -277,7 +277,8 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
     void shouldRejectAnonymousWorkspaceReadsEvenWhenPublicActivityIsEnabled() {
         User owner = persistUser("public-owner");
         Workspace workspace = createWorkspace("public-space", "Public", "public", AccountType.ORG, owner);
-        workspaceService.updatePublicActivity(workspace.getWorkspaceSlug(), true, false);
+        workspaceService.updatePublicActivity(
+                workspace.getWorkspaceSlug(), new PublicActivityChoice(true, false, false));
         webTestClient
                 .get()
                 .uri("/workspaces/{workspaceSlug}/context-echo", workspace.getWorkspaceSlug())
@@ -291,7 +292,8 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
     void unauthenticatedAccessToPrivateWorkspaceIsUnauthorized() {
         User owner = persistUser("private-owner");
         Workspace workspace = createWorkspace("private-space", "Private", "private", AccountType.ORG, owner);
-        workspaceService.updatePublicActivity(workspace.getWorkspaceSlug(), false, false);
+        workspaceService.updatePublicActivity(
+                workspace.getWorkspaceSlug(), new PublicActivityChoice(false, false, false));
 
         webTestClient
                 .get()

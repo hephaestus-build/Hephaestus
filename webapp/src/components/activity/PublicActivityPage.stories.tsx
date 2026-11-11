@@ -268,6 +268,28 @@ export const Empty: Story = {
 	},
 };
 
+/** Contributors the page counts but does not name follow the people it names, and a search leaves them out. */
+export const UnlistedContributors: Story = {
+	args: { people: readyPublicPeople(publicActivityOf(PEOPLE, { unlistedContributors: 3 })) },
+	play: async ({ canvas, userEvent }) => {
+		const note = canvas.getByText("and 3 more contributors");
+		await expect(note).toBeVisible();
+		await expect(precedes(canvas.getByRole("table", { name: "People" }), note)).toBe(true);
+		await userEvent.type(canvas.getByRole("searchbox", { name: "Search people" }), "ada");
+		await expect(canvas.queryByText("and 3 more contributors")).not.toBeInTheDocument();
+	},
+};
+
+/** The page names no one in the range but counts one contributor, so it does not say nobody contributed. */
+export const OnlyUnlistedContributors: Story = {
+	args: { people: readyPublicPeople(publicActivityOf([], { unlistedContributors: 1 })) },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("No one named in this range")).toBeVisible();
+		await expect(canvas.getByText("1 contributor in this range is not named here.")).toBeVisible();
+		await expect(canvas.queryByText("No activity in this range")).not.toBeInTheDocument();
+	},
+};
+
 /** Some repositories' history is complete: the page says since when, and for how many. */
 export const PartialHistory: Story = {
 	args: {

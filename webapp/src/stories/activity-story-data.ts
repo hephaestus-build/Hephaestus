@@ -687,7 +687,6 @@ export function peopleOf(
 			firstContributors: [...(options.firstContributors ?? [elodie.id])].filter((id) =>
 				people.some(({ person }) => person.id === id),
 			),
-			mostPeopleHelped: [],
 		},
 		repositories: REPOSITORIES,
 		teams: TEAMS,
@@ -711,6 +710,7 @@ export function publicActivityOf(
 		workspaceName: "Hephaestus",
 		providerType: "GITHUB",
 		allowSearchEngines: false,
+		unlistedContributors: 0,
 		from: everyone.from,
 		to: everyone.to,
 		coverage: everyone.coverage,
@@ -719,7 +719,6 @@ export function publicActivityOf(
 			firstContributors: everyone.highlights.firstContributors.flatMap((id) =>
 				people.filter(({ person }) => person.id === id).map(({ person }) => person.login),
 			),
-			mostPeopleHelped: [],
 		},
 		people: people.map(({ person, counts, firstContributionAt, weeks }) => ({
 			login: person.login,

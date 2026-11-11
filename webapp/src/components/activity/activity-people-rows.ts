@@ -46,10 +46,18 @@ export interface PeopleRows {
 	to: Date;
 	/** The people whose first contribution is in the period, by `person.id`. */
 	highlights: { firstContributors: readonly (number | string)[] };
+	/** Contributors in the period that the public page counts but does not name. */
+	unlisted?: number;
 }
 
 /** The public page's people: a public login stands for a person, as no id leaves the server. */
-export function publicPeopleRows({ people, from, to, highlights }: PublicActivity): PeopleRows {
+export function publicPeopleRows({
+	people,
+	from,
+	to,
+	highlights,
+	unlistedContributors,
+}: PublicActivity): PeopleRows {
 	return {
 		people: people.map(({ login, name, avatarUrl, profileUrl, counts, weeks }) => ({
 			person: { id: login, login, name, avatarUrl, htmlUrl: profileUrl },
@@ -59,6 +67,7 @@ export function publicPeopleRows({ people, from, to, highlights }: PublicActivit
 		from,
 		to,
 		highlights: { firstContributors: highlights.firstContributors },
+		unlisted: unlistedContributors,
 	};
 }
 

@@ -56,10 +56,11 @@ function publicActivity(overrides: Partial<Wire<PublicActivity>> = {}): Wire<Pub
 		workspaceName: "Acme",
 		providerType: "GITHUB",
 		allowSearchEngines: false,
+		unlistedContributors: 0,
 		from: "2026-09-01T00:00:00Z",
 		to: "2026-10-01T00:00:00Z",
 		coverage: { completeRepositories: 1, totalRepositories: 1 },
-		highlights: { firstContributors: [], mostPeopleHelped: [] },
+		highlights: { firstContributors: [] },
 		repositories: [
 			{ key: "acme/api", name: "api" },
 			{ key: "acme/web", name: "web" },
@@ -172,6 +173,16 @@ describe("the address of a workspace", () => {
 		expect(names()).toStrictEqual(["Bob Brenner", "Ada Lovelace"]);
 		within(screen.getByRole("main")).getByRole("button", { name: "Sign in" });
 		expect(router.state.location.pathname).toBe("/w/acme");
+	});
+
+	it("counts the contributors it does not name after the people it names", async () => {
+		server.use(unauthenticatedUser);
+		publish(publicActivity({ unlistedContributors: 1204 }));
+		renderRouteAtWithRouter("/w/acme");
+
+		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
+		expect(names()).toStrictEqual(["Bob Brenner", "Ada Lovelace"]);
+		screen.getByText("and 1,204 more contributors");
 	});
 
 	// The server answers an unknown, a private and a switched-off workspace alike, so the page

@@ -24,7 +24,7 @@ A page that is already open in a browser keeps its contents until it loads again
 | Who                     | Where                                            | Control                                        |
 | ----------------------- | ------------------------------------------------ | ---------------------------------------------- |
 | Instance administrator  | **Instance settings**, **Public activity pages** | **Allow public activity pages**                |
-| Workspace administrator | **Workspace settings**, **Public activity page** | **Publish the page**, **Allow search engines** |
+| Workspace administrator | **Workspace settings**, **Public activity page** | **Publish the page**, **Allow search engines**, **Show contributors without an account** |
 | Workspace administrator | **Workspace activity**, a person's level         | **Hide from activity**                         |
 
 ### Instance administrators
@@ -39,11 +39,12 @@ The switch shows the stored choice, not the configured default.
 **Publish the page** asks first.
 The confirmation states what becomes public:
 
-- the outside contributors to the public repositories, and the members who chose to show, by name, picture and profile link
+- the people who chose to show, by name, picture and profile link
 - the pull requests (merge requests on GitLab) each person opened and reviewed, the issues they opened, their public work timeline, and weekly counts of their activity
 
 It also states that the page shows nothing from private repositories, practices, feedback, AI content, Slack, Outline or automation accounts.
 It states that members and people who signed in are hidden until they choose to show.
+It also states that people without an account are counted, not named, until you show them.
 It also states that anyone on the page can hide in User settings.
 Turning the page off needs no confirmation.
 
@@ -60,6 +61,16 @@ Turning the page off sets it back to off, so publishing again starts with search
 Off, the page sets `<meta name="robots" content="noindex">`, and the API response carries `X-Robots-Tag: noindex`.
 The webapp sets the meta tag with JavaScript, so a crawler that does not run JavaScript does not see it.
 This is a request to search engines, not access control.
+
+**Show contributors without an account** is off by default, and it exists only while the page is on.
+Off, the page does not name a contributor who has no account that chose to show.
+It shows only their number, for example "and 3 more contributors", so the page does not hide that they contributed.
+Their work does not count in the totals.
+Their person pages are not available.
+On, the page names them until they object.
+Turn it off to hide them again.
+Turning the page off sets it back to off.
+This default follows data protection by default (GDPR Art. 25(2)): the page publishes a person only after that person or an administrator chooses it.
 
 **People left out of the page** shows how many people the page leaves out and does not count.
 It includes people who hid themselves, people who have not answered yet, and people an administrator hid.
@@ -122,8 +133,8 @@ Turning the setting off stops all public activity pages on the next request.
 
 A workspace administrator can read `GET /workspaces/{slug}/public-activity` and change
 `PATCH /workspaces/{slug}/public-activity`.
-The PATCH body is `{"publicActivityEnabled": true, "allowSearchEngines": false}`.
-Both fields are required.
+The PATCH body is `{"publicActivityEnabled": true, "allowSearchEngines": false, "contributorsWithoutAccount": false}`.
+All three fields are required.
 Changes are audited.
 The page is available only when the instance allows it and the active workspace enables it.
 The old whole-workspace public flag no longer grants anonymous access.

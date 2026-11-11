@@ -13,9 +13,16 @@ import {
 	updatePublicActivityMutation,
 	updatePublicActivityObjectionMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { UpdateWorkspacePublicActivityRequest, Workspace } from "@/api/types.gen";
+import type {
+	PublicActivityWorkspaceSettings,
+	UpdateWorkspacePublicActivityRequest,
+	Workspace,
+} from "@/api/types.gen";
 import type { WorkspaceHiddenPeopleState } from "@/components/admin/settings/WorkspaceHiddenPeopleSettings";
-import type { WorkspacePublicActivityState } from "@/components/admin/settings/WorkspacePublicActivitySettings";
+import type {
+	PublicActivityChange,
+	WorkspacePublicActivityState,
+} from "@/components/admin/settings/WorkspacePublicActivitySettings";
 import { panelState } from "@/components/common/panel-state";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -24,7 +31,8 @@ import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-ref
 
 /**
  * A workspace's public activity page as its admin settings show it: whether it is on, whether search
- * engines may list it, how many people it leaves out, and the two changes. Beside it, the hidden
+ * engines may list it, whether it names contributors without an account, how many people it leaves
+ * out, and the three changes. Beside it, the hidden
  * people an admin can show again, since showing one again is a public activity objection taken back.
  * `live` is the server-computed publication status from the workspace list.
  * An instance administrator outside that list reads the existing instance policy instead.
@@ -114,12 +122,17 @@ export function useWorkspacePublicActivity({
 		const body = {
 			publicActivityEnabled: current.data.enabled,
 			allowSearchEngines: current.data.allowSearchEngines,
+			contributorsWithoutAccount: current.data.contributorsWithoutAccount,
 			...patch,
 		};
-		// A page that is off has no search engine choice: the server forgets it, so this says the same.
+		// A page that is off has no choices: the server forgets them, so this says the same.
 		update.mutate({
 			path,
-			body: { ...body, allowSearchEngines: body.publicActivityEnabled && body.allowSearchEngines },
+			body: {
+				...body,
+				allowSearchEngines: body.publicActivityEnabled && body.allowSearchEngines,
+				contributorsWithoutAccount: body.publicActivityEnabled && body.contributorsWithoutAccount,
+			},
 		});
 	};
 
@@ -148,13 +161,14 @@ export function useWorkspacePublicActivity({
 			status: "ready",
 			enabled: current.data.enabled,
 			allowSearchEngines: current.data.allowSearchEngines,
+			contributorsWithoutAccount: current.data.contributorsWithoutAccount,
 			refreshFailure:
 				current.refreshFailure ??
 				(live === undefined ? publicationPolicy.refreshFailure : undefined),
 			live: publication,
 			// A count that did not load is left out rather than shown from an earlier read.
 			hiddenPeople: hidden.isError ? undefined : hidden.data?.hiddenPeople,
-			pending: pendingBody && pendingChange(pendingBody, current.data.enabled),
+			pending: pendingBody && pendingChange(pendingBody, current.data),
 		};
 	} else if (settings.isError || (live === undefined && policyQuery.isError)) {
 		state = {
@@ -172,6 +186,8 @@ export function useWorkspacePublicActivity({
 		state,
 		onEnabledChange: (publicActivityEnabled: boolean) => change({ publicActivityEnabled }),
 		onSearchEnginesChange: (allowSearchEngines: boolean) => change({ allowSearchEngines }),
+		onContributorsWithoutAccountChange: (contributorsWithoutAccount: boolean) =>
+			change({ contributorsWithoutAccount }),
 		hiddenPeople: {
 			state: hiddenPeopleState,
 			restoring: showAgain.isPending ? showAgain.variables.path.userId : undefined,
@@ -206,12 +222,17 @@ function lastRead<TData, TError>(
 	return { data: query.isError ? undefined : query.data };
 }
 
-/** The page's switch if the request turns it on or off, else the search engines' one. */
+/** The switch whose value the request changes; the page's switch first, as it resets the others. */
 function pendingChange(
-	{ publicActivityEnabled }: UpdateWorkspacePublicActivityRequest,
-	enabled: boolean,
-): "enabled" | "search-engines" {
-	return publicActivityEnabled === enabled ? "search-engines" : "enabled";
+	request: UpdateWorkspacePublicActivityRequest,
+	saved: PublicActivityWorkspaceSettings,
+): PublicActivityChange {
+	if (request.publicActivityEnabled !== saved.enabled) {
+		return "enabled";
+	}
+	return request.contributorsWithoutAccount === saved.contributorsWithoutAccount
+		? "search-engines"
+		: "contributors-without-account";
 }
 
 /** Which workspace a notification is about, since the admin may be looking at another one by then. */

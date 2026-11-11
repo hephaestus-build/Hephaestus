@@ -3,7 +3,7 @@ import { Bug, Lightbulb, MessageSquare } from "lucide-react";
 import type { FeedbackItem } from "@/api/types.gen";
 import type { StatusDefs } from "@/components/common/status-def";
 
-/** What a member chose to send, as the inbox badges it. */
+/** What a member chose to send, as the report list badges it. */
 export const FEEDBACK_KIND_DEFS: StatusDefs<FeedbackItem["kind"]> = {
 	IDEA: {
 		label: "Idea",

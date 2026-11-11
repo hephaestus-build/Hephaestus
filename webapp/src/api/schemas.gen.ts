@@ -291,18 +291,10 @@ export const ActivityHighlightsSchema = {
                 type: 'integer',
                 format: 'int64'
             }
-        },
-        mostPeopleHelped: {
-            type: 'array',
-            items: {
-                type: 'integer',
-                format: 'int64'
-            }
         }
     },
     required: [
-        'firstContributors',
-        'mostPeopleHelped'
+        'firstContributors'
     ]
 } as const;
 
@@ -11909,6 +11901,11 @@ export const PublicActivitySchema = {
             type: 'string',
             format: 'date-time'
         },
+        unlistedContributors: {
+            type: 'integer',
+            format: 'int32',
+            description: 'Contributors in the period who are counted but not named, because they have no account that chose to show and the workspace does not list such contributors'
+        },
         workspaceName: {
             type: 'string'
         }
@@ -11921,6 +11918,7 @@ export const PublicActivitySchema = {
         'people',
         'repositories',
         'to',
+        'unlistedContributors',
         'workspaceName'
     ]
 } as const;
@@ -12001,17 +11999,10 @@ export const PublicActivityHighlightsSchema = {
             items: {
                 type: 'string'
             }
-        },
-        mostPeopleHelped: {
-            type: 'array',
-            items: {
-                type: 'string'
-            }
         }
     },
     required: [
-        'firstContributors',
-        'mostPeopleHelped'
+        'firstContributors'
     ]
 } as const;
 
@@ -12347,12 +12338,17 @@ export const PublicActivityWorkspaceSettingsSchema = {
         allowSearchEngines: {
             type: 'boolean'
         },
+        contributorsWithoutAccount: {
+            type: 'boolean',
+            description: 'Whether the page names contributors who have no account that chose to show. Otherwise it only counts them.'
+        },
         enabled: {
             type: 'boolean'
         }
     },
     required: [
         'allowSearchEngines',
+        'contributorsWithoutAccount',
         'enabled'
     ]
 } as const;
@@ -19866,12 +19862,16 @@ export const UpdateWorkspacePublicActivityRequestSchema = {
         allowSearchEngines: {
             type: 'boolean'
         },
+        contributorsWithoutAccount: {
+            type: 'boolean'
+        },
         publicActivityEnabled: {
             type: 'boolean'
         }
     },
     required: [
         'allowSearchEngines',
+        'contributorsWithoutAccount',
         'publicActivityEnabled'
     ]
 } as const;

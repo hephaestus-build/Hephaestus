@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.activity.overview.dto;
 
+import de.tum.cit.aet.hephaestus.activity.overview.ActivityPeopleService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
@@ -24,12 +25,19 @@ public record PublicActivityDTO(
         @NonNull List<PublicActivityPersonDTO> people,
         @NonNull ActivityCoverageDTO coverage,
         @NonNull PublicActivityHighlightsDTO highlights,
-        @NonNull List<PublicActivityRepositoryDTO> repositories) {
+        @NonNull List<PublicActivityRepositoryDTO> repositories,
+
+        @Schema(
+                requiredMode = RequiredMode.REQUIRED,
+                description = "Contributors in the period who are counted but not named, because they have no"
+                        + " account that chose to show and the workspace does not list such contributors")
+        int unlistedContributors) {
     public static PublicActivityDTO from(
             String workspaceName,
             @Nullable IdentityProviderType providerType,
             boolean allowSearchEngines,
-            ActivityPeopleDTO activity) {
+            ActivityPeopleService.PublicPeople publicPeople) {
+        var activity = publicPeople.people();
         var loginsById = activity.people().stream()
                 .collect(Collectors.toMap(
                         row -> row.person().id(), row -> row.person().login()));
@@ -42,11 +50,11 @@ public record PublicActivityDTO(
                 activity.people().stream().map(PublicActivityPersonDTO::from).toList(),
                 activity.coverage(),
                 new PublicActivityHighlightsDTO(
-                        logins(loginsById, activity.highlights().firstContributors()),
-                        logins(loginsById, activity.highlights().mostPeopleHelped())),
+                        logins(loginsById, activity.highlights().firstContributors())),
                 activity.repositories().stream()
                         .map(repository -> new PublicActivityRepositoryDTO(repository.key(), repository.name()))
-                        .toList());
+                        .toList(),
+                publicPeople.unlistedContributors());
     }
 
     private static List<String> logins(Map<Long, String> loginsById, List<Long> ids) {
@@ -55,9 +63,7 @@ public record PublicActivityDTO(
                 .toList();
     }
 
-    public record PublicActivityHighlightsDTO(
-            @NonNull List<String> firstContributors,
-            @NonNull List<String> mostPeopleHelped) {}
+    public record PublicActivityHighlightsDTO(@NonNull List<String> firstContributors) {}
 
     public record PublicActivityRepositoryDTO(
             @NonNull String key, @NonNull String name) {}

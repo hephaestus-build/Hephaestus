@@ -7,7 +7,7 @@ import { updatePublicActivity } from '../../sdk/updatePublicActivity.gen.js';
 import type { UpdatePublicActivityData, UpdatePublicActivityResponse } from '../../types.gen.js';
 
 /**
- * Turn the public activity page and search indexing on or off
+ * Turn the public activity page, search indexing and contributors without an account on or off
  */
 export const updatePublicActivityMutation = (options?: Partial<Options<UpdatePublicActivityData>>): UseMutationOptions<UpdatePublicActivityResponse, DefaultError, Options<UpdatePublicActivityData>> => {
     const mutationOptions: UseMutationOptions<UpdatePublicActivityResponse, DefaultError, Options<UpdatePublicActivityData>> = {

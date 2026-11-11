@@ -20,12 +20,14 @@ const meta = {
 			status: "ready",
 			enabled: false,
 			allowSearchEngines: false,
+			contributorsWithoutAccount: false,
 			live: false,
 			hiddenPeople: undefined,
 			pending: undefined,
 		},
 		onEnabledChange: fn(),
 		onSearchEnginesChange: fn(),
+		onContributorsWithoutAccountChange: fn(),
 	},
 } satisfies Meta<typeof WorkspacePublicActivitySettings>;
 
@@ -33,6 +35,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const PAGE = "Publish the page";
+const WITHOUT_ACCOUNT = "Show contributors without an account";
 
 /** The confirmation, once it has arrived: a dialog fades in, and what is inside it reads as transparent until then. */
 async function confirmation() {
@@ -45,6 +48,7 @@ const live = {
 	status: "ready",
 	enabled: true,
 	allowSearchEngines: false,
+	contributorsWithoutAccount: false,
 	live: true,
 	hiddenPeople: 3,
 	pending: undefined,
@@ -66,6 +70,9 @@ export const Off: Story = {
 			dialog.getByText(/^When the page is public, anyone can see it without signing in\./u),
 		).toBeVisible();
 		await expect(dialog.getByText(/pull requests each person opened and reviewed/u)).toBeVisible();
+		await expect(
+			dialog.getByText(/People without an account are counted, not named, until you choose/u),
+		).toBeVisible();
 		await expect(args.onEnabledChange).not.toHaveBeenCalled();
 		await userEvent.click(dialog.getByRole("button", { name: "Make public" }));
 		await expect(args.onEnabledChange).toHaveBeenCalledWith(true);
@@ -95,6 +102,12 @@ export const On: Story = {
 		await expect(canvas.getByRole("switch", { name: "Allow search engines" })).not.toBeChecked();
 		await userEvent.click(canvas.getByRole("switch", { name: "Allow search engines" }));
 		await expect(args.onSearchEnginesChange).toHaveBeenCalledWith(true);
+		await expect(canvas.getByRole("switch", { name: WITHOUT_ACCOUNT })).not.toBeChecked();
+		await expect(
+			canvas.getByText("Off. People without an account are counted on the page, not named."),
+		).toBeVisible();
+		await userEvent.click(canvas.getByRole("switch", { name: WITHOUT_ACCOUNT }));
+		await expect(args.onContributorsWithoutAccountChange).toHaveBeenCalledWith(true);
 		// Turning the page off is a change of mind, not a decision to confirm.
 		await userEvent.click(canvas.getByRole("switch", { name: PAGE }));
 		await expect(args.onEnabledChange).toHaveBeenCalledWith(false);
@@ -114,6 +127,7 @@ export const OffWhileStatusCatchesUp: Story = {
 			canvas.getByText("Off. This workspace is not set to publish a public activity page."),
 		).toBeVisible();
 		await expect(canvas.queryByRole("switch", { name: "Allow search engines" })).toBeNull();
+		await expect(canvas.queryByRole("switch", { name: WITHOUT_ACCOUNT })).toBeNull();
 		await expect(canvas.queryByText(/Anyone can see it/u)).toBeNull();
 		await expect(canvas.queryByText(/private window/u)).toBeNull();
 	},
@@ -123,6 +137,19 @@ export const SearchEnginesAllowed: Story = {
 	args: { state: { ...live, allowSearchEngines: true } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("switch", { name: "Allow search engines" })).toBeChecked();
+	},
+};
+
+/** The page names people without an account, and turning that off counts them again. */
+export const ContributorsWithoutAccountShown: Story = {
+	args: { state: { ...live, contributorsWithoutAccount: true } },
+	play: async ({ args, canvas, userEvent }) => {
+		await expect(canvas.getByRole("switch", { name: WITHOUT_ACCOUNT })).toBeChecked();
+		await expect(
+			canvas.getByText("On. People without an account are named on the page until they object."),
+		).toBeVisible();
+		await userEvent.click(canvas.getByRole("switch", { name: WITHOUT_ACCOUNT }));
+		await expect(args.onContributorsWithoutAccountChange).toHaveBeenCalledWith(false);
 	},
 };
 
@@ -217,6 +244,20 @@ export const Saving: Story = {
 			"true",
 		);
 		await expect(canvas.getByRole("switch", { name: "Allow search engines" })).toBeEnabled();
+	},
+};
+
+export const SavingContributorsWithoutAccount: Story = {
+	args: { state: { ...live, pending: "contributors-without-account" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("switch", { name: WITHOUT_ACCOUNT })).toHaveAttribute(
+			"aria-readonly",
+			"true",
+		);
+		await expect(canvas.getByRole("switch", { name: PAGE })).not.toHaveAttribute(
+			"aria-readonly",
+			"true",
+		);
 	},
 };
 

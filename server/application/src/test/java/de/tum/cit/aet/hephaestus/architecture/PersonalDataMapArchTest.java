@@ -124,8 +124,12 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
 
     /** Columns whose name matches the person heuristic but that hold no person. */
     private static final Map<String, String> NOT_A_PERSON = Map.of(
-            "llm_model.operated_by", "Who operates the model: the own organisation or the provider",
-            "workspace_llm_model.operated_by", "Who operates the model: the own organisation or the provider");
+            "llm_model.operated_by",
+            "Who operates the model: the own organisation or the provider",
+            "workspace_llm_model.operated_by",
+            "Who operates the model: the own organisation or the provider",
+            "workspace.public_activity_contributors_without_account",
+            "Whether the public activity page names contributors without an account: a workspace setting");
 
     @Test
     void everyTableIsEitherMappedOrDeclaredFreeOfPersonalData() throws IOException {

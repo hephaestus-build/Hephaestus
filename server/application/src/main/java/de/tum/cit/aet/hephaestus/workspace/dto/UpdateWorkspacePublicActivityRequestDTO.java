@@ -5,4 +5,5 @@ import org.jspecify.annotations.NonNull;
 
 public record UpdateWorkspacePublicActivityRequestDTO(
         @NonNull @NotNull Boolean publicActivityEnabled,
-        @NonNull @NotNull Boolean allowSearchEngines) {}
+        @NonNull @NotNull Boolean allowSearchEngines,
+        @NonNull @NotNull Boolean contributorsWithoutAccount) {}

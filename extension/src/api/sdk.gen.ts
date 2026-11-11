@@ -3313,7 +3313,7 @@ export const getWorkspacePublicActivitySettings = <ThrowOnError extends boolean 
 });
 
 /**
- * Turn the public activity page and search indexing on or off
+ * Turn the public activity page, search indexing and contributors without an account on or off
  */
 export const updatePublicActivity = <ThrowOnError extends boolean = false>(options: Options<UpdatePublicActivityData, ThrowOnError>): RequestResult<UpdatePublicActivityResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdatePublicActivityResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

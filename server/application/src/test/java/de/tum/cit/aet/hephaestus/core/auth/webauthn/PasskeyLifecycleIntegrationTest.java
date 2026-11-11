@@ -193,7 +193,7 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .jsonPath("$.role")
                 .isEqualTo("ADMIN");
         patch(base + "/public-activity", oauth, csrf)
-                .bodyValue(new UpdateWorkspacePublicActivityRequestDTO(true, false))
+                .bodyValue(new UpdateWorkspacePublicActivityRequestDTO(true, false, false))
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -202,7 +202,7 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
         assertThat(publicActivityEnabled(admin.workspace())).isFalse();
         patch(base + "/public-activity", token(admin.account(), Instant.now()), csrf)
-                .bodyValue(new UpdateWorkspacePublicActivityRequestDTO(true, false))
+                .bodyValue(new UpdateWorkspacePublicActivityRequestDTO(true, false, false))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -222,7 +222,7 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .jsonPath("$.role")
                 .isEqualTo("MEMBER");
         patch(memberBase + "/public-activity", token(member.account(), Instant.now()), csrf)
-                .bodyValue(new UpdateWorkspacePublicActivityRequestDTO(true, false))
+                .bodyValue(new UpdateWorkspacePublicActivityRequestDTO(true, false, false))
                 .exchange()
                 .expectStatus()
                 .isForbidden()
