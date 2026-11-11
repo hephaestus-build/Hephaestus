@@ -233,6 +233,7 @@
 	"docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md",
 	"docs/decisions/0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md",
 	"docs/decisions/0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md",
+	"docs/decisions/0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",

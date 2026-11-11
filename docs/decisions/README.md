@@ -118,7 +118,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0041](0041-compose-1x-kubernetes-2.md) | Compose for 1.x; Kubernetes only for 2.0 | Superseded by [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) |
 | [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Superseded by [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) |
 | [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
-| [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Accepted |
+| [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Superseded by [0098](0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md) |
 | [0045](0045-activity-counts-work-and-never-ranks-people.md) | Activity counts and lists work; it never scores or ranks people | Superseded by [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) |
 | [0046](0046-heph-follows-its-model-not-a-workspace-switch.md) | Heph follows its model, not a workspace switch | Accepted |
 | [0047](0047-the-practice-profile-has-one-reader.md) | The Practice profile has one reader | Superseded by [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) |
@@ -171,5 +171,6 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) | Each provider has one adapter behind a vendor-neutral SPI, and Outline is a documentation source with a link-only identity | Accepted |
 | [0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md) | 1.0 is one stopped cutover from 1.0.0-rc.1, and it keeps nothing for 0.x | Accepted |
 | [0097](0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md) | Product feedback becomes a GitHub issue, and only the reporter's tick and a code gate make it public | Accepted |
+| [0098](0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md) | Each email is one outbox action that the deciding transaction enqueues, and Hephaestus sends it at most once | Accepted |
 
 Template: [0000-template.md](0000-template.md).
