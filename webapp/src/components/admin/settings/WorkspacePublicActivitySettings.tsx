@@ -115,7 +115,7 @@ function ReadySettingsBody({
 	onSearchEnginesChange,
 	onContributorsWithoutAccountChange,
 }: Omit<WorkspacePublicActivitySettingsProps, "state"> & { state: ReadySettings }) {
-	const [confirming, setConfirming] = useState(false);
+	const [confirmation, setConfirmation] = useState<"page" | "contributors" | null>(null);
 	return (
 		<>
 			<div className="space-y-3">
@@ -130,7 +130,7 @@ function ReadySettingsBody({
 						pending={state.pending === "enabled"}
 						onCheckedChange={(next) => {
 							if (next) {
-								setConfirming(true);
+								setConfirmation("page");
 							} else {
 								onEnabledChange(false);
 							}
@@ -159,7 +159,13 @@ function ReadySettingsBody({
 							}
 							checked={state.contributorsWithoutAccount}
 							pending={state.pending === "contributors-without-account"}
-							onCheckedChange={onContributorsWithoutAccountChange}
+							onCheckedChange={(next) => {
+								if (next) {
+									setConfirmation("contributors");
+								} else {
+									onContributorsWithoutAccountChange(false);
+								}
+							}}
 						/>
 					)}
 					{state.enabled && state.hiddenPeople !== undefined && (
@@ -196,13 +202,21 @@ function ReadySettingsBody({
 				)}
 			</div>
 			<PublishDialog
-				open={confirming}
-				onOpenChange={setConfirming}
+				open={confirmation === "page"}
+				onOpenChange={(open) => setConfirmation(open ? "page" : null)}
 				workspaceName={workspaceName}
 				providerType={providerType}
 				onConfirm={() => {
-					setConfirming(false);
+					setConfirmation(null);
 					onEnabledChange(true);
+				}}
+			/>
+			<ContributorsDialog
+				open={confirmation === "contributors"}
+				onOpenChange={(open) => setConfirmation(open ? "contributors" : null)}
+				onConfirm={() => {
+					setConfirmation(null);
+					onContributorsWithoutAccountChange(true);
 				}}
 			/>
 		</>
@@ -310,6 +324,36 @@ function PublishDialog({
 				<AlertDialogFooter>
 					<AlertDialogCancel>Cancel</AlertDialogCancel>
 					<AlertDialogAction onClick={onConfirm}>Make public</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
+	);
+}
+
+function ContributorsDialog({
+	open,
+	onOpenChange,
+	onConfirm,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	onConfirm: () => void;
+}) {
+	const popupRef = useRef<HTMLDivElement>(null);
+	return (
+		<AlertDialog open={open} onOpenChange={onOpenChange}>
+			<AlertDialogContent ref={popupRef} initialFocus={popupRef}>
+				<AlertDialogHeader>
+					<AlertDialogTitle>Show contributors without an account?</AlertDialogTitle>
+					<AlertDialogDescription>
+						Anyone can see their names, pictures, profile links and public work. These people have
+						not chosen to be named here. Check your organization’s legal basis before you publish
+						their names. You can turn this off to count them without naming them again.
+					</AlertDialogDescription>
+				</AlertDialogHeader>
+				<AlertDialogFooter>
+					<AlertDialogCancel>Cancel</AlertDialogCancel>
+					<AlertDialogAction onClick={onConfirm}>Show contributors</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>
 		</AlertDialog>

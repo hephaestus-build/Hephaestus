@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.activity.overview.dto;
 
-import de.tum.cit.aet.hephaestus.activity.overview.ActivityPeopleService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
@@ -36,8 +35,8 @@ public record PublicActivityDTO(
             String workspaceName,
             @Nullable IdentityProviderType providerType,
             boolean allowSearchEngines,
-            ActivityPeopleService.PublicPeople publicPeople) {
-        var activity = publicPeople.people();
+            ActivityPeopleDTO activity,
+            int unlistedContributors) {
         var loginsById = activity.people().stream()
                 .collect(Collectors.toMap(
                         row -> row.person().id(), row -> row.person().login()));
@@ -54,7 +53,7 @@ public record PublicActivityDTO(
                 activity.repositories().stream()
                         .map(repository -> new PublicActivityRepositoryDTO(repository.key(), repository.name()))
                         .toList(),
-                publicPeople.unlistedContributors());
+                unlistedContributors);
     }
 
     private static List<String> logins(Map<Long, String> loginsById, List<Long> ids) {

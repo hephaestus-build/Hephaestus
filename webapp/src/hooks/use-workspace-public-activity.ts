@@ -10,11 +10,11 @@ import {
 	listHiddenContributorsOptions,
 	listHiddenContributorsQueryKey,
 	listWorkspacesQueryKey,
-	updatePublicActivityMutation,
 	updatePublicActivityObjectionMutation,
 } from "@/api/@tanstack/react-query.gen";
+import { updatePublicActivity } from "@/api/sdk.gen";
 import type {
-	PublicActivityWorkspaceSettings,
+	UpdatePublicActivityData,
 	UpdateWorkspacePublicActivityRequest,
 	Workspace,
 } from "@/api/types.gen";
@@ -90,7 +90,13 @@ export function useWorkspacePublicActivity({
 			}),
 	});
 	const update = useMutation({
-		...updatePublicActivityMutation(),
+		mutationFn: async ({
+			body,
+			path: submitted,
+		}: Pick<UpdatePublicActivityData, "body" | "path"> & { change: PublicActivityChange }) => {
+			const { data } = await updatePublicActivity({ body, path: submitted, throwOnError: true });
+			return data;
+		},
 		onSuccess: async (_data, { path: submitted, body }) => {
 			// The list carries the publication status, and the count follows what the page lists.
 			void queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() });
@@ -115,7 +121,10 @@ export function useWorkspacePublicActivity({
 		},
 	});
 
-	const change = (patch: Partial<UpdateWorkspacePublicActivityRequest>) => {
+	const change = (
+		requested: PublicActivityChange,
+		patch: Partial<UpdateWorkspacePublicActivityRequest>,
+	) => {
 		if (current.data === undefined) {
 			return;
 		}
@@ -127,6 +136,7 @@ export function useWorkspacePublicActivity({
 		};
 		// A page that is off has no choices: the server forgets them, so this says the same.
 		update.mutate({
+			change: requested,
 			path,
 			body: {
 				...body,
@@ -156,7 +166,6 @@ export function useWorkspacePublicActivity({
 			? publicationPolicy.data.allowed && workspaceStatus === "ACTIVE" && current.data.enabled
 			: undefined);
 	if (current.data !== undefined && publication !== undefined) {
-		const pendingBody = update.isPending ? update.variables.body : undefined;
 		state = {
 			status: "ready",
 			enabled: current.data.enabled,
@@ -168,7 +177,10 @@ export function useWorkspacePublicActivity({
 			live: publication,
 			// A count that did not load is left out rather than shown from an earlier read.
 			hiddenPeople: hidden.isError ? undefined : hidden.data?.hiddenPeople,
-			pending: pendingBody && pendingChange(pendingBody, current.data),
+			pending:
+				update.isPending && update.variables.path.workspaceSlug === workspaceSlug
+					? update.variables.change
+					: undefined,
 		};
 	} else if (settings.isError || (live === undefined && policyQuery.isError)) {
 		state = {
@@ -184,10 +196,12 @@ export function useWorkspacePublicActivity({
 	}
 	return {
 		state,
-		onEnabledChange: (publicActivityEnabled: boolean) => change({ publicActivityEnabled }),
-		onSearchEnginesChange: (allowSearchEngines: boolean) => change({ allowSearchEngines }),
+		onEnabledChange: (publicActivityEnabled: boolean) =>
+			change("enabled", { publicActivityEnabled }),
+		onSearchEnginesChange: (allowSearchEngines: boolean) =>
+			change("search-engines", { allowSearchEngines }),
 		onContributorsWithoutAccountChange: (contributorsWithoutAccount: boolean) =>
-			change({ contributorsWithoutAccount }),
+			change("contributors-without-account", { contributorsWithoutAccount }),
 		hiddenPeople: {
 			state: hiddenPeopleState,
 			restoring: showAgain.isPending ? showAgain.variables.path.userId : undefined,
@@ -220,19 +234,6 @@ function lastRead<TData, TError>(
 		};
 	}
 	return { data: query.isError ? undefined : query.data };
-}
-
-/** The switch whose value the request changes; the page's switch first, as it resets the others. */
-function pendingChange(
-	request: UpdateWorkspacePublicActivityRequest,
-	saved: PublicActivityWorkspaceSettings,
-): PublicActivityChange {
-	if (request.publicActivityEnabled !== saved.enabled) {
-		return "enabled";
-	}
-	return request.contributorsWithoutAccount === saved.contributorsWithoutAccount
-		? "search-engines"
-		: "contributors-without-account";
 }
 
 /** Which workspace a notification is about, since the admin may be looking at another one by then. */

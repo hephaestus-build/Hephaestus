@@ -38,7 +38,11 @@ import { switchWorkspace } from "@/test/workspace-switcher";
 vi.setConfig({ testTimeout: 15_000 });
 
 /** The settings page for an admin of acme, with the integrations the catalog lists. */
-function renderSettingsRoute(practicesEnabled: boolean, catalog: JsonBodyType = []) {
+function renderSettingsRoute(
+	practicesEnabled: boolean,
+	catalog: JsonBodyType = [],
+	queryClient = testQueryClient(),
+) {
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json(ownMembership("ADMIN")),
@@ -48,7 +52,7 @@ function renderSettingsRoute(practicesEnabled: boolean, catalog: JsonBodyType = 
 		),
 		http.get("*/workspaces/:workspaceSlug/connections/catalog", () => HttpResponse.json(catalog)),
 	);
-	return renderRouteAt("/w/acme/admin/settings", testQueryClient());
+	return renderRouteAt("/w/acme/admin/settings", queryClient);
 }
 
 const ACME = { path: { workspaceSlug: "acme" } };
@@ -483,6 +487,18 @@ describe("the public activity page setting", () => {
 		const name = "Show contributors without an account";
 
 		await user.click(await screen.findByRole("switch", { name }, ROUTE_RENDER_WAIT));
+		const confirmation = await screen.findByRole("alertdialog");
+		within(confirmation).getByText(/These people have not chosen to be named here/u);
+		expect(changes).toStrictEqual([]);
+		await user.click(within(confirmation).getByRole("button", { name: "Cancel" }));
+		expect(screen.getByRole("switch", { name }).getAttribute("aria-checked")).toBe("false");
+		expect(changes).toStrictEqual([]);
+		await user.click(screen.getByRole("switch", { name }));
+		await user.click(
+			within(await screen.findByRole("alertdialog")).getByRole("button", {
+				name: "Show contributors",
+			}),
+		);
 		await waitFor(() =>
 			expect(changes).toStrictEqual([
 				{ publicActivityEnabled: true, allowSearchEngines: true, contributorsWithoutAccount: true },
@@ -500,6 +516,43 @@ describe("the public activity page setting", () => {
 			contributorsWithoutAccount: false,
 		});
 		await screen.findByText("Off. People without an account are counted on the page, not named.");
+	});
+
+	it("keeps the changed switch pending when a fresh read already contains its new value", async () => {
+		const user = userEvent.setup();
+		const response = deferred<Response>();
+		const queryClient = testQueryClient();
+		settings = { enabled: true, allowSearchEngines: false, contributorsWithoutAccount: false };
+		server.use(http.patch("*/workspaces/acme/public-activity", async () => response.promise));
+		renderSettingsRoute(false, [], queryClient);
+		const name = "Show contributors without an account";
+		try {
+			await user.click(await screen.findByRole("switch", { name }, ROUTE_RENDER_WAIT));
+			await user.click(
+				within(await screen.findByRole("alertdialog")).getByRole("button", {
+					name: "Show contributors",
+				}),
+			);
+			await waitFor(() =>
+				expect(screen.getByRole("switch", { name }).getAttribute("aria-readonly")).toBe("true"),
+			);
+			settings = { ...settings, contributorsWithoutAccount: true };
+			act(() => {
+				queryClient.setQueryData(getWorkspacePublicActivitySettingsQueryKey(ACME), settings);
+			});
+			await waitFor(() =>
+				expect(screen.getByRole("switch", { name }).getAttribute("aria-checked")).toBe("true"),
+			);
+			expect(screen.getByRole("switch", { name }).getAttribute("aria-readonly")).toBe("true");
+			expect(
+				screen.getByRole("switch", { name: "Allow search engines" }).getAttribute("aria-readonly"),
+			).not.toBe("true");
+		} finally {
+			await act(async () => response.resolve(HttpResponse.json(settings)));
+		}
+		await waitFor(() =>
+			expect(screen.getByRole("switch", { name }).getAttribute("aria-readonly")).not.toBe("true"),
+		);
 	});
 
 	it.each([false, true])(

@@ -107,11 +107,28 @@ export const On: Story = {
 			canvas.getByText("Off. People without an account are counted on the page, not named."),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("switch", { name: WITHOUT_ACCOUNT }));
+		const dialog = await confirmation();
+		await expect(dialog.getByText(/These people have not chosen to be named here/u)).toBeVisible();
+		await expect(args.onContributorsWithoutAccountChange).not.toHaveBeenCalled();
+		await userEvent.click(dialog.getByRole("button", { name: "Show contributors" }));
 		await expect(args.onContributorsWithoutAccountChange).toHaveBeenCalledWith(true);
 		// Turning the page off is a change of mind, not a decision to confirm.
 		await userEvent.click(canvas.getByRole("switch", { name: PAGE }));
 		await expect(args.onEnabledChange).toHaveBeenCalledWith(false);
 		await expect(screen.queryByRole("alertdialog")).toBeNull();
+	},
+};
+
+export const ContributorConfirmationCancelled: Story = {
+	args: { state: live },
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("switch", { name: WITHOUT_ACCOUNT }));
+		const dialog = await confirmation();
+		await expect(
+			dialog.getByRole("heading", { name: "Show contributors without an account?" }),
+		).toBeVisible();
+		await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+		await expect(canvas.getByRole("switch", { name: WITHOUT_ACCOUNT })).not.toBeChecked();
 	},
 };
 
