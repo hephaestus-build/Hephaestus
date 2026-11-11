@@ -1,6 +1,6 @@
 # ADR 0060: The Kubernetes floor follows upstream support
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md)
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
