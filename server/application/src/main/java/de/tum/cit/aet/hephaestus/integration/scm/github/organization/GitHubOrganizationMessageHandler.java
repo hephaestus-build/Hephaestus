@@ -107,10 +107,10 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
                     OrganizationMemberRole role = parseRole(event.membership().role());
                     membershipRepository.upsertMembership(organizationId, userId, role);
                     log.info(
-                            "Added member to organization: orgId={}, orgLogin={}, userLogin={}, role={}",
+                            "Added member to organization: orgId={}, orgLogin={}, userNativeId={}, role={}",
                             organizationId,
                             sanitizeForLog(orgDto.login()),
-                            sanitizeForLog(userDto.login()),
+                            userDto.getDatabaseId(),
                             role);
 
                     // Notify listeners about membership change
@@ -132,18 +132,18 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
                             Objects.requireNonNull(userDto.id()), providerId);
                     if (user.isEmpty()) {
                         log.debug(
-                                "Skipped member removal: reason=unknownUser, orgId={}, userLogin={}",
+                                "Skipped member removal: reason=unknownUser, orgId={}, userNativeId={}",
                                 organizationId,
-                                sanitizeForLog(userDto.login()));
+                                userDto.getDatabaseId());
                         return;
                     }
                     Long userId = Objects.requireNonNull(user.get().getId());
                     membershipRepository.deleteByOrganizationIdAndUserIdIn(organizationId, List.of(userId));
                     log.info(
-                            "Removed member from organization: orgId={}, orgLogin={}, userLogin={}",
+                            "Removed member from organization: orgId={}, orgLogin={}, userId={}",
                             organizationId,
                             sanitizeForLog(orgDto.login()),
-                            sanitizeForLog(userDto.login()));
+                            userId);
 
                     // Notify listeners about membership change
                     membershipListener.onMemberRemoved(

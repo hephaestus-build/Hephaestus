@@ -67,9 +67,9 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
         }
 
         log.debug(
-                "Received membership event: action={}, userLogin={}, teamName={}, orgLogin={}",
+                "Received membership event: action={}, userNativeId={}, teamName={}, orgLogin={}",
                 event.action(),
-                sanitizeForLog(memberDto.login()),
+                memberDto.getDatabaseId(),
                 sanitizeForLog(teamDto.name()),
                 event.organization() != null
                         ? sanitizeForLog(event.organization().login())
@@ -89,7 +89,7 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
         // Ensure user exists via processor
         User user = userProcessor.ensureExists(memberDto, providerId);
         if (user == null) {
-            log.warn("Skipped membership event: reason=userNotFound, userLogin={}", sanitizeForLog(memberDto.login()));
+            log.warn("Skipped membership event: reason=userNotFound, userNativeId={}", memberDto.getDatabaseId());
             return;
         }
 
@@ -115,8 +115,8 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
         // Check if membership already exists
         if (teamMembershipRepository.existsByTeam_IdAndUser_Id(team.getId(), user.getId())) {
             log.debug(
-                    "Skipped membership creation: reason=alreadyExists, userLogin={}, teamName={}",
-                    sanitizeForLog(user.getLogin()),
+                    "Skipped membership creation: reason=alreadyExists, userId={}, teamName={}",
+                    user.getId(),
                     sanitizeForLog(team.getName()));
             return;
         }
@@ -124,26 +124,20 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
         // Create and persist the membership
         TeamMembership membership = new TeamMembership(team, user, TeamMembership.Role.MEMBER);
         teamMembershipRepository.save(membership);
-        log.info(
-                "Created team membership: userLogin={}, teamName={}",
-                sanitizeForLog(user.getLogin()),
-                sanitizeForLog(team.getName()));
+        log.info("Created team membership: userId={}, teamName={}", user.getId(), sanitizeForLog(team.getName()));
     }
 
     private void handleMemberRemoved(Team team, User user) {
         // Delete the membership if it exists
         if (!teamMembershipRepository.existsByTeam_IdAndUser_Id(team.getId(), user.getId())) {
             log.debug(
-                    "Skipped membership removal: reason=notFound, userLogin={}, teamName={}",
-                    sanitizeForLog(user.getLogin()),
+                    "Skipped membership removal: reason=notFound, userId={}, teamName={}",
+                    user.getId(),
                     sanitizeForLog(team.getName()));
             return;
         }
 
         teamMembershipRepository.deleteByTeam_IdAndUser_Id(team.getId(), user.getId());
-        log.info(
-                "Removed team membership: userLogin={}, teamName={}",
-                sanitizeForLog(user.getLogin()),
-                sanitizeForLog(team.getName()));
+        log.info("Removed team membership: userId={}, teamName={}", user.getId(), sanitizeForLog(team.getName()));
     }
 }

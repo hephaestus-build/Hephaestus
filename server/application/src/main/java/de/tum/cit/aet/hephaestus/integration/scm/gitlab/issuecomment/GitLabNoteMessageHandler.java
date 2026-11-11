@@ -268,11 +268,11 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
         }
 
         log.info(
-                "Bot command detected: command={}, projectPath={}, mrIid={}, author={}, noteId={}",
+                "Bot command detected: command={}, projectPath={}, mrIid={}, authorNativeId={}, noteId={}",
                 attrs.note().strip(),
                 safeProjectPath,
                 mr.iid(),
-                user.username(),
+                user.id(),
                 attrs.id());
 
         String username = user.username();

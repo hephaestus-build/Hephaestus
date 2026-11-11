@@ -1546,10 +1546,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                     existingReview.setSubmittedAt(null);
                     existingReview.setUpdatedAt(ctx != null ? ctx.observedAt() : Instant.now());
                     changed = true;
-                    log.debug(
-                            "Updated review to APPROVED from sync: prId={}, reviewerId={}",
-                            pr.getId(),
-                            user.getLogin());
+                    log.debug("Updated review to APPROVED from sync: prId={}, reviewerId={}", pr.getId(), user.getId());
                 }
                 var submittedAt = pr.getState() == Issue.State.MERGED && nativeDates == null
                         ? existingReview.getSubmittedAt()
@@ -1571,7 +1568,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 if (nativeDates != null) review.setSubmittedAt(nativeDates.get(user.getNativeId()));
                 reviewRepository.save(review);
                 pr.addReview(review);
-                log.debug("Created approval review from sync: prId={}, reviewerId={}", pr.getId(), user.getLogin());
+                log.debug("Created approval review from sync: prId={}, reviewerId={}", pr.getId(), user.getId());
 
                 if (ctx != null) {
                     ScmEventPayload.ReviewData.from(review)

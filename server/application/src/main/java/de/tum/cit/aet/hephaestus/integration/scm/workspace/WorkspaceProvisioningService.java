@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.GITHUB_API_BASE_URL;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
@@ -427,11 +426,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
                 null,
                 null,
                 null);
-        log.info(
-                "Upserted user for GitLab workspace bootstrap: userLogin={}, nativeId={}, type={}",
-                LoggingUtils.sanitizeForLog(login),
-                nativeId,
-                userType);
+        log.info("Upserted user for GitLab workspace bootstrap: nativeId={}, type={}", nativeId, userType);
         // Retrieve the JPA-managed entity to get the auto-generated PK (provider-scoped)
         return userRepository
                 .findByLoginAndProviderId(login, providerId)
@@ -518,10 +513,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         userRepository.freeLoginConflicts(login, userInfo.id(), providerId);
         userRepository.upsertUser(
                 userInfo.id(), providerId, login, name, avatar, htmlUrl, User.Type.USER.name(), null, null, null);
-        log.info(
-                "Upserted user for PAT workspace bootstrap: userLogin={}, nativeId={}",
-                LoggingUtils.sanitizeForLog(login),
-                userInfo.id());
+        log.info("Upserted user for PAT workspace bootstrap: nativeId={}", userInfo.id());
         // Retrieve the JPA-managed entity to get the auto-generated PK (provider-scoped)
         return userRepository
                 .findByLoginAndProviderId(login, providerId)

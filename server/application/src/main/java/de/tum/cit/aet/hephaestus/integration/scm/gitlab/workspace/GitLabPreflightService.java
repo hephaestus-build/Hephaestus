@@ -96,7 +96,7 @@ public class GitLabPreflightService implements SelectedRepositoryVerifier {
                     .block(REQUEST_TIMEOUT);
 
             if (user != null && user.id() != null) {
-                log.info("GitLab preflight: token valid for user={}, serverUrl={}", user.username(), resolvedUrl);
+                log.info("GitLab preflight: token valid for userId={}, serverUrl={}", user.id(), resolvedUrl);
                 return GitLabPreflightResponseDTO.success(user.username(), user.id());
             }
         } catch (WebClientResponseException e) {

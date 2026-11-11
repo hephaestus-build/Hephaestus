@@ -349,10 +349,9 @@ public class GitHubCollaboratorSyncService {
                 collaboratorRepository.delete(existing);
                 removedCount++;
                 log.debug(
-                        "Removed stale collaborator: repoId={}, userId={}, userLogin={}",
+                        "Removed stale collaborator: repoId={}, userId={}",
                         repositoryId,
-                        existing.getUser().getId(),
-                        sanitizeForLog(existing.getUser().getLogin()));
+                        existing.getUser().getId());
             }
         }
 

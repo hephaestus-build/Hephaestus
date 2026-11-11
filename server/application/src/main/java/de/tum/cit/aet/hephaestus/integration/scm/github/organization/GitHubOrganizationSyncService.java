@@ -416,10 +416,9 @@ public class GitHubOrganizationSyncService {
                 organizationMembershipRepository.upsertMembership(organization.getId(), user.getId(), role);
                 memberCount++;
                 log.debug(
-                        "Synced organization membership: orgId={}, userId={}, userLogin={}, role={}",
+                        "Synced organization membership: orgId={}, userId={}, role={}",
                         organization.getNativeId(),
                         user.getId(),
-                        sanitizeForLog(user.getLogin()),
                         role);
             }
         }
