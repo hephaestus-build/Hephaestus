@@ -116,7 +116,7 @@ const onlyReview = (submitted: readonly CreateReviewRequest[]): CreateReviewRequ
 };
 
 const context: ActionsContext = {
-	eventName: "pull_request_target",
+	eventName: "workflow_run",
 	repo: { owner: "owner", repo: "repo" },
 	payload: { pull_request: { number: 7 } },
 };
@@ -358,7 +358,7 @@ void describe("review policy", () => {
 			await enforce({
 				github,
 				core,
-				context: { eventName: "pull_request_target", repo: context.repo, payload: {} },
+				context: { eventName: "workflow_run", repo: context.repo, payload: {} },
 			});
 
 			assert.deepEqual(submitted, []);
@@ -367,43 +367,58 @@ void describe("review policy", () => {
 	});
 
 	void describe("the workflow that applies it", () => {
+		const collector = readFileSync(
+			new URL("../.github/workflows/pull-request.yml", import.meta.url),
+			"utf8",
+		);
 		const workflow = readFileSync(
-			new URL("../.github/workflows/review-policy.yml", import.meta.url),
+			new URL("../.github/workflows/pull-request-policy.yml", import.meta.url),
 			"utf8",
 		);
 
-		const configuration = asRecord(parseYaml(workflow), "review-policy workflow");
+		const configuration = asRecord(parseYaml(workflow), "pull request policy workflow");
 		const jobs = asRecord(configuration.jobs, "jobs");
 		const approvalJob = asRecord(jobs.approve, "approve");
+		const approvalSource = JSON.stringify(approvalJob);
 
 		void it("keeps the checkout on the default branch's copy of the policy", () => {
-			assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/u);
+			assert.match(
+				approvalSource,
+				/"ref":"\$\{\{ github\.event\.repository\.default_branch \}\}"/u,
+			);
 			assert.doesNotMatch(workflow, /ref: \$\{\{ github\.sha \}\}/u);
-			assert.doesNotMatch(workflow, /github\.event\.pull_request\.head/u);
+			assert.doesNotMatch(workflow, /github\.event\.pull_request/u);
+			for (const ref of workflow.matchAll(/^\s+ref: (?<ref>.+)$/gmu)) {
+				assert.equal(ref.groups?.ref, `\${{ github.event.repository.default_branch }}`);
+			}
 		});
 
 		void it("uses sparse checkout and keeps no credentials", () => {
-			assert.match(workflow, /persist-credentials: false/u);
-			assert.match(workflow, /sparse-checkout: scripts/u);
+			assert.match(approvalSource, /"persist-credentials":false/u);
+			assert.match(approvalSource, /"sparse-checkout":"scripts"/u);
 		});
 
 		void it("asks for write access to pull requests and nothing else", () => {
 			assert.deepEqual(configuration.permissions, {});
-			assert.deepEqual(Object.keys(jobs), ["approve"]);
 			assert.deepEqual(approvalJob.permissions, { contents: "read", "pull-requests": "write" });
 		});
 
 		void it("re-runs on every push, because the ruleset dismisses stale approvals", () => {
-			assert.match(workflow, /types: \[opened, reopened, synchronize, ready_for_review, edited\]/u);
+			assert.match(collector, /- synchronize\n/u);
+			for (const action of ["opened", "reopened", "ready_for_review", "edited"]) {
+				assert.match(collector, new RegExp(`- ${action}\\n`, "u"));
+			}
+			assert.equal(approvalJob.needs, "resolve");
 		});
 
 		void it("runs for a stacked pull request, whatever branch it targets", () => {
-			assert.doesNotMatch(workflow, /^\s+branches:/mu);
+			assert.doesNotMatch(collector, /^\s+branches:/mu);
+			assert.doesNotMatch(String(approvalJob.if), /base/u);
 		});
 
-		void it("does not create custom check runs or run for merge groups", () => {
-			assert.doesNotMatch(workflow, /checks\.create|checks: write/u);
+		void it("does not run for merge groups", () => {
 			assert.doesNotMatch(workflow, /merge_group/u);
+			assert.doesNotMatch(collector, /merge_group/u);
 		});
 	});
 });

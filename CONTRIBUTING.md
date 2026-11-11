@@ -48,7 +48,7 @@ git rebase --exec 'git commit --amend --no-edit -S' origin/main
 A pull request title, body, or commit message carries no harness or tool marker.
 Examples are a `Claude-Session:` trailer, a "Generated with" line, and a session link.
 `AGENTS.md` § Pull requests has the rule.
-The `Validate PR` job in `pull-request.yml` checks for these markers.
+The `Validate PR` check from `pull-request-policy.yml` checks for these markers.
 Its primary-author check follows the [commit identity policy](docs/contributor/ci-cd.mdx#quality-gates).
 Keep the original authorship when a maintainer corrects another developer’s pull request.
 
