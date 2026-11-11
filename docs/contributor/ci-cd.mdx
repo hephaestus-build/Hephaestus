@@ -587,6 +587,7 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 Browser commands run through `node scripts/ci-browser.ts <command> [arguments...]` in the official Playwright image.
 `.github/playwright-image.json` pins its digest and version. The version must match `webapp/package.json`.
 The image supplies Chromium and its system libraries. The runner supplies the pinned Node.js binary and the installed dependencies.
+
 Host networking lets tests reach the packaged JAR and PostgreSQL through their existing loopback URLs.
 The container runs as the runner user and writes reports into the checkout.
 See [Playwright's Docker guidance](https://playwright.dev/docs/docker) for the image, `--init`, and shared memory.
