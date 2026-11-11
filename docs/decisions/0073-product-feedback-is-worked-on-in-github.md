@@ -1,6 +1,6 @@
 # ADR 0073: Product feedback is worked on in GitHub
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0097](0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md)
 **Date:** 2026-10-31
 **Authors:** Felix T.J. Dietrich
 **Relates to:** ADR 0025 (job claims and orphan recovery), ADR 0026 (the governed model catalog) and ADR 0068 (the worker runs model calls).

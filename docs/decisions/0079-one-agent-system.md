@@ -25,6 +25,7 @@
 
 Each ADR above has an update block, dated 2026-11-09, that names the sections that change and the sections that stay.
 
+**Amended by:** [ADR 0097](0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md)
 **Builds on:** [ADR 0070](0070-1-0-is-a-cutover-release.md) (1.0 is a cutover) and [ADR 0078](0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md) (explicit lifecycles).
 
 ## Context
