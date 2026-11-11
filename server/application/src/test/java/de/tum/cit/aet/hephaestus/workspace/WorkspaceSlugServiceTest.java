@@ -1,11 +1,14 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.security.SystemEncryptionKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -17,7 +20,8 @@ class WorkspaceSlugServiceTest extends BaseUnitTest {
         var service = new WorkspaceSlugService(
                 mock(WorkspaceRepository.class),
                 mock(WorkspaceSlugHistoryRepository.class),
-                mock(WorkspaceSlugReservationRepository.class));
+                mock(WorkspaceSlugReservationRepository.class),
+                mock(WorkspaceNamespaceReservation.class));
         assertThat(WorkspaceSlugValidator.isAssignable(service.allocate(desired, "installation")))
                 .isTrue();
         assertThat(WorkspaceSlugValidator.isAssignable(service.allocate(desired.repeat(100), "installation")))
@@ -29,7 +33,8 @@ class WorkspaceSlugServiceTest extends BaseUnitTest {
         var service = new WorkspaceSlugService(
                 mock(WorkspaceRepository.class),
                 mock(WorkspaceSlugHistoryRepository.class),
-                mock(WorkspaceSlugReservationRepository.class));
+                mock(WorkspaceSlugReservationRepository.class),
+                mock(WorkspaceNamespaceReservation.class));
         assertThat(service.allocate("xn-project", "installation")).isEqualTo("xn-project");
     }
 
@@ -38,8 +43,27 @@ class WorkspaceSlugServiceTest extends BaseUnitTest {
         var reservations = mock(WorkspaceSlugReservationRepository.class);
         when(reservations.existsById("deleted-team")).thenReturn(true);
         var service = new WorkspaceSlugService(
-                mock(WorkspaceRepository.class), mock(WorkspaceSlugHistoryRepository.class), reservations);
+                mock(WorkspaceRepository.class),
+                mock(WorkspaceSlugHistoryRepository.class),
+                reservations,
+                mock(WorkspaceNamespaceReservation.class));
         assertThat(service.isAvailable("deleted-team")).isFalse();
         assertThat(service.allocate("deleted-team", "other-installation")).isNotEqualTo("deleted-team");
+    }
+
+    @Test
+    void shouldRejectAvailabilityWhenAnErasedNamespaceReservesTheSlug() {
+        var systemKey = mock(SystemEncryptionKey.class);
+        when(systemKey.key()).thenReturn(new SecretKeySpec(new byte[32], "AES"));
+        var erased = new WorkspaceNamespaceReservation(systemKey);
+        String token = erased.slugToken("ada").orElseThrow();
+        var reservations = mock(WorkspaceSlugReservationRepository.class);
+        when(reservations.existsById(anyString())).thenAnswer(call -> token.equals(call.getArgument(0)));
+        var service = new WorkspaceSlugService(
+                mock(WorkspaceRepository.class), mock(WorkspaceSlugHistoryRepository.class), reservations, erased);
+
+        assertThat(token).startsWith("~").doesNotContain("ada");
+        assertThat(service.isAvailable("ada")).isFalse();
+        assertThat(service.isAvailable("grace")).isTrue();
     }
 }

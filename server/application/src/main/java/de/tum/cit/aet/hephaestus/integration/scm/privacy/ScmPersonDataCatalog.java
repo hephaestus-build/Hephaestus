@@ -5,6 +5,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceNamespaceReservation;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -44,12 +46,14 @@ import tools.jackson.databind.ObjectMapper;
 public class ScmPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
+    private final WorkspaceNamespaceReservation namespaceReservations;
+    private final WorkspaceSlugService workspaceSlugs;
 
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
                 new GitRepositoryHistoryPersonDataStore(jdbc, mapper),
-                new InstallationAccountPersonDataStore(jdbc, mapper),
+                new InstallationAccountPersonDataStore(jdbc, mapper, namespaceReservations, workspaceSlugs),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

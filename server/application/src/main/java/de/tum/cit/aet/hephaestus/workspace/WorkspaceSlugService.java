@@ -24,14 +24,17 @@ public class WorkspaceSlugService {
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository;
     private final WorkspaceSlugReservationRepository reservations;
+    private final WorkspaceNamespaceReservation erasedNamespaces;
 
     public WorkspaceSlugService(
             WorkspaceRepository workspaceRepository,
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
-            WorkspaceSlugReservationRepository reservations) {
+            WorkspaceSlugReservationRepository reservations,
+            WorkspaceNamespaceReservation erasedNamespaces) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
         this.reservations = reservations;
+        this.erasedNamespaces = erasedNamespaces;
     }
 
     /**
@@ -69,7 +72,7 @@ public class WorkspaceSlugService {
     }
 
     /**
-     * Check if a slug is available (valid, not in use, and never previously used).
+     * Check if a slug is available (valid, not in use, and never previously used, also by an erased namespace).
      *
      * @param slug the slug to check
      * @return true if the slug is available
@@ -78,7 +81,18 @@ public class WorkspaceSlugService {
         return WorkspaceSlugValidator.isAssignable(slug)
                 && !workspaceRepository.existsByWorkspaceSlug(slug)
                 && !reservations.existsById(slug)
+                && erasedNamespaces
+                        .slugToken(slug)
+                        .map(token -> !reservations.existsById(token))
+                        .orElse(true)
                 && !workspaceSlugHistoryRepository.existsByOldSlug(slug);
+    }
+
+    /** The slug that a name normalizes to, before a suffix that avoids a collision. */
+    public String label(String name) {
+        String normalized = Objects.requireNonNull(normalize(name)).replaceAll("[^a-z0-9-]", "-");
+        normalized = Objects.requireNonNull(normalize(normalized));
+        return normalized.isEmpty() ? "workspace" : normalized;
     }
 
     /**
@@ -90,11 +104,7 @@ public class WorkspaceSlugService {
      * @throws WorkspaceSlugConflictException if no available slug could be found
      */
     public String allocate(String desiredSlug, String suffixSeed) {
-        String normalized = Objects.requireNonNull(normalize(desiredSlug)).replaceAll("[^a-z0-9-]", "-");
-        normalized = Objects.requireNonNull(normalize(normalized));
-        if (normalized.isEmpty()) {
-            normalized = "workspace";
-        }
+        String normalized = label(desiredSlug);
         if (isAvailable(normalized)) {
             return normalized;
         }

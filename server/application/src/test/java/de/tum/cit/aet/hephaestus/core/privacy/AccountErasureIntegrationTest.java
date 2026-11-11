@@ -97,7 +97,9 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.PracticeModelTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceNamespaceReservation;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
@@ -144,6 +146,12 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PracticeModelTestFixtures modelFixtures;
+
+    @Autowired
+    private WorkspaceNamespaceReservation namespaceReservations;
+
+    @Autowired
+    private WorkspaceSlugService workspaceSlugs;
 
     @TempDir
     private Path evidenceRoot;
@@ -306,8 +314,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void
-            shouldEraseThePersonsPracticeAuthorshipAndRateLimitsAndExportTheirInstallationLoginWhenAnAdministratorErasesThem() {
+    void shouldEraseThePersonsPracticeAuthorshipRateLimitsAndPurgedNamespaceWhenAnAdministratorErasesThem() {
         Account administrator = new Account("Administrator");
         administrator.setAppRole(Account.AppRole.APP_ADMIN);
         long administratorId =
@@ -324,6 +331,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         users.saveAndFlush(TestUserFactory.createUser(4242L, "target-login", github));
         link(target, github, "4242", null);
         long personalInstallation = installation("personal-install", "Target-Login", AccountType.USER);
+        long activeInstallation = installation("active-personal", "target-login", AccountType.USER);
+        jdbc.update("UPDATE workspace SET status='PURGED' WHERE slug='personal-install'");
+        // The slug that the login names, which an earlier slug of the workspace was.
+        jdbc.update("INSERT INTO workspace_slug_reservation(slug) VALUES ('target-login') ON CONFLICT DO NOTHING");
         // Neither an organization of the same name nor another person's installation is the person's.
         installation("org-install", "target-login", AccountType.ORG);
         installation("other-install", "other-login", AccountType.USER);
@@ -357,11 +368,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(export.path("stores").path("auth_rate_limit_bucket").toString())
                 .doesNotContain("state");
         assertThat(export.path("stores").path("installation_account"))
-                .singleElement()
-                .satisfies(row -> {
-                    assertThat(row.path("id").asLong()).isEqualTo(personalInstallation);
-                    assertThat(row.path("display_name").asString()).isEqualTo("Target-Login");
-                });
+                .extracting(row ->
+                        row.path("id").asLong() + " " + row.path("display_name").asString())
+                .containsExactlyInAnyOrder(
+                        personalInstallation + " Target-Login", activeInstallation + " target-login");
 
         personData.requestErasure(requestId, administratorId, false);
         personData.run(requestId);
@@ -380,10 +390,33 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForList("SELECT id FROM auth_rate_limit_bucket", String.class))
                 .doesNotContainAnyElementsOf(targetBuckets)
                 .containsAll(keptBuckets);
+        var erased = jdbc.queryForMap(
+                "SELECT w.id, w.slug, w.display_name, w.account_login, c.display_name AS connection_name,"
+                        + " (c.config->'orgLogin') IS NOT NULL AS has_login FROM connection c JOIN workspace w ON w.id=c.workspace_id"
+                        + " WHERE c.id=?",
+                personalInstallation);
+        String erasedSlug = "erased-" + erased.get("id");
+        assertThat(erased)
+                .as("the purged personal workspace keeps no login")
+                .containsEntry("slug", erasedSlug)
+                .containsEntry("display_name", "Erased workspace")
+                .containsEntry("connection_name", erasedSlug)
+                .containsEntry("has_login", false);
+        assertThat(erased.toString()).doesNotContainIgnoringCase("target-login");
+        assertThat(erased).containsEntry("account_login", erasedSlug);
+        assertThat(jdbc.queryForList("SELECT slug FROM workspace_slug_reservation", String.class))
+                .doesNotContain("personal-install", "target-login")
+                .contains(
+                        namespaceReservations.slugToken("personal-install").orElseThrow(),
+                        namespaceReservations.slugToken("target-login").orElseThrow(),
+                        erasedSlug);
+        assertThat(workspaceSlugs.isAvailable("personal-install"))
+                .as("the erased slug stays reserved")
+                .isFalse();
         assertThat(jdbc.queryForObject(
-                        "SELECT display_name FROM connection WHERE id=?", String.class, personalInstallation))
-                .as("the installation login stays as the workspace's namespace")
-                .isEqualTo("Target-Login");
+                        "SELECT display_name FROM connection WHERE id=?", String.class, activeInstallation))
+                .as("an active personal workspace keeps its login as its namespace")
+                .isEqualTo("target-login");
     }
 
     /** A workspace installed on a provider account with this login, and its GitHub connection. */
