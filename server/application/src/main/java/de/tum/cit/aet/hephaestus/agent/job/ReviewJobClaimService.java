@@ -162,7 +162,7 @@ public class ReviewJobClaimService {
             Optional<ReviewJob> locked =
                     jobRepository.lockParentForQueuedClaim(lease.runId()).isEmpty()
                             ? Optional.empty()
-                            : jobRepository.lockQueuedByRun(lease.runId());
+                            : jobRepository.lockQueuedByRun(lease.runId(), lease.workspaceId());
             if (locked.isEmpty()) {
                 status.setRollbackOnly();
                 return new Declined(lease.runId(), ClaimOutcome.LOCKED);
@@ -217,7 +217,7 @@ public class ReviewJobClaimService {
         Optional<ReviewJob> locked =
                 jobRepository.lockParentForQueuedClaim(fence.runId()).isEmpty()
                         ? Optional.empty()
-                        : jobRepository.lockQueuedByRun(fence.runId());
+                        : jobRepository.lockQueuedByRun(fence.runId(), fence.workspaceId());
         if (locked.isEmpty()) {
             // A lifecycle write holds the review or its job; the run waits for the next pull.
             runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY, null);
@@ -257,7 +257,7 @@ public class ReviewJobClaimService {
      */
     private void holdForBudget(AgentRunRef run) {
         transactionTemplate.executeWithoutResult(status -> jobRepository
-                .lockQueuedByRun(run.id())
+                .lockQueuedByRun(run.id(), run.workspaceId())
                 .ifPresent(job -> runs.hold(run, AgentRunHold.BUDGET, BUDGET_HOLD_INTERVAL)));
     }
 

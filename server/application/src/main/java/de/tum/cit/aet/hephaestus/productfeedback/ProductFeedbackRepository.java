@@ -19,6 +19,7 @@ interface ProductFeedbackRepository extends JpaRepository<ProductFeedback, UUID>
             nativeQuery = true)
     int lockSubmission(@Param("accountId") long accountId);
 
+    @WorkspaceAgnostic("The daily report limit counts the account's own reports across workspaces and none")
     long countByAccountIdAndCreatedAtGreaterThanEqual(long accountId, Instant since);
 
     void deleteAllByWorkspaceId(Long workspaceId);

@@ -374,7 +374,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             byoEnabled(true);
             when(connectionRepository.findByIdAndWorkspaceId(50L, 1L)).thenReturn(Optional.of(connection()));
             when(modelRepository.findByWorkspaceIdAndSlug(1L, "gpt-5")).thenReturn(Optional.empty());
-            when(modelRepository.existsByConnectionIdAndUpstreamModelId(50L, "gpt-5"))
+            when(modelRepository.existsByConnectionIdAndWorkspaceIdAndUpstreamModelId(50L, 1L, "gpt-5"))
                     .thenReturn(true);
 
             assertThatThrownBy(() -> modelService.create(workspaceContext, 50L, unpricedCreateRequest()))
@@ -387,7 +387,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             byoEnabled(true);
             when(connectionRepository.findByIdAndWorkspaceId(50L, 1L)).thenReturn(Optional.of(connection()));
             when(modelRepository.findByWorkspaceIdAndSlug(1L, "gpt-5")).thenReturn(Optional.empty());
-            when(modelRepository.existsByConnectionIdAndUpstreamModelId(50L, "gpt-5"))
+            when(modelRepository.existsByConnectionIdAndWorkspaceIdAndUpstreamModelId(50L, 1L, "gpt-5"))
                     .thenReturn(false);
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -417,7 +417,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
         }
 
         /**
-         * The fast-path {@code existsByConnectionIdAndUpstreamModelId} check is racy; the unique
+         * The fast-path {@code existsByConnectionIdAndWorkspaceIdAndUpstreamModelId} check is racy; the unique
          * constraint {@code ux_ws_llm_model_connection_upstream} is the real backstop but only fires on
          * an actual flush, which is why the service calls {@code saveAndFlush()} inside the try/catch.
          */
@@ -426,7 +426,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             byoEnabled(true);
             when(connectionRepository.findByIdAndWorkspaceId(50L, 1L)).thenReturn(Optional.of(connection()));
             when(modelRepository.findByWorkspaceIdAndSlug(1L, "gpt-5")).thenReturn(Optional.empty());
-            when(modelRepository.existsByConnectionIdAndUpstreamModelId(50L, "gpt-5"))
+            when(modelRepository.existsByConnectionIdAndWorkspaceIdAndUpstreamModelId(50L, 1L, "gpt-5"))
                     .thenReturn(false);
             when(modelRepository.saveAndFlush(any())).thenThrow(upstreamIdConstraintViolation());
 

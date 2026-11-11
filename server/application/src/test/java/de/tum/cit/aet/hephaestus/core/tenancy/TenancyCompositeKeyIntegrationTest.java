@@ -23,6 +23,17 @@ class TenancyCompositeKeyIntegrationTest extends BaseIntegrationTest {
     private WorkspaceScopedTables scopedTables;
 
     @Test
+    void shouldNameAsSingleKeysOnlyPrimaryKeysAndCollectionKeysOfWorkspaceOwnedParents() {
+        assertThat(scopedTables.isSingleKeyColumn("review_job", "id", false)).isTrue();
+        assertThat(scopedTables.isSingleKeyColumn("review_job", "id", true)).isTrue();
+        // No collection maps review_job by its review, so a derived findByReviewId must bind the workspace.
+        assertThat(scopedTables.isSingleKeyColumn("review_job", "review_id", false))
+                .isFalse();
+        // User is global: its mappedBy collections span every workspace, so their keys are not keys here.
+        assertThat(scopedTables.isSingleKeyColumn("issue", "author_id", false)).isFalse();
+    }
+
+    @Test
     void anEmbeddedIdAssociationReportsBothOfItsKeyColumns() {
         assertThat(scopedTables.primaryKeyColumns("repository_collaborator"))
                 .containsExactlyInAnyOrder("repository_id", "user_id");

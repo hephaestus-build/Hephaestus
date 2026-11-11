@@ -68,7 +68,8 @@ public class WorkspaceLlmModelService {
                 && modelRepository.findByWorkspaceIdAndSlug(workspaceId, slug).isPresent()) {
             throw new LlmModelSlugConflictException(connectionId, slug);
         }
-        if (modelRepository.existsByConnectionIdAndUpstreamModelId(connectionId, request.upstreamModelId())) {
+        if (modelRepository.existsByConnectionIdAndWorkspaceIdAndUpstreamModelId(
+                connectionId, workspaceId, request.upstreamModelId())) {
             throw new LlmModelUpstreamIdConflictException(connectionId, request.upstreamModelId());
         }
 

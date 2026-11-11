@@ -167,19 +167,18 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     Optional<UUID> lockParentForQueuedClaim(@Param("runId") UUID runId);
 
     /** Locks the queued job of a run that this claim leased; skipped when a lifecycle write holds it. */
-    @WorkspaceAgnostic("Run-based claim; the run carries its workspace")
     @Query(
-            value = "SELECT j.id FROM review_job j WHERE j.run_id = :runId AND j.status = 'QUEUED' "
-                    + "FOR UPDATE OF j SKIP LOCKED",
+            value = "SELECT j.id FROM review_job j WHERE j.run_id = :runId AND j.workspace_id = :workspaceId"
+                    + " AND j.status = 'QUEUED' FOR UPDATE OF j SKIP LOCKED",
             nativeQuery = true)
-    Optional<UUID> lockQueuedIdByRun(@Param("runId") UUID runId);
+    Optional<UUID> lockQueuedIdByRun(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
 
     /**
      * The queued job of a run that this claim leased, locked; empty when a lifecycle write holds it. The lock and the
      * load are two statements because a native entity query cannot fill the attempt that the job reads from its run.
      */
-    default Optional<ReviewJob> lockQueuedByRun(UUID runId) {
-        return lockQueuedIdByRun(runId).flatMap(this::findById);
+    default Optional<ReviewJob> lockQueuedByRun(UUID runId, long workspaceId) {
+        return lockQueuedIdByRun(runId, workspaceId).flatMap(this::findById);
     }
 
     /** The job that a run drives, unlocked: a fenced write then takes the job's locks in their order. */

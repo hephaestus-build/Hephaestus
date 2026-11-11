@@ -81,11 +81,23 @@ public class WorkspaceStatementInspector implements StatementInspector {
     private static final Pattern NEGATION_PATTERN =
             Pattern.compile("\\bNOT\\s*(?:EXISTS\\s*|IN\\s*)?$", Pattern.CASE_INSENSITIVE);
 
-    // Inspect read tables in Hibernate SQL with explicit JOIN syntax; INSERT is outside this read-leak check.
-    // Native queries with comma joins require explicit workspace predicates.
+    /** A table name, optionally schema-qualified and quoted. */
+    private static final String TABLE_NAME = "\"?[A-Za-z_][A-Za-z0-9_]*\"?(?:\\s*\\.\\s*\"?[A-Za-z_][A-Za-z0-9_]*\"?)?";
+
+    /** A FROM-list item: a table and its optional alias, which is never a keyword that ends the item. */
+    private static final String FROM_ITEM = TABLE_NAME
+            + "(?:\\s+(?:AS\\s+)?(?!(?:WHERE|JOIN|ON|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|NATURAL|GROUP|ORDER|LIMIT"
+            + "|OFFSET|HAVING|UNION|FOR|SET|USING|RETURNING|WINDOW|FETCH)\\b)[A-Za-z_][A-Za-z0-9_]*)?";
+
+    // Every table a statement reads or writes: each item of a FROM list, comma-separated ones included, and the target
+    // of each JOIN and UPDATE. INSERT is outside this read-leak check.
     private static final Pattern TABLE_REFERENCE_PATTERN = Pattern.compile(
-            "(?:\\bFROM\\b|\\bJOIN\\b|\\bUPDATE\\b)\\s+(\"?[A-Za-z_][A-Za-z0-9_]*\"?(?:\\s*\\.\\s*\"?[A-Za-z_][A-Za-z0-9_]*\"?)?)",
+            "\\bFROM\\s+(" + FROM_ITEM + "(?:\\s*,\\s*" + FROM_ITEM + ")*)|(?:\\bJOIN\\b|\\bUPDATE\\b)\\s+("
+                    + TABLE_NAME + ")",
             Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern FROM_ITEM_TABLE_PATTERN =
+            Pattern.compile("^\\s*(" + TABLE_NAME + ")", Pattern.CASE_INSENSITIVE);
 
     /**
      * Matches the one statement Hibernate emits to remove an element of a {@code @ManyToMany}:
@@ -135,9 +147,13 @@ public class WorkspaceStatementInspector implements StatementInspector {
     private static final Pattern QUALIFIED_COLUMN_SPLIT_PATTERN = Pattern.compile("\\s*\\.\\s*");
     private static final Pattern TUPLE_SPLIT_PATTERN = Pattern.compile("\\)\\s*,\\s*\\(");
 
-    /** A surrogate key column, for the single-key form: {@code id} or {@code <something>_id}. */
+    /** A surrogate key column of a provider mirror: {@code id} or {@code <something>_id}. */
     private static final Pattern SURROGATE_KEY_COLUMN =
-            Pattern.compile("^(?:id|[A-Za-z_][A-Za-z0-9_]*_id)$", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("^\"?(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?$", Pattern.CASE_INSENSITIVE);
+
+    /** A set operation that joins two SELECTs into one statement. */
+    private static final Pattern SET_OPERATION_PATTERN =
+            Pattern.compile("\\b(?:UNION|INTERSECT|EXCEPT)(?:\\s+(?:ALL|DISTINCT))?\\b", Pattern.CASE_INSENSITIVE);
 
     private static final int FAST_PATH_SQL_LIMIT = 8192;
 
@@ -149,6 +165,10 @@ public class WorkspaceStatementInspector implements StatementInspector {
 
     /** Hibernate's optimistic-lock predicate, which rides along with the key on a versioned entity. */
     private static final String VERSION_COLUMN = "version";
+
+    /** A key bound to one parameter, to an array parameter, or to a list of parameters. */
+    private static final String KEY_BINDING =
+            "(?:=\\s*(?:\\?|ANY\\s*\\(\\s*\\?\\s*\\))|IN\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\))";
 
     /**
      * Matches a Hibernate-emitted load that pins the result set to a single row (or a
@@ -175,20 +195,24 @@ public class WorkspaceStatementInspector implements StatementInspector {
      * ({@code findByWorkspaceIdAndSlug} → {@code entity.getRelation()} → lazy fetch).
      *
      * <p>The check requires {@code SELECT … FROM <one-table> <alias>} (alias capture) and a
-     * WHERE clause containing {@code <alias>.<id|*_id> = ?}. The WHERE may contain
+     * WHERE clause containing {@code <alias>.<key> = ?}, where the mapping metamodel names the key
+     * as the table's primary key or a mapped collection's key ({@link #keyedSelect}). The WHERE may contain
      * additional conjunctive predicates (discriminators, soft-delete filters), but the
      * shape stays anchored to the captured alias — leaking across workspaces would require
      * dropping the alias-PK predicate entirely.
      */
     private static final Pattern PK_ONLY_SELECT_PATTERN = Pattern.compile(
-            "^\\s*SELECT\\b.+?\\bFROM\\s+\"?[A-Za-z_][A-Za-z0-9_]*\"?\\s+([A-Za-z_][A-Za-z0-9_]*)\\b" + ".*?"
-                    + "\\bWHERE\\b"
+            // The statement's own first FROM: a subquery in the select list would put another table's alias there.
+            "^\\s*SELECT\\b(?:(?!\\bFROM\\b|\\(\\s*SELECT\\b).)+\\bFROM\\s+\"?([A-Za-z_][A-Za-z0-9_]*)\"?\\s+"
+                    + "([A-Za-z_][A-Za-z0-9_]*)\\b"
+                    + ".*?"
+                    + "(\\bWHERE\\b)"
                     + ".*?"
                     // workspace_id is a workspace predicate, not a key: the workspace check below reads it, negations
                     // included (ADR 0077).
                     // A list of bound keys, as findAllById emits it, is the batch form spelled out.
-                    + "\\b\\1\\s*\\.\\s*\"?(?!workspace_id\\b)(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?\\s*"
-                    + "(?:=\\s*(?:\\?|ANY\\s*\\(\\s*\\?\\s*\\))|IN\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\))"
+                    + "\\b\\2\\s*\\.\\s*\"?(?!workspace_id\\b)(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?\\s*"
+                    + KEY_BINDING
                     + ".*?$",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
@@ -269,8 +293,8 @@ public class WorkspaceStatementInspector implements StatementInspector {
      *       a bound parameter. Rejecting comment markers separately was tried and removed — no
      *       test could distinguish it, because this rule had already caught every case;</li>
      *   <li>every predicate is {@code column = ?}, and the columns are either the table's complete
-     *       primary key per the mapping metamodel, or one surrogate key column — each optionally
-     *       with Hibernate's {@code version} optimistic lock.</li>
+     *       primary key per the mapping metamodel, or the one column by which a mapped collection is
+     *       cleared — each optionally with Hibernate's {@code version} optimistic lock.</li>
      * </ol>
      */
     private boolean keyedSingleRowDml(String sql) {
@@ -299,13 +323,14 @@ public class WorkspaceStatementInspector implements StatementInspector {
         Set<String> keyColumns = new HashSet<>(predicateColumns);
         boolean versioned = keyColumns.remove(VERSION_COLUMN);
 
-        // One surrogate key: the long-standing form, and the metamodel is not consulted for it.
-        if (keyColumns.size() == 1
-                && SURROGATE_KEY_COLUMN.matcher(keyColumns.iterator().next()).matches()) {
+        String table = unqualify(dml.group(1));
+        // One key column: the table's primary key, or the key by which Hibernate clears a mapped collection. Any
+        // other foreign key would write every row that names it, in every workspace.
+        if (keyColumns.size() == 1 && singleKey(table, keyColumns.iterator().next(), true)) {
             return true;
         }
         // The table's whole key, which is the only way a composite-key entity can be written.
-        Set<String> mapped = scopedTables.primaryKeyColumns(unqualify(dml.group(1)));
+        Set<String> mapped = scopedTables.primaryKeyColumns(table);
         if (mapped.isEmpty()) return false;
         return predicateColumns.equals(mapped) || (versioned && keyColumns.equals(mapped));
     }
@@ -331,8 +356,7 @@ public class WorkspaceStatementInspector implements StatementInspector {
         // Hibernate-emitted entity load / lazy-fetch by PK is safe for the same reason —
         // the caller already had the primary key. A disjunction (OR) would broaden the result
         // set past the single keyed row, so it disqualifies the fast path.
-        if (PK_ONLY_SELECT_PATTERN.matcher(sql).matches()
-                && !OR_TOKEN_PATTERN.matcher(sql).find()) {
+        if (keyedSelect(sql)) {
             return Decision.ok();
         }
         if (WORKSPACE_ID_PATTERN.matcher(sql).find()) {
@@ -347,12 +371,8 @@ public class WorkspaceStatementInspector implements StatementInspector {
         }
         try {
             Set<String> unguarded = new HashSet<>();
-            Matcher matcher = TABLE_REFERENCE_PATTERN.matcher(sql);
-            while (matcher.find()) {
-                String name = unqualify(matcher.group(1)).toLowerCase(Locale.ROOT);
-                if (scopedTables.isScoped(name)) {
-                    unguarded.add(name);
-                }
+            for (String name : tableReferences(sql)) {
+                if (scopedTables.isScoped(name)) unguarded.add(name);
             }
             return unguarded.isEmpty() ? Decision.ok() : Decision.violation(Set.copyOf(unguarded));
         } catch (Exception e) {
@@ -367,6 +387,94 @@ public class WorkspaceStatementInspector implements StatementInspector {
             }
             return Decision.ok();
         }
+    }
+
+    /**
+     * True iff {@code sql} loads rows of one table by a key its caller already held: the table's primary key, or the key
+     * of a mapped collection. A disjunction (OR) would broaden the result past the keyed rows, so it disqualifies it. A
+     * set operation qualifies only when each of its branches does, so a keyed branch cannot carry an unkeyed one.
+     */
+    private boolean keyedSelect(String sql) {
+        if (sql.length() > FAST_PATH_SQL_LIMIT || OR_TOKEN_PATTERN.matcher(sql).find()) return false;
+        String text = COMMENT_OR_LITERAL_PATTERN.matcher(sql).replaceAll(" ");
+        int[] depth = depths(text);
+        if (depth == null) return false;
+        int start = 0;
+        Matcher operation = SET_OPERATION_PATTERN.matcher(text);
+        while (operation.find()) {
+            if (depth[operation.start()] != 0) continue;
+            if (!keyedBranch(text.substring(start, operation.start()))) return false;
+            start = operation.end();
+        }
+        return keyedBranch(text.substring(start));
+    }
+
+    /** One SELECT without a top-level set operation, keyed by a predicate of its own WHERE clause. */
+    private boolean keyedBranch(String branch) {
+        Matcher select = PK_ONLY_SELECT_PATTERN.matcher(branch);
+        if (!select.matches()) return false;
+        String table = unqualify(select.group(1));
+        int[] depth = depths(branch);
+        if (depth == null) return false;
+        // Only a predicate of the WHERE clause pins the rows: a key compared in the select list, a join condition or a
+        // nested subquery, whose alias can shadow the outer one, does not.
+        Matcher key = Pattern.compile(
+                        "\\b" + Pattern.quote(select.group(2)) + "\\s*\\.\\s*\"?([A-Za-z_][A-Za-z0-9_]*)\"?\\s*"
+                                + KEY_BINDING,
+                        Pattern.CASE_INSENSITIVE)
+                .matcher(branch);
+        key.region(select.end(3), branch.length());
+        while (key.find()) {
+            String column = key.group(1);
+            if (depth[key.start()] == 0
+                    && !column.equalsIgnoreCase("workspace_id")
+                    && !negated(branch, key.start())
+                    && singleKey(table, column, false)) return true;
+        }
+        return false;
+    }
+
+    /** The parenthesis depth before each character of {@code text}, or null when its parentheses do not balance. */
+    private static int @Nullable [] depths(String text) {
+        int[] depth = new int[text.length() + 1];
+        int level = 0;
+        for (int i = 0; i < text.length(); i++) {
+            depth[i] = level;
+            char c = text.charAt(i);
+            if (c == '(') level++;
+            else if (c == ')' && --level < 0) return null;
+        }
+        depth[text.length()] = level;
+        return level == 0 ? depth : null;
+    }
+
+    /**
+     * True iff one {@code column = ?} pins {@code table} to rows its caller held. A provider mirror's rows are shared
+     * and keyed by their monitored scope (ADR 0077), so any surrogate key column pins them; a workspace-owned table
+     * needs a key that the mapping metamodel names ({@link WorkspaceScopedTables#isSingleKeyColumn}).
+     */
+    private boolean singleKey(String table, String column, boolean write) {
+        String name = table.toLowerCase(Locale.ROOT);
+        if (WorkspaceScopedTables.MIRROR_TABLES.contains(name))
+            return SURROGATE_KEY_COLUMN.matcher(column).matches();
+        return scopedTables.isSingleKeyColumn(name, column, write);
+    }
+
+    /** Every table {@code sql} names in a FROM list, a JOIN or an UPDATE, as bare lowercase names. */
+    private static Set<String> tableReferences(String sql) {
+        Set<String> tables = new HashSet<>();
+        Matcher matcher = TABLE_REFERENCE_PATTERN.matcher(sql);
+        while (matcher.find()) {
+            if (matcher.group(2) != null) {
+                tables.add(unqualify(matcher.group(2)).toLowerCase(Locale.ROOT));
+                continue;
+            }
+            for (String item : COMMA_SPLIT_PATTERN.split(matcher.group(1), -1)) {
+                Matcher name = FROM_ITEM_TABLE_PATTERN.matcher(item);
+                if (name.find()) tables.add(unqualify(name.group(1)).toLowerCase(Locale.ROOT));
+            }
+        }
+        return tables;
     }
 
     /** True iff {@code sql} loads rows by tuples of exactly the table's complete primary key, and by nothing else. */
@@ -390,9 +498,7 @@ public class WorkspaceStatementInspector implements StatementInspector {
 
     private static Set<String> mirrorTablesIn(String sql) {
         Set<String> mirrors = new HashSet<>();
-        Matcher matcher = TABLE_REFERENCE_PATTERN.matcher(sql);
-        while (matcher.find()) {
-            String name = unqualify(matcher.group(1)).toLowerCase(Locale.ROOT);
+        for (String name : tableReferences(sql)) {
             if (WorkspaceScopedTables.MIRROR_TABLES.contains(name)) mirrors.add(name);
         }
         return mirrors;

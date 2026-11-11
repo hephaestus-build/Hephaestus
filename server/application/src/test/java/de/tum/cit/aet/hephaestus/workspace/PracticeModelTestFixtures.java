@@ -191,9 +191,10 @@ public class PracticeModelTestFixtures {
     private Result result(Work work, long developerId, String summary, @Nullable String problemText) {
         var manager = Objects.requireNonNull(entities);
         long existing = manager.createQuery(
-                        "SELECT count(r) FROM Result r WHERE r.reviewId=:review AND"
+                        "SELECT count(r) FROM Result r WHERE r.workspaceId=:workspace AND r.reviewId=:review AND"
                                 + " r.practiceId=:practice AND r.itemId=:item",
                         Long.class)
+                .setParameter("workspace", work.review().getWorkspaceId())
                 .setParameter("review", work.review().getId())
                 .setParameter("practice", work.practice().getId())
                 .setParameter("item", work.item().getId())
