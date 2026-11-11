@@ -613,7 +613,8 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                     turn.channelId(),
                     threadTs,
                     turn.question().getId(),
-                    turn.turn().getAttempt());
+                    turn.turn().getAttempt(),
+                    turn.firstAnswer() ? SlackMentorPosts.AI_LABEL + "\n\n" : "");
             projection.stream = stream;
         }
         try {
@@ -781,7 +782,11 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                                     stream.channelId,
                                     stream.threadTs,
                                     session -> session.runs(stream.turnId, stream.attempt)
-                                            ? slack.startStream(workspaceId, stream.channelId, stream.threadTs, piece)
+                                            ? slack.startStream(
+                                                    workspaceId,
+                                                    stream.channelId,
+                                                    stream.threadTs,
+                                                    stream.prefix + piece)
                                             : null)
                             .orElse(null);
                 } catch (SlackSendException e) {
@@ -960,7 +965,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                 turn.channelId(),
                 turn.threadTs(),
                 blocks(turn, text, answerId),
-                SlackMentorPosts.notification(text),
+                fallback(turn, text, answerId),
                 answerId);
         SlackMentorPoster.Receipts receipts = answerId == null || turn.turn().getStatus() != MentorTurn.Status.DONE
                 ? SlackMentorPoster.Receipts.NONE
@@ -996,13 +1001,24 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         return stream == null ? SlackMentorPosts.Reply.Seen.NOTHING : reply.shownIn(stream.sent);
     }
 
-    /** The reply's blocks: its Markdown, and in a Slack thread the answer's feedback buttons under it. */
+    /** The message's plain text, which screen readers and notifications use; it carries the AI label as the blocks do. */
+    private static String fallback(SlackTurn turn, String text, @Nullable UUID answerId) {
+        String line = SlackMentorPosts.notification(text);
+        return answerId != null && turn.firstAnswer() ? line + " " + SlackMentorPosts.AI_LABEL : line;
+    }
+
+    /**
+     * The reply's blocks: its Markdown, then under an answer the AI label when it is the first in the DM or thread, and
+     * in a Slack thread the answer's feedback buttons.
+     */
     private static List<LayoutBlock> blocks(SlackTurn turn, String text, @Nullable UUID answerId) {
         List<LayoutBlock> blocks = SlackMentorPosts.markdown(text);
-        if (answerId == null || !turn.inThread()) {
+        if (answerId == null) {
             return blocks;
         }
-        return Stream.concat(blocks.stream(), SlackMentorPosts.feedbackButtons(answerId).stream())
+        return Stream.concat(
+                        blocks.stream(),
+                        SlackMentorPosts.answerFooter(answerId, turn.firstAnswer(), turn.inThread()).stream())
                 .toList();
     }
 
@@ -1108,7 +1124,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                     turn.channelId(),
                     ts,
                     blocks(turn, text, answerId),
-                    SlackMentorPosts.notification(text),
+                    fallback(turn, text, answerId),
                     SlackMentorPosts.metadata(questionId));
         } catch (SlackSendException e) {
             return notEnded(turn, stream, answerId, reply, e);
@@ -1318,6 +1334,9 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         final String channelId;
         final String threadTs;
         final UUID questionId;
+        /** The disclosure is outside model text, so it does not change feedback receipt offsets. */
+        final String prefix;
+
         int attempt;
 
         @Nullable
@@ -1335,13 +1354,21 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         int failures;
         Instant next = Instant.EPOCH;
 
-        ReplyStream(UUID turnId, UUID conversationId, String channelId, String threadTs, UUID questionId, int attempt) {
+        ReplyStream(
+                UUID turnId,
+                UUID conversationId,
+                String channelId,
+                String threadTs,
+                UUID questionId,
+                int attempt,
+                String prefix) {
             this.turnId = turnId;
             this.conversationId = conversationId;
             this.channelId = channelId;
             this.threadTs = threadTs;
             this.questionId = questionId;
             this.attempt = attempt;
+            this.prefix = prefix;
         }
     }
 }

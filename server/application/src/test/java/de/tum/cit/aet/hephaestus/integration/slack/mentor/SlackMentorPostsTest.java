@@ -182,4 +182,17 @@ class SlackMentorPostsTest extends BaseUnitTest {
 
         assertThat(reply.text()).doesNotContain("](https://evil.example").contains("`https://evil.example/?q=s`");
     }
+
+    @Test
+    void shouldSayOnlyOnTheFirstAnswerOfAConversationThatAnAiModelAnswers() {
+        UUID answerId = UUID.randomUUID();
+        var label = SlackMentorPosts.aiLabel().getFirst();
+        var buttons = SlackMentorPosts.feedbackButtons(answerId).getFirst();
+
+        assertThat(SlackMentorPosts.answerFooter(answerId, true, true)).containsExactly(label, buttons);
+        assertThat(SlackMentorPosts.answerFooter(answerId, false, true)).containsExactly(buttons);
+        assertThat(SlackMentorPosts.answerFooter(answerId, true, false)).containsExactly(label);
+        assertThat(SlackMentorPosts.answerFooter(answerId, false, false)).isEmpty();
+        assertThat(label.toString()).contains("Hephaestus answers with an AI model and can be wrong.");
+    }
 }

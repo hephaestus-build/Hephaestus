@@ -24,6 +24,25 @@ public interface MentorSlackDeliveryRepository extends Repository<MentorEntry, U
             """)
     int claimSlackDelivery(@Param("workspaceId") Long workspaceId, @Param("id") UUID id);
 
+    /** Whether Hephaestus already answered in Slack in this conversation, before the message at {@code seq}. */
+    @Query("""
+            SELECT COUNT(e) > 0 FROM MentorEntry e
+            WHERE e.workspaceId = :workspaceId AND e.conversationId = :conversationId
+              AND e.kind = de.tum.cit.aet.hephaestus.mentor.MentorEntry.Kind.HEPH
+              AND e.slackTs IS NOT NULL
+              AND EXISTS (
+                  SELECT q.id FROM MentorEntry q
+                  WHERE q.workspaceId = e.workspaceId AND q.turnId = e.turnId AND q.seq < :seq
+                    AND q.kind = de.tum.cit.aet.hephaestus.mentor.MentorEntry.Kind.USER
+                    AND q.surface = de.tum.cit.aet.hephaestus.mentor.MentorEntry.Surface.SLACK
+                    AND q.slackDelivery = de.tum.cit.aet.hephaestus.mentor.MentorEntry.SlackDelivery.DELIVERED
+              )
+            """)
+    boolean answeredInSlackBefore(
+            @Param("workspaceId") Long workspaceId,
+            @Param("conversationId") UUID conversationId,
+            @Param("seq") long seq);
+
     /** Marks a post that is not settled as uncertain: one taken whose outcome is unknown, or one nobody took. */
     @Modifying
     @Query("""

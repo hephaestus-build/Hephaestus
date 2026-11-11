@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -46,13 +47,16 @@ public class MentorSlackDelivery {
      * @param threadTs the Slack thread to reply in; {@code null} for the top level of the DM
      * @param messages Heph's stored messages of the turn as the app shows them, with the feedback each showed; none
      *     while the turn runs
+     * @param firstAnswer whether this is Hephaestus's first answer in Slack in this DM or thread, the one that says it
+     *     answers with an AI model
      */
     public record SlackTurn(
             MentorTurn turn,
             String channelId,
             @Nullable String threadTs,
             MentorEntry question,
-            List<MentorEntryDTO> messages) {
+            List<MentorEntryDTO> messages,
+            boolean firstAnswer) {
 
         public boolean inThread() {
             return threadTs != null;
@@ -103,12 +107,15 @@ public class MentorSlackDelivery {
                         .stream()
                         .filter(entry -> !entry.isRedacted())
                         .toList();
+        MentorEntry question = entries.findQuestion(turn.getWorkspaceId(), turn.getId());
         return Optional.of(new SlackTurn(
                 turn,
                 channelId,
                 threadTs,
-                entries.findQuestion(turn.getWorkspaceId(), turn.getId()),
-                timeline.shown(conversation.get(), stored)));
+                question,
+                timeline.shown(conversation.get(), stored),
+                !deliveries.answeredInSlackBefore(
+                        workspaceId, Objects.requireNonNull(conversation.get().getId()), question.getSeq())));
     }
 
     /**
