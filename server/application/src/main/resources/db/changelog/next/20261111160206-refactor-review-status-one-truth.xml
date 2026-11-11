@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794412926921-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <columnExists tableName="review" columnName="status"/>
+            <columnExists tableName="review" columnName="id"/>
+            <columnExists tableName="review" columnName="workspace_id"/>
+            <columnExists tableName="review_job" columnName="review_id"/>
+            <columnExists tableName="review_job" columnName="workspace_id"/>
+            <columnExists tableName="review_job" columnName="status"/>
+        </preConditions>
+        <comment>A review whose job waits in the queue used to keep RUNNING in storage while readers derived QUEUED. Store the same queued status before removing that derivation, including reviews held for budget or sandbox room that may never be claimed again. Preserve the first start time and every terminal review.</comment>
+        <sql>UPDATE review r SET status = 'QUEUED'
+WHERE r.status = 'RUNNING'
+  AND EXISTS (SELECT 1 FROM review_job j WHERE j.workspace_id = r.workspace_id
+              AND j.review_id = r.id AND j.status = 'QUEUED')
+  AND NOT EXISTS (SELECT 1 FROM review_job j WHERE j.workspace_id = r.workspace_id
+                  AND j.review_id = r.id AND j.status = 'RUNNING');</sql>
+        <rollback>
+            <stop>Restore the backup taken before this upgrade: the corrected reviews are not marked.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -183,6 +183,12 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query("SELECT j.id FROM ReviewJob j WHERE j.runId = :runId AND j.workspaceId = :workspaceId")
     Optional<UUID> findIdByRun(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
 
+    /** The review locked before finding a completed job whose composition can resume. */
+    @Query(value = """
+            SELECT r.id FROM review r WHERE r.workspace_id=:workspaceId AND r.id=:reviewId FOR UPDATE
+            """, nativeQuery = true)
+    Optional<UUID> lockParentByReview(@Param("workspaceId") long workspaceId, @Param("reviewId") UUID reviewId);
+
     /** The parent of a run's job, locked before the job, as every writer of the review and its job takes them. */
     @WorkspaceAgnostic("Run-based lock; the run carries its workspace")
     @Query(value = """

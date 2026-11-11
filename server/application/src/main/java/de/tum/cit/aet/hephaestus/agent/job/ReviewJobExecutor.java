@@ -1110,6 +1110,7 @@ public class ReviewJobExecutor {
                     "Hand-on to composition for jobId=" + jobId,
                     () -> transactionTemplate.execute(status -> {
                         AgentRunFence fence = ownFence(jobId, attempt);
+                        reviewRuns.lock(fence.run());
                         if (measured != null && !keepMeasurement(jobId, attempt, measured)) return false;
                         return reviewRuns.continueToCompose(jobId, fence).isPresent();
                     }))));

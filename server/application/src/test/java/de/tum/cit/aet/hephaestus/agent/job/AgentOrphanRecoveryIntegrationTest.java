@@ -970,6 +970,48 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(usageCalls(jobId)).containsExactly(2);
     }
 
+    @Test
+    void shouldLeaveTheJobUnlockedWhileItsCompositionHandoffWaitsForTheReview() throws Exception {
+        UUID jobId = runningJobOwnedBy("handoff-owner", Instant.now(), 0);
+        admitWithResult(jobId);
+        keepOriginalInputs(jobId, 0, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
+        ReviewJob running = jobRepository.findById(jobId).orElseThrow();
+        ReviewJobExecutor executor = tracking(executor(), running);
+        var locked = new CountDownLatch(1);
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var holder = pool.submit(() -> transactionTemplate.executeWithoutResult(tx -> {
+                jdbc.queryForObject(
+                        "SELECT id FROM review WHERE id=? AND workspace_id=? FOR NO KEY UPDATE",
+                        UUID.class,
+                        running.getReviewId(),
+                        running.getWorkspaceId());
+                locked.countDown();
+                awaitBlockedTransaction();
+                // A reaper that holds the review must still acquire its job; the handoff waits before locking it.
+                assertThat(jdbc.queryForObject(
+                                "SELECT id FROM review_job WHERE id=? AND workspace_id=? FOR UPDATE NOWAIT",
+                                UUID.class,
+                                jobId,
+                                running.getWorkspaceId()))
+                        .isEqualTo(jobId);
+            }));
+            var handoff = pool.submit(() -> {
+                assertThat(locked.await(30, TimeUnit.SECONDS)).isTrue();
+                return executor.executePrepared(jobId, running, mock(SandboxSpec.class));
+            });
+            holder.get(30, TimeUnit.SECONDS);
+            assertThat(handoff.get(30, TimeUnit.SECONDS)).isNull();
+        } finally {
+            pool.shutdownNow();
+            assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+        }
+        ReviewJob waiting = jobRepository.findById(jobId).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(jdbc.queryForObject("SELECT kind FROM agent_run WHERE id=?", String.class, waiting.getRunId()))
+                .isEqualTo("REVIEW_COMPOSE");
+    }
+
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"public review not accepted", "expired inputs", "retry limit reached"})
     @DisplayName("a timed-out run of an admitted review hands it on, and its composition run ends it timed out")

@@ -50,6 +50,30 @@ A CHECK validates each existing row.
 Rows from before the 1.0 cutover can break a rule that today's code keeps.
 Count them on staging and in production first. Then repair them in the same migration.
 
+## Review status
+
+The [review glossary](./practice-review-glossary.mdx) defines the statuses.
+`ReviewStart` owns the start and requeue transitions.
+A requeue keeps the first start time in `checks.startedAt`.
+Terminal reviews do not reopen, including when feedback repair resumes a composition run.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Review status
+    accDescr: A queued review starts, can return to the queue, and ends complete, partial, failed or cancelled.
+    [*] --> QUEUED
+    QUEUED --> RUNNING: claim or inventory
+    RUNNING --> QUEUED: invocation waits
+    QUEUED --> COMPLETE: complete
+    RUNNING --> COMPLETE: complete
+    QUEUED --> PARTIAL: partial result or refused selection
+    RUNNING --> PARTIAL: partial result
+    QUEUED --> FAILED: fail
+    RUNNING --> FAILED: fail
+    QUEUED --> CANCELLED: cancel or replace
+    RUNNING --> CANCELLED: cancel
+```
+
 ## Scheduled review batches
 
 `ReviewBatchStatus` owns the terminal states.
@@ -63,7 +87,9 @@ It has a completion time and no pause reason.
 It does not block the next scheduled batch.
 An existing scheduled batch paused at its fixed cap takes this transition on the next driver tick.
 The driver first waits for any scan already in flight to end.
-Unknown cost information keeps a pause; it does not prove that the fixed cap is spent.
+
+Unknown cost information keeps a pause.
+It does not prove that the fixed cap is spent.
 Some costs need operator correction before the run can continue.
 
 A manual dated-work batch has no fixed run cap.

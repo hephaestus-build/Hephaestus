@@ -266,6 +266,8 @@ public class ReviewRunKind implements AgentRunHandler {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean resumeComposition(long workspaceId, UUID reviewId) {
+        files.holdCopyAdmission();
+        if (jobs.lockParentByReview(workspaceId, reviewId).isEmpty()) return false;
         var resumable = jobs.lockResumableComposition(workspaceId, reviewId, capacity.reviewRetries())
                 .orElse(null);
         if (resumable == null) return false;
@@ -275,6 +277,7 @@ public class ReviewRunKind implements AgentRunHandler {
                 ? runs.continueAfter(ended, resumable.getEpoch())
                 : runs.continueAs(ended, resumable.getEpoch(), AgentRunKind.REVIEW_COMPOSE);
         jobs.queueOnRun(resumable.getId(), workspaceId, next.id());
+        reviewStart.requeue(workspaceId, reviewId);
         runs.retire(ended);
         return true;
     }
