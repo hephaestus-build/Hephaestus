@@ -123,8 +123,14 @@ legs before a runner is allocated. In a pull request, selected legs do not cance
 In a merge group, a failed leg cancels the run: [Fail fast in the merge queue](#fail-fast-in-the-merge-queue).
 
 Each runs `vp run ci:<leg>`, then pipes `vp run --last-details` through `scripts/report-task-run.ts`.
-Each task that did not pass gets an error annotation with its reproduction command.
-The job summary contains the report, including cache hits and miss reasons.
+Each crossed task gets a notice: `unpassed, cause unavailable`, with its reproduction command.
+The runner's text report does not distinguish a task failure from a task that it stopped.
+The report order does not identify the cause.
+The job summary links the run attempt and keeps the report, including cache hits and miss reasons.
+Open the quality job and its **Quality gates** step to read the task output.
+
+The quality step keeps its native failure verdict.
+The report also exits nonzero for unpassed tasks.
 
 A leg runs when the change
 detection in `cicd.yml` says its scope changed. The Windows leg uses the tooling scope.
