@@ -113,10 +113,6 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
     @Query(value = "SELECT set_config('statement_timeout', :timeout, true)", nativeQuery = true)
     String boundStatements(@Param("timeout") String timeout);
 
-    @WorkspaceAgnostic("Wakes the claimers of every server; the notification carries nothing")
-    @Query(value = "SELECT 1 FROM (SELECT pg_notify(:channel, '')) sent", nativeQuery = true)
-    Integer notifyClaimers(@Param("channel") String channel);
-
     @WorkspaceAgnostic("The claim offers the queued events of every workspace and of the installation")
     @Query(value = """
             WITH picked AS (

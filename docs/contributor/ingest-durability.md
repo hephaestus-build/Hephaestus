@@ -14,7 +14,8 @@ The unique index `uq_provider_event_delivery` is (workspace, provider, delivery 
 `INSERT … ON CONFLICT DO NOTHING` makes a provider's retry or redelivery add no row.
 `SubjectKeyDeriver` owns the key of each provider.
 A handled row stays for `hephaestus.integration.consumer.replay-window` (default `3d`), the time in which GitHub can redeliver.
-A commit sends `pg_notify('provider_event')`. `ProviderEventNotifications` listens and wakes the claimers, which also poll every 5 seconds.
+The commit wakes the claimers of the receiving server through `ProviderEventNotifications`. Claimers of other servers find the row at their next poll, every 5 seconds.
+The inbox opens no `LISTEN` connection, so the chart's connection budget stays as it is.
 
 ## Claim, lease and order
 

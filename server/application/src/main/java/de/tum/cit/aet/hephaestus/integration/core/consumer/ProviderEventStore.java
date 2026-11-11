@@ -24,17 +24,17 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 public class ProviderEventStore {
 
-    /** Wakes an idle claimer when a delivery's transaction commits. */
-    static final String CHANNEL = "provider_event";
-
     private static final TypeReference<Map<String, String>> HEADERS = new TypeReference<>() {};
 
     private final ProviderEventRepository events;
     private final ObjectMapper mapper;
+    private final ProviderEventNotifications notifications;
 
-    public ProviderEventStore(ProviderEventRepository events, ObjectMapper mapper) {
+    public ProviderEventStore(
+            ProviderEventRepository events, ObjectMapper mapper, ProviderEventNotifications notifications) {
         this.events = events;
         this.mapper = mapper;
+        this.notifications = notifications;
     }
 
     /** A delivery for one workspace, or for the installation when {@code workspaceId} is null. */
@@ -87,7 +87,7 @@ public class ProviderEventStore {
                     arrival.payload()));
         }
         if (stored > 0) {
-            events.notifyClaimers(CHANNEL);
+            notifications.queuedAfterCommit();
         }
         return stored;
     }
@@ -221,7 +221,9 @@ public class ProviderEventStore {
     @Transactional
     @WorkspaceAgnostic("The workspace is bound explicitly; null selects only installation rows")
     public Optional<DeadLetter> replay(@Nullable Long workspaceId, long id, long actor) {
-        return events.replay(workspaceId, id, actor).map(ProviderEventStore::deadLetter);
+        Optional<DeadLetter> replayed = events.replay(workspaceId, id, actor).map(ProviderEventStore::deadLetter);
+        replayed.ifPresent(ignored -> notifications.queuedAfterCommit());
+        return replayed;
     }
 
     /** One workspace and one subject without its event token. */
