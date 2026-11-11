@@ -35,6 +35,15 @@ public final class GitLabRouteTestFixtures {
         GitLabRouteAdmission.handleAdmitted(route, users, null, null, project, handling);
     }
 
+    /** Runs a member handler with the membership GitLab reported during admission. */
+    public static void handleMembership(
+            GitLabRouteAdmission.AdmittedRoute route,
+            Map<Long, GitLabUserLookup> users,
+            GitLabRouteAdmission.ReportedMembership membership,
+            Runnable handling) {
+        GitLabRouteAdmission.handleAdmitted(route, users, membership, null, null, handling);
+    }
+
     /**
      * The profiles GitLab reports for the users a payload names, where admission reads them: {@code user},
      * {@code assignees} and {@code reviewers}. Each mirrors the payload's own profile.

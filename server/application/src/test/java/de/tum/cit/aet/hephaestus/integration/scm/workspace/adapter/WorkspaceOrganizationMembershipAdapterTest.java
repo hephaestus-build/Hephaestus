@@ -87,6 +87,7 @@ class WorkspaceOrganizationMembershipAdapterTest extends BaseUnitTest {
         lenient()
                 .when(workspaceRepository.findByOrganizationId(ORGANIZATION_ID))
                 .thenReturn(Optional.empty());
+        lenient().when(workspaceRepository.findByIdForUpdate(any())).thenReturn(Optional.of(new Workspace()));
         when(organizationRepository.findById(ORGANIZATION_ID)).thenReturn(Optional.of(group));
     }
 
@@ -144,6 +145,17 @@ class WorkspaceOrganizationMembershipAdapterTest extends BaseUnitTest {
         adapter.onOrganizationMembershipsSynced(queued);
 
         verify(membershipService, never()).syncWorkspaceMembers(any(), any());
+    }
+
+    @Test
+    void shouldGrantNobodyWhenTheWorkspaceIsGoneWhileTheEventWaits() {
+        linked(3L);
+        when(actorSelector.connectedProviderId(3L)).thenReturn(Optional.of(PROVIDER_ID));
+        when(workspaceRepository.findByIdForUpdate(3L)).thenReturn(Optional.empty());
+
+        adapter.onOrganizationMembershipsSynced(new OrganizationSyncedEvent(ORGANIZATION_ID, GROUP, true));
+
+        verifyNoInteractions(connections, membershipService);
     }
 
     @Test

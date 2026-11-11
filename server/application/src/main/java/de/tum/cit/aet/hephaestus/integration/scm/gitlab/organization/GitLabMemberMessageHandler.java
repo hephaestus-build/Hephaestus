@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.dto.GitLabM
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -57,6 +58,7 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
     private final TeamMembershipRepository teamMembershipRepository;
     private final GitLabRouteAdmission routeAdmission;
     private final GitLabUserService gitLabUserService;
+    private final WorkspaceRepository workspaces;
 
     @Nullable
     private final OrganizationMembershipListener membershipListener;
@@ -69,6 +71,7 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
             TeamMembershipRepository teamMembershipRepository,
             GitLabRouteAdmission routeAdmission,
             GitLabUserService gitLabUserService,
+            WorkspaceRepository workspaces,
             @Nullable OrganizationMembershipListener membershipListener,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
@@ -85,6 +88,7 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
         this.teamMembershipRepository = teamMembershipRepository;
         this.routeAdmission = routeAdmission;
         this.gitLabUserService = gitLabUserService;
+        this.workspaces = workspaces;
         this.membershipListener = membershipListener;
     }
 
@@ -107,7 +111,9 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
             return;
         }
         Optional<GitLabRouteAdmission.ReportedMembership> reported = GitLabRouteAdmission.reportedMembership();
-        if (reported.isPresent() && routeAdmission.holdActive(route.get())) {
+        if (reported.isPresent()
+                && workspaces.findByIdForUpdate(route.get().workspaceId()).isPresent()
+                && routeAdmission.holdActive(route.get())) {
             applyReportedMembership(event.userId(), route.get(), reported.get());
         }
     }

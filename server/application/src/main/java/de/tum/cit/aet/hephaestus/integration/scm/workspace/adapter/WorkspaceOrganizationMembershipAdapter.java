@@ -73,9 +73,9 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
      * first membership write.
      *
      * <p>A GitLab group grants nobody while the workspace follows only the projects it selected: its members then
-     * come from those projects (the GitLab selected-membership projection). The answer is read under the connection's
-     * lifecycle lock, which a selection change, Stop and a disconnect take first as well, so none of them can change
-     * it before the caller's writes commit. A workspace without an active GitLab connection, or whose connection,
+     * come from those projects (the GitLab selected-membership projection). The workspace is locked before the
+     * connection's lifecycle lock, which also guards a selection change, Stop and a disconnect, so none of them can
+     * change the answer before the caller's writes commit. A workspace without an active GitLab connection, or whose connection,
      * instance or group changed while this waited, takes nobody. Other providers are not affected.
      *
      * <p>When the connection names its group by id, a group known by another id grants nobody: the source is a group
@@ -93,6 +93,9 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
             return true;
         }
         long workspaceId = workspace.getId();
+        if (workspaceRepository.findByIdForUpdate(workspaceId).isEmpty()) {
+            return false;
+        }
         Optional<ConnectionConfig> locked = connections.lockActiveConfig(workspaceId, IntegrationKind.GITLAB);
         if (locked.isEmpty()) {
             return false;

@@ -275,9 +275,12 @@ public class GitLabSelectedMembershipProjection {
 
     private Outcome apply(Snapshot snapshot, Collection<GitLabUserLookup> granted, TransactionStatus status) {
         long workspaceId = snapshot.workspaceId();
+        Workspace workspace = workspaces.findByIdForUpdate(workspaceId).orElse(null);
+        if (workspace == null) {
+            return Outcome.STALE;
+        }
         connections.acquireLifecycleLock(snapshot.connectionId(), workspaceId);
-        Workspace workspace = workspaces.findById(workspaceId).orElse(null);
-        if (workspace == null || !unchanged(snapshot, workspace)) {
+        if (!unchanged(snapshot, workspace)) {
             log.info("Skipped selected membership changes: reason=changedWhileRead, workspaceId={}", workspaceId);
             return Outcome.STALE;
         }

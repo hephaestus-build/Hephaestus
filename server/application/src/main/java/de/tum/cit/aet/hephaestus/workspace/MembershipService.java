@@ -79,6 +79,7 @@ public class MembershipService {
     }
 
     public void syncWorkspaceMembers(Workspace workspace, Map<Long, Membership.WorkspaceRole> providerRoles) {
+        lockForMembershipChange(workspace.getId());
         Map<Long, Membership.WorkspaceRole> desired = new HashMap<>();
         for (var entry : providerRoles.entrySet()) {
             var actor = providers.actor(entry.getKey()).filter(GitProviderRegistry.ActorProfile::human);
@@ -111,6 +112,7 @@ public class MembershipService {
     }
 
     public void applyProviderGrant(Workspace workspace, Long scmUserId, Membership.@Nullable WorkspaceRole role) {
+        lockForMembershipChange(workspace.getId());
         long accountId = accountIdForUser(scmUserId);
         var existing = memberships.findByWorkspace_IdAndId_AccountId(workspace.getId(), accountId);
         if (existing.isPresent() && existing.get().getRole() == Membership.WorkspaceRole.OWNER) return;
