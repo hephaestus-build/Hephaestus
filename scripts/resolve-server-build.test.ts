@@ -24,11 +24,10 @@ const requiredJobs = [
 	"Docker / Images / Build linux/amd64 images",
 	"Docker / Images / Build linux/arm64 images",
 	"Test / App Server: Unit and architecture",
-	"Test / App Server: Integration (application)",
-	"Test / App Server: Integration (providers)",
-	"Test / App Server: Integration (runtime-and-startup)",
-	"Test / App Server: Integration (practices-and-agent)",
 	"Test / App Server: Integration (review)",
+	...["1", "2", "3", "4", "5", "6", "7", "8"].map(
+		(shard) => `Test / App Server: Integration (${shard})`,
+	),
 	"Security / Dependencies, secrets, and policy",
 	"CI Status Gate",
 ];
@@ -94,14 +93,7 @@ await test("caller matrix names preserve exact-commit build reuse and reject mis
 		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
 	const aliases = new Map<string, string>();
-	for (const shard of [
-		"unit",
-		"application",
-		"providers",
-		"runtime-and-startup",
-		"practices-and-agent",
-		"review",
-	]) {
+	for (const shard of ["unit", "review", "1", "2", "3", "4", "5", "6", "7", "8"]) {
 		const caller = String(ci.getIn(["jobs", "Test", "name"])).replace(
 			`\${{ matrix.shard }}`,
 			shard,
@@ -139,16 +131,16 @@ await test("caller matrix names preserve exact-commit build reuse and reject mis
 	data.jobs = data.jobs.map((job) => ({ ...job, name: aliases.get(job.name) ?? job.name }));
 	assert.deepEqual(await resolve(data), { runId: 101, artifactId: 202 });
 	for (const bad of [
-		"Test (application) / App Server: Integration (providers)",
+		"Test (2) / App Server: Integration (1)",
 		"Docker / Images (linux/arm64) / Build linux/amd64 images",
 	]) {
 		assert.equal(canonicalCiJobName(bad), bad);
 	}
-	const providers = data.jobs.find(
-		(job) => job.name === aliases.get("Test / App Server: Integration (providers)"),
+	const shard = data.jobs.find(
+		(job) => job.name === aliases.get("Test / App Server: Integration (1)"),
 	);
-	assert.ok(providers !== undefined);
-	providers.conclusion = "failure";
+	assert.ok(shard !== undefined);
+	shard.conclusion = "failure";
 	assert.equal(await resolve(data), undefined);
 });
 
@@ -195,6 +187,7 @@ await test("a run from an earlier integration shard layout cannot approve reuse"
 	for (const shards of [
 		["providers-and-startup", "application"],
 		["providers", "runtime-and-startup", "application"],
+		["providers", "runtime-and-startup", "practices-and-agent", "application", "review"],
 	]) {
 		const data = fixture();
 		data.jobs = [

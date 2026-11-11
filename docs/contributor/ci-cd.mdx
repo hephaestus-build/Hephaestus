@@ -746,7 +746,7 @@ the pull request is ready. Re-run the ready run instead.
 A pull request that is not a draft also runs the queue tier when it changes the tier's own inputs.
 These inputs are the workflows and actions that define the tier and the database migrations.
 They also include the server build script, which defines the shards and test tasks, and the browser
-suites' specs and configuration. A changed integration test or server class is not such an input, so its integration
+suites' specs and configuration. The integration test durations, which partition the shards, are an input too. A changed integration test or server class is not such an input, so its integration
 tests first run in the merge queue.
 
 To get the queue tier for any other change before you queue it, add the `ci:full` label to the pull request.
@@ -979,22 +979,10 @@ Right after a merge, that run is still building, so the pull request builds ever
 - `Quality` legs start from source. `Test` suites and `Build` gates start when `App Server: Package`
   uploads its artifact. In a merge group, `Quality` and `App Server: Package` start after `Security`:
   [Fail fast in the merge queue](#fail-fast-in-the-merge-queue).
-- `App Server: Integration` has five shards.
-  `providers` selects the `integration` package.
-  `runtime-and-startup` selects the `core.database`, `agent.job`, `agent.proxy`, `agent.mentor` and `core.privacy` packages, plus `StartupBudgetIntegrationTest`.
-  `practices-and-agent` selects the `practices` and `agent` packages.
-  It excludes the `runtime-and-startup` selection, so those `agent` packages stay in that shard.
-  It also excludes `review`, which selects `ReviewEndToEndIntegrationTest` and also runs in the fast tier.
-  Package patterns include their subpackages. `application` excludes the selections of all other shards.
-  All shards retain the `integration` tag
-  filter and run in separate JVMs and Testcontainers databases. The startup test and the
-  `core.database` tests own databases separate from other Spring contexts. Gradle's native test filters partition
-  the tier. `vp run test:server:selection` checks coverage through JUnit dry-run reports before
-  unit/architecture verification. Discovery reports stay separate from execution results.
-  The caller matrix uses `fail-fast: false`.
-  A failed merge-group worker calls the isolated cancel helper.
-  `CI Status Gate` requires the aggregate result. Locally
-  the tier runs whole. The weekly [server profiles](#server-profiles) run the same shards.
+- `App Server: Integration` has the `review` shard and numbered shards. [Integration shards](#integration-shards) says how the classes are split.
+  Each shard runs in its own JVM and Testcontainers database. The caller matrix uses `fail-fast: false`.
+  A failed merge-group worker calls the isolated cancel helper. `CI Status Gate` requires the aggregate result.
+  Locally the tier runs whole. The weekly [server profiles](#server-profiles) run the same shards.
 - Pull requests build `linux/amd64`. Merge groups, pushes to `main`, dispatches, and every run on
   the Version PR's branch build `linux/amd64` and `linux/arm64`. Both lists take the same build,
   merge, signing, attestation and per-platform scan path. Pull requests build only changed images
@@ -1134,11 +1122,38 @@ Right after a merge, that run is still building, so the pull request builds ever
   the newest successful build that descends from it. A replaced promotion thus strands no build. The
   image build moves the `main` tags only forward, and never leaves them behind a published commit.
 
+### Integration shards
+
+The `review` shard holds `ReviewEndToEndIntegrationTest`, which the fast tier also runs.
+The numbered shards split every other integration class by the seconds that it took.
+Gradle sorts the classes from the longest to the shortest and puts each class on the shard with the least total so far.
+A class without recorded seconds, such as a new class, goes to shard `hash(class) mod n + 1`.
+A `@Nested` class stays with its top-level class.
+This is the idea of Develocity's [Test Distribution](https://docs.develocity.ai/test-distribution/), which balances partitions with historical test times, without its server.
+
+The number of shards and the default seconds live in `server/application/integration-test-durations.json`.
+The CI matrix lists `review` and each numbered shard, and `scripts/ci-contract.test.ts` pins the matrix to the file.
+To change the number of shards, change `shards` in the file and the three matrices.
+
+The file is committed, so every run of a commit partitions the same way, locally too.
+A partition that changed on each push would move hundreds of classes into new JVMs at once.
+A test that relies on a row of an earlier test would then fail in some unrelated merge group.
+
+When a shard drifts towards its timeout, refresh the seconds from a recent merge group with
+`node scripts/integration-test-durations.ts refresh <run-id>`.
+The command keeps the mean of each class's committed and measured seconds and drops classes that no longer ran.
+The file is a queue-tier input, so the pull request that changes it runs every shard with the new partition before it gates anyone.
+
+`vp run test:server:selection` proves that `review` and the numbered shards hold each integration test exactly once.
+The merge group runs every shard, so a partition never removes a test from it.
+Each shard's job summary lists its classes and their seconds.
+To repeat a failure locally, run its class with `--tests`, or run the shard with `HEPHAESTUS_INTEGRATION_SHARD=<n>`.
+
 ## Recovery tests
 
 The latest-minor `amd64` leg runs the replacement-storage recovery drill nightly and on pull requests that change its inputs.
 The `kubernetes-recovery` path filter owns those inputs: the chart, PostgreSQL image, drill script and qualification workflows.
-Merge groups skip this destructive drill. The JetStream restore test stays in the provider integration shard.
+Merge groups skip this destructive drill. The JetStream restore test stays in the integration tier.
 
 The drill backs PostgreSQL up to a disposable S3-compatible server and archives a later WAL-only row.
 It removes the disposable source claim, provisions a fresh claim and volume on a replacement k3d node, and restores through the chart.
@@ -1337,12 +1352,13 @@ Gradle streams test output only in these profiles so Spring context diagnostics 
 History uses one `ci-profile-history-gradle-jfr-<shard>` artifact for each shard and compares wall time,
 test time and context measurements. Each sample names its shard. A baseline accepts only samples of the
 same shard, so the earlier whole-tier history is not used.
+The profiles partition by the committed seconds, so a shard's classes change only when the committed file changes.
 
 GNU time's CPU/RSS accounting does not reliably include Gradle's detached JVMs, so those
 values are not reported as suite metrics or compared against budgets. Inspect the retained JFR recordings
 for JVM CPU, allocation and GC diagnostics instead.
 
-The manual `runner-comparison` selection runs the application integration shard twice each on standard
+The manual `runner-comparison` selection runs integration shard `1` twice each on standard
 Ubuntu 24.04 x64 and ARM64 runners, one job at a time. Preparation is a separate step so cold dependency
 and compilation caches are not mistaken for test execution speed. Each sample retains runner hardware,
 JUnit results and Gradle task profiles. Compare actual job ordering, test counts and execution time as

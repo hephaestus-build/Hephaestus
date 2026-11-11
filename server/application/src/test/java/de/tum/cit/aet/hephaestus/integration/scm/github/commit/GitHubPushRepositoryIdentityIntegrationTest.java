@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.commit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
@@ -58,9 +59,7 @@ class GitHubPushRepositoryIdentityIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         assertThat(gitRepositoryManager.isEnabled()).isFalse();
-        github = providers
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow();
+        github = IdentityProviderFixtures.gitHub(providers);
         gitlab = providers.saveAndFlush(new IdentityProvider(
                 IdentityProviderType.GITLAB, "https://" + UUID.randomUUID() + ".gitlab.example.test"));
         path = "p-" + UUID.randomUUID() + "/target";

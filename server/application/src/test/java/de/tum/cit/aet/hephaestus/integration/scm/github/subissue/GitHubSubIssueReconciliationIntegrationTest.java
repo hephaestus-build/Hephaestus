@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -44,9 +45,7 @@ class GitHubSubIssueReconciliationIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldSkipAnUnmirroredGitHubParentWhenOnlyGitLabHasItsPathAndNumber() {
-        var github = providers
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow();
+        var github = IdentityProviderFixtures.gitHub(providers);
         var gitlab = providers.save(new IdentityProvider(
                 IdentityProviderType.GITLAB, "https://" + UUID.randomUUID() + ".gitlab.example.test"));
         long nativeId =

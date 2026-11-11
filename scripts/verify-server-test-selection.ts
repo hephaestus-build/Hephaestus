@@ -5,6 +5,7 @@ import path from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
+import { committedShards } from "./lib/integration-durations.ts";
 import { isRecord } from "./lib/json.ts";
 import { run } from "./lib/process.ts";
 
@@ -81,12 +82,10 @@ async function main(): Promise<void> {
 		"integrationInventory",
 		"databaseInventory",
 	];
+	const shards = committedShards();
 	const shardInventories = [
-		"integrationProvidersInventory",
-		"integrationRuntimeAndStartupInventory",
-		"integrationPracticesAndAgentInventory",
-		"integrationApplicationInventory",
 		"integrationReviewInventory",
+		...Array.from({ length: shards }, (_, index) => `integrationShard${index + 1}Inventory`),
 	];
 	// Dry-run reports are isolated from execution and coverage reports.
 	await rm(reports, { recursive: true, force: true });
@@ -110,14 +109,14 @@ async function main(): Promise<void> {
 	);
 	assertCoverage(all, tierTests, false);
 	const integration = await readIdentities(path.resolve(reports, "integrationInventory", "xml"));
-	const shards = await Promise.all(
+	const groups = await Promise.all(
 		shardInventories.map(async (inventory) =>
 			readIdentities(path.resolve(reports, inventory, "xml")),
 		),
 	);
-	assertCoverage(integration, shards, true);
+	assertCoverage(integration, groups, true);
 	console.log(
-		`JUnit discovery: ${all.size} non-live discovery entries covered; ${integration.size} integration entries partitioned exactly once.`,
+		`JUnit discovery: ${all.size} non-live discovery entries covered; ${integration.size} integration entries partitioned exactly once into review and ${shards} shards.`,
 	);
 }
 

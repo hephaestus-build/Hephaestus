@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemSourceObserved;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
@@ -135,9 +136,7 @@ class GitHubSubIssueScopeIntegrationTest extends BaseIntegrationTest {
         long nativeId =
                 1_000_000_000L + Integer.toUnsignedLong(UUID.randomUUID().hashCode()) * 10;
         String owner = "s-" + UUID.randomUUID();
-        var github = providers
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow();
+        var github = IdentityProviderFixtures.gitHub(providers);
         var gitlab = providers.save(new IdentityProvider(
                 IdentityProviderType.GITLAB, "https://" + UUID.randomUUID() + ".gitlab.example.test"));
         var workspace = WorkspaceTestFixtures.persistInstallationWorkspace(
@@ -239,9 +238,7 @@ class GitHubSubIssueScopeIntegrationTest extends BaseIntegrationTest {
                 1_000_000_000L + Integer.toUnsignedLong(UUID.randomUUID().hashCode()) * 10;
         String owner = "progress-" + UUID.randomUUID();
         String path = owner + "/target";
-        var github = providers
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow();
+        var github = IdentityProviderFixtures.gitHub(providers);
         var workspace = WorkspaceTestFixtures.persistInstallationWorkspace(
                 workspaces, connections, WorkspaceTestFixtures.installationWorkspace(nativeId, owner), nativeId);
         var repository = repository(github, nativeId + 1, path);

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -96,10 +97,7 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
     }
 
     protected IdentityProvider ensureGitHubProvider() {
-        return gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseGet(() -> gitProviderRepository.save(
-                        new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+        return IdentityProviderFixtures.gitHub(gitProviderRepository);
     }
 
     protected IdentityProvider ensureGitLabProvider() {

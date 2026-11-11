@@ -571,6 +571,8 @@ jobs:
             # actions that define the tier are `test-config` and `build-config`.
             queue-tier-inputs:
               - 'server/application/build.gradle.kts'
+              # The partition of the integration shards: a new one runs every shard before it gates others.
+              - 'server/application/integration-test-durations.json'
               - 'server/application/src/main/resources/db/**'
               - 'webapp/e2e/**'
               - 'webapp/playwright.config.ts'
@@ -1045,7 +1047,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJSON(needs.detect-changes.outputs.queue-tier == 'true' && '["unit","providers","runtime-and-startup","practices-and-agent","application","review"]' || '["unit","review"]') }}
+        shard: ${{ fromJSON(needs.detect-changes.outputs.queue-tier == 'true' && '["unit","review","1","2","3","4","5","6","7","8"]' || '["unit","review"]') }}
     uses: ./.github/workflows/ci-tests.yml
     needs: [detect-changes, server-package, Security-merge-group]
     if: |

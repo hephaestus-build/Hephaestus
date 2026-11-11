@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
@@ -236,9 +236,7 @@ class GitHubMisfiledWorkIntegrationTest extends BaseIntegrationTest {
     private Repository repository(String nameWithOwner, boolean monitored) {
         var repository = new Repository();
         repository.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
-        repository.setProvider(providers
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow());
+        repository.setProvider(IdentityProviderFixtures.gitHub(providers));
         repository.setName(nameWithOwner.substring(nameWithOwner.indexOf('/') + 1));
         repository.setNameWithOwner(nameWithOwner);
         repository.setHtmlUrl("https://github.com/" + nameWithOwner);

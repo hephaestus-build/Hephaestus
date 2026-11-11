@@ -77,11 +77,15 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - shard: providers
-          - shard: runtime-and-startup
-          - shard: practices-and-agent
-          - shard: application
           - shard: review
+          - shard: "1"
+          - shard: "2"
+          - shard: "3"
+          - shard: "4"
+          - shard: "5"
+          - shard: "6"
+          - shard: "7"
+          - shard: "8"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -272,14 +272,63 @@ val testTiers =
         "databaseTest" to "database",
         "liveTest" to "live",
     )
-val integrationInventories =
-    mapOf(
-        "integrationProvidersInventory" to "providers",
-        "integrationRuntimeAndStartupInventory" to "runtime-and-startup",
-        "integrationPracticesAndAgentInventory" to "practices-and-agent",
-        "integrationApplicationInventory" to "application",
-        "integrationReviewInventory" to "review",
+
+// The integration shards: `review` holds one review from its request to its admitted results,
+// which the fast tier runs on every pull request. The numbered shards split every other class by
+// the seconds it took, as integration-test-durations.json records them
+// (docs/contributor/ci-cd.mdx § Integration shards).
+val reviewTestClass = "de.tum.cit.aet.hephaestus.practices.review.ReviewEndToEndIntegrationTest"
+
+/** Each class's numbered shard, from a longest-first greedy fit; a class without seconds hashes. */
+class IntegrationShards(val count: Int, private val assignment: Map<String, Int>) :
+    java.io.Serializable {
+    fun of(className: String) =
+        assignment[className] ?: (Math.floorMod(className.hashCode(), count) + 1)
+}
+
+fun integrationShards(durations: String, reviewClass: String): IntegrationShards {
+    val document = groovy.json.JsonSlurper().parseText(durations) as Map<*, *>
+    val count = (document["shards"] as Number).toInt()
+    require(count > 0) { "The integration test durations need at least one shard" }
+    val load = DoubleArray(count)
+    val assignment =
+        (document["seconds"] as Map<*, *>)
+            .map { (name, seconds) -> name as String to (seconds as Number).toDouble() }
+            .filter { (name, _) -> name != reviewClass }
+            .sortedWith(compareByDescending<Pair<String, Double>> { it.second }.thenBy { it.first })
+            .associate { (name, seconds) ->
+                val shard = load.indices.minBy { load[it] }
+                load[shard] += seconds
+                name to shard + 1
+            }
+    return IntegrationShards(count, assignment)
+}
+
+/** Selects the class files, nested classes with their top-level class, of one numbered shard. */
+class IntegrationShardSpec(private val shard: Int, private val shards: IntegrationShards) :
+    Spec<FileTreeElement>, java.io.Serializable {
+    override fun isSatisfiedBy(element: FileTreeElement) =
+        element.isDirectory ||
+            shards.of(
+                element.relativePath.pathString
+                    .removeSuffix(".class")
+                    .substringBefore('$')
+                    .replace('/', '.')
+            ) == shard
+}
+
+val integrationPartition =
+    integrationShards(
+        providers
+            .fileContents(layout.projectDirectory.file("integration-test-durations.json"))
+            .asText
+            .get(),
+        reviewTestClass,
     )
+val integrationInventories =
+    mapOf("integrationReviewInventory" to "review") +
+        (1..integrationPartition.count).associate { "integrationShard${it}Inventory" to "$it" }
+
 // The limit of one test task, and of one integration shard.
 val testTaskTimeout: Duration = Duration.ofMinutes(20)
 val testInventories =
@@ -349,42 +398,17 @@ tasks.test {
     finalizedBy("jacocoTestReport")
 }
 
-fun Test.selectIntegrationShard(shard: String) {
-    val providerTests = listOf("de.tum.cit.aet.hephaestus.integration.*")
-    val runtimeAndStartupTests =
-        listOf(
-            "de.tum.cit.aet.hephaestus.StartupBudgetIntegrationTest",
-            "de.tum.cit.aet.hephaestus.core.database.*",
-            "de.tum.cit.aet.hephaestus.agent.job.*",
-            "de.tum.cit.aet.hephaestus.agent.proxy.*",
-            "de.tum.cit.aet.hephaestus.agent.mentor.*",
-            "de.tum.cit.aet.hephaestus.core.privacy.*",
-        )
-    val practicesAndAgentTests =
-        listOf("de.tum.cit.aet.hephaestus.practices.*", "de.tum.cit.aet.hephaestus.agent.*")
-    // The fast tier runs this shard on every pull request: one review from its request to its
-    // admitted results.
-    val reviewTests =
-        listOf("de.tum.cit.aet.hephaestus.practices.review.ReviewEndToEndIntegrationTest")
+fun Test.selectIntegrationShard(shard: String, shards: IntegrationShards) {
     when (shard) {
         "" -> Unit
-        "providers" -> filter { providerTests.forEach(::includeTestsMatching) }
-        "runtime-and-startup" -> filter { runtimeAndStartupTests.forEach(::includeTestsMatching) }
-        // A Gradle exclusion wins over an inclusion, so agent.job, agent.proxy and agent.mentor
-        // stay in
-        // runtime-and-startup.
-        "practices-and-agent" ->
-            filter {
-                practicesAndAgentTests.forEach(::includeTestsMatching)
-                (runtimeAndStartupTests + reviewTests).forEach(::excludeTestsMatching)
-            }
-        "review" -> filter { reviewTests.forEach(::includeTestsMatching) }
-        "application" ->
-            filter {
-                (providerTests + runtimeAndStartupTests + practicesAndAgentTests + reviewTests)
-                    .forEach(::excludeTestsMatching)
-            }
-        else -> error("Unknown integration shard: $shard")
+        "review" -> filter { includeTestsMatching(reviewTestClass) }
+        else -> {
+            val index =
+                shard.toIntOrNull()?.takeIf { it in 1..shards.count }
+                    ?: error("Unknown integration shard: $shard (review or 1 to ${shards.count})")
+            filter { excludeTestsMatching(reviewTestClass) }
+            include(IntegrationShardSpec(index, shards))
+        }
     }
 }
 
@@ -424,10 +448,10 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
             require(!criteriaCases.isPresent || integrationShard.get().isEmpty()) {
                 "criteriaCases cannot be combined with HEPHAESTUS_INTEGRATION_SHARD"
             }
-            selectIntegrationShard(integrationShard.get())
+            selectIntegrationShard(integrationShard.get(), integrationPartition)
             // An unsharded run holds every shard, so it gets every shard's limit.
             if (integrationShard.get().isEmpty()) {
-                timeout.set(testTaskTimeout.multipliedBy(integrationInventories.size.toLong()))
+                timeout.set(testTaskTimeout.multipliedBy(integrationPartition.count + 1L))
             }
         }
         if (tag in setOf("live", "integration") && criteriaCases.isPresent) {
@@ -689,6 +713,6 @@ for ((taskName, tag) in testInventories) {
         group = "verification"
         description = "Discovers ${tag.ifEmpty { "all non-live" }} tests without executing them."
         selectTestTier(tag)
-        selectIntegrationShard(integrationInventories[taskName].orEmpty())
+        integrationInventories[taskName]?.let { selectIntegrationShard(it, integrationPartition) }
     }
 }

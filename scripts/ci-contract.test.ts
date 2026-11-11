@@ -18,6 +18,7 @@ import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnera
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
+import { committedShards } from "./lib/integration-durations.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { exitStatus } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
@@ -950,7 +951,7 @@ void describe("CI contract", () => {
 		const caller = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		assert.deepEqual(
 			serverShards(caller, true).filter((shard) => shard !== "unit"),
-			["providers", "runtime-and-startup", "practices-and-agent", "application", "review"],
+			integrationShards(),
 		);
 		assert.equal(
 			runScript(workflow, ["jobs", "server-verification"], "Verify test tier and shard discovery"),
@@ -1094,6 +1095,7 @@ void describe("CI contract", () => {
 			].map((match) => match.groups?.path),
 			[
 				"server/application/build.gradle.kts",
+				"server/application/integration-test-durations.json",
 				"server/application/src/main/resources/db/**",
 				"webapp/e2e/**",
 				"webapp/playwright.config.ts",
@@ -4838,6 +4840,11 @@ function expandExpressions(value: unknown, context: Record<string, unknown>): st
 	);
 }
 
+/** `review`, then the numbered shards that the committed integration test durations define. */
+function integrationShards(): string[] {
+	return ["review", ...Array.from({ length: committedShards() }, (_, index) => `${index + 1}`)];
+}
+
 function serverShards(workflow: Document, queue: boolean): string[] {
 	const expression = String(
 		workflow.getIn(["jobs", "Test", "strategy", "matrix", "shard"]),
@@ -6358,14 +6365,7 @@ void test("each worker can cancel a merge group without waiting for unrelated wo
 	}
 	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	assert.deepEqual(serverShards(ci, false), ["unit", "review"]);
-	assert.deepEqual(serverShards(ci, true), [
-		"unit",
-		"providers",
-		"runtime-and-startup",
-		"practices-and-agent",
-		"application",
-		"review",
-	]);
+	assert.deepEqual(serverShards(ci, true), ["unit", ...integrationShards()]);
 });
 
 void test("manifest publication waits for all platform builds and still signs wholly reused images", async () => {

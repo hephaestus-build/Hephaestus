@@ -23,7 +23,7 @@ on:
         type: string
         default: "false"
       shard:
-        description: "The unit tier or one integration shard selected by the caller"
+        description: "The unit tier, or the integration shard `review` or a numbered one, selected by the caller"
         required: true
         type: string
       queue_tier:
@@ -87,7 +87,7 @@ jobs:
     name: "App Server: Integration (${{ inputs.shard }})"
     if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.shard != 'unit' && (inputs.queue_tier == 'true' || inputs.shard == 'review')
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ inputs.shard == 'runtime-and-startup' && 20 || 30 }}
+    timeout-minutes: 30
     permissions:
       contents: read
       checks: write
@@ -112,6 +112,11 @@ jobs:
           HEPHAESTUS_INTEGRATION_SHARD: ${{ inputs.shard }}
           HEPHAESTUS_TEST_POSTGRES_IMAGE: hephaestus-postgres:ci
         run: vp run test:server:integration
+      - name: List the shard's classes
+        if: ${{ !cancelled() }}
+        env:
+          SHARD: ${{ inputs.shard }}
+        run: node scripts/integration-test-durations.ts summary "$SHARD" server/application/build/test-results/integrationTest
       - name: Upload test results
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
