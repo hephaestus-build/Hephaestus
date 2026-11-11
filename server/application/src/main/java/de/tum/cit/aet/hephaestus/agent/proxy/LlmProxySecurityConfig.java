@@ -218,9 +218,13 @@ class LlmProxySecurityConfig {
             SandboxGatewayConnector gateway,
             AttemptTokenVerifier jwtVerifier,
             ObjectProvider<AgentSandboxes> sandboxes,
+            SandboxGatewayBodyBudget bodyBudget,
             ProxyAccounting accounting,
             ObjectMapper objectMapper)
             throws Exception {
+        // A review sandbox's result, bounded as a review Job's result is on the capability chain.
+        RequestMatcher reviewResult = PathPatternRequestMatcher.withDefaults()
+                .matcher(HttpMethod.POST, "/internal/agent/runs/{runId}/runtime/result");
         var sourceLimit =
                 new AuthRateLimitProperties.Limit(gatewayProperties.sourceRequestsPerMinute(), Duration.ofMinutes(1));
         var authentication = new SandboxTokenAuthenticationFilter(jwtVerifier, sandboxes.getIfAvailable(), accounting);
@@ -237,6 +241,14 @@ class LlmProxySecurityConfig {
                 .addFilterBefore(authentication, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(
                         new SandboxGatewaySourceLimitFilter(sourceLimit, objectMapper, accounting),
+                        SandboxTokenAuthenticationFilter.class)
+                .addFilterBefore(
+                        bounded(
+                                SandboxOutputArchive.MAX_OUTPUT_BYTES,
+                                reviewResult,
+                                bodyBudget,
+                                objectMapper,
+                                accounting),
                         SandboxTokenAuthenticationFilter.class);
         return http.build();
     }

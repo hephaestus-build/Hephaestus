@@ -18,7 +18,7 @@ import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingService;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxDispatcher;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
@@ -114,10 +114,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * One review of a real pull request, from its request to its admitted results, with only the container and the
- * model's judgement stubbed. The worker claims the job, captures the work, and launches a sandbox whose runtime speaks
- * the runner's protocol over the gateway ({@link RunnerStubSandbox}); the review model is a stub provider behind the
- * real proxy. Between the capture and the first practice start the work may change, as it does on a live install.
+ * One review of a real pull request, from its request to its admitted results and the run that composes them, with only the container and the
+ * model's judgement stubbed. The server requests the review's sandbox; the sandbox ({@link ReviewSandboxStub}) pulls its
+ * run, which captures the work, and speaks the runner's protocol over the gateway with its own token; the review model
+ * is a stub provider behind the real proxy. Between the capture and the first practice start the work may change, as it does on a live install.
  */
 // The worker role without a cluster, as WorkerGraphWithoutCluster builds it; the sandbox is the runner stub.
 @MockitoBean(name = "sandboxKubernetesClient", types = KubernetesClient.class, enforceOverride = true)
@@ -137,6 +137,8 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         registry.add("hephaestus.agent.enabled", () -> "true");
         // The Kubernetes worker needs a fixed gateway port.
         registry.add("hephaestus.sandbox.gateway.port", () -> GATEWAY_PORT);
+        // A review's sandbox reaches the gateway at this address, as the claim passes it.
+        registry.add("hephaestus.agent.sandbox.gateway-url", () -> "http://127.0.0.1:" + GATEWAY_PORT);
         registry.add("hephaestus.sandbox.kubernetes.namespace", () -> "review-end-to-end");
         registry.add("hephaestus.sandbox.kubernetes.pod-name", () -> "review-end-to-end");
         registry.add("hephaestus.sandbox.kubernetes.pod-ip", () -> "127.0.0.1");
@@ -149,8 +151,8 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     static class Sandbox {
         @Bean
         @Primary
-        RunnerStubSandbox runnerStubSandbox(ObjectMapper mapper) {
-            return new RunnerStubSandbox(mapper);
+        ReviewSandboxStub reviewSandboxStub(ObjectMapper mapper) {
+            return new ReviewSandboxStub(mapper);
         }
     }
 
@@ -181,10 +183,10 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Autowired
-    private RunnerStubSandbox sandbox;
+    private ReviewSandboxStub sandbox;
 
     @Autowired
-    private SandboxGatewayConnector gateway;
+    private SandboxDispatcher dispatcher;
 
     @Autowired
     private ReviewComposeSandboxKind composeKind;
@@ -454,7 +456,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         // A review can start while the discussion sync still runs: the mirror has not read the whole discussion yet.
         if (between == Between.THE_DISCUSSION_SYNC_FINISHES)
             jdbc.update("UPDATE issue SET discussion_read_whole=FALSE WHERE id=?", pull.getId());
-        sandbox.prepare("http://127.0.0.1:" + gateway.port(), () -> {
+        sandbox.prepare(() -> {
             switch (between) {
                 case NOTHING -> {}
                 // The sync finishes and finds nothing new: the work did not change.
@@ -478,12 +480,14 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 ? opened(workspace, item, pull, type, developer)
                 : requested(workspace, item, practice, developer);
 
-        // The worker ends the run; the server's completion, which its scheduler runs and the test profile does not,
-        // then settles each practice of the review.
+        // The dispatch starts the review's sandbox, the sandbox measures and ends its run, and the server's completion
+        // settles each practice of the review: each pass here does what a scheduler does outside the test profile.
         try {
             await().atMost(Duration.ofMinutes(2))
                     .pollInterval(Duration.ofMillis(250))
                     .until(() -> {
+                        dispatcher.dispatch();
+                        sandbox.drive();
                         composeQueued(reviewId);
                         completion.tick();
                         // A practice withheld at its start is final before the review that held it ends.

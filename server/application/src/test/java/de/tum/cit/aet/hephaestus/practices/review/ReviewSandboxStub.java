@@ -1,12 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxClaims;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -15,13 +13,14 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
@@ -33,12 +32,14 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * A sandbox whose runtime is a stub of the Pi runner. It speaks the runner's protocol over HTTP to the worker's
- * gateway, as the container does: it reads its workspace from the gateway, starts each assigned practice, asks the
- * review model once through the proxy, stages a result for each practice that started, seals them, and uploads its
- * output. Only the model's judgement is fixed: each started practice is MET, citing the pull request's title.
+ * A review's sandbox, as its driver and a stub of the Pi runner would act. It is the claims API that the server
+ * requests sandboxes through, so it holds each sandbox's token and gateway; {@link #drive} then pulls each sandbox's run
+ * and measures it over HTTP, as the container does: it reads its workspace from the gateway, starts each assigned
+ * practice, asks the review model once through the proxy, stages a result for each practice that started, seals them,
+ * uploads its output, and ends its run. Only the model's judgement is fixed: each started practice is MET, citing the
+ * pull request's title.
  */
-final class RunnerStubSandbox implements SandboxBackend {
+final class ReviewSandboxStub implements SandboxClaims {
 
     /** What the runner did, in order; a test reads it to see what reached the gateway. */
     record Call(String path, int status, String body) {}
@@ -48,47 +49,78 @@ final class RunnerStubSandbox implements SandboxBackend {
             HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     final List<Call> calls = new CopyOnWriteArrayList<>();
-    private volatile @Nullable String gateway;
+    private final Map<String, Claim> claims = new ConcurrentHashMap<>();
+    private final Set<String> measured = ConcurrentHashMap.newKeySet();
     private volatile Runnable beforeStart = () -> {};
-    private volatile @Nullable Map<String, String> environment;
 
-    RunnerStubSandbox(ObjectMapper mapper) {
+    ReviewSandboxStub(ObjectMapper mapper) {
         this.mapper = mapper;
     }
 
-    /** Points the sandbox at the worker's gateway and sets what happens between the capture and the first start. */
-    void prepare(String gatewayUrl, Runnable betweenCaptureAndStart) {
+    void prepare(Runnable betweenCaptureAndStart) {
         calls.clear();
-        gateway = gatewayUrl;
         beforeStart = betweenCaptureAndStart;
     }
 
     @Override
-    public Handle launch(Launch launch) {
-        // A Heph host is a conversation's sandbox, which this review needs none of.
-        if (launch.kind() != Kind.REVIEW) throw new SandboxException("The runner stub runs reviews only");
-        environment = launch.environment().at(Objects.requireNonNull(gateway, "prepare the sandbox first"));
-        return new Handle("runner-stub-" + launch.id());
+    public void create(Claim claim) {
+        claims.put(claim.name(), claim);
     }
 
     @Override
-    public Observation observe(Handle handle, Stage stage, Instant deadline) {
-        if (stage != Stage.ENDED) return new Observation(false, stage == Stage.INITIALIZED ? 0 : null);
-        try {
-            return new Observation(false, run(Objects.requireNonNull(environment)));
-        } catch (IOException exception) {
-            throw new UncheckedIOException(exception);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(exception);
+    public void delete(String name) {
+        claims.remove(name);
+    }
+
+    @Override
+    public List<String> names() {
+        return List.copyOf(claims.keySet());
+    }
+
+    /**
+     * Pulls the due run of each sandbox, as its driver does, and measures its review once. The composition that follows
+     * runs on the composer's own kind, which its own test drives; this sandbox pulls no more.
+     */
+    void drive() throws IOException, InterruptedException {
+        for (Claim claim : claims.values()) {
+            if (!measured.add(claim.name())) continue;
+            String gateway = Objects.requireNonNull(claim.env().get("HEPHAESTUS_GATEWAY_URL"));
+            String token = Objects.requireNonNull(claim.env().get("HEPHAESTUS_SANDBOX_TOKEN"));
+            var offered = http.send(
+                    HttpRequest.newBuilder(URI.create(gateway + "/internal/agent/next"))
+                            .header("Authorization", "Bearer " + token)
+                            .POST(HttpRequest.BodyPublishers.noBody())
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            if (offered.statusCode() != 200) {
+                measured.remove(claim.name());
+                continue;
+            }
+            JsonNode run = mapper.readTree(offered.body());
+            if (!run.path("kind").asString().equals("REVIEW"))
+                throw new IllegalStateException("A review's sandbox first measures its review: " + run);
+            String runId = run.path("runId").asString();
+            Map<String, String> headers = Map.of(
+                    "Authorization",
+                    "Bearer " + token,
+                    "X-Agent-Run",
+                    runId,
+                    "X-Agent-Epoch",
+                    Integer.toString(run.path("epoch").asInt()));
+            String base = gateway + "/internal/agent/runs/" + runId;
+            send(base + "/context", headers, null);
+            measure(gateway + "/internal/llm", base + "/runtime", headers);
+            var ended = send(
+                    base + "/end",
+                    headers,
+                    mapper.writeValueAsBytes(mapper.createObjectNode().put("outcome", "completed")));
+            calls.add(new Call("end", ended.statusCode(), new String(ended.body(), StandardCharsets.UTF_8)));
         }
     }
 
     /** The runner's review: {@code runReviewJob} in {@code pi-runner.ts}, with a fixed judgement. */
-    private int run(Map<String, String> env) throws IOException, InterruptedException {
-        String proxy = Objects.requireNonNull(env.get("LLM_PROXY_URL"));
-        String runtime = Objects.requireNonNull(env.get("SANDBOX_RUNTIME_URL"));
-        String token = Objects.requireNonNull(env.get("LLM_PROXY_TOKEN"));
+    private void measure(String proxy, String runtime, Map<String, String> token)
+            throws IOException, InterruptedException {
         Map<String, byte[]> workspace =
                 untar(send(runtime + "/workspace", token, null).body());
         JsonNode task = mapper.readTree(workspace.get(SandboxLayout.TASK_ENVELOPE_FILENAME));
@@ -125,10 +157,12 @@ final class RunnerStubSandbox implements SandboxBackend {
         // As the runner does, a review whose practices each started or were withheld at their start writes its result,
         // which is empty when every start was withheld.
         byte[] output = tar(Map.of("result.json", mapper.writeValueAsBytes(admission(task, results))));
+        var upload = HttpRequest.newBuilder(URI.create(runtime + "/result"));
+        token.forEach(upload::header);
         var uploaded = http.send(
-                HttpRequest.newBuilder(URI.create(runtime + "/result"))
-                        .header("Authorization", "Bearer " + token)
-                        .header("Content-Type", "application/x-tar")
+                upload.header("Content-Type", "application/x-tar")
+                        .header("x-sandbox-exit-code", "0")
+                        .header("x-sandbox-timed-out", "false")
                         .header(
                                 "Content-Digest",
                                 "sha-256=:" + Base64.getEncoder().encodeToString(sha256(output)) + ":")
@@ -137,7 +171,6 @@ final class RunnerStubSandbox implements SandboxBackend {
                 HttpResponse.BodyHandlers.ofString());
         calls.add(new Call("result", uploaded.statusCode(), uploaded.body()));
         if (uploaded.statusCode() != 204) throw new IllegalStateException("The result upload failed: " + uploaded);
-        return 0;
     }
 
     private ObjectNode envelope(JsonNode task) {
@@ -197,7 +230,7 @@ final class RunnerStubSandbox implements SandboxBackend {
         throw new IllegalStateException("The capture holds no pull request record: " + manifest);
     }
 
-    private String post(String url, String token, JsonNode body) throws IOException, InterruptedException {
+    private String post(String url, Map<String, String> token, JsonNode body) throws IOException, InterruptedException {
         var response = send(url, token, mapper.writeValueAsBytes(body));
         String text = new String(response.body(), StandardCharsets.UTF_8);
         calls.add(new Call(url.substring(url.lastIndexOf('/') + 1), response.statusCode(), text));
@@ -205,11 +238,10 @@ final class RunnerStubSandbox implements SandboxBackend {
         return text;
     }
 
-    private HttpResponse<byte[]> send(String url, String token, byte @Nullable [] body)
+    private HttpResponse<byte[]> send(String url, Map<String, String> headers, byte @Nullable [] body)
             throws IOException, InterruptedException {
-        var request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(30))
-                .header("Authorization", "Bearer " + token);
+        var request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30));
+        headers.forEach(request::header);
         request = body == null
                 ? request.GET()
                 : request.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofByteArray(body));
@@ -245,26 +277,5 @@ final class RunnerStubSandbox implements SandboxBackend {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
         }
-    }
-
-    @Override
-    public boolean running(Handle handle) {
-        return false;
-    }
-
-    @Override
-    public String transcript(Handle handle, Container container) {
-        return "";
-    }
-
-    @Override
-    public void kill(Handle handle) {}
-
-    @Override
-    public void remove(Handle handle) {}
-
-    @Override
-    public List<Listed> list() {
-        return List.of();
     }
 }

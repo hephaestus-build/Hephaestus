@@ -1416,6 +1416,18 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		resources.find((resource) => kindOf(resource) === "Service" && nameOf(resource) === name);
 	// Callers reach only workers that hold their proof; only the probe reaches one that does not yet.
 	assert.equal(get(service("heph-sandbox-gateway"), "spec", "publishNotReadyAddresses"), undefined);
+	// A review attempt lives on the worker that took its sandbox's first call.
+	assert.equal(get(service("heph-sandbox-gateway"), "spec", "sessionAffinity"), "ClientIP");
+	assert.equal(
+		get(
+			service("heph-sandbox-gateway"),
+			"spec",
+			"sessionAffinityConfig",
+			"clientIP",
+			"timeoutSeconds",
+		),
+		86_400,
+	);
 	assert.equal(
 		get(service("heph-sandbox-gateway-probe"), "spec", "publishNotReadyAddresses"),
 		true,

@@ -13,14 +13,6 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { guardIsolation, type Isolation } from "./driver-isolation.ts";
 import { KINDS } from "./driver-kinds.ts";
 
-/**
- * Where a kind works: Pi's working directory and its agent directory. The image gives both to UID 1000, and they last
- * as long as the sandbox, so a conversation keeps its files from one turn to the next. The container's
- * ephemeral-storage limit bounds them.
- */
-export const WORKSPACE = "/workspace/work";
-export const AGENT_DIR = "/workspace/.pi";
-
 /** A run that the gateway leased to this sandbox (`POST /internal/agent/next`). */
 export interface Assignment {
 	runId: string;

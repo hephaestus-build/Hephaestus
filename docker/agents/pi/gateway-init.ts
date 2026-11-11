@@ -6,7 +6,12 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { discoverCapabilities, present, retryAfterMs } from "./gateway-capabilities.ts";
+import {
+	claimHeaders,
+	discoverCapabilities,
+	present,
+	retryAfterMs,
+} from "./gateway-capabilities.ts";
 
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 500;
@@ -17,7 +22,11 @@ export async function downloadWorkspace(
 	token: string,
 	archive: string,
 ): Promise<void> {
-	const headers = { Authorization: `Bearer ${token}` };
+	// A sandbox's run names its claim; a review Job has none.
+	const headers = {
+		Authorization: `Bearer ${token}`,
+		...claimHeaders(process.env.LLM_PROXY_CLAIM),
+	};
 	const { workspaceByteBudget: budget } = await discoverCapabilities(endpoint, headers);
 	for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
 		let retryable = true;

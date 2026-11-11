@@ -87,6 +87,15 @@ public class ReviewJobTerminal {
         return end(jobId, fence, status, at, error);
     }
 
+    /** Ends the attempt refused, with its run; {@code output} says why. 0 when the attempt no longer owns the job. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int refuse(UUID jobId, AgentRunFence fence, JsonNode output) {
+        int updated = jobs.transitionToEvidenceRefused(
+                jobId, fence.runId(), ReviewRunKind.attempt(fence.epoch()), Instant.now(), output);
+        if (updated > 0) runs.end(fence);
+        return updated;
+    }
+
     private int end(UUID jobId, AgentRunFence fence, ReviewJobStatus status, Instant at, @Nullable String error) {
         int updated = jobs.transitionStatusOwnedBy(
                 jobId, status, at, error, fence.runId(), ReviewRunKind.attempt(fence.epoch()));

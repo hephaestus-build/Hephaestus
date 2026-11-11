@@ -124,8 +124,8 @@ class PreparationFailureTest {
         assertThat(database.getCause()).isInstanceOf(EvidenceCollectionException.class);
         assertThat(ioFailure.message()).doesNotContain(privateText);
         assertThat(databaseFailure.message()).doesNotContain(privateText);
-        assertThat(ReviewJobExecutor.isRetryableExecutionFailure(io)).isFalse();
-        assertThat(ReviewJobExecutor.isRetryableExecutionFailure(database)).isFalse();
+        assertThat(ReviewAttemptResults.isRetryable(io)).isFalse();
+        assertThat(ReviewAttemptResults.isRetryable(database)).isFalse();
     }
 
     @Test
@@ -163,7 +163,7 @@ class PreparationFailureTest {
 
         var prepared = PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure);
 
-        assertThat(ReviewJobExecutor.isRetryableExecutionFailure(failure)).isEqualTo(retried);
+        assertThat(ReviewAttemptResults.isRetryable(failure)).isEqualTo(retried);
         assertThat(prepared.captureCode()).isEqualTo(code);
         assertThat(prepared.capturedAt()).startsWith("PreparationFailureTest.").doesNotContain("private");
         assertThat(prepared.message()).doesNotContain("private");

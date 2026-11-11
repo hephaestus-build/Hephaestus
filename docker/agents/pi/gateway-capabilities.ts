@@ -52,3 +52,28 @@ export async function discoverCapabilities(
 export function present(value: string | undefined): value is string {
 	return value !== undefined && value !== "";
 }
+
+/** The headers of a run's claim; pi-provider.ts parses the same variable for the runner. */
+const CLAIM_HEADERS = new Set(["x-agent-run", "x-agent-epoch"]);
+
+/**
+ * The claim of the run that a sandbox's driver started this program for, from `LLM_PROXY_CLAIM`: its headers go with
+ * every gateway call. Empty in a review Job, which has no run claim of its own.
+ */
+export function claimHeaders(value: string | undefined): Record<string, string> {
+	if (!present(value)) {
+		return {};
+	}
+	const parsed: unknown = JSON.parse(value);
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		throw new Error("LLM_PROXY_CLAIM is not an object of the run's claim headers");
+	}
+	const claim: Record<string, string> = {};
+	for (const [name, header] of Object.entries(parsed)) {
+		if (!CLAIM_HEADERS.has(name) || typeof header !== "string" || header === "") {
+			throw new Error("LLM_PROXY_CLAIM names only the run's claim headers, each with a value");
+		}
+		claim[name] = header;
+	}
+	return claim;
+}

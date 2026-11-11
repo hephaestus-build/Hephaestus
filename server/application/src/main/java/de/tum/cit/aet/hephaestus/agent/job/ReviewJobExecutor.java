@@ -1,28 +1,22 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
-import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
-import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
-import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
@@ -39,10 +33,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
-import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -54,13 +45,9 @@ import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.Serial;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -94,8 +81,6 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.core.retry.RetryException;
 import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
@@ -127,7 +112,7 @@ public class ReviewJobExecutor {
     private static final String MDC_JOB_TYPE = "agent.jobType";
     /**
      * When the terminal accounting write is worth re-attempting. NOT the same question as
-     * {@link #isRetryableExecutionFailure}, which requeues the whole JOB — conflating the two would charge
+     * {@link ReviewAttemptResults#isRetryable}, which requeues the whole JOB — conflating the two would charge
      * twice for a job that already spent money. {@code includes} matches nested causes, which is what
      * makes these usable directly against JPA's and {@code TransactionTemplate}'s wrapping.
      */
@@ -186,7 +171,6 @@ public class ReviewJobExecutor {
     private final ReviewJobRepository jobRepository;
     private final DefaultReviewExecutionHandler handler;
     private final PracticePiAdapter practiceAgent;
-    private final AttemptTokenIssuer attemptTokenIssuer;
 
     private final SandboxManager sandboxManager;
     private final SandboxProperties.DefaultResourceLimits reviewLimits;
@@ -196,6 +180,7 @@ public class ReviewJobExecutor {
     private final MeterRegistry meterRegistry;
     private final ReviewAttemptUsageService attemptUsage;
     private final ReviewJobTerminal terminal;
+    private final ReviewAttemptPreparation preparation;
     private final PracticeScriptRunRecorder practiceScriptRuns;
 
     // RetryTemplate, not @Retryable: both wrap private methods called from inside this class, and a
@@ -233,6 +218,8 @@ public class ReviewJobExecutor {
     private final Phaser inFlight = new Phaser(1); // 1 = the executor itself; deregistered on stop
     // The attempt and lease each locally running job runs, so a later attempt of the same job is never mistaken for it.
     private final Map<UUID, LocalAttempt> localRunningJobs = new ConcurrentHashMap<>();
+    /** The claims of attempts that their own sandbox measured, while their results are handled here; never renewed. */
+    private final Map<UUID, AgentRunFence> sandboxAttempts = new ConcurrentHashMap<>();
 
     /**
      * Claimed jobs that still prepare their sandbox, which the runtime's room does not count yet. A job leaves at its
@@ -252,7 +239,6 @@ public class ReviewJobExecutor {
             ReviewJobRepository jobRepository,
             DefaultReviewExecutionHandler handler,
             PracticePiAdapter practiceAgent,
-            AttemptTokenIssuer attemptTokenIssuer,
             SandboxManager sandboxManager,
             SandboxProperties sandboxProperties,
             @Qualifier("sandboxExecutor") AsyncTaskExecutor sandboxExecutor,
@@ -267,9 +253,11 @@ public class ReviewJobExecutor {
             ReviewRunKind reviewRuns,
             AgentRuns runs,
             AgentRunNotifications notifications,
-            ReviewJobTerminal terminal) {
+            ReviewJobTerminal terminal,
+            ReviewAttemptPreparation preparation) {
         this.agentProperties = agentProperties;
         this.terminal = terminal;
+        this.preparation = preparation;
         this.claims = claims;
         this.reviewRuns = reviewRuns;
         this.runs = runs;
@@ -277,7 +265,6 @@ public class ReviewJobExecutor {
         this.jobRepository = jobRepository;
         this.handler = handler;
         this.practiceAgent = practiceAgent;
-        this.attemptTokenIssuer = attemptTokenIssuer;
         this.sandboxManager = sandboxManager;
         this.reviewLimits = sandboxProperties.defaultResourceLimits();
         this.sandboxSlots = sandboxProperties.maxConcurrentContainers();
@@ -321,7 +308,6 @@ public class ReviewJobExecutor {
         }
     }
 
-    @EventListener(ApplicationReadyEvent.class)
     public void start() {
         if (!running.compareAndSet(false, true)) {
             return;
@@ -540,14 +526,19 @@ public class ReviewJobExecutor {
      * @throws ResultAdmissionService.StaleAttemptException when the attempt no longer holds the row
      */
     private ReviewJob ownRow(UUID jobId) {
-        LocalAttempt local = localRunningJobs.get(jobId);
+        AgentRunFence fence = claimOf(jobId);
         ReviewJob row = jobRepository.findById(jobId).orElse(null);
-        if (local == null
+        if (fence == null
                 || row == null
-                || row.getAttempt() != local.attempt()
-                || !local.fence().runId().equals(row.getRunId()))
-            throw new ResultAdmissionService.StaleAttemptException();
+                || row.getAttempt() != ReviewRunKind.attempt(fence.epoch())
+                || !fence.runId().equals(row.getRunId())) throw new ResultAdmissionService.StaleAttemptException();
         return row;
+    }
+
+    /** The claim of the attempt that runs here, or that its sandbox measured; null for neither. */
+    private @Nullable AgentRunFence claimOf(UUID jobId) {
+        LocalAttempt local = localRunningJobs.get(jobId);
+        return local != null ? local.fence() : sandboxAttempts.get(jobId);
     }
 
     /** Records an attempt that this worker claimed, so that each of its writes is fenced on its own claim. */
@@ -566,15 +557,13 @@ public class ReviewJobExecutor {
      * and claimed again is refused by the run.
      */
     private AgentRunFence ownFence(UUID jobId, int attempt) {
-        AgentRunFence tracked = Objects.requireNonNull(localRunningJobs.get(jobId), "The attempt does not run here")
-                .fence();
+        AgentRunFence tracked = Objects.requireNonNull(claimOf(jobId), "The attempt does not run here");
         return new AgentRunFence(tracked.runId(), tracked.workspaceId(), ReviewRunKind.epoch(attempt));
     }
 
     /** The run of the attempt that runs here, which each of its fenced writes names with its attempt. */
     private UUID ownRun(UUID jobId) {
-        return Objects.requireNonNull(localRunningJobs.get(jobId), "The attempt does not run here")
-                .fence()
+        return Objects.requireNonNull(claimOf(jobId), "The attempt does not run here")
                 .runId();
     }
 
@@ -879,7 +868,8 @@ public class ReviewJobExecutor {
                 metricOutcome = recordedTerminal == null ? "OWNERSHIP_LOST" : recordedTerminal.name();
                 return;
             }
-            PreparedSandbox preparedSandbox = prepareSandboxSpec(jobId, job, claim.snapshot(), preparationStage);
+            ReviewAttemptPreparation.PreparedSandbox preparedSandbox =
+                    preparation.prepare(jobId, job, claim.fence(), claim.snapshot(), preparationStage);
             stagedInputs = preparedSandbox.stagedInputs();
             SandboxSpec sandboxSpec = preparedSandbox.spec();
             if (sandboxSpec == null) {
@@ -983,7 +973,8 @@ public class ReviewJobExecutor {
     private ExecutionOutcome persistEvidenceRefusal(UUID jobId, ReviewJob job, InsufficientEvidenceException e) {
         // This evidence was not staged; no attempt owns its cleanup.
         try (PreparedJobInputs refused = e.preparedInputs()) {
-            persistPreparedEvidence(jobId, job.getWorkspaceId(), job.getAttempt(), refused);
+            preparation.persistPreparedEvidence(
+                    jobId, ownFence(jobId, job.getAttempt()), job.getWorkspaceId(), job.getAttempt(), refused);
             JsonNode output =
                     objectMapper.valueToTree(new RefusedExecution(RefusalOutcome.INSUFFICIENT_EVIDENCE, null, null));
             Integer updated = transactionTemplate.execute(status -> refuse(jobId, job.getAttempt(), output));
@@ -1029,6 +1020,27 @@ public class ReviewJobExecutor {
             throw failed;
         }
         sandbox.end(sandboxOutcome(result));
+        return measured(jobId, job, endedBefore, result);
+    }
+
+    /**
+     * The steps after an attempt's sandbox measured, for a sandbox that ran its own run: the same as after a review Job,
+     * each write fenced on the sandbox's claim.
+     *
+     * @param endedBefore the practices that had ended when the attempt's measurement started
+     */
+    @Nullable
+    ReviewJobStatus afterSandbox(ReviewJob job, AgentRunFence fence, int endedBefore, SandboxResult result) {
+        if (sandboxAttempts.putIfAbsent(job.getId(), fence) != null)
+            throw new IllegalStateException("The attempt's results are already being handled");
+        try {
+            return measured(job.getId(), job, endedBefore, result);
+        } finally {
+            sandboxAttempts.remove(job.getId());
+        }
+    }
+
+    private @Nullable ReviewJobStatus measured(UUID jobId, ReviewJob job, int endedBefore, SandboxResult result) {
         AgentResult agentResult = practiceAgent.parseResult(result);
 
         ReviewJob retained;
@@ -1211,195 +1223,6 @@ public class ReviewJobExecutor {
     }
 
     // The caller owns prepared-input cleanup through execution and admission, on every outcome.
-    private record PreparedSandbox(@Nullable SandboxSpec spec, PreparedJobInputs stagedInputs) {}
-
-    private PreparedSandbox prepareSandboxSpec(
-            UUID jobId, ReviewJob job, ConfigSnapshot snapshot, AtomicReference<PreparationFailure.Stage> stage) {
-        stage.set(PreparationFailure.Stage.INPUTS);
-
-        // Keeping a result commits at capture. If that attempt then failed, this one has nothing left to capture.
-        if (handler.keptEveryResult(ownRow(jobId))) {
-            handler.completeWithoutExecution(ownRow(jobId));
-            return new PreparedSandbox(null, new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
-        }
-        var capture = jobTelemetry.stage(ReviewStageTelemetry.Stage.CAPTURE);
-        PreparedJobInputs preparedInputs;
-        try {
-            preparedInputs = handler.prepareInputs(ownRow(jobId));
-        } catch (InsufficientEvidenceException refused) {
-            // The capture ran and found too little evidence; the attempt ends with that, not with a fault.
-            capture.end(ReviewStageTelemetry.Outcome.OK);
-            throw refused;
-        } catch (RuntimeException failed) {
-            capture.end(ReviewStageTelemetry.Outcome.FAILED);
-            throw failed;
-        }
-        capture.end(ReviewStageTelemetry.Outcome.OK);
-
-        try {
-            var report = preparedInputs.automatedReviewReadinessReport();
-            if (report != null && report.decisions().stream().noneMatch(report::runs)) {
-                stage.set(PreparationFailure.Stage.PROVENANCE);
-                persistPreparedEvidence(jobId, job.getWorkspaceId(), job.getAttempt(), preparedInputs);
-                handler.completeWithoutExecution(ownRow(jobId));
-                return new PreparedSandbox(null, preparedInputs);
-            }
-            stage.set(PreparationFailure.Stage.CREDENTIAL);
-            // Sandboxes access providers through the LLM proxy with an attempt-scoped credential.
-            Instant workDeadline =
-                    Instant.now().plusSeconds(snapshot.timeoutSeconds()).truncatedTo(ChronoUnit.SECONDS);
-            Instant tokenExpiry = workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE);
-            String jobToken = attemptTokenIssuer.issueForReview(
-                    jobId, job.getWorkspaceId(), job.getAttempt(), ownRun(jobId), workDeadline, tokenExpiry);
-            stage.set(PreparationFailure.Stage.SPEC);
-            PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
-                    snapshot.model().apiProtocol().wire(),
-                    snapshot.model().upstreamModelId(),
-                    snapshot.contextWindow(),
-                    snapshot.maxOutputTokens(),
-                    snapshot.model().reasoningEffort(),
-                    jobToken,
-                    snapshot.timeoutSeconds(),
-                    snapshot.practiceScriptModels(),
-                    snapshot.model().forcedToolChoice());
-
-            PracticeSandboxSpec agentSpec = practiceAgent.buildSandboxSpec(adapterRequest);
-            SandboxSpec sandboxSpec = buildSandboxSpec(
-                    jobId,
-                    preparedInputs.filesOnDisk(),
-                    preparedInputs.directories(),
-                    agentSpec,
-                    snapshot,
-                    workDeadline,
-                    job.getAttempt());
-            stage.set(PreparationFailure.Stage.PROVENANCE);
-            persistProvenanceDigests(
-                    jobId,
-                    job.getWorkspaceId(),
-                    agentSpec.promptDigest(),
-                    sandboxSpec.inputFiles(),
-                    preparedInputs.filesOnDisk(),
-                    preparedInputs.directories(),
-                    job.getAttempt(),
-                    preparedInputs.automatedReviewReadinessReport(),
-                    preparedInputs.copiesExpireAt());
-            return new PreparedSandbox(sandboxSpec, preparedInputs);
-        } catch (RuntimeException exception) {
-            preparedInputs.close();
-            throw exception;
-        }
-    }
-
-    private void persistPreparedEvidence(UUID jobId, long workspaceId, int attempt, PreparedJobInputs preparedInputs) {
-        persistProvenanceDigests(
-                jobId,
-                workspaceId,
-                null,
-                Map.of(),
-                preparedInputs.filesOnDisk(),
-                preparedInputs.directories(),
-                attempt,
-                preparedInputs.automatedReviewReadinessReport(),
-                preparedInputs.copiesExpireAt());
-    }
-
-    // Persist provenance before provider execution; results without their original input identity cannot be admitted.
-    private void persistProvenanceDigests(
-            UUID jobId,
-            long workspaceId,
-            @Nullable String promptDigest,
-            Map<String, byte[]> inputFiles,
-            Map<String, Path> inputPaths,
-            List<EvidenceDirectory> inputDirectories,
-            int attempt,
-            @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
-            @Nullable Instant copiesExpireAt) {
-        String inputsDigest = ProvenanceDigest.inputsDigestHex(inputFiles, inputPaths, inputDirectories, jobId);
-        JsonNode capture = capture(snapshotMetadata(inputFiles, inputPaths), automatedReviewReadinessReport);
-        var stamp = capture instanceof ObjectNode object ? object : objectMapper.createObjectNode();
-        if (promptDigest != null) stamp.put("promptDigest", promptDigest);
-        stamp.put("inputsDigest", inputsDigest);
-        // The attempt's transcript binds to this, so no copy it keeps outlives the occasion record its inputs copy.
-        if (copiesExpireAt != null) stamp.put(JobEvidenceFiles.COPIES_EXPIRE_AT, copiesExpireAt.toString());
-        stamp.set(
-                "directories",
-                objectMapper.valueToTree(
-                        inputDirectories.stream().map(EvidenceDirectory::target).toList()));
-        // Admission compares each search of the sandbox's checkout with these, read from this copy before it starts.
-        stamp.set(
-                JobEvidenceFiles.CHECKOUTS,
-                objectMapper.valueToTree(JobEvidenceFiles.checkoutDigests(inputDirectories)));
-        Integer updated = transactionTemplate.execute(
-                status -> jobRepository.updateCapture(jobId, workspaceId, ownRun(jobId), attempt, stamp));
-        if (updated == null || updated != 1) {
-            throw new IllegalStateException("Provenance digest write matched no job row: jobId=" + jobId);
-        }
-        log.debug("Provenance digests: jobId={}, prompt={}, inputs={}", jobId, promptDigest, inputsDigest);
-    }
-
-    private static Map<String, byte[]> snapshotMetadata(Map<String, byte[]> scaffolding, Map<String, Path> paths) {
-        var metadata = new HashMap<>(scaffolding);
-        for (String path : List.of(
-                SandboxLayout.MANIFEST_PATH,
-                SandboxLayout.PRACTICES_PREFIX + "index.json",
-                SandboxLayout.CONTEXT_PREFIX + "metadata.json",
-                SandboxLayout.CONTEXT_PREFIX + "issue_metadata.json")) {
-            Path source = paths.get(path);
-            if (source != null) {
-                try {
-                    metadata.put(path, Files.readAllBytes(source));
-                } catch (IOException exception) {
-                    throw new UncheckedIOException(exception);
-                }
-            }
-        }
-        return metadata;
-    }
-
-    private @Nullable JsonNode capture(
-            Map<String, byte[]> inputFiles, @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport) {
-        byte[] manifest = inputFiles.get(SandboxLayout.MANIFEST_PATH);
-        byte[] practices = inputFiles.get(SandboxLayout.PRACTICES_PREFIX + "index.json");
-        // Java null, not NullNode: NullNode serializes to the JSON value null, which is a non-SQL-NULL
-        // jsonb and so passes every IS NOT NULL predicate a reader writes against this column.
-        if (manifest == null && practices == null && automatedReviewReadinessReport == null) return null;
-        if (manifest == null) {
-            throw new IllegalStateException("Practice review inputs have an incomplete evidence snapshot");
-        }
-        ObjectNode snapshot = objectMapper.createObjectNode();
-        snapshot.set("manifest", objectMapper.readTree(manifest));
-        if (practices != null) {
-            snapshot.set("practices", objectMapper.readTree(practices));
-        }
-        if (automatedReviewReadinessReport != null)
-            snapshot.set("readiness", objectMapper.valueToTree(automatedReviewReadinessReport));
-        return snapshot;
-    }
-
-    private SandboxSpec buildSandboxSpec(
-            UUID jobId,
-            Map<String, Path> handlerFilesOnDisk,
-            List<EvidenceDirectory> handlerDirectories,
-            PracticeSandboxSpec agentSpec,
-            ConfigSnapshot snapshot,
-            Instant workDeadline,
-            int attempt) {
-        ResourceLimits limits = reviewLimits.forAttempt(Duration.ofSeconds(snapshot.timeoutSeconds()));
-
-        return new SandboxSpec(
-                jobId,
-                attempt,
-                agentSpec.image(),
-                agentSpec.command(),
-                agentSpec.environment(),
-                agentSpec.gatewayToken(),
-                limits,
-                workDeadline,
-                agentSpec.inputFiles(),
-                handlerFilesOnDisk,
-                handlerDirectories);
-    }
-
     private boolean handleCancellation(UUID jobId, ReviewJob job) {
         Boolean cancelled = transactionTemplate.execute(status -> {
             int updated = transitionTerminal(
@@ -1481,7 +1304,7 @@ public class ReviewJobExecutor {
                     preparation.exceptionTypes());
         }
 
-        if (isRetryableExecutionFailure(e)) {
+        if (ReviewAttemptResults.isRetryable(e)) {
             int currentRetryCount = job.getAttempt();
             RequeueCause cause = preparation != null ? RequeueCause.PREPARATION : RequeueCause.SANDBOX;
             if (requeueForAnotherAttempt(job, cause)) {
@@ -1561,35 +1384,6 @@ public class ReviewJobExecutor {
         ReviewJobStatus terminal() {
             return this == FAILED ? ReviewJobStatus.FAILED : null;
         }
-    }
-
-    /**
-     * Deliberately narrower than {@link SandboxException}, which also covers deterministic
-     * validation/config failures and a catch-all wrap of an unknown defect: retrying either would burn
-     * the retry budget on a failure that was never going to resolve itself.
-     */
-    static boolean isRetryableExecutionFailure(Exception e) {
-        return e instanceof ReviewSourceNotReadyException
-                || e instanceof SandboxInfrastructureException
-                || e instanceof IOException
-                || transientCapture(PreparationFailure.captureOf(e));
-    }
-
-    /**
-     * A capture that failed, or whose source was not ready, can succeed on another attempt; the same item captured on
-     * earlier attempts. Removed or hidden work, withheld consent, a lost version and an occasion that kept no record do
-     * not come back.
-     */
-    private static boolean transientCapture(@Nullable ItemCaptureException capture) {
-        return capture != null
-                && switch (capture.code()) {
-                    case CAPTURE_FAILED, SOURCE_NOT_READY -> true;
-                    case ITEM_REMOVED,
-                            ITEM_NOT_VISIBLE,
-                            CONSENT_WITHHELD,
-                            VERSION_UNAVAILABLE,
-                            OCCASION_EVIDENCE_UNAVAILABLE -> false;
-                };
     }
 
     private static ReviewStageTelemetry.Outcome sandboxOutcome(SandboxResult result) {

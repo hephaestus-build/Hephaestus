@@ -232,7 +232,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 jobs,
                 handler,
                 practiceAgent,
-                jwtIssuer,
                 sandbox,
                 sandboxProperties,
                 pool,
@@ -260,7 +259,16 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 reviewRuns,
                 runs,
                 mock(AgentRunNotifications.class),
-                new ReviewJobTerminal(jobs, runs, attemptUsage, new JsonMapper(), null, keptInputs));
+                new ReviewJobTerminal(jobs, runs, attemptUsage, new JsonMapper(), null, keptInputs),
+                new ReviewAttemptPreparation(
+                        jobs,
+                        handler,
+                        practiceAgent,
+                        jwtIssuer,
+                        sandboxProperties,
+                        transactions,
+                        new JsonMapper(),
+                        telemetry));
     }
 
     @Test

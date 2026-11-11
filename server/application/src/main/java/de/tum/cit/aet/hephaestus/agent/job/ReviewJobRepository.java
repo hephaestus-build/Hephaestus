@@ -75,6 +75,9 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query("SELECT j FROM ReviewJob j  WHERE j.id = :id AND j.workspaceId = :workspaceId")
     Optional<ReviewJob> findByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
+    /** The job that a run drives, in the run's workspace. */
+    Optional<ReviewJob> findByRunIdAndWorkspaceId(UUID runId, long workspaceId);
+
     /** A job blocks a purge until it ends and settlement marks it DONE or FAILED. */
     @Query("SELECT CASE WHEN COUNT(j) > 0 THEN true ELSE false END FROM ReviewJob j "
             + "WHERE j.workspaceId = :workspaceId AND ("

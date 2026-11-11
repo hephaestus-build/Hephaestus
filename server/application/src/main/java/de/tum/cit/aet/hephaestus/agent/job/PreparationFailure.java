@@ -18,6 +18,7 @@ import org.eclipse.jgit.api.errors.JGitInternalException;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.TransactionException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A preparation operation and a cause classified by type, without sensitive exception text. A capture failure keeps its
@@ -69,6 +70,15 @@ record PreparationFailure(
         String tag() {
             return name().toLowerCase(Locale.ROOT);
         }
+    }
+
+    /** The bounded facts that the job row keeps for operators: never the exception's message. */
+    String diagnosis(ObjectMapper mapper, int attempt) {
+        return mapper.writeValueAsString(mapper.createObjectNode()
+                .put("attempt", attempt)
+                .put("stage", stage().name())
+                .put("kind", kind().name())
+                .put("reason", reason().name()));
     }
 
     static PreparationFailure of(Stage stage, Throwable failure) {
