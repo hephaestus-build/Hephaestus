@@ -36,6 +36,8 @@ minimumReleaseAgeExclude:
   # CVE-2026-118772.
   - "joi@17.13.9"
   - "@shadcn/lint@0.1.0"
+  # Renovate security update: fast-xml-parser@5.12.0
+  - fast-xml-parser@5.12.0
 
 allowBuilds:
   "@google/genai": false
