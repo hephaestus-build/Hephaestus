@@ -53,15 +53,15 @@ public class AuthMetrics {
 
     /**
      * Terminal outcome tagged on {@code auth.token.refresh.result}. The {@code auth.token.refresh}
-     * Timer alone wraps the whole method, so a {@code revoked==0} rotation race and a SUSPENDED /
+     * Timer alone wraps the whole method, so a {@code revoked==0} rotation race and a BLOCKED /
      * DELETING / DELETED early-return are indistinguishable from a real re-mint. This split lets an
-     * operator alert on an abnormal {@code noop} (token-reuse / replay) or {@code suspended} rate
+     * operator alert on an abnormal {@code noop} (token-reuse / replay) or {@code inactive} rate
      * without inferring it from latency. Fixed set → bounded cardinality.
      */
     public enum RefreshResult {
         SUCCESS("success"),
         NOOP("noop"),
-        SUSPENDED("suspended"),
+        INACTIVE("inactive"),
         ERROR("error");
 
         private final String tag;
@@ -145,7 +145,7 @@ public class AuthMetrics {
 
     /**
      * Count one token-refresh by its terminal {@code result} ({@code success}/{@code noop}/
-     * {@code suspended}). Lazily-registered per-result Counter; the result set is a fixed enum so
+     * {@code inactive}). Lazily-registered per-result Counter; the result set is a fixed enum so
      * this is a fixed handful of meters.
      */
     public void recordRefreshResult(RefreshResult result) {

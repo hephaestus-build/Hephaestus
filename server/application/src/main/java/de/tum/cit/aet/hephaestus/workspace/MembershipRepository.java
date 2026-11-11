@@ -38,7 +38,7 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
         WHERE m.workspace.id = :workspaceId AND m.leftAt IS NULL
           AND a.status IN (de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.ACTIVE,
                            de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.UNCLAIMED,
-                           de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.SUSPENDED)
+                           de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.BLOCKED)
         ORDER BY a.displayName, a.id
         """)
     Page<Long> findViewableAccountIds(@Param("workspaceId") long workspaceId, Pageable pageable);

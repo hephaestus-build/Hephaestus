@@ -40,6 +40,17 @@ export function signInUrl(
 	return url.toString();
 }
 
+/** What the person reads when the server ends a sign-in at the callback with an error code. */
+export function callbackErrorMessage(error: string): string {
+	if (error === "access_denied") {
+		return "The provider declined the sign-in. Try again.";
+	}
+	if (error === "account_blocked") {
+		return "An instance admin blocked this account, so it cannot sign in. Ask your instance admin to unblock it.";
+	}
+	return "We could not finish signing you in. Try again.";
+}
+
 /**
  * Reads the handoff code out of the callback Chrome returns, accepting it only at the exact redirect
  * and with the exact `state` this attempt sent. Anything else — another path, a reflected error, a
@@ -102,12 +113,7 @@ export async function signIn(instance: InstanceConfig, method: SignInMethod): Pr
 	}
 	const callback = readCallback(responseUrl, { redirectUri: redirect, state });
 	if ("error" in callback) {
-		throw new WorkerError(
-			"invalid",
-			callback.error === "access_denied"
-				? "The provider declined the sign-in. Try again."
-				: "We could not finish signing you in. Try again.",
-		);
+		throw new WorkerError("invalid", callbackErrorMessage(callback.error));
 	}
 	let result: { data?: unknown; response?: Response };
 	try {

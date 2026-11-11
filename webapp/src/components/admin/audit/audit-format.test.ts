@@ -9,13 +9,14 @@ describe("audit events", () => {
 		["INSTALLATION_EVENT_REPLAYED", "Installation event replayed"],
 		["GITHUB_INSTALLATION_ADOPTED", "GitHub installation adopted"],
 		["GITHUB_INSTALLATION_DECLINED", "GitHub installation declined"],
+		["ACCOUNT_STATUS_CHANGED", "Account blocked or unblocked"],
 	] as const)("names %s in words", (eventType, label) => {
 		expect(EVENT_TYPE_LABELS[eventType]).toBe(label);
 		expect(eventLabel(eventType)).toBe(label);
 	});
 
-	it.each(["RESEARCH_DATASET_RELEASED", "RESEARCH_REMOVAL_RECORDED"])(
-		"marks a successful %s as a warning, because personal data or an attestation left the instance",
+	it.each(["RESEARCH_DATASET_RELEASED", "RESEARCH_REMOVAL_RECORDED", "ACCOUNT_STATUS_CHANGED"])(
+		"marks a successful %s as a warning, because it is a high-risk change",
 		(eventType) => {
 			expect(eventSeverity(eventType, "SUCCESS")).toBe("warning");
 			expect(eventSeverity(eventType, "FAILURE")).toBe("error");

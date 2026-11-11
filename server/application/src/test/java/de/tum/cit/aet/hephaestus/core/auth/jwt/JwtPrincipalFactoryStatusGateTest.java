@@ -16,7 +16,7 @@ class JwtPrincipalFactoryStatusGateTest extends BaseUnitTest {
 
     @Test
     void rejectsSuspendedAccount() {
-        assertRejected(Account.Status.SUSPENDED);
+        assertRejected(Account.Status.BLOCKED);
     }
 
     @Test

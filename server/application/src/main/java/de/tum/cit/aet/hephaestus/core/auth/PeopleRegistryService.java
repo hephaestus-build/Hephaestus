@@ -88,7 +88,7 @@ public class PeopleRegistryService implements PeopleRegistry {
         var target = claimedAccountId < unclaimedAccountId ? first : second;
         var source = claimedAccountId < unclaimedAccountId ? second : first;
         if (source.getStatus() != Account.Status.UNCLAIMED
-                || (target.getStatus() != Account.Status.ACTIVE && target.getStatus() != Account.Status.SUSPENDED))
+                || (target.getStatus() != Account.Status.ACTIVE && target.getStatus() != Account.Status.BLOCKED))
             throw conflict("Only an unclaimed account can be absorbed by its verified owner.");
         for (var contributor : contributors) contributor.beforeAbsorb(claimedAccountId, unclaimedAccountId);
         for (var contributor : contributors) contributor.absorb(claimedAccountId, unclaimedAccountId);

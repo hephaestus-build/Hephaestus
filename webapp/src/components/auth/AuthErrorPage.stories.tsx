@@ -45,6 +45,17 @@ export const ProviderUnavailable: Story = {
 	},
 };
 
+/** An instance admin blocked the account; the page says so instead of a generic sign-in failure. */
+export const AccountBlocked: Story = {
+	args: { code: "account_blocked" },
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("heading", { level: 1, name: "This account is blocked" }),
+		).toBeVisible();
+		await expect(canvas.getByText(/Ask your instance admin to unblock it/u)).toBeVisible();
+	},
+};
+
 /** `toString` is on every object's prototype: the page must not read it as a known code. */
 export const UnknownCode: Story = {
 	args: { code: "toString" },

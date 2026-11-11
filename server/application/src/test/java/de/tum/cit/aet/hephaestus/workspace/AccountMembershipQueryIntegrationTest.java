@@ -94,7 +94,7 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
         memberships.flush();
         assertThat(query.isActiveVisibleMember(workspaceId, accountId)).isFalse();
         member.setLeftAt(null);
-        account.setStatus(Account.Status.SUSPENDED);
+        account.setStatus(Account.Status.BLOCKED);
         accounts.flush();
         assertThat(query.isActiveVisibleMember(workspaceId, accountId)).isFalse();
         account.setStatus(Account.Status.UNCLAIMED);
@@ -230,7 +230,7 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
         member.setRole(Membership.WorkspaceRole.ADMIN);
         memberships.saveAndFlush(member);
         var suspended = accounts.saveAndFlush(new Account("Suspended administrator"));
-        suspended.setStatus(Account.Status.SUSPENDED);
+        suspended.setStatus(Account.Status.BLOCKED);
         accounts.saveAndFlush(suspended);
         addMember(workspace, suspended, Membership.WorkspaceRole.OWNER, null);
         var former = accounts.saveAndFlush(new Account("Former administrator"));

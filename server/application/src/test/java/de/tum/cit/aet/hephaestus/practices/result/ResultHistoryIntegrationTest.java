@@ -183,7 +183,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
                         "UPDATE membership SET left_at=now() WHERE workspace_id=? AND account_id=?",
                         result.getWorkspaceId(),
                         scenarioAccountId);
-            case "suspended" -> jdbc.update("UPDATE account SET status='SUSPENDED' WHERE id=?", scenarioAccountId);
+            case "suspended" -> jdbc.update("UPDATE account SET status='BLOCKED' WHERE id=?", scenarioAccountId);
             default -> throw new IllegalArgumentException(restriction);
         }
         assertThat(history.forDeveloper(result.getWorkspaceId(), scenarioAccountId, Instant.EPOCH, 20))

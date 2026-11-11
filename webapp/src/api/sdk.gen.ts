@@ -71,6 +71,7 @@ export { adminUpdateLlmSettings } from './sdk/adminUpdateLlmSettings.gen.js';
 export { adminUpdateLoginProvider } from './sdk/adminUpdateLoginProvider.gen.js';
 export { adminUpdateSilentMode } from './sdk/adminUpdateSilentMode.gen.js';
 export { adminUpdateUser } from './sdk/adminUpdateUser.gen.js';
+export { adminUpdateUserStatus } from './sdk/adminUpdateUserStatus.gen.js';
 export { adminUpdateWorkspaceLlmBudget } from './sdk/adminUpdateWorkspaceLlmBudget.gen.js';
 export { adoptGitHubInstallation } from './sdk/adoptGitHubInstallation.gen.js';
 export { adoptGroup } from './sdk/adoptGroup.gen.js';

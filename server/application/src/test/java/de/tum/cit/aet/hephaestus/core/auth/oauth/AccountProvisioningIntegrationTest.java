@@ -237,6 +237,33 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
                 .containsExactly("original-native-subject");
     }
 
+    @Test
+    void shouldRefuseAReturningLoginWithTheBlockedCodeWhenAnAdminBlockedTheAccount() {
+        seedProvider("github-blocked", LoginProvider.ProviderType.GITHUB);
+        Account account = service.resolveOrProvision(
+                        "github-blocked",
+                        "blocked-subject",
+                        principal("blocked-subject", "blocked@example.test", true, "blocked"),
+                        AuthIntentCookie.Intent.login(null, null))
+                .account();
+        account.setStatus(Account.Status.BLOCKED);
+        accountRepository.saveAndFlush(account);
+
+        Assertions.assertThatThrownBy(() -> service.resolveOrProvision(
+                        "github-blocked",
+                        "blocked-subject",
+                        principal("blocked-subject", "blocked@example.test", true, "blocked"),
+                        AuthIntentCookie.Intent.login(null, null)))
+                .isInstanceOfSatisfying(
+                        OAuth2AuthenticationException.class,
+                        exception -> assertThat(exception.getError().getErrorCode())
+                                .isEqualTo(AccountProvisioningService.ACCOUNT_BLOCKED));
+        assertThat(accountRepository.findById(persistedId(account.getId())))
+                .get()
+                .extracting(Account::getStatus)
+                .isEqualTo(Account.Status.BLOCKED);
+    }
+
     private void seedProvider(String registrationId, LoginProvider.ProviderType type) {
         LoginProvider provider = new LoginProvider();
         provider.setRegistrationId(registrationId);

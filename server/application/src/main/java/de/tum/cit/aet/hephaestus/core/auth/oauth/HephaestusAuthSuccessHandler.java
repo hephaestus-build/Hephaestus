@@ -155,11 +155,9 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
         }
         Account account = provisioned.account();
 
-        // Authoritative account-status gate (ADR 0017). A SUSPENDED / DELETING / DELETED account
-        // must
-        // never obtain a fresh JWT — otherwise a re-login silently resurrects a deleting account
-        // and a
-        // suspended account is fully re-enabled. We bail out BEFORE minting the cookie. The decoder
+        // Authoritative account-status gate (ADR 0017). A BLOCKED / DELETING / DELETED account must
+        // never obtain a fresh JWT — otherwise a re-login silently resurrects a deleting account and
+        // undoes an admin's block. We bail out BEFORE minting the cookie. The decoder
         // /
         // JwtPrincipalFactory enforce the same invariant as defense-in-depth, but this is where the
         // login decision is made, so it must be rejected here too. No cookie is set on this path.

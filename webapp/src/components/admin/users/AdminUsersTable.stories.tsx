@@ -20,12 +20,12 @@ const user: AdminAccountView = {
 	appRole: "USER",
 	status: "ACTIVE",
 };
-const suspended: AdminAccountView = {
+const blocked: AdminAccountView = {
 	id: 3,
-	displayName: "Carol Suspended",
+	displayName: "Carol Blocked",
 	primaryEmail: "carol@example.com",
 	appRole: "USER",
-	status: "SUSPENDED",
+	status: "BLOCKED",
 };
 const unclaimed: AdminAccountView = {
 	id: 4,
@@ -43,7 +43,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		users: [admin, user, suspended, unclaimed],
+		users: [admin, user, blocked, unclaimed],
 		isLoading: false,
 		hasSearch: false,
 		totalLoaded: 4,
@@ -53,6 +53,7 @@ const meta = {
 		onLoadMore: fn(),
 		onChangeRole: fn(),
 		onForceSignOut: fn(),
+		onChangeStatus: fn(),
 	},
 } satisfies Meta<typeof AdminUsersTable>;
 
@@ -65,10 +66,10 @@ export const Default: Story = {
 		// Roles and statuses in words, never the constants the wire carries.
 		canvas.getByText("Instance admin");
 		await expect(canvas.getAllByText("User")).toHaveLength(3);
-		canvas.getByText("Suspended");
+		canvas.getByText("Blocked");
 		canvas.getByText("Unclaimed");
 		await expect(
-			canvas.queryByText(/^(?:APP_ADMIN|USER|ACTIVE|SUSPENDED|UNCLAIMED)$/u),
+			canvas.queryByText(/^(?:APP_ADMIN|USER|ACTIVE|BLOCKED|UNCLAIMED)$/u),
 		).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "Actions for Ada Admin" }));
 		// A disabled Base UI item has pointer-events:none, so the guard is asserted rather than clicked.
@@ -76,6 +77,28 @@ export const Default: Story = {
 			name: /cannot revoke your own instance admin role/iu,
 		});
 		await expect(revokeSelf).toHaveAttribute("data-disabled");
+		// An admin never blocks themselves.
+		await expect(screen.queryByRole("menuitem", { name: "Block account" })).not.toBeInTheDocument();
+	},
+};
+
+export const BlockAnActiveAccount: Story = {
+	play: async ({ args, canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Actions for Bob User" }));
+		await expect(
+			screen.queryByRole("menuitem", { name: "Unblock account" }),
+		).not.toBeInTheDocument();
+		await userEvent.click(await screen.findByRole("menuitem", { name: "Block account" }));
+		await expect(args.onChangeStatus).toHaveBeenCalledWith(user);
+	},
+};
+
+export const UnblockABlockedAccount: Story = {
+	play: async ({ args, canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Actions for Carol Blocked" }));
+		await expect(screen.queryByRole("menuitem", { name: "Block account" })).not.toBeInTheDocument();
+		await userEvent.click(await screen.findByRole("menuitem", { name: "Unblock account" }));
+		await expect(args.onChangeStatus).toHaveBeenCalledWith(blocked);
 	},
 };
 

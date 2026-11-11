@@ -117,6 +117,8 @@ public class AuthEvent {
         PERSON_DATA_EXPORTED,
         PERSON_DATA_ERASURE_REQUESTED,
         APP_ROLE_CHANGED,
+        // An instance admin blocked or unblocked an account; details carry the status before and after.
+        ACCOUNT_STATUS_CHANGED,
         RESEARCH_CONSENT_REVOKED,
         // An instance admin reached a workspace they are not a member of. One marker per access
         // window, not per request — see WorkspaceElevationAuditAdapter.

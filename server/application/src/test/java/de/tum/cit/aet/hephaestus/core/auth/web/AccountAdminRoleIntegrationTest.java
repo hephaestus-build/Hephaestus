@@ -21,7 +21,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -48,6 +52,9 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private IssuedJwtRepository issuedJwtRepository;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void listsAccountsAsANumberedPageInAStableOrder() {
@@ -186,6 +193,207 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldEndSessionsAndRefuseTheOldTokenWhenAnAdminBlocksAnAccount() {
+        Account admin = persistAdmin("Blocking Admin");
+        Account user = persistUser("Blocked User");
+        String userToken = tokenFor(user);
+        long userId = persistedId(user.getId());
+
+        webTestClient
+                .patch()
+                .uri("/admin/users/{id}/status", userId)
+                .headers(h -> h.setBearerAuth(tokenFor(admin)))
+                .bodyValue(Map.of("status", "BLOCKED"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo("BLOCKED");
+
+        assertThat(accountRepository.findById(userId))
+                .get()
+                .extracting(Account::getStatus)
+                .isEqualTo(Account.Status.BLOCKED);
+        assertThat(issuedJwtRepository.findActiveByAccountId(userId, Instant.now()))
+                .isEmpty();
+        assertThat(jdbc.queryForObject(
+                        "SELECT details FROM auth_event WHERE account_id = ? AND acting_account_id = ?"
+                                + " AND event_type = 'ACCOUNT_STATUS_CHANGED'",
+                        String.class,
+                        userId,
+                        persistedId(admin.getId())))
+                .contains("\"to\":\"BLOCKED\"");
+        webTestClient
+                .get()
+                .uri("/user")
+                .headers(h -> h.setBearerAuth(userToken))
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldLetABlockedAccountBackInWhenAnAdminUnblocksIt() {
+        Account admin = persistAdmin("Unblocking Admin");
+        Account user = persistUser("Returning User");
+        user.setStatus(Account.Status.BLOCKED);
+        accountRepository.save(user);
+        long userId = persistedId(user.getId());
+
+        webTestClient
+                .patch()
+                .uri("/admin/users/{id}/status", userId)
+                .headers(h -> h.setBearerAuth(tokenFor(admin)))
+                .bodyValue(Map.of("status", "ACTIVE"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        assertThat(accountRepository.findById(userId))
+                .get()
+                .extracting(Account::getStatus)
+                .isEqualTo(Account.Status.ACTIVE);
+    }
+
+    @Test
+    void shouldRefuseBlockingFromAPlainUser() {
+        Account user = persistUser("Plain Blocker");
+        Account target = persistUser("Target");
+
+        webTestClient
+                .patch()
+                .uri("/admin/users/{id}/status", persistedId(target.getId()))
+                .headers(h -> h.setBearerAuth(tokenFor(user)))
+                .bodyValue(Map.of("status", "BLOCKED"))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+        assertThat(accountRepository.findById(persistedId(target.getId())))
+                .get()
+                .extracting(Account::getStatus)
+                .isEqualTo(Account.Status.ACTIVE);
+    }
+
+    @Test
+    void shouldRejectANullAccountStatusBeforeChangingTheAccount() {
+        Account admin = persistAdmin("Validating Admin");
+        Account target = persistUser("Unchanged Account");
+        long targetId = persistedId(target.getId());
+
+        webTestClient
+                .patch()
+                .uri("/admin/users/{id}/status", targetId)
+                .headers(h -> h.setBearerAuth(tokenFor(admin)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"status\":null}")
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+
+        assertThat(accountRepository.findById(targetId).orElseThrow().getStatus())
+                .isEqualTo(Account.Status.ACTIVE);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"UNCLAIMED", "DELETING", "DELETED"})
+    void shouldRejectAStatusOutsideTheAdminRequestContract(String status) {
+        Account admin = persistAdmin("Validating Admin");
+        Account target = persistUser("Unchanged Account");
+        long targetId = persistedId(target.getId());
+
+        webTestClient
+                .patch()
+                .uri("/admin/users/{id}/status", targetId)
+                .headers(h -> h.setBearerAuth(tokenFor(admin)))
+                .bodyValue(Map.of("status", status))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+
+        assertThat(accountRepository.findById(targetId).orElseThrow().getStatus())
+                .isEqualTo(Account.Status.ACTIVE);
+    }
+
+    @Test
+    void shouldLetTheOnlyActiveAdminDemoteABlockedAdmin() {
+        Account active = persistAdmin("Remaining Admin");
+        Account blocked = persistAdmin("Blocked Admin");
+        blocked.setStatus(Account.Status.BLOCKED);
+        accountRepository.saveAndFlush(blocked);
+        long blockedId = persistedId(blocked.getId());
+
+        webTestClient
+                .patch()
+                .uri("/admin/users/{id}", blockedId)
+                .headers(h -> h.setBearerAuth(tokenFor(active)))
+                .bodyValue(Map.of("appRole", "USER"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        assertThat(accountRepository.findById(blockedId).orElseThrow().getAppRole())
+                .isEqualTo(Account.AppRole.USER);
+        assertThat(accountRepository
+                        .findById(persistedId(active.getId()))
+                        .orElseThrow()
+                        .getAppRole())
+                .isEqualTo(Account.AppRole.APP_ADMIN);
+    }
+
+    @Test
+    void shouldKeepAnActiveAdminWhenTwoAdminsBlockEachOtherAtOnce() throws Exception {
+        Account adminA = persistAdmin("Blocking Admin A");
+        Account adminB = persistAdmin("Blocking Admin B");
+        long idA = persistedId(adminA.getId());
+        long idB = persistedId(adminB.getId());
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            CountDownLatch ready = new CountDownLatch(2);
+            CountDownLatch go = new CountDownLatch(1);
+            Future<Integer> first = pool.submit(block(tokenFor(adminA), idB, ready, go));
+            Future<Integer> second = pool.submit(block(tokenFor(adminB), idA, ready, go));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            List<Integer> statuses = List.of(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS));
+            assertThat(statuses).contains(200);
+            assertThat(statuses)
+                    .filteredOn(status -> status != 200)
+                    .singleElement()
+                    .isIn(401, 403, 409);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(List.of(
+                        accountRepository.findById(idA).orElseThrow().getStatus(),
+                        accountRepository.findById(idB).orElseThrow().getStatus()))
+                .containsExactlyInAnyOrder(Account.Status.ACTIVE, Account.Status.BLOCKED);
+    }
+
+    private Callable<Integer> block(String token, Long targetId, CountDownLatch ready, CountDownLatch go) {
+        return () -> {
+            ready.countDown();
+            go.await(10, TimeUnit.SECONDS);
+            return webTestClient
+                    .patch()
+                    .uri("/admin/users/{id}/status", targetId)
+                    .headers(h -> h.setBearerAuth(token))
+                    .bodyValue(Map.of("status", "BLOCKED"))
+                    .exchange()
+                    .returnResult(Void.class)
+                    .getStatus()
+                    .value();
+        };
     }
 
     private Callable<Integer> demote(String token, Long targetId, CountDownLatch ready, CountDownLatch go) {

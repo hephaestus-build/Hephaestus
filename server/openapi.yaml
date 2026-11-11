@@ -208,6 +208,7 @@ paths:
             - PERSON_DATA_EXPORTED
             - PERSON_DATA_ERASURE_REQUESTED
             - APP_ROLE_CHANGED
+            - ACCOUNT_STATUS_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
             - INSTALLATION_EVENT_REPLAYED
@@ -307,6 +308,7 @@ paths:
             - PERSON_DATA_EXPORTED
             - PERSON_DATA_ERASURE_REQUESTED
             - APP_ROLE_CHANGED
+            - ACCOUNT_STATUS_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
             - INSTALLATION_EVENT_REPLAYED
@@ -406,6 +408,7 @@ paths:
             - PERSON_DATA_EXPORTED
             - PERSON_DATA_ERASURE_REQUESTED
             - APP_ROLE_CHANGED
+            - ACCOUNT_STATUS_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
             - INSTALLATION_EVENT_REPLAYED
@@ -2351,6 +2354,33 @@ paths:
                 $ref: "#/components/schemas/RevokeSessionsResult"
           description: OK
       summary: "Force sign-out: revoke all of an account's active sessions"
+      tags:
+      - Admin
+  /admin/users/{id}/status:
+    patch:
+      operationId: adminUpdateUserStatus
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAccountStatusRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAccountView"
+          description: OK
+      summary: "Block an account, which ends its sessions and refuses its sign-in,\
+        \ or unblock it"
       tags:
       - Admin
   /admin/workspaces:
@@ -11994,7 +12024,7 @@ components:
           enum:
           - UNCLAIMED
           - ACTIVE
-          - SUSPENDED
+          - BLOCKED
           - DELETING
           - DELETED
       required:
@@ -12376,7 +12406,7 @@ components:
           enum:
           - UNCLAIMED
           - ACTIVE
-          - SUSPENDED
+          - BLOCKED
           - DELETING
           - DELETED
       required:
@@ -25930,6 +25960,18 @@ components:
       properties:
         appRole:
           type: string
+    UpdateAccountStatusRequest:
+      type: object
+      description: <code>BLOCKED</code> blocks the account; <code>ACTIVE</code> unblocks
+        it.
+      properties:
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - BLOCKED
+      required:
+      - status
     UpdateConnectionStatusRequest:
       type: object
       description: Request to update a connection's lifecycle status

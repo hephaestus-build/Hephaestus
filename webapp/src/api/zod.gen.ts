@@ -132,7 +132,7 @@ export const zAdminAccountView = z.object({
     status: z.enum([
         'UNCLAIMED',
         'ACTIVE',
-        'SUSPENDED',
+        'BLOCKED',
         'DELETING',
         'DELETED'
     ])
@@ -3089,7 +3089,7 @@ export const zAccountRef = z.object({
     status: z.enum([
         'UNCLAIMED',
         'ACTIVE',
-        'SUSPENDED',
+        'BLOCKED',
         'DELETING',
         'DELETED'
     ])
@@ -5518,6 +5518,13 @@ export const zTriggerSyncJobRequest = z.object({
 
 export const zUpdateAccountRequest = z.object({
     appRole: z.string().optional()
+});
+
+/**
+ * <code>BLOCKED</code> blocks the account; <code>ACTIVE</code> unblocks it.
+ */
+export const zUpdateAccountStatusRequest = z.object({
+    status: z.enum(['ACTIVE', 'BLOCKED'])
 });
 
 /**

@@ -53,7 +53,7 @@ public interface ResearchParticipationQuery {
         QUESTION_CHANGED,
         /** The account is being erased or was erased. */
         ACCOUNT_ERASED,
-        /** The account is suspended. Its earlier grant stands, but no new research use may start. */
+        /** An instance admin blocked the account. Its earlier grant stands, but no new research use may start. */
         ACCOUNT_INACTIVE,
     }
 }

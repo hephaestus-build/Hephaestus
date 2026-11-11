@@ -129,7 +129,8 @@ public class Account {
     public enum Status {
         UNCLAIMED,
         ACTIVE,
-        SUSPENDED,
+        /** An instance admin blocked the account: sessions are revoked and sign-in is refused until an unblock. */
+        BLOCKED,
         /** Sessions are revoked and login blocked immediately; erasure follows the configured cooldown. */
         DELETING,
         DELETED,

@@ -120,6 +120,7 @@ export { adminUpdateLlmSettingsMutation } from './react-query/adminUpdateLlmSett
 export { adminUpdateLoginProviderMutation } from './react-query/adminUpdateLoginProvider.gen.js';
 export { adminUpdateSilentModeMutation } from './react-query/adminUpdateSilentMode.gen.js';
 export { adminUpdateUserMutation } from './react-query/adminUpdateUser.gen.js';
+export { adminUpdateUserStatusMutation } from './react-query/adminUpdateUserStatus.gen.js';
 export { adminUpdateWorkspaceLlmBudgetMutation } from './react-query/adminUpdateWorkspaceLlmBudget.gen.js';
 export { adoptGitHubInstallationMutation } from './react-query/adoptGitHubInstallation.gen.js';
 export { adoptGroupMutation } from './react-query/adoptGroup.gen.js';

@@ -70,6 +70,7 @@ public class AccountSecurityEmailListener implements EmailNotice<AccountSecurity
             case APP_ROLE_CHANGED -> "Your instance admin access changed.";
             case PASSKEY_CHANGED ->
                 "Your passkeys or passkey protection changed. If you did not make this change, contact your instance operator.";
+            case ACCOUNT_UNBLOCKED -> "An instance admin unblocked your account. You can sign in again.";
         };
         var rendered = renderer.render(EmailKind.ACCOUNT_SECURITY_CHANGED, Map.of("change", change));
         return Prepared.send(EmailMessage.of(EmailKind.ACCOUNT_SECURITY_CHANGED, recipient.get(), rendered));

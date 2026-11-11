@@ -105,7 +105,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
         Account first = account(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE, true, true);
         Account second = account(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE, true, true);
         account(Account.AppRole.USER, Account.Status.ACTIVE, true, true);
-        account(Account.AppRole.APP_ADMIN, Account.Status.SUSPENDED, true, true);
+        account(Account.AppRole.APP_ADMIN, Account.Status.BLOCKED, true, true);
         account(Account.AppRole.APP_ADMIN, Account.Status.DELETING, true, true);
         account(Account.AppRole.APP_ADMIN, Account.Status.DELETED, true, true);
         account(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE, false, true);
@@ -191,7 +191,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
                 subscribed(admin, true);
             }
             case "demoted" -> admin.setAppRole(Account.AppRole.USER);
-            case "suspended" -> admin.setStatus(Account.Status.SUSPENDED);
+            case "suspended" -> admin.setStatus(Account.Status.BLOCKED);
             case "deleting" -> admin.setStatus(Account.Status.DELETING);
             case "deleted" -> admin.setStatus(Account.Status.DELETED);
             case "unverified" -> admin.setPrimaryEmailVerifiedAt(null);

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794347896622-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conrelid='public.account'::regclass AND conname='ck_account_status' AND contype='c'</sqlCheck>
+        </preConditions>
+        <comment>An instance admin blocks an account: the unused SUSPENDED status becomes BLOCKED.</comment>
+        <sql><![CDATA[
+ALTER TABLE account DROP CONSTRAINT ck_account_status;
+UPDATE account SET status = 'BLOCKED' WHERE status = 'SUSPENDED';
+ALTER TABLE account ADD CONSTRAINT ck_account_status CHECK (status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED', 'DELETING', 'DELETED'));
+        ]]></sql>
+        <rollback><sql><![CDATA[
+ALTER TABLE account DROP CONSTRAINT ck_account_status;
+UPDATE account SET status = 'SUSPENDED' WHERE status = 'BLOCKED';
+ALTER TABLE account ADD CONSTRAINT ck_account_status CHECK (status IN ('UNCLAIMED', 'ACTIVE', 'SUSPENDED', 'DELETING', 'DELETED'));
+        ]]></sql></rollback>
+    </changeSet>
+    <changeSet id="1794347896622-2" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conrelid='public.auth_event'::regclass AND conname='ck_auth_event_event_type' AND contype='c'</sqlCheck>
+        </preConditions>
+        <comment>Preserve every existing audit event type and admit an instance admin blocking or unblocking an account.</comment>
+        <sql><![CDATA[
+ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'ACCOUNT_STATUS_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'WORKSPACE_OWNER_CHANGE', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN')) NOT VALID;
+        ]]></sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $account_status_audit_rollback$
+BEGIN
+    IF EXISTS (SELECT 1 FROM auth_event WHERE event_type = 'ACCOUNT_STATUS_CHANGED') THEN
+        RAISE EXCEPTION 'Account status audit rows exist; retain the widened audit constraint';
+    END IF;
+    ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+    ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'WORKSPACE_OWNER_CHANGE', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN')) NOT VALID;
+END
+$account_status_audit_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+    <changeSet id="1794347896622-3" author="hephaestus">
+        <comment>Check the existing audit rows in a later transaction, so the scan does not block audit writes.</comment>
+        <sql>ALTER TABLE auth_event VALIDATE CONSTRAINT ck_auth_event_event_type</sql>
+        <rollback/>
+    </changeSet>
+    <changeSet id="1794347896622-4" author="hephaestus">
+        <comment>A blocked owner can still take over an unclaimed account's results, as the suspended status could.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.guard_result_facts() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'ended_at'-'end_reason'-'severity'-'developer_id') IS DISTINCT FROM
+    (to_jsonb(OLD)-'ended_at'-'end_reason'-'severity'-'developer_id') THEN
+  RAISE EXCEPTION 'result facts are immutable' USING ERRCODE='55000'; END IF;
+ IF NEW.developer_id IS DISTINCT FROM OLD.developer_id AND NOT EXISTS(
+   SELECT 1 FROM account old_account,account target WHERE old_account.id=OLD.developer_id
+    AND old_account.status='UNCLAIMED' AND target.id=NEW.developer_id AND target.status IN ('ACTIVE','BLOCKED')) THEN
+  RAISE EXCEPTION 'result developer can move only from an unclaimed account to its claimed owner' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $$;
+        ]]></sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.guard_result_facts() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'ended_at'-'end_reason'-'severity'-'developer_id') IS DISTINCT FROM
+    (to_jsonb(OLD)-'ended_at'-'end_reason'-'severity'-'developer_id') THEN
+  RAISE EXCEPTION 'result facts are immutable' USING ERRCODE='55000'; END IF;
+ IF NEW.developer_id IS DISTINCT FROM OLD.developer_id AND NOT EXISTS(
+   SELECT 1 FROM account old_account,account target WHERE old_account.id=OLD.developer_id
+    AND old_account.status='UNCLAIMED' AND target.id=NEW.developer_id AND target.status IN ('ACTIVE','SUSPENDED')) THEN
+  RAISE EXCEPTION 'result developer can move only from an unclaimed account to its claimed owner' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $$;
+        ]]></sql></rollback>
+    </changeSet>
+</databaseChangeLog>

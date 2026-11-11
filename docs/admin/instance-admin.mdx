@@ -29,6 +29,47 @@ Sensitive access changes require a recent sign-in.
 
 A connected provider account identifies a person. An instance role does not create workspace membership.
 
+A force sign-out ends the current sessions only.
+The person can sign in again through their provider at once.
+
+### Block an account
+
+Block an account to stop a person from using the instance, for example after a security incident or when they leave.
+
+1. In the row of the account, open the actions and select **Block account**.
+2. Confirm.
+
+Blocking ends every session of the account at once, including browser extension sessions.
+Sign-in through any linked provider is refused until an instance admin unblocks the account.
+The person sees that an admin blocked the account.
+Workspace memberships, feedback and other data stay as they are.
+
+You cannot block yourself or the last active instance admin.
+Each block and unblock requires a recent sign-in.
+Each writes an **Account blocked or unblocked** audit record with the admin and the status before and after.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Account access states
+    accDescr: An instance admin can block an active account or unblock a blocked account. Other account states cannot use these transitions.
+    ACTIVE --> BLOCKED: Block account
+    BLOCKED --> ACTIVE: Unblock account
+```
+
+Only active or blocked accounts can change between these states.
+Unclaimed accounts and accounts whose deletion has started cannot be blocked or unblocked.
+
+A block applies to the account and its linked identities.
+A provider login that is not linked to the account creates a new account at sign-in.
+
+### Unblock an account
+
+1. In the row of the blocked account, open the actions and select **Unblock account**.
+2. Confirm.
+
+The person can sign in again.
+If the account has a verified email address, Hephaestus sends a security notice that the account is unblocked.
+
 ## Workspaces
 
 1. Inspect workspace metadata and status.

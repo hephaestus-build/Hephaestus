@@ -36,7 +36,7 @@ const unclaimed = viewable("11", "sam", {
 	status: "UNCLAIMED",
 	identities: [{ provider: "GITHUB", login: "sam", displayName: "Sam", avatarUrl: null }],
 });
-const suspended = viewable("12", "kim", { status: "SUSPENDED", displayName: "Kim Park" });
+const blocked = viewable("12", "kim", { status: "BLOCKED", displayName: "Kim Park" });
 
 const retry = fn();
 
@@ -65,9 +65,9 @@ export const Default: Story = {
 };
 
 export const AccountUnavailable: Story = {
-	args: { state: { status: "ready", users: [suspended], totalPages: 1 } },
+	args: { state: { status: "ready", users: [blocked], totalPages: 1 } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Suspended")).toBeVisible();
+		await expect(canvas.getByText("Blocked")).toBeVisible();
 	},
 };
 
@@ -117,7 +117,7 @@ export const LoadFailed: Story = {
 };
 
 export const Reflow: Story = {
-	args: { state: { status: "ready", users: [linked, unclaimed, suspended], totalPages: 3 } },
+	args: { state: { status: "ready", users: [linked, unclaimed, blocked], totalPages: 3 } },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: expectNoPageOverflow,
 };

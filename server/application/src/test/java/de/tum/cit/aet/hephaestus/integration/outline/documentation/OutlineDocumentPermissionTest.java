@@ -137,7 +137,7 @@ class OutlineDocumentPermissionTest extends BaseUnitTest {
                 .thenReturn(Optional.of(51L));
         when(accounts.find(51L))
                 .thenReturn(Optional.of(new AccountDirectory.AccountView(
-                        51L, Account.Status.SUSPENDED, "Person", AiChoice.NO_AI, null, true)));
+                        51L, Account.Status.BLOCKED, "Person", AiChoice.NO_AI, null, true)));
         assertThat(permission.permits(WORKSPACE_ID, DOCUMENT_ID, human)).isFalse();
         when(accounts.find(51L))
                 .thenReturn(Optional.of(new AccountDirectory.AccountView(
@@ -168,7 +168,7 @@ class OutlineDocumentPermissionTest extends BaseUnitTest {
     @ParameterizedTest
     @EnumSource(
             value = Account.Status.class,
-            names = {"SUSPENDED", "DELETING", "DELETED"})
+            names = {"BLOCKED", "DELETING", "DELETED"})
     void refusesAccountsThatCannotProcessWork(Account.Status status) {
         readableHeader(connection(SERVER_URL));
         when(identities.accountFor(new PersonIdentity(PROVIDER_ID, "creator", TEAM)))

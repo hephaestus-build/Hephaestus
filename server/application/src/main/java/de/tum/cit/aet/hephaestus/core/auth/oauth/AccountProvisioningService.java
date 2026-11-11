@@ -31,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @WorkspaceAgnostic("Account provisioning is user-scoped, keyed by (provider, subject)")
 public class AccountProvisioningService {
+    /** The sign-in refusal code for an account that an instance admin blocked. */
+    public static final String ACCOUNT_BLOCKED = "account_blocked";
 
     private static final Logger log = LoggerFactory.getLogger(AccountProvisioningService.class);
 
@@ -226,10 +228,12 @@ public class AccountProvisioningService {
         // Native identity locks precede account locks, as they do in person erasure. The scalar
         // locked status cannot be replaced by a potentially stale managed Account entity. A write
         // lock also prevents concurrent bootstrap promotions from upgrading two shared locks.
-        if (!accountRepository
-                .lockStatusForUpdate(accountId)
-                .map(Account.Status.ACTIVE.name()::equals)
-                .orElse(false)) {
+        String status = accountRepository.lockStatusForUpdate(accountId).orElse("");
+        if (Account.Status.BLOCKED.name().equals(status)) {
+            // The failure handler names this code, so the person learns that an admin blocked the account.
+            throw new OAuth2AuthenticationException(ACCOUNT_BLOCKED);
+        }
+        if (!Account.Status.ACTIVE.name().equals(status)) {
             throw new OAuth2AuthenticationException("identity_processing_suppressed");
         }
     }

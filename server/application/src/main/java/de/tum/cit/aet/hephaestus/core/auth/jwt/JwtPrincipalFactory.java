@@ -45,7 +45,7 @@ public class JwtPrincipalFactory {
             Long accountId, Account.Status status, Account.AppRole appRole, String displayName) {
         // Defense-in-depth account-status gate (ADR 0017). Every JWT-issue path funnels through
         // here.
-        // A SUSPENDED / DELETING / DELETED account must never be minted a principal — even if a
+        // A BLOCKED / DELETING / DELETED account must never be minted a principal — even if a
         // caller
         // forgot the upstream check. The OAuth success handler rejects earlier with a friendly
         // redirect;

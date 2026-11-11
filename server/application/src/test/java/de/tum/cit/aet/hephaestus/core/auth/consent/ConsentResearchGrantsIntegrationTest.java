@@ -98,7 +98,7 @@ class ConsentResearchGrantsIntegrationTest extends BaseIntegrationTest {
         decide(suspended, true, T0);
         long deleting = account("deleting");
         decide(deleting, true, T0);
-        setStatus(suspended, Account.Status.SUSPENDED);
+        setStatus(suspended, Account.Status.BLOCKED);
         setStatus(deleting, Account.Status.DELETING);
         List<Long> all = List.of(
                 granted, refused, withdrawn, regranted, oldWording, otherOrganisation, tie, none, suspended, deleting);

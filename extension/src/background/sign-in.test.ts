@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readCallback, signInUrl } from "~/background/sign-in";
+import { callbackErrorMessage, readCallback, signInUrl } from "~/background/sign-in";
 
 const REDIRECT = "https://ijkajblcbajjpjbknfgdiiiljipafiko.chromiumapp.org/callback";
 const CODE = "A".repeat(43);
@@ -23,6 +23,20 @@ describe("readCallback", () => {
 		[`${REDIRECT}?error=access_denied&state=s1`, "access_denied"],
 	])("refuses %s", (url, error) => {
 		expect(readCallback(url, { redirectUri: REDIRECT, state: "s1" })).toStrictEqual({ error });
+	});
+});
+
+describe("callbackErrorMessage", () => {
+	it("tells a blocked person why the sign-in stopped", () => {
+		expect(callbackErrorMessage("account_blocked")).toBe(
+			"An instance admin blocked this account, so it cannot sign in. Ask your instance admin to unblock it.",
+		);
+	});
+
+	it("keeps an unknown code generic", () => {
+		expect(callbackErrorMessage("oauth_failure")).toBe(
+			"We could not finish signing you in. Try again.",
+		);
 	});
 });
 
