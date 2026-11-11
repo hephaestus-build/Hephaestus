@@ -896,6 +896,56 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(replies("delivered")).isOne();
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "false, DELIVERED, true, false",
+        "true, DELIVERED, true, false",
+        "false, DELIVERED, false, true",
+        "true, DELIVERED, false, true",
+        "false, FAILED, false, true",
+        "true, FAILED, false, true",
+        "false, UNCERTAIN, false, true",
+        "true, UNCERTAIN, false, true"
+    })
+    void shouldDiscloseAiUntilAnAnswerReachedTheSameSlackConversation(
+            boolean inThread, MentorEntry.SlackDelivery outcome, boolean showsAnswer, boolean nextIsFirst) {
+        MentorTurnService.Submission first = inThread ? askInThread() : ask(main, "First question", "100.1");
+        MentorTurn running = inThread
+                ? running(first)
+                : turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        assertThat(delivery.slackTurn(workspace.getId(), running.getId())
+                        .orElseThrow()
+                        .firstAnswer())
+                .isTrue();
+        MentorConversation conversation = conversations.require(workspace.getId(), running.getConversationId());
+        MentorTurnService.Submission second = ask(conversation, "Second question", "100.6");
+        end(running, MentorTurn.Status.DONE, "First answer", "");
+        if (outcome == MentorEntry.SlackDelivery.DELIVERED) {
+            delivery.delivered(
+                    workspace.getId(),
+                    first.question().getId(),
+                    showsAnswer ? answerOf(running).getId() : null,
+                    "200.1");
+        } else {
+            delivery.settle(workspace.getId(), first.question().getId(), outcome);
+        }
+        assertThat(delivery.slackTurn(workspace.getId(), second.turn().getId())
+                        .orElseThrow()
+                        .firstAnswer())
+                .isEqualTo(nextIsFirst);
+        if (inThread) {
+            String prefix = nextIsFirst ? SlackMentorPosts.AI_LABEL + "\n\n" : "";
+            when(slack.startStream(workspace.getId(), CHANNEL, "100.1", prefix + "Second answer"))
+                    .thenReturn("200.2");
+            MentorTurn next = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+            assertThat(next.getId()).isEqualTo(second.turn().getId());
+            changed(next);
+            writes(next, "Second answer");
+
+            verify(slack).startStream(workspace.getId(), CHANNEL, "100.1", prefix + "Second answer");
+        }
+    }
+
     @Test
     void shouldDeliverNoFeedbackWhoseTextSlackCannotShowWhenTheReplyIsCut() {
         MentorTurnService.Submission asked = ask(main, "Tell me everything", "100.1");
@@ -998,7 +1048,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldStreamTheAnswerAndStopItUnderFeedbackButtonsWhenAThreadTurnRuns() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
 
         sendPartial(running, partial("Your reviews"));
@@ -1031,7 +1082,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldFinishTheReplyOnceWhenAWakeUpForTheStreamIsStillPendingAtTheEnd() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
         sendPartial(running, partial("Your reviews"));
         changed(running);
@@ -1056,7 +1108,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldReplaceTheStreamWithTheWholeReplyWhenTheReconcilerFindsThatSlackAlreadyEndedIt() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is")).thenReturn("300.1");
+        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Here is"))
+                .thenReturn("300.1");
         sendPartial(running, partial("Here is"));
         changed(running);
         // The server stops before the turn ends; Slack ends the stream when it times out.
@@ -1085,7 +1138,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldReplaceTheStreamWithTheWholeReplyWhenSlackEndedItWhileHephWorked() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is")).thenReturn("300.1");
+        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Here is"))
+                .thenReturn("300.1");
         sendPartial(running, partial("Here is"));
         changed(running);
         // Slack ends an idle stream on its own, for example while Hephaestus waits for a tool.
@@ -1119,7 +1173,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldReplaceTheStreamWithTheWholeReplyWhenSlackEndedItBeforeTheRestOfTheAnswer() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is")).thenReturn("300.1");
+        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Here is"))
+                .thenReturn("300.1");
         sendPartial(running, partial("Here is"));
         changed(running);
         // The stream got no text while Hephaestus showed feedback, and Slack ended it meanwhile.
@@ -1146,7 +1201,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldReplaceTheStreamWithTheWholeReplyWhenSlackRefusedEightAppendsInARow() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
         sendPartial(running, partial("Your reviews"));
         changed(running);
@@ -1170,7 +1226,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldReplaceTheStreamThatAnUnansweredStartOpenedInsteadOfPostingBelowIt() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
         String opened = SlackTs.ofInstant(clock.instant());
         sendPartial(running, partial("Your reviews"));
@@ -1200,7 +1257,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldPostTheReplyAndOverwriteNoOtherMessageWhenARefusedStartOpenedNoStream() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
         sendPartial(running, partial("Your reviews"));
         changed(running);
@@ -1223,7 +1281,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldReplaceTheStreamWhenHephsAnswerNoLongerStartsWithWhatSlackShows() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews ar"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews ar"))
                 .thenReturn("300.1");
         // A model call fails after Slack showed part of its text; the retried call writes another text.
         sendPartial(running, partial("Your reviews ar"));
@@ -1252,7 +1311,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldReplaceADivergentStreamWithTheStoredAnswerWhenTheDeveloperStopsTheTurn() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews ar"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews ar"))
                 .thenReturn("300.1");
         sendPartial(running, partial("Your reviews ar"));
         changed(running);
@@ -1273,7 +1333,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldAskSlackAtMostOnceEachIntervalWhenSlackRefusesAppends() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
         sendPartial(running, partial("Your reviews"));
         changed(running);
@@ -1295,7 +1356,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldReplaceTheStreamAndNeverPostTheAnswerTwiceWhenSlackLeavesAnAppendUnanswered() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
         sendPartial(running, partial("Your reviews"));
         changed(running);
@@ -1331,7 +1393,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldLookForThePostAndNotTheStreamWhenThePostThatReplacedAGoneStreamIsUncertain() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
         sendPartial(running, partial("Your reviews"));
         changed(running);
@@ -1373,9 +1436,10 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(claimed).contains(first.turn().getId(), second.turn().getId());
         MentorTurn one = running(first);
         MentorTurn two = running(second);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.2", "Your issues"))
+        when(slack.startStream(workspace.getId(), CHANNEL, "100.2", SlackMentorPosts.AI_LABEL + "\n\n" + "Your issues"))
                 .thenReturn("300.2");
         sendPartial(one, partial("Your reviews"));
         changed(one);
@@ -1399,7 +1463,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldDeliverTheFeedbackTheStreamShowedWhenAThreadAnswerShowsIt() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is what I saw."))
+        when(slack.startStream(
+                        workspace.getId(),
+                        CHANNEL,
+                        "100.1",
+                        SlackMentorPosts.AI_LABEL + "\n\n" + "Here is what I saw."))
                 .thenReturn("300.1");
         sendPartial(running, partial("Here is what I saw."));
         changed(running);
@@ -1455,7 +1523,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 })
                 .when(receiptListener)
                 .settle(any());
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is what I saw."))
+        when(slack.startStream(
+                        workspace.getId(),
+                        CHANNEL,
+                        "100.1",
+                        SlackMentorPosts.AI_LABEL + "\n\n" + "Here is what I saw."))
                 .thenReturn("300.1");
         sendPartial(running, partial("Here is what I saw."));
         changed(running);
@@ -1498,7 +1570,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         MentorTurnService.Submission followUp =
                 ask(conversations.require(workspace.getId(), running.getConversationId()), "And next?", "100.6");
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is what I saw."))
+        when(slack.startStream(
+                        workspace.getId(),
+                        CHANNEL,
+                        "100.1",
+                        SlackMentorPosts.AI_LABEL + "\n\n" + "Here is what I saw."))
                 .thenReturn("300.1");
         sendPartial(running, partial("Here is what I saw."));
         changed(running);
@@ -1531,7 +1607,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         recordSessionCalls();
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
 
         sendPartial(running, partial("Your reviews"));
@@ -1552,7 +1629,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         MentorTurnService.Submission followUp =
                 ask(conversations.require(workspace.getId(), running.getConversationId()), "And next?", "100.6");
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
         sendPartial(running, partial("Your reviews"));
         changed(running);
@@ -1572,7 +1650,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn first = running(asked);
         MentorTurnService.Submission next =
                 ask(conversations.require(workspace.getId(), first.getConversationId()), "And next?", "100.6");
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
         sendPartial(first, partial("Your reviews"));
         changed(first);
@@ -1601,7 +1680,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn first = running(asked);
         MentorTurnService.Submission next =
                 ask(conversations.require(workspace.getId(), first.getConversationId()), "And next?", "100.6");
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
         sendPartial(first, partial("Your reviews"));
         changed(first);
@@ -1808,7 +1888,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .setSessionStatus(anyLong(), anyString(), anyString(), anyBoolean());
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
         sendPartial(running, partial("Your reviews"));
         changed(running);
@@ -1836,7 +1917,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldDeliverNoFeedbackWhenSlackStoppedTheStreamBeforeItsText() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is what I saw."))
+        when(slack.startStream(
+                        workspace.getId(),
+                        CHANNEL,
+                        "100.1",
+                        SlackMentorPosts.AI_LABEL + "\n\n" + "Here is what I saw."))
                 .thenReturn("300.1");
         sendPartial(running, partial("Here is what I saw."));
         changed(running);
@@ -1857,7 +1942,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldKeepWhatTheStreamShowsAndAppendNothingWhenTheDeveloperStoppedTheTurn() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
+        when(slack.startStream(
+                        workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Your reviews"))
                 .thenReturn("300.1");
         sendPartial(running, partial("Your reviews"));
         changed(running);
@@ -1879,7 +1965,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldEndTheStreamInPlaceAndNeverPostItAgainWhenSlackDoesNotAnswerTheEndOfTheStream() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is")).thenReturn("300.1");
+        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Here is"))
+                .thenReturn("300.1");
         sendPartial(running, partial("Here is"));
         changed(running);
         stopStreamFails("ratelimited");
@@ -1919,7 +2006,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldDeliverTheFeedbackTheStreamShowedWhenSilentModeRefusesTheEndOfTheStream() {
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is what I saw."))
+        when(slack.startStream(
+                        workspace.getId(),
+                        CHANNEL,
+                        "100.1",
+                        SlackMentorPosts.AI_LABEL + "\n\n" + "Here is what I saw."))
                 .thenReturn("300.1");
         sendPartial(running, partial("Here is what I saw."));
         changed(running);
@@ -1944,9 +2035,9 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurnService.Submission asked = ask(thread, "Tell me more", "100.5");
         turns.claimNext(LEASE, Integer.MAX_VALUE);
         MentorTurn first = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "First try"))
+        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "First try"))
                 .thenReturn("300.1");
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Second try"))
+        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Second try"))
                 .thenReturn("300.2");
         sendPartial(first, partial("First try"));
         changed(first);
@@ -1965,7 +2056,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                         CHANNEL,
                         "300.1",
                         new SlackMessageService.StreamStop(SlackMentorPosts.RESTART_NOTE, List.of(), null, false));
-        verify(slack).startStream(workspace.getId(), CHANNEL, "100.1", "Second try");
+        verify(slack)
+                .startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Second try");
         assertThat(question(asked).getSlackStreamTs()).isEqualTo("300.2");
     }
 
@@ -1977,9 +2069,9 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurnService.Submission asked = ask(thread, "Tell me more", "100.5");
         turns.claimNext(LEASE, Integer.MAX_VALUE);
         MentorTurn first = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "First try"))
+        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "First try"))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
-        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Second try"))
+        when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Second try"))
                 .thenReturn("300.2");
         sendPartial(first, partial("First try"));
         changed(first);
@@ -1991,7 +2083,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn retried = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         writes(retried, "Second try");
 
-        verify(slack).startStream(workspace.getId(), CHANNEL, "100.1", "Second try");
+        verify(slack)
+                .startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Second try");
         assertThat(question(asked).getSlackStreamTs()).isEqualTo("300.2");
     }
 

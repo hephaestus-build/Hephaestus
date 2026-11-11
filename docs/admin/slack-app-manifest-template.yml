@@ -1,5 +1,6 @@
 display_information:
   name: Hephaestus
+  description: An AI assistant for your practice feedback and recent work.
 
 features:
   app_home:
@@ -7,7 +8,7 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   agent_view:
-    agent_description: Ask Hephaestus about your practice feedback and recent work in private Slack DMs.
+    agent_description: An AI assistant that answers about your practice feedback and recent work in private Slack DMs.
     suggested_prompts:
       - title: What needs attention?
         message: What software project practice should I focus on next?

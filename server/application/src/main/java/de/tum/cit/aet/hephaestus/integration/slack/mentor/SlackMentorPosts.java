@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.mentor;
 
 import com.slack.api.model.Message;
 import com.slack.api.model.block.ContextActionsBlock;
+import com.slack.api.model.block.ContextBlock;
 import com.slack.api.model.block.LayoutBlock;
 import com.slack.api.model.block.MarkdownBlock;
 import com.slack.api.model.block.composition.FeedbackButtonObject;
@@ -21,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 /** What Hephaestus's Slack messages look like: answer blocks, notification text, feedback buttons and post metadata. */
@@ -265,6 +267,29 @@ public final class SlackMentorPosts {
         }
         int cut = line.lastIndexOf(' ', NOTIFICATION_CHARS);
         return line.substring(0, cut > 0 ? cut : NOTIFICATION_CHARS) + "…";
+    }
+
+    /**
+     * Says once per DM or thread that a model writes the answers (EU AI Act Art. 50(1): at the first interaction).
+     * Slack already shows Hephaestus as an agent, so later answers do not repeat it.
+     */
+    public static final String AI_LABEL = "Hephaestus answers with an AI model and can be wrong.";
+
+    /** The {@link #AI_LABEL} line, in Slack's small context text. */
+    public static List<LayoutBlock> aiLabel() {
+        return List.of(ContextBlock.builder()
+                .elements(List.of(PlainTextObject.builder().text(AI_LABEL).build()))
+                .build());
+    }
+
+    /**
+     * What closes an answer: the AI label on the first answer of a DM or thread, then in a thread the feedback buttons.
+     */
+    static List<LayoutBlock> answerFooter(UUID answerId, boolean firstAnswer, boolean inThread) {
+        return Stream.concat(
+                        (firstAnswer ? aiLabel() : List.<LayoutBlock>of()).stream(),
+                        (inThread ? feedbackButtons(answerId) : List.<LayoutBlock>of()).stream())
+                .toList();
     }
 
     /** Helpful and Not helpful buttons that vote on Hephaestus's answer. */

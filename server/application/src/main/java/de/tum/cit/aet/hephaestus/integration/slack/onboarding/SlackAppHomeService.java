@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelR
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
+import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
 import java.util.ArrayList;
@@ -91,6 +92,7 @@ public class SlackAppHomeService {
     View buildHomeView(long workspaceId, String teamId, String slackUserId) {
         List<LayoutBlock> blocks = new ArrayList<>();
         blocks.add(header(h -> h.text(plainText("Hephaestus"))));
+        blocks.add(SlackMentorPosts.aiLabel().getFirst());
         boolean mentorReady = mentorReadinessQuery.isReady(workspaceId);
         Optional<AccountSummaryQuery.AccountSummary> developer =
                 identityResolver.resolveDeveloper(workspaceId, teamId, slackUserId);
