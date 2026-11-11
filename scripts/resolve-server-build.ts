@@ -14,7 +14,8 @@ const requiredJobs = [
 	"Build / Webapp: E2E",
 	"Docker / Images / Build linux/amd64 images",
 	"Docker / Images / Build linux/arm64 images",
-	"Test / App Server: Unit and architecture",
+	"Test / App Server: Unit",
+	"Test / App Server: Architecture",
 	"Test / App Server: Integration (review)",
 	...Array.from(
 		{ length: committedShards() },

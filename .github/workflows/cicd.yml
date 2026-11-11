@@ -1051,7 +1051,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJSON(needs.detect-changes.outputs.queue-tier == 'true' && '["unit","review","1","2","3","4","5","6","7","8"]' || '["unit","review"]') }}
+        shard: ${{ fromJSON(needs.detect-changes.outputs.queue-tier == 'true' && '["unit","architecture","review","1","2","3","4","5","6","7","8"]' || '["unit","architecture","review"]') }}
     uses: ./.github/workflows/ci-tests.yml
     needs: [detect-changes, server-package, Security-merge-group]
     if: |

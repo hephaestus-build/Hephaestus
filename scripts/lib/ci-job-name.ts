@@ -3,6 +3,12 @@ export function canonicalCiJobName(name: string): string {
 	if (name === "Test (unit) / App Server: Unit and architecture") {
 		return "Test / App Server: Unit and architecture";
 	}
+	if (
+		name === "Test (unit) / App Server: Unit" ||
+		name === "Test (architecture) / App Server: Architecture"
+	) {
+		return name.replace(/^Test \([a-z]+\)/u, "Test");
+	}
 	const integration =
 		/^Test \((?<shard>[a-z0-9-]+)\) \/ App Server: Integration \(\k<shard>\)$/u.exec(name);
 	if (integration?.groups?.shard !== undefined) {

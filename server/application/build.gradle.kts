@@ -395,6 +395,9 @@ fun Test.selectTestTier(tag: String) {
 
 tasks.test {
     selectTestTier(testTiers.getValue("test"))
+    // The unit tier is the longest chain after packaging. Unit tests share no container or port, so
+    // two JVMs split it; org.gradle.workers.max caps forks at two anyway.
+    maxParallelForks = 2
     finalizedBy("jacocoTestReport")
 }
 
