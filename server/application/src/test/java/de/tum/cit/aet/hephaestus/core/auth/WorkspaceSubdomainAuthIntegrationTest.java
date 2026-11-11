@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
@@ -19,6 +20,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -28,6 +30,9 @@ class WorkspaceSubdomainAuthIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private WebTestClient client;
+
+    @Autowired
+    private WorkspaceSubdomainProperties subdomains;
 
     @Autowired
     private WorkspaceService workspaces;
@@ -164,6 +169,7 @@ class WorkspaceSubdomainAuthIntegrationTest extends RealAuthIntegrationTest {
 
     @Test
     void shouldRecoverWithOneRefetchWhenAnotherResponseReplacedTheCsrfCookie() {
+        assertThat(subdomains.enabled()).isTrue();
         var first = fetchCsrf(null);
         var last = fetchCsrf(null);
         assertThat(last.token()).isNotEqualTo(first.token());
@@ -180,9 +186,13 @@ class WorkspaceSubdomainAuthIntegrationTest extends RealAuthIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isForbidden()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo(ProblemType.CSRF_TOKEN_REJECTED.uri().toString());
+                .isEqualTo(ProblemType.CSRF_TOKEN_REJECTED.uri().toString())
+                .jsonPath("$.properties")
+                .doesNotExist();
 
         var refreshed = fetchCsrf(last.token());
         assertThat(refreshed.token()).isEqualTo(last.token());

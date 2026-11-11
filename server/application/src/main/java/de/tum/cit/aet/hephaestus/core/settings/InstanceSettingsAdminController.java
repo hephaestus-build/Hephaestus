@@ -21,6 +21,7 @@ import java.time.Instant;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -83,11 +84,17 @@ public class InstanceSettingsAdminController {
     @ApiResponse(
             responseCode = "412",
             description = "The supplied ETag is stale",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "428",
             description = "If-Match is required when releasing Silent Mode",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "SILENT_MODE_CHANGED")
     public ResponseEntity<InstanceSettingsDTO> updateSilentMode(
             @Parameter(description = "Current settings ETag; required when releasing Silent Mode")

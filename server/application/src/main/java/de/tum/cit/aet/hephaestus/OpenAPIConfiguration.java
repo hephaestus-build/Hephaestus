@@ -156,17 +156,27 @@ public class OpenAPIConfiguration {
             normalizeDiscriminatedUnions(openApi);
             declareExactDecimals(openApi);
             declareProviderIdentityKinds(openApi);
-            declareProblemRequestId(openApi);
+            declareProblemShape(openApi);
         };
     }
 
     /**
-     * Spring writes a problem's extension properties at the top level, and every problem names its
+     * Spring writes extension properties at the top level. Every problem names its
      * request ({@link RequestReference}). With tracing off there is no id, so the field is optional.
      */
-    private static void declareProblemRequestId(OpenAPI openApi) {
+    private static void declareProblemShape(OpenAPI openApi) {
         Schema<?> problem = openApi.getComponents().getSchemas().get("ProblemDetail");
         if (problem != null) {
+            var properties = problem.getProperties();
+            if (properties != null) {
+                properties.remove("properties");
+                // RFC 9457 makes both URI references, and Spring fills a missing instance with the request path.
+                for (String reference : List.of("type", "instance")) {
+                    Schema<?> member = properties.get(reference);
+                    if (member != null) member.setFormat("uri-reference");
+                }
+            }
+            problem.setAdditionalProperties(true);
             problem.addProperty(
                     RequestReference.PROPERTY,
                     new StringSchema()

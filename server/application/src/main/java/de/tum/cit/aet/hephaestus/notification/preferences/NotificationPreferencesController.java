@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -67,23 +68,38 @@ public class NotificationPreferencesController {
     @ApiResponse(
             responseCode = "400",
             description = "Invalid preferences or If-Match header",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Enabling this subscription requires instance administration",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Enabling email requires a verified contact on an active account",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "412",
             description = "The supplied ETag is stale",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "428",
             description = "If-Match is required",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<NotificationPreferencesDTO> update(
             @Valid @RequestBody UpdateNotificationPreferencesDTO request,
             @Parameter(required = true, description = "Current preferences ETag")

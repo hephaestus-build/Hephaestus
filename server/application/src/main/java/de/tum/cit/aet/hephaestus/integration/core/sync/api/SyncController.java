@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -94,20 +95,32 @@ public class SyncController {
         @ApiResponse(
                 responseCode = "400",
                 description = "Missing or invalid request body (e.g. absent sync type)",
-                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                                schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
                 responseCode = "404",
                 description = "Connection not found in this workspace",
-                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                                schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
                 responseCode = "409",
                 description =
                         "Connection is not ACTIVE, a different sync type is already running, or manual sync is unsupported for the kind",
-                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                                schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
                 responseCode = "503",
                 description = "The server is too busy to dispatch the sync; retry later",
-                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                                schema = @Schema(implementation = ProblemDetail.class))),
     })
     @AuditExempt(reason = "sync job control, not configuration; each run is its own sync_job record")
     public ResponseEntity<SyncJobDTO> triggerConnectionSyncJob(
@@ -132,15 +145,24 @@ public class SyncController {
         @ApiResponse(
                 responseCode = "400",
                 description = "The update does not request cancellation",
-                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                                schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
                 responseCode = "404",
                 description = "Job not found in this workspace, or not owned by this connection",
-                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                                schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
                 responseCode = "409",
                 description = "Job is already in a terminal status",
-                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                                schema = @Schema(implementation = ProblemDetail.class))),
     })
     @AuditExempt(reason = "sync job control, not configuration; each run is its own sync_job record")
     public ResponseEntity<SyncJobDTO> updateConnectionSyncJob(

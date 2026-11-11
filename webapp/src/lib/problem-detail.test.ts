@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 
+import { zProblemDetail } from "@/api/zod.gen";
+
 import { problemDetailOf, problemStatusOf, stepUpChallengeOf, problemType } from "./problem-detail";
+
+describe("the generated problem contract", () => {
+	it("preserves validation and request extensions at the top level", () => {
+		const wire = {
+			type: "about:blank",
+			title: "Validation failed",
+			status: 400,
+			instance: "/api/workspaces",
+			requestId: "0123456789abcdef0123456789abcdef",
+			errors: { slug: ["Choose a different identifier."] },
+		};
+
+		expect(zProblemDetail.parse(wire)).toStrictEqual(wire);
+		expect(zProblemDetail.safeParse({ ...wire, status: "400" }).success).toBe(false);
+	});
+});
 
 describe("problemDetailOf", () => {
 	it("prefers RFC 9457 `detail` over everything else", () => {

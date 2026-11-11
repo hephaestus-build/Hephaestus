@@ -68,13 +68,23 @@ export default defineConfig({
 			transformer: true,
 		},
 		// Schemas for payloads that bypass the SDK, such as server-sent events. The resolvers make the
-		// parsed output match the generated types: int64 stays a `number`, and dates become `Date`s as
-		// the transformers above make them.
+		// parsed output match the generated types: int64 stays a `number`, dates become `Date`s as the
+		// transformers above make them, and an open object keeps its unknown keys.
 		{
 			name: "zod",
 			requests: false,
 			responses: false,
-			"~resolvers": {
+			$resolvers: {
+				object: (ctx) => {
+					const { $, nodes, plugin, schema } = ctx;
+					const { additionalProperties, properties } = schema;
+					return additionalProperties !== false &&
+						additionalProperties?.type === "unknown" &&
+						properties !== undefined &&
+						Object.keys(properties).length > 0
+						? nodes.base(ctx).attr("catchall").call($(plugin.imports.z).attr("unknown").call())
+						: undefined;
+				},
 				number: ({ $, schema, plugin }) =>
 					schema.format === "int64" ? $(plugin.imports.z).attr("int").call() : undefined,
 				string: ({ $, schema, plugin }) => {
