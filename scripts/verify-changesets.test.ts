@@ -409,6 +409,14 @@ void test("the release-note rules hold a branch to what CI requires, against ori
 		git("rm", "--quiet", ".migration/pending.md");
 	}, /Pending migration fragments may be edited, but not deleted or renamed/u);
 
+	// Test support code is in no image, like the tests that import it.
+	await write("webapp/src/test/harness.tsx", "export const harness = 1;\n");
+	await write("webapp/src/a.test.ts", "export {};\n");
+	git("add", "--all");
+	git("commit", "--quiet", "-m", "test support only");
+	assert.equal(problems(), "");
+	git("reset", "--quiet", "--hard", "origin/main");
+
 	await write("webapp/src/a.ts", "export const a = 2;\n");
 	await write(".changeset/feature.md", '---\n"hephaestus": patch\n---\n\nThe value is two.\n');
 	git("add", ".");
