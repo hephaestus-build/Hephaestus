@@ -26,4 +26,15 @@ $workspace_deletion_audit_rollback$;
         <sql>ALTER TABLE auth_event VALIDATE CONSTRAINT ck_auth_event_event_type</sql>
         <rollback/>
     </changeSet>
+    <changeSet id="1794344584684-3" author="hephaestus">
+        <comment>Account deletion no longer sends a confirmation email, and its event class and email kind are gone. Remove its queued publications, which hold only an account id, and withdraw its waiting emails, so that no retry tries to read them.</comment>
+        <sql><![CDATA[
+DELETE FROM event_publication WHERE event_type = 'de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent';
+UPDATE agent_action
+   SET state = 'CANCELLED', stop_reason = 'WITHDRAWN', ended_at = CURRENT_TIMESTAMP, payload = NULL,
+       updated_at = CURRENT_TIMESTAMP
+ WHERE kind = 'EMAIL' AND state IN ('PROPOSED', 'ADMITTED') AND payload ->> 'kind' = 'ACCOUNT_DELETION_SCHEDULED';
+        ]]></sql>
+        <rollback/>
+    </changeSet>
 </databaseChangeLog>

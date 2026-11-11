@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices;
 
-import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeGroupRequestDTO;
@@ -116,7 +116,8 @@ public class PracticeGroupController {
         return ResponseEntity.noContent().build();
     }
 
-    @RecentSignInExempt(reason = "returns the group to the catalog version, which a workspace admin can customize again")
+    @RecentSignInExempt(
+            reason = "returns the group to the catalog version, which a workspace admin can customize again")
     @DeleteMapping("/{groupSlug}/catalog-customization")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_GROUP")
     @Operation(operationId = "resetGroupToCatalog")

@@ -40,7 +40,7 @@ function LoginRoute() {
 
 	// Account deletion reloads this route, so the Danger zone leaves a record behind. Read it on the
 	// first render and clear it afterwards: a later reload must not repeat the notice.
-	const [accountDeletionScheduled] = useState(accountDeletedRecently);
+	const [accountDeleted] = useState(accountDeletedRecently);
 	useEffect(() => {
 		clearAccountDeletedNotice();
 	}, []);
@@ -49,7 +49,7 @@ function LoginRoute() {
 		<LoginPage
 			options={providers}
 			error={error}
-			notice={accountDeletionScheduled ? "account-deletion-scheduled" : undefined}
+			notice={accountDeleted ? "account-deleted" : undefined}
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
 			devReturnTo={returnTo}
 		/>

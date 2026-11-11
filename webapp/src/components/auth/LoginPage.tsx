@@ -35,7 +35,7 @@ export interface LoginPageProps extends SignInButtonsProps {
 	title?: string;
 	error?: string;
 	/** Something the reader must know before signing in, such as their own account deletion. */
-	notice?: "account-deletion-scheduled";
+	notice?: "account-deleted";
 }
 
 /**
@@ -72,13 +72,12 @@ export function LoginPage({
 				<CardContent>
 					{/* A note, not a live region: it is on the page from the first render, and it stays
 					    until the reader leaves, because a deletion notice must not leave on a timer. */}
-					{notice === "account-deletion-scheduled" ? (
+					{notice === "account-deleted" ? (
 						<Alert role="note" className="mb-4">
-							<AlertTitle>Your account is scheduled for deletion</AlertTitle>
+							<AlertTitle>Your account is deleted</AlertTitle>
 							<AlertDescription>
-								You’re signed out on all devices, and you cannot sign in to this account again.
-								After a waiting period, Hephaestus permanently deletes the account. If this was a
-								mistake, contact your instance operator now.
+								You’re signed out on all devices. Hephaestus is erasing your personal data, and
+								nobody can sign in to this account again.
 							</AlertDescription>
 						</Alert>
 					) : null}

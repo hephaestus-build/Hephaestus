@@ -86,6 +86,8 @@ export const AsksForARecentSignIn: Story = {
 	args: { confirmation: { ...noSignInAsked, open: true, maxAgeSeconds: 300 } },
 	play: async () => {
 		const dialog = await screen.findByRole("dialog", { name: "Confirm access" });
-		await expect(within(dialog).getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
+		await expect(
+			within(dialog).getByRole("button", { name: "Continue with GitHub" }),
+		).toBeVisible();
 	},
 };

@@ -71,7 +71,7 @@ this key rather than comparing login names.
   [read-only user views](./contributor/instance-admin.md#read-only-user-views).
 - **GDPR.** `auth_event` is an append-only, monthly RANGE-partitioned (self-managed in-app by
   `pg_partman`, 12-month retention; see ADR 0018)
-  audit log. Account deletion is a 48-hour soft-delete cooldown → hard cascade +
+  audit log. Account deletion purges the account as soon as the deletion commits → hard cascade +
   pseudonymization of the git-provider mirror (Art. 17(3) — preserves activity-graph integrity on
   other users' work).
 

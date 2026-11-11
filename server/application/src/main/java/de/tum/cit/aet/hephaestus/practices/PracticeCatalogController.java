@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.practices;
 
-import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.practices.dto.BindPracticeGroupRequestDTO;
@@ -171,7 +171,8 @@ public class PracticeCatalogController {
                 ctx.id(), practices.movePractice(ctx, practiceSlug, input.groupSlug(), input.position()));
     }
 
-    @RecentSignInExempt(reason = "returns the practice to the catalog version, which a workspace admin can customize again")
+    @RecentSignInExempt(
+            reason = "returns the practice to the catalog version, which a workspace admin can customize again")
     @DeleteMapping("/{practiceSlug}/catalog-customization")
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_DEFINITION")

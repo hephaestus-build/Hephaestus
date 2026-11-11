@@ -91,30 +91,6 @@ class RecentSignInByDefaultArchTest extends HephaestusArchitectureTest {
                 whose effect can be undone declares @RecentSignInExempt(reason="…").""").isEmpty();
     }
 
-    /** The interceptor records a refusal on a type; a gated handler without one could only fail at request time. */
-    @Test
-    void everyHandlerThatAsksOnEveryCallCanRecordItsRefusal() {
-        List<String> unrecordable = classes.stream()
-                .filter(AuditByDefaultArchTest::isController)
-                .flatMap(c -> c.getMethods().stream())
-                .filter(m -> m.tryGetAnnotationOfType(RequiresRecentSignIn.class)
-                        .filter(a -> a.value() == RequiresRecentSignIn.When.EVERY_CALL)
-                        .isPresent())
-                .filter(m -> {
-                    String refusal = m.getAnnotationOfType(RequiresRecentSignIn.class).refusal();
-                    return refusal.isEmpty()
-                            ? malformedReason(m).isPresent()
-                            : !AuditLedger.AUTH_EVENT.vocabulary().contains(refusal);
-                })
-                .map(RecentSignInByDefaultArchTest::name)
-                .sorted()
-                .toList();
-
-        assertThat(unrecordable)
-                .as("@RequiresRecentSignIn handlers with neither @Audited(AUTH_EVENT) nor a valid refusal type")
-                .isEmpty();
-    }
-
     /**
      * {@link RequiresRecentSignIn.When#OWNER_CHANGE} leaves the decision to the workspace membership service, so
      * on any other endpoint it would ask for nothing.
@@ -147,18 +123,25 @@ class RecentSignInByDefaultArchTest extends HephaestusArchitectureTest {
         List<String> unrecordable = classes.stream()
                 .filter(AuditByDefaultArchTest::isController)
                 .flatMap(c -> c.getMethods().stream())
-                .filter(m -> Optional.ofNullable(
-                                AnnotatedElementUtils.findMergedAnnotation(m.reflect(), RequiresRecentSignIn.class))
+                .flatMap(m -> Optional.ofNullable(
+                        AnnotatedElementUtils.findMergedAnnotation(m.reflect(), RequiresRecentSignIn.class))
                         .filter(a -> a.value() == RequiresRecentSignIn.When.EVERY_CALL)
-                        .isPresent())
-                .flatMap(m -> malformedReason(m).map(reason -> name(m) + ": " + reason).stream())
+                        .flatMap(a -> a.refusal().isEmpty() ? malformedReason(m) : unknownRefusal(a.refusal()))
+                        .map(reason -> name(m) + ": " + reason)
+                        .stream())
                 .sorted()
                 .toList();
 
         assertThat(unrecordable).as("""
                 These @RequiresRecentSignIn endpoints cannot record a refusal. Each needs \
                 @Audited(ledger = AuditLedger.AUTH_EVENT, type = "…") naming an AuthEvent.EventType \
-                constant on the same method.""").isEmpty();
+                constant on the same method, or a refusal = "…" that names one.""").isEmpty();
+    }
+
+    private static Optional<String> unknownRefusal(String refusal) {
+        return AuditLedger.AUTH_EVENT.vocabulary().contains(refusal)
+                ? Optional.empty()
+                : Optional.of("refusal '" + refusal + "' is not an " + AuthEvent.EventType.class.getSimpleName());
     }
 
     private static Optional<String> malformedReason(JavaMethod method) {

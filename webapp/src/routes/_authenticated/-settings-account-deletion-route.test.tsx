@@ -87,7 +87,7 @@ describe("account deletion on the settings page", () => {
 
 		await waitFor(() => expect(assigned).toStrictEqual(["/login"]));
 		const notice = await signInPageNotice();
-		expect(notice?.textContent).toContain("Your account is scheduled for deletion");
+		expect(notice?.textContent).toContain("Your account is deleted");
 	});
 
 	it("does not show the notice to another person who signs in and out in the same tab", async () => {

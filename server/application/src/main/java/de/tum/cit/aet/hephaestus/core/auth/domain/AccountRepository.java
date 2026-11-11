@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.core.auth.domain;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -71,19 +70,18 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<String> findActiveVerifiedAdministratorEmail(@Param("accountId") long accountId);
 
     /**
-     * Ids of accounts whose GDPR soft-delete cooldown has elapsed: {@code status = DELETING} and
-     * {@code deleted_at} strictly older than {@code cutoff}, oldest first. Paged so a large erasure
-     * backlog is purged one bounded page at a time. Backs {@code AccountHardDeleteSweeper}.
+     * Ids of accounts that are still {@code DELETING}, after {@code afterId} in id order. Paged so a large erasure
+     * backlog is purged one bounded page at a time, and keyed so an account that cannot be purged yet never hides the
+     * ones after it. Backs the hourly retry of {@code AccountHardDeleteSweeper}.
      */
     @Query("""
         SELECT a.id
           FROM Account a
          WHERE a.status = de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.DELETING
-           AND a.deletedAt IS NOT NULL
-           AND a.deletedAt < :cutoff
-         ORDER BY a.deletedAt
+           AND a.id > :afterId
+         ORDER BY a.id
         """)
-    List<Long> findDeletingPastCooldown(@Param("cutoff") Instant cutoff, Pageable pageable);
+    List<Long> findDeleting(@Param("afterId") long afterId, Pageable pageable);
 
     /**
      * Resolve an account by {@code primary_email} — dev-login only ({@code DevLoginService}, for

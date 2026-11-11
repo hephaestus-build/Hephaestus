@@ -137,8 +137,9 @@ function DeleteAccountRow({
 				<h3 className="text-base font-medium">Delete account</h3>
 				<p className="text-sm leading-relaxed text-muted-foreground">
 					Permanently delete your account and erase your personal data (GDPR Art. 17). Hephaestus
-					signs you out on all devices at once, then deletes the account after a waiting period that
-					your instance operator sets. You cannot recover it from here.
+					signs you out on all devices and deletes the account at once. Nobody can recover it. If
+					Hephaestus posted feedback for you on GitHub, GitLab, or Slack, erasure finishes after
+					your instance operator removes those comments.
 				</p>
 			</div>
 			<AlertDialog
@@ -162,9 +163,8 @@ function DeleteAccountRow({
 					<AlertDialogHeader>
 						<AlertDialogTitle>Delete your account?</AlertDialogTitle>
 						<AlertDialogDescription>
-							This signs you out on all devices and disables your account. After a waiting period,
-							Hephaestus permanently deletes the account and your data. You cannot undo this from
-							here. To confirm, enter{" "}
+							This signs you out on all devices and permanently deletes your account at once. Nobody
+							can undo this. To confirm, enter{" "}
 							<span className="font-medium text-foreground">{DELETE_CONFIRM_PHRASE}</span> below.
 						</AlertDialogDescription>
 					</AlertDialogHeader>

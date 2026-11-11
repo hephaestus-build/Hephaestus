@@ -432,7 +432,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .get()
                 .extracting(Account::getStatus)
                 .isEqualTo(Account.Status.ACTIVE);
-        assertThat(authEventRepository.findByAccountSince(personId, Instant.now().minusSeconds(60)))
+        assertThat(authEventRepository.findByAccountSince(
+                        personId, Instant.now().minusSeconds(60)))
                 .filteredOn(event -> event.getEventType() == AuthEvent.EventType.ACCOUNT_DELETED)
                 .singleElement()
                 .extracting(AuthEvent::getResult)
@@ -460,7 +461,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .get()
                 .extracting(Workspace::getStatus)
                 .isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
-        assertThat(authEventRepository.findByAccountSince(persistedId(owner.getId()), Instant.now().minusSeconds(60)))
+        assertThat(authEventRepository.findByAccountSince(
+                        persistedId(owner.getId()), Instant.now().minusSeconds(60)))
                 .filteredOn(event -> event.getEventType() == AuthEvent.EventType.WORKSPACE_DELETION)
                 .singleElement()
                 .extracting(AuthEvent::getResult)

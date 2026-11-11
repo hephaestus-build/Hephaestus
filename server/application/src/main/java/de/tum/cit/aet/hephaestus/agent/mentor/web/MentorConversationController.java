@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.web;
 
-import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentProperties;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;

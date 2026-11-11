@@ -11,8 +11,6 @@ public enum EmailKind {
     WORKSPACE_ALERT("workspace-alert", true),
     /** Sent by an instance admin from the settings page to prove the relay works end to end. */
     TEST_MESSAGE("test-message", false),
-    /** The GDPR Art. 17 cooldown started; tells the person when the purge runs. */
-    ACCOUNT_DELETION_SCHEDULED("account-deletion-scheduled", false),
     ACCOUNT_SECURITY_CHANGED("account-security-changed", false),
     PRODUCT_FEEDBACK("product-feedback", true),
     PRODUCT_FEEDBACK_UPDATE("product-feedback-update", true),

@@ -103,8 +103,8 @@ describe("contextual sign-in", () => {
 		recordAccountDeleted(String(currentUser.id));
 		renderRouteAtWithRouter("/login");
 		const notice = await screen.findByRole("note", undefined, ROUTE_RENDER_WAIT);
-		expect(notice.textContent).toContain("Your account is scheduled for deletion");
-		expect(notice.textContent).toContain("contact your instance operator");
+		expect(notice.textContent).toContain("Your account is deleted");
+		expect(notice.textContent).toContain("nobody can sign in to this account again");
 		// A fresh render models the reload.
 		cleanup();
 		renderRouteAtWithRouter("/login");

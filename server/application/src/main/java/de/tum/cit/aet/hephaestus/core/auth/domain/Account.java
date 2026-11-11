@@ -65,10 +65,8 @@ public class Account {
     private @Nullable Instant updatedAt;
 
     /**
-     * Set when the account enters {@link Status#DELETING} (start of the GDPR-cooldown window,
-     * {@code hephaestus.auth.delete-cooldown}, default 48h). Once it is older than the cooldown,
-     * {@code AccountHardDeleteSweeper} purges the account's personal/auth child rows and flips the
-     * row to {@link Status#DELETED}.
+     * Set when the account enters {@link Status#DELETING}. {@code AccountHardDeleteSweeper} then purges the account's
+     * personal and auth child rows and flips the row to {@link Status#DELETED}.
      */
     @Column(name = "deleted_at")
     @Nullable
@@ -131,7 +129,7 @@ public class Account {
         ACTIVE,
         /** An instance admin blocked the account: sessions are revoked and sign-in is refused until an unblock. */
         BLOCKED,
-        /** Sessions are revoked and login blocked immediately; erasure follows the configured cooldown. */
+        /** Sessions are revoked and login blocked immediately; erasure follows once the deletion commits. */
         DELETING,
         DELETED,
     }

@@ -143,6 +143,8 @@ export const AsksForARecentSignIn: Story = {
 	},
 	play: async () => {
 		const dialog = await screen.findByRole("dialog", { name: "Confirm access" });
-		await expect(within(dialog).getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
+		await expect(
+			within(dialog).getByRole("button", { name: "Continue with GitHub" }),
+		).toBeVisible();
 	},
 };
