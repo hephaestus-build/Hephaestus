@@ -82,12 +82,12 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0005](0005-two-role-runtime-via-conditional-on-property.md) | Two-role runtime topology via `@ConditionalOnProperty` | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0006](0006-llm-proxy-on-coordinator-trust-model.md) | LLM proxy stays on the coordinator (BYO trust model) | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0007](0007-sandbox-spi-shape.md) | Sandbox SPI shape — sealed VolumeMount + typed NetworkPolicy | Superseded by [0079](0079-one-agent-system.md) |
-| [0008](0008-webhook-runtime-role.md) | Webhook as a third runtime role (`webhook-server` container) | Accepted |
+| [0008](0008-webhook-runtime-role.md) | Webhook as a third runtime role (`webhook-server` container) | Superseded by [0080](0080-provider-events-go-to-a-postgresql-inbox.md) |
 | [0009](0009-worker-runtime-substrate-wss-control-channel.md) | Worker runtime substrate + WSS-over-443 control channel | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0010](0010-outbound-oauth-state-handrolled.md) | Hand-roll OAuth state for outbound per-workspace integrations | Accepted |
 | [0011](0011-integration-identity-not-wired-from-sync.md) | `integration_identity` is OAuth-fed, not sync-fed (tombstone) | Superseded by [0016](0016-unified-identity-keycloak-as-truth.md) |
 | [0012](0012-cross-instance-identity-safety-on-sync-paths.md) | Cross-instance identity safety on sync paths | Superseded by [0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md) |
-| [0013](0013-no-jetstream-dlq-stream.md) | No dedicated JetStream DLQ stream — poison handler ACKs after N redeliveries | Accepted |
+| [0013](0013-no-jetstream-dlq-stream.md) | No dedicated JetStream DLQ stream — poison handler ACKs after N redeliveries | Superseded by [0080](0080-provider-events-go-to-a-postgresql-inbox.md) |
 | [0014](0014-per-row-aes-gcm-aad-binding.md) | Per-row AES-GCM AAD binds ciphertext to record identity | Accepted |
 | [0015](0015-unified-integration-framework.md) | Unified integration framework — package layout and SPI surface | Superseded by [0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
 | [0016](0016-unified-identity-keycloak-as-truth.md) | Unified identity — SCM `User` is the authoritative person row, Keycloak `sub` is the persisted join key | Superseded by [0017](0017-replace-keycloak-with-spring-native-auth.md) |

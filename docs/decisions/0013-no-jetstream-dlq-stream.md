@@ -1,6 +1,6 @@
 # ADR 0013: No dedicated JetStream DLQ stream — poison handler ACKs after N redeliveries
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md)
 **Date:** 2026-05-25
 **Authors:** Integration framework polish (#1198), Wave 9 revert
 

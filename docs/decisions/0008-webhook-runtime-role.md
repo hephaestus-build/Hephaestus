@@ -1,6 +1,6 @@
 # ADR 0008: Webhook as a third runtime role (`webhook-server` container)
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md)
 **Date:** 2026-05-20
 **Authors:** Webhook substrate epic (#1110)
 **Amended by:** [ADR 0057](0057-one-heph-conversation-per-developer.md), [ADR 0066](0066-the-webhook-receiver-has-no-database.md), [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md)
