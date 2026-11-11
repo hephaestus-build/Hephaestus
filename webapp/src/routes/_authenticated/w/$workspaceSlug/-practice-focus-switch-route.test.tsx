@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -112,7 +113,7 @@ const readsOf = (path: string) => requests.filter((url) => url.pathname.endsWith
 /** The workspace page with the group open over it, reached the way a reader reaches it. */
 async function openWorkspaceGroup() {
 	const { router } = renderRouteAtWithRouter(WORKSPACE_PAGE, appQueryClient());
-	fireEvent.click(
+	await userEvent.click(
 		await screen.findByRole(
 			"button",
 			{ name: `Open group ${packagingGroup.name}` },
@@ -129,7 +130,7 @@ async function switchTo(
 	router: { state: { location: { pathname: string } } },
 ) {
 	const group = screen.getByRole("dialog", { name: packagingGroup.name });
-	fireEvent.click(within(group).getByRole("button", { name }));
+	await userEvent.click(within(group).getByRole("button", { name }));
 	await waitFor(() => {
 		expect(router.state.location.pathname).toBe(pathname);
 	}, ROUTE_RENDER_WAIT);
@@ -163,19 +164,19 @@ describe("going between the Practice profile and Practices across the workspace"
 		expect(router.state.location.search).toMatchObject({ detail: GROUP });
 	});
 
-	it("keeps history bounded between the list of every group and the workspace page", async () => {
+	it("keeps one history step between the group list and workspace page", async () => {
 		const { router } = renderRouteAtWithRouter(WORKSPACE_PAGE, appQueryClient());
 		await screen.findByRole("button", { name: TO_OWN_GROUPS }, ROUTE_RENDER_WAIT);
 		const origin = router.history.length;
 
-		fireEvent.click(await screen.findByRole("button", { name: TO_OWN_GROUPS }));
+		await userEvent.click(await screen.findByRole("button", { name: TO_OWN_GROUPS }));
 		await waitFor(() => {
 			expect(router.state.location.pathname).toBe(PROFILE);
 		}, ROUTE_RENDER_WAIT);
 		expect(router.state.location.search).toMatchObject({ detail: ALL_GROUPS });
 		await screen.findByRole("dialog", { name: "All practice groups" }, ROUTE_RENDER_WAIT);
 
-		fireEvent.click(
+		await userEvent.click(
 			await screen.findByRole("button", { name: TO_ALL_GROUPS }, ROUTE_RENDER_WAIT),
 		);
 		await waitFor(() => {
@@ -198,7 +199,7 @@ describe("going between the Practice profile and Practices across the workspace"
 		await switchTo(TO_PROFILE, PROFILE, router);
 		const afterSwitch = router.history.length;
 
-		fireEvent.click(
+		await userEvent.click(
 			within(screen.getByRole("dialog", { name: packagingGroup.name })).getByRole("button", {
 				name: "Close",
 			}),
@@ -221,7 +222,7 @@ describe("going between the Practice profile and Practices across the workspace"
 		const afterSwitch = router.history.length;
 
 		// The reader opens a practice over the group the switch opened: a new step, without the mark.
-		fireEvent.click(
+		await userEvent.click(
 			await screen.findByRole(
 				"button",
 				{ name: `Open practice ${practice.name}` },
@@ -238,7 +239,7 @@ describe("going between the Practice profile and Practices across the workspace"
 		expect(router.state.location.state.focusSwitch).toBeUndefined();
 
 		// The next switch adds a step instead of replacing the level the reader opened.
-		fireEvent.click(
+		await userEvent.click(
 			await screen.findByRole(
 				"button",
 				{ name: `See this practice across the workspace: ${practice.name}` },
@@ -266,7 +267,7 @@ describe("going between the Practice profile and Practices across the workspace"
 			`${PROFILE}?detail=${encodeURIComponent(JSON.stringify([GROUP, `practice:${practice.slug}`]))}`,
 			appQueryClient(),
 		);
-		fireEvent.click(
+		await userEvent.click(
 			await screen.findByRole(
 				"button",
 				{ name: `See this practice across the workspace: ${practice.name}` },
@@ -282,7 +283,7 @@ describe("going between the Practice profile and Practices across the workspace"
 		});
 
 		// A practice row goes to that practice over its group, never onto the levels already open.
-		fireEvent.click(
+		await userEvent.click(
 			await screen.findByRole(
 				"button",
 				{ name: "Open in your Practice profile Scope the change to one concern" },

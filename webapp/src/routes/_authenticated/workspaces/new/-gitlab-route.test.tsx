@@ -20,7 +20,10 @@ import {
 	ROUTE_RENDER_WAIT,
 } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/workspaces/new/gitlab"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(
+	() => loadRouteCode("/workspaces/new/gitlab", "/w/hephaestus/activity"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 // The GitLab instance the shared fixtures configure a login for and link the current user on.
 const lrz = "https://gitlab.lrz.de";

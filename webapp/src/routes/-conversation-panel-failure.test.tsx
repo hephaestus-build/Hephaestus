@@ -12,7 +12,10 @@ import { sleep } from "@/test/async";
 import { ConversationFake } from "@/test/conversation-server";
 import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/teams"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => {
+	await loadRouteCode("/w/acme/teams");
+	await import("@/routes/-GlobalConversationPanel");
+}, ROUTE_RENDER_WAIT.timeout);
 
 // The conversation renders only while the panel is open, so this fails the panel the moment the
 // developer opens it.

@@ -23,7 +23,10 @@ import {
 	wireScan,
 } from "./-scan-server";
 
-beforeAll(() => loadRouteCode("/w/acme/admin/practices/scans"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(
+	() => loadRouteCode("/w/acme/admin/practices/scans", "/w/acme/practice-profile"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const LIST = "/w/acme/admin/practices/scans";
 

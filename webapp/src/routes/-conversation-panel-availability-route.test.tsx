@@ -14,7 +14,15 @@ import { ConversationFake } from "@/test/conversation-server";
 import { FakeEventSource } from "@/test/fake-event-source";
 import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/teams", "/w/acme/onboarding"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => {
+	await loadRouteCode(
+		"/w/acme/teams",
+		"/w/acme/onboarding",
+		"/w/acme/conversation",
+		"/w/acme/feedback/433",
+	);
+	await import("@/routes/-GlobalConversationPanel");
+}, ROUTE_RENDER_WAIT.timeout);
 
 function mockConversationPanel(preference: WorkspaceOnboarding) {
 	const conversations = {

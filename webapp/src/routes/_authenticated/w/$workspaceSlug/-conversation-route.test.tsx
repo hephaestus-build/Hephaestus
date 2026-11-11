@@ -15,7 +15,10 @@ import { FakeEventSource } from "@/test/fake-event-source";
 import { ObserverStub } from "@/test/observers";
 import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/conversation"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => {
+	await loadRouteCode("/w/acme/conversation");
+	await import("@/routes/-GlobalConversationPanel");
+}, ROUTE_RENDER_WAIT.timeout);
 
 /** The workspaces of `fakes`, each with its own conversation, for a member whose Hephaestus can answer. */
 function serve(...fakes: ConversationFake[]) {

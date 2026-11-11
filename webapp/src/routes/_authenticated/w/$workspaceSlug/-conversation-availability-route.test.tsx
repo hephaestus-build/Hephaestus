@@ -11,7 +11,10 @@ import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { ConversationFake } from "@/test/conversation-server";
 import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/conversation", "/w/acme/teams"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => {
+	await loadRouteCode("/w/acme/conversation", "/w/acme/teams");
+	await import("@/routes/-GlobalConversationPanel");
+}, ROUTE_RENDER_WAIT.timeout);
 
 it("keeps an existing conversation readable under No AI and restores its composer after opting in", async () => {
 	let preference: WorkspaceOnboarding = {

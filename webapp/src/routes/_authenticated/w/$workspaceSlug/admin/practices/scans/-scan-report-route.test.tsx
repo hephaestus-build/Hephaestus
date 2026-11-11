@@ -26,7 +26,11 @@ import {
 } from "./-scan-server";
 
 beforeAll(
-	() => loadRouteCode("/w/acme/admin/practices/reviews/problems", "/w/acme/admin/practices/scans/a0000000-0000-4000-8000-000000000001"),
+	() =>
+		loadRouteCode(
+			"/w/acme/admin/practices/reviews/problems",
+			"/w/acme/admin/practices/scans/a0000000-0000-4000-8000-000000000001",
+		),
 	ROUTE_RENDER_WAIT.timeout,
 );
 

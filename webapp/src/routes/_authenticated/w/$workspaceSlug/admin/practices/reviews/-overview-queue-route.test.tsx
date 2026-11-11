@@ -1,5 +1,5 @@
 import { focusManager, type QueryClient } from "@tanstack/react-query";
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,7 +60,11 @@ async function poll(queryClient: QueryClient) {
 	const query = { queryKey: getReviewQueueQueryKey({ path: { workspaceSlug: "acme" } }) };
 	await act(async () => {
 		await vi.advanceTimersByTimeAsync(QUEUE_POLL_MS);
-		await queryClient.getQueryCache().find(query)?.promise;
+		const queued = queryClient.getQueryCache().find(query);
+		if (queued === undefined) {
+			throw new Error("The overview must register its queue query before polling");
+		}
+		await queued.promise;
 	});
 }
 
@@ -108,7 +112,7 @@ describe("practice review queue on the overview", () => {
 
 		act(() => focusManager.setFocused(true));
 		await poll(queryClient);
-		await waitFor(() => expect(queue.reads()).toBeGreaterThan(2));
+		expect(queue.reads()).toBeGreaterThan(2);
 	});
 });
 

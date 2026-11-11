@@ -6,7 +6,7 @@ import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(() => loadRouteCode("/w/acme/activity", "/"), ROUTE_RENDER_WAIT.timeout);
 
 const NOTICE = "You cannot open the workspace “foreign”.";
 

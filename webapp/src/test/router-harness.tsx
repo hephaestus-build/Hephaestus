@@ -18,8 +18,8 @@ import { routeTree } from "@/routeTree.gen";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 
 /**
- * Bounds asynchronous route work and code-loading setup. Load split modules with `loadRouteCode`
- * before the test starts, so imports do not consume the test's own execution budget.
+ * Bounds route-code setup hooks and DOM queries; each test keeps its own execution timeout.
+ * Load split modules with `loadRouteCode` before the test starts.
  */
 export const ROUTE_RENDER_WAIT = { timeout: 30_000 } as const;
 
