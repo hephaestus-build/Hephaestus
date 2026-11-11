@@ -1,6 +1,6 @@
 # ADR 0070: 1.0 is a cutover release
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md)
 **Date:** 2026-10-28
 **Authors:** Felix T.J. Dietrich
 **Amends:** ADR 0058 (§ Supported deployment, § Notice and removal, gate 10), ADR 0041, ADR 0042 and ADR 0005.
