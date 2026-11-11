@@ -20743,6 +20743,14 @@ export const WorkspaceListItemSchema = {
             format: 'int64',
             description: 'Unique identifier of the workspace'
         },
+        linkHosts: {
+            type: 'array',
+            description: 'Hosts that a link in model-written text may point to in this workspace: Hephaestus and the workspace\'s providers. A host that starts with a dot also allows its subdomains. Any other link shows as text.',
+            items: {
+                type: 'string'
+            },
+            uniqueItems: true
+        },
         practicesEnabled: {
             type: 'boolean',
             description: 'Whether practice reviews are on'
@@ -20785,6 +20793,7 @@ export const WorkspaceListItemSchema = {
         'createdAt',
         'displayName',
         'id',
+        'linkHosts',
         'practicesEnabled',
         'publishesPublicActivity',
         'status',

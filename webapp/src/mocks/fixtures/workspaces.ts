@@ -21,6 +21,7 @@ export function workspaceListItem(
 		status: "ACTIVE",
 		practicesEnabled: false,
 		publishesPublicActivity: false,
+		linkHosts: [],
 		...overrides,
 	};
 }

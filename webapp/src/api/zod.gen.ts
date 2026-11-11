@@ -6270,6 +6270,7 @@ export const zWorkspaceListItem = z.object({
     createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
     displayName: z.string(),
     id: z.int(),
+    linkHosts: z.array(z.string()),
     practicesEnabled: z.boolean(),
     providerType: z.enum([
         'GITHUB',

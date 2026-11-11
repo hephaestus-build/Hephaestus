@@ -323,7 +323,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 			queryClient.setQueryData<WorkspaceListItem[]>(listWorkspacesQueryKey(), (workspaces) => [
 				...(workspaces ?? []),
 				// Nothing is public yet; the refetch below says what the server reads.
-				{ ...data, publishesPublicActivity: false },
+				{ ...data, publishesPublicActivity: false, linkHosts: [] },
 			]);
 			toast.success(`Workspace “${data.displayName}” created`);
 			void navigate({

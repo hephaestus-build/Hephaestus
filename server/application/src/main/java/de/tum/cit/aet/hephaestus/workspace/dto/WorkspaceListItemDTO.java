@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceListData;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -42,12 +43,20 @@ public record WorkspaceListItemDTO(
         @Schema(
                 description = "Whether the public activity page is live: the instance allows it and the workspace"
                         + " turned it on")
-        Boolean publishesPublicActivity) {
+        Boolean publishesPublicActivity,
+
+        @NonNull
+        @Schema(
+                description = "Hosts that a link in model-written text may point to in this workspace: Hephaestus and"
+                        + " the workspace's providers. A host that starts with a dot also allows its subdomains."
+                        + " Any other link shows as text.")
+        Set<String> linkHosts) {
     public static WorkspaceListItemDTO from(
             WorkspaceListData workspace,
             @Nullable IdentityProviderType providerType,
             String workspaceAddress,
-            boolean instanceAllowsPublicActivity) {
+            boolean instanceAllowsPublicActivity,
+            Set<String> linkHosts) {
         return new WorkspaceListItemDTO(
                 workspace.id(),
                 workspace.workspaceSlug(),
@@ -60,6 +69,7 @@ public record WorkspaceListItemDTO(
                 workspace.practicesEnabled(),
                 instanceAllowsPublicActivity
                         && workspace.status() == WorkspaceStatus.ACTIVE
-                        && Boolean.TRUE.equals(workspace.publicActivityEnabled()));
+                        && Boolean.TRUE.equals(workspace.publicActivityEnabled()),
+                linkHosts);
     }
 }

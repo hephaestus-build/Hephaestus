@@ -5,6 +5,7 @@ import {
 	getPublicActivityOnboardingOptions,
 	getWorkspaceOptions,
 } from "@/api/@tanstack/react-query.gen";
+import { ModelLinkHostsContext } from "@/components/common/model-links";
 import { PublicActivityNotice } from "@/components/onboarding/PublicActivityNotice";
 import { noticeCannotOpenWorkspace } from "@/components/workspace/cannot-open-workspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
@@ -117,6 +118,8 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
  * notice waits out. A user view answers for no one, and an instance admin who administers the
  * workspace without a membership has no workspace here, so neither sees it.
  */
+const NO_HOSTS: readonly string[] = [];
+
 function WorkspaceLayout() {
 	const { workspaceSlug } = Route.useParams();
 	const { userView } = useAuth();
@@ -136,7 +139,8 @@ function WorkspaceLayout() {
 		enabled: workspace?.publishesPublicActivity === true && userView === undefined && !settingUp,
 	});
 	return (
-		<>
+		// Model-written links on every page of the workspace may point only to its own hosts.
+		<ModelLinkHostsContext.Provider value={workspace?.linkHosts ?? NO_HOSTS}>
 			{workspace !== undefined && notice !== undefined && (
 				<PublicActivityNotice
 					{...notice}
@@ -147,6 +151,6 @@ function WorkspaceLayout() {
 				/>
 			)}
 			<Outlet />
-		</>
+		</ModelLinkHostsContext.Provider>
 	);
 }

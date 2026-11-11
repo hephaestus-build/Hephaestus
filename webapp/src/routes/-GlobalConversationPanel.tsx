@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
+import { ModelLinkHostsContext } from "@/components/common/model-links";
 import { RemovableToken } from "@/components/common/RemovableToken";
 import { ConversationPanel } from "@/components/conversation/ConversationPanel";
 import type { ThreadFocus } from "@/components/conversation/ConversationTimeline";
@@ -28,9 +29,14 @@ import { MainConversation, ThreadConversation } from "./-ConversationView";
  * the member's AI choice there: whenever Hephaestus cannot answer them, the launcher hides rather than
  * letting a send fail.
  */
+const NO_HOSTS: readonly string[] = [];
+
 export default function GlobalConversationPanel() {
-	const { workspaceSlug } = useActiveWorkspaceSlug();
+	const { workspaceSlug, workspaces } = useActiveWorkspaceSlug();
 	const { isAuthenticated, isLoading } = useAuth();
+	const linkHosts = workspaces.find(
+		(workspace) => workspace.workspaceSlug === workspaceSlug,
+	)?.linkHosts;
 	const preference = useQuery({
 		...getMemberOnboardingOptions({ path: { workspaceSlug: workspaceSlug ?? "" } }),
 		enabled: Boolean(workspaceSlug),
@@ -59,7 +65,10 @@ export default function GlobalConversationPanel() {
 			}}
 			errorComponent={ConversationPanelFailed}
 		>
-			<WorkspaceConversationPanel key={workspaceSlug} workspaceSlug={workspaceSlug} />
+			{/* The panel sits outside the workspace layout, so it names the workspace's link hosts itself. */}
+			<ModelLinkHostsContext.Provider value={linkHosts ?? NO_HOSTS}>
+				<WorkspaceConversationPanel key={workspaceSlug} workspaceSlug={workspaceSlug} />
+			</ModelLinkHostsContext.Provider>
 		</CatchBoundary>
 	);
 }

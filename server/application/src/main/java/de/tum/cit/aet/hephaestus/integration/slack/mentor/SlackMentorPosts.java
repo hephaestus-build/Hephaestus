@@ -7,15 +7,20 @@ import com.slack.api.model.block.MarkdownBlock;
 import com.slack.api.model.block.composition.FeedbackButtonObject;
 import com.slack.api.model.block.composition.PlainTextObject;
 import com.slack.api.model.block.element.FeedbackButtonsElement;
+import de.tum.cit.aet.hephaestus.core.ModelLinks;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorLinkDTO;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 /** What Hephaestus's Slack messages look like: answer blocks, notification text, feedback buttons and post metadata. */
@@ -173,18 +178,63 @@ public final class SlackMentorPosts {
     }
 
     /** Each of Hephaestus's messages as the app shows it: its text, then what it showed, quoted. */
-    static Reply reply(List<MentorEntryDTO> messages) {
-        StringBuilder text = new StringBuilder();
-        List<Reply.Shown> shown = new ArrayList<>();
+    static Reply reply(List<MentorEntryDTO> messages, Set<String> linkHosts) {
+        StringBuilder raw = new StringBuilder();
+        List<MentorLinkDTO> links = new ArrayList<>();
+        List<String> quotes = new ArrayList<>();
         for (MentorEntryDTO message : messages) {
-            paragraph(text, message.text());
+            paragraph(raw, message.text());
             for (MentorLinkDTO link : message.links()) {
                 String quote = quote(link);
-                paragraph(text, quote);
-                shown.add(new Reply.Shown(link.kind(), link.id(), quote, text.length() - quote.length()));
+                paragraph(raw, quote);
+                links.add(link);
+                quotes.add(quote);
             }
         }
-        return new Reply(text.toString(), shown);
+        // The link rule reads the reply as Slack does: as one text, since parts can join into one block.
+        String text = ModelLinks.neutralize(raw.toString(), linkHosts);
+        List<Reply.Shown> shown = new ArrayList<>();
+        int from = 0;
+        for (int index = 0; index < links.size(); index++) {
+            MentorLinkDTO link = links.get(index);
+            String quote = ModelLinks.neutralize(quotes.get(index), linkHosts);
+            int start = text.indexOf(quote, from);
+            if (start < 0) {
+                // The rule changed the quote in its context, so this reply never counts it as shown.
+                shown.add(new Reply.Shown(link.kind(), link.id(), quotes.get(index), text.length()));
+                continue;
+            }
+            shown.add(new Reply.Shown(link.kind(), link.id(), quote, start));
+            from = start + quote.length();
+        }
+        return new Reply(text, shown);
+    }
+
+    /**
+     * The part of a partial answer that a stream may show. Finished paragraphs go out under the link rule. A link never
+     * spans paragraphs, so they read as the start of the finished reply. The paragraph still being written goes out up
+     * to the first place where a link could start ({@code [}, {@code <}, a web address, or a last word that may grow
+     * into one), so the stream never shows a link that the finished reply would not.
+     */
+    static String streamable(String partial, Set<String> linkHosts) {
+        int paragraph = partial.lastIndexOf("\n\n");
+        String done = paragraph < 0 ? "" : ModelLinks.neutralize(partial.substring(0, paragraph), linkHosts) + "\n\n";
+        String writing = paragraph < 0 ? partial : partial.substring(paragraph + 2);
+        int cut = writing.length();
+        Matcher risky = LINK_START.matcher(writing);
+        if (risky.find()) cut = risky.start();
+        int word = lastWordStart(writing);
+        String last = writing.substring(word).toLowerCase(Locale.ROOT);
+        if (!last.isEmpty() && ("https://".startsWith(last) || "http://".startsWith(last) || "www.".startsWith(last)))
+            cut = Math.min(cut, word);
+        return done + writing.substring(0, cut);
+    }
+
+    private static int lastWordStart(String text) {
+        int at = text.length();
+        while (at > 0 && (Character.isLetterOrDigit(text.charAt(at - 1)) || ":/.".indexOf(text.charAt(at - 1)) >= 0))
+            at--;
+        return at;
     }
 
     private static void paragraph(StringBuilder text, String part) {
@@ -198,6 +248,10 @@ public final class SlackMentorPosts {
     }
 
     private static final String QUOTE_MARKER = "> ";
+
+    // Where a link may begin in text that is still being written.
+    private static final Pattern LINK_START =
+            Pattern.compile("[\\[<]|!(?:\\[|$)|(?<![\\p{L}\\p{N}])(?i:https?:|www\\.)");
 
     private static String quote(MentorLinkDTO link) {
         return QUOTE_MARKER + link.text().strip().replace("\n", "\n" + QUOTE_MARKER);

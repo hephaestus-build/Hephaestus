@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -18,13 +19,19 @@ public class ConnectionMetadataQuery {
         this.connectionRepository = connectionRepository;
     }
 
-    /** Active SCM kinds for the workspace list, without loading configurations or credentials. */
-    public Map<Long, IntegrationKind> findActiveProviderKinds(Collection<Long> workspaceIds) {
-        if (workspaceIds.isEmpty()) return Map.of();
-        return connectionRepository.findActiveWorkspaceProviders(workspaceIds).stream()
+    /** Every active connection of the listed workspaces with its configuration, in one read; never a credential. */
+    public List<ConnectionRepository.WorkspaceConfigRow> findActiveConnections(Collection<Long> workspaceIds) {
+        return workspaceIds.isEmpty() ? List.of() : connectionRepository.findActiveWorkspaceConfigs(workspaceIds);
+    }
+
+    /** The active SCM kind of each workspace among {@code connections}. */
+    public static Map<Long, IntegrationKind> providerKinds(List<ConnectionRepository.WorkspaceConfigRow> connections) {
+        return connections.stream()
+                .filter(row -> row.kind() == IntegrationKind.GITHUB || row.kind() == IntegrationKind.GITLAB)
                 .collect(Collectors.toMap(
-                        ConnectionRepository.WorkspaceProviderRow::workspaceId,
-                        ConnectionRepository.WorkspaceProviderRow::kind));
+                        ConnectionRepository.WorkspaceConfigRow::workspaceId,
+                        ConnectionRepository.WorkspaceConfigRow::kind,
+                        (first, second) -> first));
     }
 
     /** Display metadata and credential presence only; this read never decrypts a credential. */

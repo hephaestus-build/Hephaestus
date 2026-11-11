@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMetadataQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
@@ -19,6 +20,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -34,6 +36,7 @@ public class WorkspaceQueryService {
     private final MembershipRepository workspaceMembershipRepository;
     private final ConnectionService connectionService;
     private final ConnectionMetadataQuery connectionMetadata;
+    private final ModelLinkHosts modelLinkHosts;
     private final PublicActivityPolicy publicActivityPolicy;
 
     private final Map<IntegrationKind, WorkspaceProviderAvailability> providerAvailability;
@@ -47,6 +50,7 @@ public class WorkspaceQueryService {
             MembershipRepository workspaceMembershipRepository,
             ConnectionService connectionService,
             ConnectionMetadataQuery connectionMetadata,
+            ModelLinkHosts modelLinkHosts,
             PublicActivityPolicy publicActivityPolicy,
             WorkspaceProperties workspaceProperties,
             WorkspaceSubdomainProperties subdomains,
@@ -56,6 +60,7 @@ public class WorkspaceQueryService {
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.connectionService = connectionService;
         this.connectionMetadata = connectionMetadata;
+        this.modelLinkHosts = modelLinkHosts;
         this.publicActivityPolicy = publicActivityPolicy;
         this.workspaceProperties = workspaceProperties;
         this.subdomains = subdomains;
@@ -92,8 +97,10 @@ public class WorkspaceQueryService {
                 : List.of(viewed.workspaceId());
         if (ids.isEmpty()) return List.of();
         var workspaces = workspaceRepository.findListDataByIds(ids, viewed != null);
-        var kinds = connectionMetadata.findActiveProviderKinds(
-                workspaces.stream().map(WorkspaceListData::id).toList());
+        var workspaceIds = workspaces.stream().map(WorkspaceListData::id).toList();
+        var connections = connectionMetadata.findActiveConnections(workspaceIds);
+        var kinds = ConnectionMetadataQuery.providerKinds(connections);
+        var linkHosts = modelLinkHosts.forConnections(workspaceIds, connections);
         return workspaces.stream()
                 .sorted(Comparator.comparing(WorkspaceListData::displayName, String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(WorkspaceListData::workspaceSlug, String.CASE_INSENSITIVE_ORDER))
@@ -103,7 +110,8 @@ public class WorkspaceQueryService {
                                 .map(IdentityProviderType::from)
                                 .orElse(null),
                         workspaceAddress(workspace.workspaceSlug()),
-                        publicActivityAllowed))
+                        publicActivityAllowed,
+                        linkHosts.getOrDefault(workspace.id(), Set.of())))
                 .toList();
     }
 

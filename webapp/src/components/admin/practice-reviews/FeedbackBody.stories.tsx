@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor, within } from "storybook/test";
 
+import { ModelLinkHostsContext } from "@/components/common/model-links";
+
 import { FeedbackBody } from "./FeedbackBody";
 
 const body =
@@ -10,6 +12,14 @@ const meta = {
 	component: FeedbackBody,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 768] } },
 	tags: ["autodocs"],
+	// A workspace page lists the hosts that its model-written links may reach; here, the example host.
+	decorators: [
+		(Story) => (
+			<ModelLinkHostsContext.Provider value={["example.com"]}>
+				<Story />
+			</ModelLinkHostsContext.Provider>
+		),
+	],
 	args: {
 		feedback: { body, destination: "ON_WORK", textHidden: false },
 	},
@@ -148,6 +158,7 @@ export const UntrustedMarkdown: Story = {
 				"[unsafe link](javascript:alert(1))",
 				"<img src=x onerror=alert(1)>",
 				"[safe link](https://example.com/docs)",
+				"[outside link](https://attacker.example/?q=context)",
 			].join("\n\n"),
 			destination: "ON_WORK",
 			textHidden: false,
@@ -160,6 +171,9 @@ export const UntrustedMarkdown: Story = {
 		await expect(
 			canvas.getByRole("link", { name: "safe link (opens in a new tab)" }),
 		).toHaveAttribute("href", "https://example.com/docs");
+		// A host outside the workspace shows the address as code, never as a link.
+		await expect(canvas.queryByRole("link", { name: /outside link/u })).not.toBeInTheDocument();
+		canvas.getByText("https://attacker.example/?q=context");
 	},
 };
 

@@ -37,6 +37,7 @@ function listItem(
 		practicesEnabled: true,
 		providerType,
 		publishesPublicActivity: false,
+		linkHosts: [],
 		status: "ACTIVE",
 		workspaceSlug: slug,
 		workspaceAddress: `https://hephaestus.example.test/w/${slug}`,

@@ -181,7 +181,7 @@ export function PracticeDefinitionPreview({
 						{/* The editor promises "Markdown is supported", and this is the one definition field
 						    that uses it. `max-w-2xl` because the drawer reaches 62rem. */}
 						<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "max-w-2xl")}>
-							<UntrustedMarkdown headingLevel={headingLevel === 4 ? 5 : 4}>
+							<UntrustedMarkdown headingLevel={headingLevel === 4 ? 5 : 4} authored>
 								{definition.criteria}
 							</UntrustedMarkdown>
 						</div>

@@ -94,17 +94,15 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
             Long id, IntegrationKind kind, ConnectionConfig config, Instant createdAt, boolean credentialsPresent) {}
 
     @Query("""
-        SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WorkspaceProviderRow(
-               c.workspace.id, c.kind)
+        SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WorkspaceConfigRow(
+               c.workspace.id, c.kind, c.config)
         FROM Connection c
         WHERE c.workspace.id IN :workspaceIds
           AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE
-          AND c.kind IN (de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB,
-                         de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITLAB)
         """)
-    List<WorkspaceProviderRow> findActiveWorkspaceProviders(@Param("workspaceIds") Collection<Long> workspaceIds);
+    List<WorkspaceConfigRow> findActiveWorkspaceConfigs(@Param("workspaceIds") Collection<Long> workspaceIds);
 
-    record WorkspaceProviderRow(Long workspaceId, IntegrationKind kind) {}
+    record WorkspaceConfigRow(Long workspaceId, IntegrationKind kind, ConnectionConfig config) {}
 
     /** Whether another workspace still removes what its disconnected connection to this instance left at the provider. */
     @WorkspaceAgnostic("A connect refuses an instance whose removal another workspace has not finished")
