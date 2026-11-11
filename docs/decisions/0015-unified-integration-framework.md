@@ -1,6 +1,6 @@
 # ADR 0015: Unified integration framework — package layout and SPI surface
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md)
 **Date:** 2026-05-26
 **Authors:** Felix T.J. Dietrich
 

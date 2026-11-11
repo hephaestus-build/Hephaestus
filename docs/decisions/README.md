@@ -86,10 +86,10 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0009](0009-worker-runtime-substrate-wss-control-channel.md) | Worker runtime substrate + WSS-over-443 control channel | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0010](0010-outbound-oauth-state-handrolled.md) | Hand-roll OAuth state for outbound per-workspace integrations | Accepted |
 | [0011](0011-integration-identity-not-wired-from-sync.md) | `integration_identity` is OAuth-fed, not sync-fed (tombstone) | Superseded by [0016](0016-unified-identity-keycloak-as-truth.md) |
-| [0012](0012-cross-instance-identity-safety-on-sync-paths.md) | Cross-instance identity safety on sync paths | Accepted |
+| [0012](0012-cross-instance-identity-safety-on-sync-paths.md) | Cross-instance identity safety on sync paths | Superseded by [0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md) |
 | [0013](0013-no-jetstream-dlq-stream.md) | No dedicated JetStream DLQ stream — poison handler ACKs after N redeliveries | Accepted |
 | [0014](0014-per-row-aes-gcm-aad-binding.md) | Per-row AES-GCM AAD binds ciphertext to record identity | Accepted |
-| [0015](0015-unified-integration-framework.md) | Unified integration framework — package layout and SPI surface | Accepted |
+| [0015](0015-unified-integration-framework.md) | Unified integration framework — package layout and SPI surface | Superseded by [0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
 | [0016](0016-unified-identity-keycloak-as-truth.md) | Unified identity — SCM `User` is the authoritative person row, Keycloak `sub` is the persisted join key | Superseded by [0017](0017-replace-keycloak-with-spring-native-auth.md) |
 | [0017](0017-replace-keycloak-with-spring-native-auth.md) | Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs) | Superseded by [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) |
 | [0018](0018-pg-partman-for-auth-event-partitioning.md) | pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions) | Accepted |
@@ -97,8 +97,8 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0020](0020-context-fabric-everything-is-an-integration.md) | Context Fabric — everything is an integration, only practice review and mentor are native | Superseded by [0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) |
 | [0021](0021-observations-feedback-synthesis-seam.md) | Separate observations from feedback | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
 | [0022](0022-observation-presence-assessment-and-schema-cleanup.md) | Observation = presence × assessment (drop `Practice.kind`); reaction anchors on feedback; ruthless column cleanup | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
-| [0023](0023-outline-documentation-integration.md) | Outline documentation integration — a content source, not a detection surface | Accepted |
-| [0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md) | Integration sync lifecycle — drift tombstones and mirror erasure are two different operations | Accepted |
+| [0023](0023-outline-documentation-integration.md) | Outline documentation integration — a content source, not a detection surface | Superseded by [0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| [0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md) | Integration sync lifecycle — drift tombstones and mirror erasure are two different operations | Superseded by [0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md) |
 | [0025](0025-agent-job-queue-on-postgresql.md) | Agent job queue moves off NATS onto PostgreSQL | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0026](0026-per-purpose-agent-bindings-and-llm-governance.md) | Per-purpose agent bindings and governed OpenAI-compatible LLM catalog | Superseded by [0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) |
 | [0027](0027-dialog-lifetime-and-where-a-write-outcome-lands.md) | Dialog lifetime, and where a write's outcome lands when the dialog is gone | Accepted |
@@ -167,5 +167,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) | The signed Helm chart is the only supported deployment, and one host runs it on k3s | Accepted |
 | [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) | CI builds each image once, a release signs one lock that names it, and hosts pull that lock | Accepted |
 | [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) | Members see activity, a workspace can publish its public work, and private practice feedback has one reader | Accepted |
+| [0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md) | A provider mirror changes only on a definitive provider answer, and a tombstone is never an erasure | Accepted |
+| [0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) | Each provider has one adapter behind a vendor-neutral SPI, and Outline is a documentation source with a link-only identity | Accepted |
 
 Template: [0000-template.md](0000-template.md).
