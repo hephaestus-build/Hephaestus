@@ -19,7 +19,7 @@ import { zBrowserFaultsReport } from "@/api/zod.gen";
 import type environment from "@/environment";
 import { server } from "@/mocks/server";
 import { installPreloadErrorReload } from "@/runtime/preload-error";
-import { sleep } from "@/test/async";
+import { deferred, sleep } from "@/test/async";
 
 import {
 	type BrowserFaults,
@@ -80,10 +80,18 @@ async function renderInRoot(faults: BrowserFaults, content: ReactNode) {
 async function renderOutsideAct(faults: BrowserFaults, content: ReactNode) {
 	const actEnvironment: unknown = Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT");
 	Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", false);
-	const root = createRoot(document.createElement("div"), rootErrorHandlers(faults));
+	const handled = deferred();
+	const handlers = rootErrorHandlers(faults);
+	const root = createRoot(document.createElement("div"), {
+		...handlers,
+		onUncaughtError: (error, errorInfo) => {
+			handlers.onUncaughtError?.(error, errorInfo);
+			handled.resolve();
+		},
+	});
 	try {
 		root.render(content);
-		await sleep(50);
+		await handled.promise;
 	} finally {
 		root.unmount();
 		Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);

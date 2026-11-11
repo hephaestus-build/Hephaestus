@@ -1,11 +1,10 @@
-import { setTimeout as sleep } from "node:timers/promises";
-
-import { focusManager } from "@tanstack/react-query";
-import { screen, waitFor, within } from "@testing-library/react";
+import { focusManager, type QueryClient } from "@tanstack/react-query";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { getReviewQueueQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { ReviewQueue as ReviewQueueAnswer } from "@/api/types.gen";
 import {
 	busyReviewQueue,
@@ -13,27 +12,22 @@ import {
 	practiceReviewOverview,
 	reviews,
 } from "@/components/admin/practice-reviews/fixtures";
-import type { QueueState } from "@/components/admin/practice-reviews/review-queue";
-import type * as ReviewQueueModule from "@/components/admin/practice-reviews/review-queue";
+import { QUEUE_POLL_MS, type QueueState } from "@/components/admin/practice-reviews/review-queue";
 import { server } from "@/mocks/server";
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
 import { ObserverStub } from "@/test/observers";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// A short poll, so the test watches several re-reads in real time instead of faking the clock
-// under the whole router.
-vi.mock("@/components/admin/practice-reviews/review-queue", async (importOriginal) => ({
-	...(await importOriginal<typeof ReviewQueueModule>()),
-	QUEUE_POLL_MS: 100,
-}));
-
 beforeAll(
-	() => loadRouteCode("/w/acme/admin/practices/reviews", "/w/acme/admin/practices/reviews/overview"),
+	() =>
+		loadRouteCode("/w/acme/admin/practices/reviews", "/w/acme/admin/practices/reviews/overview"),
 	ROUTE_RENDER_WAIT.timeout,
 );
 
 // jsdom needs an IntersectionObserver stub for paged lists.
 beforeEach(() => {
+	// Query polling uses intervals; router transitions and HTTP completion keep their real timers.
+	vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
 	vi.stubGlobal("IntersectionObserver", ObserverStub);
 });
 
@@ -62,51 +56,59 @@ function serveQueue(...answers: ReviewQueueAnswer[]) {
 	return { reads: () => reads };
 }
 
-/** Long enough for several polls at the test's interval. */
-const settle = async () => sleep(600);
+async function poll(queryClient: QueryClient) {
+	const query = { queryKey: getReviewQueueQueryKey({ path: { workspaceSlug: "acme" } }) };
+	await act(async () => {
+		await vi.advanceTimersByTimeAsync(QUEUE_POLL_MS);
+		await queryClient.getQueryCache().find(query)?.promise;
+	});
+}
 
 afterEach(() => {
 	focusManager.setFocused(undefined);
+	vi.useRealTimers();
 });
 
 describe("practice review queue on the overview", () => {
 	it("re-reads the queue while reviews wait and stops once it is empty", async () => {
 		const queue = serveQueue(busyReviewQueue, busyReviewQueue, idleReviewQueue);
-		renderRouteAtWithRouter(OVERVIEW);
+		const { queryClient } = renderRouteAtWithRouter(OVERVIEW);
 
+		await screen.findByRole("link", { name: /^See all/u }, ROUTE_RENDER_WAIT);
+		await poll(queryClient);
+		expect(queue.reads()).toBe(2);
+		await poll(queryClient);
 		await screen.findByText("Nothing waits or runs.", undefined, ROUTE_RENDER_WAIT);
-		const readsWhenEmpty = queue.reads();
-		expect(readsWhenEmpty).toBe(3);
+		expect(queue.reads()).toBe(3);
 
-		await settle();
-		expect(queue.reads()).toBe(readsWhenEmpty);
+		await poll(queryClient);
+		expect(queue.reads()).toBe(3);
 	});
 
 	it("does not poll an empty queue", async () => {
 		const queue = serveQueue(idleReviewQueue);
-		renderRouteAtWithRouter(OVERVIEW);
+		const { queryClient } = renderRouteAtWithRouter(OVERVIEW);
 
 		await screen.findByText("Nothing waits or runs.", undefined, ROUTE_RENDER_WAIT);
-		await settle();
+		await poll(queryClient);
 		expect(queue.reads()).toBe(1);
 	});
 
 	it("pauses while the browser tab is hidden and resumes when it is back", async () => {
 		const queue = serveQueue(busyReviewQueue);
-		renderRouteAtWithRouter(OVERVIEW);
+		const { queryClient } = renderRouteAtWithRouter(OVERVIEW);
 
 		await screen.findByRole("link", { name: /^See all/u }, ROUTE_RENDER_WAIT);
-		await waitFor(() => expect(queue.reads()).toBeGreaterThan(1), ROUTE_RENDER_WAIT);
+		await poll(queryClient);
+		expect(queue.reads()).toBe(2);
 
-		focusManager.setFocused(false);
-		// A read already in flight may still land.
-		await settle();
-		const readsWhileHidden = queue.reads();
-		await settle();
-		expect(queue.reads()).toBe(readsWhileHidden);
+		act(() => focusManager.setFocused(false));
+		await poll(queryClient);
+		expect(queue.reads()).toBe(2);
 
-		focusManager.setFocused(true);
-		await waitFor(() => expect(queue.reads()).toBeGreaterThan(readsWhileHidden), ROUTE_RENDER_WAIT);
+		act(() => focusManager.setFocused(true));
+		await poll(queryClient);
+		await waitFor(() => expect(queue.reads()).toBeGreaterThan(2));
 	});
 });
 
