@@ -126,7 +126,8 @@ Each runs `vp run ci:<leg>`, then pipes `vp run --last-details` through `scripts
 Each crossed task gets a notice: `unpassed, cause unavailable`, with its reproduction command.
 The runner's text report does not distinguish a task failure from a task that it stopped.
 The report order does not identify the cause.
-The job summary links the raw task output and keeps the report, including cache hits and miss reasons.
+The job summary links the run attempt and keeps the report, including cache hits and miss reasons.
+Open the quality job and its **Quality gates** step to read the task output.
 
 The quality step keeps its native failure verdict.
 The report also exits nonzero for unpassed tasks.

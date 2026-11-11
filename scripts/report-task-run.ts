@@ -42,13 +42,13 @@ if (import.meta.main) {
 		GITHUB_RUN_ID: runId,
 		GITHUB_RUN_ATTEMPT: attempt,
 	} = process.env;
-	const logUrl =
+	const runAttemptUrl =
 		isSet(server) && isSet(repository) && isSet(runId) && isSet(attempt)
 			? `${server}/${repository}/actions/runs/${runId}/attempts/${attempt}`
 			: undefined;
 	for (const task of unpassed) {
 		const message =
-			`${task}: unpassed, cause unavailable. Reproduce with: vp run ${task}.${logUrl === undefined ? "" : ` Raw output: ${logUrl}`}`
+			`${task}: unpassed, cause unavailable.${runAttemptUrl === undefined ? "" : ` Run attempt: ${runAttemptUrl}`} | Reproduce with: vp run ${task}`
 				.replaceAll("%", "%25")
 				.replaceAll("\r", "%0D")
 				.replaceAll("\n", "%0A");
@@ -60,7 +60,10 @@ if (import.meta.main) {
 			unpassed.length === 0
 				? ""
 				: "Crossed tasks are **unpassed, cause unavailable**. This report does not distinguish failures from tasks the runner stopped.\n\n";
-		const source = logUrl === undefined ? "" : `[Raw task output](${logUrl})\n\n`;
+		const source =
+			runAttemptUrl === undefined
+				? ""
+				: `[Run attempt](${runAttemptUrl}). Open the quality job’s **Quality gates** step for task output.\n\n`;
 		appendFileSync(summary, `\n${explanation}${source}\`\`\`text\n${report.trim()}\n\`\`\`\n`);
 	}
 	process.exitCode = unpassed.length === 0 ? 0 : 1;

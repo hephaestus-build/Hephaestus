@@ -45,7 +45,7 @@ void test("reads a coloured report, which would otherwise name nothing and exit 
 	assert.deepEqual(unpassedTasks(coloured), ["gate:stories"]);
 });
 
-void test("the CLI emits unknown-cause notices and a raw log link without inferring a first failure", async (context) => {
+void test("the CLI emits unknown-cause notices and a run-attempt link without inferring a first failure", async (context) => {
 	const directory = await mkdtemp(path.join(tmpdir(), "task-report-"));
 	context.after(async () => rm(directory, { recursive: true, force: true }));
 	const summary = path.join(directory, "summary");
@@ -68,17 +68,16 @@ void test("the CLI emits unknown-cause notices and a raw log link without inferr
 	assert.equal(result.status, 1, result.stderr);
 	assert.equal(result.stdout.split("\n").filter((line) => line.startsWith("::notice::")).length, 2);
 	assert.doesNotMatch(result.stdout, /::error::|first failure|task failed/u);
-	assert.match(result.stdout, /gate:stories: unpassed, cause unavailable/u);
-	assert.match(result.stdout, /gate:server: unpassed, cause unavailable/u);
-	assert.match(
-		result.stdout,
-		/Raw output: https:\/\/github.com\/example\/repository\/actions\/runs\/123\/attempts\/2/u,
-	);
+	assert.deepEqual(result.stdout.trim().split("\n"), [
+		"::notice::gate:stories: unpassed, cause unavailable. Run attempt: https://github.com/example/repository/actions/runs/123/attempts/2 | Reproduce with: vp run gate:stories",
+		"::notice::gate:server: unpassed, cause unavailable. Run attempt: https://github.com/example/repository/actions/runs/123/attempts/2 | Reproduce with: vp run gate:server",
+	]);
 	const rendered = await readFile(summary, "utf8");
 	assert.match(rendered, /\*\*unpassed, cause unavailable\*\*/u);
 	assert.match(
 		rendered,
-		/\[Raw task output\]\(https:\/\/github.com\/example\/repository\/actions\/runs\/123\/attempts\/2\)/u,
+		/\[Run attempt\]\(https:\/\/github.com\/example\/repository\/actions\/runs\/123\/attempts\/2\)/u,
 	);
+	assert.match(rendered, /Open the quality job’s \*\*Quality gates\*\* step for task output/u);
 	assert.ok(rendered.includes(report.trim()));
 });
