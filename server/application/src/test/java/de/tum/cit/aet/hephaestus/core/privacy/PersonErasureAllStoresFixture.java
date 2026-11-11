@@ -626,6 +626,29 @@ final class PersonErasureAllStoresFixture {
         row("commit_file_change", "commit_id", base + 9, "filename", CANARY, "change_type", "MODIFIED");
     }
 
+    /** A dead GitHub delivery whose sender is the person with {@code githubUserId}. */
+    void seedProviderEvent(long workspace, long githubUserId, String login) {
+        row(
+                "provider_event",
+                "workspace_id",
+                workspace,
+                "provider",
+                "github",
+                "subject",
+                "github.acme.app.issues",
+                "scope_key",
+                workspace + ":github.acme.app",
+                "payload",
+                ("{\"sender\":{\"login\":\"" + login + "\",\"id\":" + githubUserId + "}}")
+                        .getBytes(StandardCharsets.UTF_8),
+                "state",
+                "DEAD",
+                "ended_at",
+                Timestamp.from(Instant.now()),
+                "error_class",
+                "Failure");
+    }
+
     void seedOutline(long workspace, long connection, String subject) {
         seedOutline(workspace, connection, subject, 999000L);
     }

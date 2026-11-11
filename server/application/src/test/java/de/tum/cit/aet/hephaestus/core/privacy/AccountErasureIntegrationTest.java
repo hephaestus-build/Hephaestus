@@ -976,6 +976,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var githubUser = users.saveAndFlush(TestUserFactory.createUser(4242L, "target-github", github));
         link(targetAccount, github, "4242", null);
         allStores.seedScm(githubUser.getId(), Objects.requireNonNull(github.getId()), 998000L);
+        allStores.seedProviderEvent(firstWorkspace, 4242L, PersonErasureAllStoresFixture.CANARY);
         installation("all-stores-personal", "target-github", AccountType.USER);
         // GitHub App installations: the target's own that no admin adopted, the target's adopted one, a decision
         // that the target made as an admin, and another person's own.
@@ -1004,6 +1005,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var otherGitHub = users.saveAndFlush(TestUserFactory.createUser(8484L, "other-github", github));
         link(otherAccount, github, "8484", null);
         otherSourceRows.seedScm(otherGitHub.getId(), Objects.requireNonNull(github.getId()), 998100L);
+        otherSourceRows.seedProviderEvent(firstWorkspace, 8484L, "other-github");
         String otherOutlineSubject = "00000000-0000-4000-8000-000000000084";
         link(otherAccount, outline, otherOutlineSubject, null);
         otherSourceRows.seedOutline(
