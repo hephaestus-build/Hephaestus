@@ -76,11 +76,20 @@ if (
 }
 
 const nodeBase =
-	/^FROM node:\$\{NODE_VERSION\}-trixie-slim@sha256:[a-f0-9]{64}(?: AS [\w-]+)?$/mu.exec(
+	/^FROM node:\$\{NODE_VERSION\}-trixie-slim@(?<digest>sha256:[a-f0-9]{64})(?: AS [\w-]+)?$/mu.exec(
 		dockerfile,
 	);
 if (!nodeBase) {
 	problems.push("docker/agents/pi/Dockerfile: Node base must be pinned by a 64-character digest.");
+}
+
+for (const file of ["scripts/capacity-fixture.ts", "scripts/capacity-bench/post-render.ts"]) {
+	const image = /"node:(?<version>[\d.]+)-trixie-slim@(?<digest>sha256:[a-f0-9]{64})"/u.exec(
+		readFileSync(file, "utf8"),
+	)?.groups;
+	if (image?.version !== nodeVersion || image.digest !== nodeBase?.groups?.digest) {
+		problems.push(`${file}: Node version and base digest must match docker/agents/pi/Dockerfile.`);
+	}
 }
 
 for (const marker of [
@@ -100,5 +109,5 @@ if (problems.length > 0) {
 }
 
 console.log(
-	`Agent runtime pins agree: Node ${nodeVersion} (base digest present); Pi ${piVersion} (image, TypeScript, and live tests).`,
+	`Agent runtime pins agree: Node ${nodeVersion} (base and capacity pins agree); Pi ${piVersion} (image, TypeScript, and live tests).`,
 );

@@ -151,9 +151,19 @@ try {
 	copyFileSync(path.join(ROOT, METADATA), head);
 	if (differs(base, "pnpm-lock.yaml")) {
 		refuseStaleInstall("its build cannot be compared with the base's own install");
+		// The head's Node.js builds both trees, so the comparison measures only the code. A change
+		// of the Node.js pin would otherwise fail the base's own `devEngines` check here.
 		run(
 			process.execPath,
-			[repositoryCli(), "install", "--frozen-lockfile", "--ignore-scripts", "--prefer-offline"],
+			[
+				repositoryCli(),
+				"install",
+				"--frozen-lockfile",
+				"--ignore-scripts",
+				"--prefer-offline",
+				"--",
+				"--runtime-on-fail=ignore",
+			],
 			copy,
 		);
 	} else {

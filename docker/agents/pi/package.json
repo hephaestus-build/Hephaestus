@@ -11,6 +11,6 @@
 		"typescript": "7.0.2"
 	},
 	"engines": {
-		"pnpm": "12.3.4"
+		"pnpm": "12.18.0"
 	}
 }
