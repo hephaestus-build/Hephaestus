@@ -7,8 +7,13 @@ import org.springframework.stereotype.Component;
 /** Reads the destination singleton; before an operator saves one, nothing is configured. */
 @Component
 @RequiredArgsConstructor
-class DestinationSettings {
+public class DestinationSettings {
     private final ProductFeedbackDestinationRepository repository;
+
+    /** The instance's private destination cannot be a workspace source. */
+    public boolean excludesRepository(String nameWithOwner) {
+        return nameWithOwner.equalsIgnoreCase(current().getPrivateRepository());
+    }
 
     ProductFeedbackDestination current() {
         return repository.findById(ProductFeedbackDestination.SINGLETON).orElseGet(ProductFeedbackDestination::new);

@@ -121,6 +121,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("productfeedback.ProductFeedbackUpdateEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackCleanupIntegrationTest", "product-feedback-github"),
             assignment("productfeedback.ProductFeedbackTrustGatesIntegrationTest", "product-feedback-github"),
+            assignment("productfeedback.PrivateDestinationOutOfWorkspacesIntegrationTest", "product-feedback-github"),
             assignment("testconfig.BaseIntegrationTest", "base"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"));
 
@@ -332,6 +333,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "productfeedback.ProductFeedbackUpdateEmailIntegrationTest",
             "productfeedback.ProductFeedbackCleanupIntegrationTest",
             "productfeedback.ProductFeedbackTrustGatesIntegrationTest",
+            "productfeedback.PrivateDestinationOutOfWorkspacesIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
 
@@ -366,6 +368,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "integration.scm.github.installation.adoption.GitHubInstallationAdoptionIntegrationTest",
             "productfeedback.ProductFeedbackCleanupIntegrationTest",
             "productfeedback.ProductFeedbackTrustGatesIntegrationTest",
+            "productfeedback.PrivateDestinationOutOfWorkspacesIntegrationTest",
             "agent.job.ReviewJobEventListenerIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "practices.review.ReviewEndToEndIntegrationTest",

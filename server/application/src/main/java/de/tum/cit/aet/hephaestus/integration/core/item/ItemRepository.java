@@ -41,6 +41,9 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             @Param("path") @Nullable String path,
             @Param("at") Instant at);
 
+    /** The active children of one item, for a walk that removes a whole tree. */
+    List<Item> findByWorkspaceIdAndParentIdAndRemovedAtIsNull(long workspaceId, long parentId);
+
     @Modifying
     @Query(
             "UPDATE Item i SET i.removedAt = :at WHERE i.workspaceId = :workspaceId AND i.id = :itemId AND i.removedAt IS NULL")

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.activity;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -105,6 +106,14 @@ public interface ActivityEventRepository extends JpaRepository<ActivityEvent, UU
         ORDER BY gc.author_id
         """, nativeQuery = true)
     List<Long> unresolvedCommitAuthors(@Param("repositoryId") Long repositoryId);
+
+    @Modifying
+    @Query(
+            value =
+                    "DELETE FROM activity_event WHERE workspace_id = :workspaceId AND repository_id IN (:repositoryIds)",
+            nativeQuery = true)
+    int deleteByWorkspaceIdAndRepositoryIds(
+            @Param("workspaceId") long workspaceId, @Param("repositoryIds") Collection<Long> repositoryIds);
 
     @Query(value = "SELECT COUNT(*) FROM activity_event WHERE workspace_id = :workspaceId", nativeQuery = true)
     long countByWorkspaceId(@Param("workspaceId") Long workspaceId);

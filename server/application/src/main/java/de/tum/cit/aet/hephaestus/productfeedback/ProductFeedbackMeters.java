@@ -26,6 +26,8 @@ class ProductFeedbackMeters {
     ProductFeedbackMeters(MeterRegistry registry) {
         this.registry = registry;
         registry.gauge(OLDEST_WAITING, oldestWaitingSeconds);
+        // Registered at 0, so an alert on its increase sees the very first failure.
+        registry.counter(STEPS, "step", "private_repository", "outcome", "not_withdrawn");
     }
 
     /** The age of the oldest report not yet on GitHub or saved for the admins; 0 when none waits. */

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace.adapter;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.core.event.RepositoryExcludedFromWorkspacesEvent;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -37,6 +39,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Component
 public class WorkspaceSyncTargetProvider implements SyncTargetProvider, RepositoryScopeProvider {
@@ -128,7 +132,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                     // configuration (e.g., dev environment limits)
                     List<RepositoryToMonitor> monitors =
                             repositoryToMonitorRepository.findByWorkspaceId(scopeId).stream()
-                                    .filter(workspaceScopeFilter::isRepositoryAllowed)
+                                    .filter(allowedIn(ws))
                                     .toList();
                     List<SyncTarget> targets = monitors.stream()
                             .flatMap(rtm -> SyncTargetFactory.create(ws, rtm, connectionService).stream())
@@ -538,6 +542,19 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                 rtm.setNameWithOwner(Objects.requireNonNull(resolvedNameWithOwner));
                 dirty = true;
                 nameChanged = true;
+                // The monitor now names a repository that no GitHub workspace may hold. The withdrawal runs after
+                // this commit, in a transaction for each workspace, so it sees the new name.
+                Workspace owner = Objects.requireNonNull(rtm.getWorkspace());
+                if (!hasActiveProvider(owner, IntegrationKind.GITLAB)
+                        && workspaceScopeFilter.isExcluded(resolvedNameWithOwner)) {
+                    String excluded = resolvedNameWithOwner;
+                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            eventPublisher.publishEvent(new RepositoryExcludedFromWorkspacesEvent(excluded));
+                        }
+                    });
+                }
             }
 
             if (dirty) {
@@ -644,10 +661,17 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                 total, skippedByStatus, skippedByFilter, activeAndAllowed, workspaceScopeFilter.isActive());
     }
 
+    /** A GitLab project can share the excluded GitHub repository's path, and it is a different repository. */
+    private Predicate<RepositoryToMonitor> allowedIn(Workspace workspace) {
+        return hasActiveProvider(workspace, IntegrationKind.GITLAB)
+                ? workspaceScopeFilter::isRepositoryAllowed
+                : workspaceScopeFilter::isGitHubRepositoryAllowed;
+    }
+
     private SyncSession toSyncSession(Workspace workspace) {
         // Filter repositories by workspace scope
         List<SyncTarget> syncTargets = workspace.getRepositoriesToMonitor().stream()
-                .filter(workspaceScopeFilter::isRepositoryAllowed)
+                .filter(allowedIn(workspace))
                 .flatMap(rtm -> SyncTargetFactory.create(workspace, rtm, connectionService).stream())
                 .toList();
 

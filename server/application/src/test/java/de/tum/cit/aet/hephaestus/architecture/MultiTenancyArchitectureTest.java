@@ -532,6 +532,8 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "ProductFeedbackSubmittedEvent", // Instance-admin fan-out; submission UUID
                                         "ProductFeedbackCleanupNeedsActionEvent", // Instance-admin fan-out; cleanup
                                         // UUID
+                                        "RepositoryExcludedFromWorkspacesEvent", // Instance policy fans out to every
+                                        // workspace holding the configured private destination
                                         "ProductFeedbackUpdatedEvent", // The reporter's own report; feedback UUID and
                                         // account
                                         // covers instance or workspace feedback

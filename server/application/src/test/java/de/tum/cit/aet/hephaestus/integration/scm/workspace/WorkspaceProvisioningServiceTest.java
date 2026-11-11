@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugHistoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugReservationRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryExclusion;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -124,6 +125,7 @@ class WorkspaceProvisioningServiceTest {
                         new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
                 WebClient.builder(),
                 List.of(),
+                List.of(),
                 List.of());
     }
 
@@ -178,6 +180,52 @@ class WorkspaceProvisioningServiceTest {
                         eq("pat-token"),
                         anyString());
         assertThat(workspace.getId()).isEqualTo(1L);
+    }
+
+    @Test
+    void bootstrapLeavesOutARepositoryThatNoWorkspaceMayHold() {
+        workspaceProperties = new WorkspaceProperties(
+                true,
+                new WorkspaceProperties.DefaultProperties("aet-org", "pat-token", List.of("aet-org/reports")),
+                false,
+                null,
+                WorkspaceProperties.CreationPolicy.SELF_SERVICE);
+        WorkspaceRepositoryExclusion reports = "aet-org/reports"::equalsIgnoreCase;
+        provisioningService = new WorkspaceProvisioningService(
+                workspaceProperties,
+                workspaceRepository,
+                repositoryToMonitorRepository,
+                workspaceService,
+                workspaceSlugs,
+                userRepository,
+                gitProviderRepository,
+                workspaceMembershipRepository,
+                workspaceMembershipService,
+                connectionService,
+                List.of(),
+                new ScmServerEndpointPolicy(
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
+                WebClient.builder(),
+                List.of(),
+                List.of(),
+                List.of(reports));
+        Workspace workspace = new Workspace();
+        workspace.setWorkspaceSlug("aet-org");
+        workspace.setId(1L);
+        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
+                .thenReturn(Optional.of(TestEntities.gitProvider(100L, IdentityProviderType.GITHUB)));
+        User owner = new User();
+        owner.setId(11L);
+        when(userRepository.findByLoginAndProviderId("aet-org", 100L)).thenReturn(Optional.of(owner));
+        when(workspaceRepository.count()).thenReturn(0L);
+        when(workspaceService.createWorkspace(anyString(), anyString(), anyString(), any(AccountType.class), anyLong()))
+                .thenReturn(workspace);
+        when(workspaceRepository.save(any(Workspace.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        provisioningService.bootstrapDefaultPatWorkspace();
+
+        verify(repositoryToMonitorRepository, never()).save(any());
+        assertThat(workspace.getRepositoriesToMonitor()).isEmpty();
     }
 
     @Test
@@ -272,6 +320,7 @@ class WorkspaceProvisioningServiceTest {
                 new ScmServerEndpointPolicy(
                         new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
                 WebClient.builder(),
+                List.of(),
                 List.of(),
                 List.of());
         when(workspaceRepository.findAllByAccountLoginIgnoreCase("hephaestustest"))
@@ -386,6 +435,7 @@ class WorkspaceProvisioningServiceTest {
                 List.of(),
                 endpoints,
                 WebClient.builder(),
+                List.of(),
                 List.of(),
                 List.of());
     }

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ProductFeedbackAudit;
+import de.tum.cit.aet.hephaestus.core.event.RepositoryExcludedFromWorkspacesEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ProductFeedbackDestinationsDTO;
@@ -19,6 +20,7 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,8 @@ class DestinationService {
     private final TransactionTemplate transactions;
     private final ProductFeedbackAudit audit;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
+    private final ProductFeedbackMeters meters;
 
     DestinationService(
             ProductFeedbackDestinationRepository repository,
@@ -49,7 +53,11 @@ class DestinationService {
             ProductFeedbackIssues issues,
             TransactionTemplate transactions,
             ProductFeedbackAudit audit,
-            Clock clock) {
+            Clock clock,
+            ApplicationEventPublisher events,
+            ProductFeedbackMeters meters) {
+        this.events = events;
+        this.meters = meters;
         this.repository = repository;
         this.settings = settings;
         this.filings = filings;
@@ -124,8 +132,43 @@ class DestinationService {
                     accountId, publicName, privateName, request.paused(), destination.getNoticeVersion()))
                 throw new IllegalStateException("The destination change could not be audited");
         });
+        // After the save commits: a failure here must not lose the setting, and the repair run tries again.
+        if (privateName != null) withdraw(privateName);
         refreshSnapshot();
         return get();
+    }
+
+    private void withdraw(String privateRepository) {
+        try {
+            events.publishEvent(new RepositoryExcludedFromWorkspacesEvent(privateRepository));
+        } catch (RuntimeException failure) {
+            meters.step("private_repository", "not_withdrawn");
+            log.error(
+                    "Could not take the private repository out of the workspaces: errorType={}",
+                    failure.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Repairs what no save covers: a private repository set before this rule existed, a failed run, or a monitor that a
+     * workspace committed while the destination was saved. Each run starts from the saved setting, so a replaced
+     * repository is no longer touched and can be monitored again.
+     */
+    @Scheduled(fixedDelayString = "PT15M", initialDelayString = "PT1M")
+    @SchedulerLock(name = "product-feedback-private-repository", lockAtMostFor = "PT10M", lockAtLeastFor = "PT1M")
+    @WorkspaceAgnostic("The repository leaves every workspace that monitors it")
+    void keepPrivateRepositoryOutOfWorkspaces() {
+        String privateRepository;
+        try {
+            privateRepository = settings.current().getPrivateRepository();
+        } catch (RuntimeException failure) {
+            meters.step("private_repository", "not_withdrawn");
+            log.error(
+                    "Could not take the private repository out of the workspaces: errorType={}",
+                    failure.getClass().getSimpleName());
+            return;
+        }
+        if (privateRepository != null) withdraw(privateRepository);
     }
 
     /**
