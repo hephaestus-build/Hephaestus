@@ -8,6 +8,8 @@ GraphQL clients are generated. Package layout under
 This file is the gotchas. Spring, JPA and Lombok idioms that the surrounding code already shows you
 are not here: write code that reads like the file you are editing.
 
+Logging: [guide](../docs/contributor/structured-logging.mdx).
+
 ## Local development loop
 
 - **No devtools.** Hot reload is JVM HotSwap through the IDE — IntelliJ's Spring Boot run config with
@@ -51,8 +53,7 @@ are not here: write code that reads like the file you are editing.
 **Ask first** — schema changes · security configuration · a new Gradle dependency
 (`docs/contributor/dependencies.md`) · workspace authorization logic.
 
-**Never** — commit credentials · `System.out.println` (log through SLF4J with `{}` placeholders, and
-never log a token) · `@Transactional` on a controller (service layer only) · expose an entity from a
+**Never** — commit credentials · `System.out.println` · `@Transactional` on a controller (service layer only) · expose an entity from a
 controller.
 
 ## Practice model boundaries

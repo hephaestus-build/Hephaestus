@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
@@ -218,10 +217,7 @@ public class GitLabWorkspaceInitializationService {
             WorkspaceContextHolder.setContext(context);
         }
         try {
-            log.info(
-                    "Starting GitLab workspace initialization: workspaceId={}, accountLogin={}",
-                    workspace.getId(),
-                    LoggingUtils.sanitizeForLog(workspace.getAccountLogin()));
+            log.info("Starting GitLab workspace initialization: workspaceId={}", workspace.getId());
 
             // Phase 0: Token rotation
             SyncResult result = rotateToken(workspace, handle);
@@ -346,10 +342,12 @@ public class GitLabWorkspaceInitializationService {
                         webhookResult.webhookId());
                 return SyncResult.completed(0);
             } else {
-                log.warn(
-                        "Webhook setup: workspaceId={}, registered=false, reason={}",
-                        workspace.getId(),
-                        LoggingUtils.sanitizeForLog(webhookResult.failureReason()));
+                if (webhookResult.status() == WebhookSetupResult.Status.SKIPPED) {
+                    log.warn(
+                            "Webhook setup: workspaceId={}, registered=false, reason={}",
+                            workspace.getId(),
+                            webhookResult.reason());
+                }
                 return SyncResult.abortedError(0);
             }
         } catch (Exception e) {
@@ -523,16 +521,11 @@ public class GitLabWorkspaceInitializationService {
                             handle, groupMilestoneResult, SyncPhase.ISSUES, "Group milestone sync", accountLogin);
                     result = SyncResult.merge(result, groupMilestoneResult);
                     log.info(
-                            "GitLab group milestone sync: workspaceId={}, group={}, written={}",
+                            "GitLab group milestone sync: workspaceId={}, written={}",
                             workspace.getId(),
-                            LoggingUtils.sanitizeForLog(accountLogin),
                             groupMilestoneResult.count());
                 } catch (Exception e) {
-                    log.warn(
-                            "Failed GitLab group milestone sync: workspaceId={}, group={}",
-                            workspace.getId(),
-                            LoggingUtils.sanitizeForLog(accountLogin),
-                            e);
+                    log.warn("Failed GitLab group milestone sync: workspaceId={}", workspace.getId(), e);
                     reportIncomplete(
                             handle, SyncResult.abortedError(0), SyncPhase.ISSUES, "Group milestone sync", accountLogin);
                     result = SyncResult.merge(result, SyncResult.abortedError(0));

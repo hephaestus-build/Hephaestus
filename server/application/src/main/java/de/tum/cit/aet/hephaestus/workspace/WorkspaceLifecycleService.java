@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import static de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
@@ -75,7 +74,7 @@ public class WorkspaceLifecycleService {
         if (workspace.suspend()) {
             workspace = workspaceRepository.save(workspace);
             recordStatusChange(workspace, previous, WorkspaceStatus.SUSPENDED);
-            log.info("Suspended workspace: workspaceSlug={}", LoggingUtils.sanitizeForLog(workspaceSlug));
+            log.info("Suspended workspace: workspaceId={}", workspace.getId());
         }
 
         return workspace;
@@ -109,7 +108,7 @@ public class WorkspaceLifecycleService {
         if (workspace.resume()) {
             workspace = workspaceRepository.save(workspace);
             recordStatusChange(workspace, previous, WorkspaceStatus.ACTIVE);
-            log.info("Resumed workspace: workspaceSlug={}", LoggingUtils.sanitizeForLog(workspaceSlug));
+            log.info("Resumed workspace: workspaceId={}", workspace.getId());
         }
 
         return workspace;
@@ -132,14 +131,11 @@ public class WorkspaceLifecycleService {
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
 
         if (workspace.getStatus() == WorkspaceStatus.PURGED) {
-            log.debug(
-                    "Skipped workspace purge: reason=alreadyPurged, workspaceSlug={}",
-                    LoggingUtils.sanitizeForLog(workspaceSlug));
+            log.debug("Skipped workspace purge: reason=alreadyPurged, workspaceId={}", workspace.getId());
             return workspace;
         }
 
         Long workspaceId = workspace.getId();
-        String sanitizedSlug = LoggingUtils.sanitizeForLog(workspaceSlug);
 
         purgeGuards.forEach(guard -> guard.verifyQuiescent(workspaceId));
 
@@ -167,7 +163,7 @@ public class WorkspaceLifecycleService {
         workspace = workspaceRepository.save(workspace);
         recordStatusChange(workspace, previousStatus, WorkspaceStatus.PURGED);
 
-        log.info("Purged workspace: workspaceSlug={}, workspaceId={}", sanitizedSlug, workspaceId);
+        log.info("Purged workspace: workspaceId={}", workspaceId);
         return workspace;
     }
 

@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabTokenLifecycleService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
+import de.tum.cit.aet.hephaestus.observability.ShippedLogEncoder;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -360,6 +361,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
             assertThat(result.registered()).isFalse();
+            assertThat(result.reason()).isEqualTo(WebhookSetupResult.Reason.ROUTING_KEY_UNKNOWN);
             assertThat(registered).isEmpty();
             assertThat(hooks).extracting(WebhookInfo::id).containsExactly(99L);
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(99L);
@@ -428,6 +430,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             WebhookSetupResult result = service(credential(null, null)).registerWebhook(workspace);
 
             assertThat(result.registered()).isFalse();
+            assertThat(result.reason()).isEqualTo(WebhookSetupResult.Reason.ROUTING_SECRET_MISSING);
             assertThat(result.failureReason()).contains("routing secret");
             assertThat(registered).isEmpty();
         }
@@ -450,7 +453,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             try {
                 WebhookSetupResult result = webhookService.registerWebhook(workspace);
                 assertThat(result.registered()).isFalse();
-                assertThat(result.failureReason()).isEqualTo("GitLab API error: 500");
+                assertThat(result.failureReason()).isEqualTo("GitLab API error (HTTP 500)");
                 var failures = appender.list.stream()
                         .filter(event -> event.getLevel() == Level.WARN)
                         .toList();
@@ -486,10 +489,30 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                     .thenThrow(WebClientResponseException.create(
                             403, "Forbidden", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
 
-            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+            workspace.setAccountLogin("private-account-login-canary");
+            Logger logger = (Logger) LoggerFactory.getLogger(GitLabWebhookService.class);
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            try {
+                WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
-            assertThat(result.registered()).isFalse();
-            assertThat(result.failureReason()).contains("Insufficient permissions");
+                assertThat(result.registered()).isFalse();
+                assertThat(result.failureReason())
+                        .contains("Insufficient permissions")
+                        .doesNotContain("private-account-login-canary");
+                assertThat(appender.list)
+                        .anySatisfy(
+                                event -> assertThat(event.getKeyValuePairs()).anySatisfy(pair -> {
+                                    assertThat(pair.key).isEqualTo("http.response.status_code");
+                                    assertThat(pair.value).isEqualTo(403);
+                                }))
+                        .allSatisfy(event -> assertThat(ShippedLogEncoder.encode(event))
+                                .doesNotContain("private-account-login-canary"));
+            } finally {
+                logger.detachAppender(appender);
+                appender.stop();
+            }
         }
 
         @Test
@@ -507,7 +530,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             WebhookSetupResult result = service.registerWebhook(workspace);
 
             assertThat(result.registered()).isFalse();
-            assertThat(result.failureReason()).contains("not configured");
+            assertThat(result.reason()).isEqualTo(WebhookSetupResult.Reason.ROUTING_SECRET_MISSING);
         }
     }
 
@@ -519,6 +542,31 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             fakeGroupHooks();
             when(workspaceRepository.findByStatus(Workspace.WorkspaceStatus.ACTIVE))
                     .thenReturn(List.of(workspace));
+        }
+
+        @Test
+        void shouldReportARegistrationRefusalWithoutTheAccountLogin() {
+            workspace.setAccountLogin("private-account-login-canary");
+            bindGitLabConfig(1L, new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
+            when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
+                    .thenThrow(WebClientResponseException.create(
+                            403, "Forbidden", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
+            Logger logger = (Logger) LoggerFactory.getLogger(GitLabWebhookService.class);
+            var appender = new ListAppender<ILoggingEvent>();
+            appender.start();
+            logger.addAppender(appender);
+            try {
+                webhookService.checkWebhookHealth();
+
+                assertThat(appender.list)
+                        .anySatisfy(event ->
+                                assertThat(event.getFormattedMessage()).isEqualTo("GitLab webhook registration failed"))
+                        .allSatisfy(event -> assertThat(ShippedLogEncoder.encode(event))
+                                .doesNotContain("private-account-login-canary"));
+            } finally {
+                logger.detachAppender(appender);
+                appender.stop();
+            }
         }
 
         @Test

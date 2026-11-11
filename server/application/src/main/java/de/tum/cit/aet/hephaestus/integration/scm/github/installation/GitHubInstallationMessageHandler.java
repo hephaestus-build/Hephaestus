@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.installation;
 
-import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
-
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -135,18 +133,11 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
         String accountLogin = account != null ? account.login() : null;
         Long installationId = installation.id();
 
-        log.debug(
-                "Received installation event: action={}, installationId={}, accountLogin={}",
-                event.action(),
-                installationId,
-                accountLogin != null ? sanitizeForLog(accountLogin) : "unknown");
+        log.debug("Received installation event: action={}, installationId={}", event.action(), installationId);
 
         // Handle deletion early - no scope provisioning needed
         if (action == GitHubEventAction.Installation.DELETED) {
-            log.info(
-                    "Processed installation deletion: installationId={}, accountLogin={}",
-                    installationId,
-                    sanitizeForLog(accountLogin));
+            log.info("Processed installation deletion: installationId={}", installationId);
             provisioningListener.onInstallationDeleted(installationId);
             return;
         }

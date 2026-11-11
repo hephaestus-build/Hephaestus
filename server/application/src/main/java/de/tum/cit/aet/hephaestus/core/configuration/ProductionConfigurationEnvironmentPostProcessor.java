@@ -31,7 +31,7 @@ public final class ProductionConfigurationEnvironmentPostProcessor implements En
                 .map(fact -> " - [" + fact.id() + "] " + fact.explanation() + " Set " + fact.subject() + ". "
                         + fact.documentationUrl())
                 .collect(Collectors.joining("\n"));
-        log.error("Production configuration validation failed with " + failures.size() + " problem(s):\n" + diagnosis);
+        log.error("Production configuration validation failed with {} problem(s):\n{}", failures.size(), diagnosis);
         throw new IllegalStateException("Production configuration validation failed. Diagnostic identifiers: "
                 + failures.stream().map(ConfigurationFactDTO::id).collect(Collectors.joining(", ")));
     }

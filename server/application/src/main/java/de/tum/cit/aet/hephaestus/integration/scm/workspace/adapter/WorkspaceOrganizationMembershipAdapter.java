@@ -163,7 +163,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
         Optional<Organization> organization = organizationRepository.findById(event.organizationId());
 
         if (workspaceOpt.isEmpty() || organization.isEmpty()) {
-            log.debug("Skipped member sync: reason=noWorkspaceForOrg, orgLogin={}", event.organizationLogin());
+            log.debug("Skipped member sync: reason=noWorkspaceForOrg, organizationId={}", event.organizationId());
             return;
         }
 
@@ -177,15 +177,15 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
             int synced = reconcileWorkspaceMembers(workspace, event.organizationId(), event.rosterComplete());
             log.info(
                     "Synced workspace members after scheduled org sync: workspaceId={},"
-                            + " orgLogin={}, memberCount={}",
+                            + " organizationId={}, memberCount={}",
                     workspace.getId(),
-                    event.organizationLogin(),
+                    event.organizationId(),
                     synced);
         } catch (Exception e) {
             log.error(
-                    "Failed to sync workspace members after scheduled sync: workspaceId={}," + " orgLogin={}",
+                    "Failed to sync workspace members after scheduled sync: workspaceId={}, organizationId={}",
                     workspace.getId(),
-                    event.organizationLogin(),
+                    event.organizationId(),
                     e);
         }
     }
@@ -197,8 +197,8 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
 
         if (workspaceOpt.isEmpty() || organization.isEmpty()) {
             log.debug(
-                    "Skipped member sync: reason=noWorkspaceForOrg, orgLogin={}, action={}",
-                    event.organizationLogin(),
+                    "Skipped member sync: reason=noWorkspaceForOrg, organizationId={}, action={}",
+                    event.organizationId(),
                     action);
             return;
         }
@@ -216,18 +216,18 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
             Membership.@Nullable WorkspaceRole role = currentGrant(organization.get(), event.userId());
             workspaceMembershipService.applyProviderGrant(workspace, event.userId(), role);
             log.info(
-                    "Synced workspace member after member change: workspaceId={}, orgLogin={},"
-                            + " action={}, userLogin={}, role={}",
+                    "Synced workspace member after member change: workspaceId={}, organizationId={},"
+                            + " action={}, userId={}, role={}",
                     workspace.getId(),
-                    event.organizationLogin(),
+                    event.organizationId(),
                     action,
-                    event.userLogin(),
+                    event.userId(),
                     role);
         } catch (Exception e) {
             log.error(
-                    "Failed to sync workspace member after member change: workspaceId={}," + " orgLogin={}, action={}",
+                    "Failed to sync workspace member after member change: workspaceId={}, organizationId={}, action={}",
                     workspace.getId(),
-                    event.organizationLogin(),
+                    event.organizationId(),
                     action,
                     e);
             // Don't rethrow - org membership change succeeded, workspace sync is secondary

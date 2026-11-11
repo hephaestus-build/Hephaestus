@@ -380,10 +380,10 @@ public class GitHubDeletionSweepService {
                         .addKeyValue("integration.kind", "github")
                         .addKeyValue("reason", listing.reason())
                         .log(
-                                "Skipped deletion sweep, deleted nothing: reason={}, entity={}, repoName={}, scopeId={}",
+                                "Skipped deletion sweep, deleted nothing: reason={}, entity={}, repositoryId={}, scopeId={}",
                                 listing.reason(),
                                 entity.plural,
-                                safeNameWithOwner,
+                                repository.getId(),
                                 scopeId);
                 continue;
             }

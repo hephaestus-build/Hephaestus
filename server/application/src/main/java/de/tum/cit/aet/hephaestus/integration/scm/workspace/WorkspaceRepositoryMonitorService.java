@@ -367,9 +367,9 @@ public class WorkspaceRepositoryMonitorService {
         var snapshots = enumerator.enumerate(installationId);
         if (snapshots.isEmpty()) {
             log.warn(
-                    "Skipped repository enumeration: reason=noDataReturned, installationId={}," + " workspaceSlug={}",
+                    "Skipped repository enumeration: reason=noDataReturned, installationId={}," + " workspaceId={}",
                     installationId,
-                    LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+                    workspace.getId());
             return;
         }
 

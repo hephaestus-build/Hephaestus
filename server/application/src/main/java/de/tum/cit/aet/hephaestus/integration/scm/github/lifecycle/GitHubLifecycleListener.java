@@ -333,10 +333,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                 Long ownerUserId = syncGitHubUserForOwnership(installationId, accountId, login, accountKind, avatarUrl);
                 if (ownerUserId == null) {
                     // Likely an old or deleted installation whose owner user can no longer be resolved.
-                    log.warn(
-                            "Skipped workspace creation, cannot sync owner user: installationId={}, accountLogin={}",
-                            installationId,
-                            LoggingUtils.sanitizeForLog(accountLogin));
+                    log.warn("Skipped workspace creation, cannot sync owner user: installationId={}", installationId);
                     return null;
                 }
                 ownerAccountId = humanAccountOf(ownerUserId);
@@ -351,11 +348,10 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             // must surface the allocated slug to the user instead.
             workspace = createWorkspace(availableSlug, login, login, wsAccountType, ownerAccountId);
             log.info(
-                    "Created workspace from installation: workspaceSlug={}, installationId={}, ownerAccountId={}, requestedSlug={}",
-                    LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()),
+                    "Created workspace from installation: workspaceId={}, installationId={}, ownerAccountId={}",
+                    workspace.getId(),
                     installationId,
-                    ownerAccountId,
-                    LoggingUtils.sanitizeForLog(accountLogin));
+                    ownerAccountId);
         }
 
         if (!isBlank(accountLogin)) {
@@ -717,8 +713,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                     null // updatedAt
                     );
             log.info(
-                    "Upserted user for workspace ownership: userLogin={}, userId={}, userType={}, installationId={}",
-                    LoggingUtils.sanitizeForLog(accountLogin),
+                    "Upserted user for workspace ownership: nativeId={}, userType={}, installationId={}",
                     accountId,
                     typeStr,
                     installationId);
@@ -731,10 +726,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                             new IllegalStateException("Installation account was not found after its identity upsert"));
         }
 
-        log.warn(
-                "Skipped user creation: reason=missingAccountId, userLogin={}, installationId={}",
-                LoggingUtils.sanitizeForLog(accountLogin),
-                installationId);
+        log.warn("Skipped user creation: reason=missingAccountId, installationId={}", installationId);
         return null;
     }
 

@@ -16,7 +16,7 @@ public final class WorkspaceContextHolder {
 
     private static final String MDC_WORKSPACE_ID = StructuredLogKeys.WORKSPACE_ID;
     // The id, not the slug: a slug is chosen text and can be a person's login, and it would ride on every line.
-    private static final String MDC_INSTALLATION_ID = "installation_id";
+    private static final String MDC_INSTALLATION_ID = StructuredLogKeys.INSTALLATION_ID;
 
     private static final ThreadLocal<WorkspaceContext> contextHolder = new ThreadLocal<>();
 

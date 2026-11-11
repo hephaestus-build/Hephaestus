@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.workspace.settings;
 
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
@@ -81,9 +80,9 @@ public class WorkspaceTeamSettingsService {
         if (teamOpt.isEmpty() || !belongsToWorkspace(teamOpt.get(), workspace)) {
             log.warn(
                     "Skipped team visibility update: reason=teamNotFoundOrWrongWorkspace,"
-                            + " teamId={}, workspaceSlug={}",
+                            + " teamId={}, workspaceId={}",
                     teamId,
-                    LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+                    workspace.getId());
             return Optional.empty();
         }
 
@@ -95,11 +94,7 @@ public class WorkspaceTeamSettingsService {
         settings.setHidden(hidden);
         WorkspaceTeamSettings saved = teamSettingsRepository.save(settings);
 
-        log.info(
-                "Updated team visibility: teamId={}, hidden={}, workspaceSlug={}",
-                teamId,
-                hidden,
-                LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+        log.info("Updated team visibility: teamId={}, hidden={}, workspaceId={}", teamId, hidden, workspace.getId());
 
         return Optional.of(saved);
     }
@@ -119,9 +114,9 @@ public class WorkspaceTeamSettingsService {
         if (teamOpt.isEmpty() || !belongsToWorkspace(teamOpt.get(), workspace)) {
             log.warn(
                     "Skipped repository visibility update: reason=teamNotFoundOrWrongWorkspace,"
-                            + " teamId={}, workspaceSlug={}",
+                            + " teamId={}, workspaceId={}",
                     teamId,
-                    LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+                    workspace.getId());
             return Optional.empty();
         }
 
@@ -148,11 +143,11 @@ public class WorkspaceTeamSettingsService {
 
         log.info(
                 "Updated repository visibility: repositoryId={}, teamId={},"
-                        + " hiddenFromContributions={}, workspaceSlug={}",
+                        + " hiddenFromContributions={}, workspaceId={}",
                 repositoryId,
                 teamId,
                 hiddenFromContributions,
-                LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+                workspace.getId());
 
         return Optional.of(saved);
     }
@@ -198,9 +193,9 @@ public class WorkspaceTeamSettingsService {
         if (teamOpt.isEmpty() || !belongsToWorkspace(teamOpt.get(), workspace)) {
             log.warn(
                     "Skipped label filter addition: reason=teamNotFoundOrWrongWorkspace, teamId={},"
-                            + " workspaceSlug={}",
+                            + " workspaceId={}",
                     teamId,
-                    LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+                    workspace.getId());
             return Optional.empty();
         }
 
@@ -220,21 +215,17 @@ public class WorkspaceTeamSettingsService {
         if (labelFilterRepository.existsById(filterId)) {
             log.debug(
                     "Skipped label filter addition: reason=filterAlreadyExists, teamId={},"
-                            + " labelId={}, workspaceSlug={}",
+                            + " labelId={}, workspaceId={}",
                     teamId,
                     labelId,
-                    LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+                    workspace.getId());
             return labelFilterRepository.findById(filterId);
         }
 
         WorkspaceTeamLabelFilter filter = new WorkspaceTeamLabelFilter(workspace, team, label);
         WorkspaceTeamLabelFilter saved = labelFilterRepository.save(filter);
 
-        log.info(
-                "Added label filter: labelId={}, teamId={}, workspaceSlug={}",
-                labelId,
-                teamId,
-                LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+        log.info("Added label filter: labelId={}, teamId={}, workspaceId={}", labelId, teamId, workspace.getId());
 
         return Optional.of(saved);
     }
@@ -245,21 +236,16 @@ public class WorkspaceTeamSettingsService {
 
         if (!labelFilterRepository.existsById(filterId)) {
             log.debug(
-                    "Skipped label filter removal: reason=filterNotExists, teamId={}, labelId={},"
-                            + " workspaceSlug={}",
+                    "Skipped label filter removal: reason=filterNotExists, teamId={}, labelId={}," + " workspaceId={}",
                     teamId,
                     labelId,
-                    LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+                    workspace.getId());
             return false;
         }
 
         labelFilterRepository.deleteByWorkspaceIdAndTeamIdAndLabelId(workspace.getId(), teamId, labelId);
 
-        log.info(
-                "Removed label filter: labelId={}, teamId={}, workspaceSlug={}",
-                labelId,
-                teamId,
-                LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+        log.info("Removed label filter: labelId={}, teamId={}, workspaceId={}", labelId, teamId, workspace.getId());
 
         return true;
     }
@@ -267,10 +253,7 @@ public class WorkspaceTeamSettingsService {
     @Transactional
     public void removeAllLabelFilters(Workspace workspace, Long teamId) {
         labelFilterRepository.deleteAllByWorkspaceIdAndTeamId(workspace.getId(), teamId);
-        log.info(
-                "Removed all label filters: teamId={}, workspaceSlug={}",
-                teamId,
-                LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+        log.info("Removed all label filters: teamId={}, workspaceId={}", teamId, workspace.getId());
     }
 
     // Utility Methods

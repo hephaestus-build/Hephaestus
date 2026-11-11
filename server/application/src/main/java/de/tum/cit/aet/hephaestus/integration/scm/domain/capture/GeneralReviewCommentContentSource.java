@@ -137,7 +137,7 @@ public class GeneralReviewCommentContentSource {
             ObjectNode root = objectMapper.createObjectNode();
             root.set("comments", commentArray);
             root.put("truncated", truncated);
-            log.info(
+            log.debug(
                     "GeneralReviewComments: prId={} emitted={} truncated={}",
                     pullRequestId,
                     commentArray.size(),

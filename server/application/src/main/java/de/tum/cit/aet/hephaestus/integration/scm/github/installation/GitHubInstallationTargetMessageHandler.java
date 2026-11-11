@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.installation;
 
-import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
-
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -82,11 +80,7 @@ public class GitHubInstallationTargetMessageHandler
         provisioningListener.onAccountRenamed(installationId, previousLogin, newLogin);
         upsertOrganization(event, installationId, newLogin);
 
-        log.info(
-                "Processed installation_target rename: installationId={}, previousLogin={}, newLogin={}",
-                installationId,
-                sanitizeForLog(previousLogin),
-                sanitizeForLog(newLogin));
+        log.info("Processed installation_target rename: installationId={}", installationId);
     }
 
     private void upsertOrganization(GitHubInstallationTargetEventDTO event, long installationId, String login) {

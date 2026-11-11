@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync;
 
-import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
-
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -504,17 +502,9 @@ public class GitLabDataSyncScheduler {
 
         try {
             SyncResult result = milestoneSync.syncMilestonesForGroup(session.scopeId(), session.accountLogin(), repos);
-            log.info(
-                    "GitLab group milestone sync: scopeId={}, group={}, written={}",
-                    session.scopeId(),
-                    sanitizeForLog(session.accountLogin()),
-                    result.count());
+            log.info("GitLab group milestone sync: scopeId={}, written={}", session.scopeId(), result.count());
         } catch (Exception e) {
-            log.error(
-                    "Failed GitLab group milestone sync: scopeId={}, group={}",
-                    session.scopeId(),
-                    sanitizeForLog(session.accountLogin()),
-                    e);
+            log.error("Failed GitLab group milestone sync: scopeId={}", session.scopeId(), e);
             reportWarning(handle);
         }
     }

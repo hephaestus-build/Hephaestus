@@ -163,10 +163,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
                 token,
                 "bootstrap-pat-workspace-" + savedWorkspace.getId());
 
-        log.info(
-                "Created default PAT workspace: accountLogin={}, workspaceId={}",
-                savedWorkspace.getAccountLogin(),
-                savedWorkspace.getId());
+        log.info("Created default PAT workspace: workspaceId={}", savedWorkspace.getId());
 
         config.repositoriesToMonitor().stream()
                 .map(repo -> repo == null ? null : repo.trim())
@@ -275,10 +272,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
                 token,
                 "bootstrap-gitlab-pat-workspace-" + savedWorkspace.getId());
 
-        log.info(
-                "Created default GitLab PAT workspace: groupPath={}, workspaceId={}",
-                savedWorkspace.getAccountLogin(),
-                savedWorkspace.getId());
+        log.info("Created default GitLab PAT workspace: workspaceId={}", savedWorkspace.getId());
 
         ensureAdminMembership(savedWorkspace);
     }
@@ -457,20 +451,15 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
                             workspace.getId(), workspaceMembershipService.accountIdForUser(adminUser.getId()))
                     .isPresent();
             if (alreadyMember) {
-                log.debug(
-                        "Skipped adding default admin, already member:" + " workspaceSlug={}, workspaceId={}",
-                        workspace.getWorkspaceSlug(),
-                        workspace.getId());
+                log.debug("Skipped adding default admin, already member: workspaceId={}", workspace.getId());
                 return;
             }
             try {
                 workspaceMembershipService.createMembership(
                         workspace, workspaceMembershipService.accountIdForUser(adminUser.getId()), WorkspaceRole.ADMIN);
-                log.info(
-                        "Added default admin to workspace: workspaceSlug={}," + " role=ADMIN",
-                        workspace.getWorkspaceSlug());
+                log.info("Added default admin to workspace: workspaceId={}," + " role=ADMIN", workspace.getId());
             } catch (IllegalArgumentException ex) {
-                log.debug("Skipped default admin addition: workspaceSlug={}", workspace.getWorkspaceSlug(), ex);
+                log.debug("Skipped default admin addition: workspaceId={}", workspace.getId(), ex);
             }
         });
     }

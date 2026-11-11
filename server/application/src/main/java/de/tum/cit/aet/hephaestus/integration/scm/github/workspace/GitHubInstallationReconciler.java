@@ -204,7 +204,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
 
         workspace = workspaceService.updateAccountLogin(workspace.getId(), login);
 
-        log.info("Configured organization sync via webhooks: workspaceSlug={}", workspace.getWorkspaceSlug());
+        log.info("Configured organization sync via webhooks: workspaceId={}", workspace.getId());
     }
 
     private @Nullable RepositorySelection convertRepositorySelection(@Nullable String selection) {

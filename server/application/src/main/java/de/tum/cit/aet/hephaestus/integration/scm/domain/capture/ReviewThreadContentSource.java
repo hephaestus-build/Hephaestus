@@ -160,7 +160,7 @@ public class ReviewThreadContentSource {
             root.put("decisionHistoryComplete", false);
             root.put("truncated", !pullRequestRepository.isDiscussionReadWhole(pullRequestId));
 
-            log.info(
+            log.debug(
                     "ReviewThreads: prId={} threads={} decisions={}",
                     pullRequestId,
                     threadArray.size(),

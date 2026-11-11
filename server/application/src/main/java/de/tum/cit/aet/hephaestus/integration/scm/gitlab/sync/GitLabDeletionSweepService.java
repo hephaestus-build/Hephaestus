@@ -449,11 +449,11 @@ public class GitLabDeletionSweepService {
                         .addKeyValue("integration.kind", "gitlab")
                         .addKeyValue("reason", listing.reason())
                         .log(
-                                "Skipped GitLab deletion sweep, deleted nothing: reason={}, entity={}, projectPath={},"
+                                "Skipped GitLab deletion sweep, deleted nothing: reason={}, entity={}, repositoryId={},"
                                         + " scopeId={}",
                                 listing.reason(),
                                 entity.plural,
-                                safeProjectPath,
+                                repository.getId(),
                                 scopeId);
                 continue;
             }
