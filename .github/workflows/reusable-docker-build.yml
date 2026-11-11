@@ -7,14 +7,6 @@ name: CI / Build, sign and publish images
 on:
   workflow_call:
     inputs:
-      phase:
-        description: "Build one platform, or merge and sign the completed platform builds"
-        type: string
-        required: true
-      platform:
-        description: "Native platform for the build phase; unused by the manifest phase"
-        type: string
-        default: ""
       database-artifact:
         description: "Immutable advisory database artifact ID selected by this CI run"
         type: string
@@ -79,6 +71,41 @@ on:
         required: false
         default: "[]"
         description: "JSON list of the images reuse-run published; only these are reused"
+      should_skip:
+        description: "Whether to skip the workflow"
+        required: false
+        type: string
+        default: "false"
+      # publish and platforms have no default; reusable-docker-build.yml says why.
+      webapp_changed:
+        description: "Whether webapp files changed (or should build for other reasons)"
+        required: false
+        type: string
+        default: "true"
+      application_server_changed:
+        description: "Whether the CI / Build workflow published an application-server image this run"
+        required: false
+        type: string
+        default: "true"
+      agent_images_changed:
+        description: "Whether agent image files changed (or should build for other reasons)"
+        required: false
+        type: string
+        default: "true"
+      postgres_image_changed:
+        description: "Whether the PostgreSQL image inputs changed"
+        required: false
+        type: string
+        default: "true"
+      alias_base:
+        description: "The published commit an unchanged image is aliased from; empty when the caller builds every image"
+        required: false
+        type: string
+        default: ""
+      dockerfile_images:
+        description: "Whether this run builds and aliases the Dockerfile images at all; the *_changed inputs select among them"
+        required: true
+        type: string
     outputs:
       application-server-digest:
         description: "Published application-server image index digest"
@@ -112,22 +139,25 @@ env:
     type=raw,value=${{ format('pr-{0}', github.event.number) }},enable=${{ github.event_name == 'pull_request' }}
 
 jobs:
+
   build:
-    name: Build ${{ inputs.platform }} images
+    name: linux/amd64
     # Builds every selected image that the push does not reuse from the merge queue.
     if: >-
-      ${{ !cancelled() && inputs.phase == 'build' && (
+      ${{ !cancelled() && contains(fromJSON(inputs.platforms), 'linux/amd64') && (
         (inputs.application-server && !contains(fromJSON(inputs.reuse-images), 'application-server')) ||
         (inputs.webapp && !contains(fromJSON(inputs.reuse-images), 'webapp')) ||
         (inputs.agent-pi && !contains(fromJSON(inputs.reuse-images), 'agent-pi')) ||
         (inputs.postgres && !contains(fromJSON(inputs.reuse-images), 'postgres'))) }}
     timeout-minutes: 45
     # Each platform builds natively on its own runner; no emulation.
-    runs-on: ${{ inputs.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
-    steps:
+    env:
+      IMAGE_PLATFORM: linux/amd64
+    steps: &image-build-steps
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -153,7 +183,7 @@ jobs:
       - name: Plan the build
         id: prep
         env:
-          MATRIX_PLATFORM: ${{ inputs.platform }}
+          MATRIX_PLATFORM: ${{ env.IMAGE_PLATFORM }}
           REUSE_IMAGES: ${{ inputs.reuse-images }}
         run: |
           set -euo pipefail
@@ -216,7 +246,7 @@ jobs:
             ${{ steps.meta-agent-pi.outputs.bake-file-labels }}
             ${{ steps.meta-postgres.outputs.bake-file-labels }}
           targets: ${{ steps.prep.outputs.bake-targets }}
-          set: "*.platform=${{ inputs.platform }}"
+          set: "*.platform=${{ env.IMAGE_PLATFORM }}"
 
       # A failed Dockerfile build does not stop the App Server image from building and reporting.
       - uses: ./.github/actions/setup-toolchain
@@ -276,7 +306,7 @@ jobs:
           APPLICATION_DIRECTORY: ${{ runner.temp }}/application
           BUILDPACK_DEPENDENCIES: ${{ steps.buildpack-dependencies.outputs.directory }}
           INPUT_REGISTRY: ${{ inputs.registry }}
-          MATRIX_PLATFORM: ${{ inputs.platform }}
+          MATRIX_PLATFORM: ${{ env.IMAGE_PLATFORM }}
           PLATFORM_PAIR: ${{ steps.prep.outputs.platform_pair }}
           PROJECT_DESCRIPTOR: ${{ inputs.project-descriptor }}
           PUBLISH: ${{ inputs.publish }}
@@ -388,7 +418,7 @@ jobs:
         env:
           IMAGES: ${{ steps.prep.outputs.images }}
           REGISTRY: ${{ inputs.registry }}
-          SCAN_PLATFORM: ${{ inputs.platform }}
+          SCAN_PLATFORM: ${{ env.IMAGE_PLATFORM }}
           TMPDIR: ${{ steps.scan-disk.outputs.directory }}
           PLATFORM_PAIR: ${{ steps.prep.outputs.platform_pair }}
         run: |
@@ -443,12 +473,32 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  build-arm64:
+    name: linux/arm64
+    # Builds every selected image that the push does not reuse from the merge queue.
+    if: >-
+      ${{ !cancelled() && contains(fromJSON(inputs.platforms), 'linux/arm64') && (
+        (inputs.application-server && !contains(fromJSON(inputs.reuse-images), 'application-server')) ||
+        (inputs.webapp && !contains(fromJSON(inputs.reuse-images), 'webapp')) ||
+        (inputs.agent-pi && !contains(fromJSON(inputs.reuse-images), 'agent-pi')) ||
+        (inputs.postgres && !contains(fromJSON(inputs.reuse-images), 'postgres'))) }}
+    timeout-minutes: 45
+    # Each platform builds natively on its own runner; no emulation.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_PLATFORM: linux/arm64
+    steps: *image-build-steps
+
   merge:
-    name: Create manifests
+    name: Manifest
     timeout-minutes: 30
     runs-on: ubuntu-latest
-    # The caller waits for every platform; the signing identity stays in this workflow.
-    if: ${{ inputs.phase == 'merge' && inputs.publish && !cancelled() }}
+    needs: [build, build-arm64]
+    # Wait for every platform; the signing identity stays in this workflow.
+    if: ${{ (inputs.application-server || inputs.webapp || inputs.agent-pi || inputs.postgres) && inputs.publish && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     permissions:
       # Compares this commit with the one the branch tag names.
       contents: read
@@ -755,9 +805,129 @@ jobs:
             [[ "$published" = "${reference##*@}" ]]
           done
 
-  fail-fast:
-    needs: [build, merge]
+  tag-unchanged-images:
+    name: "Tag unchanged images"
+    if: >-
+      inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' && inputs.publish && github.event_name == 'pull_request' &&
+      (inputs.webapp_changed != 'true' || inputs.application_server_changed != 'true' ||
+       inputs.agent_images_changed != 'true' ||
+       inputs.postgres_image_changed != 'true')
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      attestations: read
+      contents: read
+    steps:
+      - name: Install Cosign
+        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@6276400edd5816b2904ef9141f4db8cf5b4a1044
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Verify each immutable subject before moving tags; see ci-cd.mdx § Shared setup actions.
+      - name: Verify and tag unchanged images
+        id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WEBAPP_CHANGED: ${{ inputs.webapp_changed }}
+          APPLICATION_SERVER_CHANGED: ${{ inputs.application_server_changed }}
+          AGENT_IMAGES_CHANGED: ${{ inputs.agent_images_changed }}
+          POSTGRES_IMAGE_CHANGED: ${{ inputs.postgres_image_changed }}
+          PR_NUMBER: ${{ github.event.number }}
+          ALIAS_BASE: ${{ inputs.alias_base }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          [ -n "$ALIAS_BASE" ] || {
+            echo "::error::No published commit to alias from; the caller must build every image"; exit 1; }
+
+          tag_image() {
+            local image="ghcr.io/hephaestus-build/$1"
+            local source="$image:$ALIAS_BASE"
+            local digest
+            digest=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$source" 2>/dev/null || true)
+            if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              # The default branch's own push run may not have published yet; the pull request that
+              # merged the commit tagged the same images under its head.
+              local merged_head
+              merged_head=$(gh api "repos/$REPOSITORY/commits/$ALIAS_BASE/pulls" \
+                --jq '[.[] | select(.merged_at != null)][0].head.sha // empty')
+              if [ -n "$merged_head" ]; then
+                source="$image:$merged_head"
+                digest=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$source" 2>/dev/null || true)
+              fi
+            fi
+            if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              echo "::error::Invalid digest for $source: ${digest:-<empty>}"
+              return 1
+            fi
+            local verified="$image@$digest"
+            cosign verify "$verified" \
+              --certificate-identity-regexp "^https://github\\.com/$REPOSITORY/\\.github/workflows/reusable-docker-build\\.yml@" \
+              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+              --certificate-github-workflow-repository "$REPOSITORY" \
+              > /dev/null
+            gh attestation verify "oci://$verified" --bundle-from-oci --owner "$REPOSITORY_OWNER"
+            docker buildx imagetools create \
+              --tag "$image:$HEAD_SHA" \
+              --tag "$image:pr-$PR_NUMBER" \
+              "$verified"
+          }
+
+          [ "$WEBAPP_CHANGED" = "true" ] || tag_image webapp
+          [ "$APPLICATION_SERVER_CHANGED" = "true" ] || tag_image application-server
+          [ "$AGENT_IMAGES_CHANGED" = "true" ] || tag_image agent-pi
+          [ "$POSTGRES_IMAGE_CHANGED" = "true" ] || tag_image postgres
+
+  fail-fast-build:
+    name: Stop the merge group early
+    needs: [build]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    uses: ./.github/workflows/fail-fast.yml
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     permissions:
       actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-build-arm64:
+    name: Stop the merge group early
+    needs: [build-arm64]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-merge:
+    name: Stop the merge group early
+    needs: [merge]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"

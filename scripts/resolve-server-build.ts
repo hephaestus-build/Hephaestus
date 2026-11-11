@@ -7,21 +7,21 @@ import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 
 const requiredJobs = [
-	"App Server: Package",
-	"Build / App Server: Generated artifacts",
-	"Build / App Server: Database",
-	"Build / App Server: PostgreSQL drills",
-	"Build / Webapp: E2E",
-	"Docker / Images / Build linux/amd64 images",
-	"Docker / Images / Build linux/arm64 images",
-	"Test / App Server: Unit",
-	"Test / App Server: Architecture",
-	"Test / App Server: Integration (review)",
+	"Build / Server package",
+	"Build / Generated API",
+	"Build / Database migrations",
+	"Build / PostgreSQL drills",
+	"Browser tests / Webapp",
+	"Images / linux/amd64",
+	"Images / linux/arm64",
+	"Server tests / Unit",
+	"Server tests / Architecture",
+	"Server tests / Integration (review)",
 	...Array.from(
 		{ length: committedShards() },
-		(_, index) => `Test / App Server: Integration (${index + 1})`,
+		(_, index) => `Server tests / Integration (${index + 1} of 8)`,
 	),
-	"Security / Dependencies, secrets, and policy",
+	"Security / Dependencies, secrets and policy",
 	"CI Status Gate",
 ];
 
@@ -87,7 +87,7 @@ type Api = (path: string) => Promise<unknown>;
  * The job that publishes every image of a CI/CD run, and the step that attests each image it built,
  * by the image key that the image builds of a default-branch push read from `reuse_images`.
  */
-export const imageManifestJob = "Docker / Images / Create manifests";
+export const imageManifestJob = "Images / Manifest";
 export const imageAttestations = {
 	"application-server": "Attest the application-server image",
 	webapp: "Attest the webapp image",
@@ -172,7 +172,10 @@ export async function resolveQueueRun(
 /** The images whose index a run published: those its successful manifest job attested. */
 function publishedImages(jobs: readonly Record<string, unknown>[]): string[] {
 	const manifests = jobs.find(
-		(job) => job.name === imageManifestJob && job.conclusion === "success",
+		(job) =>
+			typeof job.name === "string" &&
+			canonicalCiJobName(job.name) === imageManifestJob &&
+			job.conclusion === "success",
 	);
 	const steps = manifests === undefined ? [] : asArray(manifests.steps, "manifest job steps");
 	return Object.entries(imageAttestations)

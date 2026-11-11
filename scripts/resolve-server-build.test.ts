@@ -86,67 +86,36 @@ await test("selects the immutable artifact of an exact-commit successful release
 	assert.deepEqual(await resolve(), { runId: 101, artifactId: 202 });
 });
 
-await test("caller matrix names preserve exact-commit build reuse and reject mismatched shards", async () => {
+await test("current static names and historical caller names preserve exact-commit reuse", async () => {
 	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-	const tests = parseDocument(await readFile(".github/workflows/ci-tests.yml", "utf8"));
-	const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+	const suites = parseDocument(await readFile(".github/workflows/ci-tests.yml", "utf8"));
 	const images = parseDocument(
 		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
-	const aliases = new Map<string, string>();
-	for (const shard of ["unit", "architecture", "review", "1", "2", "3", "4", "5", "6", "7", "8"]) {
-		const caller = String(ci.getIn(["jobs", "Test", "name"])).replace(
-			`\${{ matrix.shard }}`,
-			shard,
+	const jobs = suites.get("jobs");
+	assert.ok(isMap(jobs));
+	const current = jobs.items
+		.filter(({ key }) => !String(key).startsWith("fail-fast-"))
+		.map(({ value }) => {
+			assert.ok(isMap(value));
+			return `${String(ci.getIn(["jobs", "Test", "name"]))} / ${String(value.get("name"))}`;
+		});
+	for (const arch of ["amd64", "arm64"])
+		current.push(
+			`Images / ${String(images.getIn(["jobs", arch === "amd64" ? "build" : "build-arm64", "name"]))}`,
 		);
-		const tier = { unit: "Unit", architecture: "Architecture" }[shard];
-		const worker =
-			tier === undefined
-				? String(tests.getIn(["jobs", "server-integration", "name"])).replace(
-						`\${{ inputs.shard }}`,
-						shard,
-					)
-				: String(tests.getIn(["jobs", "server-verification", "name"])).replace(
-						`\${{ inputs.shard == 'unit' && 'Unit' || 'Architecture' }}`,
-						tier,
-					);
-		const name = `${caller} / ${worker}`;
-		const canonical =
-			tier === undefined
-				? `Test / App Server: Integration (${shard})`
-				: `Test / App Server: ${tier}`;
-		assert.equal(canonicalCiJobName(name), canonical);
-		aliases.set(canonical, name);
-	}
-	for (const platform of ["linux/amd64", "linux/arm64"]) {
-		const caller = String(docker.getIn(["jobs", "images", "name"])).replace(
-			`\${{ matrix.platform }}`,
-			platform,
-		);
-		const worker = String(images.getIn(["jobs", "build", "name"])).replace(
-			`\${{ inputs.platform }}`,
-			platform,
-		);
-		const name = `Docker / ${caller} / ${worker}`;
-		const canonical = `Docker / Images / Build ${platform} images`;
-		assert.equal(canonicalCiJobName(name), canonical);
-		aliases.set(canonical, name);
-	}
+	const legacy = requiredJobs.filter(
+		(name) => name.startsWith("Test /") || name.startsWith("Docker / Images / Build"),
+	);
+	assert.deepEqual(current.toSorted(), legacy.map(canonicalCiJobName).toSorted());
 	const data = fixture();
-	data.jobs = data.jobs.map((job) => ({ ...job, name: aliases.get(job.name) ?? job.name }));
+	data.jobs = data.jobs.map((job) => ({ ...job, name: canonicalCiJobName(job.name) }));
 	assert.deepEqual(await resolve(data), { runId: 101, artifactId: 202 });
 	for (const bad of [
 		"Test (2) / App Server: Integration (1)",
 		"Docker / Images (linux/arm64) / Build linux/amd64 images",
-	]) {
+	])
 		assert.equal(canonicalCiJobName(bad), bad);
-	}
-	const shard = data.jobs.find(
-		(job) => job.name === aliases.get("Test / App Server: Integration (1)"),
-	);
-	assert.ok(shard !== undefined);
-	shard.conclusion = "failure";
-	assert.equal(await resolve(data), undefined);
 });
 
 await test("reuses an ordinary merge group without the release-only evidence job", async () => {
@@ -369,29 +338,21 @@ await test("the image builds receive the queue run a default-branch push resolve
 		`\${{ steps.queue_run.outputs.images || '[]' }}`,
 	);
 	assert.equal(
-		workflow.getIn(["jobs", "Docker", "with", "reuse_run"]),
+		workflow.getIn(["jobs", "Docker", "with", "reuse-run"]),
 		`\${{ needs.detect-changes.outputs.queue-run }}`,
 	);
 	assert.equal(
-		workflow.getIn(["jobs", "Docker", "with", "reuse_images"]),
+		workflow.getIn(["jobs", "Docker", "with", "reuse-images"]),
 		`\${{ needs.detect-changes.outputs.queue-images }}`,
 	);
-	const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
-	assert.equal(docker.getIn(["jobs", "images", "with", "reuse-run"]), `\${{ inputs.reuse_run }}`);
-	assert.equal(
-		docker.getIn(["jobs", "images", "with", "reuse-images"]),
-		`\${{ inputs.reuse_images }}`,
-	);
-	const build = parseDocument(
+	const docker = parseDocument(
 		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
-	// The job and step names the lookup reads, as GitHub names them in the run. A caller job without
-	// a name shows its ID.
-	assert.equal(workflow.hasIn(["jobs", "Docker", "name"]), false);
-	assert.equal(
-		imageManifestJob,
-		`Docker / ${String(docker.getIn(["jobs", "manifests", "name"]))} / ${String(build.getIn(["jobs", "merge", "name"]))}`,
-	);
+	assert.equal(docker.getIn(["on", "workflow_call", "inputs", "reuse-run", "default"]), "");
+	assert.equal(docker.getIn(["on", "workflow_call", "inputs", "reuse-images", "default"]), "[]");
+	const build = docker;
+	assert.equal(workflow.getIn(["jobs", "Docker", "name"]), "Images");
+	assert.equal(imageManifestJob, `Images / ${String(build.getIn(["jobs", "merge", "name"]))}`);
 	// One image list: the attestation steps the lookup reads are the images the workflow can select,
 	// so `complete` cannot call a run complete that left out an image CI builds. Each listed image has
 	// its input, its digest output and its attestation step.

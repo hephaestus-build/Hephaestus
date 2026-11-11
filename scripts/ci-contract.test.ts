@@ -11,7 +11,16 @@ import { runInNewContext } from "node:vm";
 import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
 import { parse as parseJsonc } from "jsonc-parser";
 import { minimatch } from "minimatch";
-import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
+import {
+	type Document,
+	isMap,
+	isScalar,
+	isSeq,
+	parseDocument as parseYamlDocument,
+	visit,
+	type YAMLMap,
+	stringify,
+} from "yaml";
 
 import { commandsFor, scopesFor } from "./check-affected.ts";
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
@@ -29,6 +38,11 @@ import { resolveAliasBase } from "./resolve-alias-base.ts";
 import { planSubjects } from "./scan-main-images.ts";
 import { PLATFORMS, planUpstreamSubjects } from "./scan-upstream-images.ts";
 import { validateManifest } from "./verify-release-evidence.ts";
+
+/** Expand native YAML aliases before inspecting a worker's steps. */
+function parseDocument(source: string) {
+	return parseYamlDocument(stringify(parseYamlDocument(source).toJS({ maxAliasCount: -1 })));
+}
 
 void test("private dependency and platform reports run only on the default branch", async () => {
 	const workflow = parseDocument(await readFile(".github/workflows/rescan-images.yml", "utf8"));
@@ -1142,7 +1156,8 @@ void describe("CI contract", () => {
 		const guarded: string[] = [];
 		for (const [file, caller] of [
 			[".github/workflows/ci-build.yml", "Build"],
-			[".github/workflows/ci-tests.yml", "Test"],
+			[".github/workflows/ci-browser-tests.yml", "Browser tests"],
+			[".github/workflows/ci-tests.yml", "Server tests"],
 		] as const) {
 			const callee = parseDocument(await readFile(file, "utf8"));
 			const jobs = callee.get("jobs");
@@ -1162,7 +1177,7 @@ void describe("CI contract", () => {
 			"extension-e2e",
 			"postgres-drill",
 			"server-database",
-			"server-integration",
+			...Array.from({ length: committedShards() }, (_, index) => `server-integration-${index + 1}`),
 			"webapp-e2e",
 		]);
 		// A pull request packages for the browser suites only when it runs them.
@@ -1298,7 +1313,7 @@ void describe("CI contract", () => {
 			JSON.stringify(orchestrator.getIn(["on", "pull_request"]) ?? {}),
 			/labeled/u,
 		);
-		for (const caller of ["Build", "Test"]) {
+		for (const caller of ["Build", "Browser-tests", "Test"]) {
 			assert.equal(
 				orchestrator.getIn(["jobs", caller, "with", "queue_tier"]),
 				`\${{ needs.detect-changes.outputs.queue-tier }}`,
@@ -1306,12 +1321,13 @@ void describe("CI contract", () => {
 			);
 		}
 		for (const [file, queue, fast] of [
+			[".github/workflows/ci-build.yml", ["server-database", "postgres-drill"], ["server-api"]],
+			[".github/workflows/ci-browser-tests.yml", ["webapp-e2e", "extension-e2e"], []],
 			[
-				".github/workflows/ci-build.yml",
-				["server-database", "postgres-drill", "webapp-e2e", "extension-e2e"],
-				["server-api"],
+				".github/workflows/ci-tests.yml",
+				Array.from({ length: committedShards() }, (_, index) => `server-integration-${index + 1}`),
+				["server-verification", "server-architecture", "server-integration"],
 			],
-			[".github/workflows/ci-tests.yml", ["server-integration"], ["server-verification"]],
 		] as const) {
 			const workflow = parseDocument(await readFile(file, "utf8"));
 			assert.equal(
@@ -1322,9 +1338,7 @@ void describe("CI contract", () => {
 				assert.match(
 					String(workflow.getIn(["jobs", name, "if"])),
 					// Of the integration shards, the review shard also runs in the fast tier.
-					name === "server-integration"
-						? /&& \(inputs\.queue_tier == 'true' \|\| inputs\.shard == 'review'\)$/u
-						: /&& inputs\.queue_tier == 'true'$/u,
+					/&& inputs\.queue_tier == 'true'$/u,
 					`${name} belongs to the queue tier`,
 				);
 			}
@@ -1416,7 +1430,9 @@ void describe("CI contract", () => {
 		assert.equal(api.getIn(["jobs", "generate", "permissions", "contents"]), "read");
 		assert.doesNotMatch(job(String(api), "generate"), /actions\/setup-java@/u);
 		assert.doesNotMatch(job(String(api), "commit"), /setup-caches|gradlew|vp run/u);
-		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
+		const build =
+			(await readFile(".github/workflows/ci-build.yml", "utf8")) +
+			(await readFile(".github/workflows/ci-browser-tests.yml", "utf8")).split("jobs:\n")[1];
 		for (const name of ["webapp-e2e", "extension-e2e"]) {
 			assert.match(job(build, name), /actions\/setup-java@/u);
 			assert.doesNotMatch(job(build, name), /setup-caches|gradlew/u);
@@ -1480,7 +1496,9 @@ void describe("CI contract", () => {
 			"vp run --filter extension build:e2e",
 			"vp run --filter extension test:e2e",
 		]);
-		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
+		const build =
+			(await readFile(".github/workflows/ci-build.yml", "utf8")) +
+			(await readFile(".github/workflows/ci-browser-tests.yml", "utf8")).split("jobs:\n")[1];
 		const e2e = job(build, "extension-e2e");
 		assert.match(e2e, /vp run test:extension:e2e/u);
 		// Every Playwright project runs: neither the task nor the job narrows the suite.
@@ -1507,9 +1525,9 @@ void describe("CI contract", () => {
 		);
 		assert.equal(e2eStep.getIn(["env", "E2E_SERVER_URL"]), "http://127.0.0.1:8080");
 		assert.match(String(e2eStep.get("run")), /SERVER_PORT=8080 /u);
-		const leg = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+		const leg = parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8"));
 		const upload = namedStep(leg, ["jobs", "quality"], "Upload the extension package");
-		assert.equal(upload.get("if"), "inputs.leg == 'extension'");
+		assert.equal(upload.get("if"), "env.QUALITY_LEG == 'extension'");
 		assert.equal(stepInputs(upload).get("path"), "extension/.output/*-production-chrome.zip");
 		assert.equal(
 			stepInputs(upload).get("include-hidden-files"),
@@ -1616,7 +1634,7 @@ void describe("CI contract", () => {
 			workflow.getIn(["jobs", "Docker", "with", "scan-images"]),
 			`\${{ needs.detect-changes.outputs.release-preflight != 'true' }}`,
 		);
-		for (const file of ["ci-docker-build.yml", "reusable-docker-build.yml"]) {
+		for (const file of ["reusable-docker-build.yml", "reusable-docker-build.yml"]) {
 			const reusable = parseDocument(await readFile(`.github/workflows/${file}`, "utf8"));
 			assert.equal(
 				reusable.getIn(["on", "workflow_call", "inputs", "scan-images", "default"]),
@@ -1854,10 +1872,12 @@ void describe("CI contract", () => {
 		}
 		// The handover runs only when every step succeeded, and the manifest job needs the build.
 		assert.equal(namedStep(workflow, build, "Upload digests").get("if"), "inputs.publish");
-		const caller = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
-		const dependencies = caller.getIn(["jobs", "manifests", "needs"]);
+		const caller = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		const dependencies = caller.getIn(["jobs", "merge", "needs"]);
 		assert.ok(isSeq(dependencies));
-		assert.deepEqual(dependencies.toJSON(), ["images"]);
+		assert.deepEqual(dependencies.toJSON(), ["build", "build-arm64"]);
 	});
 
 	void test("every CI/CD run validates the Gradle wrapper in a job without a condition", async () => {
@@ -1895,7 +1915,7 @@ void describe("CI contract", () => {
 		const workflow = parseDocument(source);
 		const integration = job(source, "server-integration");
 		const caller = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-		assert.equal(caller.getIn(["jobs", "Test", "strategy", "fail-fast"]), false);
+		assert.equal(caller.hasIn(["jobs", "Test", "strategy"]), false);
 		assert.equal(workflow.hasIn(["jobs", "server-integration", "strategy"]), false);
 		const jobPath = ["jobs", "server-integration"];
 		const run = namedStep(workflow, jobPath, "Run integration tests");
@@ -1903,7 +1923,7 @@ void describe("CI contract", () => {
 		assert.ok(isMap(environment));
 		assert.match(
 			String(environment.get("HEPHAESTUS_INTEGRATION_SHARD")),
-			/inputs\.shard/u,
+			/env\.INTEGRATION_SHARD/u,
 			"The shard's selector reaches the task as an environment value",
 		);
 		const steps = workflow.getIn([...jobPath, "steps"]);
@@ -1935,7 +1955,7 @@ void describe("CI contract", () => {
 		assert.equal((source.match(/run: vp run test:server:integration/gu) ?? []).length, 1);
 		assert.match(
 			integration,
-			/Test Results - App Server Integration \(\$\{\{ inputs.shard \}\}\)/u,
+			/Test Results - App Server Integration \(\$\{\{ env.INTEGRATION_SHARD \}\}\)/u,
 		);
 		const tasks = await readFile("vite.config.ts", "utf8");
 		assert.match(
@@ -1992,7 +2012,9 @@ void describe("CI contract", () => {
 	});
 
 	void test("packages the server once and runs every artifact gate against it", async () => {
-		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
+		const build =
+			(await readFile(".github/workflows/ci-build.yml", "utf8")) +
+			(await readFile(".github/workflows/ci-browser-tests.yml", "utf8")).split("jobs:\n")[1];
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		const packageJob = job(orchestrator, "server-package");
 		const packaging = /^\s+run: (?<command>\.\/gradlew .*)$/mu.exec(packageJob)?.groups?.command;
@@ -2059,10 +2081,8 @@ void describe("CI contract", () => {
 		}
 		// docs/contributor/ci-cd.mdx § Parallelism and concurrency owns action-context setup ordering.
 		for (const [file, names] of [
-			[
-				".github/workflows/ci-build.yml",
-				["server-api", "server-database", "postgres-drill", "webapp-e2e", "extension-e2e"],
-			],
+			[".github/workflows/ci-build.yml", ["server-api", "server-database", "postgres-drill"]],
+			[".github/workflows/ci-browser-tests.yml", ["webapp-e2e", "extension-e2e"]],
 			[".github/workflows/ci-tests.yml", ["server-verification", "server-integration"]],
 		] as const) {
 			const workflow = parseDocument(await readFile(file, "utf8"));
@@ -2121,7 +2141,7 @@ void describe("CI contract", () => {
 		const image = job(orchestrator, "Docker");
 		assert.match(
 			image,
-			/needs: \[detect-changes, vulnerability-database, server-package, Security-merge-group\]/u,
+			/needs: \[detect-changes, vulnerability-database, server-package, Security\]/u,
 		);
 		assert.match(image, /application-artifact: server-build-\$\{\{ github\.run_id \}\}/u);
 		assert.match(image, /needs\.server-package\.result == 'success'/u);
@@ -2136,7 +2156,7 @@ void describe("CI contract", () => {
 		for (const [name, command] of [
 			[
 				"server-verification",
-				/TASK: test:server:\$\{\{ inputs\.shard \}\}\n\s+run: vp run "\$TASK"/u,
+				/TASK: test:server:\$\{\{ env\.TEST_TIER \}\}\n\s+run: vp run "\$TASK"/u,
 			],
 			["server-integration", /vp run test:server:integration/u],
 		] as const) {
@@ -2146,10 +2166,7 @@ void describe("CI contract", () => {
 			assert.doesNotMatch(suite, /^ {4}needs:/mu);
 		}
 		assert.match(job(orchestrator, "Build"), /needs: \[detect-changes, server-package\]/u);
-		assert.match(
-			job(orchestrator, "Test"),
-			/needs: \[detect-changes, server-package, Security-merge-group\]/u,
-		);
+		assert.match(job(orchestrator, "Test"), /needs: \[detect-changes, server-package, Security\]/u);
 		// A package skipped while the suites are selected must fail them, never skip them.
 		assert.match(job(orchestrator, "Test"), /needs\.server-package\.result != 'failure'/u);
 		assert.doesNotMatch(job(orchestrator, "Test"), /needs\.server-package\.result == 'success'/u);
@@ -2191,7 +2208,7 @@ void describe("CI contract", () => {
 			"detect-changes",
 			"vulnerability-database",
 			"server-package",
-			"Security-merge-group",
+			"Security",
 		]);
 		for (const name of ["Release-preflight"]) {
 			const dependencies = workflow.getIn(["jobs", name, "needs"]);
@@ -2390,8 +2407,8 @@ void describe("CI contract", () => {
 		]) {
 			const needs = {
 				"upstream-images": /needs: \[detect-changes, vulnerability-database\]/u,
-				Test: /needs: \[detect-changes, server-package, Security-merge-group\]/u,
-				Quality: /needs: \[detect-changes, Security-merge-group\]/u,
+				Test: /needs: \[detect-changes, server-package, Security\]/u,
+				Quality: /needs: \[detect-changes, Security\]/u,
 			}[name];
 			assert.match(job(source, name), needs ?? /needs: \[detect-changes\]/u);
 			assert.match(
@@ -2402,10 +2419,14 @@ void describe("CI contract", () => {
 		// Every push to main packages and publishes the final-SHA images; only a version bump
 		// repeats source validation, so the artifact gates inside Build follow the same rule.
 		assert.doesNotMatch(job(source, "Docker"), /version-bump/u);
-		const build = job(source, "Build");
-		assert.doesNotMatch(build.slice(0, build.indexOf("with:")), /version-bump/u);
-		for (const gate of ["contracts_changed", "e2e_changed", "extension_e2e_changed"]) {
-			assert.match(build, new RegExp(`^\\s+${gate}:.*version-bump == 'true'`, "mu"));
+		for (const [name, gates] of [
+			["Build", ["contracts_changed"]],
+			["Browser-tests", ["e2e_changed", "extension_e2e_changed"]],
+		] as const) {
+			const build = job(source, name);
+			assert.doesNotMatch(build.slice(0, build.indexOf("with:")), /version-bump/u);
+			for (const gate of gates)
+				assert.match(build, new RegExp(`^\\s+${gate}:.*version-bump == 'true'`, "mu"));
 		}
 		assertNeeds(source, "all-ci-passed", "Docker");
 	});
@@ -2533,20 +2554,22 @@ void describe("CI contract", () => {
 		);
 		// The caller owns which commit a run is a diff from; `ci-build.yml` derives nothing from
 		// the event.
-		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
+		const build =
+			(await readFile(".github/workflows/ci-build.yml", "utf8")) +
+			(await readFile(".github/workflows/ci-browser-tests.yml", "utf8")).split("jobs:\n")[1];
 		assert.doesNotMatch(build, /github\.event\.pull_request\.base\.sha/u);
 	});
 
 	void test("decides an image's architectures once, for every image the run builds", async () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 
-		const docker = await readFile(".github/workflows/ci-docker-build.yml", "utf8");
+		const docker = await readFile(".github/workflows/reusable-docker-build.yml", "utf8");
 		// The platform list is one decision, taken in cicd.yml and handed to every image build, so
 		// a run cannot evidence one image on both platforms and its sibling on one. The test below
 		// owns what that decision is; this owns that nothing decides it locally.
-		const images = job(docker, "images");
-		assert.match(images, /platforms: \$\{\{ inputs\.platforms \}\}/u);
-		assert.doesNotMatch(images, /^\s+tags:/mu);
+		const images = job(docker, "build");
+		assert.match(images, /contains\(fromJSON\(inputs\.platforms\), 'linux\/amd64'\)/u);
+		assert.equal(parseDocument(images).getIn(["build", "strategy"]), undefined);
 		// Required, and with no default: a caller that forgets it fails to start, rather than
 		// silently publishing one architecture where a release needs two.
 		assert.match(docker, /^ {6}platforms:\n(?: {8}.*\n)*? {8}required: true$/mu);
@@ -2574,25 +2597,22 @@ void describe("CI contract", () => {
 		assert.equal(declaration.get("required"), true);
 		assert.equal(declaration.get("default"), undefined);
 		// One code path for every platform list: the build matrix, which scans, and the merge read it.
-		assert.equal(
-			parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8")).getIn([
-				"jobs",
-				"images",
-				"strategy",
-				"matrix",
-				"platform",
-			]),
-			`\${{ fromJSON(inputs.platforms) }}`,
-		);
+		for (const [key, platform] of [
+			["build", "linux/amd64"],
+			["build-arm64", "linux/arm64"],
+		]) {
+			assert.match(
+				String(parsed.getIn(["jobs", key, "if"])),
+				new RegExp(`contains\\(fromJSON\\(inputs\\.platforms\\), '${platform}'\\)`, "u"),
+			);
+		}
+
 		assert.equal(
 			namedStep(parsed, ["jobs", "merge"], "Create manifests and push").getIn(["env", "PLATFORMS"]),
 			`\${{ inputs.platforms }}`,
 		);
 		// Each platform builds natively on its own runner; no emulation.
-		assert.equal(
-			parsed.getIn(["jobs", "build", "runs-on"]),
-			`\${{ inputs.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}`,
-		);
+		assert.equal(parsed.getIn(["jobs", "build", "runs-on"]), "ubuntu-24.04");
 		assert.doesNotMatch(reusable, /qemu/iu);
 	});
 
@@ -2626,7 +2646,9 @@ void describe("CI contract", () => {
 			published,
 		);
 
-		const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+		const docker = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
 		const tagging = ["jobs", "tag-unchanged-images"];
 		assert.match(
 			String(orchestrator.getIn(["jobs", "Docker", "with", "alias_base"])),
@@ -2718,7 +2740,9 @@ void describe("CI contract", () => {
 			`\${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}`,
 		);
 
-		const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+		const docker = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
 		assert.match(String(docker.getIn(["jobs", "tag-unchanged-images", "if"])), /inputs\.publish/u);
 	});
 
@@ -2785,7 +2809,7 @@ void describe("CI contract", () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const workflow = parseDocument(source);
 		assert.equal(workflow.getIn(["jobs", "Supported-host-smoke"]), undefined);
-		const cluster = job(source, "Kubernetes-chart");
+		const cluster = job(source, "Kubernetes");
 		assert.match(cluster, /needs\.Docker\.result == 'success'/u);
 		assert.match(cluster, /needs\.server-package\.result != 'failure'/u);
 		assert.match(cluster, /outputs\.kubernetes == 'true'/u);
@@ -2794,9 +2818,9 @@ void describe("CI contract", () => {
 			/commit: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/u,
 		);
 		assertNeeds(source, "all-ci-passed", "Kubernetes");
-		assertNeeds(source, "all-ci-passed", "Kubernetes-chart");
+		assertNeeds(source, "all-ci-passed", "Kubernetes");
 		assertNeeds(source, "Kubernetes", "server-package");
-		assertNeeds(source, "Kubernetes", "Kubernetes-chart");
+		assertNeeds(source, "Kubernetes", "Docker");
 		assert.match(
 			job(source, "Kubernetes"),
 			/application-artifact:.*needs\.server-package\.result == 'success'/u,
@@ -2947,11 +2971,14 @@ void describe("CI contract", () => {
 		// runner hop. The merge needs the build, so only scanned digests reach an index.
 		assert.equal(workflow.hasIn(["jobs", "scan"]), false);
 		// Other events collect both platform scans; merge groups use the isolated cancel helper.
-		const images = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
-		assert.equal(images.getIn(["jobs", "images", "strategy", "fail-fast"]), false);
-		const dependencies = images.getIn(["jobs", "manifests", "needs"]);
+		const images = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		assert.equal(images.hasIn(["jobs", "build", "strategy"]), false);
+		assert.equal(images.hasIn(["jobs", "build-arm64", "strategy"]), false);
+		const dependencies = images.getIn(["jobs", "merge", "needs"]);
 		assert.ok(isSeq(dependencies));
-		assert.deepEqual(dependencies.toJSON(), ["images"]);
+		assert.deepEqual(dependencies.toJSON(), ["build", "build-arm64"]);
 		const build = ["jobs", "build"];
 		const steps = workflow.getIn([...build, "steps"]);
 		assert.ok(isSeq(steps));
@@ -2968,7 +2995,7 @@ void describe("CI contract", () => {
 			String(enforce.get("run")),
 			/node scripts\/check-release-vulnerabilities\.ts "\$image" "\$SCAN_PLATFORM"[\s\S]*security\/vulnerability-policy\.json/u,
 		);
-		assert.equal(enforce.getIn(["env", "SCAN_PLATFORM"]), `\${{ inputs.platform }}`);
+		assert.equal(enforce.getIn(["env", "SCAN_PLATFORM"]), `\${{ env.IMAGE_PLATFORM }}`);
 		assert.doesNotMatch(String(enforce.get("run")), /github\.(?:run_id|run_attempt)/u);
 		// The scans run on freed disk, with their temporary files on the roomiest volume.
 		const disk = namedStep(workflow, build, "Free disk space for the scans");
@@ -3686,10 +3713,7 @@ void describe("CI contract", () => {
 		// A merge group that cancelled itself after a failed leg reports that failure. A regroup that
 		// cancelled the run reports a cancellation. The merge-group reporter reads this difference.
 		const afterCancel = { Test: "cancelled", Docker: "cancelled" };
-		assert.deepEqual(
-			await verdict({ ...afterCancel, "Security-merge-group": "failure" }, false),
-			fails,
-		);
+		assert.deepEqual(await verdict({ ...afterCancel, Security: "failure" }, false), fails);
 		assert.deepEqual(await verdict(afterCancel, false), {
 			failed: true,
 			outputs: { status: "cancelled" },
@@ -3796,7 +3820,7 @@ void describe("CI contract", () => {
 		// re-tests the event on its own. The package and server image selectors read it directly.
 		for (const at of [
 			["jobs", "server-package", "if"],
-			["jobs", "Docker", "with", "application_server_image"],
+			["jobs", "Docker", "with", "application-server"],
 		]) {
 			const condition = String(workflow.getIn(at));
 			assert.match(condition, /needs\.detect-changes\.outputs\.all-images == 'true'/u);
@@ -3827,7 +3851,9 @@ void describe("CI contract", () => {
 		}
 		// And the alias cannot run behind their backs: it is reachable only while some image is
 		// unchanged, so a run that builds the whole set evidences nothing another run published.
-		const images = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+		const images = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
 		const alias = String(images.getIn(["jobs", "tag-unchanged-images", "if"]));
 		for (const name of imageInputs.Docker) {
 			assert.match(alias, new RegExp(`inputs\\.${name} != 'true'`, "u"));
@@ -3848,7 +3874,7 @@ void describe("CI contract", () => {
 			/^\$\{\{ steps\.filter\.outputs\.kubernetes \}\}$/u,
 		);
 		assert.match(
-			String(workflow.getIn(["jobs", "Kubernetes-chart", "if"])),
+			String(workflow.getIn(["jobs", "Kubernetes", "if"])),
 			/needs\.detect-changes\.outputs\.kubernetes == 'true'/u,
 		);
 		assert.match(
@@ -4374,9 +4400,8 @@ void describe("CI contract", () => {
 		}
 		// One setup per job that runs a browser: the two E2E suites, Storybook, and the extension leg.
 		for (const [file, browserJobs] of [
-			[".github/workflows/ci-build.yml", 2],
-			[".github/workflows/ci-quality-gates.yml", 1],
-			[".github/workflows/ci-quality-leg.yml", 1],
+			[".github/workflows/ci-browser-tests.yml", 2],
+			[".github/workflows/ci-quality-gates.yml", 2],
 		] as const) {
 			const source = sources.get(file);
 			assert.ok(isSet(source));
@@ -4877,7 +4902,7 @@ function expandExpressions(value: unknown, context: Record<string, unknown>): st
 	);
 }
 
-/** The matrix entries of `ci-tests.yml` that run a whole tier rather than an integration shard. */
+/** The static workers that run a whole tier rather than an integration shard. */
 const SERVER_TIERS = new Set(["unit", "architecture"]);
 
 /** `review`, then the numbered shards that the committed integration test durations define. */
@@ -4886,13 +4911,23 @@ function integrationShards(): string[] {
 }
 
 function serverShards(workflow: Document, queue: boolean): string[] {
-	const expression = String(
-		workflow.getIn(["jobs", "Test", "strategy", "matrix", "shard"]),
-	).replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "");
-	const encoded = expandExpressions(`\${{ toJSON(${expression}) }}`, {
-		needs: { "detect-changes": { outputs: { "queue-tier": String(queue) } } },
+	assert.equal(workflow.getIn(["jobs", "Test", "uses"]), "./.github/workflows/ci-tests.yml");
+	assert.equal(workflow.hasIn(["jobs", "Test", "strategy"]), false);
+	const suites = parseDocument(readFileSync(".github/workflows/ci-tests.yml", "utf8"));
+	const jobs = suites.get("jobs");
+	assert.ok(isMap(jobs));
+	return jobs.items.flatMap(({ key, value }) => {
+		assert.ok(isMap(value));
+		const tier = value.getIn(["env", "TEST_TIER"]) ?? value.getIn(["env", "INTEGRATION_SHARD"]);
+		if (tier === undefined) return [];
+		return jobRuns(suites, String(key), "pull_request", {}, false, {
+			should_skip: "false",
+			application_server_changed: "true",
+			queue_tier: String(queue),
+		})
+			? [asString(tier, "server tier or shard")]
+			: [];
 	});
-	return asArray(JSON.parse(encoded), "server shards").map((value) => asString(value, "shard"));
 }
 
 // A push to a pull request leaves its earlier run validating a commit nobody will merge, and every
@@ -5002,25 +5037,27 @@ void test("a pull-request workflow cancels its superseded runs and nothing else"
 
 void test("proves the toolchain on Windows and from a clean clone", async () => {
 	const source = await readFile(".github/workflows/ci-quality-gates.yml", "utf8");
-	const legSource = await readFile(".github/workflows/ci-quality-leg.yml", "utf8");
+	const legSource = await readFile(".github/workflows/ci-quality-gates.yml", "utf8");
 	const workflow = parseDocument(legSource);
 	const qualityPath = ["jobs", "quality"];
 	const quality = job(legSource, "quality");
-	assert.match(quality, /runs-on: .*inputs\.leg == 'windows'.*'windows-latest'.*'ubuntu-latest'/u);
+	assert.equal(parseDocument(source).getIn(["jobs", "windows", "runs-on"]), "windows-latest");
+	assert.equal(workflow.getIn(["jobs", "quality", "runs-on"]), "ubuntu-latest");
 	assert.match(quality, /shell: bash/u);
 	assert.match(quality, /windows\) deadline vp run --no-cache ci:windows/u);
 	assert.match(quality, /deadline\(\) \{ node scripts\/ci-deadline\.ts 900 "\$@"; \}/u);
 	for (const name of ["Restore Vite task cache", "Save Vite task cache"]) {
 		assert.match(
 			String(namedStep(workflow, qualityPath, name).get("if")),
-			/inputs\.leg != 'windows'/u,
+			/env\.QUALITY_LEG != 'windows'/u,
 		);
 	}
 	const install = job(source, "clean-install");
 	assert.doesNotMatch(install, /setup-toolchain|pnpm\/setup/u);
 	assert.match(install, /vp install --frozen-lockfile/u);
 	assert.match(install, /vp run gate:toolchain/u);
-	const hookCondition = "(inputs.leg == 'tooling' || inputs.leg == 'windows') && !cancelled()";
+	const hookCondition =
+		"(env.QUALITY_LEG == 'tooling' || env.QUALITY_LEG == 'windows') && !cancelled()";
 	for (const name of ["Commit-msg hook", "Pre-push hook"]) {
 		assert.equal(namedStep(workflow, qualityPath, name).get("if"), hookCondition);
 	}
@@ -5133,7 +5170,9 @@ void test(
 	"quality dispatch selects one task and rejects an unknown leg",
 	{ skip: !bashRunsRunnerSteps() },
 	async () => {
-		const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+		const workflow = parseDocument(
+			await readFile(".github/workflows/ci-quality-gates.yml", "utf8"),
+		);
 		const script = runScript(workflow, ["jobs", "quality"], "Quality gates");
 		// The task runs under the step's deadline: `node scripts/ci-deadline.ts <seconds> <vp arguments>`.
 		const probe = `node() { printf 'deadline=%s %s\\n' "$1" "$2" >> "$GITHUB_OUTPUT"; shift 2; printf 'command=%s\\n' "$*" >> "$GITHUB_OUTPUT"; }\n${script}`;
@@ -5163,7 +5202,7 @@ void test(
 void test("unchanged quality legs are skipped before runner allocation", async () => {
 	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8"));
 	for (const [leg, scope] of [
-		["server", "application_server"],
+		["quality", "application_server"],
 		["tooling", "tooling"],
 		["webapp", "webapp"],
 		["extension", "extension"],
@@ -5189,8 +5228,11 @@ void test("unchanged quality legs are skipped before runner allocation", async (
 				`${leg}, changed=${changed}, skip=${skip}`,
 			);
 		}
-		assert.equal(workflow.getIn(["jobs", leg, "uses"]), "./.github/workflows/ci-quality-leg.yml");
-		assert.equal(workflow.getIn(["jobs", leg, "with", "leg"]), leg);
+		assert.equal(workflow.hasIn(["jobs", leg, "uses"]), false);
+		assert.equal(
+			workflow.getIn(["jobs", leg, "env", "QUALITY_LEG"]),
+			leg === "quality" ? "server" : leg,
+		);
 	}
 });
 
@@ -5202,7 +5244,7 @@ void test("a change to the task graph or the hooks selects every quality leg", a
 		"scripts/lib/push-gates.ts",
 		".vite-hooks/**",
 		".java-version",
-		".github/workflows/ci-quality-leg.yml",
+		".github/workflows/ci-quality-gates.yml",
 	]) {
 		assert.match(
 			filter,
@@ -5442,7 +5484,7 @@ await test("extension unit and browser stories retain separate reports through t
 		assert.ok(command.includes("--reporter=junit"));
 		assert.ok(command.includes(`--outputFile.junit=test-results/${report}`));
 	}
-	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8"));
 	for (const name of [
 		"Upload application test results",
 		"Retain application test reports",
@@ -5451,7 +5493,7 @@ await test("extension unit and browser stories retain separate reports through t
 	]) {
 		const report = namedStep(workflow, ["jobs", "quality"], name);
 		const condition = asString(report.get("if"), name);
-		assert.ok(condition.includes("inputs.leg == 'extension'"));
+		assert.ok(condition.includes("env.QUALITY_LEG == 'extension'"));
 		assert.ok(condition.includes("!cancelled()"));
 	}
 });
@@ -5506,7 +5548,7 @@ void test("the prose gate ratchets on Linux and Windows with the base history", 
 		commandsOf(tasks["gate:prose"]).join(" "),
 		/node --test scripts\/check-prose\.test\.ts.*node scripts\/check-prose\.ts/u,
 	);
-	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8"));
 	const steps = workflow.getIn(["jobs", "quality", "steps"]);
 	assert.ok(isSeq(steps));
 	const checkout = steps.items.find(
@@ -5752,10 +5794,10 @@ void test("every job that runs Helm installs the pinned one first, and the rende
 	}
 	assert.deepEqual(helmJobs, ["tag-images", "publish-release"]);
 
-	const leg = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+	const leg = parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8"));
 	const setup = namedStep(leg, ["jobs", "quality"], "Setup Helm");
 	assert.equal(setup.get("uses"), "./.github/actions/setup-helm");
-	assert.equal(setup.get("if"), "inputs.leg == 'tooling' || inputs.leg == 'windows'");
+	assert.equal(setup.get("if"), "env.QUALITY_LEG == 'tooling' || env.QUALITY_LEG == 'windows'");
 	const legSteps = leg.getIn(["jobs", "quality", "steps"]);
 	assert.ok(isSeq(legSteps));
 	assert.ok(
@@ -5835,7 +5877,7 @@ void test("a cluster leg is named for its distribution, minor and architecture, 
 		assert.doesNotMatch(name(String(entry.key)), /sha256|@|\d+\.\d+\.\d+/u);
 	}
 	assert.equal(name("schema"), "Chart");
-	assert.match(name("k3d"), /^k3s \$\{\{ inputs\.minor \}\} \$\{\{ inputs\.arch \}\}$/u);
+	assert.equal(name("k3d"), "k3s 1.37 amd64");
 	const minors = [
 		...new Set(
 			clusterMatrix(true, true)
@@ -5869,20 +5911,29 @@ void test("a cluster leg is named for its distribution, minor and architecture, 
 
 function clusterMatrix(queue: boolean, arm64 = false) {
 	const workflow = parseDocument(readFileSync(".github/workflows/ci-kubernetes.yml", "utf8"));
-	const encoded = expandExpressions(workflow.getIn(["jobs", "schema", "outputs", "matrix"]), {
-		inputs: { queue, arm64 },
+	const include = ["k3d-1-35-amd64", "k3d-1-35-arm64", "k3d", "calico"].flatMap((key) => {
+		if (
+			!jobRuns(workflow, key, "pull_request", { schema: { result: "success" } }, false, {
+				queue,
+				arm64,
+			})
+		)
+			return [];
+		return [
+			{
+				leg: key === "calico" ? "calico" : "k3d",
+				minor:
+					key === "calico"
+						? "1.35"
+						: String(workflow.getIn(["jobs", key, "env", "KUBERNETES_MINOR"])),
+				arch:
+					key === "calico"
+						? "amd64"
+						: String(workflow.getIn(["jobs", key, "env", "KUBERNETES_ARCH"])),
+			},
+		];
 	});
-	const plan = asRecord(JSON.parse(encoded), "cluster plan");
-	return {
-		include: asArray(plan.include, "cluster legs").map((value) => {
-			const leg = asRecord(value, "cluster leg");
-			return {
-				leg: asString(leg.leg, "leg"),
-				minor: asString(leg.minor, "minor"),
-				arch: asString(leg.arch, "arch"),
-			};
-		}),
-	};
+	return { include };
 }
 
 /** Names each leg of the cluster matrix as its distribution, minor and architecture. */
@@ -5898,10 +5949,16 @@ function evaluateLeg(
 ): string {
 	const parsed = new Parser(
 		new Lexer(String(source).replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "")).lex().tokens,
-		["inputs"],
+		["inputs", "env"],
 		[],
 	).parse();
-	const context: unknown = JSON.parse(JSON.stringify({ inputs: { queue, ...leg } }), data.reviver);
+	const context: unknown = JSON.parse(
+		JSON.stringify({
+			inputs: { queue, ...leg },
+			env: { KUBERNETES_MINOR: leg.minor, KUBERNETES_ARCH: leg.arch },
+		}),
+		data.reviver,
+	);
 	assert.ok(context instanceof data.Dictionary);
 	return new Evaluator(parsed, context).evaluate().coerceString();
 }
@@ -5909,7 +5966,7 @@ function evaluateLeg(
 void test("a pull request runs the chart and the latest k3s on amd64; the queue adds the floor and kind; only the nightly run adds arm64", async () => {
 	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
 	const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-	const queue = String(cicd.getIn(["jobs", "Kubernetes-chart", "with", "queue"]));
+	const queue = String(cicd.getIn(["jobs", "Kubernetes", "with", "queue"]));
 	assert.doesNotMatch(queue, /pull_request/u, "a pull request must not run the queue's legs");
 	for (const event of ["merge_group", "push", "workflow_dispatch"]) {
 		assert.match(queue, new RegExp(`github\\.event_name == '${event}'`, "u"));
@@ -5917,7 +5974,7 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	// A push that a merge group tested runs no leg; a push with no merge-group run, such as a direct
 	// push, runs them all. The nightly run on main runs every leg on the newest build that passed CI.
 	assert.match(
-		String(cicd.getIn(["jobs", "Kubernetes-chart", "if"])),
+		String(cicd.getIn(["jobs", "Kubernetes", "if"])),
 		/github\.event_name == 'push' && needs\.detect-changes\.outputs\.queue-run == ''/u,
 	);
 	const nightly = parseDocument(await readFile(".github/workflows/kubernetes-nightly.yml", "utf8"));
@@ -5926,10 +5983,10 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 		nightly.getIn(["jobs", "Kubernetes", "uses"]),
 		"./.github/workflows/ci-kubernetes.yml",
 	);
-	assert.equal(nightly.getIn(["jobs", "Kubernetes-chart", "with", "queue"]), true);
-	assert.equal(nightly.getIn(["jobs", "Kubernetes-chart", "with", "arm64"]), true);
+	assert.equal(nightly.getIn(["jobs", "Kubernetes", "with", "queue"]), true);
+	assert.equal(nightly.getIn(["jobs", "Kubernetes", "with", "arm64"]), true);
 	// arm64 runners are scarce, so the merge queue leaves the arm64 leg to the nightly run.
-	assert.equal(cicd.getIn(["jobs", "Kubernetes-chart", "with", "arm64"]), undefined);
+	assert.equal(cicd.getIn(["jobs", "Kubernetes", "with", "arm64"]), undefined);
 	assert.equal(
 		nightly.getIn(["jobs", "Kubernetes", "with", "ref"]),
 		nightly.getIn(["jobs", "Kubernetes", "with", "commit"]),
@@ -5987,14 +6044,8 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 		"calico 1.35 amd64",
 	]);
 	for (const caller of [cicd, nightly]) {
-		assert.equal(
-			caller.getIn(["jobs", "Kubernetes", "strategy", "matrix"]),
-			`\${{ fromJSON(needs.Kubernetes-chart.outputs.matrix) }}`,
-		);
-		assert.equal(
-			caller.getIn(["jobs", "Kubernetes", "name"]),
-			`Kubernetes (\${{ matrix.leg }} \${{ matrix.minor }} \${{ matrix.arch }})`,
-		);
+		assert.equal(caller.hasIn(["jobs", "Kubernetes", "strategy"]), false);
+		assert.equal(caller.getIn(["jobs", "Kubernetes", "name"]), "Kubernetes");
 	}
 
 	// kubeconform validates the render on the lowest and the latest minor of the legs.
@@ -6015,7 +6066,7 @@ void test("a merge group runs no Kubernetes drill, and no release ships past a f
 	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
 	assert.equal(
 		kubernetes.getIn(["jobs", "k3d", "env", "DRILLS"]),
-		`\${{ inputs.minor == '1.37' && inputs.arch == 'amd64' && github.event_name != 'merge_group' }}`,
+		`\${{ github.event_name != 'merge_group' }}`,
 	);
 	const steps = kubernetes.getIn(["jobs", "k3d", "steps"]);
 	assert.ok(isSeq(steps));
@@ -6121,7 +6172,7 @@ void test("the staging channel is signed by the release's keyless signer, over n
 });
 
 // docs/contributor/ci-cd.mdx § Fail fast in the merge queue owns the reasons for the tests below.
-const FAIL_FAST = "./.github/workflows/fail-fast.yml";
+const isCancelWorker = (job: Record<string, unknown>) => job.name === "Stop the merge group early";
 
 // The legs that take most of a merge group's runner time. In a merge group they start only after
 // Security passed, so a base-wide advisory ends the group before they take runners.
@@ -6131,7 +6182,6 @@ const HEAVY_LEGS = [
 	"Build",
 	"Test",
 	"Docker",
-	"Kubernetes-chart",
 	"Kubernetes",
 	"Release-preflight",
 ];
@@ -6140,14 +6190,13 @@ const HEAVY_LEGS = [
 const RUN_ORDER = [
 	"vulnerability-database",
 	"Security",
-	"Security-merge-group",
 	"server-package",
 	"Quality",
 	"upstream-images",
 	"Test",
 	"Build",
+	"Browser-tests",
 	"Docker",
-	"Kubernetes-chart",
 	"Kubernetes",
 	"Release-preflight",
 ];
@@ -6176,7 +6225,7 @@ function simulateRun(workflow: Document, event: string, security: string): Recor
 	for (const name of RUN_ORDER) {
 		let result = "skipped";
 		if (jobRuns(workflow, name, event, completions)) {
-			result = name === "Security-merge-group" ? security : "success";
+			result = name === "Security" ? security : "success";
 		}
 		const digest = name === "Docker" && result === "success" ? "sha256:image" : "";
 		completions[name] = { result, outputs: { "application-server-digest": digest } };
@@ -6200,62 +6249,21 @@ function needsClosure(workflow: Document, name: string): Set<string> {
 	return closure;
 }
 
-void test("in a merge group the heavy legs start after Security passed, and elsewhere they do not wait for it", async () => {
+void test("one Security scan is the heavy legs' prerequisite on every event, with advisory work independent", async () => {
 	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-	// `needs` cannot depend on the event, so the merge group's scan is a job of its own. It needs only
-	// `Detect changes`, so outside a merge group it skips when that job ends and holds nothing back.
-	const scanNeeds = workflow.getIn(["jobs", "Security-merge-group", "needs"]);
-	assert.ok(isSeq(scanNeeds));
-	assert.deepEqual(scanNeeds.toJSON(), ["detect-changes"]);
-	for (const leg of HEAVY_LEGS) {
-		const closure = needsClosure(workflow, leg);
-		assert.ok(
-			closure.has("Security-merge-group"),
-			`${leg} does not wait for Security in a merge group`,
-		);
-		assert.ok(!closure.has("Security"), `${leg} waits for the pull request's Security scan`);
-	}
-	// One scan with one name: the two jobs differ only in the event that selects them.
-	const jobs = asRecord(asRecord(workflow.toJSON(), "cicd.yml").jobs, "cicd.yml jobs");
-	const security = asRecord(jobs.Security, "Security");
-	const merge = asRecord(jobs["Security-merge-group"], "Security-merge-group");
-	const { if: securityIf, ...securityRest } = security;
-	const { if: mergeIf, name: mergeName, ...mergeRest } = merge;
-	assert.equal(mergeName, "Security");
-	assert.deepEqual(mergeRest, securityRest);
-	assert.match(
-		asString(securityIf, "Security condition"),
-		/^github\.event_name != 'merge_group' &&/u,
-	);
-	assert.equal(
-		mergeIf,
-		asString(securityIf, "Security condition").replace(
-			"github.event_name != 'merge_group' &&",
-			"github.event_name == 'merge_group' &&",
-		),
-	);
-
-	// A merge group: Security passed, so every heavy leg runs. It failed or was cancelled, so none runs.
-	const passed = simulateRun(workflow, "merge_group", "success");
-	assert.equal(passed.Security, "skipped");
-	for (const leg of HEAVY_LEGS) {
-		assert.equal(passed[leg], "success", `${leg} after Security passed`);
-	}
-	for (const result of ["failure", "cancelled"]) {
-		const stopped = simulateRun(workflow, "merge_group", result);
-		for (const leg of HEAVY_LEGS) {
-			assert.equal(stopped[leg], "skipped", `${leg} after Security ended ${result}`);
-		}
-		// The cheap legs beside Security still run, so the gate sees each of their verdicts.
-		assert.equal(stopped["vulnerability-database"], "success");
-	}
-	// Every other event: the merge group's scan skips, and every heavy leg runs.
-	for (const event of ["pull_request", "push", "workflow_dispatch"]) {
-		const run = simulateRun(workflow, event, "failure");
-		assert.equal(run["Security-merge-group"], "skipped", event);
-		assert.equal(run.Security, "success", event);
-		for (const leg of HEAVY_LEGS) {
-			assert.equal(run[leg], "success", `${leg} in ${event}`);
+	assert.deepEqual(needsOf(workflow, "Security"), ["detect-changes"]);
+	for (const leg of HEAVY_LEGS) assert.ok(needsClosure(workflow, leg).has("Security"), leg);
+	for (const event of ["merge_group", "pull_request", "push", "workflow_dispatch"]) {
+		for (const security of ["success", "failure", "cancelled"]) {
+			const run = simulateRun(workflow, event, security);
+			assert.equal(run.Security, security, event);
+			for (const leg of HEAVY_LEGS)
+				assert.equal(
+					run[leg],
+					security === "success" ? "success" : "skipped",
+					`${event} ${security}: ${leg}`,
+				);
+			assert.equal(run["vulnerability-database"], "success");
 		}
 	}
 });
@@ -6266,15 +6274,15 @@ void test("a failed leg cancels its own merge-group run, and only a merge-group 
 	const gate = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
 	assert.ok(isSeq(gate));
 	// These legs never run in a merge group, so a cancel job for them could never fire.
-	const pullRequestOnly = new Set(["Security", "Changesets"]);
-	assert.equal(simulateRun(workflow, "merge_group", "success").Security, "skipped");
+	const pullRequestOnly = new Set(["Changesets"]);
+	assert.equal(simulateRun(workflow, "merge_group", "success").Security, "success");
 	assert.equal(workflow.getIn(["jobs", "Changesets", "if"]), "github.event_name == 'pull_request'");
 	const legs = gate.items
 		.map(String)
 		.filter((name) => name !== "detect-changes" && !pullRequestOnly.has(name));
 	const jobs = asRecord(asRecord(workflow.toJSON(), "cicd.yml").jobs, "cicd.yml jobs");
 	const callers = Object.entries(jobs)
-		.filter(([, definition]) => asRecord(definition, "job").uses === FAIL_FAST)
+		.filter(([, definition]) => isCancelWorker(asRecord(definition, "job")))
 		.map(([name]) => name);
 	// One cancel job per leg that the gate judges, and the gate does not wait for any of them.
 	assert.deepEqual(callers.toSorted(), legs.map((leg) => `fail-fast-${leg}`).toSorted());
@@ -6284,7 +6292,7 @@ void test("a failed leg cancels its own merge-group run, and only a merge-group 
 		assert.deepEqual(cancel.needs, [leg], name);
 		assert.deepEqual(cancel.permissions, { actions: "write" }, name);
 		assert.equal("with" in cancel || "secrets" in cancel, false, name);
-		const condition = `\${{ always() && github.event_name == 'merge_group' && needs.${leg}.result == 'failure' }}`;
+		const condition = `\${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}`;
 		assert.equal(cancel.if, condition, name);
 		for (const event of ["merge_group", "pull_request", "push", "workflow_dispatch"]) {
 			for (const result of ["success", "failure", "cancelled", "skipped"]) {
@@ -6306,28 +6314,31 @@ void test("a failed leg cancels its own merge-group run, and only a merge-group 
 	);
 });
 
-void test("the fail-fast job cancels its run gracefully and runs no other code with its token", async () => {
-	const source = await readFile(".github/workflows/fail-fast.yml", "utf8");
-	const workflow = asRecord(parseDocument(source).toJSON(), "fail-fast.yml");
-	assert.deepEqual(workflow.on, { workflow_call: null });
-	assert.deepEqual(workflow.permissions, {});
-	const jobs = asRecord(workflow.jobs, "fail-fast.yml jobs");
-	assert.deepEqual(Object.keys(jobs), ["cancel"]);
-	const cancel = asRecord(jobs.cancel, "cancel");
-	assert.equal(cancel["runs-on"], "ubuntu-slim");
-	assert.equal(cancel.if, "github.event_name == 'merge_group'");
-	assert.deepEqual(cancel.permissions, { actions: "write" });
-	const steps = asArray(cancel.steps, "cancel steps");
-	assert.equal(steps.length, 1);
-	const only = asRecord(steps[0], "cancel step");
-	assert.equal("uses" in only, false);
-	// A graceful cancel lets `CI Status Gate` run and fail, so the queue removes the entry.
-	assert.equal(only.run, `gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"`);
-	assert.equal(asRecord(only.env, "cancel env").RUN_ID, `\${{ github.run_id }}`);
+void test("each cancel worker has the same readable name and runs only graceful cancellation with its token", async () => {
+	let count = 0;
+	for (const [file, source] of await workflowSources()) {
+		const workflow = asRecord(parseDocument(source).toJSON(), file);
+		for (const [key, definition] of Object.entries(asRecord(workflow.jobs, "jobs"))) {
+			const worker = asRecord(definition, key);
+			if (!key.startsWith("fail-fast-")) continue;
+			count++;
+			assert.equal(worker.name, "Stop the merge group early");
+			assert.equal(worker["runs-on"], "ubuntu-slim");
+			assert.deepEqual(worker.permissions, { actions: "write" });
+			const steps = asArray(worker.steps, "cancel steps");
+			assert.equal(steps.length, 1);
+			const step = asRecord(steps[0], "cancel step");
+			assert.equal(step.run, 'gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"');
+			assert.equal(step.uses, undefined);
+			assert.deepEqual(step.env, {
+				GH_TOKEN: "${{ github.token }}",
+				RUN_ID: "${{ github.run_id }}",
+			});
+		}
+	}
+	assert.ok(count > 0);
 });
 
-// A force-cancel skips `always()` jobs, so `CI Status Gate` never reports, and the queue keeps the
-// entry with no verdict until its check timeout.
 void test("no workflow, action or script force-cancels a run", async () => {
 	// This file names the forbidden forms in the patterns below.
 	const scripts = await posixGlob("scripts/**/*.ts");
@@ -6354,64 +6365,40 @@ const writesActions = (permissions: unknown) =>
 	permissions === "write-all" || (isRecord(permissions) && permissions.actions === "write");
 
 void test("each worker can cancel a merge group without waiting for unrelated workers", async () => {
-	for (const [file, workers] of [
-		["ci-quality-leg.yml", ["quality"]],
-		["ci-quality-gates.yml", ["clean-install", "webapp-stories"]],
-		[
-			"ci-build.yml",
-			["server-api", "server-database", "postgres-drill", "webapp-e2e", "extension-e2e"],
-		],
-		["ci-tests.yml", ["server-verification", "server-integration"]],
-		["reusable-docker-build.yml", ["build", "merge"]],
-		["ci-kubernetes.yml", ["schema", "k3d", "calico"]],
-	] as const) {
+	for (const file of [
+		"ci-quality-gates.yml",
+		"ci-build.yml",
+		"ci-browser-tests.yml",
+		"ci-tests.yml",
+		"reusable-docker-build.yml",
+		"ci-kubernetes.yml",
+	]) {
 		const workflow = parseDocument(await readFile(`.github/workflows/${file}`, "utf8"));
 		const jobs = asRecord(asRecord(workflow.toJSON(), file).jobs, "jobs");
-		for (const worker of workers) {
-			const leaf = asRecord(jobs[worker], worker);
-			assert.equal(
-				leaf.strategy,
-				undefined,
-				`${file}#${worker}: a callback must not wait for a matrix`,
-			);
-			assert.equal(writesActions(leaf.permissions), false, `${file}#${worker}: worker token`);
+		for (const [key, definition] of Object.entries(jobs)) {
+			const worker = asRecord(definition, key);
+			if (isCancelWorker(worker) || key === "tag-unchanged-images") continue;
 			const callbacks = Object.entries(jobs).filter(([, value]) => {
 				const callback = asRecord(value, "callback");
 				return (
-					callback.uses === FAIL_FAST &&
+					isCancelWorker(callback) &&
 					Array.isArray(callback.needs) &&
-					callback.needs.includes(worker)
+					callback.needs.length === 1 &&
+					callback.needs[0] === key
 				);
 			});
-			assert.equal(callbacks.length, 1, `${file}#${worker}: one immediate callback`);
-			const [name, value] = callbacks[0] ?? [];
-			assert.ok(name !== undefined);
-			const callback = asRecord(value, name);
-			const dependencies = asArray(callback.needs, "callback needs").map((need) =>
-				asString(need, "need"),
-			);
-			assert.ok(
-				dependencies.every((need) => new Set<string>(workers).has(need)),
-				`${file}#${name}: unrelated dependency`,
-			);
-			for (const event of [
-				"merge_group",
-				"pull_request",
-				"push",
-				"workflow_dispatch",
-				"schedule",
-			]) {
-				for (const result of ["success", "skipped", "cancelled", "failure"]) {
-					const completions = Object.fromEntries(
-						dependencies.map((need) => [need, { result: need === worker ? result : "skipped" }]),
-					);
-					assert.equal(
-						jobRuns(workflow, name, event, completions),
-						event === "merge_group" && result === "failure",
-						`${file}#${worker}: ${event}, ${result}`,
-					);
-				}
-			}
+			assert.equal(callbacks.length, 1, `${file}#${key}: immediate callback`);
+			const name = callbacks[0]?.[0];
+			assert.ok(name);
+			for (const event of ["merge_group", "pull_request", "push", "workflow_dispatch", "schedule"])
+				for (const result of ["success", "skipped", "cancelled", "failure"])
+					for (const cancelled of [false, true]) {
+						assert.equal(
+							jobRuns(workflow, name, event, { [key]: { result } }, cancelled),
+							event === "merge_group" && result === "failure",
+							`${file}#${key}: ${event}, ${result}`,
+						);
+					}
 		}
 	}
 	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
@@ -6419,52 +6406,46 @@ void test("each worker can cancel a merge group without waiting for unrelated wo
 	assert.deepEqual(serverShards(ci, true), [...SERVER_TIERS, ...integrationShards()]);
 });
 
-void test("manifest publication waits for all platform builds and still signs wholly reused images", async () => {
-	const caller = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
-	const worker = parseDocument(
+void test("manifest publication waits for both platform verdicts and still signs wholly reused images", async () => {
+	const workflow = parseDocument(
 		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
-	const selected = {
-		application_server_image: "true",
-		dockerfile_images: "false",
-		should_skip: "false",
+	assert.deepEqual(needsOf(workflow, "merge"), ["build", "build-arm64"]);
+	const inputs = {
+		publish: true,
+		"application-server": true,
+		platforms: '["linux/amd64","linux/arm64"]',
+		"reuse-images": "[]",
 	};
-	assert.equal(caller.getIn(["jobs", "images", "with", "phase"]), "build");
-	assert.equal(caller.getIn(["jobs", "manifests", "with", "phase"]), "merge");
-	for (const result of ["success", "skipped", "failure", "cancelled"]) {
+	for (const result of ["success", "skipped", "failure", "cancelled"])
 		for (const cancelled of [false, true]) {
 			assert.equal(
-				jobRuns(caller, "manifests", "merge_group", { images: { result } }, cancelled, selected),
+				jobRuns(
+					workflow,
+					"merge",
+					"merge_group",
+					{ build: { result }, "build-arm64": { result: "success" } },
+					cancelled,
+					inputs,
+				),
 				!cancelled && ["success", "skipped"].includes(result),
-				`${result}, cancelled=${String(cancelled)}`,
 			);
 		}
-	}
-	assert.equal(
-		jobRuns(caller, "manifests", "push", { images: { result: "skipped" } }, false, {
-			...selected,
-			application_server_image: "false",
-		}),
-		false,
-	);
-	for (const phase of ["build", "merge"]) {
-		for (const reused of [false, true]) {
-			const inputs = {
-				phase,
-				publish: true,
-				"application-server": true,
-				"reuse-images": reused ? '["application-server"]' : "[]",
-			};
-			assert.equal(
-				jobRuns(worker, "build", "push", {}, false, inputs),
-				phase === "build" && !reused,
-			);
-			assert.equal(jobRuns(worker, "merge", "push", {}, false, inputs), phase === "merge");
-			assert.equal(
-				jobRuns(worker, "merge", "pull_request", {}, false, { ...inputs, publish: false }),
+	for (const reused of [false, true]) {
+		const selected = { ...inputs, "reuse-images": reused ? '["application-server"]' : "[]" };
+		for (const key of ["build", "build-arm64"])
+			assert.equal(jobRuns(workflow, key, "push", {}, false, selected), !reused);
+		assert.equal(
+			jobRuns(
+				workflow,
+				"merge",
+				"push",
+				{ build: { result: "skipped" }, "build-arm64": { result: "skipped" } },
 				false,
-			);
-		}
+				selected,
+			),
+			true,
+		);
 	}
 });
 
@@ -6510,12 +6491,11 @@ void test("only the fail-fast jobs, and the listed exceptions, can write to Acti
 	const grants: string[] = [];
 	const sources = await workflowSources();
 	const callsCancel = (file: string): boolean => {
-		if (file === ".github/workflows/fail-fast.yml") {
-			return true;
-		}
 		const workflow = asRecord(parseDocument(sources.get(file) ?? "").toJSON(), file);
 		return Object.values(asRecord(workflow.jobs, "jobs")).some((value) => {
-			const { uses } = asRecord(value, "job");
+			const job = asRecord(value, "job");
+			if (isCancelWorker(job)) return true;
+			const { uses } = job;
 			return (
 				typeof uses === "string" &&
 				uses.startsWith("./.github/workflows/") &&
@@ -6536,16 +6516,13 @@ void test("only the fail-fast jobs, and the listed exceptions, can write to Acti
 					forwardsCancel,
 					`${file}#${name}: helper permission must pass through every caller`,
 				);
-			} else if (writesActions(worker.permissions)) {
+			} else if (writesActions(worker.permissions) && !isCancelWorker(worker)) {
 				grants.push(`${file}#${name}`);
 			}
 		}
 	}
 
-	assert.deepEqual(
-		grants.toSorted(),
-		[".github/workflows/fail-fast.yml#cancel", ...Object.keys(ACTIONS_WRITE_GRANTS)].toSorted(),
-	);
+	assert.deepEqual(grants.toSorted(), Object.keys(ACTIONS_WRITE_GRANTS).toSorted());
 });
 
 void test("manual publication requires a nonempty candidate on main and cannot bypass successful trusted CI", async () => {
@@ -6597,6 +6574,55 @@ void test("manual publication requires a nonempty candidate on main and cannot b
 				inputs: {},
 			}),
 			"false",
+		);
+	}
+});
+
+void test("the CI outline has static names and one reusable level, including skipped workers", async () => {
+	const root = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const jobs = asRecord(asRecord(root.toJSON(), "CI/CD").jobs, "jobs");
+	assert.equal(asRecord(jobs["all-ci-passed"], "gate").name, "CI Status Gate");
+	for (const [key, definition] of Object.entries(jobs)) {
+		const caller = asRecord(definition, key);
+		const name = asString(caller.name ?? key, "caller name");
+		assert.doesNotMatch(name, /\$\{\{/u, key);
+		if (typeof caller.uses !== "string") continue;
+		assert.equal(caller.strategy, undefined, `${key}: a caller matrix repeats its stage`);
+		const callee = asRecord(
+			parseDocument(await readFile(caller.uses.slice(2), "utf8")).toJSON(),
+			key,
+		);
+		for (const [workerKey, value] of Object.entries(asRecord(callee.jobs, key))) {
+			const worker = asRecord(value, workerKey);
+			assert.equal(
+				worker.uses,
+				undefined,
+				`${key}/${workerKey}: a nested workflow adds a sidebar level`,
+			);
+			const label = asString(worker.name ?? workerKey, "worker name");
+			assert.doesNotMatch(label, /\$\{\{|^(?:Gates|Build|Run)$/u, `${key}/${workerKey}`);
+			assert.notEqual(label, name, `${key}/${workerKey}: the child repeats its stage`);
+		}
+	}
+});
+
+void test("the flattened signer preserves its published digest output contract", async () => {
+	const root = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const producer = parseDocument(
+		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+	);
+	assert.equal(
+		root.getIn(["jobs", "Docker", "uses"]),
+		"./.github/workflows/reusable-docker-build.yml",
+	);
+	for (const image of ["application-server", "webapp", "agent-pi", "postgres"]) {
+		assert.equal(
+			producer.getIn(["on", "workflow_call", "outputs", `${image}-digest`, "value"]),
+			`\${{ jobs.merge.outputs.${image}-digest }}`,
+		);
+		assert.equal(
+			producer.getIn(["jobs", "merge", "outputs", `${image}-digest`]),
+			`\${{ steps.digest.outputs.${image} }}`,
 		);
 	}
 });

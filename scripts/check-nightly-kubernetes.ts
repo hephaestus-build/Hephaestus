@@ -15,7 +15,9 @@ export const maxAgeHours = 48;
 /** The nightly jobs that qualify the cluster; the sandbox footprint benchmark is not one. */
 function isClusterJob(name: string): boolean {
 	return (
-		name === "Newest main build" || name === "Kubernetes / Chart" || name.startsWith("Kubernetes (")
+		name === "Newest main build" ||
+		name === "Kubernetes / Chart" ||
+		/^Kubernetes(?: \(.*\))? \/ (?:k3s |kind )/u.test(name)
 	);
 }
 
@@ -70,7 +72,8 @@ export async function nightlyRefusal(
 	if (
 		!jobs.some(
 			(job) =>
-				asString(job.name, "job name").startsWith("Kubernetes (") && job.conclusion === "success",
+				/^Kubernetes(?: \(.*\))? \/ (?:k3s |kind )/u.test(asString(job.name, "job name")) &&
+				job.conclusion === "success",
 		)
 	) {
 		return {

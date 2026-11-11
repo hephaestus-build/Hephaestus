@@ -5,14 +5,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { isMap, isSeq, parseDocument } from "yaml";
+import { isMap, isSeq, parseDocument as parseYamlDocument } from "yaml";
 
 import { asArray, asRecord } from "./lib/json.ts";
 
 void test("image provenance can persist storage records through every reusable-workflow caller", async () => {
 	const callers = {
 		"cicd.yml": ["Docker"],
-		"ci-docker-build.yml": ["images"],
 		"reusable-docker-build.yml": ["merge"],
 	};
 	for (const [file, jobs] of Object.entries(callers)) {
@@ -137,6 +136,11 @@ void test("signing and publication jobs do not restore tool cache archives", asy
 	}
 });
 
+/** Expand native YAML aliases before inspecting a worker's steps. */
+function parseDocument(source: string) {
+	return parseYamlDocument(JSON.stringify(parseYamlDocument(source).toJS({ maxAliasCount: -1 })));
+}
+
 const repository = "hephaestus-build/Hephaestus";
 const owner = "hephaestus-build";
 const digest = `sha256:${"a".repeat(64)}`;
@@ -145,7 +149,7 @@ const immutable = `${image}@${digest}`;
 const verificationSites = [
 	{ file: "reusable-docker-build.yml", job: "merge", step: "Verify signatures + attestations" },
 	{
-		file: "ci-docker-build.yml",
+		file: "reusable-docker-build.yml",
 		job: "tag-unchanged-images",
 		step: "Verify and tag unchanged images",
 	},
@@ -904,13 +908,15 @@ void test("a reused image skips only building, merging and attesting", async () 
 			name,
 		);
 	}
-	const caller = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
-	const dependencies = caller.getIn(["jobs", "manifests", "needs"]);
+	const caller = parseDocument(
+		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+	);
+	const dependencies = caller.getIn(["jobs", "merge", "needs"]);
 	assert.ok(isSeq(dependencies));
-	assert.deepEqual(dependencies.toJSON(), ["images"]);
+	assert.deepEqual(dependencies.toJSON(), ["build", "build-arm64"]);
 	assert.equal(
 		workflow.getIn(["jobs", "merge", "if"]),
-		`\${{ inputs.phase == 'merge' && inputs.publish && !cancelled() }}`,
+		`\${{ (inputs.application-server || inputs.webapp || inputs.agent-pi || inputs.postgres) && inputs.publish && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}`,
 	);
 	// The queue run already scanned the image it built, in the build this skips, and its verdict
 	// gated the merge.

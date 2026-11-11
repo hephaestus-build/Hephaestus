@@ -57,77 +57,320 @@ on:
 permissions: {}
 
 jobs:
-  server:
-    name: "App Server"
-    if: inputs.should_skip != 'true' && (inputs.application_server_changed == 'true' || inputs.pmd_canary == 'true')
-    uses: ./.github/workflows/ci-quality-leg.yml
-    permissions:
-      actions: write
-      contents: read
-      checks: write
-      packages: read
-    with:
-      leg: server
-      pmd_canary: ${{ inputs.pmd_canary }}
-      gradle_dependencies: ${{ inputs.gradle_dependencies }}
 
-  # The gates, and the two longest native suites in two halves, run in three jobs: in one job
-  # those suites took 9 of its 12 minutes. ci-cd.mdx § Parallelism and concurrency.
-  tooling:
-    name: "Tooling and Docs${{ matrix.node_test_shard != '' && format(' (tests {0})', matrix.node_test_shard) || '' }}"
-    if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        node_test_shard: ["", "1/2", "2/2"]
-    uses: ./.github/workflows/ci-quality-leg.yml
+  quality:
+    name: Server
+    if: inputs.should_skip != 'true' && (inputs.application_server_changed == 'true' || inputs.pmd_canary == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
-      actions: write
       contents: read
       checks: write
       packages: read
-    with:
-      leg: tooling
-      node_test_shard: ${{ matrix.node_test_shard }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: server
+      NODE_TEST_SHARD: ""
+    steps: &quality-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The contract and prose gates compare paths with the base branch. Keep that history.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      - uses: ./.github/actions/setup-ci-tool
+        if: env.QUALITY_LEG == 'tooling' || env.QUALITY_LEG == 'windows'
+        with:
+          tool: shellcheck
+      - uses: ./.github/actions/setup-ci-tool
+        if: env.QUALITY_LEG == 'tooling' || env.QUALITY_LEG == 'windows'
+        with:
+          tool: vale
+
+      # Content-addressed, so a pull request may save them for its own reruns.
+      # Windows task-input tracking cannot reliably invalidate new files, so it runs uncached.
+      - name: Restore Vite task cache
+        if: env.QUALITY_LEG != 'windows'
+        id: task-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ env.NODE_TEST_SHARD != '' && 'tests-' || '' }}${{ env.QUALITY_LEG }}-${{ github.run_id }}-${{ github.run_attempt }}${{ env.NODE_TEST_SHARD != '' && format('-{0}', env.NODE_TEST_SHARD) || '' }}
+          restore-keys: |
+            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ env.NODE_TEST_SHARD != '' && 'tests-' || '' }}${{ env.QUALITY_LEG }}-
+
+      - name: Setup application-server caches
+        if: env.QUALITY_LEG == 'server'
+        uses: ./.github/actions/setup-caches
+
+      # test:tooling renders the chart with the real Helm CLI; the release jobs install the same one.
+      - name: Setup Helm
+        if: env.QUALITY_LEG == 'tooling' || env.QUALITY_LEG == 'windows'
+        uses: ./.github/actions/setup-helm
+
+      # test:agents compares the loop's search proof with the real rg, and fails in CI without it.
+      - name: Install ripgrep
+        if: env.QUALITY_LEG == 'tooling'
+        uses: ./.github/actions/setup-ci-tool
+        with:
+          tool: ripgrep
+      - name: Install verified ripgrep on the tools server PATH
+        if: env.QUALITY_LEG == 'tooling'
+        run: node scripts/setup-ripgrep.ts
+
+      # The extension's story tests run in Chromium.
+      - name: Setup Playwright browsers
+        if: env.QUALITY_LEG == 'extension'
+        uses: ./.github/actions/setup-browsers
+
+      - name: Quality gates
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          LEG: ${{ env.QUALITY_LEG }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # The bundle budget compares with the entry ahead in the queue; a pull request uses its merge base.
+          BUNDLE_BASE: ${{ github.event.merge_group.base_sha }}
+          HEPHAESTUS_NODE_TEST_SHARD: ${{ env.NODE_TEST_SHARD }}
+        # 15 minutes, under the job's 20: a hung task is named in the log and the summary before the
+        # job limit cancels the run, which can lose its log. The step takes 5 to 11 minutes.
+        run: |
+          deadline() { node scripts/ci-deadline.ts 900 "$@"; }
+          case "$LEG" in
+            server) deadline vp run ci:server ;;
+            tooling) if [ -n "$HEPHAESTUS_NODE_TEST_SHARD" ]; then deadline vp run ci:tooling-tests; else deadline vp run ci:tooling; fi ;;
+            webapp) deadline vp run ci:webapp ;;
+            extension) node scripts/ci-browser.ts node scripts/ci-deadline.ts 900 vp run ci:extension ;;
+            windows) deadline vp run --no-cache ci:windows ;;
+            *) echo "::error::Unknown quality leg: $LEG"; exit 1 ;;
+          esac
+
+      - name: Task report
+        if: ${{ !cancelled() }}
+        run: vp run --last-details | node scripts/report-task-run.ts
+
+      # The log names a file that PMD could not analyze, not why; its XML report keeps the stack trace.
+      - name: Retain the PMD report
+        if: env.QUALITY_LEG == 'server' && failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: server-pmd-report-${{ github.run_attempt }}
+          path: server/application/build/reports/pmd
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: PMD canary
+        if: env.QUALITY_LEG == 'server' && inputs.pmd_canary == 'true'
+        run: vp run gate:pmd-canary
+
+      # Gradle only adds verification entries. The pull request decides drift, so a merge group skips it.
+      - name: Gradle verification metadata
+        if: env.QUALITY_LEG == 'server' && inputs.gradle_dependencies == 'true' && github.event_name == 'pull_request'
+        run: node scripts/check-gradle-verification-metadata.ts
+
+      # CI installs with --ignore-scripts, so prepare never runs: both hooks are dispatched here instead.
+      - name: Commit-msg hook
+        if: (env.QUALITY_LEG == 'tooling' || env.QUALITY_LEG == 'windows') && !cancelled()
+        run: |
+          node scripts/enable-hooks.ts
+          test "$(git config core.hooksPath)" = ".vite-hooks"
+          git config user.name ci
+          git config user.email ci@example.invalid
+          if git commit --allow-empty --quiet -m "bad message"; then
+            echo "::error::commit-msg accepted a message commitlint rejects"
+            exit 1
+          fi
+          git commit --allow-empty --quiet -m "chore(ci): probe the commit-msg hook"
+
+      # The hook launcher prepends node_modules/.bin to PATH, so the launcher is shadowed there; the
+      # gate itself must not run a second time.
+      - name: Pre-push hook
+        if: (env.QUALITY_LEG == 'tooling' || env.QUALITY_LEG == 'windows') && !cancelled()
+        run: |
+          node scripts/enable-hooks.ts
+          probe="$(mktemp)"
+          remote="$(mktemp -d)"
+          launcher=node_modules/.bin/vp
+          # Nothing else in CI runs the local launcher: GitHub does not put node_modules/.bin on PATH.
+          "$launcher" --version > /dev/null
+          mv "$launcher" "$launcher.real"
+          trap 'mv "$launcher.real" "$launcher"; rm -f "$probe"; rm -rf "$remote"' EXIT
+          cat > "$launcher" <<'EOF'
+          #!/bin/sh
+          if [ "$#" -ne 2 ] || [ "$1" != run ] || [ "$2" != check:push ]; then
+            exit 1
+          fi
+          printf 'ran\n' > "$PRE_PUSH_PROBE"
+          EOF
+          chmod +x "$launcher"
+          export PRE_PUSH_PROBE="$probe"
+          git init --bare --quiet "$remote"
+          git push --dry-run --quiet "$remote" HEAD:refs/heads/pre-push-probe
+          test "$(cat "$probe")" = ran
+
+      - name: Upload application test results
+        if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        with:
+          name: "Test Results - ${{ env.QUALITY_LEG }}"
+          path: "${{ env.QUALITY_LEG }}/test-results/junit-*.xml"
+          reporter: java-junit
+          list-suites: failed
+          list-tests: failed
+          # Source lookup is needed only for failure annotations, not successful summaries.
+          max-annotations: ${{ job.status == 'failure' && 50 || 0 }}
+          fail-on-error: false
+
+      - name: Retain application test reports
+        if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.QUALITY_LEG }}-unit-reports-${{ github.run_attempt }}
+          path: ${{ env.QUALITY_LEG }}/test-results
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Summarize application tests
+        if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
+        continue-on-error: true
+        env:
+          APPLICATION_LEG: ${{ env.QUALITY_LEG }}
+        run: vp run report:test-results "$APPLICATION_LEG tests" "$APPLICATION_LEG/test-results" "ci-metrics/$APPLICATION_LEG-unit.json"
+
+      - name: Upload application test metrics
+        if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-metrics-${{ env.QUALITY_LEG }}-unit
+          path: ci-metrics/${{ env.QUALITY_LEG }}-unit.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # The zip a Chrome Web Store submission uploads, from the same build the gates just judged.
+      - name: Upload the extension package
+        if: env.QUALITY_LEG == 'extension'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: extension-chrome-${{ github.run_attempt }}
+          path: extension/.output/*-production-chrome.zip
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Save Vite task cache
+        if: env.QUALITY_LEG != 'windows' && !cancelled()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.task-cache.outputs.cache-primary-key }}
 
   webapp:
-    name: "Webapp"
+    name: Webapp
     if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true'
-    uses: ./.github/workflows/ci-quality-leg.yml
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
-      actions: write
       contents: read
       checks: write
       packages: read
-    with:
-      leg: webapp
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: webapp
+      NODE_TEST_SHARD: ""
+    steps: *quality-steps
 
   extension:
-    name: "Extension"
+    name: Extension
     if: inputs.should_skip != 'true' && inputs.extension_changed == 'true'
-    uses: ./.github/workflows/ci-quality-leg.yml
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
-      actions: write
       contents: read
       checks: write
       packages: read
-    with:
-      leg: extension
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: extension
+      NODE_TEST_SHARD: ""
+    steps: *quality-steps
+
+  tooling:
+    name: Tooling and docs
+    if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: tooling
+      NODE_TEST_SHARD: ""
+    steps: *quality-steps
+
+  tooling-tests-1:
+    name: Tooling and docs (tests 1 of 2)
+    if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: tooling
+      NODE_TEST_SHARD: "1/2"
+    steps: *quality-steps
+
+  tooling-tests-2:
+    name: Tooling and docs (tests 2 of 2)
+    if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: tooling
+      NODE_TEST_SHARD: "2/2"
+    steps: *quality-steps
 
   windows:
-    name: "Windows"
+    name: Windows
     if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true' && (github.event_name != 'pull_request' || inputs.windows_changed != 'false')
-    uses: ./.github/workflows/ci-quality-leg.yml
+    runs-on: windows-latest
+    timeout-minutes: 20
     permissions:
-      actions: write
       contents: read
       checks: write
       packages: read
-    with:
-      leg: windows
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: windows
+      NODE_TEST_SHARD: ""
+    steps: *quality-steps
 
-  # The contributor's first command, without setup-toolchain: vp install must fetch the pinned pnpm,
-  # install the workspace and enable the hooks on its own.
   clean-install:
     name: "Clean install"
     if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
@@ -152,7 +395,7 @@ jobs:
       - run: test "$(git config core.hooksPath)" = ".vite-hooks"
 
   webapp-stories:
-    name: "Webapp: Stories"
+    name: "Webapp stories"
     if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true' && inputs.light_tier != 'true'
     # Browser rasterization depends on the OS; keep the canonical generated assets on one version.
     runs-on: ubuntu-24.04
@@ -322,16 +565,137 @@ jobs:
             exit 1
           fi
 
-  fail-fast-clean-install:
-    needs: [clean-install]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.clean-install.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
+  fail-fast-quality:
+    name: Stop the merge group early
+    needs: [quality]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     permissions:
       actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-webapp:
+    name: Stop the merge group early
+    needs: [webapp]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-extension:
+    name: Stop the merge group early
+    needs: [extension]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-tooling:
+    name: Stop the merge group early
+    needs: [tooling]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-tooling-tests-1:
+    name: Stop the merge group early
+    needs: [tooling-tests-1]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-tooling-tests-2:
+    name: Stop the merge group early
+    needs: [tooling-tests-2]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-windows:
+    name: Stop the merge group early
+    needs: [windows]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-clean-install:
+    name: Stop the merge group early
+    needs: [clean-install]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
 
   fail-fast-webapp-stories:
+    name: Stop the merge group early
     needs: [webapp-stories]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.webapp-stories.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     permissions:
       actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"

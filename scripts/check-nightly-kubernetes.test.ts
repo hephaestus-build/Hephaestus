@@ -90,3 +90,22 @@ void test("a stale run, a run with no cluster leg and no run at all refuse the r
 	const none = await nightlyRefusal(repository, api([], {}), now);
 	assert.match(none.refusal ?? "", /No nightly Kubernetes run/u);
 });
+
+void test("the static cluster names retain nightly admission and failure visibility", async () => {
+	const jobs = passingLegs.map((job) => ({
+		...job,
+		name: job.name.replace(/^Kubernetes \([^)]*\)/u, "Kubernetes"),
+	}));
+	assert.equal(
+		(await nightlyRefusal(repository, api([run(2, "success")], { 2: jobs }), now)).refusal,
+		undefined,
+	);
+	const failed = jobs.map((job) => ({
+		...job,
+		conclusion: job.name === "Kubernetes / k3s 1.37 amd64" ? "failure" : job.conclusion,
+	}));
+	assert.match(
+		(await nightlyRefusal(repository, api([run(3, "failure")], { 3: failed }), now)).refusal ?? "",
+		/Kubernetes \/ k3s 1\.37 amd64/u,
+	);
+});
