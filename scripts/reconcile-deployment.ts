@@ -187,6 +187,7 @@ function parseImages(value: unknown): Readonly<Record<string, string>> {
 
 const releaseParts = (release: string): string[] => release.slice(1).split(".");
 const releaseMajor = (release: string) => BigInt(releaseParts(release)[0] ?? "0");
+const isCandidate = (release: string) => release.includes("-");
 
 function compareReleases(left: string, right: string): number {
 	const from = parseVersion(left.slice(1));
@@ -1038,7 +1039,15 @@ export function isMajorCutover(target: string, applied?: string, installed?: str
 	if (previousMajors.some((major) => major > targetMajor)) {
 		throw new OperatorActionRequiredError(MAJOR_DOWNGRADE_RECOVERY);
 	}
-	return previousMajors.some((major) => major !== targetMajor);
+	// A candidate is part of the release it precedes, so the step from a candidate to its major's
+	// first stable release is the cutover too (ADR 0070: a host on the last candidate still stops).
+	const fromCandidate =
+		!isCandidate(target) &&
+		[installedRelease, appliedRelease].some(
+			(version) =>
+				version !== undefined && isCandidate(version) && releaseMajor(version) === targetMajor,
+		);
+	return fromCandidate || previousMajors.some((major) => major !== targetMajor);
 }
 
 function matchesChartValues(
