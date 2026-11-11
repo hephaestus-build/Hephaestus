@@ -108,26 +108,51 @@ class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @Transactional
-    void shouldKeepPendingOutputAndStripThenDeleteOnlyFinishedDelivery() {
+    void shouldKeepUnsettledJobsAndStripThenDeleteOnlySettledOnes() {
         Workspace workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("payload-retention"));
         var pending = oldTerminalJob(workspace);
         pending.setProcessingStatus(ProcessingStatus.PENDING);
         pending.setOutput(objectMapper.createObjectNode().put("receipt", "needed"));
+        var unsettled = oldTerminalJob(workspace);
+        unsettled.setProcessingStatus(ProcessingStatus.NONE);
+        unsettled.setOutput(objectMapper.createObjectNode().put("receipt", "not yet settled"));
         var finished = oldTerminalJob(workspace);
         finished.setOutput(objectMapper.createObjectNode().put("receipt", "delivered"));
-        jobRepository.saveAllAndFlush(List.of(pending, finished));
+        jobRepository.saveAllAndFlush(List.of(pending, unsettled, finished));
         Instant cutoff = Instant.now().minus(Duration.ofDays(90));
         jobRepository.stripTerminalPayloads(cutoff, 500);
         assertThat(jobRepository.findById(pending.getId()).orElseThrow().getOutput())
+                .isNotNull();
+        assertThat(jobRepository.findById(unsettled.getId()).orElseThrow().getOutput())
                 .isNotNull();
         assertThat(jobRepository.findById(finished.getId()).orElseThrow().getOutput())
                 .isNull();
         assertThat(jobRepository.deleteUnreferencedTerminalRowsOlderThan(cutoff, 500))
                 .contains(finished.getRunId())
-                .doesNotContain(pending.getRunId());
+                .doesNotContain(pending.getRunId(), unsettled.getRunId());
         assertThat(runtimeJdbc.queryForList(
-                        "SELECT id FROM review_job WHERE id IN (?, ?)", UUID.class, pending.getId(), finished.getId()))
-                .containsExactly(pending.getId());
+                        "SELECT id FROM review_job WHERE id IN (?, ?, ?)",
+                        UUID.class,
+                        pending.getId(),
+                        unsettled.getId(),
+                        finished.getId()))
+                .containsExactlyInAnyOrder(pending.getId(), unsettled.getId());
+    }
+
+    @Test
+    @Transactional
+    void shouldBlockAPurgeUntilEveryEndedJobIsSettled() {
+        Workspace workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("purge-unsettled"));
+        var ended = oldJob(workspace, ReviewJobStatus.CANCELLED);
+        ended.setCompletedAt(Instant.now().minus(Duration.ofDays(1)));
+        ended = jobRepository.saveAndFlush(ended);
+        assertThat(ended.getProcessingStatus()).isEqualTo(ProcessingStatus.NONE);
+
+        assertThat(jobRepository.existsPurgeBlockingWork(workspace.getId())).isTrue();
+
+        ended.setProcessingStatus(ProcessingStatus.FAILED);
+        jobRepository.saveAndFlush(ended);
+        assertThat(jobRepository.existsPurgeBlockingWork(workspace.getId())).isFalse();
     }
 
     private ReviewCompositionBasis basis(ReviewJob job, Instant expiresAt) {

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794277634805-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <columnExists tableName="review_job" columnName="processing_status"/>
+            <columnExists tableName="review" columnName="checks"/>
+        </preConditions>
+        <comment>The 1.0 cutover (#2656) copied each earlier review invocation into review_job as a terminal job. An invocation with nothing left to deliver got processing_status NONE, and its review carries checks.MIGRATION. Nothing settles such a job again, but NONE marks a job that settlement still owes. Mark these jobs DONE, so that NONE and PENDING mean one thing: settlement has not run yet.</comment>
+        <sql>UPDATE review_job j SET processing_status = 'DONE'
+FROM review r
+WHERE r.id = j.review_id AND r.workspace_id = j.workspace_id AND r.id = j.id
+  AND jsonb_exists(r.checks, 'MIGRATION')
+  AND j.status IN ('COMPLETED', 'FAILED', 'TIMED_OUT', 'CANCELLED')
+  AND j.processing_status = 'NONE';</sql>
+        <rollback>
+            <stop>Restore the backup taken before this upgrade: the corrected rows are not marked.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794277634805-2" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <indexExists tableName="review_job" indexName="idx_review_job_retention"/>
+        </preConditions>
+        <comment>Retention strips and deletes only settled jobs.</comment>
+        <sql>DROP INDEX idx_review_job_retention;
+CREATE INDEX idx_review_job_retention ON review_job (completed_at, id)
+WHERE status IN ('COMPLETED', 'FAILED', 'TIMED_OUT', 'CANCELLED') AND processing_status IN ('DONE', 'FAILED');</sql>
+        <rollback>
+            <sql>DROP INDEX idx_review_job_retention;
+CREATE INDEX idx_review_job_retention ON review_job (completed_at, id)
+WHERE status IN ('COMPLETED', 'FAILED', 'TIMED_OUT', 'CANCELLED') AND processing_status IN ('NONE', 'DONE', 'FAILED');</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
