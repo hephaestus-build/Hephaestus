@@ -478,3 +478,8 @@ in API PUT /workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote the `type` 
 # #4155: the public activity page sends no unread logins (ADR 0052), and its setting names contributors without an account (GDPR Art. 25(2)).
 in API GET /public/workspaces/{slug}/activity removed the required property `highlights/mostPeopleHelped` from the response with the `200` status
 in API GET /workspaces/{workspaceSlug}/activity/people removed the required property `highlights/mostPeopleHelped` from the response with the `200` status
+
+# #4110: an admin reads the developer's answer to feedback, never their rating or other notes.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId} removed the required property `response` from the response with the `200` status
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck removed the required property `response` from the response with the `202` status
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry removed the required property `response` from the response with the `202` status
