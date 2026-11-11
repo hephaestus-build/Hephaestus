@@ -213,6 +213,30 @@ class ResultControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldListOnlyTheCallersOwnResultsWhenAnotherMemberAsksForTheSameWork() {
+        var own = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
+        var other = data.member(scenario.workspace().getId());
+        String byItem = root() + "/practices/results?itemId=" + own.getItemId();
+
+        get("/practices/results?itemId=" + own.getItemId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[*].id")
+                .value(ids -> assertThat(ids.toString()).contains(own.getId().toString()));
+        http.get()
+                .uri(byItem)
+                .headers(h -> h.setBearerAuth("mock-jwt-member-" + other.getId()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[*].id")
+                .value(ids ->
+                        assertThat(ids.toString()).doesNotContain(own.getId().toString()));
+    }
+
+    @Test
     void currentAndEndedResultsRemainInHistory() {
         var old = data.result(scenario, ResultOutcome.MET, Instant.now().minusSeconds(60));
         data.end(old, Instant.now().minusSeconds(30));
