@@ -123,6 +123,7 @@ export function ActivityPeopleTable({
 	const to = state.status === "ready" ? state.people.to : undefined;
 	const firstContributorIds =
 		state.status === "ready" ? state.people.highlights.firstContributors : undefined;
+	const unlisted = state.status === "ready" ? (state.people.unlisted ?? 0) : 0;
 
 	// The table's `data`, in name order: the sorted row model keeps the data's order on a tie, so
 	// people with the same count stay in name order in either direction.
@@ -310,11 +311,7 @@ export function ActivityPeopleTable({
 				<div aria-busy={stale || undefined} className={cn(stale && STALE)}>
 					<ActivityEmpty
 						icon={<EmptyIcon />}
-						title={
-							repo.length > 0
-								? "No activity in these repositories in this range"
-								: "No activity in this range"
-						}
+						title={emptyTitle(repo.length > 0, unlisted > 0)}
 						syncing={syncing}
 					/>
 				</div>
@@ -381,6 +378,12 @@ export function ActivityPeopleTable({
 					/>
 				</>
 			)}
+			{/* A contributor who is not named cannot match a search, so a searched list leaves the note out. */}
+			{unlisted > 0 && (empty || search.trim() === "") && (
+				<p className={cn("text-sm text-muted-foreground", stale && STALE)}>
+					{unlistedNote(unlisted, !empty)}
+				</p>
+			)}
 		</div>
 	);
 }
@@ -443,6 +446,30 @@ function Figure({ count, strong = false }: { count: number; strong?: boolean }) 
 		return <NoneMark />;
 	}
 	return <span className={cn(strong && "font-semibold")}>{formatNumber(count)}</span>;
+}
+
+/**
+ * What the list says when it has no row: with contributors it counts but does not name, the range
+ * had activity, so it does not say there was none.
+ */
+function emptyTitle(filtered: boolean, unlisted: boolean): string {
+	if (unlisted) {
+		return filtered
+			? "No one named in these repositories in this range"
+			: "No one named in this range";
+	}
+	return filtered ? "No activity in these repositories in this range" : "No activity in this range";
+}
+
+/**
+ * The contributors the list counts but does not name: "and 3 more contributors" after the named
+ * ones, or "3 contributors in this range are not named here" where it names no one.
+ */
+function unlistedNote(count: number, afterNamed: boolean): string {
+	const noun = count === 1 ? "contributor" : "contributors";
+	return afterNamed
+		? `and ${formatNumber(count)} more ${noun}`
+		: `${formatNumber(count)} ${noun} in this range ${count === 1 ? "is" : "are"} not named here.`;
 }
 
 /** "12 people", or what a search leaves of them: "3 of 12 people". */

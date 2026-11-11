@@ -62,6 +62,11 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                       AND (a.status IN ('DELETING', 'DELETED') OR (
         """ + ACCOUNT_HIDES_PUBLIC + """
                       )))
+              AND (:#{#scope.withoutAccount().name()} = 'SHOWN'
+                  OR (:#{#scope.withoutAccount().name()} = 'HIDDEN') = EXISTS (SELECT 1 FROM identity v
+                      JOIN account va ON va.id = v.account_id
+                      WHERE v.provider_id = u.provider_id AND v.provider_user_key = CAST(u.native_id AS text)
+                          AND va.public_activity_visible))
         """;
     String PUBLIC_REPOSITORY_CONDITION = """
         r.visibility = 'PUBLIC' AND NOT r.is_private
@@ -158,6 +163,15 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
             + SOURCE + NORMALIZED_EVENTS_END;
     String NORMALIZED = PUBLIC_PEOPLE + ", " + MONITORS + NORMALIZED_HEAD + PUBLIC_HELPED + NORMALIZED_HELPED + SOURCE
             + NORMALIZED_TAIL;
+
+    /** How many public contributors the scope keeps in the range, without counting their work. */
+    @Query(value = PUBLIC_EVENTS + " SELECT count(DISTINCT actor_id) FROM normalized", nativeQuery = true)
+    long countPublicContributors(
+            @Param("scope") ActivityScope scope,
+            @Param("range") TimeRange range,
+            @Param("person") long person,
+            @Param("own") boolean own);
+
     String INTERNAL_NORMALIZED = "WITH " + HIDDEN_ACTORS + ", " + MONITORS + NORMALIZED_HEAD + NORMALIZED_HELPED
             + INTERNAL_SOURCE + NORMALIZED_TAIL;
     String HEADLINE_COUNTS = """

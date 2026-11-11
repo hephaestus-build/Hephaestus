@@ -22,6 +22,9 @@ import { formatNumber } from "@/lib/numbers";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
+/** A switch on the page's settings, named by the change it saves. */
+export type PublicActivityChange = "enabled" | "search-engines" | "contributors-without-account";
+
 export type WorkspacePublicActivityState =
 	| { status: "loading" }
 	| { status: "error"; error: unknown; onRetry: () => void }
@@ -29,6 +32,8 @@ export type WorkspacePublicActivityState =
 			status: "ready";
 			enabled: boolean;
 			allowSearchEngines: boolean;
+			/** Whether the page names contributors without an account, or only counts them. */
+			contributorsWithoutAccount: boolean;
 			/** Set when the latest read failed, so these settings are the last known ones. */
 			refreshFailure?: RefreshFailure;
 			/** Server-computed publication status from the workspace list. */
@@ -36,7 +41,7 @@ export type WorkspacePublicActivityState =
 			/** How many people the page leaves out, never who; undefined where the count did not load. */
 			hiddenPeople: number | undefined;
 			/** The change in flight, if any. */
-			pending: "enabled" | "search-engines" | undefined;
+			pending: PublicActivityChange | undefined;
 	  };
 
 type ReadySettings = Extract<WorkspacePublicActivityState, { status: "ready" }>;
@@ -49,6 +54,7 @@ export interface WorkspacePublicActivitySettingsProps {
 	state: WorkspacePublicActivityState;
 	onEnabledChange: (enabled: boolean) => void;
 	onSearchEnginesChange: (allow: boolean) => void;
+	onContributorsWithoutAccountChange: (show: boolean) => void;
 }
 
 /**
@@ -62,6 +68,7 @@ export function WorkspacePublicActivitySettings({
 	state,
 	onEnabledChange,
 	onSearchEnginesChange,
+	onContributorsWithoutAccountChange,
 }: WorkspacePublicActivitySettingsProps) {
 	const headingId = useId();
 	return (
@@ -88,6 +95,7 @@ export function WorkspacePublicActivitySettings({
 					state={state}
 					onEnabledChange={onEnabledChange}
 					onSearchEnginesChange={onSearchEnginesChange}
+					onContributorsWithoutAccountChange={onContributorsWithoutAccountChange}
 				/>
 			)}
 		</section>
@@ -105,8 +113,9 @@ function ReadySettingsBody({
 	state,
 	onEnabledChange,
 	onSearchEnginesChange,
+	onContributorsWithoutAccountChange,
 }: Omit<WorkspacePublicActivitySettingsProps, "state"> & { state: ReadySettings }) {
-	const [confirming, setConfirming] = useState(false);
+	const [confirmation, setConfirmation] = useState<"page" | "contributors" | null>(null);
 	return (
 		<>
 			<div className="space-y-3">
@@ -121,7 +130,7 @@ function ReadySettingsBody({
 						pending={state.pending === "enabled"}
 						onCheckedChange={(next) => {
 							if (next) {
-								setConfirming(true);
+								setConfirmation("page");
 							} else {
 								onEnabledChange(false);
 							}
@@ -138,6 +147,25 @@ function ReadySettingsBody({
 							checked={state.allowSearchEngines}
 							pending={state.pending === "search-engines"}
 							onCheckedChange={onSearchEnginesChange}
+						/>
+					)}
+					{state.enabled && (
+						<SettingRow
+							title="Show contributors without an account"
+							description={
+								state.contributorsWithoutAccount
+									? "On. People without an account are named on the page until they object."
+									: "Off. People without an account are counted on the page, not named."
+							}
+							checked={state.contributorsWithoutAccount}
+							pending={state.pending === "contributors-without-account"}
+							onCheckedChange={(next) => {
+								if (next) {
+									setConfirmation("contributors");
+								} else {
+									onContributorsWithoutAccountChange(false);
+								}
+							}}
 						/>
 					)}
 					{state.enabled && state.hiddenPeople !== undefined && (
@@ -174,13 +202,21 @@ function ReadySettingsBody({
 				)}
 			</div>
 			<PublishDialog
-				open={confirming}
-				onOpenChange={setConfirming}
+				open={confirmation === "page"}
+				onOpenChange={(open) => setConfirmation(open ? "page" : null)}
 				workspaceName={workspaceName}
 				providerType={providerType}
 				onConfirm={() => {
-					setConfirming(false);
+					setConfirmation(null);
 					onEnabledChange(true);
+				}}
+			/>
+			<ContributorsDialog
+				open={confirmation === "contributors"}
+				onOpenChange={(open) => setConfirmation(open ? "contributors" : null)}
+				onConfirm={() => {
+					setConfirmation(null);
+					onContributorsWithoutAccountChange(true);
 				}}
 			/>
 		</>
@@ -265,10 +301,7 @@ function PublishDialog({
 								{repositories} of this workspace, it lists:
 							</p>
 							<ul className="list-disc space-y-1 pl-5">
-								<li>
-									outside contributors, and members who chose to show, by name, picture and a link
-									to their profile
-								</li>
+								<li>people who chose to show, by name, picture and a link to their profile</li>
 								<li>
 									counts of the {pullRequests} each person opened and reviewed and the issues they
 									opened
@@ -280,9 +313,10 @@ function PublishDialog({
 							<p>
 								The page shows nothing from private {repositories}, practices, feedback, AI content,
 								Slack, Outline or automation accounts. Members and people who signed in are hidden
-								until they choose to show. Anyone on it can hide in User settings. Search engines
-								are asked not to list it until you allow that. Turning the page off takes that
-								choice back.
+								until they choose to show. People without an account are counted, not named, until
+								you choose to show them. Anyone on it can hide in User settings. Search engines are
+								asked not to list it until you allow that. Turning the page off takes these choices
+								back.
 							</p>
 						</div>
 					</AlertDialogDescription>
@@ -290,6 +324,36 @@ function PublishDialog({
 				<AlertDialogFooter>
 					<AlertDialogCancel>Cancel</AlertDialogCancel>
 					<AlertDialogAction onClick={onConfirm}>Make public</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
+	);
+}
+
+function ContributorsDialog({
+	open,
+	onOpenChange,
+	onConfirm,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	onConfirm: () => void;
+}) {
+	const popupRef = useRef<HTMLDivElement>(null);
+	return (
+		<AlertDialog open={open} onOpenChange={onOpenChange}>
+			<AlertDialogContent ref={popupRef} initialFocus={popupRef}>
+				<AlertDialogHeader>
+					<AlertDialogTitle>Show contributors without an account?</AlertDialogTitle>
+					<AlertDialogDescription>
+						Anyone can see their names, pictures, profile links and public work. These people have
+						not chosen to be named here. Check your organization’s legal basis before you publish
+						their names. You can turn this off to count them without naming them again.
+					</AlertDialogDescription>
+				</AlertDialogHeader>
+				<AlertDialogFooter>
+					<AlertDialogCancel>Cancel</AlertDialogCancel>
+					<AlertDialogAction onClick={onConfirm}>Show contributors</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>
 		</AlertDialog>

@@ -24,7 +24,7 @@ const DESTINATIONS: [path: string, entry: string][] = [
 	["/admin/github-installations", "GitHub installations"],
 	["/admin/login-providers", "Login providers"],
 	["/admin/catalog", "Practice catalog"],
-	["/admin/feedback", "Inbox"],
+	["/admin/feedback", "Reports"],
 	["/admin/models", "AI models"],
 	["/admin/usage", "AI usage"],
 	["/admin/audit", "Audit log"],

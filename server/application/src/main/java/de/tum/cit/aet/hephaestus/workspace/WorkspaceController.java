@@ -95,11 +95,18 @@ public class WorkspaceController {
 
     public record PublicActivityWorkspaceSettingsDTO(
             @Schema(requiredMode = RequiredMode.REQUIRED) boolean enabled,
-            @Schema(requiredMode = RequiredMode.REQUIRED) boolean allowSearchEngines) {
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean allowSearchEngines,
+
+            @Schema(
+                    requiredMode = RequiredMode.REQUIRED,
+                    description = "Whether the page names contributors who have no account that chose to show."
+                            + " Otherwise it only counts them.")
+            boolean contributorsWithoutAccount) {
         static PublicActivityWorkspaceSettingsDTO from(Workspace workspace) {
             return new PublicActivityWorkspaceSettingsDTO(
                     Boolean.TRUE.equals(workspace.getPublicActivityEnabled()),
-                    workspace.isPublicActivitySearchEngines());
+                    workspace.isPublicActivitySearchEngines(),
+                    workspace.isPublicActivityContributorsWithoutAccount());
         }
     }
 
@@ -115,7 +122,10 @@ public class WorkspaceController {
     }
 
     @PatchMapping("/public-activity")
-    @Operation(summary = "Turn the public activity page and search indexing on or off")
+    @Operation(
+            summary = "Change the supplied public activity settings",
+            description = "Omitted or null fields stay unchanged. Turning the page off resets search indexing and"
+                    + " the choice to name contributors without an account.")
     @ApiResponse(
             responseCode = "200",
             description = "Workspace updated",
@@ -125,7 +135,11 @@ public class WorkspaceController {
     public ResponseEntity<PublicActivityWorkspaceSettingsDTO> updatePublicActivity(
             WorkspaceContext workspaceContext, @Valid @RequestBody UpdateWorkspacePublicActivityRequestDTO request) {
         Workspace workspace = workspaceService.updatePublicActivity(
-                workspaceContext, request.publicActivityEnabled(), request.allowSearchEngines());
+                workspaceContext,
+                new PublicActivityChoice(
+                        request.publicActivityEnabled(),
+                        request.allowSearchEngines(),
+                        request.contributorsWithoutAccount()));
         return ResponseEntity.ok(PublicActivityWorkspaceSettingsDTO.from(workspace));
     }
 

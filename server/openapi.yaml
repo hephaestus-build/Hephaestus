@@ -11217,6 +11217,8 @@ paths:
       tags:
       - workspace
     patch:
+      description: Omitted or null fields stay unchanged. Turning the page off resets
+        search indexing and the choice to name contributors without an account.
       operationId: updatePublicActivity
       parameters:
       - description: Workspace slug
@@ -11241,7 +11243,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityWorkspaceSettings"
           description: Workspace updated
-      summary: Turn the public activity page and search indexing on or off
+      summary: Change the supplied public activity settings
       tags:
       - workspace
   /workspaces/{workspaceSlug}/repositories:
@@ -12185,14 +12187,8 @@ components:
           items:
             type: integer
             format: int64
-        mostPeopleHelped:
-          type: array
-          items:
-            type: integer
-            format: int64
       required:
       - firstContributors
-      - mostPeopleHelped
     ActivityPeople:
       type: object
       properties:
@@ -20882,6 +20878,12 @@ components:
         to:
           type: string
           format: date-time
+        unlistedContributors:
+          type: integer
+          format: int32
+          description: "Contributors in the period who are counted but not named,\
+            \ because they have no account that chose to show and the workspace does\
+            \ not list such contributors"
         workspaceName:
           type: string
       required:
@@ -20892,6 +20894,7 @@ components:
       - people
       - repositories
       - to
+      - unlistedContributors
       - workspaceName
     PublicActivityChoice:
       type: object
@@ -20947,13 +20950,8 @@ components:
           type: array
           items:
             type: string
-        mostPeopleHelped:
-          type: array
-          items:
-            type: string
       required:
       - firstContributors
-      - mostPeopleHelped
     PublicActivityOnboarding:
       type: object
       properties:
@@ -21185,10 +21183,15 @@ components:
       properties:
         allowSearchEngines:
           type: boolean
+        contributorsWithoutAccount:
+          type: boolean
+          description: Whether the page names contributors who have no account that
+            chose to show. Otherwise it only counts them.
         enabled:
           type: boolean
       required:
       - allowSearchEngines
+      - contributorsWithoutAccount
       - enabled
     RateLimitSnapshot:
       type: object
@@ -26649,14 +26652,21 @@ components:
       - required
     UpdateWorkspacePublicActivityRequest:
       type: object
+      description: Only supplied non-null settings change. Turning the page off resets
+        the other settings.
       properties:
         allowSearchEngines:
-          type: boolean
+          type:
+          - boolean
+          - "null"
+        contributorsWithoutAccount:
+          type:
+          - boolean
+          - "null"
         publicActivityEnabled:
-          type: boolean
-      required:
-      - allowSearchEngines
-      - publicActivityEnabled
+          type:
+          - boolean
+          - "null"
     UpdateWorkspaceStatusRequest:
       type: object
       description: Request to update the workspace lifecycle status

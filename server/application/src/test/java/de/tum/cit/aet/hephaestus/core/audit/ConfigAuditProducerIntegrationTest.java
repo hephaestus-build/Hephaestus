@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
+import de.tum.cit.aet.hephaestus.workspace.PublicActivityChoice;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSettingsService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -105,7 +106,7 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
     void togglingPublicVisibilityIsRecorded() {
         Workspace workspace = workspace("audit-producer-visibility");
 
-        settingsService.updatePublicActivity(workspace.getId(), true, false);
+        settingsService.updatePublicActivity(workspace.getId(), new PublicActivityChoice(true, false, false));
 
         assertThat(actionsFor(workspace, ConfigAuditEntityType.WORKSPACE_VISIBILITY))
                 .containsExactly(ConfigAuditAction.UPDATED);
@@ -115,9 +116,9 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
     @Transactional
     void aNoOpVisibilityUpdateIsNotRecorded() {
         Workspace workspace = workspace("audit-producer-noop");
-        settingsService.updatePublicActivity(workspace.getId(), true, false);
+        settingsService.updatePublicActivity(workspace.getId(), new PublicActivityChoice(true, false, false));
 
-        settingsService.updatePublicActivity(workspace.getId(), true, false);
+        settingsService.updatePublicActivity(workspace.getId(), new PublicActivityChoice(true, false, false));
 
         assertThat(actionsFor(workspace, ConfigAuditEntityType.WORKSPACE_VISIBILITY))
                 .as("re-submitting a form unchanged must not add a row that says nothing")

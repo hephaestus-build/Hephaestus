@@ -80,20 +80,35 @@ public class WorkspaceSettingsService {
     }
 
     @Transactional
-    public Workspace updatePublicActivity(Long workspaceId, Boolean publicActivityEnabled, boolean allowSearchEngines) {
-        Workspace workspace = requireWorkspace(workspaceId);
-        // A page that is off has no search engine choice, so publishing again starts from "not listed".
-        boolean searchEngines = Boolean.TRUE.equals(publicActivityEnabled) && allowSearchEngines;
+    public Workspace updatePublicActivity(Long workspaceId, PublicActivityChoice choice) {
+        Workspace workspace = workspaceRepository
+                .findByIdForUpdate(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
+        // A page that is off has no choices, so publishing again starts from "not listed" and "not named".
+        boolean published =
+                choice.enabled() != null ? choice.enabled() : Boolean.TRUE.equals(workspace.getPublicActivityEnabled());
+        Boolean publicActivityEnabled = published;
+        boolean searchEngines = published
+                && (choice.allowSearchEngines() != null
+                        ? choice.allowSearchEngines()
+                        : workspace.isPublicActivitySearchEngines());
+        boolean withoutAccount = published
+                && (choice.contributorsWithoutAccount() != null
+                        ? choice.contributorsWithoutAccount()
+                        : workspace.isPublicActivityContributorsWithoutAccount());
         var beforeVis = new WorkspaceAuditSnapshots.VisibilitySnapshot(
-                workspace.getPublicActivityEnabled(), workspace.isPublicActivitySearchEngines());
+                workspace.getPublicActivityEnabled(),
+                workspace.isPublicActivitySearchEngines(),
+                workspace.isPublicActivityContributorsWithoutAccount());
         workspace.setPublicActivityEnabled(publicActivityEnabled);
         workspace.setPublicActivitySearchEngines(searchEngines);
+        workspace.setPublicActivityContributorsWithoutAccount(withoutAccount);
         configAudit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_VISIBILITY,
                 workspaceId,
                 workspaceId,
                 beforeVis,
-                new WorkspaceAuditSnapshots.VisibilitySnapshot(publicActivityEnabled, searchEngines)));
+                new WorkspaceAuditSnapshots.VisibilitySnapshot(publicActivityEnabled, searchEngines, withoutAccount)));
         log.info("Updated public activity: workspaceId={}, enabled={}", workspaceId, publicActivityEnabled);
         return workspaceRepository.save(workspace);
     }

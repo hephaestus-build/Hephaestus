@@ -334,15 +334,8 @@ public class WorkspaceService {
         return updateToken(requireSlug(workspaceContext), personalAccessToken);
     }
 
-    public Workspace updatePublicActivity(String slug, Boolean publicActivityEnabled, boolean allowSearchEngines) {
-        Workspace workspace = requireWorkspace(slug);
-        return workspaceSettingsService.updatePublicActivity(
-                workspace.getId(), publicActivityEnabled, allowSearchEngines);
-    }
-
-    public Workspace updatePublicActivity(
-            WorkspaceContext workspaceContext, Boolean publicActivityEnabled, boolean allowSearchEngines) {
-        return updatePublicActivity(requireSlug(workspaceContext), publicActivityEnabled, allowSearchEngines);
+    public Workspace updatePublicActivity(WorkspaceContext workspaceContext, PublicActivityChoice choice) {
+        return workspaceSettingsService.updatePublicActivity(workspaceContext.id(), choice);
     }
 
     public Workspace updateFeatures(WorkspaceContext workspaceContext, UpdateWorkspaceFeaturesRequestDTO request) {

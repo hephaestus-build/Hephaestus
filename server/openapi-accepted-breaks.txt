@@ -475,3 +475,6 @@ in API PUT /user/notification-preferences the `type` response's property `format
 in API PUT /user/notification-preferences the `type` response's property `format` changed from `uri` to `uri-reference` for status `428`
 in API PUT /workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote the `instance` response's property `format` changed from `uri` to `uri-reference` for status `409`
 in API PUT /workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote the `type` response's property `format` changed from `uri` to `uri-reference` for status `409`
+# #4155: the public activity page sends no unread logins (ADR 0052), and its setting names contributors without an account (GDPR Art. 25(2)).
+in API GET /public/workspaces/{slug}/activity removed the required property `highlights/mostPeopleHelped` from the response with the `200` status
+in API GET /workspaces/{workspaceSlug}/activity/people removed the required property `highlights/mostPeopleHelped` from the response with the `200` status

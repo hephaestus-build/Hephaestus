@@ -10,12 +10,19 @@ import {
 	listHiddenContributorsOptions,
 	listHiddenContributorsQueryKey,
 	listWorkspacesQueryKey,
-	updatePublicActivityMutation,
 	updatePublicActivityObjectionMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { UpdateWorkspacePublicActivityRequest, Workspace } from "@/api/types.gen";
+import { updatePublicActivity } from "@/api/sdk.gen";
+import type {
+	UpdatePublicActivityData,
+	UpdateWorkspacePublicActivityRequest,
+	Workspace,
+} from "@/api/types.gen";
 import type { WorkspaceHiddenPeopleState } from "@/components/admin/settings/WorkspaceHiddenPeopleSettings";
-import type { WorkspacePublicActivityState } from "@/components/admin/settings/WorkspacePublicActivitySettings";
+import type {
+	PublicActivityChange,
+	WorkspacePublicActivityState,
+} from "@/components/admin/settings/WorkspacePublicActivitySettings";
 import { panelState } from "@/components/common/panel-state";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -24,7 +31,8 @@ import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-ref
 
 /**
  * A workspace's public activity page as its admin settings show it: whether it is on, whether search
- * engines may list it, how many people it leaves out, and the two changes. Beside it, the hidden
+ * engines may list it, whether it names contributors without an account, how many people it leaves
+ * out, and the three changes. Beside it, the hidden
  * people an admin can show again, since showing one again is a public activity objection taken back.
  * `live` is the server-computed publication status from the workspace list.
  * An instance administrator outside that list reads the existing instance policy instead.
@@ -82,7 +90,13 @@ export function useWorkspacePublicActivity({
 			}),
 	});
 	const update = useMutation({
-		...updatePublicActivityMutation(),
+		mutationFn: async ({
+			body,
+			path: submitted,
+		}: Pick<UpdatePublicActivityData, "body" | "path"> & { change: PublicActivityChange }) => {
+			const { data } = await updatePublicActivity({ body, path: submitted, throwOnError: true });
+			return data;
+		},
 		onSuccess: async (_data, { path: submitted, body }) => {
 			// The list carries the publication status, and the count follows what the page lists.
 			void queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() });
@@ -107,19 +121,14 @@ export function useWorkspacePublicActivity({
 		},
 	});
 
-	const change = (patch: Partial<UpdateWorkspacePublicActivityRequest>) => {
+	const change = (requested: PublicActivityChange, patch: UpdateWorkspacePublicActivityRequest) => {
 		if (current.data === undefined) {
 			return;
 		}
-		const body = {
-			publicActivityEnabled: current.data.enabled,
-			allowSearchEngines: current.data.allowSearchEngines,
-			...patch,
-		};
-		// A page that is off has no search engine choice: the server forgets it, so this says the same.
 		update.mutate({
+			change: requested,
 			path,
-			body: { ...body, allowSearchEngines: body.publicActivityEnabled && body.allowSearchEngines },
+			body: patch,
 		});
 	};
 
@@ -143,18 +152,21 @@ export function useWorkspacePublicActivity({
 			? publicationPolicy.data.allowed && workspaceStatus === "ACTIVE" && current.data.enabled
 			: undefined);
 	if (current.data !== undefined && publication !== undefined) {
-		const pendingBody = update.isPending ? update.variables.body : undefined;
 		state = {
 			status: "ready",
 			enabled: current.data.enabled,
 			allowSearchEngines: current.data.allowSearchEngines,
+			contributorsWithoutAccount: current.data.contributorsWithoutAccount,
 			refreshFailure:
 				current.refreshFailure ??
 				(live === undefined ? publicationPolicy.refreshFailure : undefined),
 			live: publication,
 			// A count that did not load is left out rather than shown from an earlier read.
 			hiddenPeople: hidden.isError ? undefined : hidden.data?.hiddenPeople,
-			pending: pendingBody && pendingChange(pendingBody, current.data.enabled),
+			pending:
+				update.isPending && update.variables.path.workspaceSlug === workspaceSlug
+					? update.variables.change
+					: undefined,
 		};
 	} else if (settings.isError || (live === undefined && policyQuery.isError)) {
 		state = {
@@ -170,8 +182,12 @@ export function useWorkspacePublicActivity({
 	}
 	return {
 		state,
-		onEnabledChange: (publicActivityEnabled: boolean) => change({ publicActivityEnabled }),
-		onSearchEnginesChange: (allowSearchEngines: boolean) => change({ allowSearchEngines }),
+		onEnabledChange: (publicActivityEnabled: boolean) =>
+			change("enabled", { publicActivityEnabled }),
+		onSearchEnginesChange: (allowSearchEngines: boolean) =>
+			change("search-engines", { allowSearchEngines }),
+		onContributorsWithoutAccountChange: (contributorsWithoutAccount: boolean) =>
+			change("contributors-without-account", { contributorsWithoutAccount }),
 		hiddenPeople: {
 			state: hiddenPeopleState,
 			restoring: showAgain.isPending ? showAgain.variables.path.userId : undefined,
@@ -206,14 +222,6 @@ function lastRead<TData, TError>(
 	return { data: query.isError ? undefined : query.data };
 }
 
-/** The page's switch if the request turns it on or off, else the search engines' one. */
-function pendingChange(
-	{ publicActivityEnabled }: UpdateWorkspacePublicActivityRequest,
-	enabled: boolean,
-): "enabled" | "search-engines" {
-	return publicActivityEnabled === enabled ? "search-engines" : "enabled";
-}
-
 /** Which workspace a notification is about, since the admin may be looking at another one by then. */
 function inWorkspace(workspaceSlug: string): string {
 	return `In workspace ${workspaceSlug}.`;
@@ -224,7 +232,7 @@ function announce(
 	{ publicActivityEnabled }: UpdateWorkspacePublicActivityRequest,
 	workspaceSlug: string,
 ) {
-	if (publicActivityEnabled) {
+	if (publicActivityEnabled !== false) {
 		toast.success("Public activity settings saved", { description: inWorkspace(workspaceSlug) });
 		return;
 	}

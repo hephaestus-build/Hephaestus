@@ -66,10 +66,10 @@ export const Route = createFileRoute("/_authenticated/admin/feedback")({
 		status: z.enum(["OPEN", "RESOLVED", "ALL"]).optional().catch(undefined),
 		page: z.coerce.number().int().min(0).optional().catch(undefined),
 	}),
-	component: AdminFeedbackInboxPage,
+	component: AdminProductFeedbackPage,
 });
 
-function AdminFeedbackInboxPage() {
+function AdminProductFeedbackPage() {
 	const { status = "OPEN", page = 0 } = Route.useSearch();
 	const setSearch = useSearchState();
 	const queryClient = useQueryClient();

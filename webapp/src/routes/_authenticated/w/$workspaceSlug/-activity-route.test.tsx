@@ -68,7 +68,7 @@ const people = {
 	})),
 	automation: [],
 	coverage: { completeRepositories: 1, totalRepositories: 1 },
-	highlights: { firstContributors: [], mostPeopleHelped: [] },
+	highlights: { firstContributors: [] },
 	repositories: [
 		{ id: 1, key: "acme/api", name: "api" },
 		{ id: 2, key: "acme/web", name: "web" },

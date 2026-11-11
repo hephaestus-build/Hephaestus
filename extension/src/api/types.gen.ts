@@ -87,7 +87,6 @@ export type ActivityFacets = {
  */
 export type ActivityHighlights = {
     firstContributors: Array<number>;
-    mostPeopleHelped: Array<number>;
 };
 
 export type ActivityPeople = {
@@ -4317,6 +4316,10 @@ export type PublicActivity = {
     providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
     repositories: Array<PublicActivityRepository>;
     to: string;
+    /**
+     * Contributors in the period who are counted but not named, because they have no account that chose to show and the workspace does not list such contributors
+     */
+    unlistedContributors: number;
     workspaceName: string;
 };
 
@@ -4340,7 +4343,6 @@ export type PublicActivityHiddenCount = {
 
 export type PublicActivityHighlights = {
     firstContributors: Array<string>;
-    mostPeopleHelped: Array<string>;
 };
 
 export type PublicActivityOnboarding = {
@@ -4433,6 +4435,10 @@ export type PublicActivityWorkSummary = {
 
 export type PublicActivityWorkspaceSettings = {
     allowSearchEngines: boolean;
+    /**
+     * Whether the page names contributors who have no account that chose to show. Otherwise it only counts them.
+     */
+    contributorsWithoutAccount: boolean;
     enabled: boolean;
 };
 
@@ -6548,9 +6554,13 @@ export type UpdateWorkspacePasskeyPolicy = {
     required: boolean;
 };
 
+/**
+ * Only supplied non-null settings change. Turning the page off resets the other settings.
+ */
 export type UpdateWorkspacePublicActivityRequest = {
-    allowSearchEngines: boolean;
-    publicActivityEnabled: boolean;
+    allowSearchEngines?: boolean | null;
+    contributorsWithoutAccount?: boolean | null;
+    publicActivityEnabled?: boolean | null;
 };
 
 /**

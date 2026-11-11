@@ -49,7 +49,7 @@ const INBOX_BY_STATUS: Record<string, Wire<FeedbackItem>[]> = {
 };
 
 /** Answers by status and records which status each request asked for. */
-function mockInbox() {
+function mockReports() {
 	const requested: (string | null)[] = [];
 	server.use(
 		http.get("*/admin/product-feedback", ({ request }) => {
@@ -138,7 +138,7 @@ beforeEach(() => {
 describe("instance product feedback destinations", () => {
 	it("files a saved report on GitHub and says when this instance cannot send email", async () => {
 		const filed: string[] = [];
-		mockInbox();
+		mockReports();
 		server.use(
 			http.get("*/admin/product-feedback", () =>
 				HttpResponse.json({
@@ -170,7 +170,7 @@ describe("instance product feedback destinations", () => {
 
 	it("saves the destinations as the server's update", async () => {
 		const puts: unknown[] = [];
-		mockInbox();
+		mockReports();
 		server.use(
 			http.put("*/admin/product-feedback/destinations", async ({ request }) => {
 				const body = await request.json();
@@ -217,7 +217,7 @@ describe("instance product feedback destinations", () => {
 	});
 
 	it("asks for a fresh sign-in when the save needs one", async () => {
-		mockInbox();
+		mockReports();
 		server.use(
 			http.put("*/admin/product-feedback/destinations", () =>
 				HttpResponse.json(
@@ -236,7 +236,7 @@ describe("instance product feedback destinations", () => {
 	});
 
 	it("retries a stopped report", async () => {
-		mockInbox();
+		mockReports();
 		const retried: string[] = [];
 		server.use(
 			http.get("*/admin/product-feedback/needs-action", () => HttpResponse.json(stopped)),
@@ -254,7 +254,7 @@ describe("instance product feedback destinations", () => {
 	});
 
 	it("confirms an erased report's GitHub step only after the admin agrees", async () => {
-		mockInbox();
+		mockReports();
 		const confirmed: string[] = [];
 		server.use(
 			http.get("*/admin/product-feedback/needs-action", () => HttpResponse.json(scrubbed)),
@@ -279,9 +279,9 @@ describe("instance product feedback destinations", () => {
 	});
 });
 
-describe("instance feedback inbox route", () => {
+describe("instance product feedback route", () => {
 	it("shows open feedback by default and asks for the status the filter selects", async () => {
-		const requested = mockInbox();
+		const requested = mockReports();
 		renderRouteAt("/admin/feedback");
 		const user = userEvent.setup();
 
@@ -303,8 +303,8 @@ describe("instance feedback inbox route", () => {
 		expect(screen.getByText("2 pieces of feedback.")).not.toBeNull();
 	});
 
-	it("marks feedback resolved and refreshes the inbox", async () => {
-		mockInbox();
+	it("marks feedback resolved and refreshes the reports", async () => {
+		mockReports();
 		const triaged: { id: string; body: unknown }[] = [];
 		server.use(
 			http.patch("*/admin/product-feedback/:feedbackId", async ({ params, request }) => {

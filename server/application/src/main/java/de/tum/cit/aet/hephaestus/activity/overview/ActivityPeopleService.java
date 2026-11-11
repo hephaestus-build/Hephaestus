@@ -65,13 +65,31 @@ public class ActivityPeopleService {
         return new ActivityFacetsDTO(queries.repositories(workspace), queries.teams(workspace));
     }
 
+    /** The public people, and how many contributors without an account the page counts instead of naming. */
+    public record PublicPeople(ActivityPeopleDTO people, int unlistedContributors) {}
+
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
-    public ActivityPeopleDTO publicPeople(
-            long workspace, ActivityPeopleRangeParams params, Set<String> repositoryKeys) {
+    public PublicPeople publicPeople(
+            long workspace,
+            ActivityPeopleRangeParams params,
+            Set<String> repositoryKeys,
+            boolean contributorsWithoutAccount) {
         var repositories = queries.publicRepositories(workspace, visibility.confirmedAfter());
         var selected = select(workspace, null, repositoryKeys, List.of(), repositories);
-        var scope = new ActivityScope(workspace, Set.of(), Set.of(), selected.repositoryIds(), true);
-        return aggregate(scope, params, List.of(), repositories);
+        var scope = ActivityScope.published(
+                workspace, selected.repositoryIds(), withoutAccount(contributorsWithoutAccount));
+        var people = aggregate(scope, params, List.of(), repositories);
+        if (contributorsWithoutAccount) return new PublicPeople(people, 0);
+        long unlisted = queries.countPublicContributors(
+                scope.withoutAccount(ActivityScope.WithoutAccount.ONLY),
+                new TimeRange(people.from(), people.to()),
+                0,
+                false);
+        return new PublicPeople(people, Math.toIntExact(unlisted));
+    }
+
+    private static ActivityScope.WithoutAccount withoutAccount(boolean shown) {
+        return shown ? ActivityScope.WithoutAccount.SHOWN : ActivityScope.WithoutAccount.HIDDEN;
     }
 
     private ActivityPeopleDTO aggregate(
@@ -79,7 +97,8 @@ public class ActivityPeopleService {
             ActivityPeopleRangeParams params,
             List<ActivityTeamDTO> teams,
             List<ActivityRepositoryDTO> repositories) {
-        var range = params.resolve(clock, () -> queries.findEarliest(scope));
+        var history = history(scope);
+        var range = params.resolve(clock, () -> queries.findEarliest(history));
         var rows = queries.findPeople(scope, range, 0, false);
         Map<Long, ActivityPeopleQueryRepository.CountRow> totals = new LinkedHashMap<>();
         Map<Long, List<ActivitySparklineWeekDTO>> weeks = new LinkedHashMap<>();
@@ -104,27 +123,18 @@ public class ActivityPeopleService {
         var people = all.stream()
                 .filter(row -> row.kind() == ActivityContributorKind.PERSON)
                 .toList();
-        long mostHelped = people.stream()
-                .mapToLong(row -> row.counts().peopleHelped())
-                .max()
-                .orElse(0);
-        var coverage = queries.coverage(scope);
+        var coverage = queries.coverage(history);
         boolean firstKnown = coverage.totalRepositories() > 0
                 && coverage.completeRepositories() == coverage.totalRepositories()
                 && coverage.since() != null
                 && range.from().isAfter(coverage.since());
-        var highlights = new ActivityHighlightsDTO(
-                people.stream()
-                        .filter(row -> firstKnown
-                                && row.firstContributionAt() != null
-                                && !row.firstContributionAt().isBefore(range.from())
-                                && row.firstContributionAt().isBefore(range.to()))
-                        .map(row -> row.person().id())
-                        .toList(),
-                people.stream()
-                        .filter(row -> mostHelped > 0 && row.counts().peopleHelped() == mostHelped)
-                        .map(row -> row.person().id())
-                        .toList());
+        var highlights = new ActivityHighlightsDTO(people.stream()
+                .filter(row -> firstKnown
+                        && row.firstContributionAt() != null
+                        && !row.firstContributionAt().isBefore(range.from())
+                        && row.firstContributionAt().isBefore(range.to()))
+                .map(row -> row.person().id())
+                .toList());
         return new ActivityPeopleDTO(
                 range.from(),
                 range.to(),
@@ -201,12 +211,17 @@ public class ActivityPeopleService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
     public PublicActivityPersonDetailDTO publicPerson(
-            long workspace, String login, ActivityPeopleRangeParams params, Set<String> repositoryKeys) {
+            long workspace,
+            String login,
+            ActivityPeopleRangeParams params,
+            Set<String> repositoryKeys,
+            boolean contributorsWithoutAccount) {
         var repositories = queries.publicRepositories(workspace, visibility.confirmedAfter());
         var selected = select(workspace, null, repositoryKeys, List.of(), repositories);
-        var scope = new ActivityScope(workspace, Set.of(), Set.of(), selected.repositoryIds(), true);
+        var scope = ActivityScope.published(
+                workspace, selected.repositoryIds(), withoutAccount(contributorsWithoutAccount));
         var contributor = publicContributor(scope, login);
-        var range = params.resolve(clock, () -> queries.findEarliest(scope));
+        var range = params.resolve(clock, () -> queries.findEarliest(history(scope)));
         return PublicActivityPersonDetailDTO.from(
                 detail(scope, range, contributor.person().id(), false, contributor, repositories));
     }
@@ -217,10 +232,12 @@ public class ActivityPeopleService {
             String login,
             ActivityPeopleRangeParams params,
             Set<String> repositoryKeys,
-            ActivityWorkFilterParams page) {
+            ActivityWorkFilterParams page,
+            boolean contributorsWithoutAccount) {
         var repositories = queries.publicRepositories(workspace, visibility.confirmedAfter());
         var selected = select(workspace, null, repositoryKeys, List.of(), repositories);
-        var scope = new ActivityScope(workspace, Set.of(), Set.of(), selected.repositoryIds(), true);
+        var scope = ActivityScope.published(
+                workspace, selected.repositoryIds(), withoutAccount(contributorsWithoutAccount));
         var contributor = publicContributor(scope, login);
         var kinds = page.kinds() == null || page.kinds().isEmpty()
                 ? PublicActivityPersonDetailDTO.SUPPORTED_KINDS
@@ -228,7 +245,7 @@ public class ActivityPeopleService {
         if (!PublicActivityPersonDetailDTO.SUPPORTED_KINDS.containsAll(kinds)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This kind is not published in public activity.");
         }
-        var range = page.range(params, clock, () -> queries.findEarliest(scope));
+        var range = page.range(params, clock, () -> queries.findEarliest(history(scope)));
         var groups = publicWork.findWork(
                 scope,
                 range,
@@ -265,6 +282,11 @@ public class ActivityPeopleService {
                                         content.getLast().getId())
                                 .encode()
                         : null);
+    }
+
+    // Hiding names must not change the period or the coverage of public history.
+    private static ActivityScope history(ActivityScope scope) {
+        return scope.publicOnly() ? scope.withoutAccount(ActivityScope.WithoutAccount.SHOWN) : scope;
     }
 
     private ActivityPeopleQueryRepository.Contributor publicContributor(ActivityScope scope, String login) {

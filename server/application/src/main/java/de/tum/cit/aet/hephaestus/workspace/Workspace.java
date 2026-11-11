@@ -100,6 +100,14 @@ public class Workspace {
     private boolean publicActivitySearchEngines;
 
     /**
+     * Whether the public page lists contributors who have no account that chose to show. Off by default: the page
+     * then counts them without naming them (GDPR Art. 25(2), data protection by default).
+     */
+    @Column(name = "public_activity_contributors_without_account", nullable = false)
+    @ColumnDefault("false")
+    private boolean publicActivityContributorsWithoutAccount;
+
+    /**
      * Current lifecycle state of the workspace.
      *
      * @see WorkspaceStatus for valid states and transitions

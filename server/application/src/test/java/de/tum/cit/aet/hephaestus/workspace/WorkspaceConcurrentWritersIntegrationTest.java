@@ -38,6 +38,9 @@ class WorkspaceConcurrentWritersIntegrationTest extends AbstractWorkspaceIntegra
     private WorkspaceRepository workspaceRepository;
 
     @Autowired
+    private WorkspaceSettingsService settings;
+
+    @Autowired
     private OrganizationService organizations;
 
     @Autowired
@@ -66,6 +69,29 @@ class WorkspaceConcurrentWritersIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(suspend.get(30, SECONDS)).isInstanceOf(WorkspaceLifecycleViolationException.class);
         assertThat(jdbc.queryForObject("SELECT status FROM workspace WHERE id = ?", String.class, workspaceId))
                 .isEqualTo("PURGED");
+    }
+
+    @Test
+    void shouldKeepContributorNamesOffWhenSearchIndexingChangesConcurrently() throws Exception {
+        var workspace = WorkspaceTestFixtures.activeWorkspace(
+                "race-" + UUID.randomUUID().toString().substring(0, 8));
+        workspace.setPublicActivityEnabled(true);
+        workspace.setPublicActivityContributorsWithoutAccount(true);
+        long workspaceId = Objects.requireNonNull(
+                workspaceRepository.saveAndFlush(workspace).getId());
+
+        Future<Throwable> second = whileFirstWriterHoldsItsTransaction(
+                () -> settings.updatePublicActivity(workspaceId, new PublicActivityChoice(null, null, false)),
+                () -> settings.updatePublicActivity(workspaceId, new PublicActivityChoice(null, true, null)));
+
+        assertThat(second.get(30, SECONDS)).isNull();
+        assertThat(jdbc.queryForMap(
+                        "SELECT public_activity_enabled, public_activity_search_engines,"
+                                + " public_activity_contributors_without_account FROM workspace WHERE id = ?",
+                        workspaceId))
+                .containsEntry("public_activity_enabled", true)
+                .containsEntry("public_activity_search_engines", true)
+                .containsEntry("public_activity_contributors_without_account", false);
     }
 
     @Test

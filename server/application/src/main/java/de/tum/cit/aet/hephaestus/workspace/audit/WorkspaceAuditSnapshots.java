@@ -29,7 +29,8 @@ public final class WorkspaceAuditSnapshots {
 
     public record PasskeyPolicySnapshot(boolean required) implements ConfigAuditSnapshot {}
 
-    public record VisibilitySnapshot(@Nullable Boolean publicActivityEnabled, boolean allowSearchEngines)
+    public record VisibilitySnapshot(
+            @Nullable Boolean publicActivityEnabled, boolean allowSearchEngines, boolean contributorsWithoutAccount)
             implements ConfigAuditSnapshot {}
 
     /** Presence of a stored SCM token — never the token itself. */

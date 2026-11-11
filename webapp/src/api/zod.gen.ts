@@ -79,8 +79,7 @@ export const zActivityCoverage = z.object({
  * Identifiers refer only to the people in the same response.
  */
 export const zActivityHighlights = z.object({
-    firstContributors: z.array(z.int()),
-    mostPeopleHelped: z.array(z.int())
+    firstContributors: z.array(z.int())
 });
 
 /**
@@ -3137,8 +3136,7 @@ export const zPublicActivityHiddenCount = z.object({
 });
 
 export const zPublicActivityHighlights = z.object({
-    firstContributors: z.array(z.string()),
-    mostPeopleHelped: z.array(z.string())
+    firstContributors: z.array(z.string())
 });
 
 export const zPublicActivityOnboarding = z.object({
@@ -3193,6 +3191,7 @@ export const zPublicActivity = z.object({
     ]).optional(),
     repositories: z.array(zPublicActivityRepository),
     to: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+    unlistedContributors: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     workspaceName: z.string()
 });
 
@@ -3274,6 +3273,7 @@ export const zCursorPageDtoPublicActivityWork = z.object({
 
 export const zPublicActivityWorkspaceSettings = z.object({
     allowSearchEngines: z.boolean(),
+    contributorsWithoutAccount: z.boolean(),
     enabled: z.boolean()
 });
 
@@ -5841,9 +5841,13 @@ export const zUpdateWorkspacePasskeyPolicy = z.object({
     required: z.boolean()
 });
 
+/**
+ * Only supplied non-null settings change. Turning the page off resets the other settings.
+ */
 export const zUpdateWorkspacePublicActivityRequest = z.object({
-    allowSearchEngines: z.boolean(),
-    publicActivityEnabled: z.boolean()
+    allowSearchEngines: z.boolean().nullish(),
+    contributorsWithoutAccount: z.boolean().nullish(),
+    publicActivityEnabled: z.boolean().nullish()
 });
 
 /**

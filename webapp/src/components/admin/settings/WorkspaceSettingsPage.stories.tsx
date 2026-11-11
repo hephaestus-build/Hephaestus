@@ -13,12 +13,14 @@ const publicActivity = {
 		status: "ready",
 		enabled: false,
 		allowSearchEngines: false,
+		contributorsWithoutAccount: false,
 		live: false,
 		hiddenPeople: undefined,
 		pending: undefined,
 	},
 	onEnabledChange: fn(),
 	onSearchEnginesChange: fn(),
+	onContributorsWithoutAccountChange: fn(),
 } satisfies WorkspaceSettingsPageProps["publicActivity"];
 
 const hiddenPeople = {

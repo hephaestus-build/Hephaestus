@@ -5,7 +5,7 @@ import {
 	CircleDollarSign,
 	FlaskConical,
 	Gauge,
-	Inbox,
+	MessageSquareText,
 	KeyRound,
 	LibraryBig,
 	ScrollText,
@@ -76,9 +76,9 @@ const ADMIN_NAV_GROUPS = [
 		items: [
 			{
 				to: "/admin/feedback",
-				label: "Inbox",
-				icon: Inbox,
-				tooltip: "Feedback and bug reports",
+				label: "Reports",
+				icon: MessageSquareText,
+				tooltip: "Ideas and bug reports about Hephaestus",
 			},
 		],
 	},

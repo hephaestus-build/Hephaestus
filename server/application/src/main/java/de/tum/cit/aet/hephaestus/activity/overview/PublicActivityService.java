@@ -30,11 +30,14 @@ class PublicActivityService {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
     public PublicActivityDTO page(String slug, ActivityPeopleRangeParams range, Set<String> repositoryKeys) {
         var selected = publishedWorkspace(slug);
+        var publicPeople = people.publicPeople(
+                selected.getId(), range, repositoryKeys, selected.isPublicActivityContributorsWithoutAccount());
         return PublicActivityDTO.from(
                 selected.getDisplayName(),
                 workspaceQueries.scmProviderType(selected),
                 selected.isPublicActivitySearchEngines(),
-                people.publicPeople(selected.getId(), range, repositoryKeys));
+                publicPeople.people(),
+                publicPeople.unlistedContributors());
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
@@ -42,7 +45,12 @@ class PublicActivityService {
             String slug, String login, ActivityPeopleRangeParams range, Set<String> repositoryKeys) {
         var workspace = publishedWorkspace(slug);
         return new Published<>(
-                people.publicPerson(workspace.getId(), login, range, repositoryKeys),
+                people.publicPerson(
+                        workspace.getId(),
+                        login,
+                        range,
+                        repositoryKeys,
+                        workspace.isPublicActivityContributorsWithoutAccount()),
                 workspace.isPublicActivitySearchEngines());
     }
 
@@ -55,7 +63,13 @@ class PublicActivityService {
             ActivityWorkFilterParams page) {
         var workspace = publishedWorkspace(slug);
         return new Published<>(
-                people.publicPersonWork(workspace.getId(), login, range, repositoryKeys, page),
+                people.publicPersonWork(
+                        workspace.getId(),
+                        login,
+                        range,
+                        repositoryKeys,
+                        page,
+                        workspace.isPublicActivityContributorsWithoutAccount()),
                 workspace.isPublicActivitySearchEngines());
     }
 
