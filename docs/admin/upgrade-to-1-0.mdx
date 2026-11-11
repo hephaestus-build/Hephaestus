@@ -106,9 +106,10 @@ The migration guide owns each change. This table gives the names.
 The table covers the changes after the release candidate `1.0.0-rc.5`.
 A host on an earlier candidate also needs the entries of the later candidates.
 
-Three more checks need a read before the window:
+Four more checks need a read before the window:
 
 - API callers of the team routes move to the new contract: *Update team API callers*.
+- Custom API clients read error responses in the problem format: *Read problem responses from the top level*.
 - Duplicate repository monitor names stop the migration: run the query of *Stop every role before enforcing unique repository monitor names*.
 - A practice identifier can collide with a reserved route name: run the preflight of *Check practice identifiers before upgrading*.
 
