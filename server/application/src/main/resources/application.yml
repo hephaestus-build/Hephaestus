@@ -921,6 +921,13 @@ spring:
             "[mail.smtp.starttls.enable]": false
             "[mail.smtp.starttls.required]": false
 
+# A person reads this console: Boot's text pattern, with the trace and span IDs in brackets. The shipped JSON stays
+# the default of every other profile.
+logging:
+    structured:
+        format:
+            console: ""
+
 hephaestus:
     email:
         from: hephaestus@localhost

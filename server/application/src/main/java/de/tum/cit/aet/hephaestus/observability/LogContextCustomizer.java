@@ -11,7 +11,12 @@ import org.springframework.boot.logging.structured.StructuredLoggingJsonMembersC
 
 /**
  * Writes the MDC and the event's key-value pairs as one nested {@code context} object, in place of Boot's own context
- * pairs ({@code logging.structured.json.context.include: false}).
+ * pairs ({@code logging.structured.json.context.include: false}), and the trace scope as ECS {@code trace.id} and
+ * {@code span.id}.
+ *
+ * <p>Micrometer Tracing puts the scope in the MDC as {@code traceId} and {@code spanId}. ECS names them {@code trace.id}
+ * and {@code span.id} at the top level of the record, where an ECS-aware store or a collector's trace parser looks for
+ * them, so they are written there and not again in {@code context}.
  *
  * <p>Boot's ECS formatter refuses a name that the MDC and a key-value pair both carry and the appender then drops the
  * whole record. A lifecycle event that names its job inside that job's MDC scope was lost that way. Here the event's
@@ -21,13 +26,27 @@ public class LogContextCustomizer implements StructuredLoggingJsonMembersCustomi
 
     @Override
     public void customize(JsonWriter.Members<ILoggingEvent> members) {
+        members.add("trace", event -> id(event, StructuredLogKeys.TRACE_ID)).whenNotNull();
+        members.add("span", event -> id(event, StructuredLogKeys.SPAN_ID)).whenNotNull();
         members.add("context", LogContextCustomizer::context).whenNotEmpty();
+    }
+
+    private static @Nullable Map<String, String> id(ILoggingEvent event, String key) {
+        Map<String, String> mdc = event.getMDCPropertyMap();
+        String id = mdc == null ? null : mdc.get(key);
+        return id == null || id.isEmpty() ? null : Map.of("id", id);
     }
 
     static Map<String, Object> context(ILoggingEvent event) {
         Map<String, Object> context = new LinkedHashMap<>();
         Map<String, String> mdc = event.getMDCPropertyMap();
-        if (mdc != null) mdc.forEach((name, value) -> put(context, name, value));
+        if (mdc != null) {
+            mdc.forEach((name, value) -> {
+                if (!StructuredLogKeys.TRACE_ID.equals(name) && !StructuredLogKeys.SPAN_ID.equals(name)) {
+                    put(context, name, value);
+                }
+            });
+        }
         List<KeyValuePair> pairs = event.getKeyValuePairs();
         if (pairs != null) pairs.forEach(pair -> put(context, pair.key, pair.value));
         return context;

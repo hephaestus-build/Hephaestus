@@ -117,7 +117,7 @@ class RedactionContractTest {
         assertTrue(trace.contains(WebClientResponseException.class.getName()), trace);
         assertTrue(trace.contains("at " + RedactionContractTest.class.getName()), trace);
         assertTrue(trace.contains("<#"), "frame hashes group repeated failures: " + trace);
-        assertEquals("0123456789abcdef0123456789abcdef", text(json, "context.traceId"));
+        assertEquals("0123456789abcdef0123456789abcdef", text(json, "trace.id"));
         assertEquals("7", text(json, "context.job.id"));
     }
 
@@ -136,7 +136,7 @@ class RedactionContractTest {
 
         assertTrue(line.getBytes(StandardCharsets.UTF_8).length < 16 * 1024, "record is " + line.length());
         JsonNode json = new ObjectMapper().readTree(line);
-        assertEquals("0123456789abcdef0123456789abcdef", text(json, "context.traceId"));
+        assertEquals("0123456789abcdef0123456789abcdef", text(json, "trace.id"));
         assertEquals("42", text(json, "context.workspace.id"));
         assertEquals(RuntimeException.class.getName(), text(json, "error.type"));
         String trace = text(json, "error.stack_trace");
@@ -194,7 +194,7 @@ class RedactionContractTest {
         JsonNode json = new ObjectMapper().readTree(line);
         assertEquals(BeanCreationException.class.getName(), text(json, "error.type"));
         assertNull(node(json, "error.message"), line);
-        assertEquals("0123456789abcdef0123456789abcdef", text(json, "context.traceId"));
+        assertEquals("0123456789abcdef0123456789abcdef", text(json, "trace.id"));
         String trace = text(json, "error.stack_trace");
         assertTrue(trace.length() <= 8192, "stack trace is " + trace.length());
         int root = trace.indexOf(SSLHandshakeException.class.getName());
@@ -307,6 +307,17 @@ class RedactionContractTest {
         assertEquals(RedactionContractTest.class.getName(), text(json, "log.logger"));
     }
 
+    /** Every shipped profile writes JSON; only the local profile, which a person reads in a terminal, writes text. */
+    @Test
+    void shouldWriteTextOnlyForTheLocalProfile() {
+        assertEquals(
+                "ecs",
+                ShippedLogEncoder.environment("application.yml", -1).getProperty("logging.structured.format.console"));
+        assertEquals(
+                "",
+                ShippedLogEncoder.environment("application.yml", 1).getProperty("logging.structured.format.console"));
+    }
+
     @ParameterizedTest
     @CsvSource({
         "Bearer synthetic-private-token, Bearer ***",
@@ -410,8 +421,11 @@ class RedactionContractTest {
         assertTrue(duration != null && duration.isNumber(), line);
         JsonNode enabled = node(json, "context.runtime.server.enabled");
         assertTrue(enabled != null && enabled.isBoolean() && enabled.asBoolean(), line);
-        assertEquals("0123456789abcdef0123456789abcdef", text(json, "context.traceId"));
-        assertEquals("0123456789abcdef", text(json, "context.spanId"));
+        assertEquals("0123456789abcdef0123456789abcdef", text(json, "trace.id"));
+        assertEquals("0123456789abcdef", text(json, "span.id"));
+        // ECS names the trace scope at the top level only.
+        assertNull(node(json, "context.traceId"), line);
+        assertNull(node(json, "context.spanId"), line);
         assertEquals(1, line.strip().lines().count());
         String record = line.strip();
         assertFalse(record.contains("\r"));
