@@ -1,6 +1,6 @@
 # ADR 0012: Cross-instance identity safety on sync paths
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md)
 **Date:** 2026-05-25
 **Amended by:** [ADR 0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md)
 
