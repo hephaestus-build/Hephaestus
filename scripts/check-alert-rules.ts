@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { parse } from "yaml";
@@ -59,6 +60,25 @@ export function incompleteAlerts(rules: string, tests: string, runbook: string):
 	]);
 }
 
+/**
+ * The test groups split round-robin into `parts` lists of exact `--run` patterns. promtool runs one
+ * group at a time on one core, which took 7 of the tooling leg's 9 minutes, so each list gets a
+ * promtool process of its own.
+ */
+export function runPatterns(tests: string, parts: number): string[][] {
+	const names = asArray(asRecord(parse(tests), testsFile).tests, "tests").map((test) => {
+		const { name } = asRecord(test, "test");
+		if (typeof name !== "string" || name === "") {
+			throw new Error(`${testsFile}: every test group needs a name`);
+		}
+		return `--run=^${name.replaceAll(/[\\^$.*+?()[\]{}|]/gu, String.raw`\$&`)}$`;
+	});
+	const count = Math.max(1, Math.min(parts, names.length));
+	return Array.from({ length: count }, (_unused, part) =>
+		names.filter((_name, index) => index % count === part),
+	);
+}
+
 const read = async (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 if (import.meta.main) {
@@ -89,5 +109,10 @@ if (import.meta.main) {
 	];
 
 	await run("docker", [...promtool, "check", "rules", `/rules/${rulesFile}`]);
-	await run("docker", [...promtool, "test", "rules", `/rules/${testsFile}`]);
+	const tests = await read(`deploy/chart/hephaestus/files/${testsFile}`);
+	await Promise.all(
+		runPatterns(tests, availableParallelism()).map(async (patterns) =>
+			run("docker", [...promtool, "test", "rules", ...patterns, `/rules/${testsFile}`]),
+		),
+	);
 }
