@@ -88,7 +88,7 @@ export function testQueryClient(): QueryClient {
 }
 
 /**
- * Loads the code of every route that `paths` match, as `beforeAll(() => loadRouteCode(...),
+ * Loads the code of every route that `paths` match, as `beforeAll(async () => loadRouteCode(...),
  * ROUTE_RENDER_WAIT.timeout)`. A route's first mount loads its split modules, and Vitest transforms
  * each one on that first import. Setup owns that transformation; each test owns the routing or
  * rendering behavior once the matched code is available.

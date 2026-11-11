@@ -4,8 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 
-import { build } from "vite-plus";
-import { expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
@@ -28,9 +27,13 @@ it.each([
 	expect(packageOf(moduleId)).toBe(name);
 });
 
-it("the bundle carries used and lazy package identities, without unused build dependencies", async () => {
-	const root = await mkdtemp(path.join(os.tmpdir(), "bundle-packages-"));
-	try {
+describe("bundle package inventory", () => {
+	let fixtureRoot: string | undefined;
+
+	beforeAll(async () => {
+		const { build } = await import("vite-plus");
+		const root = await mkdtemp(path.join(os.tmpdir(), "bundle-packages-"));
+		fixtureRoot = root;
 		await writeFile(path.join(root, "index.html"), '<script type="module" src="/app.js"></script>');
 		await writeFile(
 			path.join(root, "app.js"),
@@ -52,6 +55,17 @@ it("the bundle carries used and lazy package identities, without unused build de
 			plugins: [bundlePackages()],
 			build: { license: { fileName: BUNDLE_LICENSE_FILE } },
 		});
+	});
+
+	afterAll(async () => {
+		if (fixtureRoot !== undefined) {
+			await rm(fixtureRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("carries used and lazy package identities, without unused build dependencies", async () => {
+		const root = fixtureRoot;
+		assert.ok(root !== undefined);
 		const metadata = (name: string) =>
 			path.join(root, "dist/.vite/packages", encodeURIComponent(`${name}@1.2.3`), "package.json");
 		for (const name of ["used", "@scope/lazy"]) {
@@ -91,8 +105,8 @@ it("the bundle carries used and lazy package identities, without unused build de
 		assert.ok(chunks.some((chunk) => chunk.isDynamicEntry));
 		for (const chunk of chunks) {
 			const code = await readFile(path.join(root, "dist", chunk.fileName));
-			assert.equal(chunk.bytes, code.byteLength);
-			assert.equal(chunk.gzipBytes, gzipSync(code, { level: 6 }).byteLength);
+			expect(chunk.bytes).toBe(code.byteLength);
+			expect(chunk.gzipBytes).toBe(gzipSync(code, { level: 6 }).byteLength);
 		}
 		assert.deepEqual([...new Set(chunks.flatMap((chunk) => chunk.packages))].sort(), [
 			"@scope/lazy",
@@ -117,35 +131,67 @@ it("the bundle carries used and lazy package identities, without unused build de
 		await assert.rejects(readFile(path.join(root, "dist", BUNDLE_LICENSE_FILE)), {
 			code: "ENOENT",
 		});
-		await assert.rejects(
-			build({
-				root,
-				configFile: false,
-				logLevel: "silent",
-				plugins: [
-					{
-						name: "omit-native-license",
-						writeBundle: {
-							order: "pre",
-							handler(_options, bundle) {
-								const asset = bundle[BUNDLE_LICENSE_FILE];
-								assert.ok(asset?.type === "asset");
-								assert.ok(typeof asset.source === "string");
-								const text = asset.source;
-								const entries = z
-									.array(z.looseObject({ name: z.string() }))
-									.parse(JSON.parse(text));
-								asset.source = JSON.stringify(entries.filter((item) => item.name !== "used"));
-							},
+	});
+});
+
+describe("a license report that omits a bundled package", () => {
+	let fixtureRoot: string | undefined;
+	let buildFailure: unknown;
+
+	beforeAll(async () => {
+		const { build } = await import("vite-plus");
+		const root = await mkdtemp(path.join(os.tmpdir(), "bundle-packages-missing-license-"));
+		fixtureRoot = root;
+		await writeFile(path.join(root, "index.html"), '<script type="module" src="/app.js"></script>');
+		await writeFile(
+			path.join(root, "app.js"),
+			'import { value } from "used"; console.log(value); window.lazy = () => import("@scope/lazy");',
+		);
+		for (const name of ["used", "@scope/lazy", "unused-build-tool"]) {
+			const directory = path.join(root, "node_modules", name);
+			await mkdir(directory, { recursive: true });
+			await writeFile(
+				path.join(directory, "package.json"),
+				JSON.stringify({ name, version: "1.2.3", license: "MIT", main: "index.js" }),
+			);
+			await writeFile(path.join(directory, "index.js"), 'export const value = "fixture";');
+		}
+		buildFailure = await build({
+			root,
+			configFile: false,
+			logLevel: "silent",
+			plugins: [
+				{
+					name: "omit-native-license",
+					writeBundle: {
+						order: "pre",
+						handler(_options, bundle) {
+							const asset = bundle[BUNDLE_LICENSE_FILE];
+							assert.ok(asset?.type === "asset");
+							assert.ok(typeof asset.source === "string");
+							const text = asset.source;
+							const entries = z.array(z.looseObject({ name: z.string() })).parse(JSON.parse(text));
+							asset.source = JSON.stringify(entries.filter((item) => item.name !== "used"));
 						},
 					},
-					bundlePackages(),
-				],
-				build: { license: { fileName: BUNDLE_LICENSE_FILE } },
-			}),
-			/license report omitted bundled package used/u,
+				},
+				bundlePackages(),
+			],
+			build: { license: { fileName: BUNDLE_LICENSE_FILE } },
+		}).then(
+			() => undefined,
+			(error: unknown) => error,
 		);
-	} finally {
-		await rm(root, { recursive: true, force: true });
-	}
+	});
+
+	afterAll(async () => {
+		if (fixtureRoot !== undefined) {
+			await rm(fixtureRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects the build with the missing package identity", () => {
+		assert.ok(buildFailure instanceof Error);
+		assert.match(buildFailure.message, /license report omitted bundled package used/u);
+	});
 });
