@@ -62,7 +62,7 @@ would introduce an additional export or rendering step here without an existing 
   headers. Logs carry the kind and message id, never the address.
 - **The transport is Boot's `spring.mail.*`**, so an operator's environment variable is the property
   path in upper case. Boot's `MailSenderAutoConfiguration` is excluded: it registers a sender for an
-  empty host, and the compose topology forwards unset variables as empty strings. A server-role
+  empty host, and the Helm chart sets `SPRING_MAIL_HOST` to an empty string when no relay is configured. A server-role
   configuration conditionally imports Boot's own auto-configuration for a non-blank host, retaining SSL bundles
   and the framework's sender construction instead of copying its property mapping. The sender
   identity is `hephaestus.email.*`. Both `smtp` and implicit-TLS `smtps` configure finite connection,
@@ -125,6 +125,12 @@ would introduce an additional export or rendering step here without an existing 
   as the runbook already requires; the gateway does not exempt itself.
 - Self-hosters bring their own relay. The code names no relay; the university relay used by the
   canonical deployment is operator configuration only.
+
+## Confirmation
+
+`NotificationArchitectureTest` fails for a plain `@EventListener` in `notification`, and for a plain `@TransactionalEventListener` that does not run before commit.
+`EmailTransportConfigurationTest` checks that a blank host registers no sender and that authenticated SMTP requires TLS.
+`EmailAdapterTest` checks Silent Mode, the outcome values and the automation headers of the one gateway.
 
 ## Sources
 

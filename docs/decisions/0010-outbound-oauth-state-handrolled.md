@@ -9,16 +9,16 @@
 > never wired into any strategy — both providers (GitHub App, Slack OAuth v2) are
 > **confidential clients** authenticating with a `client_secret`, for which PKCE is
 > recommended-but-not-required (RFC 9700) and provided no active protection while unwired.
-> The signed state payload is now `(workspaceId|kind|issuedAt|nonce|actorRef)`; CSRF/replay
-> defense (HMAC + TTL + single-use nonce) is unchanged. A future public-client provider that
+> The signed state payload is now `v2|workspaceId|kind|issuedAt|nonce|base64url(accountId)`.
+> The CSRF and replay defense (HMAC + TTL + single-use nonce) is unchanged. A future public-client provider that
 > needs PKCE can reintroduce the primitive against this same `OAuthStateService` seam.
 
 ## Context
 
 Hephaestus opens outbound OAuth Authorization Code flows from per-workspace admin pages
-("Connect GitHub", "Connect GitLab", "Connect Slack"; Outline integration was
-removed from this epic — see ADR 0015). The framework
-must:
+("Connect GitHub", "Connect Slack").
+GitLab and Outline connect with a pasted token and have no vendor redirect.
+The framework must:
 
 - Survive multi-step flows that may take **minutes** and span **tab close / reopen** (GitHub
   App org-admin approval gates can pause the flow for arbitrary time).
@@ -27,7 +27,7 @@ must:
 - Run **without a Spring session** at the callback step: the vendor redirects back from
   an unauthenticated browser tab; the only authoritative identity is what we signed into
   `state`.
-- Compose with the existing Keycloak `oauth2-resource-server` chain (inbound API auth) —
+- Compose with the server's own `oauth2-resource-server` chain (inbound API auth, ADR 0017) —
   Spring Security 6 cannot run resource-server + client filters with conflicting state
   stores against the same `/oauth/**` paths.
 - Support **per-instance** ClientRegistration shapes (each Slack workspace has its own
@@ -52,8 +52,10 @@ We examined whether `spring-boot-starter-oauth2-client` could replace the hand-r
   is an open enhancement request. Workarounds require a custom `ClientRegistrationRepository`
   with careful concurrent-modification handling. Same effort as hand-rolled; less control.
 - **GitHub App ≠ standard OAuth Authorization Code.** GitHub App install callbacks deliver
-  `installation_id`, not `code`. There is no token-exchange at the browser callback — the
-  installation token is minted server-side via JWT-signed-with-private-key. Spring's
+  `installation_id` and a user-authorization `code`.
+  The connect exchanges the code for a user token.
+  It uses that token only to prove that the installer can access the installation and owns its account.
+  The installation token is minted server-side via JWT-signed-with-private-key. Spring's
   `OAuth2LoginAuthenticationFilter` at `/login/oauth2/code/{registrationId}` is the wrong
   endpoint shape entirely.
 - **Both providers are confidential clients.** GitHub App and Slack OAuth v2 both
@@ -77,7 +79,7 @@ We examined whether `spring-boot-starter-oauth2-client` could replace the hand-r
      (if the OSS landscape closes the multi-tenant gap) is a refactor, not a rewrite.
 
 3. **Hand-roll** the entire flow, document our cryptographic choices in line with RFC 9700,
-   ArchUnit-pin the state token shape. Adopted.
+   pin the state token shape in a test. Adopted.
 
 ## Decision
 
@@ -85,11 +87,11 @@ We examined whether `spring-boot-starter-oauth2-client` could replace the hand-r
 nothing and reduce future drift:
 
 - Keep `HmacOAuthStateService`, `OAuthStateNonceStore`, the `state` payload shape
-  `(workspaceId|kind|issuedAt|nonce|actorRef)`, and the single-use
+  `v2|workspaceId|kind|issuedAt|nonce|base64url(accountId)`, and the single-use
   `consumed_at` conditional UPDATE.
 - No PKCE: both providers are confidential clients, so the signed-state HMAC + TTL +
   single-use nonce carry the CSRF/replay defense on their own.
-- ArchUnit pins remain: the OAuth state SPI lives under
+- `HmacOAuthStateServiceTest` pins the state token shape. The OAuth state SPI lives under
   `integration/core/oauth/state/`.
 
 ## Consequences
@@ -117,6 +119,12 @@ nothing and reduce future drift:
 - Future engineers will ask "why don't we use `spring-boot-starter-oauth2-client`?".
   This ADR is the standing answer.
 
+## Confirmation
+
+`HmacOAuthStateServiceTest` fails when the token shape, the HMAC check or the single-use rule changes.
+`OAuthStateNonceStoreIntegrationTest` fails when two consumes of one nonce both succeed.
+Nothing fails if a new connect flow uses `spring-boot-starter-oauth2-client`. Review catches that.
+
 ## Revisit trigger
 
 Any of:
@@ -124,8 +132,8 @@ Any of:
 - Spring Security ships first-class multi-tenant `ClientRegistrationRepository` + a
   per-tenant `OAuth2AuthorizedClientService` schema that keys on something other than
   `principal_name` (track [issue #12862](https://github.com/spring-projects/spring-security/issues/12862)).
-- GitHub App flow lands a standard `code` exchange at install time (currently `installation_id`
-  is the callback param, not `code`).
+- GitHub App flow lands a standard `code` exchange at install time (the callback now carries
+  `installation_id` and a user-authorization `code`, see the drivers).
 - We reach 10+ integration kinds — at that point the per-kind `ConnectionStrategy`
   branching may itself benefit from a registry-as-`ClientRegistrationRepository`
   refactor, evaluated against Spring's then-current shape.
@@ -135,3 +143,19 @@ Any of:
 - [RFC 7636 — PKCE](https://www.rfc-editor.org/info/rfc7636)
 - [RFC 9700 — Best Current Practice for OAuth 2.0 Security (Jan 2025)](https://www.rfc-editor.org/rfc/rfc9700.html)
 - [spring-security/#12862 — Multi-tenant ClientRegistration enhancement request](https://github.com/spring-projects/spring-security/issues/12862)
+
+## Update — 2026-11-11: the revisit trigger fired
+
+GitHub now sends a `code` with the installation callback, and the connect exchanges it to prove access and ownership.
+Spring Security also runs `oauth2Login` beside the resource server on main, with a dynamic client registration repository.
+Two reasons of the decision above thus no longer hold.
+
+The open question is whether Spring Security's OAuth2 client replaces the hand-rolled state.
+AGENTS.md prefers a framework feature over a hand-rolled one, so that is the default answer.
+The question has three inputs:
+
+- binding the state to the browser session (RFC 9700 § 4.7.1)
+- PKCE on connect
+- the fallback of the state key to the webhook secret.
+
+The question is decided after the 1.0 release. Until then the decision above stays in force.

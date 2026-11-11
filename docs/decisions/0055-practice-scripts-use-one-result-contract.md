@@ -48,6 +48,12 @@ The [runner guide](../contributor/practice-script-runner.mdx) owns the strict ve
 A script failure creates no claim about the work.
 [ADR 0056](0056-one-practice-model-for-items-and-scans.md) § Consequences owns the upgrade.
 
+## Confirmation
+
+`docker/agents/practice-scripts/lib/core/program-host.test.ts` fails if a script inherits the host environment, or if an invalid program or a stored script with metadata runs.
+`docker/agents/practice-scripts/lib/core/contract.test.ts` checks the strict candidate contract.
+Review catches a fallback from a custom script to the built-in script.
+
 ## Revisit trigger
 
 Revisit when a shipped script requires a capability that its domain kit and governed host cannot express.

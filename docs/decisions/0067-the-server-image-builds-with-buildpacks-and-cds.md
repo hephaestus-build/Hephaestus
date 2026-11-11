@@ -32,7 +32,7 @@ This profile disables Liquibase and JDBC-metadata probing.
 It identifies PostgreSQL without a connection.
 Thus, context refresh succeeds without a reachable Postgres.
 
-Compose's runtime `SPRING_PROFILES_ACTIVE=prod` overrides the default that the buildpack sets.
+The chart's runtime `SPRING_PROFILES_ACTIVE` overrides the default that the buildpack sets.
 Paketo writes `env.launch/<KEY>.default`, which yields to the runtime environment.
 The [build-only profile boundary](https://docs.hephaestus.build/admin/runtime-roles#build-only-profiles) keeps runtime bootstrap out of training.
 It rejects a production/build-profile combination.
@@ -40,7 +40,7 @@ Authentication types remain available for class loading without configured deplo
 
 The build uses the run image without changes.
 The server needs no `git` binary.
-`GitRepositoryManager` and `GitDiffOperations` use JGit.
+`GitRepositoryManager` uses JGit.
 
 ## Dependency scan coverage
 
@@ -80,8 +80,8 @@ Renovate tracks each image's `latest` tag and opens the digest update.
 
 ## Container healthcheck on the distroless run image
 
-On Docker Compose, the container `HEALTHCHECK` is the only container-level health signal.
-Both `service_healthy` gating and the `docker compose ps` column depend on it.
+The Helm chart probes the actuator over HTTP (`hephaestus.probes` in `deploy/chart/hephaestus/templates/_helpers.tpl`).
+Only a container runtime outside Kubernetes needs a container `HEALTHCHECK`.
 `run-tiny` has no shell or wget.
 `builder-noble-java-tiny` includes no probe.
 Thus, `server/application/project.toml` names an explicit buildpack group.
@@ -91,7 +91,7 @@ The `java` composite (`paketo-buildpacks/java`) must come before `docker://paket
 `BP_HEALTH_CHECKER_ENABLED=true` enables the health-checker.
 It supplies the static, shell-free `thc` binary at `/workspace/health-check`.
 
-The Compose services invoke this binary as an exec-form `HEALTHCHECK`.
+Such a runtime invokes this binary as an exec-form `HEALTHCHECK`. No chart template or workflow invokes it.
 `THC_PORT` and `THC_PATH` select actuator liveness/readiness.
 The buildpack adds no `health-check` process type.
 Thus, each probe starts no JVM.
@@ -105,8 +105,8 @@ The build-once guarantee does not apply until that path also downloads `applicat
 2. Add an `application-server` target to `docker/docker-bake.hcl`, and remove the Buildpacks steps from `.github/workflows/reusable-docker-build.yml`.
 3. Use the [upgrade rollback procedure](https://docs.hephaestus.build/admin/upgrade#rollback).
 
-Detection uses an error spike in the logs of the new `service.version` or a Prometheus alert.
-The alert condition is `application_ready_time_seconds > 15` for three consecutive deploys.
+Detection uses an error spike in the logs of the new `service.version`.
+No shipped alert watches `application_ready_time_seconds`.
 
 ## Operational checklist
 
@@ -116,8 +116,14 @@ It forwards signals natively, without `tini`.
 Paketo's memory calculator handles JVM memory parameters.
 
 1. Set the deployment system's stop grace period above the shutdown timeout so SIGTERM can drain in-flight requests.
-2. Do not set `MaxRAMPercentage`, `-Xmx`, or `-Xss` in the Compose environment.
+2. Do not set `MaxRAMPercentage`, `-Xmx`, or `-Xss` in the runtime environment of the chart.
 3. If necessary, override only `BPL_JVM_HEAD_ROOM`.
+
+## Confirmation
+
+`scripts/ci-contract.test.ts` fails when the image build does not call `pack build` with the descriptor and the pinned run image.
+It also fails when a workflow uses `bootBuildImage`.
+CDS on and AOT off are not enforced. Review of `server/application/project.toml` catches a change.
 
 ## Sources
 
