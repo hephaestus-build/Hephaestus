@@ -4,19 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.jspecify.annotations.Nullable;
 import org.springframework.mail.MailException;
 import org.springframework.mail.MailPreparationException;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/** Captures MIME and simulates transport failures; {@link EmailSmtpIntegrationTest} covers real SMTP. */
+/**
+ * Captures MIME and simulates transport failures; {@link EmailSmtpIntegrationTest} covers real SMTP. The outbox sends
+ * the emails of one batch on parallel threads, so the mailbox and the failure switch are safe to use from several
+ * threads. A plain list loses a message when two sends add to it at once.
+ */
 public class CapturingJavaMailSender extends JavaMailSenderImpl {
 
-    private final List<MimeMessage> sent = new ArrayList<>();
-    private @Nullable MailException failure;
+    private final List<MimeMessage> sent = new CopyOnWriteArrayList<>();
+    private volatile @Nullable MailException failure;
 
     public List<MimeMessage> sent() {
         return sent;
@@ -32,8 +36,9 @@ public class CapturingJavaMailSender extends JavaMailSenderImpl {
         assertThat(TransactionSynchronizationManager.isActualTransactionActive())
                 .as("blocking SMTP must not hold a database transaction")
                 .isFalse();
-        if (failure != null) {
-            throw failure;
+        MailException failing = failure;
+        if (failing != null) {
+            throw failing;
         }
         for (MimeMessage message : mimeMessages) {
             try {
