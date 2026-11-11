@@ -145,7 +145,7 @@ public final class ComposeRunGateway implements AutoCloseable {
             factory.registerSingleton("sandboxRunArguments", new WebMvcConfigurer() {
                 @Override
                 public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-                    resolvers.add(new SandboxRunArgumentResolver(runs));
+                    resolvers.add(new SandboxRunArgumentResolver(runs, Tracer.NOOP));
                 }
             });
             factory.registerSingleton("agentSandboxes", sandboxes);
