@@ -6467,7 +6467,8 @@ export const zWorkspaceMembership = z.object({
         'OWNER',
         'ADMIN',
         'MEMBER'
-    ])
+    ]),
+    roleSource: z.enum(['PROVIDER', 'PERSON'])
 });
 
 /**

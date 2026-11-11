@@ -1288,7 +1288,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         doReturn(ItemFixtures.snapshot(ref, Map.of()).build())
                 .when(productItems)
                 .pin(eq(ref), isNull());
-        assertThat(jdbc.sql("UPDATE membership SET role=:role WHERE workspace_id=:ws AND account_id=:account")
+        // An owner role is always a person's decision (ck_membership_owner_role_source).
+        assertThat(jdbc.sql("UPDATE membership SET role=:role, role_source=CASE WHEN :role='OWNER' THEN 'PERSON'"
+                                + " ELSE role_source END WHERE workspace_id=:ws AND account_id=:account")
                         .param("role", role.name())
                         .param("ws", workspaceId)
                         .param("account", scenarioAccountId)

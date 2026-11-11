@@ -6,6 +6,7 @@ import { toast } from "@/lib/toast";
 
 import {
 	assignMemberRoleMutation,
+	followProviderRoleMutation,
 	getAllTeamsOptions,
 	getOwnMembershipQueryKey,
 	getUsersWithTeamsQueryKey,
@@ -30,6 +31,7 @@ import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
+import { getProviderLabel } from "@/lib/provider/provider-labels";
 import { pageParam, useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import type { WorkspaceRole } from "@/lib/workspace-roles";
@@ -80,7 +82,15 @@ function AdminMembersContainer() {
 		error: workspaceError,
 		refetch: refetchWorkspace,
 		role: readerRole,
+		chromeWorkspace,
+		administrationWorkspace,
 	} = useWorkspaceAccess();
+	// Only a GitHub organization or a GitLab group roster sets workspace roles; Slack and Outline set none.
+	const providerType = (administrationWorkspace ?? chromeWorkspace)?.providerType;
+	const providerLabel =
+		providerType === "GITHUB" || providerType === "GITLAB"
+			? getProviderLabel(providerType)
+			: undefined;
 	const { getUserId } = useAuth();
 	const [roleChange, setRoleChange] = useState<WorkspaceRoleChange | null>(null);
 	// The Role menu the waiting change came from. The dialog opens while focus is still in that menu's
@@ -169,7 +179,24 @@ function AdminMembersContainer() {
 		},
 	});
 
+	const followProvider = useMutation({
+		...followProviderRoleMutation(),
+		onSuccess: (updated) => {
+			toast.success(
+				`${accountName(updated.account)}’s role now comes from ${providerLabel ?? "the provider"}`,
+				{ description: "It changes at the next sync." },
+			);
+			void queryClient.invalidateQueries({ queryKey: membersKey });
+		},
+		onError: (error) => {
+			toast.error("We could not change where the role comes from", {
+				description: problemDetailOf(error),
+			});
+		},
+	});
+
 	const { mutate: changeHidden } = toggleHidden;
+	const { mutate: restoreProviderRole } = followProvider;
 	// `mutate` is stable and the mutation result is not. A role handler that closed over the result
 	// would change every render, so the table would rebuild its columns and close an open role list.
 	const { mutate: changeRole } = assignRole;
@@ -183,6 +210,12 @@ function AdminMembersContainer() {
 	const sendRoleChange = ({ accountId, to }: WorkspaceRoleChange) => {
 		if (hasText(workspaceSlug)) {
 			changeRole({ path: { workspaceSlug }, body: { accountId, role: to } });
+		}
+	};
+
+	const handleFollowProvider = (member: WorkspaceMemberRow) => {
+		if (hasText(workspaceSlug)) {
+			restoreProviderRole({ path: { workspaceSlug, accountId: member.membership.account.id } });
 		}
 	};
 
@@ -242,6 +275,11 @@ function AdminMembersContainer() {
 				assignableRoles={assignableWorkspaceRoles(readerRole)}
 				pendingRoleAccountId={
 					assignRole.isPending ? assignRole.variables.body.accountId : undefined
+				}
+				providerLabel={providerLabel}
+				onFollowProvider={handleFollowProvider}
+				pendingFollowAccountId={
+					followProvider.isPending ? followProvider.variables.path.accountId : undefined
 				}
 				view={view}
 				onViewChange={(patch) => {

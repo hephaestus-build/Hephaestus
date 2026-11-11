@@ -9,6 +9,7 @@ import {
 	mockMemberships,
 	mockTeams,
 	multiProviderMember,
+	ownerMember,
 	unclaimedMember,
 } from "./fixtures";
 
@@ -170,6 +171,75 @@ export const AdminCannotAssignOwner: Story = {
 			"MEMBER",
 			canvas.getByRole("combobox", { name: "Role of Alice Johnson" }),
 		);
+	},
+};
+
+export const RoleFromTheProvider: Story = {
+	args: {
+		members: workspaceMemberRows([unclaimedMember]),
+		rowCount: 1,
+		providerLabel: "GitHub",
+		onFollowProvider: fn(),
+	},
+	play: async ({ canvas }) => {
+		const row = within(rowOf(canvas, "Bob Smith"));
+		await expect(row.getByText("From GitHub")).toBeVisible();
+		await expect(row.queryByRole("button", { name: /^Use GitHub role/u })).toBeNull();
+	},
+};
+
+export const RoleSetInHephaestus: Story = {
+	args: {
+		members: workspaceMemberRows([multiProviderMember]),
+		rowCount: 1,
+		providerLabel: "GitHub",
+		onFollowProvider: fn(),
+	},
+	play: async ({ args, canvas, userEvent }) => {
+		const row = within(rowOf(canvas, "Alice Johnson"));
+		await expect(row.getByText("Set in Hephaestus")).toBeVisible();
+		await userEvent.click(row.getByRole("button", { name: "Use GitHub role for Alice Johnson" }));
+		await expect(args.onFollowProvider).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "Alice Johnson" }),
+		);
+	},
+};
+
+export const OwnerRoleSetInHephaestus: Story = {
+	args: {
+		members: workspaceMemberRows([ownerMember]),
+		rowCount: 1,
+		providerLabel: "GitLab",
+		onFollowProvider: fn(),
+	},
+	play: async ({ canvas }) => {
+		const row = within(rowOf(canvas, "Charlie Brown"));
+		await expect(row.getByText("Set in Hephaestus")).toBeVisible();
+		// An owner's role is always set by a person, so it never follows the provider.
+		await expect(row.queryByRole("button", { name: /^Use GitLab role/u })).toBeNull();
+	},
+};
+
+export const FollowProviderPending: Story = {
+	args: {
+		members: workspaceMemberRows([multiProviderMember]),
+		rowCount: 1,
+		providerLabel: "GitHub",
+		onFollowProvider: fn(),
+		pendingFollowAccountId: multiProviderMember.account.id,
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("button", { name: "Use GitHub role for Alice Johnson" }),
+		).toBeDisabled();
+	},
+};
+
+export const NoProviderSetsRoles: Story = {
+	args: { providerLabel: undefined, onFollowProvider: fn() },
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByText("Set in Hephaestus")).toBeNull();
+		await expect(canvas.queryByText(/^From /u)).toBeNull();
 	},
 };
 

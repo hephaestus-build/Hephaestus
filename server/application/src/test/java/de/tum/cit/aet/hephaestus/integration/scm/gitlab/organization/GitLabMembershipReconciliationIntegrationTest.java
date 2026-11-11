@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupMemberResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.dto.GitLabMemberEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.collaborator.GitLabCollaboratorSyncService;
@@ -53,7 +54,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncServi
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.GitLabRepositorySelectionService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -68,6 +71,8 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
@@ -91,6 +96,8 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -231,6 +238,10 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
     private GitLabTeamSyncService teamSync;
     private GitLabCollaboratorSyncService collaboratorSync;
     private GitLabSelectedMembershipProjection projection;
+
+    @Autowired
+    private GitLabRepositorySelectionService selectionService;
+
     private Workspace workspace;
     private Organization course;
     private IdentityProvider gitLab;
@@ -910,10 +921,7 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
         roster.upsertMembership(course.getId(), student.getId(), OrganizationMemberRole.MEMBER);
         assertThat(workspaceRoleOf(student)).isEmpty();
         long workspaceId = workspace.getId();
-        long connectionId = Objects.requireNonNull(connections
-                .findActive(workspaceId, IntegrationKind.GITLAB)
-                .orElseThrow()
-                .getId());
+        long ownerAccountId = ensureAccount(owner);
 
         // The selection change holds the connection's lifecycle lock and the workspace row, uncommitted,
         // while a roster sync that started from the committed ALL state runs into it.
@@ -923,10 +931,10 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
             var selecting = threads.submit(() -> {
                 try {
                     transactionTemplate.executeWithoutResult(status -> {
-                        connections.acquireLifecycleLock(connectionId, workspaceId);
-                        Workspace selected = workspaces.findById(workspaceId).orElseThrow();
-                        selected.setRepositorySelection(RepositorySelection.SELECTED);
-                        workspaces.saveAndFlush(selected);
+                        selectionService.updateGitLabRepositorySelection(
+                                WorkspaceContext.fromWorkspace(workspace, Set.of(WorkspaceRole.ADMIN), null),
+                                RepositorySelection.SELECTED,
+                                ownerAccountId);
                         holder.complete(
                                 Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
                         awaitRelease(release);
@@ -974,6 +982,151 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
                 .isEmpty();
         assertThat(groupRoleOf(STUDENT)).as("the shared roster").contains(OrganizationMemberRole.MEMBER);
         assertThat(workspaceRoleOf(owner)).contains(WorkspaceRole.OWNER);
+    }
+
+    private enum ProviderWriter {
+        ROSTER,
+        SELECTED,
+        WEBHOOK,
+        SELECTION
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProviderWriter.class)
+    void shouldLockTheWorkspaceBeforeWaitingForTheConnectionToChangeProviderAccess(ProviderWriter writer)
+            throws Exception {
+        User student = users.save(TestUserFactory.createUser(STUDENT, "student", gitLab));
+        long accountId = ensureAccount(student);
+        membershipService.createMembership(workspace, accountId, WorkspaceRole.MEMBER);
+        roster.upsertMembership(course.getId(), student.getId(), OrganizationMemberRole.ADMIN);
+        if (writer == ProviderWriter.SELECTED) {
+            selectProjectsOnly();
+            String project = COURSE + "/p";
+            select(project, 7101L);
+            answer("GetProjectMembers " + project, projectPage(7101L, false, member(STUDENT, "student", 30)));
+        }
+        long workspaceId = workspace.getId();
+        long connectionId = Objects.requireNonNull(connections
+                .findActive(workspaceId, IntegrationKind.GITLAB)
+                .orElseThrow()
+                .getId());
+        long ownerAccountId = ensureAccount(owner);
+        var release = new CountDownLatch(1);
+        var holder = new CompletableFuture<Integer>();
+        try (var threads = Executors.newFixedThreadPool(3)) {
+            var holdingConnection = threads.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                // Hold only the connection to observe which lock a provider writer takes before waiting for it.
+                connections.acquireLifecycleLock(connectionId, workspaceId);
+                holder.complete(Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
+                awaitRelease(release);
+            }));
+            try {
+                int holderPid = holder.get(20, SECONDS);
+                var syncing = threads.submit(() -> {
+                    if (writer == ProviderWriter.SELECTED) {
+                        assertThat(projection.project(workspaceId))
+                                .isEqualTo(GitLabSelectedMembershipProjection.Outcome.APPLIED);
+                    } else if (writer == ProviderWriter.SELECTION) {
+                        selectionService.updateGitLabRepositorySelection(
+                                WorkspaceContext.fromWorkspace(workspace, Set.of(WorkspaceRole.ADMIN), null),
+                                RepositorySelection.SELECTED,
+                                ownerAccountId);
+                    } else if (writer == ProviderWriter.WEBHOOK) {
+                        var route = new GitLabRouteAdmission.AdmittedRoute(
+                                connectionId, workspaceId, Objects.requireNonNull(gitLab.getId()), COURSE_ID, COURSE);
+                        var profile = new GitLabUserLookup(
+                                "gid://gitlab/User/" + STUDENT,
+                                "student",
+                                "student",
+                                null,
+                                GITLAB_URL + "/student",
+                                null,
+                                null);
+                        var reported = new GitLabRouteAdmission.ReportedMembership(
+                                COURSE_ID,
+                                List.of(new GitLabGroupMemberResponse(
+                                        new GitLabGroupMemberResponse.GitLabMemberUser(
+                                                "gid://gitlab/User/" + STUDENT,
+                                                "student",
+                                                "student",
+                                                null,
+                                                GITLAB_URL + "/student",
+                                                null),
+                                        new GitLabGroupMemberResponse.GitLabAccessLevel("MAINTAINER", 40))));
+                        GitLabRouteTestFixtures.handleMembership(
+                                route,
+                                Map.of(STUDENT, profile),
+                                reported,
+                                () -> transactionTemplate.executeWithoutResult(
+                                        status -> memberHandler.handleEvent(new GitLabMemberEventDTO(
+                                                GitLabMemberEventDTO.EVENT_USER_UPDATE,
+                                                "intro",
+                                                COURSE,
+                                                COURSE_ID,
+                                                "student",
+                                                "student",
+                                                null,
+                                                STUDENT,
+                                                "MAINTAINER",
+                                                null,
+                                                null,
+                                                null,
+                                                null))));
+                    } else {
+                        organizationMembershipListener.onOrganizationMembershipsSynced(
+                                new OrganizationSyncedEvent(course.getId(), COURSE, true));
+                    }
+                });
+                var blockedProvider = await().atMost(Duration.ofSeconds(20))
+                        .until(
+                                () -> jdbc.queryForList(
+                                        "SELECT pid FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid))",
+                                        Integer.class,
+                                        holderPid),
+                                pids -> !pids.isEmpty());
+                int providerPid = blockedProvider.getFirst();
+                var manualBackend = new CompletableFuture<Integer>();
+                var assigning = threads.submit(() -> {
+                    WorkspaceContextHolder.setContext(
+                            WorkspaceContext.fromWorkspace(workspace, Set.of(WorkspaceRole.ADMIN), null));
+                    try {
+                        transactionTemplate.executeWithoutResult(status -> {
+                            manualBackend.complete(Objects.requireNonNull(
+                                    jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
+                            membershipService.assignRole(workspaceId, accountId, WorkspaceRole.MEMBER);
+                        });
+                    } finally {
+                        WorkspaceContextHolder.clearContext();
+                    }
+                });
+                int manualPid = manualBackend.get(20, SECONDS);
+                await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+                    assertThat(assigning.isDone())
+                            .as("the provider must hold the workspace lock already")
+                            .isFalse();
+                    assertThat(jdbc.queryForObject(
+                                    "SELECT ? = ANY(pg_blocking_pids(?))", Boolean.class, providerPid, manualPid))
+                            .isTrue();
+                });
+                release.countDown();
+                holdingConnection.get(20, SECONDS);
+                syncing.get(20, SECONDS);
+                assigning.get(20, SECONDS);
+            } finally {
+                release.countDown();
+            }
+        }
+        var member = memberships
+                .findByWorkspace_IdAndId_AccountId(workspaceId, accountId)
+                .orElseThrow();
+        assertThat(member.getRole()).isEqualTo(WorkspaceRole.MEMBER);
+        assertThat(member.getRoleSource()).isEqualTo(Membership.RoleSource.PERSON);
+        assertThat(jdbc.queryForObject("""
+                        SELECT count(*) FROM config_audit_event
+                        WHERE workspace_id = ? AND entity_type = 'WORKSPACE_ROLE' AND entity_id = ?
+                          AND action = 'UPDATED' AND changed_keys @> ARRAY['role']
+                        """, Integer.class, workspaceId, Long.toString(accountId)))
+                .isEqualTo(writer == ProviderWriter.SELECTION ? 0 : 2);
     }
 
     @Test
@@ -1027,10 +1180,6 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
         replacement.setProvider(gitLab);
         long replacementId = organizations.save(replacement).getId();
         long workspaceId = workspace.getId();
-        long connectionId = Objects.requireNonNull(connections
-                .findActive(workspaceId, IntegrationKind.GITLAB)
-                .orElseThrow()
-                .getId());
 
         // The relink holds the connection's lifecycle lock, uncommitted: the old group moves aside, the new group
         // takes its path, and the workspace and its connection now name the new group. A roster sync of the old
@@ -1041,7 +1190,6 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
             var relinking = threads.submit(() -> {
                 try {
                     transactionTemplate.executeWithoutResult(status -> {
-                        connections.acquireLifecycleLock(connectionId, workspaceId);
                         Organization retired =
                                 organizations.findById(course.getId()).orElseThrow();
                         retired.setLogin(COURSE + "-retired");
@@ -1051,8 +1199,9 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
                         next.setLogin(COURSE);
                         organizations.saveAndFlush(next);
                         Workspace relinked = workspaces.findById(workspaceId).orElseThrow();
-                        relinked.setOrganizationId(replacementId);
+                        relinked.setOrganizationId(null);
                         workspaces.saveAndFlush(relinked);
+                        workspaceLinkService.link(relinked);
                         assertThat(connectionService.updateConfig(
                                         workspaceId,
                                         IntegrationKind.GITLAB,

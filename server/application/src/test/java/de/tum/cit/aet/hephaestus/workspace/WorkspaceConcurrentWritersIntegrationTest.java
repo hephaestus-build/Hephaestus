@@ -5,10 +5,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -20,6 +24,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -117,6 +124,95 @@ class WorkspaceConcurrentWritersIntegrationTest extends AbstractWorkspaceIntegra
                 .isEqualTo("second-login");
     }
 
+    @ParameterizedTest
+    @CsvSource({"false, false", "true, false", "false, true", "true, true"})
+    void shouldKeepAPersonsRoleWhenAProviderGrantWaitsForTheManualChange(boolean fullRoster, boolean rejoining)
+            throws Exception {
+        var fixture = memberFixture();
+        if (rejoining) workspaceMembershipService.applyProviderGrant(fixture.workspace(), fixture.userId(), null);
+
+        Future<Throwable> provider = whileFirstWriterHoldsItsTransaction(
+                () -> assignRole(fixture, Membership.WorkspaceRole.ADMIN),
+                () -> grant(fixture, Membership.WorkspaceRole.ADMIN, fullRoster));
+
+        assertThat(provider.get(30, SECONDS)).isNull();
+        assertMembership(fixture, Membership.WorkspaceRole.ADMIN, Membership.RoleSource.PERSON);
+        assertRoleChanges(fixture, 1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldApplyTheManualRoleAfterAConcurrentProviderPromotion(boolean fullRoster) throws Exception {
+        var fixture = memberFixture();
+
+        Future<Throwable> manual = whileFirstWriterHoldsItsTransaction(
+                () -> grant(fixture, Membership.WorkspaceRole.ADMIN, fullRoster),
+                () -> assignRole(fixture, Membership.WorkspaceRole.MEMBER));
+
+        assertThat(manual.get(30, SECONDS)).isNull();
+        assertMembership(fixture, Membership.WorkspaceRole.MEMBER, Membership.RoleSource.PERSON);
+        assertRoleChanges(fixture, 2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRecordOneRoleChangeWhenTwoProviderGrantsPromoteTheSameMember(boolean fullRoster) throws Exception {
+        var fixture = memberFixture();
+
+        Future<Throwable> provider = whileFirstWriterHoldsItsTransaction(
+                () -> grant(fixture, Membership.WorkspaceRole.ADMIN, fullRoster),
+                () -> grant(fixture, Membership.WorkspaceRole.ADMIN, fullRoster));
+
+        assertThat(provider.get(30, SECONDS)).isNull();
+        assertMembership(fixture, Membership.WorkspaceRole.ADMIN, Membership.RoleSource.PROVIDER);
+        assertRoleChanges(fixture, 1);
+    }
+
+    private record MemberFixture(Workspace workspace, long userId, long accountId) {}
+
+    private MemberFixture memberFixture() {
+        String slug = "roles-" + UUID.randomUUID().toString().substring(0, 8);
+        var owner = persistUser(slug + "-owner");
+        var workspace = createWorkspace(slug, slug, slug, AccountType.ORG, owner);
+        var user = persistUser(slug + "-member");
+        ensureMembership(workspace, user, Membership.WorkspaceRole.MEMBER);
+        return new MemberFixture(workspace, Objects.requireNonNull(user.getId()), accountId(user));
+    }
+
+    private void grant(MemberFixture fixture, Membership.WorkspaceRole role, boolean fullRoster) {
+        if (fullRoster)
+            workspaceMembershipService.syncWorkspaceMembers(fixture.workspace(), Map.of(fixture.userId(), role));
+        else workspaceMembershipService.applyProviderGrant(fixture.workspace(), fixture.userId(), role);
+    }
+
+    private void assignRole(MemberFixture fixture, Membership.WorkspaceRole role) {
+        WorkspaceContextHolder.setContext(
+                WorkspaceContext.fromWorkspace(fixture.workspace(), Set.of(Membership.WorkspaceRole.ADMIN), null));
+        try {
+            workspaceMembershipService.assignRole(fixture.workspace().getId(), fixture.accountId(), role);
+        } finally {
+            WorkspaceContextHolder.clearContext();
+        }
+    }
+
+    private void assertMembership(MemberFixture fixture, Membership.WorkspaceRole role, Membership.RoleSource source) {
+        var member =
+                workspaceMembershipService.getMembership(fixture.workspace().getId(), fixture.accountId());
+        assertThat(member.getRole()).isEqualTo(role);
+        assertThat(member.getRoleSource()).isEqualTo(source);
+        assertThat(member.getLeftAt()).isNull();
+    }
+
+    private void assertRoleChanges(MemberFixture fixture, int expected) {
+        assertThat(jdbc.queryForObject(
+                        """
+                        SELECT count(*) FROM config_audit_event
+                        WHERE workspace_id = ? AND entity_type = 'WORKSPACE_ROLE' AND entity_id = ?
+                          AND action = 'UPDATED' AND changed_keys @> ARRAY['role']
+                        """, Integer.class, fixture.workspace().getId(), Long.toString(fixture.accountId())))
+                .isEqualTo(expected);
+    }
+
     /** Runs {@code first} in a transaction that commits only after {@code second} waits on its lock; returns its failure. */
     private Future<Throwable> whileFirstWriterHoldsItsTransaction(Runnable first, Runnable second) throws Exception {
         CountDownLatch written = new CountDownLatch(1);
@@ -139,7 +235,7 @@ class WorkspaceConcurrentWritersIntegrationTest extends AbstractWorkspaceIntegra
                 }
             };
             Future<Throwable> outcome = threads.submit(secondWriter);
-            awaitASessionBlockedBy(firstBackend.get());
+            awaitASessionBlockedBy(firstBackend.get(), outcome);
             release.countDown();
             firstWriter.get(30, SECONDS);
             return outcome;
@@ -148,9 +244,12 @@ class WorkspaceConcurrentWritersIntegrationTest extends AbstractWorkspaceIntegra
         }
     }
 
-    private void awaitASessionBlockedBy(int backend) throws InterruptedException {
+    private void awaitASessionBlockedBy(int backend, Future<Throwable> contender) throws InterruptedException {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(30));
         while (Instant.now().isBefore(deadline)) {
+            assertThat(contender.isDone())
+                    .as("the second writer must wait for the first transaction")
+                    .isFalse();
             Integer blocked = jdbc.queryForObject(
                     "SELECT count(*) FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid))",
                     Integer.class,

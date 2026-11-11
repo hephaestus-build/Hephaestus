@@ -73,6 +73,9 @@ public class GitLabRepositorySelectionService {
         String slug = requireSlug(workspaceContext);
         Long workspaceId = requireWorkspace(slug).getId();
         RepositorySelection selection = transactionTemplate.execute(status -> {
+            Workspace workspace = workspaceRepository
+                    .findByIdForUpdate(workspaceId)
+                    .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
             if (connectionRepository
                     .lockActiveConfig(workspaceId, IntegrationKind.GITLAB)
                     .filter(ConnectionConfig.GitLabConfig.class::isInstance)
@@ -86,10 +89,6 @@ public class GitLabRepositorySelectionService {
             em.refresh(current);
             RepositorySelection stored = storedSelection(workspaceId);
             if (stored == requested) return stored;
-            Workspace workspace = workspaceRepository
-                    .findById(workspaceId)
-                    .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
-            em.refresh(workspace);
             workspace.setRepositorySelection(requested);
             workspaceRepository.saveAndFlush(workspace);
             recordChange(current, stored, requested, actorAccountId);

@@ -6261,6 +6261,45 @@ paths:
       summary: Change a member’s activity visibility
       tags:
       - membership
+  /workspaces/{workspaceSlug}/members/{accountId}/role-override:
+    delete:
+      description: Removes a person's decision about the member's role. The next sync
+        of the organization or group roster applies the provider's role. Refused for
+        an owner.
+      operationId: followProviderRole
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: accountId
+        required: true
+        schema:
+          type: string
+          maximum: 9223372036854776000
+          pattern: "^[1-9][0-9]*$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMembership"
+          description: "The member, whose role the provider sets from the next sync"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "The member is an owner, whose role is always set by a person"
+      summary: Let the provider decide a member's role again
+      tags:
+      - membership
   /workspaces/{workspaceSlug}/mentor/conversation:
     get:
       operationId: getMentorConversation
@@ -27818,6 +27857,14 @@ components:
           - OWNER
           - ADMIN
           - MEMBER
+        roleSource:
+          type: string
+          description: "Who decided the role: PROVIDER while the organization or group\
+            \ roster sets it at each sync, PERSON after a person set it. An owner\
+            \ role is always PERSON."
+          enum:
+          - PROVIDER
+          - PERSON
       required:
       - account
       - eligibleForPracticeReview
@@ -27827,6 +27874,7 @@ components:
       - publicActivityAnswered
       - reviewSelected
       - role
+      - roleSource
     WorkspaceOnboarding:
       type: object
       description: |-

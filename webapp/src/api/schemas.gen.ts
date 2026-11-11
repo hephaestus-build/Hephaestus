@@ -21304,6 +21304,14 @@ export const WorkspaceMembershipSchema = {
                 'ADMIN',
                 'MEMBER'
             ]
+        },
+        roleSource: {
+            type: 'string',
+            description: 'Who decided the role: PROVIDER while the organization or group roster sets it at each sync, PERSON after a person set it. An owner role is always PERSON.',
+            enum: [
+                'PROVIDER',
+                'PERSON'
+            ]
         }
     },
     required: [
@@ -21314,7 +21322,8 @@ export const WorkspaceMembershipSchema = {
         'leftAt',
         'publicActivityAnswered',
         'reviewSelected',
-        'role'
+        'role',
+        'roleSource'
     ]
 } as const;
 

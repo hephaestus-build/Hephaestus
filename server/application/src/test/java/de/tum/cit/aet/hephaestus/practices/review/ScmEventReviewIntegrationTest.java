@@ -3311,7 +3311,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .getAccount()
                 .getId());
         jdbc.update(
-                "INSERT INTO membership(workspace_id,account_id,role,joined_at) VALUES (?,?,'OWNER',now())",
+                "INSERT INTO membership(workspace_id,account_id,role,role_source,joined_at) VALUES (?,?,'OWNER','PERSON',now())",
                 workspace.getId(),
                 account);
         var kind = reviewed ? ScmItemEvents.PULL_REQUEST_REVIEW : ScmItemEvents.PULL_REQUEST;
@@ -3415,7 +3415,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         TestUserFactory.ensureAccountForUser(accounts, identities, merger);
         long authorAccount = account(author);
         jdbc.update(
-                "INSERT INTO membership(workspace_id,account_id,role,joined_at) VALUES (?,?,'OWNER',now())",
+                "INSERT INTO membership(workspace_id,account_id,role,role_source,joined_at) VALUES (?,?,'OWNER','PERSON',now())",
                 workspace.getId(),
                 authorAccount);
         jdbc.update(

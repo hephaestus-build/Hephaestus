@@ -28,7 +28,7 @@ public class WorkspacePersonDataCatalog implements PersonDataCatalog {
                         "membership",
                         "membership",
                         "t.account_id=:account",
-                        "workspace_id,account_id,role,hidden,review_selected,onboarding_seen_revision,public_activity_seen,joined_at,left_at",
+                        "workspace_id,account_id,role,role_source,hidden,review_selected,onboarding_seen_revision,public_activity_seen,joined_at,left_at",
                         "workspace_id,account_id",
                         "",
                         550),

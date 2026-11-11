@@ -90,13 +90,17 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
     @Modifying
     @WorkspaceAgnostic("Account absorption spans workspaces")
     @Query(value = """
-        INSERT INTO membership(workspace_id,account_id,role,hidden,review_selected,onboarding_seen_revision,
+        INSERT INTO membership(workspace_id,account_id,role,role_source,hidden,review_selected,onboarding_seen_revision,
             public_activity_seen,joined_at,left_at)
-        SELECT workspace_id,:target,role,hidden,review_selected,onboarding_seen_revision,public_activity_seen,joined_at,left_at
+        SELECT workspace_id,:target,role,role_source,hidden,review_selected,onboarding_seen_revision,public_activity_seen,
+            joined_at,left_at
         FROM membership WHERE account_id=:source
         ON CONFLICT(workspace_id,account_id) DO UPDATE SET
             role=CASE WHEN membership.role='OWNER' OR EXCLUDED.role='OWNER' THEN 'OWNER'
                 WHEN membership.role='ADMIN' OR EXCLUDED.role='ADMIN' THEN 'ADMIN' ELSE 'MEMBER' END,
+            role_source=CASE WHEN membership.role='OWNER' OR EXCLUDED.role='OWNER'
+                    OR membership.role_source='PERSON' OR EXCLUDED.role_source='PERSON' THEN 'PERSON'
+                ELSE 'PROVIDER' END,
             hidden=membership.hidden OR EXCLUDED.hidden,
             review_selected=membership.review_selected OR EXCLUDED.review_selected,
             onboarding_seen_revision=GREATEST(membership.onboarding_seen_revision,EXCLUDED.onboarding_seen_revision),

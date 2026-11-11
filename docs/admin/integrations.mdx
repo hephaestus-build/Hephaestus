@@ -178,6 +178,32 @@ Do not change the origin or team during key rotation.
 The API validates the key and updates the connection's credentials without deletion of documents or collection registrations.
 It resets connection configuration, including subscription metadata.
 
+## Workspace roles from GitHub and GitLab
+
+The organization or group roster of a GitHub or GitLab connection sets workspace roles at each sync:
+
+| Provider | Admin | Member |
+| --- | --- | --- |
+| GitHub organization | Organization owner | Organization member, or a member of one of its teams |
+| GitLab group | Owner or Maintainer | Developer, Reporter, Planner, Guest or Minimal access |
+
+Sync never sets or removes the **Owner** role.
+Slack and Outline set no workspace roles.
+
+**Members** shows where each role comes from:
+
+- **From GitHub** or **From GitLab**: the next sync can change the role.
+- **Set in Hephaestus**: an admin set the role on this page. Sync does not change it.
+
+If you change a role on **Members**, the role is set in Hephaestus.
+To let the provider set it again, select **Use GitHub role** or **Use GitLab role** in the member's row.
+The role changes at the next sync. Select **Sync now** on the connection to apply it at once.
+An owner's role is always set in Hephaestus. To let the provider set it, give the person another role first.
+
+A role set in Hephaestus does not keep the membership.
+If the provider no longer lists the person, they leave the workspace at the next sync.
+If they come back, their role comes from the provider again.
+
 ## Read sync errors
 
 A healthy connection does not prove that every resource synced.

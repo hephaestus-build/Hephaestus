@@ -43,6 +43,7 @@ export function membership(
 		hidden: false,
 		reviewSelected: true,
 		eligibleForPracticeReview: true,
+		roleSource: "PROVIDER",
 		publicActivityAnswered: null,
 		...overrides,
 	};
@@ -56,7 +57,7 @@ export const multiProviderMember = membership(
 			{ provider: "GITLAB", login: "ajohnson", displayName: "Alice J.", avatarUrl: null },
 		],
 	}),
-	{ role: "ADMIN" },
+	{ role: "ADMIN", roleSource: "PERSON" },
 );
 
 export const unclaimedMember = membership(
@@ -73,7 +74,7 @@ export const ownerMember = membership(
 			{ provider: "GITHUB", login: "charlie", displayName: "Charlie Brown", avatarUrl: null },
 		],
 	}),
-	{ role: "OWNER", joinedAt: new Date("2025-11-20T09:00:00Z") },
+	{ role: "OWNER", roleSource: "PERSON", joinedAt: new Date("2025-11-20T09:00:00Z") },
 );
 
 export const hiddenMember = membership(

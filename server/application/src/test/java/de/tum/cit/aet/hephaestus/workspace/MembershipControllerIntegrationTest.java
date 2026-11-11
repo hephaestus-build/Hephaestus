@@ -463,6 +463,93 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Test
     @WithMentorUser
+    void shouldKeepAPersonsRoleThroughProviderSyncUntilItFollowsTheProviderAgain() {
+        User owner = persistUser("role-source-owner");
+        Workspace workspace = createWorkspace("role-source", "Role source", "role-source", AccountType.ORG, owner);
+        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.ADMIN);
+        User member = persistUser("role-source-member");
+        workspaceMembershipService.applyProviderGrant(workspace, member.getId(), WorkspaceRole.MEMBER);
+        long accountId = accountId(member);
+        assertThat(roleSource(workspace, accountId)).isEqualTo(Membership.RoleSource.PROVIDER);
+
+        WorkspaceMembershipDTO assigned = webTestClient
+                .post()
+                .uri("/workspaces/{slug}/members/assign", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new AssignRoleRequestDTO(Long.toString(accountId), WorkspaceRole.ADMIN))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(WorkspaceMembershipDTO.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(Objects.requireNonNull(assigned).roleSource()).isEqualTo(Membership.RoleSource.PERSON);
+
+        // The provider still lists a member: sync leaves the role that a person set.
+        workspaceMembershipService.applyProviderGrant(workspace, member.getId(), WorkspaceRole.MEMBER);
+        assertThat(workspaceMembershipService
+                        .getMembership(workspace.getId(), accountId)
+                        .getRole())
+                .isEqualTo(WorkspaceRole.ADMIN);
+
+        WorkspaceMembershipDTO reset = webTestClient
+                .delete()
+                .uri("/workspaces/{slug}/members/{accountId}/role-override", workspace.getWorkspaceSlug(), accountId)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(WorkspaceMembershipDTO.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(Objects.requireNonNull(reset).roleSource()).isEqualTo(Membership.RoleSource.PROVIDER);
+        assertThat(reset.role()).isEqualTo(WorkspaceRole.ADMIN);
+        assertThat(jdbc.queryForObject("""
+                        SELECT count(*) FROM config_audit_event
+                         WHERE workspace_id = ? AND entity_type = 'WORKSPACE_ROLE' AND entity_id = ? AND action = 'UPDATED'
+                           AND changed_keys @> ARRAY['roleSource']
+                        """, Long.class, workspace.getId(), Long.toString(accountId)))
+                .isPositive();
+
+        // The next sync applies the provider's role again.
+        workspaceMembershipService.applyProviderGrant(workspace, member.getId(), WorkspaceRole.MEMBER);
+        assertThat(workspaceMembershipService
+                        .getMembership(workspace.getId(), accountId)
+                        .getRole())
+                .isEqualTo(WorkspaceRole.MEMBER);
+    }
+
+    @Test
+    @WithMentorUser
+    void shouldRefuseToLetTheLastOwnersRoleFollowTheProvider() {
+        User owner = persistUser("mentor");
+        Workspace workspace = createWorkspace("owner-follows", "Owner follows", "owner", AccountType.ORG, owner);
+        long accountId = accountId(owner);
+        assertThat(roleSource(workspace, accountId)).isEqualTo(Membership.RoleSource.PERSON);
+
+        webTestClient
+                .delete()
+                .uri("/workspaces/{slug}/members/{accountId}/role-override", workspace.getWorkspaceSlug(), accountId)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody(Void.class);
+
+        Membership kept = workspaceMembershipService.getMembership(workspace.getId(), accountId);
+        assertThat(kept.getRole()).isEqualTo(WorkspaceRole.OWNER);
+        assertThat(kept.getRoleSource()).isEqualTo(Membership.RoleSource.PERSON);
+    }
+
+    private Membership.RoleSource roleSource(Workspace workspace, long accountId) {
+        return workspaceMembershipService
+                .getMembership(workspace.getId(), accountId)
+                .getRoleSource();
+    }
+
+    @Test
+    @WithMentorUser
     void shouldRejectDemotionAndRemovalOfOwnerWhenCallerIsWorkspaceAdmin() {
         User owner = persistUser("protected-owner");
         Workspace workspace = createWorkspace("protected-owner", "Owner", "owner", AccountType.ORG, owner);

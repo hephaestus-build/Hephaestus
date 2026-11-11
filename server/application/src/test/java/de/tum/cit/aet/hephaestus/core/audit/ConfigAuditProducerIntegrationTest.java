@@ -94,7 +94,8 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
     void aRoleChangedByOrgSyncIsRecorded() {
         Workspace workspace = workspace("audit-producer-sync");
         User member = persistUser("audit-producer-sync-member");
-        membershipService.assignRole(workspace.getId(), accountId(member), Membership.WorkspaceRole.MEMBER);
+        // A role the provider set: sync may change it, unlike one that a person set.
+        membershipService.createMembership(workspace, accountId(member), Membership.WorkspaceRole.MEMBER);
 
         membershipService.syncWorkspaceMembers(workspace, Map.of(member.getId(), Membership.WorkspaceRole.ADMIN));
 

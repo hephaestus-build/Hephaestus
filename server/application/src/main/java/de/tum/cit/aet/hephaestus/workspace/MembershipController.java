@@ -129,6 +129,29 @@ public class MembershipController {
         return ResponseEntity.ok(toDTO(context.id(), membership, membership.getRole()));
     }
 
+    @DeleteMapping("/{accountId}/role-override")
+    @Operation(
+            operationId = "followProviderRole",
+            summary = "Let the provider decide a member's role again",
+            description = "Removes a person's decision about the member's role. The next sync of the organization or"
+                    + " group roster applies the provider's role. Refused for an owner.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "The member, whose role the provider sets from the next sync",
+            content = @Content(schema = @Schema(implementation = WorkspaceMembershipDTO.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The member is an owner, whose role is always set by a person",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @RequireAtLeastWorkspaceAdmin
+    @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_ROLE")
+    @RequiresRecentSignIn(RequiresRecentSignIn.When.OWNER_CHANGE)
+    public ResponseEntity<WorkspaceMembershipDTO> followProviderRole(
+            WorkspaceContext context, @PathVariable @AccountId String accountId) {
+        Membership membership = workspaceMembershipService.followProviderRole(context.id(), accountId(accountId));
+        return ResponseEntity.ok(toDTO(context.id(), membership, membership.getRole()));
+    }
+
     @DeleteMapping("/{accountId}")
     @Operation(operationId = "removeMember", summary = "Remove a workspace member")
     @ApiResponse(responseCode = "204", description = "Membership removed")
@@ -170,6 +193,7 @@ public class MembershipController {
         return new WorkspaceMembershipDTO(
                 account,
                 role,
+                member.getRoleSource(),
                 member.getJoinedAt(),
                 member.getLeftAt(),
                 member.isHidden(),
