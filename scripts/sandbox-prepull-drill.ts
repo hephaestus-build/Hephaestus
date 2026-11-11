@@ -122,21 +122,33 @@ async function main(): Promise<void> {
 		await run("k3d", ["node", "create", nodeName, "--cluster", CLUSTER, "--role", "agent"]);
 		await nodeReady(node);
 		if (values.gvisor !== undefined) {
-			for (const file of ["runsc", "containerd-shim-runsc-v1", "gvisor-bin"]) {
-				await run("docker", [
-					"cp",
-					path.join(values.gvisor, file),
-					`${node}:/usr/local/bin/${file}`,
-				]);
-			}
-			await run("docker", [
-				"cp",
-				CONTAINERD_TEMPLATE,
-				`${node}:/var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl`,
+			const { gvisor } = values;
+			// `k3d node create --cluster` copies an existing node's settings, so a cluster created with the files as
+			// `--volume …@all` mounts them on the new node too. A copy onto a mounted file fails (the target is busy):
+			// copy only what the node does not mount.
+			const mounts = await output("docker", [
+				"inspect",
+				"-f",
+				"{{range .Mounts}}{{println .Destination}}{{end}}",
+				node,
 			]);
-			// k3s writes containerd's configuration from the template when it starts.
-			await run("docker", ["restart", node]);
-			await nodeReady(node);
+			const mounted = new Set(mounts.split("\n").map((line) => line.trim()));
+			const files: [string, string][] = [
+				...["runsc", "containerd-shim-runsc-v1", "gvisor-bin"].map((file): [string, string] => [
+					path.join(gvisor, file),
+					`/usr/local/bin/${file}`,
+				]),
+				[CONTAINERD_TEMPLATE, "/var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl"],
+			];
+			const missing = files.filter(([, target]) => !mounted.has(target));
+			for (const [source, target] of missing) {
+				await run("docker", ["cp", source, `${node}:${target}`]);
+			}
+			if (missing.length > 0) {
+				// k3s writes containerd's configuration from the template when it starts.
+				await run("docker", ["restart", node]);
+				await nodeReady(node);
+			}
 		}
 
 		// The DaemonSet's Pod on the new node: its pull is the one that no sandbox waits for.
