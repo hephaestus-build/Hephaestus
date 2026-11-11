@@ -50,7 +50,6 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
     private final FeedbackRepository feedback;
     private final FeedbackOutcomes outcomes;
     private final FeedbackCopyRepository copies;
-    private final FeedbackSendRepository sends;
     private final FeedbackDecisionService decisions;
     private final FeedbackResponseService responses;
     private final FeedbackVisibilityService visibility;
@@ -220,7 +219,7 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
     public void retry(long workspaceId, UUID feedbackId, long actorId) {
         if (actorId <= 0) throw new IllegalArgumentException("A retry requires an authenticated account.");
         var row = lock(workspaceId, feedbackId);
-        var send = sends.lockByFeedbackId(workspaceId, feedbackId);
+        var send = sendQueue.current(workspaceId, feedbackId);
         var children = copies.lockByFeedbackId(workspaceId, feedbackId);
         if (row.getDestination() == FeedbackDestination.ON_WORK && visibility.withdrawn(workspaceId, feedbackId)) {
             retryWithdrawal(row, send, children);
@@ -254,16 +253,16 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
 
     /**
      * Runs the recorded withdrawal's correction again after it stopped with a posted copy whose removal the provider
-     * did not acknowledge. It records no decision and keeps the copies' receipts and the send's attempt history.
+     * did not acknowledge. It records no decision and keeps the copies' receipts. The copies decide: the withdrawal's own
+     * send may be gone, because the outbox keeps an ended send for 30 days.
      */
     private void retryWithdrawal(Feedback row, Optional<FeedbackSend> send, List<FeedbackCopy> children) {
         if (send.filter(s -> s.getState() != FeedbackSendState.DONE).isPresent())
             throw conflict("The withdrawal is still in progress.");
-        if (send.filter(s -> s.getAction() == FeedbackSendAction.RETRACT).isEmpty()
-                || children.stream()
-                        .noneMatch(c -> c.getState() == FeedbackCopyState.POSTED
-                                && c.getExternalRef() != null
-                                && c.getReadback() == FeedbackCopyReadback.TRANSIENT))
+        if (children.stream()
+                .noneMatch(c -> c.getState() == FeedbackCopyState.POSTED
+                        && c.getExternalRef() != null
+                        && c.getReadback() == FeedbackCopyReadback.TRANSIENT))
             throw conflict("No withdrawn copy can be retried.");
         sendQueue.queue(row, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING);
     }

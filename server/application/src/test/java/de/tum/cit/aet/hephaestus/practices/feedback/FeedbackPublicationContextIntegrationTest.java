@@ -247,7 +247,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         var unrelated = publicPiece(
                 elsewhereReview, elsewhere, "Explain the retry limit.", contextFor(elsewhereReview, elsewhere));
         for (var piece : List.of(first, second, unrelated))
-            assertThat(transactions.claim(workspace.getId(), piece, "owner-" + piece))
+            assertThat(transactions.claim(workspace.getId(), piece, owner(piece)))
                     .isNotNull();
         var holding = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -407,7 +407,6 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         if (presence == LookupPresence.FOUND)
             provider.physical.put(summary.getId(), current().getBody());
         provider.readback = presence == LookupPresence.UNKNOWN ? LookupPresence.UNKNOWN : LookupPresence.FOUND;
-        int attempts = sends.findById(feedbackId).orElseThrow().getAttempts();
         store.recheck(workspace.getId(), feedbackId, developerId);
         due();
         newSender().send(workspace.getId(), feedbackId);
@@ -426,7 +425,9 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                         });
         assertThat(after.get(1).getState()).isEqualTo(FeedbackCopyState.WITHHELD);
         assertThat(after.get(1).getWriteStartedAt()).isNull();
-        assertThat(sends.findById(feedbackId).orElseThrow().getAttempts()).isGreaterThan(attempts);
+        assertThat(sends.findById(feedbackId).orElseThrow().getAttempts())
+                .as("the readback is a new send")
+                .isOne();
     }
 
     @ParameterizedTest
@@ -905,16 +906,19 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
     }
 
     private void settledSend(Feedback parent) {
-        sends.saveAndFlush(FeedbackSend.builder()
-                .feedbackId(parent.getId())
-                .workspaceId(workspace.getId())
-                .action(FeedbackSendAction.POST)
-                .state(FeedbackSendState.DONE)
-                .attempts(8)
-                .nextAttemptAt(AT)
-                .createdAt(AT)
-                .updatedAt(AT)
-                .build());
+        jdbc.update(
+                """
+                INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, stop_reason,
+                  attempts, max_attempts, next_attempt_at, ended_at, created_at, updated_at)
+                VALUES (uuidv7(), ?, 'DELIVER_FEEDBACK', ?, ?, 'UNCERTAIN', 'WRITE_UNCONFIRMED', 8, 8, ?, ?, ?, ?)
+                """,
+                workspace.getId(),
+                "feedback:" + parent.getId(),
+                "feedback:" + parent.getId() + ":1:POST",
+                Timestamp.from(AT),
+                Timestamp.from(AT),
+                Timestamp.from(AT),
+                Timestamp.from(AT));
     }
 
     /** The fixture piece: its summary write started and its send settled at the readback limit; its note planned. */
@@ -924,12 +928,12 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
     }
 
     private void settledUnknownFromPrepared() {
-        String owner = "exhausted-owner";
+        var owner = owner(feedbackId);
         assertThat(transactions.claim(workspace.getId(), feedbackId, owner)).isNotNull();
         var summary = children().getFirst();
         assertThat(transactions.fence(workspace.getId(), feedbackId, owner, List.of(summary.getId()), List.of()))
                 .isTrue();
-        transactions.finish(workspace.getId(), feedbackId, owner, true);
+        finishSend(feedbackId, owner, true);
         assertThat(sends.findById(feedbackId).orElseThrow().getState()).isEqualTo(FeedbackSendState.DONE);
         assertThat(children().getFirst().getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
         assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.PLANNED);
@@ -937,7 +941,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
 
     /** A posted summary and a note whose write stayed unknown after the post settled its readbacks. */
     private void settledPartialPackage(FeedbackCopy summary, FeedbackCopy note) {
-        String owner = "partial-owner";
+        var owner = owner(feedbackId);
         assertThat(transactions.claim(workspace.getId(), feedbackId, owner)).isNotNull();
         assertThat(transactions.fence(workspace.getId(), feedbackId, owner, List.of(summary.getId()), List.of()))
                 .isTrue();
@@ -955,7 +959,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                         null)));
         assertThat(transactions.fence(workspace.getId(), feedbackId, owner, List.of(note.getId()), List.of()))
                 .isTrue();
-        transactions.finish(workspace.getId(), feedbackId, owner, true);
+        finishSend(feedbackId, owner, true);
         var post = sends.findById(feedbackId).orElseThrow();
         assertThat(post.getAction()).isEqualTo(FeedbackSendAction.POST);
         assertThat(post.getState()).isEqualTo(FeedbackSendState.DONE);
@@ -1034,7 +1038,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         return transactions.fence(
                 workspace.getId(),
                 piece,
-                "owner-" + piece,
+                owner(piece),
                 List.of(FeedbackIds.copy(piece, FeedbackCopyKind.SUMMARY, 0)),
                 List.of());
     }

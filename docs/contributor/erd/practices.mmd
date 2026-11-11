@@ -97,20 +97,6 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
     }
 
-    FeedbackSend {
-        UUID feedback_id PK,FK,UK
-        BIGINT workspace_id FK,UK "NOT NULL"
-        VARCHAR(8) action "NOT NULL"
-        VARCHAR(16) state "NOT NULL"
-        VARCHAR(64) lease_owner
-        TIMESTAMPTZ lease_expires_at
-        INTEGER attempts "NOT NULL"
-        TIMESTAMPTZ next_attempt_at "NOT NULL"
-        VARCHAR(512) last_error
-        TIMESTAMPTZ created_at "NOT NULL"
-        TIMESTAMPTZ updated_at "NOT NULL"
-    }
-
     Practice {
         BIGINT id PK,FK,UK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -356,7 +342,6 @@ erDiagram
 
     %% Relationships
     %% One-to-One relationships
-    Feedback ||--|| FeedbackSend : has
     PracticeVersion ||--|| Practice : references
 
     %% One-to-Many relationships
@@ -374,7 +359,6 @@ erDiagram
     Workspace ||--o{ FeedbackDecision : has
     Feedback ||--o{ FeedbackResponse : has
     Workspace ||--o{ FeedbackResponse : has
-    Workspace ||--o{ FeedbackSend : has
     Workspace ||--o{ Practice : has
     PracticeGroup ||--o{ Practice : has
     Workspace ||--o{ PracticeGroup : has

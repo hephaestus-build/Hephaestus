@@ -15,7 +15,19 @@ public enum ActionKind {
      * One product-feedback issue on GitHub, for the instance. GitHub can list the app's issues by their marker, so an
      * attempt whose write may have started reads back before it writes again.
      */
-    FILE_ISSUE(false, true);
+    FILE_ISSUE(false, true),
+
+    /**
+     * Posts the copies of one feedback on the reviewed work, or reads back copies whose write may have reached the
+     * provider. Each copy carries a marker, so an attempt whose write may have started reads back first.
+     */
+    DELIVER_FEEDBACK(false, false),
+
+    /** Corrects the posted copies of one feedback in place, to a newer revision. */
+    EDIT_FEEDBACK(false, false),
+
+    /** Removes or restores the posted copies of one feedback. */
+    RETRACT_FEEDBACK(false, false);
 
     private final boolean atMostOnce;
     private final boolean instanceLevel;

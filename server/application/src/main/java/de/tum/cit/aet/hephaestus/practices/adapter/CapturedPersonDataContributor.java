@@ -50,12 +50,7 @@ final class CapturedPersonDataContributor implements PersonDataContributor {
         var rows = store.export(selection, frozenScope);
         String ownerTable = switch (store.store()) {
             case "result", "problem", "result_mark", "review_item" -> "result";
-            case "feedback",
-                    "feedback_basis",
-                    "feedback_send",
-                    "feedback_response",
-                    "feedback_copy",
-                    "feedback_decision" -> "feedback";
+            case "feedback", "feedback_basis", "feedback_response", "feedback_copy", "feedback_decision" -> "feedback";
             default -> "";
         };
         if (ownerTable.isEmpty() || rows.isEmpty()) return rows;

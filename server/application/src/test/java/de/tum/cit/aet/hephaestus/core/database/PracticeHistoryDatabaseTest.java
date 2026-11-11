@@ -24,16 +24,17 @@ class PracticeHistoryDatabaseTest {
         assertThat(column(database, """
             SELECT right(f.id::text,6) || '|' || f.state || '|' ||
                 (f.delivered_at='2026-01-01T00:01:30Z'::timestamptz) || '|' ||
-                coalesce(f.stop_reason,'none') || '|' || s.action || '|' || s.state
-            FROM feedback f JOIN feedback_send s ON s.feedback_id=f.id
+                coalesce(f.stop_reason,'none') || '|' ||
+                coalesce(split_part(s.idempotency_key,':',4) || '|' || s.state, 'no send')
+            FROM feedback f LEFT JOIN agent_action s ON s.lane_key='feedback:' || f.id
             WHERE f.id IN('00000000-0000-0000-0000-000000992314',
                 '00000000-0000-0000-0000-000000992317','00000000-0000-0000-0000-000000992318')
             ORDER BY f.id
             """))
                 .containsExactly(
-                        "992314|FAILED|true|none|POST|DONE",
-                        "992317|UNCONFIRMED|true|DELIVERY_UNCONFIRMED|POST|UNCERTAIN",
-                        "992318|FAILED|true|none|POST|DONE");
+                        "992314|FAILED|true|none|no send",
+                        "992317|UNCONFIRMED|true|DELIVERY_UNCONFIRMED|POST|ADMITTED",
+                        "992318|FAILED|true|none|no send");
         assertThat(column(database, """
             SELECT right(feedback_id::text,6) || '|' || kind || '|' || state || '|' ||
                 coalesce(external_ref,'none') || '|' || (posted_at IS NOT NULL)
@@ -115,15 +116,15 @@ class PracticeHistoryDatabaseTest {
         // A send that released projection retired keeps its approved text, posted reference and approval history.
         assertThat(column(database, """
             SELECT f.state || '|' || f.body || '|' || c.state || '|' || (c.body IS NULL) || '|' || c.external_ref
-                || '|' || s.state || '|' || (h.facts->'dispatch'->>'payloadCleared')
+                || '|' || coalesce(s.state,'no send') || '|' || (h.facts->'dispatch'->>'payloadCleared')
                 || '|' || (h.facts->>'approvalDigest' = repeat('f', 64))
                 || '|' || (SELECT count(*) FROM feedback_decision d WHERE d.feedback_id=f.id AND d.action='APPROVE')
             FROM feedback f JOIN feedback_copy c ON c.feedback_id=f.id AND c.kind='SUMMARY'
-            JOIN feedback_send s ON s.feedback_id=f.id JOIN review r ON r.id=f.review_id
+            LEFT JOIN agent_action s ON s.lane_key='feedback:' || f.id JOIN review r ON r.id=f.review_id
             CROSS JOIN LATERAL (SELECT r.checks->'MIGRATION'->'feedback'->(f.id::text)->'MIGRATION' AS facts) h
             WHERE f.id='00000000-0000-0000-0000-000000992319'
             """))
-                .containsExactly("DELIVERED|Explain this change.|POSTED|true|provider:retired|DONE|true|true|1");
+                .containsExactly("DELIVERED|Explain this change.|POSTED|true|provider:retired|no send|true|true|1");
         // Two comments at one anchor keep their own ids and references; each receipt joins its comment by reference.
         assertThat(column(database, """
             SELECT right(c.id::text, 6) || '|' || c.kind || '|' || c.external_ref || '|' || c.write_key || '|' || c.state

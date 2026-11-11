@@ -805,8 +805,12 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 modelFixtures.feedback(result, FeedbackDestination.ON_WORK, FeedbackState.READY, "Prepared feedback");
         var job = work.job();
         jdbc.update("""
-            INSERT INTO feedback_send(workspace_id,feedback_id,action,state,attempts,next_attempt_at,created_at,updated_at)
-            VALUES (?,?,'POST','PENDING',0,CURRENT_TIMESTAMP + INTERVAL '1 day',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+            INSERT INTO agent_action(id,workspace_id,kind,lane_key,idempotency_key,state,payload,subject_account_id,
+              max_attempts,next_attempt_at,created_at,updated_at)
+            SELECT uuidv7(),f.workspace_id,'DELIVER_FEEDBACK','feedback:' || f.id,'feedback:' || f.id || ':1:POST',
+              'ADMITTED',jsonb_build_object('feedbackId',f.id),f.developer_id,8,CURRENT_TIMESTAMP + INTERVAL '1 day',
+              CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+              FROM feedback f WHERE f.workspace_id=? AND f.id=?
             """, workspace.getId(), feedback.getId());
         var copyId = FeedbackIds.copy(feedback.getId(), FeedbackCopyKind.SUMMARY, 0);
         jdbc.update(

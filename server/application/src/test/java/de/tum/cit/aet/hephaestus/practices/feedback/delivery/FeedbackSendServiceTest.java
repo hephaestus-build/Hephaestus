@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -13,6 +12,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
@@ -46,6 +47,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 @Tag("unit")
 class FeedbackSendServiceTest {
@@ -55,6 +57,17 @@ class FeedbackSendServiceTest {
     final SummaryWriter writer = mock(SummaryWriter.class);
     final UUID id = UUID.randomUUID();
     final UUID copyId = UUID.randomUUID();
+    final ActionAttempt owner = new ActionAttempt(
+            UUID.randomUUID(),
+            1L,
+            ActionKind.DELIVER_FEEDBACK,
+            "feedback:" + id + ":1:POST",
+            JsonNodeFactory.instance.objectNode(),
+            1,
+            1,
+            false,
+            null,
+            () -> true);
     final Feedback feedback = Feedback.builder()
             .id(id)
             .workspaceId(1)
@@ -109,7 +122,7 @@ class FeedbackSendServiceTest {
     }
 
     void attempt(FeedbackCopyState state) {
-        when(transactions.claim(eq(1L), eq(id), anyString()))
+        when(transactions.claim(eq(1L), eq(id), eq(owner)))
                 .thenReturn(new FeedbackSendTransactions.Attempt(
                         feedback, FeedbackSendAction.POST, List.of(copy(state)), 1));
     }
@@ -117,23 +130,23 @@ class FeedbackSendServiceTest {
     @Test
     void shouldCommitTheCopyFenceBeforeAProviderCreate() {
         attempt(FeedbackCopyState.PLANNED);
-        when(transactions.fence(eq(1L), eq(id), anyString(), eq(List.of(copyId)), eq(List.of())))
+        when(transactions.fence(eq(1L), eq(id), eq(owner), eq(List.of(copyId)), eq(List.of())))
                 .thenReturn(true);
         when(writer.postSummary(eq(target), any())).thenReturn(new SummaryHandle("42", "https://example.test/copy/42"));
-        sender.send(1, id);
+        sender.send(owner);
         var order = inOrder(transactions, writer);
-        order.verify(transactions).fence(eq(1L), eq(id), anyString(), eq(List.of(copyId)), eq(List.of()));
+        order.verify(transactions).fence(eq(1L), eq(id), eq(owner), eq(List.of(copyId)), eq(List.of()));
         order.verify(writer).postSummary(eq(target), any());
-        order.verify(transactions).receipt(eq(1L), eq(id), anyString(), anyList());
+        order.verify(transactions).receipt(eq(1L), eq(id), eq(owner), anyList());
     }
 
     @Test
     void shouldNeverCreateAgainWhenVisibilityIsUnknown() {
         attempt(FeedbackCopyState.WRITE_STARTED);
         when(writer.findExistingSummary(eq(target), any())).thenReturn(new SummaryLookup(LookupPresence.UNKNOWN, null));
-        sender.send(1, id);
+        sender.send(owner);
         verify(writer, never()).postSummary(any(), any());
-        verify(transactions, never()).absent(anyLong(), any(), anyString(), any());
+        verify(transactions, never()).absent(anyLong(), any(), eq(owner), any());
         assertThat(readbacks("unknown")).isEqualTo(1);
     }
 
@@ -141,8 +154,8 @@ class FeedbackSendServiceTest {
     void shouldRecordProvedAbsenceWithoutAutomaticallyReposting() {
         attempt(FeedbackCopyState.WRITE_STARTED);
         when(writer.findExistingSummary(eq(target), any())).thenReturn(new SummaryLookup(LookupPresence.ABSENT, null));
-        sender.send(1, id);
-        verify(transactions).absent(eq(1L), eq(id), anyString(), eq(copyId));
+        sender.send(owner);
+        verify(transactions).absent(eq(1L), eq(id), eq(owner), eq(copyId));
         verify(writer, never()).postSummary(any(), any());
         assertThat(readbacks("absent")).isEqualTo(1);
     }
@@ -153,9 +166,9 @@ class FeedbackSendServiceTest {
         when(writer.findExistingSummary(eq(target), any()))
                 .thenReturn(new SummaryLookup(
                         LookupPresence.FOUND, new SummaryHandle("42", "https://example.test/copy/42")));
-        sender.send(1, id);
+        sender.send(owner);
         ArgumentCaptor<List<CopyReceipt>> capture = ArgumentCaptor.captor();
-        verify(transactions).receipt(eq(1L), eq(id), anyString(), capture.capture());
+        verify(transactions).receipt(eq(1L), eq(id), eq(owner), capture.capture());
         assertThat(capture.getValue().getFirst().externalRef()).isEqualTo("42");
         verify(writer, never()).postSummary(any(), any());
         assertThat(readbacks("found")).isEqualTo(1);
@@ -164,7 +177,7 @@ class FeedbackSendServiceTest {
     @Test
     void shouldNeverPostAConfirmedCopyAgain() {
         attempt(FeedbackCopyState.POSTED);
-        sender.send(1, id);
+        sender.send(owner);
         verify(writer, never()).postSummary(any(), any());
         verify(writer, never()).findExistingSummary(any(), any());
         assertThat(readbacks("found") + readbacks("absent") + readbacks("unknown"))
@@ -174,19 +187,19 @@ class FeedbackSendServiceTest {
     @Test
     void shouldStopBeforeProviderCreateWhenTheFenceRefuses() {
         attempt(FeedbackCopyState.PLANNED);
-        sender.send(1, id);
+        sender.send(owner);
         verify(writer, never()).postSummary(any(), any());
     }
 
     @Test
     void shouldRetainUnknownVisibilityAfterAPostThrows() {
         attempt(FeedbackCopyState.PLANNED);
-        when(transactions.fence(eq(1L), eq(id), anyString(), anyList(), anyList()))
+        when(transactions.fence(eq(1L), eq(id), eq(owner), anyList(), anyList()))
                 .thenReturn(true);
         when(writer.postSummary(eq(target), any())).thenThrow(new IllegalStateException("connection ended"));
-        sender.send(1, id);
-        verify(transactions).error(eq(1L), eq(id), anyString());
-        verify(transactions).finish(eq(1L), eq(id), anyString(), eq(false));
+        sender.send(owner);
+        verify(transactions).error(eq(1L), eq(id), eq(owner));
+        verify(transactions).finish(1, id, owner);
     }
 
     final LineNoteWriter notes = mock(LineNoteWriter.class);
@@ -214,7 +227,7 @@ class FeedbackSendServiceTest {
     FeedbackSendService pullRequest(List<LineNoteWriter> writers, FeedbackCopyState summary, FeedbackCopyState line) {
         when(item.kind()).thenReturn(new ItemKind("scm.pull_request"));
         when(notes.kind()).thenReturn(IntegrationKind.GITHUB);
-        when(transactions.claim(eq(1L), eq(id), anyString()))
+        when(transactions.claim(eq(1L), eq(id), eq(owner)))
                 .thenReturn(new FeedbackSendTransactions.Attempt(
                         feedback, FeedbackSendAction.POST, List.of(copy(summary), note(line)), 1));
         return new FeedbackSendService(
@@ -235,23 +248,23 @@ class FeedbackSendServiceTest {
                 new CopyReceipt(copyId, CopyDisposition.POSTED, "PRR_1", null, true, null),
                 new CopyReceipt(noteId, CopyDisposition.POSTED, "PRRC_1", null, true, null));
         when(notes.postPackage(eq(target), any(), any())).thenReturn(CopyWriteResult.of(posted));
-        sender.send(1, id);
+        sender.send(owner);
         ArgumentCaptor<OnWorkPackage> sent = ArgumentCaptor.captor();
         verify(notes, times(1)).postPackage(eq(target), sent.capture(), any());
         assertThat(sent.getValue().copyIds()).containsExactly(copyId, noteId);
         assertThat(sent.getValue().summary()).isNotNull();
         verify(writer, never()).postSummary(any(), any());
-        verify(transactions).receipt(eq(1L), eq(id), anyString(), eq(posted));
+        verify(transactions).receipt(eq(1L), eq(id), eq(owner), eq(posted));
     }
 
     @Test
     void shouldOnlyReadBackAPackageWhoseSubmissionMayHaveHappened() {
         var sender = pullRequest(List.of(notes), FeedbackCopyState.POSTED, FeedbackCopyState.WRITE_STARTED);
         when(notes.findPosted(eq(target), any())).thenReturn(List.of());
-        sender.send(1, id);
+        sender.send(owner);
         verify(notes, never()).postPackage(any(), any(), any());
-        verify(transactions).absent(eq(1L), eq(id), anyString(), eq(noteId));
-        verify(transactions, never()).absent(eq(1L), eq(id), anyString(), eq(copyId));
+        verify(transactions).absent(eq(1L), eq(id), eq(owner), eq(noteId));
+        verify(transactions, never()).absent(eq(1L), eq(id), eq(owner), eq(copyId));
         assertThat(readbacks("absent")).isEqualTo(1);
         assertThat(readbacks("found") + readbacks("unknown")).isZero();
     }
@@ -263,7 +276,7 @@ class FeedbackSendServiceTest {
                 .thenReturn(List.of(
                         new CopyReceipt(copyId, CopyDisposition.PRESERVED_EXISTING, "PRR_1", null, true, null),
                         CopyReceipt.attempted(noteId)));
-        sender.send(1, id);
+        sender.send(owner);
         verify(notes, never()).postPackage(any(), any(), any());
         assertThat(readbacks("found")).isEqualTo(1);
         assertThat(readbacks("unknown")).isEqualTo(1);
@@ -274,10 +287,10 @@ class FeedbackSendServiceTest {
     void shouldKeepTheOutcomeUnknownWhenReadbackIsInconclusive() {
         var sender = pullRequest(List.of(notes), FeedbackCopyState.WRITE_STARTED, FeedbackCopyState.WRITE_STARTED);
         when(notes.findPosted(eq(target), any())).thenReturn(null);
-        sender.send(1, id);
+        sender.send(owner);
         verify(notes, never()).postPackage(any(), any(), any());
-        verify(transactions, never()).receipt(anyLong(), any(), anyString(), anyList());
-        verify(transactions, never()).absent(anyLong(), any(), anyString(), any());
+        verify(transactions, never()).receipt(anyLong(), any(), eq(owner), anyList());
+        verify(transactions, never()).absent(anyLong(), any(), eq(owner), any());
         assertThat(readbacks("unknown")).isEqualTo(2);
     }
 
@@ -303,12 +316,12 @@ class FeedbackSendServiceTest {
     @Test
     void shouldWithholdThePackageWhenNoWriterServesTheProvider() {
         var sender = pullRequest(List.of(), FeedbackCopyState.PLANNED, FeedbackCopyState.PLANNED);
-        sender.send(1, id);
+        sender.send(owner);
         verify(transactions)
                 .withholdCopies(
                         eq(1L),
                         eq(id),
-                        anyString(),
+                        eq(owner),
                         eq(List.of(copyId, noteId)),
                         eq(FeedbackStopReason.RECIPIENT_UNAVAILABLE));
         verify(writer, never()).postSummary(any(), any());

@@ -27,8 +27,8 @@ class PracticeV1FreshInstallDatabaseTest {
                                 database,
                                 "SELECT count(*)::text FROM information_schema.tables WHERE table_schema='public' AND"
                                         + " table_name IN"
-                                        + " ('item','item_event','review','review_practice','review_item','review_job','result','problem','result_mark','membership','identity','identity_restriction','feedback','feedback_basis','feedback_copy','feedback_send','feedback_decision','feedback_response','practice_version','catalog_entry')"))
-                .containsExactly("20");
+                                        + " ('item','item_event','review','review_practice','review_item','review_job','result','problem','result_mark','membership','identity','identity_restriction','feedback','feedback_basis','feedback_copy','feedback_decision','feedback_response','practice_version','catalog_entry')"))
+                .containsExactly("19");
         assertThat(PracticeMigrationFixture.column(
                         database,
                         "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='sfk_result_version'"))

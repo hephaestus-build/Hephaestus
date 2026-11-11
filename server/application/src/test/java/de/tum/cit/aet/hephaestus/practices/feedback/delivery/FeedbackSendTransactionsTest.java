@@ -10,6 +10,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
@@ -22,9 +25,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackOutcomes;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicationContext;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSend;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackStoreService;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackVisibilityService;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
@@ -34,8 +35,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckFacts;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -49,6 +48,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 @Tag("unit")
 class FeedbackSendTransactionsTest {
@@ -56,12 +56,13 @@ class FeedbackSendTransactionsTest {
     final FeedbackStoreService store = mock(FeedbackStoreService.class);
     final FeedbackRepository parents = mock(FeedbackRepository.class);
     final FeedbackCopyRepository copies = mock(FeedbackCopyRepository.class);
-    final FeedbackSendRepository sends = mock(FeedbackSendRepository.class);
+    final AgentActions actions = mock(AgentActions.class);
     final FeedbackVisibilityService visibility = mock(FeedbackVisibilityService.class);
     final PersonDataWriteFence privacy = mock(PersonDataWriteFence.class);
     final Instant now = Instant.EPOCH;
     final UUID id = UUID.randomUUID(), copyId = UUID.randomUUID();
     final Feedback row = Feedback.builder().id(id).workspaceId(1).build();
+    final ActionAttempt owner = attempt(1), expired = attempt(2);
     final FeedbackSendTransactions transactions = new FeedbackSendTransactions(
             store,
             new FeedbackOutcomes(
@@ -70,7 +71,7 @@ class FeedbackSendTransactionsTest {
                     mock(ReviewRepository.class),
                     mock(FeedbackDecisionRepository.class)),
             copies,
-            sends,
+            actions,
             visibility,
             Clock.fixed(now, ZoneOffset.UTC),
             privacy,
@@ -82,18 +83,27 @@ class FeedbackSendTransactionsTest {
     @BeforeEach
     void setup() {
         when(store.lock(1, id)).thenReturn(row);
-        when(sends.lockByFeedbackId(1, id))
-                .thenReturn(Optional.of(FeedbackSend.builder()
-                        .state(FeedbackSendState.SENDING)
-                        .action(FeedbackSendAction.POST)
-                        .leaseOwner("owner")
-                        .leaseExpiresAt(now.plusSeconds(120))
-                        .build()));
+        when(actions.holds(owner)).thenReturn(true);
+    }
+
+    /** A claimed post of the feedback; only {@link #owner} still holds its lease. */
+    ActionAttempt attempt(long epoch) {
+        return new ActionAttempt(
+                UUID.randomUUID(),
+                1L,
+                ActionKind.DELIVER_FEEDBACK,
+                "feedback:" + id + ":1:POST",
+                JsonNodeFactory.instance.objectNode(),
+                1,
+                epoch,
+                false,
+                null,
+                () -> true);
     }
 
     @Test
     void shouldRefuseAnExpiredOwnerBeforeOpeningAnyFence() {
-        assertThat(transactions.fence(1, id, "expired", List.of(copyId), List.of()))
+        assertThat(transactions.fence(1, id, expired, List.of(copyId), List.of()))
                 .isFalse();
         verify(copies, never()).beginWrite(anyLong(), any(), any(), any());
     }
@@ -108,8 +118,7 @@ class FeedbackSendTransactionsTest {
                         now,
                         new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false)));
         when(copies.beginWrite(1, id, copyId, now)).thenReturn(1);
-        assertThat(transactions.fence(1, id, "owner", List.of(copyId), List.of()))
-                .isTrue();
+        assertThat(transactions.fence(1, id, owner, List.of(copyId), List.of())).isTrue();
         verify(parents).updateDelivery(1, id, FeedbackState.UNCONFIRMED, FeedbackStopReason.DELIVERY_UNCONFIRMED, null);
     }
 
@@ -122,7 +131,7 @@ class FeedbackSendTransactionsTest {
                         .state(FeedbackCopyState.WRITE_STARTED)
                         .build()));
         transactions.receipt(
-                1, id, "owner", List.of(new CopyReceipt(copyId, CopyDisposition.FAILED, null, null, null, null)));
+                1, id, owner, List.of(new CopyReceipt(copyId, CopyDisposition.FAILED, null, null, null, null)));
         verify(copies, never()).recordAbsent(anyLong(), any(), any(), anyString());
         verify(copies)
                 .recordError(
@@ -146,7 +155,7 @@ class FeedbackSendTransactionsTest {
         assertThatThrownBy(() -> transactions.receipt(
                         1,
                         id,
-                        "owner",
+                        owner,
                         List.of(new CopyReceipt(copyId, CopyDisposition.POSTED, "other", null, true, null))))
                 .isInstanceOf(IllegalStateException.class);
     }
@@ -162,7 +171,7 @@ class FeedbackSendTransactionsTest {
         assertThatThrownBy(() -> transactions.receipt(
                         1,
                         id,
-                        "owner",
+                        owner,
                         List.of(new CopyReceipt(copyId, CopyDisposition.POSTED, "first", null, true, null))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -180,7 +189,7 @@ class FeedbackSendTransactionsTest {
         assertThatThrownBy(() -> transactions.receipt(
                         1,
                         id,
-                        "owner",
+                        owner,
                         List.of(new CopyReceipt(
                                 copyId, CopyDisposition.FELL_BACK, "ref", null, true, CopyForm.FILE_NOTE))))
                 .isInstanceOf(IllegalArgumentException.class);

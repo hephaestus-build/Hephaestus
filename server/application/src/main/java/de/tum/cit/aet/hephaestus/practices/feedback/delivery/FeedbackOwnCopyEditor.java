@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReadRequest;
@@ -38,7 +39,7 @@ public class FeedbackOwnCopyEditor {
     private final List<LineNoteWriter> notes;
     private final FeedbackSendTransactions transactions;
 
-    public void edit(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, String owner) {
+    public void edit(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner) {
         var row = attempt.feedback();
         long workspace = row.getWorkspaceId();
         UUID feedbackId = row.getId();
@@ -89,7 +90,9 @@ public class FeedbackOwnCopyEditor {
                 continue;
             }
             var update = transactions.recipientWrite(row.getDeveloperId(), () -> {
-                if (!transactions.fence(workspace, feedbackId, owner, List.of(copy.getId()), List.of())) return null;
+                if (!owner.fence().beginWrite()
+                        || !transactions.fence(workspace, feedbackId, owner, List.of(copy.getId()), List.of()))
+                    return null;
                 return update(attempt, target, copy, prior);
             });
             if (update == null) continue;
@@ -147,7 +150,7 @@ public class FeedbackOwnCopyEditor {
                         CopyUpdateReceipt.transientFailure(copy.getId(), "The quiet edit has no confirmed receipt."));
     }
 
-    private void confirmed(FeedbackCopy copy, FeedbackCopy prior, String owner) {
+    private void confirmed(FeedbackCopy copy, FeedbackCopy prior, ActionAttempt owner) {
         transactions.receipt(
                 copy.getWorkspaceId(),
                 copy.getFeedbackId(),

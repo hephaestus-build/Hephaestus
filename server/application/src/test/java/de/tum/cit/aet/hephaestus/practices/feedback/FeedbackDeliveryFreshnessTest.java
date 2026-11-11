@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Tag;
@@ -15,8 +17,8 @@ class FeedbackDeliveryFreshnessTest {
 
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final FeedbackRepository feedback = mock(FeedbackRepository.class);
-    private final FeedbackSendRepository sends = mock(FeedbackSendRepository.class);
-    private final FeedbackDeliveryFreshness freshness = new FeedbackDeliveryFreshness(feedback, sends, registry);
+    private final AgentActions actions = mock(AgentActions.class);
+    private final FeedbackDeliveryFreshness freshness = new FeedbackDeliveryFreshness(feedback, actions, registry);
 
     @Test
     void shouldReportTheAgeOfTheOldestWaitingFeedbackAndZeroWhenNoneWaits() {
@@ -44,7 +46,7 @@ class FeedbackDeliveryFreshnessTest {
     @Test
     void shouldReportSendAttemptsAndZeroWhenNoSendWaits() {
         assertThat(attempts()).isNaN();
-        when(sends.maxAttemptsBeforeDone()).thenReturn(4, 0);
+        when(actions.maxLiveAttempts(any())).thenReturn(4, 0);
         freshness.sample();
         assertThat(attempts()).isEqualTo(4);
         freshness.sample();
@@ -53,7 +55,7 @@ class FeedbackDeliveryFreshnessTest {
 
     @Test
     void shouldClearSendAttemptsAfterAFailedReadAndRecoverIndependentlyOfTheAge() {
-        when(sends.maxAttemptsBeforeDone())
+        when(actions.maxLiveAttempts(any()))
                 .thenReturn(4)
                 .thenThrow(new QueryTimeoutException("fixture"))
                 .thenReturn(2);

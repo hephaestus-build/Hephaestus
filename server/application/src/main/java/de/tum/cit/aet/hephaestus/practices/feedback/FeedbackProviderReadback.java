@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReadRequest;
@@ -9,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackCopyReader;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackReadbackObservedEvent;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
@@ -37,9 +38,9 @@ public class FeedbackProviderReadback {
     private final Clock clock;
     private final ApplicationEventPublisher events;
     private final PersonDataWriteFence privacy;
-    private final FeedbackSendRepository sends;
+    private final AgentActions actions;
 
-    public void capture(long workspaceId, UUID feedbackId, String owner) {
+    public void capture(long workspaceId, UUID feedbackId, ActionAttempt owner) {
         var row = feedback.findByIdAndWorkspaceId(feedbackId, workspaceId).orElse(null);
         if (row == null) return;
         var children = copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, feedbackId);
@@ -107,12 +108,7 @@ public class FeedbackProviderReadback {
             var locked =
                     feedback.lockByIdAndWorkspaceId(feedbackId, workspaceId).orElse(null);
             if (locked == null || locked.getDeveloperId() != row.getDeveloperId()) return;
-            var send = sends.lockByFeedbackId(workspaceId, feedbackId);
-            if (send.filter(attempt -> attempt.getState() == FeedbackSendState.SENDING
-                            && owner.equals(attempt.getLeaseOwner())
-                            && attempt.getLeaseExpiresAt() != null
-                            && attempt.getLeaseExpiresAt().isAfter(clock.instant()))
-                    .isEmpty()) return;
+            if (!actions.holds(owner)) return;
             var state = (ObjectNode) locked.getComposition().deepCopy();
             if (retained.stream()
                     .anyMatch(copy -> copy.resolved() || copy.status() == CopyReadback.Status.HUMAN_EDITED))

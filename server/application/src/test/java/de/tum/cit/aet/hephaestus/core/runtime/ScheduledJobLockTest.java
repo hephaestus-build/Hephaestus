@@ -56,7 +56,6 @@ class ScheduledJobLockTest {
             Map.entry("GitLabRateLimitTracker#evictStaleEntries", "LOCAL"),
             Map.entry("SlackRateLimitTracker#evictStaleEntries", "LOCAL"),
             Map.entry("ConversationFeedbackTtlSweeper#sweep", "ROW"),
-            Map.entry("FeedbackSendRecovery#recover", "ROW"),
             Map.entry("FilingService#fileDue", "ROW"),
             Map.entry("FilingService#measureWaiting", "LOCAL"),
             Map.entry("FollowService#promoteDue", "ROW"),

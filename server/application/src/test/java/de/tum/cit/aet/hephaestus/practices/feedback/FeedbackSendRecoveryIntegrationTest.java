@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
-import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecovery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionInput;
@@ -16,7 +18,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackUsefulness;
 import java.sql.Timestamp;
-import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
@@ -25,7 +26,7 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
     @Test
     void shouldRecoverAnExpiredClaimBeforeAnyFenceWithOneCreate() {
         prepare(false);
-        var attempt = transactions.claim(workspace.getId(), feedbackId, "crashed-before-fence");
+        var attempt = transactions.claim(workspace.getId(), feedbackId, claimSend(feedbackId));
         assertThat(attempt).isNotNull();
         assertThat(children().getFirst().getWriteStartedAt()).isNull();
         expireClaim();
@@ -37,7 +38,7 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
     @Test
     void shouldReadBackACrashAfterTheFenceBeforeAnyProviderCall() {
         prepare(false);
-        String owner = "crashed-after-fence";
+        var owner = claimSend(feedbackId);
         var attempt = transactions.claim(workspace.getId(), feedbackId, owner);
         assertThat(attempt).isNotNull();
         var copyId = children().getFirst().getId();
@@ -79,13 +80,13 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
     @Test
     void shouldOnlyReadBackAnUnknownCopyAndWithholdUnrequestedSiblingsDuringRecovery() {
         prepare(true);
-        String owner = "lost-package-owner";
+        var owner = claimSend(feedbackId);
         transactions.claim(workspace.getId(), feedbackId, owner);
         var summary = children().getFirst();
         transactions.fence(workspace.getId(), feedbackId, owner, List.of(summary.getId()), List.of());
         provider.physical.put(summary.getId(), current().getBody());
         expireClaim();
-        recovery().recover();
+        recovery().send(workspace.getId(), feedbackId);
         assertThat(provider.summaryCreates).isZero();
         assertThat(provider.noteCreates).isZero();
         assertThat(children().getFirst().getState()).isEqualTo(FeedbackCopyState.POSTED);
@@ -98,8 +99,8 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
     void shouldNeverCreateAConfirmedCopyWhenRecoveryRunsAfterMigration() {
         seedHistoricalCopy(true);
         var original = children().getFirst();
-        recovery().recover();
-        recovery().recover();
+        recovery().send(workspace.getId(), feedbackId);
+        recovery().send(workspace.getId(), feedbackId);
         assertThat(provider.summaryCreates).isZero();
         assertThat(children().getFirst().getExternalRef()).isEqualTo(original.getExternalRef());
         assertThat(children().getFirst().getWriteMarker()).isEqualTo("<!-- released-feedback-marker -->");
@@ -109,7 +110,7 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
     @Test
     void shouldReconcileAnUnknownCopyBeforeAnyCreate() {
         seedHistoricalCopy(false);
-        recovery().recover();
+        recovery().send(workspace.getId(), feedbackId);
         assertThat(provider.summaryCreates).isZero();
         assertThat(provider.lastSummaryLookupMarker).isEqualTo("<!-- released-feedback-marker -->");
         assertThat(children().getFirst().getState()).isEqualTo(FeedbackCopyState.POSTED);
@@ -123,14 +124,9 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         var copy = children().getFirst();
         copies.confirmCorrection(workspace.getId(), feedbackId, copy.getId(), FeedbackCopyState.RETRACTED.name());
         provider.physical.put(copy.getId(), "This feedback was withdrawn.");
-        jdbc.update(
-                "UPDATE feedback_send SET"
-                        + " action='RETRACT',state='PENDING',next_attempt_at=now()-interval '1 second'"
-                        + " WHERE workspace_id=? AND feedback_id=?",
-                workspace.getId(),
-                feedbackId);
-        recovery().recover();
-        recovery().recover();
+        queueSend(feedbackId, FeedbackSendAction.RETRACT);
+        recovery().send(workspace.getId(), feedbackId);
+        recovery().send(workspace.getId(), feedbackId);
         assertThat(provider.summaryCreates).isZero();
         assertThat(provider.updates).isEqualTo(1);
         assertThat(provider.physical.get(copy.getId())).isEqualTo(current().getBody());
@@ -138,8 +134,9 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         assertThat(children().getFirst().getPostedAt()).isEqualTo(AT);
     }
 
-    private FeedbackSendRecovery recovery() {
-        return new FeedbackSendRecovery(sends, newSender(), Clock.systemUTC());
+    /** The executor's next run of this feedback's lane. */
+    private Sender recovery() {
+        return newSender();
     }
 
     private void seedHistoricalCopy(boolean confirmed) {
@@ -163,22 +160,8 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
                 confirmed ? Timestamp.from(AT) : null,
                 feedbackId,
                 workspace.getId());
-        jdbc.update(
-                "UPDATE feedback_send SET state=?,next_attempt_at=now()-interval '1 second' WHERE"
-                        + " workspace_id=? AND feedback_id=?",
-                confirmed ? "DONE" : "UNCERTAIN",
-                workspace.getId(),
-                feedbackId);
+        if (!confirmed) queueSend(feedbackId, FeedbackSendAction.POST);
         provider.physical.put(copy.getId(), current().getBody());
-    }
-
-    private void expireClaim() {
-        jdbc.update(
-                "UPDATE feedback_send SET lease_expires_at=now()-interval '1"
-                        + " second',next_attempt_at=now()-interval '1 second' WHERE workspace_id=? AND"
-                        + " feedback_id=?",
-                workspace.getId(),
-                feedbackId);
     }
 
     @Test
@@ -271,7 +254,7 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         assertThat(settled.getAction()).isEqualTo(FeedbackSendAction.RETRACT);
         assertThat(settled.getState()).isEqualTo(FeedbackSendState.DONE);
         assertThat(settled.getLastError()).isNull();
-        assertThat(settled.getAttempts()).isEqualTo(stopped.getAttempts() + 1);
+        assertThat(settled.getAttempts()).isOne();
         assertThat(children()).allSatisfy(copy -> {
             assertThat(copy.getState()).isEqualTo(FeedbackCopyState.RETRACTED);
             assertThat(copy.getReadback()).isNull();
@@ -303,7 +286,7 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("The withdrawal is still in progress.");
         due();
-        assertThat(transactions.claim(workspace.getId(), feedbackId, "leased-correction"))
+        assertThat(transactions.claim(workspace.getId(), feedbackId, claimSend(feedbackId)))
                 .isNotNull();
         assertThatThrownBy(() -> store.retry(workspace.getId(), feedbackId, developerId))
                 .isInstanceOf(ResponseStatusException.class)
@@ -311,7 +294,6 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         var leased = sends.findById(feedbackId).orElseThrow();
         assertThat(leased.getAction()).isEqualTo(FeedbackSendAction.RETRACT);
         assertThat(leased.getState()).isEqualTo(FeedbackSendState.SENDING);
-        assertThat(leased.getLeaseOwner()).isEqualTo("leased-correction");
         assertThat(provider.updates).isZero();
     }
 
@@ -335,6 +317,62 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         var after = sends.findById(feedbackId).orElseThrow();
         assertThat(after.getState()).isEqualTo(FeedbackSendState.DONE);
         assertThat(after.getAttempts()).isEqualTo(stopped.getAttempts());
+    }
+
+    @Test
+    void shouldRetractACopyWithdrawnAfterItsSendSettledButBeforeTheSendEnded() {
+        prepare(false);
+        var owner = claimSend(feedbackId);
+        assertThat(transactions.claim(workspace.getId(), feedbackId, owner)).isNotNull();
+        var summary = children().getFirst();
+        assertThat(transactions.fence(workspace.getId(), feedbackId, owner, List.of(summary.getId()), List.of()))
+                .isTrue();
+        provider.physical.put(summary.getId(), current().getBody());
+        transactions.receipt(
+                workspace.getId(),
+                feedbackId,
+                owner,
+                List.of(new CopyReceipt(
+                        summary.getId(),
+                        CopyDisposition.POSTED,
+                        summary.getId().toString(),
+                        "https://example.test/comments/" + summary.getId(),
+                        true,
+                        null)));
+        var settled = transactions.finish(workspace.getId(), feedbackId, owner);
+
+        withdraw();
+        assertThat(sends.findById(feedbackId).orElseThrow().getState()).isEqualTo(FeedbackSendState.SENDING);
+        ActionTestSupport.record(context, owner, settled);
+
+        var correction = sends.findById(feedbackId).orElseThrow();
+        assertThat(correction.getAction()).isEqualTo(FeedbackSendAction.RETRACT);
+        assertThat(correction.getState()).isEqualTo(FeedbackSendState.PENDING);
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(children().getFirst().getState()).isEqualTo(FeedbackCopyState.RETRACTED);
+    }
+
+    @Test
+    void shouldRecheckAnUnknownCopyAfterTheOutboxDeletedItsEndedSend() {
+        prepare(false);
+        var owner = claimSend(feedbackId);
+        assertThat(transactions.claim(workspace.getId(), feedbackId, owner)).isNotNull();
+        assertThat(transactions.fence(
+                        workspace.getId(),
+                        feedbackId,
+                        owner,
+                        List.of(children().getFirst().getId()),
+                        List.of()))
+                .isTrue();
+        finishSend(feedbackId, owner, true);
+        jdbc.update("DELETE FROM agent_action WHERE lane_key = ?", "feedback:" + feedbackId);
+        assertThat(sends.findById(feedbackId)).isEmpty();
+
+        store.recheck(workspace.getId(), feedbackId, developerId);
+
+        var readback = sends.findById(feedbackId).orElseThrow();
+        assertThat(readback.getAction()).isEqualTo(FeedbackSendAction.POST);
+        assertThat(readback.getState()).isEqualTo(FeedbackSendState.PENDING);
     }
 
     private long decisionCount() {

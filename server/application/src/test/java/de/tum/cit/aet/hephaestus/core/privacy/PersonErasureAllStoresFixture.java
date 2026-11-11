@@ -368,16 +368,6 @@ final class PersonErasureAllStoresFixture {
                 later,
                 "removal_reason",
                 CANARY);
-        row(
-                "feedback_send",
-                "workspace_id",
-                workspace,
-                "feedback_id",
-                person.feedback(),
-                "action",
-                "POST",
-                "state",
-                "PENDING");
         row("feedback_response", "workspace_id", workspace, "feedback_id", person.feedback(), "comment", CANARY);
         UUID problemId = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT id FROM problem WHERE result_id=? AND workspace_id=?", UUID.class, person.result(), workspace));

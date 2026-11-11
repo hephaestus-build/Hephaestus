@@ -1,11 +1,13 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendService;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.EnumSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
@@ -30,13 +32,13 @@ class FeedbackDeliveryFreshness {
     private static final Logger log = LoggerFactory.getLogger(FeedbackDeliveryFreshness.class);
 
     private final FeedbackRepository feedback;
-    private final FeedbackSendRepository sends;
+    private final AgentActions actions;
     private final AtomicReference<@Nullable Integer> sendAttempts = new AtomicReference<>();
     private final AtomicReference<@Nullable Double> oldest = new AtomicReference<>();
 
-    FeedbackDeliveryFreshness(FeedbackRepository feedback, FeedbackSendRepository sends, MeterRegistry registry) {
+    FeedbackDeliveryFreshness(FeedbackRepository feedback, AgentActions actions, MeterRegistry registry) {
         this.feedback = feedback;
-        this.sends = sends;
+        this.actions = actions;
         Gauge.builder(PracticeMetrics.FEEDBACK_OLDEST_WAITING, oldest, FeedbackDeliveryFreshness::seconds)
                 .description("Seconds since the oldest feedback on the work that may be sent and has no posted copy;"
                         + " 0 when none waits, NaN before the first read and after a failed read")
@@ -46,10 +48,10 @@ class FeedbackDeliveryFreshness {
                     Integer current = value.get();
                     return current == null ? Double.NaN : current.doubleValue();
                 })
-                .description("Most lifetime attempts of feedback sends not DONE; NaN without a successful read")
+                .description("Most attempts of a feedback send that has not ended; NaN without a successful read")
                 .register(registry);
-        Gauge.builder(PracticeMetrics.FEEDBACK_SEND_READBACK_LIMIT, () -> FeedbackSendService.MAX_READBACK_ATTEMPTS)
-                .description("Claim count at which unresolved feedback readback stops retrying")
+        Gauge.builder(PracticeMetrics.FEEDBACK_SEND_READBACK_LIMIT, () -> FeedbackSendQueue.MAX_ATTEMPTS)
+                .description("Attempts at which a feedback send whose copies stay unresolved ends")
                 .register(registry);
     }
 
@@ -65,7 +67,8 @@ class FeedbackDeliveryFreshness {
                     e.getClass().getName());
         }
         try {
-            sendAttempts.set(sends.maxAttemptsBeforeDone());
+            sendAttempts.set(actions.maxLiveAttempts(
+                    EnumSet.of(ActionKind.DELIVER_FEEDBACK, ActionKind.EDIT_FEEDBACK, ActionKind.RETRACT_FEEDBACK)));
         } catch (RuntimeException e) {
             sendAttempts.set(null);
             log.warn(

@@ -20,10 +20,6 @@ BEGIN
   WHERE b.developer_id IS DISTINCT FROM r.developer_id OR b.developer_id IS DISTINCT FROM f.developer_id) THEN
   RAISE EXCEPTION 'Feedback basis changes the developer';
  END IF;
- IF EXISTS (SELECT FROM feedback_copy c JOIN feedback_send s ON (s.feedback_id,s.workspace_id)=(c.feedback_id,c.workspace_id)
-  WHERE (c.state='POSTED' OR c.write_started_at IS NOT NULL) AND s.action='POST' AND s.state='PENDING') THEN
-  RAISE EXCEPTION 'Existing or uncertain copy is queued for a repeat POST';
- END IF;
  IF EXISTS (SELECT FROM feedback WHERE id='00000000-0000-0000-0000-000000992161')
  AND NOT EXISTS (SELECT FROM feedback_copy WHERE id='00000000-0000-0000-0000-000000992171'
   AND state='POSTED' AND external_ref='provider:123') THEN

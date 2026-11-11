@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -11,6 +12,7 @@ import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -104,7 +106,8 @@ class ActionStore {
                 .toList();
     }
 
-    @Transactional
+    /** Commits on its own, also inside a caller's transaction: the fence must be durable before the provider call. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean beginWrite(UUID id, long epoch, Duration margin) {
         return actions.beginWrite(id, epoch, margin.toSeconds()) == 1;
     }
@@ -135,6 +138,39 @@ class ActionStore {
         Optional<Settled> settled = row.map(ActionStore::settled);
         settled.flatMap(Settled::ended).ifPresent(onEnd);
         return settled;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean holds(UUID id, long epoch) {
+        return actions.holds(id, epoch);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<LaneAction> newestInLane(long workspaceId, String laneKey) {
+        return actions.newestInLane(workspaceId, laneKey).map(row -> {
+            String reason = row.getStopReason();
+            return new LaneAction(
+                    row.getId(),
+                    ActionKind.valueOf(row.getKind()),
+                    row.getIdempotencyKey(),
+                    ActionState.valueOf(row.getState()),
+                    row.getAttempts(),
+                    row.getRereading(),
+                    row.getNextAttemptAt(),
+                    reason == null ? null : ActionStopReason.valueOf(reason),
+                    row.getCreatedAt(),
+                    row.getUpdatedAt());
+        });
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int cancelPending(long workspaceId, String laneKey) {
+        return actions.cancelPending(workspaceId, laneKey);
+    }
+
+    @Transactional(readOnly = true)
+    public int maxLiveAttempts(Collection<ActionKind> kinds) {
+        return actions.maxLiveAttempts(kinds.stream().map(ActionKind::name).toList());
     }
 
     /** Up to {@code limit} actions that {@link #endStale} can end. */

@@ -49,6 +49,8 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.ComposeRunGateway;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
@@ -96,8 +98,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeReads;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
-import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecovery;
-import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendService;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
@@ -151,6 +151,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -262,7 +263,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private FeedbackCopyRepository copies;
 
     @Autowired
-    private FeedbackSendRepository sends;
+    private FeedbackSendQueue sendQueue;
 
     @Autowired
     private ScmItemService itemSource;
@@ -304,10 +305,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private ScriptedGitHub github;
 
     @Autowired
-    private FeedbackSendRecovery recovery;
-
-    @Autowired
-    private FeedbackSendService sender;
+    private ActionExecutor executor;
 
     @Autowired
     private FeedbackDecisionService decisions;
@@ -1378,8 +1376,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .isEmpty();
             assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(review.workspaceId(), id))
                     .isEmpty();
-            assertThat(sends.findByFeedbackIdAndWorkspaceId(id, review.workspaceId()))
-                    .isEmpty();
+            assertThat(sendQueue.current(review.workspaceId(), id)).isEmpty();
             assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getPublicReviewDigest())
                     .isNull();
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
@@ -1429,8 +1426,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(feedback.findByIdAndWorkspaceId(id, owner.workspaceId())).isEmpty();
             assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(owner.workspaceId(), id))
                     .isEmpty();
-            assertThat(sends.findByFeedbackIdAndWorkspaceId(id, owner.workspaceId()))
-                    .isEmpty();
+            assertThat(sendQueue.current(owner.workspaceId(), id)).isEmpty();
             assertThat(github.threads().on(ScriptedGitHub.pullRequest(owner.repository(), owner.pullRequestNumber())))
                     .isEmpty();
             assertThat(github.threads().on(ScriptedGitHub.pullRequest(other.repository(), other.pullRequestNumber())))
@@ -1577,15 +1573,14 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         assertThat(copy.getState()).isEqualTo(FeedbackCopyState.PLANNED);
                         assertThat(copy.getExternalRef()).isNull();
                     });
-            assertThat(sends.findByFeedbackIdAndWorkspaceId(feedbackId, review.workspaceId()))
-                    .hasValueSatisfying(send -> {
-                        assertThat(send.getAction()).isEqualTo(FeedbackSendAction.POST);
-                        assertThat(send.getState()).isEqualTo(FeedbackSendState.PENDING);
-                    });
+            assertThat(sendQueue.current(review.workspaceId(), feedbackId)).hasValueSatisfying(send -> {
+                assertThat(send.getAction()).isEqualTo(FeedbackSendAction.POST);
+                assertThat(send.getState()).isEqualTo(FeedbackSendState.PENDING);
+            });
             assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getPublicReviewDigest())
                     .isEqualTo(prepared.packageDigest());
 
-            recovery.recover();
+            ActionTestSupport.drain(executor, jdbc);
 
             var posted =
                     github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber()));
@@ -1607,7 +1602,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         assertThat(copy.getWriteStartedAt()).isNotNull();
                         assertThat(copy.getPostedAt()).isNotNull();
                     });
-            assertThat(sends.findByFeedbackIdAndWorkspaceId(feedbackId, review.workspaceId()))
+            assertThat(sendQueue.current(review.workspaceId(), feedbackId))
                     .hasValueSatisfying(send -> assertThat(send.getState()).isEqualTo(FeedbackSendState.DONE));
             assertThat(count(
                             PracticeMetrics.FEEDBACK_SETTLED,
@@ -1766,7 +1761,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             .toList());
             assertThat(replayed.packageDigest()).isEqualTo(prepared.packageDigest());
 
-            recovery.recover();
+            ActionTestSupport.drain(executor, jdbc);
 
             assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
                     .isEmpty();
@@ -1795,7 +1790,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             pull.setHeadRefOid("d".repeat(40));
             pullRequests.saveAndFlush(pull);
 
-            recovery.recover();
+            ActionTestSupport.drain(executor, jdbc);
 
             assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
                     .isEmpty();
@@ -1812,7 +1807,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         assertThat(copy.getWriteStartedAt()).isNull();
                         assertThat(copy.getExternalRef()).isNull();
                     });
-            assertThat(sends.findByFeedbackIdAndWorkspaceId(feedbackId, review.workspaceId()))
+            assertThat(sendQueue.current(review.workspaceId(), feedbackId))
                     .hasValueSatisfying(send -> assertThat(send.getState()).isEqualTo(FeedbackSendState.DONE));
         }
     }
@@ -1826,7 +1821,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
             var thread = ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber());
 
-            recovery.recover();
+            ActionTestSupport.drain(executor, jdbc);
 
             assertThat(github.threads().on(thread)).isEmpty();
             assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
@@ -1841,6 +1836,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             null,
                             null,
                             digests.current(review.workspaceId(), feedbackId)));
+            ActionTestSupport.drain(executor, jdbc);
 
             var posted = github.threads().on(thread);
             assertThat(posted)
@@ -1898,6 +1894,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             null,
                             null,
                             digests.current(review.workspaceId(), feedbackId)));
+            // The approved post's readback resumes the composition.
+            ActionTestSupport.drain(executor, jdbc);
             var resumed = jobs.findById(ended.getId()).orElseThrow();
             assertThat(resumed.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
             assertThat(jdbc.queryForObject(
@@ -1947,7 +1945,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .pieces()
                     .getFirst()
                     .feedbackId();
-            sender.send(review.workspaceId(), id);
+            ActionTestSupport.drain(executor, jdbc);
             assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId())
                             .orElseThrow()
                             .getState())
@@ -1992,7 +1990,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .pieces()
                     .getFirst()
                     .feedbackId();
-            sender.send(review.workspaceId(), id);
+            ActionTestSupport.drain(executor, jdbc);
             assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId())
                             .orElseThrow()
                             .getState())
@@ -2295,9 +2293,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .filteredOn(row -> row.getDestination() == FeedbackDestination.ON_WORK)
                     .singleElement()
                     .satisfies(onWork -> {
-                        assertThat(onWork.getState()).isNotEqualTo(FeedbackState.WITHHELD);
+                        assertThat(onWork.getState()).isEqualTo(FeedbackState.DELIVERED);
                         assertThat(onWork.getBody()).contains(SUMMARY);
                     });
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
+                    .singleElement()
+                    .satisfies(comment -> assertThat(comment.body()).contains(PostedText.of(SUMMARY)));
             // The run's end released the inputs it held: holding the attempt again prepares anew.
             var released = new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null);
             var attempt = new ResultAdmissionService.AdmissionIdentity(
@@ -2368,20 +2369,25 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
      */
     private ObjectNode composerAnswer(JsonNode request, UUID result) {
         var messages = request.path("messages");
+        var checks = new HashSet<String>();
+        boolean published = false;
+        for (JsonNode message : messages)
+            for (JsonNode call : message.path("tool_calls")) {
+                String name = call.path("function").path("name").asString();
+                if (name.equals("check_package")) checks.add(call.path("id").asString());
+                if (name.equals("publish_package")) published = true;
+            }
         boolean asked = false;
         String draftId = null;
         for (JsonNode message : messages) {
             if (!message.path("role").asString().equals("tool")) continue;
             asked = true;
+            if (!checks.contains(message.path("tool_call_id").asString())) continue;
             String checked = mapper.readTree(message.path("content").asString("{}"))
                     .path("draftId")
                     .asString(null);
             if (checked != null) draftId = checked;
         }
-        boolean published = false;
-        for (JsonNode message : messages)
-            for (JsonNode call : message.path("tool_calls"))
-                if (call.path("function").path("name").asString().equals("publish_package")) published = true;
         var message = mapper.createObjectNode().put("role", "assistant");
         if (!asked && messages.toString().contains(QUOTE)) {
             call(message, "check_package", """

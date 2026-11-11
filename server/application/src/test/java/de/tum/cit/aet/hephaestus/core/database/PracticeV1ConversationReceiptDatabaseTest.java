@@ -114,8 +114,8 @@ class PracticeV1ConversationReceiptDatabaseTest {
                 "55000");
         assertThat(PracticeMigrationFixture.column(
                         database,
-                        "SELECT count(*)::text FROM feedback_send WHERE"
-                                + " feedback_id='00000000-0000-0000-0000-000000998161'"))
+                        "SELECT count(*)::text FROM agent_action WHERE"
+                                + " lane_key='feedback:00000000-0000-0000-0000-000000998161'"))
                 .containsExactly("0");
     }
 

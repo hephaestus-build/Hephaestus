@@ -1,5 +1,9 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionState;
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -14,18 +18,15 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackOutcomes;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicationContext;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackStoreService;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackVisibilityService;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -40,11 +41,13 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class FeedbackSendTransactions {
-    private static final Duration LEASE = Duration.ofMinutes(2);
+    /** How long an unresolved send waits before it reads the provider back again. */
+    private static final Duration REREAD = Duration.ofSeconds(30);
+
     private final FeedbackStoreService store;
     private final FeedbackOutcomes outcomes;
     private final FeedbackCopyRepository copies;
-    private final FeedbackSendRepository sends;
+    private final AgentActions actions;
     private final FeedbackVisibilityService visibility;
     private final Clock clock;
     private final PersonDataWriteFence privacy;
@@ -59,16 +62,13 @@ public class FeedbackSendTransactions {
         }
     }
 
+    /** The feedback and its copies as the claimed send finds them; {@code null} when the feedback is gone. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public @Nullable Attempt claim(long workspaceId, UUID feedbackId, String owner) {
-        var row = store.lock(workspaceId, feedbackId);
-        var prior = sends.lockByFeedbackId(workspaceId, feedbackId);
-        Instant now = clock.instant();
-        if (prior.isEmpty()
-                || prior.get().getState() == FeedbackSendState.DONE
-                || sends.claim(workspaceId, feedbackId, owner, now, now.plus(LEASE)) != 1) return null;
+    public @Nullable Attempt claim(long workspaceId, UUID feedbackId, ActionAttempt owner) {
+        var row = feedback.lockByIdAndWorkspaceId(feedbackId, workspaceId);
+        if (row.isEmpty()) return null;
         var children = copies.lockByFeedbackId(workspaceId, feedbackId);
-        return new Attempt(row, prior.get().getAction(), children, prior.get().getAttempts() + 1);
+        return new Attempt(row.get(), FeedbackSendQueue.actionOf(owner.idempotencyKey()), children, owner.attempt());
     }
 
     /**
@@ -79,17 +79,18 @@ public class FeedbackSendTransactions {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean fence(
-            long workspaceId, UUID feedbackId, String owner, List<UUID> attempting, List<CopyReceipt> completed) {
+            long workspaceId,
+            UUID feedbackId,
+            ActionAttempt owner,
+            List<UUID> attempting,
+            List<CopyReceipt> completed) {
         if (!attempting.isEmpty())
             publication.itemOf(workspaceId, feedbackId).ifPresent(itemId -> itemLocks.lock(workspaceId, itemId));
         feedback.lockCorrectionFamily(workspaceId, feedbackId);
         var row = store.lock(workspaceId, feedbackId);
-        if (!owns(workspaceId, feedbackId, owner)) return false;
+        if (!owns(owner)) return false;
         record(row, completed);
-        if (visibility.withdrawn(workspaceId, feedbackId)) {
-            settle(workspaceId, feedbackId, owner, false);
-            return false;
-        }
+        if (visibility.withdrawn(workspaceId, feedbackId)) return false;
         if (row.getComposition().hasNonNull("editOf")) {
             var previous = store.lock(
                     workspaceId,
@@ -105,11 +106,8 @@ public class FeedbackSendTransactions {
             store.withhold(row, Objects.requireNonNull(check.reason()));
             return false;
         }
-        if (!attempting.isEmpty()
-                && sends.lockByFeedbackId(workspaceId, feedbackId)
-                        .filter(send -> send.getAction() == FeedbackSendAction.POST
-                                || send.getAction() == FeedbackSendAction.EDIT)
-                        .isPresent()) {
+        var action = FeedbackSendQueue.actionOf(owner.idempotencyKey());
+        if (!attempting.isEmpty() && (action == FeedbackSendAction.POST || action == FeedbackSendAction.EDIT)) {
             var refusal = publication.refusal(row);
             if (refusal.isPresent()) {
                 store.withhold(row, refusal.get());
@@ -128,10 +126,10 @@ public class FeedbackSendTransactions {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void receipt(long workspaceId, UUID feedbackId, String owner, List<CopyReceipt> receipts) {
+    public void receipt(long workspaceId, UUID feedbackId, ActionAttempt owner, List<CopyReceipt> receipts) {
         feedback.lockCorrectionFamily(workspaceId, feedbackId);
         var row = store.lock(workspaceId, feedbackId);
-        if (owns(workspaceId, feedbackId, owner)) {
+        if (owns(owner)) {
             record(row, receipts);
             var projection = FeedbackSendStateMachine.project(
                     row, copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, feedbackId));
@@ -199,52 +197,65 @@ public class FeedbackSendTransactions {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void withholdCopies(
-            long workspaceId, UUID feedbackId, String owner, List<UUID> copyIds, FeedbackStopReason reason) {
+            long workspaceId, UUID feedbackId, ActionAttempt owner, List<UUID> copyIds, FeedbackStopReason reason) {
         store.lock(workspaceId, feedbackId);
-        if (!owns(workspaceId, feedbackId, owner)) return;
+        if (!owns(owner)) return;
         for (UUID copyId : copyIds) copies.withholdCopy(workspaceId, feedbackId, copyId, reason.name());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void absent(long workspaceId, UUID feedbackId, String owner, UUID copyId) {
+    public void absent(long workspaceId, UUID feedbackId, ActionAttempt owner, UUID copyId) {
         store.lock(workspaceId, feedbackId);
-        if (owns(workspaceId, feedbackId, owner))
+        if (owns(owner))
             copies.recordAbsent(workspaceId, feedbackId, copyId, "Provider readback proved the copy is absent.");
     }
 
+    /**
+     * Settles the send's copies. While a copy's write may have reached the provider, the send reads it back again
+     * later; its last attempt then ends it uncertain. The correction that a settled send may still owe is decided when
+     * the action ends ({@link #ended}).
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void finish(long workspaceId, UUID feedbackId, String owner, boolean exhausted) {
-        settle(workspaceId, feedbackId, owner, exhausted);
-    }
-
-    private void settle(long workspaceId, UUID feedbackId, String owner, boolean exhausted) {
+    public ActionResult finish(long workspaceId, UUID feedbackId, ActionAttempt owner) {
         var row = store.lock(workspaceId, feedbackId);
-        if (!owns(workspaceId, feedbackId, owner)) return;
-        var active = sends.lockByFeedbackId(workspaceId, feedbackId).orElseThrow();
+        if (!owns(owner)) return new ActionResult.Abandoned();
+        boolean retract = FeedbackSendQueue.actionOf(owner.idempotencyKey()) == FeedbackSendAction.RETRACT;
         var children = copies.lockByFeedbackId(workspaceId, feedbackId);
         boolean unresolved = children.stream()
                 .anyMatch(c -> c.getState() == FeedbackCopyState.WRITE_STARTED
-                        || (active.getAction() == FeedbackSendAction.RETRACT
-                                && c.getReadback() == FeedbackCopyReadback.TRANSIENT));
+                        || (retract && c.getReadback() == FeedbackCopyReadback.TRANSIENT));
+        project(row, children, unresolved);
+        return unresolved ? new ActionResult.Reread(REREAD) : new ActionResult.Done(null);
+    }
+
+    /**
+     * Ends a send's domain side in the transaction that ends its action. A send whose copies are resolved queues the
+     * correction of a mark that changed under it, also when it ended without settling. A decision or a mark that commits while the send runs sees the send running and leaves
+     * the correction to it; deciding here, under the feedback lock and with the action already ended, sees every such
+     * change. A send that ended without settling, such as one whose lease ran out on its last attempt, projects its
+     * copies.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void ended(long workspaceId, UUID feedbackId, ActionState state) {
+        var row = feedback.lockByIdAndWorkspaceId(feedbackId, workspaceId);
+        if (row.isEmpty()) return;
+        var children = copies.lockByFeedbackId(workspaceId, feedbackId);
+        boolean unresolved = children.stream().anyMatch(c -> c.getState() == FeedbackCopyState.WRITE_STARTED);
+        if (state != ActionState.DONE) project(row.get(), children, unresolved);
+        if (!unresolved && asksForCorrection(row.get(), copies.lockByFeedbackId(workspaceId, feedbackId)))
+            sendQueue.follow(row.get(), FeedbackSendAction.RETRACT);
+    }
+
+    private void project(Feedback row, List<FeedbackCopy> children, boolean unresolved) {
+        long workspaceId = row.getWorkspaceId();
+        UUID feedbackId = row.getId();
         // A finished send leaves no copy planned: nothing sends it later, and a retry needs it failed.
-        if (!unresolved
+        boolean failed = !unresolved
                 && !visibility.withdrawn(workspaceId, feedbackId)
-                && copies.failUnstarted(workspaceId, feedbackId) > 0)
-            children = copies.lockByFeedbackId(workspaceId, feedbackId);
-        var projection = FeedbackSendStateMachine.project(row, children);
-        Instant now = clock.instant();
-        if (sends.settle(
-                        workspaceId,
-                        feedbackId,
-                        owner,
-                        unresolved && !exhausted ? FeedbackSendState.UNCERTAIN.name() : FeedbackSendState.DONE.name(),
-                        now,
-                        now.plusSeconds(30),
-                        unresolved ? "Provider visibility is unknown." : null)
-                != 1) return;
+                && copies.failUnstarted(workspaceId, feedbackId) > 0;
+        var projection = FeedbackSendStateMachine.project(
+                row, failed ? copies.lockByFeedbackId(workspaceId, feedbackId) : children);
         outcomes.update(row, projection.state(), projection.stopReason(), projection.deliveredAt());
-        if (!unresolved && asksForCorrection(row, children))
-            sendQueue.queue(row, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING);
     }
 
     /**
@@ -269,11 +280,10 @@ public class FeedbackSendTransactions {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void error(long workspaceId, UUID feedbackId, String owner) {
+    public void error(long workspaceId, UUID feedbackId, ActionAttempt owner) {
         store.lock(workspaceId, feedbackId);
-        if (!owns(workspaceId, feedbackId, owner)) return;
-        var active = sends.lockByFeedbackId(workspaceId, feedbackId).orElseThrow();
-        if (active.getAction() == FeedbackSendAction.RETRACT) {
+        if (!owns(owner)) return;
+        if (FeedbackSendQueue.actionOf(owner.idempotencyKey()) == FeedbackSendAction.RETRACT) {
             for (var copy : copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, feedbackId)) {
                 if (copy.getState() == FeedbackCopyState.POSTED || copy.getState() == FeedbackCopyState.RETRACTED)
                     copies.recordError(
@@ -298,13 +308,8 @@ public class FeedbackSendTransactions {
                         "Provider call did not produce a confirmed receipt.");
     }
 
-    private boolean owns(long workspaceId, UUID feedbackId, String owner) {
-        var send = sends.lockByFeedbackId(workspaceId, feedbackId);
-        return send.filter(s -> s.getState() == FeedbackSendState.SENDING
-                        && owner.equals(s.getLeaseOwner())
-                        && s.getLeaseExpiresAt() != null
-                        && s.getLeaseExpiresAt().isAfter(clock.instant()))
-                .isPresent();
+    private boolean owns(ActionAttempt owner) {
+        return actions.holds(owner);
     }
 
     @Transactional
@@ -314,36 +319,36 @@ public class FeedbackSendTransactions {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void correction(long workspaceId, UUID feedbackId, String owner, UUID copyId, String state) {
+    public void correction(long workspaceId, UUID feedbackId, ActionAttempt owner, UUID copyId, String state) {
         store.lock(workspaceId, feedbackId);
-        if (owns(workspaceId, feedbackId, owner)) copies.confirmCorrection(workspaceId, feedbackId, copyId, state);
+        if (owns(owner)) copies.confirmCorrection(workspaceId, feedbackId, copyId, state);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void correctionError(
             long workspaceId,
             UUID feedbackId,
-            String owner,
+            ActionAttempt owner,
             UUID copyId,
             @Nullable FeedbackCopyReadback readback,
             String error) {
         store.lock(workspaceId, feedbackId);
-        if (owns(workspaceId, feedbackId, owner))
+        if (owns(owner))
             copies.recordError(workspaceId, feedbackId, copyId, null, readback == null ? null : readback.name(), error);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean mayRestore(long workspaceId, UUID feedbackId, String owner) {
+    public boolean mayRestore(long workspaceId, UUID feedbackId, ActionAttempt owner) {
         var row = store.lock(workspaceId, feedbackId);
-        return owns(workspaceId, feedbackId, owner)
+        return owns(owner)
                 && !visibility.withdrawn(workspaceId, feedbackId)
                 && store.check(row, true).allowed();
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean holdsLease(long workspaceId, UUID feedbackId, String owner) {
+    public boolean holdsLease(long workspaceId, UUID feedbackId, ActionAttempt owner) {
         store.lock(workspaceId, feedbackId);
-        return owns(workspaceId, feedbackId, owner);
+        return owns(owner);
     }
 
     public static final class RecipientWriteRefused extends RuntimeException {
@@ -355,14 +360,14 @@ public class FeedbackSendTransactions {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void refuseRecipient(long workspaceId, UUID feedbackId, String owner) {
+    public void refuseRecipient(long workspaceId, UUID feedbackId, ActionAttempt owner) {
         var row = store.lock(workspaceId, feedbackId);
-        if (owns(workspaceId, feedbackId, owner)) store.withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
+        if (owns(owner)) store.withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void refuseTarget(long workspaceId, UUID feedbackId, String owner, FeedbackStopReason reason) {
+    public void refuseTarget(long workspaceId, UUID feedbackId, ActionAttempt owner, FeedbackStopReason reason) {
         var row = store.lock(workspaceId, feedbackId);
-        if (owns(workspaceId, feedbackId, owner)) store.withhold(row, reason);
+        if (owns(owner)) store.withhold(row, reason);
     }
 }
