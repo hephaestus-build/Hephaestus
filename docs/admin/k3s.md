@@ -23,7 +23,7 @@ A run with the files of a newer release upgrades the host.
 - If `ufw` is active, rules that let in ports 80 and 443 and the k3s networks: `sudo ufw allow 80,443/tcp`, `sudo ufw allow from 10.42.0.0/16`, and `sudo ufw allow from 10.43.0.0/16`.
 - Outbound HTTPS to the destinations in [Network egress](./network-egress#one-host-on-k3s).
 - `curl`, `jq`, `openssl`, `python3`, Cosign, and the Helm CLI, as [Verify the release chart](./kubernetes#verify-the-release-chart) describes. Ubuntu includes `python3`.
-- A clock that NTP keeps synchronized, as [Clocks](./install#clocks) describes.
+- A clock that NTP keeps synchronized, as [Clocks](./helm-chart#clocks) describes.
 - A GitHub OAuth app for sign-in, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes. Its callback URL is `https://<host>/api/login/oauth2/code/github`.
 
 ## What the installer checks

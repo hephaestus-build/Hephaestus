@@ -1,9 +1,8 @@
 ---
 title: Runtime roles
 description: The three roles one Hephaestus image boots into, and why the webhook role runs in its own container.
+page_type: reference
 ---
-
-# Runtime Roles
 
 Hephaestus ships **one JAR** that boots in any of three runtime roles.
 The same artifact can run as an application server, worker pod, or webhook receiver.
@@ -959,7 +958,7 @@ The sandbox gateway then refuses the review's next model call.
 The worker that runs the review stops its sandbox at its next lease renewal (`hephaestus.agent.capacity.lease-renewal`).
 A requeue or a reap of the review ends it in the same way.
 
-## See also
+## Decision records
 
 The full design rationale lives in the architecture decision records, which are kept in the
 repository rather than on this site:

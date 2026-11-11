@@ -1,11 +1,9 @@
 ---
-id: dsms
 sidebar_position: 3
 title: Data-Protection Documentation
 description: What an operator records under Arts. 28, 30 and 35 GDPR, and the source-governance and personal-data controls that Hephaestus ships.
+page_type: reference
 ---
-
-# Hephaestus — Data-Protection Documentation
 
 This package describes the processing that Hephaestus ships.
 Each operator completes its own record of processing before it collects data.

@@ -1,9 +1,8 @@
 ---
 title: Repair activity history
 description: Check stored activity against provider data and repair gaps without restoring erased people.
+page_type: how-to
 ---
-
-# Repair activity history
 
 Use this procedure when a workspace has missing activity before a date or fewer pull requests or merge requests than the provider.
 Keep public activity pages disabled until you verify the repair.
@@ -155,7 +154,6 @@ Existing results are not rewritten.
 2. Open the workspace's integration settings.
 3. Select its GitHub or GitLab connection and select **Run backfill**.
 4. Check the job's progress and repository errors.
-5. Repeat the read-only queries after the job finishes.
 
 The existing workspace-admin API provides the same action:
 
@@ -197,7 +195,14 @@ Rate limits, cancellation, and provider error cooldowns still apply.
 Recent-sync timestamps are unchanged.
 A repeat repair does not insert duplicate ledger entries.
 
-## Compare a GitHub sample
+## Check that it worked
+
+1. Run the read-only queries of [Inspect the gap](#inspect-the-gap) again.
+2. Compare the stored counts with the provider's total.
+   The counts match, or the job warnings name each repository that it could not repair.
+3. For GitHub, compare a sample, as [Compare a GitHub sample](#compare-a-github-sample) describes.
+
+### Compare a GitHub sample
 
 Use a token that can read the same repository as the workspace connection.
 Replace `OWNER`, `REPO`, and `NUMBER`.

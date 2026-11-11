@@ -1,10 +1,8 @@
 ---
-id: public-activity
 title: Public activity pages
 description: Publication settings and privacy controls for public repository activity.
+page_type: reference
 ---
-
-# Public activity pages
 
 A public activity page shows human contributions to public GitHub and GitLab repositories.
 It includes pull requests, reviews, and issues from workspace members and outside contributors.
@@ -148,7 +146,6 @@ Send only the settings that you change. Omitted or null fields stay unchanged. T
 Changes are audited.
 
 The page is available only when the instance allows it and the active workspace enables it.
-The old whole-workspace public flag no longer grants anonymous access.
 
 **Allow search engines** defaults to off.
 The JSON response then carries `X-Robots-Tag: noindex`.
@@ -238,7 +235,6 @@ A successful sync can restore publication when it confirms that the repository i
 `HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE` supplies
 `hephaestus.public-activity.repository-visibility-max-age` and defaults to `48h`.
 The value must be a positive duration.
-This is twice the default daily `hephaestus.sync.cron` interval (03:00 server time).
 Use twice your configured metadata sync interval when you change the cadence.
 The limit is enforced during each public query, without a cleanup job.
 
@@ -246,7 +242,7 @@ If metadata reads stop, publication stops no later than this limit after the las
 This includes disabled sync, credentials that no longer work, and failed metadata reads.
 A failed metadata fetch does not renew the confirmation.
 The separate visibility confirmation does not advance when only issues, pull requests, or other resources sync.
-Repositories without a successful metadata confirmation after this upgrade are not published.
+A repository without a successful metadata confirmation is not published.
 Run a repository sync before enabling a page.
 
 GitLab project create, rename, transfer and update events refresh stored visibility.
@@ -266,7 +262,7 @@ Every response carries `Cache-Control: no-store`, so no browser or shared cache 
 The existing shared rate limiter defaults to 60 anonymous requests per minute per client IP across workspace slugs.
 The Helm chart exposes no value to change this rate limit.
 Signed-in requests do not consume this anonymous IP budget.
-It refuses requests if its rate-limit backend is unavailable.
+The rate limiter refuses requests if its backend is unavailable.
 Proxy trust comes from the servlet container, not a second parser for forwarded headers.
 
 Publication changes apply to new server requests.

@@ -11,10 +11,10 @@ export type Guide = (typeof GUIDES)[number];
 const PAGE_TYPES: Record<Guide, readonly string[]> = {
 	user: ["overview", "tutorial", "feature", "reference"],
 	admin: ["overview", "tutorial", "how-to", "reference", "explanation", "troubleshooting"],
-	contributor: ["overview", "how-to", "reference", "explanation"],
+	contributor: ["overview", "tutorial", "how-to", "reference", "explanation"],
 };
 // Every page of these guides declares a type, so each page answers to every rule.
-const FULLY_CHECKED = new Set<Guide>(["user"]);
+const FULLY_CHECKED = new Set<Guide>(["user", "admin"]);
 
 const CALLOUTS = new Set(["note", "tip", "caution"]);
 const SECTION_NAMES = new Map([
@@ -270,16 +270,16 @@ async function pagesOf(directory: string): Promise<string[]> {
 	});
 	return (
 		entries
-			// A leading `_` marks a partial that pages import; Docusaurus does not publish it.
-			.filter(
-				(entry) => entry.isFile() && /\.mdx?$/u.test(entry.name) && !entry.name.startsWith("_"),
-			)
+			.filter((entry) => entry.isFile() && /\.mdx?$/u.test(entry.name))
 			.map((entry) =>
 				path
 					.relative(repositoryRoot, path.join(entry.parentPath, entry.name))
 					.split(path.sep)
 					.join("/"),
 			)
+			// A leading `_` on a file or a directory marks a partial that pages import; Docusaurus
+			// does not publish it.
+			.filter((file) => !file.split("/").some((segment) => segment.startsWith("_")))
 			.toSorted()
 	);
 }

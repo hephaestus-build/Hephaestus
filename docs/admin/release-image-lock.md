@@ -1,10 +1,8 @@
 ---
-id: release-image-lock
 title: Release image lock
 description: Verify the image digests selected by a Hephaestus release.
+page_type: reference
 ---
-
-# Release image lock
 
 Each release publishes `release-vX.Y.Z.chart.json` with its Sigstore bundle.
 This joint lock records the release, source commit, chart repository, chart version and chart digest.

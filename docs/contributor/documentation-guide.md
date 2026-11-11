@@ -11,8 +11,8 @@ The [product vocabulary](./practice-feedback-language.md) owns the product terms
 Read this guide before you add a page or move a fact to another guide.
 
 The rules apply to a guide when all of its pages declare a `page_type`.
-Today, that is the user guide.
-In the admin and contributor guides, a new page and a page that declares its type follow the rules.
+Today, that is the user guide and the admin guide.
+In the contributor guide, a new page and a page that declares its type follow the rules.
 
 ## The three guides
 
@@ -22,7 +22,7 @@ Each fact goes in the guide of the reader who acts on it.
 | --- | --- | --- | --- | --- |
 | User (`docs/user/`) | A developer or a workspace admin who uses Hephaestus in the web app, on GitHub or GitLab, or in Slack | Get feedback on their work, understand it, act on it, and set up their workspace | Product voice | overview, tutorial, feature, reference |
 | Admin (`docs/admin/`) | An operator or an instance admin who installs, configures, upgrades, and secures an instance | Keep an instance available, safe, and current | STE | overview, tutorial, how-to, reference, explanation, troubleshooting |
-| Contributor (`docs/contributor/`) | An engineer or a coding agent that changes the code | Make a correct change and know why the system works as it does | STE | overview, how-to, reference, explanation |
+| Contributor (`docs/contributor/`) | An engineer or a coding agent that changes the code | Make a correct change and know why the system works as it does | STE | overview, tutorial, how-to, reference, explanation |
 
 The place of a task decides between the user and the admin guide.
 A task in the web app for a workspace, such as the feedback mode, goes in the user guide.
@@ -54,7 +54,7 @@ Declare the type in the front matter as `page_type`.
 | `page_type` | The reader wants to | Example |
 | --- | --- | --- |
 | `overview` | Find the right page in a guide. Each guide has one. | `user/overview` |
-| `tutorial` | Get a first result from start to end, on one path | `user/getting-started`, `admin/first-steps` |
+| `tutorial` | Get a first result from start to end, on one path | `user/getting-started`, `admin/first-steps`, `contributor/first-change` |
 | `how-to` | Finish one task | `admin/backup-restore` |
 | `feature` | Use one area of the product. Only in the user guide. | `user/practice-profile` |
 | `reference` | Look up a fact | `admin/configuration-reference`, `user/accessibility` |
@@ -225,23 +225,25 @@ Do not put two callouts in a row.
 ## Checks
 
 [Check a docs page](./check-a-docs-page.md) gives the steps before a pull request.
-`gate:docs-pages` checks these rules in the user guide:
+`gate:docs-pages` checks these rules on every page of the user guide and the admin guide:
 
 - Each page has a `title`, a `description` of at most 160 characters, and a `page_type` that the guide allows. No page sets an `id`.
 - No page has a `#` heading in its body.
 - No section uses a name from the "Do not use" column.
+- A tutorial has numbered steps and a `Next steps` section. A how-to page has numbered steps and a `Check that it worked` section.
+- A `Troubleshooting` section is the last section.
+- A callout is a note, a tip, or a caution.
+
+In the user guide, it also checks these rules:
+
 - Only the overview and reference pages link to the contributor guide.
 - No inline code names a repository command or a source path.
 - A page shows the product with `Screenshot`, not with a Markdown image.
 - Each `Screenshot` has alt text of at most 155 characters.
 - Each `Screenshot` has a light and a dark image of at most 150 KB.
 
-In the admin and contributor guides, the gate checks on every page that a callout is a note, a tip, or a caution.
-It checks the other rules below on a page that declares its type:
-
-- A declared `page_type` is one that the guide allows.
-- A tutorial has numbered steps and a `Next steps` section. A how-to page has numbered steps and a `Check that it worked` section.
-- A `Troubleshooting` section is the last section.
+In the contributor guide, the gate checks on every page that a callout is a note, a tip, or a caution.
+On a page that declares its type, it also checks that the guide allows the type, and the rules for numbered steps and closing sections.
 
 A guide gets the full check when all its pages declare a type.
 Vale checks the sentences, as the [writing standard](./simplified-technical-english.md#machine-checks-and-human-review) describes.
