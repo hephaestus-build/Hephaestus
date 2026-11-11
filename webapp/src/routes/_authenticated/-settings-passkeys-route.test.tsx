@@ -1,13 +1,13 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(() => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
 
 /** A browser that can hold passkeys; no test here reaches its prompt. */
 class BrowserCredential {

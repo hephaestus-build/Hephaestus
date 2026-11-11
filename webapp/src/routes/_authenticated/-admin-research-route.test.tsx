@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, assert, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, assert, describe, expect, it, vi } from "vitest";
 
 import { getPasskeyStatusOptions } from "@/api/@tanstack/react-query.gen";
 import type {
@@ -15,10 +15,9 @@ import type { Wire } from "@/lib/dates";
 import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(() => loadRouteCode("/admin/research"), ROUTE_RENDER_WAIT.timeout);
 
 const DATASET = "6f1c2b8e-4d3a-4f6b-9a1e-2c7d8e9f0a1b";
 const KEY = "p_abcdefghijklmnopqrstuvwxyz";

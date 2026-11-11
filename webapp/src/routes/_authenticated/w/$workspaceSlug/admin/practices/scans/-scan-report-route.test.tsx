@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ScanReport, ScanSummary } from "@/api/types.gen";
 import { SCAN_POLL_MS } from "@/components/admin/practice-scans/scan-display";
@@ -10,7 +10,7 @@ import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 import {
 	adminHandlers,
@@ -25,8 +25,10 @@ import {
 	type WireProblem,
 } from "./-scan-server";
 
-// Route mounting loads the admin layout and lazy modules; allow time for the first render.
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(
+	() => loadRouteCode("/w/acme/admin/practices/reviews/problems", "/w/acme/admin/practices/scans/a0000000-0000-4000-8000-000000000001"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const REPORT_URL = `/w/acme/admin/practices/scans/${SCAN_ID}`;
 

@@ -1,15 +1,19 @@
 import { act, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { AdminWorkspaceView } from "@/api/types.gen";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	renderRouteAtWithRouter,
+} from "@/test/router-harness";
 
-// A case mounts the whole app chrome, whose route modules are imported lazily.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(() => loadRouteCode("/settings", "/admin"), ROUTE_RENDER_WAIT.timeout);
 
 /**
  * `/settings` and the instance console name no workspace in their URL, and the chrome renders on

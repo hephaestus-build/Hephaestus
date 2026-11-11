@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { deferred } from "@/test/async";
 
 import {
@@ -12,9 +12,19 @@ import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { authClient } from "@/runtime/auth/auth-client";
-import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(
+	() =>
+		loadRouteCode(
+			"/w/acme/practice-profile",
+			"/w/acme/onboarding",
+			"/w/acme/admin/onboarding",
+			"/w/acme/activity",
+			"/w/acme/teams",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 function mockWorkspace(data: WorkspaceOnboarding) {
 	server.use(

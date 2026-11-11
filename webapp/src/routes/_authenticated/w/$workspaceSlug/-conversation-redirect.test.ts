@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { http, HttpResponse } from "msw";
-import { expect, it, vi } from "vitest";
+import { beforeAll, expect, it } from "vitest";
 
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -9,8 +9,9 @@ import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { workspaceRewrite } from "@/runtime/workspace-address";
 import { ConversationFake } from "@/test/conversation-server";
+import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(() => loadRouteCode("/w/acme/mentor", "/w/acme/conversation"), ROUTE_RENDER_WAIT.timeout);
 
 const thread = "65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed";
 const entry = "e9999999-0000-4000-8000-000000000000";

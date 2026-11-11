@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { assert, describe, expect, it, vi } from "vitest";
+import { beforeAll, assert, describe, expect, it } from "vitest";
 
 import {
 	getReviewOverviewQueryKey,
@@ -27,9 +27,22 @@ import {
 } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
 import { deferred, sleep } from "@/test/async";
 import { levelsOpenedBy } from "@/test/detail-stack";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, testQueryClient } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(
+	() =>
+		loadRouteCode(
+			"/w/acme/admin/practices/reviews",
+			"/w/acme/admin/practices/reviews/feedback",
+			"/w/acme/admin/practices/reviews/overview",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const FEEDBACK_ID = awaitingApprovalFeedbackDetail.id;
 const CONTENT_DIGEST = awaitingApprovalFeedbackDetail.contentDigest;

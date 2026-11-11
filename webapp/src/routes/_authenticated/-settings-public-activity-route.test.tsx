@@ -1,14 +1,14 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import type { PublicActivityChoice } from "@/api/types.gen";
 import { server } from "@/mocks/server";
 import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(() => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
 
 describe("the account's public activity choice on the settings page", () => {
 	it("hides the account on every public page at once, and shows it again", async () => {

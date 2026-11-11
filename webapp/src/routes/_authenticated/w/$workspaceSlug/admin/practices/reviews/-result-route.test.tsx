@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	getOwnResultQueryKey,
@@ -15,9 +15,17 @@ import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { server } from "@/mocks/server";
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, testQueryClient } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(
+	() => loadRouteCode("/w/acme/admin/practices/reviews/results"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 // jsdom needs an IntersectionObserver stub for paged lists.
 beforeEach(() => {

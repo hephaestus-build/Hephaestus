@@ -2,7 +2,7 @@ import { focusManager } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { EARLIER_REVIEWS_COUNTED } from "@/components/practice-vocabulary/standing-basis-defs";
@@ -15,13 +15,15 @@ import {
 	TILES_BY_WINDOW,
 } from "@/stories/practices-across-the-workspace-story-data";
 import { deferred, sleep } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 /** The note's title as it renders, with its period, so its absence is checked on the real words. */
 const EARLIER_NOTE = `${EARLIER_REVIEWS_COUNTED.title}.`;
 
-// Mounting the real route pulls in the whole app shell and its lazy modules.
-vi.setConfig({ testTimeout: ROUTE_RENDER_WAIT.timeout });
+beforeAll(
+	() => loadRouteCode("/w/acme/practices-across-the-workspace", "/w/acme/practice-profile"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const PAGE = "/w/acme/practices-across-the-workspace";
 const PROFILE = "/w/acme/practice-profile";

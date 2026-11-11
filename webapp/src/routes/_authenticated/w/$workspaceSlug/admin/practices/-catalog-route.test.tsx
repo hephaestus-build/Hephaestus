@@ -1,15 +1,15 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CatalogGroupAdoptionPreview } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 import { practiceSetupHandlers, wireGroup } from "./-practice-server";
 
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(() => loadRouteCode("/w/acme/admin/practices"), ROUTE_RENDER_WAIT.timeout);
 
 beforeEach(() => {
 	server.use(...practiceSetupHandlers());

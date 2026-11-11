@@ -1,11 +1,11 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, expect, it, vi } from "vitest";
 
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 // The composer's code does not load, as when a deploy replaced the file.
 const { importFailure } = vi.hoisted(() => ({
@@ -15,8 +15,7 @@ vi.mock("./-ProductFeedbackComposer", () => {
 	throw importFailure;
 });
 
-// A case mounts the whole app chrome, whose route modules are imported lazily.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(() => loadRouteCode("/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
 
 beforeEach(() => {
 	server.use(

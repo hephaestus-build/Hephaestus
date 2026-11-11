@@ -1,12 +1,15 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 import { OVERVIEW, serveAttention } from "./-overview-attention-server";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(
+	() => loadRouteCode("/w/acme/admin/practices/reviews/overview"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 describe("the overview's review time", () => {
 	it("shows nothing the Reviews list cannot open, not even in the review time card's (i)", async () => {

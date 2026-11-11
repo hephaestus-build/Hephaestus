@@ -1,17 +1,16 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, describe, expect, it } from "vitest";
 
 import type { LlmConnection, LlmModel } from "@/api/types.gen";
 import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules.
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(() => loadRouteCode("/admin/models"), ROUTE_RENDER_WAIT.timeout);
 
 function mockPage(connections: LlmConnection[] = [], models: LlmModel[] = []) {
 	server.use(

@@ -1,14 +1,13 @@
 import { screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { expect, it, vi } from "vitest";
+import { beforeAll, expect, it } from "vitest";
 
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// A case mounts the whole app chrome, whose route modules are imported lazily.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(() => loadRouteCode("/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
 
 it("shows the page loading, not the previous page, while a slow navigation waits", async () => {
 	const onboarding = deferred();

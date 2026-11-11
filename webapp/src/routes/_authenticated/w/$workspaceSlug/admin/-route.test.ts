@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, onTestFinished } from "vitest";
 
 import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
 import { isRecord } from "@/lib/is-record";
@@ -13,12 +13,23 @@ import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { clearUserView, USER_VIEW_STORAGE_KEY } from "@/runtime/user-view/session";
+import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
 // The workspace reviews practices, so its home is the Practice profile.
 const WORKSPACE_HOME = "/w/acme/practice-profile";
 
-// `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(
+	() =>
+		loadRouteCode(
+			...adminUrls,
+			"/w/acme/practice-profile",
+			"/w/acme/admin/settings",
+			"/w/acme/admin/onboarding",
+			"/w/acme/admin/members",
+			"/w/acme/conversation",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 function newRouter(url?: string, queryClient = new QueryClient()) {
 	return createRouter({

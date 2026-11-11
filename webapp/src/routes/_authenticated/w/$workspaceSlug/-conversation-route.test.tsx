@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type PathParams } from "msw";
-import { afterEach, assert, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, assert, expect, it, vi } from "vitest";
 
 import type { MentorTurnRequest } from "@/api/types.gen";
 import { conversationEntriesOptions } from "@/hooks/conversation-cache";
@@ -13,9 +13,9 @@ import { deferred } from "@/test/async";
 import { ConversationFake } from "@/test/conversation-server";
 import { FakeEventSource } from "@/test/fake-event-source";
 import { ObserverStub } from "@/test/observers";
-import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(() => loadRouteCode("/w/acme/conversation"), ROUTE_RENDER_WAIT.timeout);
 
 /** The workspaces of `fakes`, each with its own conversation, for a member whose Hephaestus can answer. */
 function serve(...fakes: ConversationFake[]) {

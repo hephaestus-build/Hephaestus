@@ -1,7 +1,7 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { getAllTeamsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { TeamInfo } from "@/api/types.gen";
@@ -9,10 +9,9 @@ import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// A case mounts the whole app chrome, whose route modules are imported lazily.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(() => loadRouteCode("/w/acme/teams"), ROUTE_RENDER_WAIT.timeout);
 
 const FAILED = "We could not load teams";
 const NONE = /No teams yet/u;

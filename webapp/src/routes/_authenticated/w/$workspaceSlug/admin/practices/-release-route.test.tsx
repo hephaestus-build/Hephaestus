@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, expect, it } from "vitest";
 
 import { getPracticeGuidanceOptions } from "@/api/@tanstack/react-query.gen";
 import type { PracticeReleaseProposal } from "@/api/types.gen";
@@ -8,12 +8,19 @@ import { definitionOf } from "@/components/admin/practice-editor/fixtures";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt, testQueryClient } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	testQueryClient,
+} from "@/test/router-harness";
 
 import { practiceSetupHandlers, wireGuidance, wirePractice } from "./-practice-server";
 
-// The round trip renders Practice setup, the slowest page here to import and draw.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(
+	() => loadRouteCode("/w/acme/admin/practices", "/w/acme/admin/practices/releases"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const base = definitionOf({ name: "Explain the change", criteria: "Earlier criteria" });
 

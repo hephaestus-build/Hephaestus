@@ -4,7 +4,7 @@ import { focusManager } from "@tanstack/react-query";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ReviewQueue as ReviewQueueAnswer } from "@/api/types.gen";
 import {
@@ -18,7 +18,7 @@ import type * as ReviewQueueModule from "@/components/admin/practice-reviews/rev
 import { server } from "@/mocks/server";
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // A short poll, so the test watches several re-reads in real time instead of faking the clock
 // under the whole router.
@@ -27,7 +27,10 @@ vi.mock("@/components/admin/practice-reviews/review-queue", async (importOrigina
 	QUEUE_POLL_MS: 100,
 }));
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(
+	() => loadRouteCode("/w/acme/admin/practices/reviews", "/w/acme/admin/practices/reviews/overview"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 // jsdom needs an IntersectionObserver stub for paged lists.
 beforeEach(() => {

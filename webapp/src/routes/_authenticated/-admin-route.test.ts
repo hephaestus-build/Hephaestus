@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { type HttpHandler, HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import type { Workspace } from "@/api/types.gen";
 import { isRecord } from "@/lib/is-record";
@@ -11,9 +11,25 @@ import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
+import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-// `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(
+	() =>
+		loadRouteCode(
+			...adminUrls,
+			"/",
+			"/admin",
+			"/admin/users",
+			"/admin/usage",
+			"/w/hephaestus/view-as",
+			"/w/hephaestus/admin/usage",
+			"/w/hephaestus/admin/practices",
+			"/w/hephaestus/admin/practices/releases",
+			"/w/hephaestus/admin/integrations/scm",
+			"/w/hephaestus/onboarding",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 function newRouter(url?: string) {
 	return createRouter({

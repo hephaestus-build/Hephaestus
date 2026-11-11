@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resultDetail } from "@/components/admin/practice-reviews/fixtures";
 import { parseSearch } from "@/lib/router-search";
@@ -8,11 +8,19 @@ import { server } from "@/mocks/server";
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
 import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
-// deadlock backstop, not a budget these renders were meant to fit inside.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(
+	() =>
+		loadRouteCode(
+			"/w/acme/admin/practices/reviews/problems",
+			"/w/acme/admin/practices/reviews",
+			"/w/acme/admin/practices/reviews/results",
+			"/w/acme/admin/practices/reviews/feedback",
+			"/w/acme/admin/practices/reviews/overview",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const FEEDBACK = "dddddddd-2222-2222-2222-222222222222";
 

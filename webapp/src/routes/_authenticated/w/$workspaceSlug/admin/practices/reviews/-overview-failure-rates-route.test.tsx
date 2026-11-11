@@ -1,13 +1,16 @@
 import { screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { reviewRangeStart } from "@/components/admin/practice-reviews/review-range";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 import { OVERVIEW, rangeOverview, serveAttention } from "./-overview-attention-server";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(
+	() => loadRouteCode("/w/acme/admin/practices/reviews/overview"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 // jsdom needs an IntersectionObserver stub for paged lists.
 beforeEach(() => {
