@@ -979,3 +979,8 @@ The update of 2026-11-09 is implemented.
 The composer runs only as a `review_compose` run in the review's sandbox, after the seal ([ADR 0061](0061-review-seals-then-feedback-composes.md), update of 2026-11-10).
 The worker composes nothing, and the worker's composer loop and its capacity settings are gone.
 D16 holds as stated in the update of 2026-11-09.
+
+## Update — 2026-11-11: one deadline for composition and readback
+
+[ADR 0079](0079-one-agent-system.md#update--2026-11-11-compose-deadlines-and-expired-run-continuation) defines the run's work deadline and closing reserve.
+The composer still checks, publishes once, reads back and corrects under that deadline.

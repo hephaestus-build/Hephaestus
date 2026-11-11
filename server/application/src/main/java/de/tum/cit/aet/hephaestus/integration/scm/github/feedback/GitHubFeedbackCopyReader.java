@@ -20,16 +20,17 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class GitHubFeedbackCopyReader implements FeedbackCopyReader {
+    // Explicit nulls carry provider facts, such as an absent editor. API output inclusion cannot remove them.
+    private static final JsonMapper PROVIDER_JSON = new JsonMapper();
     private final GitHubGraphQlClientProvider provider;
     private final GitHubPrNodeIdResolver subjects;
     private final ScmFeedbackTargetResolver targets;
-    private final ObjectMapper mapper;
 
     @Override
     public IntegrationKind kind() {
@@ -57,7 +58,7 @@ public class GitHubFeedbackCopyReader implements FeedbackCopyReader {
             provider.trackRateLimit(workspace, response);
             String viewer = response.field("viewer.login").getValue();
             Object payload = response.field("nodes").getValue();
-            JsonNode nodes = mapper.valueToTree(payload);
+            JsonNode nodes = PROVIDER_JSON.valueToTree(payload);
             if (viewer == null || viewer.isBlank() || !nodes.isArray() || nodes.size() != ids.size())
                 return unavailable(copies);
             var indexed = new HashMap<String, JsonNode>();

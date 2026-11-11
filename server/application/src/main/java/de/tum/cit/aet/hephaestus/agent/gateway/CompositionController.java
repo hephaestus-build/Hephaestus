@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -64,7 +65,7 @@ public class CompositionController {
         return fenced(run, composing -> {
             var finished = EnumSet.noneOf(FeedbackDestination.class);
             finished.addAll(request.finished());
-            var deadline = sessions.deadline(notAfter(composing));
+            var deadline = notAfter(composing);
             boolean last = sessions.lastAttempt(composing.job());
             return sessions.next(composing.job(), composing.identity(), finished)
                     .map(next -> switch (next) {
@@ -125,9 +126,10 @@ public class CompositionController {
         }
     }
 
-    /** When the run ends whatever its lease; a run without a deadline is bounded by the composition's own timeout. */
+    /** The deadline persisted when this composition run was created. */
     private static Instant notAfter(ResultAdmissionService.Composing composing) {
-        return Objects.requireNonNullElse(composing.deadline(), Instant.MAX);
+        return ReviewRunKind.compositionWorkDeadline(
+                Objects.requireNonNull(composing.deadline(), "A composition run has a deadline"));
     }
 
     /** @param finished the destinations whose sessions the composition already ended */
@@ -140,7 +142,7 @@ public class CompositionController {
     /**
      * The next session of a composition, or the cause that stops every destination.
      *
-     * @param deadline when a composition that starts now stops; the loop keeps the one its first call returned
+     * @param deadline when the run stops; each destination and model call shares this stored deadline
      * @param lastAttempt whether this attempt is the review's last: a passing cause then withholds instead of handing on
      */
     public record NextAnswer(

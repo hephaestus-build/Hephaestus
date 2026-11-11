@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
@@ -47,6 +48,8 @@ public class ReviewRunKind implements AgentRunHandler {
     /** How many attempts past the retry limit may withhold what an admitted review still has open. */
     static final int WITHHOLD_ATTEMPTS = 3;
 
+    private static final Duration COMPOSITION_CLOSE_WINDOW = Duration.ofMinutes(1);
+
     static final String LOST_AT_LIMIT = "The attempt's holder was lost, and the retry limit is reached.";
 
     static final String RETRIES_EXHAUSTED =
@@ -57,16 +60,18 @@ public class ReviewRunKind implements AgentRunHandler {
     private final ReviewJobRepository jobs;
     private final AgentRuns runs;
     private final AgentCapacityProperties capacity;
+    private final PracticeReviewProperties properties;
     private final ReviewJobAssignments assignments;
     private final JobEvidenceFiles files;
     private final ObjectMapper mapper;
     private final ReviewStart reviewStart;
-    private final Counter compositionUnconfirmed;
+    private final MeterRegistry meters;
 
     ReviewRunKind(
             ReviewJobRepository jobs,
             AgentRuns runs,
             AgentCapacityProperties capacity,
+            PracticeReviewProperties properties,
             ReviewJobAssignments assignments,
             JobEvidenceFiles files,
             ObjectMapper mapper,
@@ -75,15 +80,14 @@ public class ReviewRunKind implements AgentRunHandler {
         this.jobs = jobs;
         this.runs = runs;
         this.capacity = capacity;
+        this.properties = properties;
         this.assignments = assignments;
         this.files = files;
         this.mapper = mapper;
         this.reviewStart = reviewStart;
-        this.compositionUnconfirmed = Counter.builder(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED)
-                .description("Admitted reviews whose attempts all ended before they confirmed each destination")
-                .tag("cause", "retries_exhausted")
-                .tag("outcome", "unrecorded")
-                .register(meters);
+        this.meters = meters;
+        compositionUnconfirmed(AgentRunStopReason.ATTEMPTS_EXHAUSTED);
+        compositionUnconfirmed(AgentRunStopReason.DEADLINE);
     }
 
     /** The band of a review's run: scheduled and backfilled reviews wait behind the ones that work or a person started. */
@@ -146,11 +150,11 @@ public class ReviewRunKind implements AgentRunHandler {
      * run ends with it. The reaper's write settles the lost claim's open calls.
      */
     @Override
-    public boolean lost(AgentRunFence lost) {
+    public LossOutcome lost(AgentRunFence lost) {
         ReviewJob job = jobs.lockByRun(lost.runId(), lost.workspaceId())
                 .filter(found -> holds(found, lost))
                 .orElse(null);
-        if (job == null) return true;
+        if (job == null) return new Requeue();
         // The lost lease spends one retry, which the run counts once the reaper writes it.
         int spent = job.spentAttempts() + 1;
         if (!ResultAdmissionService.isAdmitted(job)
@@ -158,12 +162,12 @@ public class ReviewRunKind implements AgentRunHandler {
             jobs.transitionStatusOwnedBy(
                     job.getId(), ReviewJobStatus.FAILED, Instant.now(), LOST_AT_LIMIT, lost.runId(), job.getAttempt());
             log.info("Review attempt lost its lease at the retry limit, so the review fails: jobId={}", job.getId());
-            return false;
+            return new End();
         }
         jobs.requeueRunning(job.getId(), lost.runId(), job.getAttempt());
         reviewStart.requeue(job.getWorkspaceId(), job.getReviewId());
         log.info("Review attempt lost its lease and is queued again: jobId={}", job.getId());
-        return true;
+        return new Requeue();
     }
 
     @Override
@@ -171,22 +175,25 @@ public class ReviewRunKind implements AgentRunHandler {
         ReviewJob job = jobs.lockByRun(run.id(), run.workspaceId()).orElse(null);
         if (job == null) return;
         Instant now = Instant.now();
-        if (job.getStatus() == ReviewJobStatus.QUEUED) {
+        boolean queued = job.getStatus() == ReviewJobStatus.QUEUED;
+        if (queued && !ResultAdmissionService.isAdmitted(job)) {
             jobs.transitionStatus(
                     job.getId(), ReviewJobStatus.FAILED, now, RETRIES_EXHAUSTED, Set.of(ReviewJobStatus.QUEUED));
             return;
         }
-        if (job.getStatus() != ReviewJobStatus.RUNNING || job.getAttempt() != attempt(lastEpoch)) return;
+        if (!queued && (job.getStatus() != ReviewJobStatus.RUNNING || job.getAttempt() != attempt(lastEpoch))) return;
+
         if (ResultAdmissionService.isAdmitted(job)) {
             // Its results stay. Settlement closes the review as partial: nothing confirms each destination's decision.
             jobs.failCompositionUnconfirmed(
                     job.getId(),
                     run.id(),
-                    attempt(lastEpoch),
+                    job.getAttempt(),
                     now,
                     mapper.createObjectNode().put("outcome", RefusalOutcome.COMPOSITION_UNCONFIRMED.name()));
             // Counted once the reaper's take-back commits; a run that another replica took back rolls this back.
-            TransactionCallbacks.afterCommit(compositionUnconfirmed::increment);
+            var counter = compositionUnconfirmed(reason);
+            TransactionCallbacks.afterCommit(counter::increment);
         } else {
             jobs.transitionStatusOwnedBy(
                     job.getId(), ReviewJobStatus.FAILED, now, RETRIES_EXHAUSTED, run.id(), attempt(lastEpoch));
@@ -230,12 +237,47 @@ public class ReviewRunKind implements AgentRunHandler {
         if (job == null || !holds(job, fence)) return Optional.empty();
         if (runs.end(fence) != AgentRuns.EndOutcome.ENDED) return Optional.empty();
         AgentRunRef ended = new AgentRunRef(fence.runId(), fence.workspaceId());
-        AgentRunRef composing = runs.continueAs(ended, fence.epoch(), AgentRunKind.REVIEW_COMPOSE);
+        AgentRunRef composing =
+                runs.continueAs(ended, fence.epoch(), AgentRunKind.REVIEW_COMPOSE, compositionExecutionWindow());
         if (jobs.queueOnNextRun(jobId, fence.runId(), attempt(fence.epoch()), composing.id()) == 0)
             throw new IllegalStateException("The attempt's job moved under its lock");
         reviewStart.requeue(job.getWorkspaceId(), job.getReviewId());
         runs.retire(ended);
         return Optional.of(composing);
+    }
+
+    /** Hands a passing composition failure to a fresh run, spending one retry with its usual backoff. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean retryComposition(UUID jobId, AgentRunFence fence) {
+        files.holdCopyAdmission();
+        jobs.lockParentOfJob(jobId);
+        var job = jobs.lockById(jobId).orElse(null);
+        if (job == null || !holds(job, fence) || !ResultAdmissionService.isAdmitted(job)) return false;
+        if (runs.end(fence) != AgentRuns.EndOutcome.ENDED) return false;
+        var ended = fence.run();
+        var delay = AgentRuns.backoff(job.spentAttempts() + 1);
+        var next = runs.continueAfter(ended, fence.epoch(), delay, compositionExecutionWindow());
+        if (jobs.queueOnNextRun(jobId, fence.runId(), job.getAttempt(), next.id()) == 0)
+            throw new IllegalStateException("The attempt's job moved under its lock");
+        reviewStart.requeue(job.getWorkspaceId(), job.getReviewId());
+        runs.retire(ended);
+        return true;
+    }
+
+    /** Continues an expired composition, with its domain relink in the reaper's transaction. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LossOutcome continueExpiredComposition(AgentRunFence fence) {
+        var job = jobs.lockByRun(fence.runId(), fence.workspaceId()).orElse(null);
+        // A stale reaper may find no domain after the winner relinked it. Let the run CAS decide that race first.
+        var delay = job == null ? Duration.ZERO : AgentRuns.backoff(job.spentAttempts() + 1);
+        var next = runs.continueExpired(fence, delay, compositionExecutionWindow());
+        if (job == null || !holds(job, fence))
+            throw new IllegalStateException("The expired composition's domain does not hold its run");
+        if (jobs.queueOnNextRun(job.getId(), fence.runId(), job.getAttempt(), next.id()) == 0)
+            throw new IllegalStateException("The attempt's job moved under its lock");
+        reviewStart.requeue(job.getWorkspaceId(), job.getReviewId());
+        runs.retire(fence.run());
+        return new Continued(next);
     }
 
     /**
@@ -263,12 +305,35 @@ public class ReviewRunKind implements AgentRunHandler {
         AgentRunRef ended = new AgentRunRef(resumable.getRunId(), workspaceId);
         // A review that composed on its review run, before composition had a run of its own, resumes on one.
         AgentRunRef next = runs.find(ended).map(AgentRun::getKind).orElseThrow() == AgentRunKind.REVIEW_COMPOSE
-                ? runs.continueAfter(ended, resumable.getEpoch())
-                : runs.continueAs(ended, resumable.getEpoch(), AgentRunKind.REVIEW_COMPOSE);
+                ? runs.continueAfter(ended, resumable.getEpoch(), Duration.ZERO, compositionExecutionWindow())
+                : runs.continueAs(
+                        ended, resumable.getEpoch(), AgentRunKind.REVIEW_COMPOSE, compositionExecutionWindow());
         jobs.queueOnRun(resumable.getId(), workspaceId, next.id());
         reviewStart.requeue(workspaceId, reviewId);
         runs.retire(ended);
         return true;
+    }
+
+    private Counter compositionUnconfirmed(AgentRunStopReason reason) {
+        return Counter.builder(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED)
+                .description("Admitted reviews whose runs ended before they confirmed each destination")
+                .tag("cause", reason == AgentRunStopReason.DEADLINE ? "deadline" : "retries_exhausted")
+                .tag("outcome", "unrecorded")
+                .register(meters);
+    }
+
+    /** The run leaves time after composition to record its stop and close the attempt. */
+    public static Instant compositionRunDeadline(Instant workDeadline) {
+        return workDeadline.plus(COMPOSITION_CLOSE_WINDOW);
+    }
+
+    /** The work deadline shared by the model, composer and provider readback, before the driver's abort. */
+    public static Instant compositionWorkDeadline(Instant runDeadline) {
+        return runDeadline.minus(COMPOSITION_CLOSE_WINDOW);
+    }
+
+    private Duration compositionExecutionWindow() {
+        return properties.compositionTimeout().plus(COMPOSITION_CLOSE_WINDOW);
     }
 
     /** Whether the claim of {@code fence} still runs the job. */

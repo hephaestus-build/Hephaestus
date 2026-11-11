@@ -214,7 +214,7 @@ final class ComposerReplay {
                 sessions,
                 state.job,
                 identity,
-                sessions.deadline(Instant.now().plus(Duration.ofHours(1))),
+                Instant.now().plus(state.properties.compositionTimeout()),
                 recorded)) {
             var process = new ProcessBuilder("node", NODE_DRIVER.toString(), gateway.url())
                     .redirectError(ProcessBuilder.Redirect.INHERIT)

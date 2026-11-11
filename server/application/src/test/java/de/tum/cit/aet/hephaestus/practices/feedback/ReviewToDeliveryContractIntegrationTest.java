@@ -9,6 +9,9 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
@@ -28,6 +31,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewComposeRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
@@ -37,6 +41,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
@@ -44,10 +49,13 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.RuntimeNonResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SubmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.ComposeRunGateway;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
@@ -133,6 +141,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.AfterCommitCheckpoint;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGitHub;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -161,6 +170,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
@@ -188,6 +199,8 @@ import org.springframework.test.context.BootstrapUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Mono;
+import reactor.netty.http.server.HttpServer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -1901,6 +1914,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(compositionBases.findByWorkspaceIdAndJobId(review.workspaceId(), ended.getId()))
                     .isPresent();
             assertThat(jobs.findById(ended.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+            Instant resumeFrom = Instant.now();
             decisions.decide(
                     review.workspaceId(),
                     feedbackId,
@@ -1913,6 +1927,15 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             // The approved post's readback resumes the composition.
             ActionTestSupport.drain(executor, jdbc);
             var resumed = jobs.findById(ended.getId()).orElseThrow();
+            assertThat(ReviewRunKind.compositionWorkDeadline(Objects.requireNonNull(agentRuns
+                            .find(new AgentRunRef(resumed.getRunId(), review.workspaceId()))
+                            .orElseThrow()
+                            .getDeadline())))
+                    .isBetween(
+                            resumeFrom
+                                    .plus(reviewProperties.compositionTimeout())
+                                    .minusMillis(1),
+                            Instant.now().plus(reviewProperties.compositionTimeout()));
             assertThat(resumed.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
             assertThat(jdbc.queryForObject(
                             "SELECT status FROM review WHERE workspace_id=? AND id=?",
@@ -2401,6 +2424,329 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRetryCompositionOnANewRunWithAFreshDeadlineAndTheSameAttemptBudget() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admitStaged(review.identity(), request(review));
+            var sealed = resultIds(review);
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            for (int lost = 0; lost < agentRuns.capacity().reviewRetries() - 1; lost++)
+                RuntimeJobTestData.retry(jdbc, job);
+            job = jobs.findById(job.getId()).orElseThrow();
+            UUID composing = composeRun(job);
+            var claimed = claimAgain(job);
+            var fence = RuntimeJobTestData.fence(jdbc, claimed);
+            UUID jobId = job.getId();
+
+            Boolean handedOn = transactions.execute(status -> {
+                // The gateway's end first loads the composing run in this same persistence context.
+                admission.composing(fence);
+                return reviewRuns.retryComposition(jobId, fence);
+            });
+            assertThat(handedOn).isTrue();
+
+            var retry = jobs.findById(job.getId()).orElseThrow();
+            assertThat(retry.getRunId()).isNotEqualTo(composing);
+            assertThat(retry.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            assertThat(jdbc.queryForObject(
+                            "SELECT status FROM review WHERE workspace_id=? AND id=?",
+                            String.class,
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .isEqualTo("QUEUED");
+            assertThat(retry.spentAttempts()).isEqualTo(claimed.spentAttempts() + 1);
+            assertThat(retry.getAttempt()).isEqualTo(claimed.getAttempt() + 1);
+            var next = agentRuns
+                    .find(new AgentRunRef(retry.getRunId(), review.workspaceId()))
+                    .orElseThrow();
+            var workEnds = ReviewRunKind.compositionWorkDeadline(Objects.requireNonNull(next.getDeadline()));
+            assertThat(workEnds)
+                    .isAfter(next.getAvailableAt()
+                            .plus(reviewProperties.compositionTimeout().dividedBy(2)));
+            assertThat(next.getAvailableAt()).isAfter(next.getCreatedAt());
+            assertThat(agentRuns.find(new AgentRunRef(composing, review.workspaceId())))
+                    .isEmpty();
+            assertThat(resultIds(review)).containsExactlyElementsOf(sealed);
+            Boolean stale = transactions.execute(status -> reviewRuns.retryComposition(jobId, fence));
+            assertThat(stale).isFalse();
+        }
+    }
+
+    @Test
+    void shouldContinueLostCompositionWithoutResettingItsRetryCeilingOrMovingTheDomainOnRollback() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admitStaged(review.identity(), request(review));
+            var sealed = resultIds(review);
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            UUID jobId = job.getId();
+            for (int spent = 0; spent < agentRuns.capacity().reviewRetries() - 1; spent++)
+                RuntimeJobTestData.retry(jdbc, job);
+            job = jobs.findById(jobId).orElseThrow();
+            composeRun(job);
+            var current = claimAgain(job);
+            var original = RuntimeJobTestData.fence(jdbc, current);
+            jdbc.update(
+                    "UPDATE agent_run SET leased_until = now() - interval '1 second' WHERE id = ?", original.runId());
+            assertThatThrownBy(() -> transactions.executeWithoutResult(tx -> {
+                        reviewRuns.lock(original.run());
+                        reviewRuns.continueExpiredComposition(original);
+                        throw new IllegalStateException("domain transaction refused");
+                    }))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("domain transaction refused");
+            assertThat(jobs.findById(jobId).orElseThrow().getRunId()).isEqualTo(original.runId());
+            assertThat(runState(original.runId())).isEqualTo("LEASED");
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM agent_run WHERE workspace_id = ? AND concurrency_key = ?",
+                            Long.class,
+                            review.workspaceId(),
+                            subjectOf(original.runId())))
+                    .isEqualTo(1);
+            int ceiling = context.getBean(ReviewComposeRunKind.class).retries();
+            for (int spent = current.spentAttempts(); spent < ceiling; spent++) {
+                UUID previous = current.getRunId();
+                int previousAttempt = current.getAttempt();
+                jdbc.update("UPDATE agent_run SET leased_until = now() - interval '1 second' WHERE id = ?", previous);
+                reaper.reap();
+                var queued = jobs.findById(jobId).orElseThrow();
+                assertThat(queued.getRunId()).isNotEqualTo(previous);
+                assertThat(queued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+                assertThat(jdbc.queryForObject(
+                                "SELECT status FROM review WHERE workspace_id=? AND id=?",
+                                String.class,
+                                review.workspaceId(),
+                                review.reviewId()))
+                        .isEqualTo("QUEUED");
+                assertThat(queued.spentAttempts()).isEqualTo(spent + 1);
+                assertThat(queued.getAttempt()).isEqualTo(previousAttempt + 1);
+                var next = agentRuns
+                        .find(new AgentRunRef(queued.getRunId(), review.workspaceId()))
+                        .orElseThrow();
+                assertThat(ReviewRunKind.compositionWorkDeadline(Objects.requireNonNull(next.getDeadline())))
+                        .isEqualTo(next.getAvailableAt().plus(reviewProperties.compositionTimeout()));
+                assertThat(next.getAvailableAt()).isAfter(next.getCreatedAt());
+                assertThat(agentRuns.isCurrent(
+                                new AgentRunRef(previous, review.workspaceId()), ReviewRunKind.epoch(previousAttempt)))
+                        .isFalse();
+                jdbc.update("UPDATE agent_run SET available_at = now() WHERE id = ?", queued.getRunId());
+                current = claimAgain(queued);
+            }
+            UUID last = current.getRunId();
+            jdbc.update("UPDATE agent_run SET leased_until = now() - interval '1 second' WHERE id = ?", last);
+            reaper.reap();
+            reaper.reap();
+            var ended = jobs.findById(jobId).orElseThrow();
+            assertThat(ended.getRunId()).isEqualTo(last);
+            assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+            assertThat(runState(last)).isEqualTo("ENDED");
+            assertThat(Objects.requireNonNull(ended.getOutput()).path("outcome").asString())
+                    .isEqualTo("COMPOSITION_UNCONFIRMED");
+            assertThat(resultIds(review)).containsExactlyElementsOf(sealed);
+        }
+    }
+
+    @Test
+    void shouldRecordDeadlineWithholdingsBeforeTheDriverAbortsItsFinalComposition() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admitStaged(review.identity(), request(review));
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            for (int lost = 0; lost < agentRuns.capacity().reviewRetries(); lost++) RuntimeJobTestData.retry(jdbc, job);
+            job = jobs.findById(job.getId()).orElseThrow();
+            review.inputs().close();
+            UUID composing;
+            var calls = new AtomicInteger();
+            double before =
+                    count(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED, "cause", "deadline", "outcome", "withheld");
+            try (var gateway = new ComposeRunGateway(
+                    context, composingPolicy(true), new ReviewAttemptCustody(agentRuns), request -> {
+                        calls.incrementAndGet();
+                        return mapper.createObjectNode();
+                    })) {
+                composing = queuedComposition(
+                        job, ReviewRunKind.compositionRunDeadline(Instant.now().minusSeconds(1)));
+                assertThat(gateway.drive(gateway.sandbox(review.workspaceId(), subjectOf(composing))))
+                        .isEqualTo("{\"ended\":204}");
+            }
+            assertThat(calls).hasValue(0);
+            assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+            assertThat(runState(composing)).isEqualTo("ENDED");
+            assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
+                            review.workspaceId(), review.reviewId()))
+                    .isNotEmpty()
+                    .allSatisfy(row -> {
+                        assertThat(row.getState()).isEqualTo(FeedbackState.WITHHELD);
+                        assertThat(row.getStopReason()).isEqualTo(FeedbackStopReason.NOT_COMPOSED);
+                    });
+            assertThat(count(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED, "cause", "deadline", "outcome", "withheld"))
+                    .isGreaterThan(before);
+        }
+    }
+
+    @Test
+    void shouldKeepAdmittedResultsAndReportUnconfirmedCompositionWhenItsQueuedRunExpires() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admitStaged(review.identity(), request(review));
+            var sealed = resultIds(review);
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            double before =
+                    count(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED, "cause", "deadline", "outcome", "unrecorded");
+            UUID queued = queuedComposition(job, Instant.EPOCH);
+
+            reaper.reap();
+            completion.tick();
+
+            assertThat(runState(queued)).isEqualTo("ENDED");
+            var ended = jobs.findById(job.getId()).orElseThrow();
+            assertThat(Objects.requireNonNull(ended.getOutput()).path("outcome").asString())
+                    .isEqualTo("COMPOSITION_UNCONFIRMED");
+            assertThat(resultIds(review)).containsExactlyElementsOf(sealed);
+            var recorded = jdbc.queryForMap(
+                    "SELECT status, stop_reason FROM review WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+            assertThat(recorded)
+                    .containsEntry("status", "PARTIAL")
+                    .containsEntry("stop_reason", "COMPOSITION_UNCONFIRMED");
+            assertThat(count(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED, "cause", "deadline", "outcome", "unrecorded"))
+                    .isGreaterThanOrEqualTo(before + 1);
+        }
+    }
+
+    @Test
+    void shouldContinueAfterSuccessfulProviderReadbackAndEndTheComposeRunThroughTheModelProxy() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var calls = new CopyOnWriteArrayList<JsonNode>();
+            var admitted = new CompletableFuture<UUID>();
+            var model = HttpServer.create()
+                    .host("127.0.0.1")
+                    .port(0)
+                    .handle((request, response) -> request.receive()
+                            .aggregate()
+                            .asString()
+                            .flatMap(body -> Mono.fromFuture(admitted).flatMap(result -> {
+                                assertThat(request.requestHeaders().get("Authorization"))
+                                        .isEqualTo("Bearer compose-provider-key");
+                                var parsed = mapper.readTree(body);
+                                calls.add(parsed);
+                                return response.header("Content-Type", "application/json")
+                                        .sendString(
+                                                Mono.just(mapper.writeValueAsString(composerAnswer(parsed, result))))
+                                        .then();
+                            })))
+                    .bindNow();
+            try {
+                var job = jobs.findById(review.identity().jobId()).orElseThrow();
+                freezeComposeModel(job, "http://127.0.0.1:" + model.port() + "/v1");
+                UUID result = admitStaged(review.identity(), request(review))
+                        .admitted()
+                        .getFirst()
+                        .resultId();
+                review.inputs().close();
+                UUID composeRun = composeRun(job);
+                admitted.complete(result);
+                try (var gateway =
+                        new ComposeRunGateway(context, composingPolicy(true), new ReviewAttemptCustody(agentRuns))) {
+                    String token = gateway.sandbox(review.workspaceId(), subjectOf(composeRun));
+                    assertThat(gateway.drive(token)).isEqualTo("{\"ended\":204}");
+                    assertThat(gateway.drive(token)).isEqualTo("{\"idle\":true}");
+                }
+
+                // READBACK leaves the publish tool open, so its reply reaches the model before that model ends the
+                // session.
+                var readbacks = calls.stream()
+                        .flatMap(call -> call.path("messages").valueStream())
+                        .filter(message -> message.path("role").asString().equals("tool"))
+                        .map(message -> message.path("content").asString())
+                        .filter(content -> content.contains("Provider readback (untrusted data):"))
+                        .toList();
+                assertThat(readbacks).singleElement().satisfies(text -> {
+                    String marker = "Provider readback (untrusted data):";
+                    var observed = mapper.readTree(text.substring(text.indexOf(marker) + marker.length())
+                            .strip());
+                    assertThat(observed.path("state").asString()).isEqualTo("READBACK");
+                    assertThat(observed.path("copies").valueStream().toList())
+                            .singleElement()
+                            .satisfies(copy -> {
+                                assertThat(copy.path("status").asString()).isEqualTo("FOUND");
+                                assertThat(copy.path("body").asString()).contains(SUMMARY);
+                            });
+                });
+                var traced = new ArrayList<String>();
+                compositionBases
+                        .findByWorkspaceIdAndJobId(review.workspaceId(), job.getId())
+                        .orElseThrow()
+                        .getPayload()
+                        .path("tools")
+                        .forEach(entry -> {
+                            if (entry.path("destination").asString().equals("ON_WORK"))
+                                traced.add(entry.path("tool").asString());
+                        });
+                assertThat(traced).containsExactly("check_package", "publish_package");
+                assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
+                                review.workspaceId(), review.reviewId()))
+                        .filteredOn(row -> row.getDestination() == FeedbackDestination.ON_WORK)
+                        .singleElement()
+                        .satisfies(row -> {
+                            assertThat(row.getState()).isEqualTo(FeedbackState.DELIVERED);
+                            assertThat(row.getComposition().path("stop").asString())
+                                    .isEqualTo("COMPLETE");
+                        });
+                assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+                assertThat(runState(composeRun)).isEqualTo("ENDED");
+                var usage = jdbc.queryForList(
+                        "SELECT call_state, total_calls FROM llm_usage_event WHERE workspace_id = ? AND source_id = ? AND run_id = ?",
+                        review.workspaceId(),
+                        job.getId(),
+                        composeRun);
+                assertThat(usage)
+                        .hasSize(calls.size())
+                        .isNotEmpty()
+                        .allSatisfy(row -> assertThat(row)
+                                .containsEntry("call_state", "ENDED")
+                                .containsEntry("total_calls", 1));
+                var created = agentRuns
+                        .find(new AgentRunRef(composeRun, review.workspaceId()))
+                        .orElseThrow();
+                assertThat(created.getAvailableAt()).isEqualTo(created.getCreatedAt());
+                assertThat(ReviewRunKind.compositionWorkDeadline(Objects.requireNonNull(created.getDeadline())))
+                        .isEqualTo(created.getAvailableAt().plus(reviewProperties.compositionTimeout()));
+            } finally {
+                model.disposeNow();
+            }
+        }
+    }
+
+    private void freezeComposeModel(ReviewJob job, String baseUrl) {
+        var connection = LlmCatalogTestFixtures.connection("compose-" + UUID.randomUUID());
+        connection.setBaseUrl(baseUrl);
+        connection.setAuthMode(LlmAuthMode.BEARER);
+        connection.setApiKey("compose-provider-key");
+        connection = context.getBean(LlmConnectionRepository.class).save(connection);
+        var model = context.getBean(LlmModelRepository.class)
+                .save(LlmCatalogTestFixtures.model(connection, "compose-" + UUID.randomUUID(), "contract-model"));
+        var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), mapper);
+        job.setConfigSnapshot(new ConfigSnapshot(
+                        snapshot.schemaVersion(),
+                        new FrozenModel(
+                                LlmApiProtocol.OPENAI_COMPLETIONS,
+                                baseUrl,
+                                "contract-model",
+                                UsageFundingSource.INSTANCE,
+                                connection.getId(),
+                                model.getId(),
+                                job.getWorkspaceId(),
+                                DataHandlingTier.UNDECLARED,
+                                null,
+                                null,
+                                false),
+                        snapshot.contextWindow(),
+                        snapshot.maxOutputTokens(),
+                        snapshot.timeoutSeconds(),
+                        snapshot.practiceScript())
+                .toJson(mapper));
+        jobs.saveAndFlush(job);
+    }
+
+    @Test
     void shouldWithholdWithoutAModelCallWhenTheComposeRunsClaimFindsAIDeclined() throws Exception {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             admitStaged(review.identity(), request(review));
@@ -2432,6 +2778,26 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    /* Queues a fixture at a chosen immutable deadline through the run's normal writes. */
+    private UUID queuedComposition(ReviewJob job, Instant deadline) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            var fence = RuntimeJobTestData.fence(jdbc, job);
+            assertThat(agentRuns.end(fence)).isEqualTo(AgentRuns.EndOutcome.ENDED);
+            var composing = agentRuns.continueAs(
+                    fence.run(),
+                    fence.epoch(),
+                    AgentRunKind.REVIEW_COMPOSE,
+                    Duration.between(
+                            Objects.requireNonNull(jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
+                                    .toInstant(),
+                            deadline));
+            assertThat(jobs.queueOnNextRun(job.getId(), fence.runId(), job.getAttempt(), composing.id()))
+                    .isOne();
+            agentRuns.retire(fence.run());
+            return composing.id();
+        }));
+    }
+
     private UUID composeRun(ReviewJob job) {
         var fence = new AgentRunFence(job.getRunId(), job.getWorkspaceId(), ReviewRunKind.epoch(job.getAttempt()));
         return Objects.requireNonNull(transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), fence)))
@@ -2439,7 +2805,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 .id();
     }
 
-    /** A developer who allows AI reviews, or not, bound to the model that the review's job froze. */
+    /* A developer who allows AI reviews, or not, bound to the model that the review's job froze. */
     private static ReviewMemberAiPolicy composingPolicy(boolean permits) {
         var policy = mock(ReviewMemberAiPolicy.class);
         when(policy.permitsReview(any())).thenReturn(permits);
@@ -2456,7 +2822,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         return Objects.requireNonNull(jdbc.queryForObject("SELECT state FROM agent_run WHERE id=?", String.class, run));
     }
 
-    /**
+    /*
      * The model of the review on the work: it checks a package that raises the admitted result with the summary,
      * publishes the draft that the check returned, and has nothing to add after that, nor for the private feedback.
      */
@@ -2684,7 +3050,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 pending);
     }
 
-    /** What the worker's capture recorded: the pull request record, staged and citable as one text. */
+    /* What the worker's capture recorded: the pull request record, staged and citable as one text. */
     private ObjectNode capture(byte[] record) {
         String sha256 = ProvenanceDigest.sha256Hex(record);
         var capture = EvidenceSnapshotFixtures.snapshot(mapper);
@@ -2750,7 +3116,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 List.of());
     }
 
-    /** One summary on the work, composed from the public history named by {@code publicationContext}. */
+    /* One summary on the work, composed from the public history named by publicationContext. */
     private static FeedbackPackage composition(
             AdmissionResponseDTO admitted, String summary, @Nullable String publicationContext) {
         var result = admitted.admitted().getFirst();

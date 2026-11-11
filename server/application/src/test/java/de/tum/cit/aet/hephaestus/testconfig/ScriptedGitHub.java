@@ -21,6 +21,7 @@ import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * GitHub's GraphQL endpoint as a script behind the application's own client: the client, its document loading,
@@ -136,6 +137,23 @@ public final class ScriptedGitHub implements ExchangeFunction {
                                 Map.of(
                                         "reviewThreads",
                                         Map.of("nodes", List.of(), "pageInfo", Map.of("hasNextPage", false))))));
+            case "GetOwnedFeedbackCopies" -> {
+                var nodes = json.createArrayNode();
+                for (var id : variables.path("ids")) {
+                    var review = reviews.get(id.asString());
+                    if (review == null) {
+                        nodes.addNull();
+                        continue;
+                    }
+                    ObjectNode copy = json.valueToTree(review.fields());
+                    copy.put("__typename", "PullRequestReview");
+                    copy.put("bodyHTML", "<p>" + review.body() + "</p>");
+                    copy.putNull("editor");
+                    copy.putObject("pullRequest").put("id", review.parent());
+                    nodes.add(copy);
+                }
+                yield data(Map.of("viewer", Map.of("login", "hephaestus-test-bot"), "nodes", nodes));
+            }
             case "AddPullRequestReviewWithThreads" -> {
                 var review = new PendingReview(
                         variables.path("pullRequestId").asString(),

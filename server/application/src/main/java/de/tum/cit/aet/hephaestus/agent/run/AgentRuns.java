@@ -2,12 +2,16 @@ package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -34,6 +38,9 @@ public class AgentRuns {
     private final AgentRunRepository runs;
     private final AgentCapacityProperties capacity;
     private final MeterRegistry meters;
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
 
     AgentRuns(AgentRunRepository runs, AgentCapacityProperties capacity, MeterRegistry meters) {
         this.runs = runs;
@@ -63,7 +70,7 @@ public class AgentRuns {
      * the ended run had spent: it is a retry of the same work, so the work's retry limit bounds how often it continues.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public AgentRunRef continueAfter(AgentRunRef ended, int lastEpoch) {
+    public AgentRunRef continueAfter(AgentRunRef ended, int lastEpoch, Duration delay, Duration executionWindow) {
         AgentRun previous = ended(ended);
         return insert(
                 previous.getWorkspaceId(),
@@ -72,7 +79,9 @@ public class AgentRuns {
                 previous.getConcurrencyKey(),
                 Math.max(lastEpoch, previous.getLeaseEpoch()),
                 previous.getAttempt() + 1,
-                previous.getStartWithinSeconds() == null ? null : Duration.ofSeconds(previous.getStartWithinSeconds()));
+                startWithin(previous),
+                delay,
+                executionWindow);
     }
 
     /**
@@ -81,7 +90,7 @@ public class AgentRuns {
      * attempt: the work's attempts count across both steps.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public AgentRunRef continueAs(AgentRunRef ended, int lastEpoch, AgentRunKind kind) {
+    public AgentRunRef continueAs(AgentRunRef ended, int lastEpoch, AgentRunKind kind, Duration executionWindow) {
         AgentRun previous = ended(ended);
         if (previous.getKind() == kind) throw new IllegalArgumentException("A run of the same kind continues it");
         return insert(
@@ -91,12 +100,43 @@ public class AgentRuns {
                 previous.getConcurrencyKey(),
                 Math.max(lastEpoch, previous.getLeaseEpoch()),
                 previous.getAttempt(),
-                null);
+                null,
+                Duration.ZERO,
+                executionWindow);
+    }
+
+    /**
+     * Replaces an expired lease and settles its open calls. The caller relinks the domain in this same transaction.
+     * The conditional end is the fence winner; a renewal or another reaper rolls the whole continuation back.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AgentRunRef continueExpired(AgentRunFence fence, Duration delay, Duration executionWindow) {
+        if (runs.endExpiredForContinuation(fence.runId(), fence.workspaceId(), fence.epoch()) != 1)
+            throw new StaleRunException(fence);
+        int calls = runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch());
+        TransactionCallbacks.afterCommit(() -> settled(calls));
+        AgentRun previous = ended(fence.run());
+        return insert(
+                previous.getWorkspaceId(),
+                previous.getKind(),
+                previous.getBand(),
+                previous.getConcurrencyKey(),
+                previous.getLeaseEpoch(),
+                previous.getAttempt(),
+                startWithin(previous),
+                delay,
+                executionWindow);
+    }
+
+    private static @Nullable Duration startWithin(AgentRun previous) {
+        return previous.getStartWithinSeconds() == null ? null : Duration.ofSeconds(previous.getStartWithinSeconds());
     }
 
     private AgentRun ended(AgentRunRef ended) {
         AgentRun previous = runs.findByRef(ended.id(), ended.workspaceId())
                 .orElseThrow(() -> new IllegalStateException("The run to continue does not exist"));
+        // The native end keeps domain entities managed. Refresh only this run before inspecting its state.
+        Objects.requireNonNull(entityManager).refresh(previous);
         if (previous.getState() != AgentRunState.ENDED)
             throw new IllegalStateException("Only an ended run is continued");
         return previous;
@@ -110,6 +150,19 @@ public class AgentRuns {
             int epoch,
             int spent,
             @Nullable Duration startWithin) {
+        return insert(workspaceId, kind, band, concurrencyKey, epoch, spent, startWithin, Duration.ZERO, null);
+    }
+
+    private AgentRunRef insert(
+            long workspaceId,
+            AgentRunKind kind,
+            AgentRunBand band,
+            String concurrencyKey,
+            int epoch,
+            int spent,
+            @Nullable Duration startWithin,
+            Duration delay,
+            @Nullable Duration executionWindow) {
         AgentRun run = new AgentRun(
                 UUID.randomUUID(),
                 workspaceId,
@@ -119,7 +172,9 @@ public class AgentRuns {
                 epoch,
                 spent,
                 runs.databaseClock(),
-                startWithin);
+                startWithin,
+                delay,
+                executionWindow);
         runs.save(run);
         wake(kind);
         return run.ref();
@@ -280,7 +335,7 @@ public class AgentRuns {
 
     /**
      * {@link #endBy} for the claim that still holds the run. A claim that lost its run moves no deadline: a requeued
-     * run starts its next claim without one.
+     * review or turn starts its next claim without one. A composition keeps its creation deadline.
      *
      * @return whether the claim still holds the run
      */

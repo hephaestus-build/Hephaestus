@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 /**
  * The reaper's side of a review's composition run. It drives the review job that its review run admitted, which keeps
  * its attempt counter and retry limit across both runs (ADR 0061 § Retry). So a lost or ended composition moves the
- * job as {@link ReviewRunKind} moves an admitted job: a lost lease is billed and queued again, and a run that ends
+ * job with its run: a lost lease continues on a successor with the same retry budget, and a run that ends
  * without its holder closes the review as partial, because nothing confirmed each destination. Either way the attempt's
  * held inputs go, where this replica holds them.
  */
@@ -49,9 +49,9 @@ public class ReviewComposeRunKind implements AgentRunHandler {
     }
 
     @Override
-    public boolean lost(AgentRunFence fence) {
+    public LossOutcome lost(AgentRunFence fence) {
         release(fence.runId(), fence.workspaceId(), fence.epoch());
-        return review.lost(fence);
+        return review.continueExpiredComposition(fence);
     }
 
     @Override

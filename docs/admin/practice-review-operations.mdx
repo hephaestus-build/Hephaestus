@@ -248,7 +248,8 @@ Use them for alerts instead of application logs.
 - **`agent.job.composition.stopped`** — destinations whose feedback the worker did not write, tagged by `cause` and `outcome`.
   `withheld` counts a recorded withholding, and `handed_on` counts an attempt handed on to compose again.
   `refused` counts a withholding that the server refused. The attempt is handed on to record it again.
-  `unrecorded` counts a review whose attempts all ended before they confirmed each destination, so it closed as Partial.
+  `unrecorded` counts a review whose runs ended before they confirmed each destination, so it closed as Partial.
+  Its cause is `deadline` when the run expired, including while queued, or `retries_exhausted` when the retry limit ended it.
   The causes that withhold at once are `no_ai`, `budget`, `deadline`, `model_refused`, `context_window`, `publication_refused`, `no_decision`, `inputs_gone`, `inputs_erased` and `retries_exhausted`.
   The passing causes are `provider`, `routing_unavailable` and `unexpected`.
 - **`agent.job.retention.stripped`** / **`agent.job.retention.deleted`** — rows pruned by the retention sweep.

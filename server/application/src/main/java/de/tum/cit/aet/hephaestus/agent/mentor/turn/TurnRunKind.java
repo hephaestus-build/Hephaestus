@@ -68,11 +68,11 @@ public class TurnRunKind implements AgentRunHandler {
     }
 
     @Override
-    public boolean lost(AgentRunFence lost) {
+    public LossOutcome lost(AgentRunFence lost) {
         MentorTurn turn = turns.lockByRun(lost.workspaceId(), lost.runId())
                 .filter(found -> found.getAttempt() == lost.epoch())
                 .orElse(null);
-        if (turn == null) return false;
+        if (turn == null) return new End();
         MentorTurnService.LostAttempt taken = turns.takeBack(turn, true);
         completion.billLostAttempt(taken);
         log.info(
@@ -80,7 +80,7 @@ public class TurnRunKind implements AgentRunHandler {
                 turn.getId(),
                 taken.attempt(),
                 turn.getStatus());
-        return turn.getStatus() == MentorTurn.Status.QUEUED;
+        return turn.getStatus() == MentorTurn.Status.QUEUED ? new Requeue() : new End();
     }
 
     @Override

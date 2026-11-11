@@ -20,6 +20,20 @@ Review jobs and conversation turns are on runs. `AgentRuns` in `agent.run` is th
 | `LEASED` | One holder drives the run under the current `lease_epoch`, until `leased_until`. | `LEASED` (renewal), `QUEUED`, `ENDED` |
 | `ENDED` | Final. Work that must go on gets a new run (`AgentRuns.continueAfter`). | none |
 
+```mermaid
+stateDiagram-v2
+    accTitle: Agent run lifecycle
+    accDescr: A queued run can be leased or ended. A lease can renew, requeue, or end. Continued work uses a new run.
+    [*] --> QUEUED
+    QUEUED --> LEASED: Claim takes next epoch
+    LEASED --> LEASED: Renew
+    LEASED --> QUEUED: Requeue
+    LEASED --> ENDED: Complete, cancel, replace or expire
+    QUEUED --> ENDED: Cancel or wait limit
+    ENDED --> [*]
+    note right of ENDED: Continuation creates a different run
+```
+
 `AgentRunState` holds this table. The trigger `guard_agent_run` refuses every other transition, and every change of a run's identity.
 Only a queued run may move to another subject (`AgentRuns.moveQueued`), as when an account absorption merges two conversations.
 A claim takes the next epoch. No other write changes the epoch.
@@ -66,8 +80,11 @@ A run has two clocks, and the reaper enforces both:
   A requeue makes the run due again, so a retry gets the same window.
 - **Deadline** (`deadline`): it bounds the current claim.
   A leased run is not renewed past it, and the reaper ends it there, even while its lease is live.
-  Within a claim it only moves earlier (`AgentRuns.endBy`). A requeue clears it, so the next claim sets its own.
+  Within a claim it only moves earlier (`AgentRuns.endBy`). A review or turn requeue clears it, so the next claim sets its own.
   The trigger `guard_agent_run` refuses any other change.
+
+  A composition sets its deadline at creation: its due time plus its work window and closing reserve.
+  Its retries continue on new runs, so the old deadline stays fixed. A free requeue keeps that deadline.
 
 ## Model call permits
 
@@ -88,13 +105,34 @@ Lock a domain row before its run: every writer of both takes them in that order.
 
 `AgentRunReaper` runs on every server replica, every `hephaestus.agent.capacity.lease-renewal`, without a leader.
 For each expired lease, it locks the domain row through the kind's `AgentRunHandler`.
-Then the handler moves the domain row, while the run still reads as its lost holder left it.
+For a requeue or end, the handler first moves the domain row, while the run still reads as its lost holder left it.
 Last, one conditional write takes the run back. When another replica or a renewal won meanwhile, the transaction rolls back.
+A continuation takes the run back and relinks the domain inside the handler, as its outcome describes.
 
-A run with retries left is queued again, after a backoff. At the kind's limit, or past its deadline, it ends.
-A queued run past its start window also ends.
+`AgentRunHandler.lost` returns one of three `LossOutcome` records:
+
+- `Requeue()`: the handler queued the domain row. The reaper requeues the same run and spends one attempt.
+- `End()`: the handler ended the domain row. The reaper ends the run at the retry limit.
+- `Continued(next)`: the handler replaced the run and relinked the domain row in this transaction.
+  The reaper records the successor and makes no second run write.
+
+Composition owns the retry delay and execution window.
+`AgentRuns.continueExpired` conditionally ends the expired `LEASED` run as `CANCELLED`, by workspace, id and epoch on the database clock.
+It settles that epoch's open calls, then creates a successor of the same kind, band and subject.
+The successor carries the spent attempt count plus one and continues the claim epochs.
+
+Its due time is database time plus the retry delay.
+Its deadline is that due time plus the execution window.
+The domain relink commits with these writes or all roll back.
+
+A conditional fence that loses to another reaper or a renewal throws `StaleRunException`.
+The reaper treats that transaction's rollback as an expected no-op, without a failure signal.
+Other failures keep their failure signal.
+At the kind's limit, or past its deadline, a run ends.
+A queued run past its deadline or start window also ends.
 A run whose take-back fails is skipped until the next tick, so it cannot hold back the runs behind it.
 
+`agent.run.continued` and the `continued` reaper outcome count a committed continuation. The event also names `run.next_id`.
 Each take-back writes one event that names `run.id`, `run.epoch` and `subject.key` ([Log records](/admin/log-records#agent-run-and-outbox-events)).
 The holder of a review run puts the same three fields in its thread-scoped log context, and on its execution span.
 

@@ -209,8 +209,7 @@ class ReviewComposeSandboxKindTest {
     @Test
     void shouldSpendAnAttemptWhenTheRunIsHandedOn() {
         claim(null);
-        when(reviewRuns.requeue(composing.identity().jobId(), fence, AgentRuns.Charge.SPEND, Duration.ZERO, null))
-                .thenReturn(true);
+        when(reviewRuns.retryComposition(composing.identity().jobId(), fence)).thenReturn(true);
 
         assertThat(kind.end(run, SandboxRunKind.Outcome.HANDED_ON)).isTrue();
 

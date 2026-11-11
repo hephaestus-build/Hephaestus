@@ -100,8 +100,8 @@ public class AgentRun {
 
     /**
      * Bounds the current claim: a leased run is not renewed past it, and the reaper ends it there as {@link
-     * AgentRunStopReason#DEADLINE}. Within a claim it only moves earlier ({@link AgentRuns#endBy}); a requeue clears it,
-     * so the next claim sets its own.
+     * AgentRunStopReason#DEADLINE}. Within a claim it only moves earlier ({@link AgentRuns#endBy}); a review or turn requeue clears it,
+     * so the next claim sets its own. A composition keeps its creation deadline across free requeues and retries on a new run.
      */
     @Column(name = "deadline", updatable = false)
     private @Nullable Instant deadline;
@@ -129,7 +129,9 @@ public class AgentRun {
             int leaseEpoch,
             int attempt,
             Instant now,
-            @Nullable Duration startWithin) {
+            @Nullable Duration startWithin,
+            Duration delay,
+            @Nullable Duration executionWindow) {
         if (workspaceId <= 0) throw new IllegalArgumentException("A run belongs to a workspace");
         if (concurrencyKey.isBlank() || concurrencyKey.length() > 96)
             throw new IllegalArgumentException("A run names its subject in at most 96 characters");
@@ -141,7 +143,8 @@ public class AgentRun {
         this.state = AgentRunState.QUEUED;
         this.leaseEpoch = leaseEpoch;
         this.attempt = attempt;
-        this.availableAt = now;
+        this.availableAt = now.plus(delay);
+        this.deadline = executionWindow == null ? null : this.availableAt.plus(executionWindow);
         this.createdAt = now;
         this.startWithinSeconds = startWithin == null ? null : Math.toIntExact(startWithin.toSeconds());
     }

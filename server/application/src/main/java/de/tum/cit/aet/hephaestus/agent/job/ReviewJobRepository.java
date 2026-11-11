@@ -285,9 +285,11 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("output") JsonNode output);
 
     /** Ends an admitted attempt whose decisions nothing confirmed. Its output tells settlement why; its results stay. */
-    @WorkspaceAgnostic("ID-based fenced terminal write; caller holds the attempt's lease and attempt")
+    @WorkspaceAgnostic("ID-based fenced terminal write; caller locks the run and its job")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(EVIDENCE_REFUSAL_TRANSITION)
+    @Query("UPDATE ReviewJob j SET j.status = 'FAILED', j.completedAt = :now, j.output = :output "
+            + "WHERE j.id = :id AND j.runId = :runId AND j.attempt = :attempt "
+            + "AND j.admissionDigest IS NOT NULL AND j.status IN ('RUNNING', 'QUEUED')")
     int failCompositionUnconfirmed(
             @Param("id") UUID id,
             @Param("runId") UUID runId,

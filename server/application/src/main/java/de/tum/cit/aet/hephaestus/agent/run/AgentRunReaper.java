@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -59,6 +60,7 @@ public class AgentRunReaper {
         meters.counter(AgentMetrics.AGENT_RUN_REAPER_FAILURE);
         for (AgentRunKind kind : AgentRunKind.values()) {
             count(kind, "requeued", 0);
+            count(kind, "continued", 0);
             for (AgentRunStopReason reason : List.of(
                     AgentRunStopReason.ATTEMPTS_EXHAUSTED, AgentRunStopReason.NOT_STARTED, AgentRunStopReason.DEADLINE))
                 count(kind, reason.name().toLowerCase(Locale.ROOT), 0);
@@ -86,6 +88,9 @@ public class AgentRunReaper {
             if (row.isEmpty()) return;
             try {
                 takeBack.accept(row.get());
+            } catch (StaleRunException stale) {
+                // The conditional fence lost; the transaction rolled back every domain and successor write.
+                failed.add(row.get().getId());
             } catch (RuntimeException e) {
                 failed.add(row.get().getId());
                 meters.counter(AgentMetrics.AGENT_RUN_REAPER_FAILURE).increment();
@@ -107,7 +112,17 @@ public class AgentRunReaper {
                     : row.getAttempt() < handler.retries() ? null : AgentRunStopReason.ATTEMPTS_EXHAUSTED;
             // The domain moves first, while the run still reads as its lost holder left it.
             if (reason == null) {
-                if (handler.lost(lost)) {
+                var outcome = handler.lost(lost);
+                if (outcome instanceof AgentRunHandler.Continued continued) {
+                    TransactionCallbacks.afterCommit(() -> {
+                        count(kind, "continued");
+                        event(log.atInfo(), "agent.run.continued", row)
+                                .addKeyValue("run.next_id", continued.next().id())
+                                .log("Run lease expired; its successor continues the work");
+                    });
+                    return;
+                }
+                if (outcome instanceof AgentRunHandler.Requeue) {
                     long backoff = handler.retryAfter(row.getAttempt() + 1).toSeconds();
                     if (!taken(status, runs.requeueExpired(lost.runId(), lost.workspaceId(), lost.epoch(), backoff)))
                         return;
@@ -135,17 +150,13 @@ public class AgentRunReaper {
         transactions.executeWithoutResult(status -> {
             var run = new AgentRunRef(row.getId(), row.getWorkspaceId());
             handler.lock(run);
-            handler.ended(run, row.getLeaseEpoch(), AgentRunStopReason.NOT_STARTED);
-            if (!taken(
-                    status,
-                    runs.endExpired(
-                            row.getId(),
-                            row.getWorkspaceId(),
-                            row.getLeaseEpoch(),
-                            AgentRunStopReason.NOT_STARTED.name()))) return;
-            count(kind, AgentRunStopReason.NOT_STARTED.name().toLowerCase(Locale.ROOT));
+            var reason = row.getPastDeadline() ? AgentRunStopReason.DEADLINE : AgentRunStopReason.NOT_STARTED;
+            handler.ended(run, row.getLeaseEpoch(), reason);
+            if (!taken(status, runs.endExpired(row.getId(), row.getWorkspaceId(), row.getLeaseEpoch(), reason.name())))
+                return;
+            count(kind, reason.name().toLowerCase(Locale.ROOT));
             event(log.atInfo(), "agent.run.ended", row)
-                    .addKeyValue("run.stop_reason", AgentRunStopReason.NOT_STARTED.name())
+                    .addKeyValue("run.stop_reason", reason.name())
                     .log("Queued run waited past its start window; the run ended");
         });
     }

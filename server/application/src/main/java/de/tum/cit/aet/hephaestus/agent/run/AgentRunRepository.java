@@ -72,6 +72,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             LEFT JOIN (SELECT workspace_id, count(*) AS leased FROM agent_run WHERE state = 'LEASED'
                        GROUP BY workspace_id) busy ON busy.workspace_id = r.workspace_id
             WHERE r.state = 'QUEUED' AND r.available_at <= clock_timestamp()
+              AND (r.deadline IS NULL OR r.deadline > clock_timestamp())
               AND NOT EXISTS (SELECT 1 FROM agent_run s
                               WHERE s.workspace_id = r.workspace_id AND s.concurrency_key = r.concurrency_key
                                 AND (s.state = 'LEASED'
@@ -218,7 +219,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET state = 'QUEUED', leased_until = NULL, deadline = NULL, attempt = attempt + :spent,
+            UPDATE agent_run SET state = 'QUEUED', leased_until = NULL,
+                   deadline = CASE WHEN kind = 'REVIEW_COMPOSE' THEN deadline ELSE NULL END, attempt = attempt + :spent,
                    available_at = clock_timestamp() + make_interval(secs => :delaySeconds), hold_reason = :hold
              WHERE id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch AND state = 'LEASED'
             """, nativeQuery = true)
@@ -352,12 +354,15 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
                                       )))))
             """;
 
-    @WorkspaceAgnostic("The reaper ends queued runs past their start window in every workspace")
+    String OVERDUE_QUEUED = "(r.state = 'QUEUED' AND r.deadline <= clock_timestamp()) OR " + NOT_STARTED;
+
+    @WorkspaceAgnostic("The reaper ends queued runs past their deadline or start window in every workspace")
     @Query(value = """
             SELECT r.id, r.workspace_id AS "workspaceId", r.kind, r.concurrency_key AS "concurrencyKey", r.attempt,
                    r.lease_epoch AS "leaseEpoch",
-                   false AS "pastDeadline"
-              FROM agent_run r WHERE r.kind = :kind AND""" + NOT_STARTED + """
+                   (r.deadline IS NOT NULL AND r.deadline <= clock_timestamp()) AS "pastDeadline"
+              FROM agent_run r WHERE r.kind = :kind AND (""" + OVERDUE_QUEUED + """
+               )
                AND (:#{#skipped.isEmpty()} OR r.id NOT IN (:skipped))
              ORDER BY r.available_at, r.id LIMIT 1
             """, nativeQuery = true)
@@ -377,14 +382,25 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("epoch") int epoch,
             @Param("delaySeconds") long delaySeconds);
 
+    /** Ends only the still-expired lease, spending its attempt once before its successor is inserted. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = 'CANCELLED',
+                   attempt = attempt + 1, ended_at = clock_timestamp()
+             WHERE id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch AND state = 'LEASED'
+               AND leased_until < clock_timestamp() AND (deadline IS NULL OR deadline > clock_timestamp())
+            """, nativeQuery = true)
+    int endExpiredForContinuation(
+            @Param("runId") UUID runId, @Param("workspaceId") long workspaceId, @Param("epoch") int epoch);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
             UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = :reason,
                    attempt = attempt + CASE WHEN state = 'LEASED' THEN 1 ELSE 0 END, ended_at = clock_timestamp()
              WHERE id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch
                AND ((state = 'LEASED' AND (leased_until < clock_timestamp() OR deadline <= clock_timestamp()))
-                    OR (state = 'QUEUED' AND id IN (SELECT r.id FROM agent_run r WHERE r.id = :runId AND""" + NOT_STARTED + """
-               )))
+                    OR (state = 'QUEUED' AND id IN (SELECT r.id FROM agent_run r WHERE r.id = :runId AND (""" + OVERDUE_QUEUED + """
+               ))))
             """, nativeQuery = true)
     int endExpired(
             @Param("runId") UUID runId,

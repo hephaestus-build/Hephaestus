@@ -163,16 +163,6 @@ public class CompositionSessions {
         }
     }
 
-    /**
-     * When a composition that starts now stops: after its own timeout, and a minute before its attempt's work ends at
-     * the latest. No model call starts after it.
-     */
-    public Instant deadline(Instant notAfter) {
-        Instant own = Instant.now().plus(properties.compositionTimeout());
-        Instant latest = notAfter.minus(Duration.ofMinutes(1));
-        return own.isBefore(latest) ? own : latest;
-    }
-
     // ------------------------------------------------------------ the wire records
 
     /** A tool the model may call. */
