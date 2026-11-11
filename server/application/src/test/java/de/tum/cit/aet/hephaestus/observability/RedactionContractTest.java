@@ -16,6 +16,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -294,11 +295,10 @@ class RedactionContractTest {
         assertEquals("9.9.9-build", text(json, "service.version"));
     }
 
-    @ParameterizedTest
-    @CsvSource({"application.yml, -1", "application.yml, 1"})
-    void shouldKeepServiceMetadataWithoutARetiredRuntimeRole(String file, int document) throws IOException {
+    @Test
+    void shouldKeepServiceMetadataWithoutARetiredRuntimeRole() throws IOException {
         JsonNode json = new ObjectMapper()
-                .readTree(encode(shippedEnvironment(file, document), event -> event.setMessage("ready")));
+                .readTree(encode(shippedEnvironment("application.yml", -1), event -> event.setMessage("ready")));
         assertNull(node(json, "runtime.role"));
         assertEquals("Hephaestus", text(json, "service.name"));
         assertFalse(text(json, "service.version").isBlank());
@@ -309,13 +309,53 @@ class RedactionContractTest {
 
     /** Every shipped profile writes JSON; only the local profile, which a person reads in a terminal, writes text. */
     @Test
-    void shouldWriteTextOnlyForTheLocalProfile() {
+    void shouldWriteSafeReadableTextForTheLocalProfile() {
         assertEquals(
                 "ecs",
                 ShippedLogEncoder.environment("application.yml", -1).getProperty("logging.structured.format.console"));
-        assertEquals(
-                "",
-                ShippedLogEncoder.environment("application.yml", 1).getProperty("logging.structured.format.console"));
+        var failure = new IllegalStateException("private-provider-body " + EMAIL);
+        failure.initCause(new IllegalArgumentException("Bearer cause-private-token"));
+        failure.addSuppressed(new IllegalStateException("Bearer suppressed-private-token"));
+        var frames = new StackTraceElement[300];
+        Arrays.fill(frames, new StackTraceElement("Synthetic", "run", "Synthetic.java", 1));
+        failure.setStackTrace(frames);
+
+        String text = encode(shippedEnvironment("application.yml", 1), event -> {
+            event.setMDCPropertyMap(Map.of(
+                    "traceId",
+                    "0123456789abcdef0123456789abcdef",
+                    "token",
+                    "field-private-token",
+                    "terminal",
+                    "\u009B\u202E\u2028\u200F\u061C 👩‍💻"));
+            event.setMessage("Local diagnostic\nBearer message-private-token Basic\ttab-private-token "
+                    + "Bearer\nnewline-private-token \u009B \u202E 👩‍💻");
+            event.setThrowableProxy(new ThrowableProxy(failure));
+        });
+
+        assertTrue(text.startsWith("2026-09-10T10:11:12.123Z INFO "), text);
+        assertTrue(text.contains("Local diagnostic_Bearer ***"), text);
+        assertTrue(text.contains("0123456789abcdef0123456789abcdef"), text);
+        assertTrue(text.contains(IllegalStateException.class.getName()), text);
+        assertTrue(text.contains(IllegalArgumentException.class.getName()), text);
+        for (String privateText : List.of(
+                "private-provider-body",
+                EMAIL,
+                "cause-private-token",
+                "suppressed-private-token",
+                "message-private-token",
+                "field-private-token",
+                "tab-private-token",
+                "newline-private-token",
+                "\u009B",
+                "\u202E",
+                "\u2028",
+                "\u200F",
+                "\u061C")) {
+            assertFalse(text.contains(privateText), text);
+        }
+        assertTrue(text.contains("👩‍💻"), text);
+        assertTrue(text.length() < 10_000, text);
     }
 
     @ParameterizedTest

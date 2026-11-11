@@ -921,12 +921,11 @@ spring:
             "[mail.smtp.starttls.enable]": false
             "[mail.smtp.starttls.required]": false
 
-# A person reads this console: Boot's text pattern, with the trace and span IDs in brackets. The shipped JSON stays
-# the default of every other profile.
+# The local formatter shares JSON's masking and bounded exception printer. Every other profile writes ECS JSON.
 logging:
     structured:
         format:
-            console: ""
+            console: de.tum.cit.aet.hephaestus.observability.LocalLogFormatter
 
 hephaestus:
     email:

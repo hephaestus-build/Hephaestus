@@ -31,7 +31,7 @@ public final class ShippedLogEncoder {
         context.putObject(Environment.class.getName(), environment);
         StructuredLogEncoder encoder = new StructuredLogEncoder();
         encoder.setContext(context);
-        encoder.setFormat("ecs");
+        encoder.setFormat(environment.getRequiredProperty("logging.structured.format.console"));
         encoder.start();
         try {
             return new String(encoder.encode(event), StandardCharsets.UTF_8);
