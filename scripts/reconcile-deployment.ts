@@ -188,6 +188,8 @@ function parseImages(value: unknown): Readonly<Record<string, string>> {
 const releaseParts = (release: string): string[] => release.slice(1).split(".");
 const releaseMajor = (release: string) => BigInt(releaseParts(release)[0] ?? "0");
 const isCandidate = (release: string) => release.includes("-");
+/** A candidate of a major's first stable release, such as `v1.0.0-rc.6`; not of a patch, such as `v1.0.1-rc.1`. */
+const isMajorCandidate = (release: string) => /^v\d+\.0\.0-/u.test(release);
 
 function compareReleases(left: string, right: string): number {
 	const from = parseVersion(left.slice(1));
@@ -1045,7 +1047,7 @@ export function isMajorCutover(target: string, applied?: string, installed?: str
 		!isCandidate(target) &&
 		[installedRelease, appliedRelease].some(
 			(version) =>
-				version !== undefined && isCandidate(version) && releaseMajor(version) === targetMajor,
+				version !== undefined && isMajorCandidate(version) && releaseMajor(version) === targetMajor,
 		);
 	return fromCandidate || previousMajors.some((major) => major !== targetMajor);
 }

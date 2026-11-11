@@ -734,6 +734,9 @@ await test("a host on a release candidate stops for its major's stable release",
 	assert.equal(isMajorCutover("v1.0.0-rc.7", "v1.0.0-rc.6", "1.0.0-rc.6"), false);
 	assert.equal(isMajorCutover("v1.0.1", "v1.0.0", "1.0.0"), false);
 	assert.equal(isMajorCutover("v2.0.0", "v2.0.0-rc.1", "2.0.0-rc.1"), true);
+	// A candidate of a patch or minor release is not the major's cutover.
+	assert.equal(isMajorCutover("v1.0.1", "v1.0.1-rc.1", "1.0.1-rc.1"), false);
+	assert.equal(isMajorCutover("v1.1.0", "v1.1.0-rc.2", "1.1.0-rc.2"), false);
 });
 
 await test("major cutovers order 9 and 10 numerically", () => {
