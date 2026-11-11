@@ -16,7 +16,9 @@ export function canonicalCiJobName(name: string): string {
 		"Docker / Images / Create manifests": "Images / Manifest",
 		"Security / Dependencies, secrets, and policy": "Security / Dependencies, secrets and policy",
 	};
-	if (renamed[name] !== undefined) return renamed[name];
+	if (renamed[name] !== undefined) {
+		return renamed[name];
+	}
 	const tier =
 		/^Test(?: \((?<shard>unit|architecture)\))? \/ App Server: (?<tier>Unit|Architecture|Unit and architecture)$/u.exec(
 			name,
@@ -40,7 +42,7 @@ export function canonicalCiJobName(name: string): string {
 		(integration.groups.caller === undefined ||
 			integration.groups.caller === integration.groups.shard)
 	) {
-		const shard = integration.groups.shard;
+		const { shard } = integration.groups;
 		return `Server tests / Integration (${/^\d+$/u.test(shard) ? `${shard} of ${historicalNumericShards}` : shard})`;
 	}
 	const image =

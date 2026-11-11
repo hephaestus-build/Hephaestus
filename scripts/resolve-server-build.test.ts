@@ -100,10 +100,11 @@ await test("current static names and historical caller names preserve exact-comm
 			assert.ok(isMap(value));
 			return `${String(ci.getIn(["jobs", "Test", "name"]))} / ${String(value.get("name"))}`;
 		});
-	for (const arch of ["amd64", "arm64"])
+	for (const arch of ["amd64", "arm64"]) {
 		current.push(
 			`Images / ${String(images.getIn(["jobs", arch === "amd64" ? "build" : "build-arm64", "name"]))}`,
 		);
+	}
 	const legacy = requiredJobs.filter(
 		(name) => name.startsWith("Test /") || name.startsWith("Docker / Images / Build"),
 	);
@@ -114,8 +115,9 @@ await test("current static names and historical caller names preserve exact-comm
 	for (const bad of [
 		"Test (2) / App Server: Integration (1)",
 		"Docker / Images (linux/arm64) / Build linux/amd64 images",
-	])
+	]) {
 		assert.equal(canonicalCiJobName(bad), bad);
+	}
 });
 
 await test("reuses an ordinary merge group without the release-only evidence job", async () => {

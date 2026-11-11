@@ -401,7 +401,7 @@ function run(entry: Case) {
 		);
 	};
 	// A merge group's heavy legs wait for its Security scan, which passes in this model.
-	needs["Security"] = { result: job("Security") ? "success" : "skipped" };
+	needs.Security = { result: job("Security") ? "success" : "skipped" };
 	let packageResult = "skipped";
 	if (job("server-package")) {
 		packageResult = entry.skip === "package-fails" ? "failure" : "success";
@@ -423,8 +423,11 @@ function run(entry: Case) {
 			: value;
 	}
 	const declarations = asImageInputs();
-	for (const [key, value] of Object.entries(inputs))
-		if (declarations[key] === "boolean") inputs[key] = value === "true";
+	for (const [key, value] of Object.entries(inputs)) {
+		if (declarations[key] === "boolean") {
+			inputs[key] = value === "true";
+		}
+	}
 	const called = dictionary({ inputs, github });
 	const reusable = (path: string[]) =>
 		dockerRuns && evaluate(docker.getIn(path), ["inputs", "github"], called) === "true";
@@ -466,7 +469,7 @@ function run(entry: Case) {
 		dockerResult = fails ? "failure" : "success";
 	}
 	needs.Docker = { result: dockerResult };
-	needs["Kubernetes"] = { result: job("Kubernetes") ? "success" : "skipped" };
+	needs.Kubernetes = { result: job("Kubernetes") ? "success" : "skipped" };
 	return {
 		present,
 		published,

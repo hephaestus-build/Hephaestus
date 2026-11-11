@@ -96,16 +96,12 @@ void test("the static cluster names retain nightly admission and failure visibil
 		...job,
 		name: job.name.replace(/^Kubernetes \([^)]*\)/u, "Kubernetes"),
 	}));
-	assert.equal(
-		(await nightlyRefusal(repository, api([run(2, "success")], { 2: jobs }), now)).refusal,
-		undefined,
-	);
+	const admitted = await nightlyRefusal(repository, api([run(2, "success")], { 2: jobs }), now);
+	assert.equal(admitted.refusal, undefined);
 	const failed = jobs.map((job) => ({
 		...job,
 		conclusion: job.name === "Kubernetes / k3s 1.37 amd64" ? "failure" : job.conclusion,
 	}));
-	assert.match(
-		(await nightlyRefusal(repository, api([run(3, "failure")], { 3: failed }), now)).refusal ?? "",
-		/Kubernetes \/ k3s 1\.37 amd64/u,
-	);
+	const refused = await nightlyRefusal(repository, api([run(3, "failure")], { 3: failed }), now);
+	assert.match(refused.refusal ?? "", /Kubernetes \/ k3s 1\.37 amd64/u);
 });

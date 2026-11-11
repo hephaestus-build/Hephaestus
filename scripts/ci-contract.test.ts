@@ -1434,9 +1434,10 @@ void describe("CI contract", () => {
 		assert.equal(api.getIn(["jobs", "generate", "permissions", "contents"]), "read");
 		assert.doesNotMatch(job(String(api), "generate"), /actions\/setup-java@/u);
 		assert.doesNotMatch(job(String(api), "commit"), /setup-caches|gradlew|vp run/u);
+		const browserSource = await readFile(".github/workflows/ci-browser-tests.yml", "utf8");
 		const build =
 			(await readFile(".github/workflows/ci-build.yml", "utf8")) +
-			(await readFile(".github/workflows/ci-browser-tests.yml", "utf8")).split("jobs:\n")[1];
+			browserSource.split("jobs:\n")[1];
 		for (const name of ["webapp-e2e", "extension-e2e"]) {
 			assert.match(job(build, name), /actions\/setup-java@/u);
 			assert.doesNotMatch(job(build, name), /setup-caches|gradlew/u);
@@ -1500,9 +1501,10 @@ void describe("CI contract", () => {
 			"vp run --filter extension build:e2e",
 			"vp run --filter extension test:e2e",
 		]);
+		const browserSource = await readFile(".github/workflows/ci-browser-tests.yml", "utf8");
 		const build =
 			(await readFile(".github/workflows/ci-build.yml", "utf8")) +
-			(await readFile(".github/workflows/ci-browser-tests.yml", "utf8")).split("jobs:\n")[1];
+			browserSource.split("jobs:\n")[1];
 		const e2e = job(build, "extension-e2e");
 		assert.match(e2e, /vp run test:extension:e2e/u);
 		// Every Playwright project runs: neither the task nor the job narrows the suite.
@@ -1958,7 +1960,7 @@ void describe("CI contract", () => {
 		assert.equal((source.match(/run: vp run test:server:integration/gu) ?? []).length, 1);
 		assert.equal(
 			namedStep(workflow, jobPath, "Upload test results").getIn(["with", "name"]),
-			"Test Results - Integration (${{ env.INTEGRATION_SHARD == 'review' && 'review' || format('{0} of {1}', env.INTEGRATION_SHARD, env.INTEGRATION_COUNT) }})",
+			`Test Results - Integration (\${{ env.INTEGRATION_SHARD == 'review' && 'review' || format('{0} of {1}', env.INTEGRATION_SHARD, env.INTEGRATION_COUNT) }})`,
 		);
 		const tasks = await readFile("vite.config.ts", "utf8");
 		assert.match(
@@ -2015,9 +2017,10 @@ void describe("CI contract", () => {
 	});
 
 	void test("packages the server once and runs every artifact gate against it", async () => {
+		const browserSource = await readFile(".github/workflows/ci-browser-tests.yml", "utf8");
 		const build =
 			(await readFile(".github/workflows/ci-build.yml", "utf8")) +
-			(await readFile(".github/workflows/ci-browser-tests.yml", "utf8")).split("jobs:\n")[1];
+			browserSource.split("jobs:\n")[1];
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		const packageJob = job(orchestrator, "server-package");
 		const packaging = /^\s+run: (?<command>\.\/gradlew .*)$/mu.exec(packageJob)?.groups?.command;
@@ -2415,14 +2418,15 @@ void describe("CI contract", () => {
 		// Every push to main packages and publishes the final-SHA images; only a version bump
 		// repeats source validation, so the artifact gates inside Build follow the same rule.
 		assert.doesNotMatch(job(source, "Docker"), /version-bump/u);
-		for (const [name, gates] of [
+		for (const [name, inputGates] of [
 			["Build", ["contracts_changed"]],
 			["Browser-tests", ["e2e_changed", "extension_e2e_changed"]],
 		] as const) {
 			const build = job(source, name);
 			assert.doesNotMatch(build.slice(0, build.indexOf("with:")), /version-bump/u);
-			for (const gate of gates)
+			for (const gate of inputGates) {
 				assert.match(build, new RegExp(`^\\s+${gate}:.*version-bump == 'true'`, "mu"));
+			}
 		}
 		assertNeeds(source, "all-ci-passed", "Docker");
 	});
@@ -2543,9 +2547,10 @@ void describe("CI contract", () => {
 		);
 		// The caller owns which commit a run is a diff from; `ci-build.yml` derives nothing from
 		// the event.
+		const browserSource = await readFile(".github/workflows/ci-browser-tests.yml", "utf8");
 		const build =
 			(await readFile(".github/workflows/ci-build.yml", "utf8")) +
-			(await readFile(".github/workflows/ci-browser-tests.yml", "utf8")).split("jobs:\n")[1];
+			browserSource.split("jobs:\n")[1];
 		assert.doesNotMatch(build, /github\.event\.pull_request\.base\.sha/u);
 	});
 
@@ -2589,7 +2594,7 @@ void describe("CI contract", () => {
 		for (const [key, platform] of [
 			["build", "linux/amd64"],
 			["build-arm64", "linux/arm64"],
-		]) {
+		] as const) {
 			assert.match(
 				String(parsed.getIn(["jobs", key, "if"])),
 				new RegExp(`contains\\(fromJSON\\(inputs\\.platforms\\), '${platform}'\\)`, "u"),
@@ -4908,7 +4913,9 @@ function serverShards(workflow: Document, queue: boolean): string[] {
 	return jobs.items.flatMap(({ key, value }) => {
 		assert.ok(isMap(value));
 		const tier = value.getIn(["env", "TEST_TIER"]) ?? value.getIn(["env", "INTEGRATION_SHARD"]);
-		if (tier === undefined) return [];
+		if (tier === undefined) {
+			return [];
+		}
 		return jobRuns(suites, String(key), "pull_request", {}, false, {
 			should_skip: "false",
 			application_server_changed: "true",
@@ -5906,8 +5913,9 @@ function clusterMatrix(queue: boolean, arm64 = false) {
 				queue,
 				arm64,
 			})
-		)
+		) {
 			return [];
+		}
 		return [
 			{
 				leg: key === "calico" ? "calico" : "k3d",
@@ -6161,7 +6169,8 @@ void test("the staging channel is signed by the release's keyless signer, over n
 });
 
 // docs/contributor/ci-cd.mdx § Fail fast in the merge queue owns the reasons for the tests below.
-const isCancelWorker = (job: Record<string, unknown>) => job.name === "Stop the merge group early";
+const isCancelWorker = (worker: Record<string, unknown>) =>
+	worker.name === "Stop the merge group early";
 
 // The legs that take most of a merge group's runner time. In a merge group they start only after
 // Security passed, so a base-wide advisory ends the group before they take runners.
@@ -6241,17 +6250,20 @@ function needsClosure(workflow: Document, name: string): Set<string> {
 void test("one Security scan is the heavy legs' prerequisite on every event, with advisory work independent", async () => {
 	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	assert.deepEqual(needsOf(workflow, "Security"), ["detect-changes"]);
-	for (const leg of HEAVY_LEGS) assert.ok(needsClosure(workflow, leg).has("Security"), leg);
+	for (const leg of HEAVY_LEGS) {
+		assert.ok(needsClosure(workflow, leg).has("Security"), leg);
+	}
 	for (const event of ["merge_group", "pull_request", "push", "workflow_dispatch"]) {
 		for (const security of ["success", "failure", "cancelled"]) {
 			const run = simulateRun(workflow, event, security);
 			assert.equal(run.Security, security, event);
-			for (const leg of HEAVY_LEGS)
+			for (const leg of HEAVY_LEGS) {
 				assert.equal(
 					run[leg],
 					security === "success" ? "success" : "skipped",
 					`${event} ${security}: ${leg}`,
 				);
+			}
 			assert.equal(run["vulnerability-database"], "success");
 		}
 	}
@@ -6309,19 +6321,21 @@ void test("each cancel worker has the same readable name and runs only graceful 
 		const workflow = asRecord(parseDocument(source).toJSON(), file);
 		for (const [key, definition] of Object.entries(asRecord(workflow.jobs, "jobs"))) {
 			const worker = asRecord(definition, key);
-			if (!key.startsWith("fail-fast-")) continue;
-			count++;
+			if (!key.startsWith("fail-fast-")) {
+				continue;
+			}
+			count += 1;
 			assert.equal(worker.name, "Stop the merge group early");
 			assert.equal(worker["runs-on"], "ubuntu-slim");
 			assert.deepEqual(worker.permissions, { actions: "write" });
 			const steps = asArray(worker.steps, "cancel steps");
 			assert.equal(steps.length, 1);
-			const step = asRecord(steps[0], "cancel step");
-			assert.equal(step.run, 'gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"');
-			assert.equal(step.uses, undefined);
-			assert.deepEqual(step.env, {
-				GH_TOKEN: "${{ github.token }}",
-				RUN_ID: "${{ github.run_id }}",
+			const cancelStep = asRecord(steps[0], "cancel step");
+			assert.equal(cancelStep.run, 'gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"');
+			assert.equal(cancelStep.uses, undefined);
+			assert.deepEqual(cancelStep.env, {
+				GH_TOKEN: `\${{ github.token }}`,
+				RUN_ID: `\${{ github.run_id }}`,
 			});
 		}
 	}
@@ -6354,6 +6368,12 @@ const writesActions = (permissions: unknown) =>
 	permissions === "write-all" || (isRecord(permissions) && permissions.actions === "write");
 
 void test("each worker can cancel a merge group without waiting for unrelated workers", async () => {
+	const cases = ["merge_group", "pull_request", "push", "workflow_dispatch", "schedule"].flatMap(
+		(event) =>
+			["success", "skipped", "cancelled", "failure"].flatMap((result) =>
+				[false, true].map((cancelled) => ({ event, result, cancelled })),
+			),
+	);
 	for (const file of [
 		"ci-quality-gates.yml",
 		"ci-build.yml",
@@ -6366,7 +6386,9 @@ void test("each worker can cancel a merge group without waiting for unrelated wo
 		const jobs = asRecord(asRecord(workflow.toJSON(), file).jobs, "jobs");
 		for (const [key, definition] of Object.entries(jobs)) {
 			const worker = asRecord(definition, key);
-			if (isCancelWorker(worker) || key === "tag-unchanged-images") continue;
+			if (isCancelWorker(worker) || key === "tag-unchanged-images") {
+				continue;
+			}
 			const callbacks = Object.entries(jobs).filter(([, value]) => {
 				const callback = asRecord(value, "callback");
 				return (
@@ -6378,16 +6400,14 @@ void test("each worker can cancel a merge group without waiting for unrelated wo
 			});
 			assert.equal(callbacks.length, 1, `${file}#${key}: immediate callback`);
 			const name = callbacks[0]?.[0];
-			assert.ok(name);
-			for (const event of ["merge_group", "pull_request", "push", "workflow_dispatch", "schedule"])
-				for (const result of ["success", "skipped", "cancelled", "failure"])
-					for (const cancelled of [false, true]) {
-						assert.equal(
-							jobRuns(workflow, name, event, { [key]: { result } }, cancelled),
-							event === "merge_group" && result === "failure",
-							`${file}#${key}: ${event}, ${result}`,
-						);
-					}
+			assert.ok(isSet(name));
+			for (const { event, result, cancelled } of cases) {
+				assert.equal(
+					jobRuns(workflow, name, event, { [key]: { result } }, cancelled),
+					event === "merge_group" && result === "failure",
+					`${file}#${key}: ${event}, ${result}`,
+				);
+			}
 		}
 	}
 	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
@@ -6406,7 +6426,7 @@ void test("manifest publication waits for both platform verdicts and still signs
 		platforms: '["linux/amd64","linux/arm64"]',
 		"reuse-images": "[]",
 	};
-	for (const result of ["success", "skipped", "failure", "cancelled"])
+	for (const result of ["success", "skipped", "failure", "cancelled"]) {
 		for (const cancelled of [false, true]) {
 			assert.equal(
 				jobRuns(
@@ -6420,10 +6440,12 @@ void test("manifest publication waits for both platform verdicts and still signs
 				!cancelled && ["success", "skipped"].includes(result),
 			);
 		}
+	}
 	for (const reused of [false, true]) {
 		const selected = { ...inputs, "reuse-images": reused ? '["application-server"]' : "[]" };
-		for (const key of ["build", "build-arm64"])
+		for (const key of ["build", "build-arm64"]) {
 			assert.equal(jobRuns(workflow, key, "push", {}, false, selected), !reused);
+		}
 		assert.equal(
 			jobRuns(
 				workflow,
@@ -6482,9 +6504,11 @@ void test("only the fail-fast jobs, and the listed exceptions, can write to Acti
 	const callsCancel = (file: string): boolean => {
 		const workflow = asRecord(parseDocument(sources.get(file) ?? "").toJSON(), file);
 		return Object.values(asRecord(workflow.jobs, "jobs")).some((value) => {
-			const job = asRecord(value, "job");
-			if (isCancelWorker(job)) return true;
-			const { uses } = job;
+			const workerDefinition = asRecord(value, "job");
+			if (isCancelWorker(workerDefinition)) {
+				return true;
+			}
+			const { uses } = workerDefinition;
 			return (
 				typeof uses === "string" &&
 				uses.startsWith("./.github/workflows/") &&
@@ -6578,12 +6602,13 @@ void test("the CI outline has static names and one reusable level, including ski
 	);
 	assert.equal(jobs["start-ci"], undefined, "the status-only admission design was rejected");
 	const gateScript = runScript(root, ["jobs", "all-ci-passed"], "Evaluate CI results");
-	const labels = /jq -r '(\{[\s\S]*?\}) as \$names/u.exec(gateScript)?.[1];
-	assert.ok(labels, "the summary names every native result with its sidebar name");
+	const labels = /jq -r '(?<labels>\{[\s\S]*?\}) as \$names/u.exec(gateScript)?.groups?.labels;
+	assert.ok(isSet(labels), "the summary names every native result with its sidebar name");
 	const names = asRecord(JSON.parse(labels), "summary names");
 	assert.deepEqual(Object.keys(names).toSorted(), needsOf(root, "all-ci-passed").toSorted());
-	for (const [key, label] of Object.entries(names))
+	for (const [key, label] of Object.entries(names)) {
 		assert.equal(label, asRecord(jobs[key], key).name ?? key, key);
+	}
 	const suites = parseDocument(await readFile(".github/workflows/ci-tests.yml", "utf8"));
 	assert.equal(suites.getIn(["env", "INTEGRATION_COUNT"]), String(committedShards()));
 	for (let index = 1; index <= committedShards(); index += 1) {
@@ -6596,7 +6621,9 @@ void test("the CI outline has static names and one reusable level, including ski
 		const caller = asRecord(definition, key);
 		const name = asString(caller.name ?? key, "caller name");
 		assert.doesNotMatch(name, /\$\{\{| \/ /u, key);
-		if (typeof caller.uses !== "string") continue;
+		if (typeof caller.uses !== "string") {
+			continue;
+		}
 		assert.equal(caller.strategy, undefined, `${key}: a caller matrix repeats its stage`);
 		const callee = asRecord(
 			parseDocument(await readFile(caller.uses.slice(2), "utf8")).toJSON(),
@@ -6642,21 +6669,26 @@ void test("chart lint runs once in its latest-k3s consumer with its parser depen
 	const jobs = asRecord(asRecord(workflow.toJSON(), "Kubernetes").jobs, "jobs");
 	let linters = 0;
 	for (const [key, value] of Object.entries(jobs)) {
-		if (!key.startsWith("k3d")) continue;
-		const job = asRecord(value, key);
-		const environment = asRecord(job.env, "environment");
-		const steps = asArray(job.steps, "steps").map((step) => asRecord(step, "step"));
+		if (!key.startsWith("k3d")) {
+			continue;
+		}
+		const worker = asRecord(value, key);
+		const environment = asRecord(worker.env, "environment");
+		const steps = asArray(worker.steps, "steps").map((declaration) =>
+			asRecord(declaration, "declaration"),
+		);
 		const selected = steps
 			.filter(
-				(step) =>
-					step.uses === "./.github/actions/setup-toolchain" ||
-					(typeof step.run === "string" && step.run.includes("node scripts/crd-schemas.ts")),
+				(declaration) =>
+					declaration.uses === "./.github/actions/setup-toolchain" ||
+					(typeof declaration.run === "string" &&
+						declaration.run.includes("node scripts/crd-schemas.ts")),
 			)
 			.filter(
-				(step) =>
-					step.if === undefined ||
+				(declaration) =>
+					declaration.if === undefined ||
 					expandExpressions(
-						`\${{ ${asString(step.if, "step condition").replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "")} }}`,
+						`\${{ ${asString(declaration.if, "declaration condition").replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "")} }}`,
 						{
 							env: environment,
 							inputs: {},
@@ -6664,10 +6696,14 @@ void test("chart lint runs once in its latest-k3s consumer with its parser depen
 						},
 					) === "true",
 			);
-		const toolchain = selected.filter((step) => step.uses === "./.github/actions/setup-toolchain");
+		const toolchain = selected.filter(
+			(declaration) => declaration.uses === "./.github/actions/setup-toolchain",
+		);
 		assert.equal(toolchain.length, 1, key);
 		const lint = selected.find(
-			(step) => typeof step.run === "string" && step.run.includes("node scripts/crd-schemas.ts"),
+			(declaration) =>
+				typeof declaration.run === "string" &&
+				declaration.run.includes("node scripts/crd-schemas.ts"),
 		);
 		assert.equal(Boolean(lint), key === "k3d", key);
 		assert.equal(
@@ -6675,7 +6711,7 @@ void test("chart lint runs once in its latest-k3s consumer with its parser depen
 			lint ? "frozen" : "none",
 		);
 		if (lint) {
-			linters++;
+			linters += 1;
 			assert.ok(selected.indexOf(toolchain[0] ?? {}) < selected.indexOf(lint));
 		}
 	}
@@ -6729,7 +6765,7 @@ void test("merged workflow lint retains Zizmor after an Actionlint failure and i
 void test("the prepull drill stays on the latest amd64 consumer after flattening cluster jobs", async () => {
 	const workflow = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
 	for (const key of ["k3d", "k3d-1-35-amd64", "k3d-1-35-arm64"]) {
-		const step = namedStep(
+		const prepullStep = namedStep(
 			workflow,
 			["jobs", key],
 			"Start a sandbox on a new node without an image pull",
@@ -6737,9 +6773,9 @@ void test("the prepull drill stays on the latest amd64 consumer after flattening
 		const environment = workflow.getIn(["jobs", key, "env"]);
 		assert.ok(isMap(environment));
 		assert.equal(
-			expandExpressions(step.get("if"), { env: environment.toJSON() }),
+			expandExpressions(prepullStep.get("if"), { env: environment.toJSON() }),
 			String(key === "k3d"),
 		);
-		assert.match(String(step.get("run")), /node scripts\/sandbox-prepull-drill\.ts/u);
+		assert.match(String(prepullStep.get("run")), /node scripts\/sandbox-prepull-drill\.ts/u);
 	}
 });

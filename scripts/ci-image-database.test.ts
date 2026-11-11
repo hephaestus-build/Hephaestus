@@ -47,7 +47,7 @@ function evaluates(
 					]),
 				),
 				// A pull request's merge-group Security scan skips.
-				Security: { result: results["Security"] ?? "skipped" },
+				Security: { result: results.Security ?? "skipped" },
 				"detect-changes": { result: results["detect-changes"] ?? "success", outputs },
 			},
 		}),
