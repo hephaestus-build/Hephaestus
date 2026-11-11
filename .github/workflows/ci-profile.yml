@@ -29,11 +29,15 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - shard: providers
-          - shard: runtime-and-startup
-          - shard: practices-and-agent
-          - shard: application
           - shard: review
+          - shard: "1"
+          - shard: "2"
+          - shard: "3"
+          - shard: "4"
+          - shard: "5"
+          - shard: "6"
+          - shard: "7"
+          - shard: "8"
     permissions:
       contents: read
       actions: read
@@ -281,7 +285,7 @@ jobs:
         run: ./gradlew :application:testClasses --profile
       - name: Run application integration tests
         env:
-          HEPHAESTUS_INTEGRATION_SHARD: application
+          HEPHAESTUS_INTEGRATION_SHARD: "1"
         run: vp run test:server:integration --profile
       - name: Summarize test results
         if: ${{ !cancelled() }}

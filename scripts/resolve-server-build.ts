@@ -2,6 +2,7 @@ import { appendFile } from "node:fs/promises";
 
 import { canonicalCiJobName } from "./lib/ci-job-name.ts";
 import { requiredEnv } from "./lib/env.ts";
+import { committedShards } from "./lib/integration-durations.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 
@@ -14,11 +15,11 @@ const requiredJobs = [
 	"Docker / Images / Build linux/amd64 images",
 	"Docker / Images / Build linux/arm64 images",
 	"Test / App Server: Unit and architecture",
-	"Test / App Server: Integration (application)",
-	"Test / App Server: Integration (providers)",
-	"Test / App Server: Integration (runtime-and-startup)",
-	"Test / App Server: Integration (practices-and-agent)",
 	"Test / App Server: Integration (review)",
+	...Array.from(
+		{ length: committedShards() },
+		(_, index) => `Test / App Server: Integration (${index + 1})`,
+	),
 	"Security / Dependencies, secrets, and policy",
 	"CI Status Gate",
 ];

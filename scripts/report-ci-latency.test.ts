@@ -147,6 +147,7 @@ function integration(...shards: string[]) {
 
 void test("lightweight runs cannot make full verification's latency budget pass", () => {
 	for (const shards of [
+		["review", "1", "2", "3", "4", "5", "6", "7", "8"],
 		["providers", "runtime-and-startup", "practices-and-agent", "application", "review"],
 		["providers", "runtime-and-startup", "practices-and-agent", "application"],
 		["providers", "runtime-and-startup", "application"],
@@ -168,13 +169,7 @@ void test("lightweight runs cannot make full verification's latency budget pass"
 	assert.equal(isFullVerification([{ name: "Quality / Tooling and Docs" }]), false);
 	const current = [
 		...verificationJobs,
-		...integration(
-			"providers",
-			"runtime-and-startup",
-			"practices-and-agent",
-			"application",
-			"review",
-		),
+		...integration("review", "1", "2", "3", "4", "5", "6", "7", "8"),
 	].map((name) => ({
 		name:
 			name === "Test / App Server: Unit and architecture"
@@ -202,6 +197,8 @@ void test("only a complete integration shard layout counts as full verification"
 			"review",
 			"unexpected",
 		],
+		["review", "1", "2", "3", "4", "5", "6", "7"],
+		["review", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
 	]) {
 		const jobs = [...verificationJobs, ...integration(...shards)].map((name) => ({ name }));
 		assert.equal(isFullVerification(jobs), false, shards.join(","));

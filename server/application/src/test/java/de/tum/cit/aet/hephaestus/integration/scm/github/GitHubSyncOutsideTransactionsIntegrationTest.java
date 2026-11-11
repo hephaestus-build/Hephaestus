@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
@@ -184,14 +185,8 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                 "owner":{"__typename":"Organization","databaseId":%d,"login":"outside-org-%d"}}}}
                 """.formatted(RATE_LIMIT, nativeId, name, name, 5_000_000L + repositoryId, repositoryId));
 
-        var synced = repositories()
-                .syncRepository(
-                        workspaceId,
-                        name,
-                        providers
-                                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                                .orElseThrow(),
-                        nativeId);
+        var synced =
+                repositories().syncRepository(workspaceId, name, IdentityProviderFixtures.gitHub(providers), nativeId);
 
         assertThat(synced).isPresent();
         assertThat(requests).containsExactly(new Request(Thread.currentThread().getName(), false));
@@ -443,9 +438,7 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
         organization.setNativeId(3_000_000L + repositoryId);
         organization.setLogin("outside-org-" + repositoryId);
         organization.setHtmlUrl("https://github.com/outside-org-" + repositoryId);
-        organization.setProvider(providers
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow());
+        organization.setProvider(IdentityProviderFixtures.gitHub(providers));
         return context.getBean(OrganizationRepository.class).save(organization);
     }
 

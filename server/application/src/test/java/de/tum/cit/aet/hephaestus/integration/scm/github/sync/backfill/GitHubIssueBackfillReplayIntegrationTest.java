@@ -5,8 +5,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -97,9 +97,7 @@ class GitHubIssueBackfillReplayIntegrationTest extends BaseIntegrationTest {
     @ValueSource(booleans = {false, true})
     void shouldKeepATiedWebhookWriteThatCommittedDuringTheBackfillRequest(boolean writeDuringRequest) {
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("backfill-" + UUID.randomUUID()));
-        var provider = providers
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow();
+        var provider = IdentityProviderFixtures.gitHub(providers);
         var repository = new Repository();
         repository.setNativeId(Integer.toUnsignedLong(UUID.randomUUID().hashCode()));
         repository.setProvider(provider);
