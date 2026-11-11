@@ -14,12 +14,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createClient } from "@/api/client";
 import { client as appClient } from "@/api/client.gen";
+import * as sdk from "@/api/sdk.gen";
 import type { BrowserFault, BrowserFaultsReport } from "@/api/types.gen";
 import { zBrowserFaultsReport } from "@/api/zod.gen";
 import type environment from "@/environment";
 import { server } from "@/mocks/server";
 import { installPreloadErrorReload } from "@/runtime/preload-error";
-import { sleep } from "@/test/async";
+import { deferred } from "@/test/async";
 
 import {
 	type BrowserFaults,
@@ -80,10 +81,18 @@ async function renderInRoot(faults: BrowserFaults, content: ReactNode) {
 async function renderOutsideAct(faults: BrowserFaults, content: ReactNode) {
 	const actEnvironment: unknown = Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT");
 	Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", false);
-	const root = createRoot(document.createElement("div"), rootErrorHandlers(faults));
+	const handled = deferred();
+	const handlers = rootErrorHandlers(faults);
+	const root = createRoot(document.createElement("div"), {
+		...handlers,
+		onUncaughtError: (error, errorInfo) => {
+			handlers.onUncaughtError?.(error, errorInfo);
+			handled.resolve();
+		},
+	});
 	try {
 		root.render(content);
-		await sleep(50);
+		await handled.promise;
 	} finally {
 		root.unmount();
 		Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
@@ -286,15 +295,18 @@ describe("how a failed request is reported", () => {
 
 	it("reports nothing about its own report, even with the app's client reporting failed requests", async () => {
 		const reports = receive(503);
+		const send = vi.spyOn(sdk, "reportBrowserFaults");
 		faults = installBrowserFaults(routerAt(false));
 		const uninstall = reportFailedRequests(appClient, faults);
 		try {
 			dispatchEvent(new ErrorEvent("error", { error: new TypeError("x") }));
 			await hide();
 			await vi.waitFor(() => expect(reports).toHaveLength(1));
-			await sleep(50);
+			const [sent] = send.mock.results;
+			expect(sent?.type).toBe("return");
+			await sent?.value;
 			await hide();
-			await sleep(50);
+			expect(send).toHaveBeenCalledOnce();
 
 			expect(reports).toHaveLength(1);
 		} finally {
@@ -305,6 +317,7 @@ describe("how a failed request is reported", () => {
 	it("leaves a not-found or no-access view and a failed request's view to the request", async () => {
 		vi.spyOn(console, "warn").mockReturnValue(undefined);
 		const reports = receive();
+		const send = vi.spyOn(sdk, "reportBrowserFaults");
 		faults = installBrowserFaults(routerAt(false));
 
 		for (const status of [404, 403, 503]) {
@@ -316,8 +329,8 @@ describe("how a failed request is reported", () => {
 			).catch(noop);
 		}
 		await hide();
-		await sleep(50);
 
+		expect(send).not.toHaveBeenCalled();
 		expect(reports).toStrictEqual([]);
 	});
 });

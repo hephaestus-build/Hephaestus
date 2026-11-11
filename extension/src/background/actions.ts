@@ -52,6 +52,72 @@ const intentSchema = z.object({
 });
 
 export type ActionIntent = z.infer<typeof intentSchema>;
+export type IntentState =
+	| { state: "absent" }
+	| (ActionIntent & { state: "unbound"; confirmationTabId?: undefined })
+	| (ActionIntent & { state: "bound"; confirmationTabId: number });
+
+function intentState(intent: ActionIntent | undefined): IntentState {
+	if (intent === undefined) {
+		return { state: "absent" };
+	}
+	return intent.confirmationTabId === undefined
+		? { ...intent, state: "unbound", confirmationTabId: undefined }
+		: { ...intent, state: "bound", confirmationTabId: intent.confirmationTabId };
+}
+
+function intentRecord(state: IntentState): ActionIntent | undefined {
+	if (state.state === "absent") {
+		return undefined;
+	}
+	const { state: phase, ...record } = state;
+	if (phase === "unbound") {
+		delete record.confirmationTabId;
+	}
+	return record;
+}
+
+type IntentEvent =
+	| { type: "open"; intent: Extract<IntentState, { state: "unbound" }> }
+	| { type: "bind"; tabId: number }
+	| { type: "forget" }
+	| { type: "close"; tabId: number }
+	| { type: "discard"; tabId: number }
+	| { type: "consume"; tabId: number; generation: number; now: number };
+
+/** An absent intent is also a consumed intent: no durable state can replay the request. */
+export function transitionIntent(
+	current: IntentState,
+	event: IntentEvent,
+): IntentState | undefined {
+	switch (event.type) {
+		case "open": {
+			return event.intent;
+		}
+		case "bind": {
+			return current.state === "unbound"
+				? { ...current, state: "bound", confirmationTabId: event.tabId }
+				: undefined;
+		}
+		case "forget": {
+			return current.state === "absent" ? undefined : { state: "absent" };
+		}
+		case "close":
+		case "discard": {
+			return current.state === "bound" && current.confirmationTabId === event.tabId
+				? { state: "absent" }
+				: undefined;
+		}
+		case "consume": {
+			return current.state === "bound" &&
+				current.confirmationTabId === event.tabId &&
+				current.generation === event.generation &&
+				event.now <= current.expiresAt
+				? { state: "absent" }
+				: undefined;
+		}
+	}
+}
 
 /** Where the one pending intent lives: `storage.session`, so it outlives an idle worker. */
 export interface IntentStore {
@@ -90,31 +156,30 @@ async function storedIntent(deps: ActionDependencies): Promise<ActionIntent | un
 }
 
 /**
- * Applies `change` to the stored intent only if it is still `intentId`: a reader that started before a
- * replacement can never touch the newer intent.
+ * Applies one event under the storage lock. An event with an intent ID cannot change a replacement.
  */
-async function compareAndSet(
+async function applyIntent(
 	deps: ActionDependencies,
-	intentId: string,
-	change: (intent: ActionIntent) => ActionIntent | undefined | false,
+	event: () => IntentEvent,
+	intentId?: string,
 ): Promise<boolean> {
 	return exclusive(async () => {
 		const intent = await storedIntent(deps);
-		if (intent?.id !== intentId) {
+		if (intentId !== undefined && intent?.id !== intentId) {
 			return false;
 		}
-		const next = change(intent);
-		if (next === false) {
+		const next = transitionIntent(intentState(intent), event());
+		if (next === undefined) {
 			return false;
 		}
-		await deps.store.write(next);
+		await deps.store.write(intentRecord(next));
 		return true;
 	});
 }
 
 /** Removes the intent if it is still this one; a newer intent survives. */
 export async function forgetAction(deps: ActionDependencies, intentId: string): Promise<void> {
-	await compareAndSet(deps, intentId, () => undefined);
+	await applyIntent(deps, () => ({ type: "forget" }), intentId);
 }
 
 function expired(): WorkerError {
@@ -145,7 +210,8 @@ export async function openAction(
 	const { context, stillShowing } = await requireReady(env, tabId, workspaceSlug);
 	allowed(context);
 	await stillShowing();
-	const intent: ActionIntent = {
+	const intent = {
+		state: "unbound",
 		id: deps.newId(),
 		generation: env.api.generation,
 		tabId,
@@ -154,8 +220,8 @@ export async function openAction(
 		itemId: context.item.id,
 		action,
 		expiresAt: deps.now() + INTENT_LIFETIME_MS,
-	};
-	await exclusive(async () => deps.store.write(intent));
+	} satisfies Extract<IntentState, { state: "unbound" }>;
+	await applyIntent(deps, () => ({ type: "open", intent }));
 	return intent.id;
 }
 
@@ -165,19 +231,12 @@ export async function bindConfirmation(
 	intentId: string,
 	confirmationTabId: number,
 ): Promise<boolean> {
-	return compareAndSet(deps, intentId, (intent) =>
-		intent.confirmationTabId === undefined ? { ...intent, confirmationTabId } : false,
-	);
+	return applyIntent(deps, () => ({ type: "bind", tabId: confirmationTabId }), intentId);
 }
 
 /** A closed confirmation window takes its intent with it, and no other. */
 export async function confirmationClosed(deps: ActionDependencies, tabId: number): Promise<void> {
-	await exclusive(async () => {
-		const intent = await storedIntent(deps);
-		if (intent?.confirmationTabId === tabId) {
-			await deps.store.write(undefined);
-		}
-	});
+	await applyIntent(deps, () => ({ type: "close", tabId }));
 }
 
 /**
@@ -264,12 +323,15 @@ export async function confirmAction(
 ): Promise<ActionOutcome> {
 	const { context, stillShowing } = await revalidate(env, deps, intentId, senderTabId);
 	await stillShowing();
-	const consumed = await compareAndSet(deps, intentId, (current) =>
-		current.confirmationTabId === senderTabId &&
-		current.generation === env.api.generation &&
-		deps.now() <= current.expiresAt
-			? undefined
-			: false,
+	const consumed = await applyIntent(
+		deps,
+		() => ({
+			type: "consume",
+			tabId: senderTabId,
+			generation: env.api.generation,
+			now: deps.now(),
+		}),
+		intentId,
 	);
 	if (!consumed) {
 		throw expired();
@@ -320,7 +382,5 @@ export async function discardAction(
 	intentId: string,
 	senderTabId: number,
 ): Promise<void> {
-	await compareAndSet(deps, intentId, (intent) =>
-		intent.confirmationTabId === senderTabId ? undefined : false,
-	);
+	await applyIntent(deps, () => ({ type: "discard", tabId: senderTabId }), intentId);
 }

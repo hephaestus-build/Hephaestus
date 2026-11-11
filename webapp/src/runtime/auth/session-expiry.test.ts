@@ -15,7 +15,6 @@ import {
 import { SESSION_COOLDOWN_MS, refreshAccessToken } from "./session-refresh";
 
 import { hasText } from "@/lib/text";
-import { sleep } from "@/test/async";
 
 vi.mock(import("@/environment"), async (importOriginal) => {
 	const actual = await importOriginal();
@@ -81,25 +80,19 @@ function serveSession({ user = 200, refresh = 204 }: { user?: number; refresh?: 
 
 const PRACTICES = "http://localhost:3000/api/workspaces/acme/practices";
 
-/** Recovery chains an identity read and a renewal; both answer well within this wait. */
-async function settled(): Promise<void> {
-	await sleep(50);
-}
-
 describe("handlePossibleSessionExpiry", () => {
 	it("leaves a refused browser report alone, so a hidden tab keeps its session", async () => {
 		const calls = serveSession({ user: 401, refresh: 401 });
 		const { assigned } = stubLocation("/w/acme/practice-profile", "");
 
 		for (const report of ["web-vitals", "browser-faults"]) {
-			expect(
+			await expect(
 				handlePossibleSessionExpiry(
 					res(401, `http://localhost:3000/api/${report}`),
 					makeQueryClient(),
 				),
-			).toBe(false);
+			).resolves.toBe(false);
 		}
-		await settled();
 
 		expect(calls).toStrictEqual({ user: 0, refresh: 0 });
 		expect(assigned).toHaveLength(0);
@@ -111,8 +104,7 @@ describe("handlePossibleSessionExpiry", () => {
 		const qc = makeQueryClient();
 		const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-		expect(handlePossibleSessionExpiry(res(401, PRACTICES), qc)).toBe(true);
-		await settled();
+		await expect(handlePossibleSessionExpiry(res(401, PRACTICES), qc)).resolves.toBe(true);
 
 		expect(calls).toStrictEqual({ user: 1, refresh: 0 });
 		expect(assigned).toHaveLength(0);
@@ -122,8 +114,7 @@ describe("handlePossibleSessionExpiry", () => {
 	it("still renews after recovery reads a valid identity", async () => {
 		const calls = serveSession();
 		stubLocation("/w/acme/activity");
-		handlePossibleSessionExpiry(res(401, PRACTICES), makeQueryClient());
-		await settled();
+		await handlePossibleSessionExpiry(res(401, PRACTICES), makeQueryClient());
 		expect(calls).toStrictEqual({ user: 1, refresh: 0 });
 
 		await expect(refreshAccessToken()).resolves.toBe("refreshed");
@@ -137,13 +128,11 @@ describe("handlePossibleSessionExpiry", () => {
 		const qc = makeQueryClient();
 
 		await expect(refreshAccessToken()).resolves.toBe("refreshed");
-		handlePossibleSessionExpiry(res(401, PRACTICES), qc);
-		await settled();
+		await handlePossibleSessionExpiry(res(401, PRACTICES), qc);
 		expect(calls).toStrictEqual({ user: 0, refresh: 1 });
 
 		vi.setSystemTime(NOW + SESSION_COOLDOWN_MS);
-		handlePossibleSessionExpiry(res(401, PRACTICES), qc);
-		await settled();
+		await handlePossibleSessionExpiry(res(401, PRACTICES), qc);
 		expect(calls).toStrictEqual({ user: 1, refresh: 1 });
 	});
 
@@ -156,8 +145,7 @@ describe("handlePossibleSessionExpiry", () => {
 			JSON.stringify({ id: crypto.randomUUID(), completedAt: NOW }),
 		);
 
-		handlePossibleSessionExpiry(res(401, PRACTICES), makeQueryClient());
-		await settled();
+		await handlePossibleSessionExpiry(res(401, PRACTICES), makeQueryClient());
 
 		expect(calls).toStrictEqual({ user: 0, refresh: 0 });
 	});
@@ -167,10 +155,8 @@ describe("handlePossibleSessionExpiry", () => {
 		stubLocation("/w/acme/overview");
 		const qc = makeQueryClient();
 
-		handlePossibleSessionExpiry(res(401, PRACTICES), qc);
-		await settled();
-		handlePossibleSessionExpiry(res(401, PRACTICES), qc);
-		await settled();
+		await handlePossibleSessionExpiry(res(401, PRACTICES), qc);
+		await handlePossibleSessionExpiry(res(401, PRACTICES), qc);
 
 		expect(calls).toStrictEqual({ user: 1, refresh: 0 });
 	});
@@ -184,9 +170,8 @@ describe("handlePossibleSessionExpiry", () => {
 			handlePossibleSessionExpiry(res(401, PRACTICES), qc),
 			handlePossibleSessionExpiry(res(401, PRACTICES), qc),
 		];
-		await settled();
 
-		expect(handled).toStrictEqual([true, true, true]);
+		await expect(Promise.all(handled)).resolves.toStrictEqual([true, true, true]);
 		expect(calls).toStrictEqual({ user: 1, refresh: 0 });
 		expect(assigned).toHaveLength(0);
 	});
@@ -197,8 +182,7 @@ describe("handlePossibleSessionExpiry", () => {
 		const qc = makeQueryClient();
 		const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-		handlePossibleSessionExpiry(res(401, PRACTICES), qc);
-		await settled();
+		await handlePossibleSessionExpiry(res(401, PRACTICES), qc);
 
 		expect(calls).toStrictEqual({ user: 1, refresh: 1 });
 		expect(assigned).toHaveLength(0);
@@ -209,8 +193,7 @@ describe("handlePossibleSessionExpiry", () => {
 		serveSession({ user: 401, refresh: 401 });
 		const { assigned } = stubLocation("/w/acme/overview", "?tab=prs");
 
-		handlePossibleSessionExpiry(res(401, PRACTICES), makeQueryClient());
-		await settled();
+		await handlePossibleSessionExpiry(res(401, PRACTICES), makeQueryClient());
 
 		expect(assigned).toHaveLength(1);
 		const [target] = assigned;
@@ -242,8 +225,7 @@ describe("handlePossibleSessionExpiry", () => {
 		const qc = makeQueryClient();
 		const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-		handlePossibleSessionExpiry(res(401, PRACTICES), qc);
-		await settled();
+		await handlePossibleSessionExpiry(res(401, PRACTICES), qc);
 
 		expect(userCalls).toBe(2);
 		expect(assigned).toHaveLength(0);
@@ -256,8 +238,7 @@ describe("handlePossibleSessionExpiry", () => {
 		const qc = makeQueryClient();
 		const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-		handlePossibleSessionExpiry(res(401, "http://localhost:3000/api/workspaces/acme"), qc);
-		await settled();
+		await handlePossibleSessionExpiry(res(401, "http://localhost:3000/api/workspaces/acme"), qc);
 
 		expect(calls).toStrictEqual({ user: 1, refresh: 0 });
 		expect(assigned).toHaveLength(0);
@@ -270,8 +251,7 @@ describe("handlePossibleSessionExpiry", () => {
 		const qc = makeQueryClient();
 		const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-		handlePossibleSessionExpiry(res(401, "http://localhost:3000/api/workspaces/acme"), qc);
-		await settled();
+		await handlePossibleSessionExpiry(res(401, "http://localhost:3000/api/workspaces/acme"), qc);
 
 		expect(assigned).toHaveLength(0);
 		expect(invalidate).not.toHaveBeenCalled();
@@ -287,8 +267,9 @@ describe("handlePossibleSessionExpiry", () => {
 		const calls = serveSession();
 		const { assigned } = stubLocation(pathname);
 
-		expect(handlePossibleSessionExpiry(res(401, url), makeQueryClient())).toBe(false);
-		await settled();
+		await expect(handlePossibleSessionExpiry(res(401, url), makeQueryClient())).resolves.toBe(
+			false,
+		);
 
 		expect(calls).toStrictEqual({ user: 0, refresh: 0 });
 		expect(assigned).toHaveLength(0);
@@ -297,20 +278,19 @@ describe("handlePossibleSessionExpiry", () => {
 	it("drops an open-redirect returnTo down to '/' when logging out", async () => {
 		serveSession({ user: 401, refresh: 401 });
 		const { assigned } = stubLocation("//evil.example.com");
-		handlePossibleSessionExpiry(
+		await handlePossibleSessionExpiry(
 			res(401, "http://localhost:3000/api/workspaces/acme"),
 			makeQueryClient(),
 		);
-		await settled();
 		const [target] = assigned;
 		assert(hasText(target));
 		const url = new URL(target);
 		expect(url.searchParams.get("returnTo")).toBe("/");
 	});
 
-	it.each([200, 204, 403, 500])("ignores non-401 status %i", (status) => {
+	it.each([200, 204, 403, 500])("ignores non-401 status %i", async (status) => {
 		const { assigned } = stubLocation("/dashboard");
-		const handled = handlePossibleSessionExpiry(
+		const handled = await handlePossibleSessionExpiry(
 			res(status, "http://localhost:3000/api/workspaces/acme"),
 			makeQueryClient(),
 		);

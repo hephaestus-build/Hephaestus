@@ -2,7 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type JsonBodyType, type PathParams } from "msw";
-import { assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	getPublicActivityHiddenCountQueryKey,
@@ -27,6 +27,7 @@ import { server } from "@/mocks/server";
 import { apiPathOf } from "@/test/api-path";
 import { deferred } from "@/test/async";
 import {
+	loadRouteCode,
 	ROUTE_RENDER_WAIT,
 	renderRouteAt,
 	renderRouteAtWithRouter,
@@ -34,9 +35,16 @@ import {
 } from "@/test/router-harness";
 import { switchWorkspace } from "@/test/workspace-switcher";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
-// deadlock backstop, not a budget these renders were meant to fit inside.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme/admin/settings",
+			"/w/acme/admin/practices/review",
+			"/w/acme/admin/practices",
+			"/admin/workspaces",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 /** The settings page for an admin of acme, with the integrations the catalog lists. */
 function renderSettingsRoute(

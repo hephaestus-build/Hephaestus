@@ -2,7 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type JsonBodyType } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { toast } from "@/lib/toast";
 
 import {
@@ -35,13 +35,23 @@ import { server } from "@/mocks/server";
 import { apiPathOf } from "@/test/api-path";
 import { type Deferred, deferred } from "@/test/async";
 import {
+	loadRouteCode,
 	ROUTE_RENDER_WAIT,
 	renderRouteAt,
 	renderRouteAtWithRouter,
 	testQueryClient,
 } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme/admin/integrations",
+			"/w/acme/admin/integrations/scm",
+			"/w/acme/admin/integrations/slack",
+			"/w/acme/admin/integrations/outline",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 // This route test owns credential HTTP requests; the SSE transport has its own hook suite.
 vi.mock("@/hooks/use-sync-events", () => ({ useSyncEvents: () => false }));
