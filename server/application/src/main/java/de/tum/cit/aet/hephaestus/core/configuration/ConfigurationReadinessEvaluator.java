@@ -84,6 +84,17 @@ public final class ConfigurationReadinessEvaluator {
                 "external-url");
         add(
                 facts,
+                "external.api-origin",
+                "hephaestus.auth.issuer",
+                roles(RuntimeRole.SERVER),
+                ConfigurationRequirement.REQUIRED,
+                server,
+                this::validHttpsOrigin,
+                "The issuer is the API origin that provider webhooks and the Slack callback use. "
+                        + "A root HTTPS origin is required; the localhost default is for development only.",
+                "external-url");
+        add(
+                facts,
                 "webhook.shared-secret",
                 "hephaestus.webhook.secret",
                 roles(RuntimeRole.SERVER, RuntimeRole.WEBHOOK),

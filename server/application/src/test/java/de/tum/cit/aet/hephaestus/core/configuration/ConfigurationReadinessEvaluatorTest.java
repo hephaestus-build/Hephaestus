@@ -42,6 +42,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.webhook.secret", "PLANTED");
         properties.put("hephaestus.auth.state-cookie-key", SECRET_MARKER);
         properties.put("hephaestus.auth.login-providers.github.client-secret", "");
+        properties.put("hephaestus.auth.issuer", "http://localhost:8080");
 
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, false);
 
@@ -54,7 +55,8 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
                         "security.value-encryption",
                         "webhook.shared-secret",
                         "auth.state-cookie-key",
-                        "auth.login-provider");
+                        "auth.login-provider",
+                        "external.api-origin");
         assertThat(facts.toString()).doesNotContain(SECRET_MARKER);
     }
 
@@ -331,6 +333,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.security.encryption-key", "0123456789abcdef0123456789abcdef");
         properties.put("hephaestus.security.credential-encryption-key", "0123456789abcdef0123456789abcdef");
         properties.put("hephaestus.host-url", "https://hephaestus.example.com");
+        properties.put("hephaestus.auth.issuer", "https://hephaestus.example.com");
         properties.put("hephaestus.webhook.secret", "0123456789abcdef0123456789abcdef");
         properties.put("hephaestus.webhook.routing.secret", "fedcba9876543210fedcba9876543210");
         properties.put("hephaestus.sync.nats.enabled", true);

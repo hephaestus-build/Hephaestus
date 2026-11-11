@@ -39,6 +39,7 @@ The table names variables inside each application Pod. The chart owns their role
 | `hephaestus.runtime.worker.enabled`             | `HEPHAESTUS_RUNTIME_WORKER_ENABLED`             |
 | `hephaestus.runtime.webhook.enabled`            | `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED`            |
 | `hephaestus.host-url`                           | `APPLICATION_HOST_URL`                          |
+| `hephaestus.auth.issuer`                        | `HEPHAESTUS_AUTH_ISSUER`                        |
 | `hephaestus.security.encryption-key`            | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`            |
 | `hephaestus.security.credential-encryption-key` | `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` |
 | `hephaestus.webhook.secret`                     | `WEBHOOK_SECRET`                                |
@@ -102,6 +103,8 @@ Keep the general and credential encryption keys as separate settings.
 
 Set `hephaestus.host-url` to the public HTTPS origin.
 The origin must have no credentials, query, fragment, or path other than `/`.
+The server role also requires `hephaestus.auth.issuer` as such an origin.
+Provider webhooks and the Slack callback use it. The chart sets it from the host.
 
 ## Webhooks
 
