@@ -30,23 +30,18 @@ public record AgentSandboxProperties(
      *
      * @param review the warm pool that a review's sandbox is claimed from
      * @param conversation the warm pool that a conversation's sandbox is claimed from
-     * @param action the warm pool that an action task's sandbox is claimed from
      */
     public record WarmPools(
             @DefaultValue("hephaestus-sandbox-review") @NotBlank
             String review,
 
             @DefaultValue("hephaestus-sandbox-conversation") @NotBlank
-            String conversation,
-
-            @DefaultValue("hephaestus-sandbox-action") @NotBlank
-            String action) {
+            String conversation) {
 
         public String of(AgentSandboxKind kind) {
             return switch (kind) {
                 case REVIEW -> review;
                 case CONVERSATION -> conversation;
-                case ACTION -> action;
             };
         }
     }

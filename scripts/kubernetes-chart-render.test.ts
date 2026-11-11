@@ -1363,7 +1363,7 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 	assert.equal(envValue(worker, "HEPHAESTUS_SANDBOX_RUNTIME"), undefined);
 	assert.equal(envValue(worker, "HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE"), sandboxes);
 	// A claim names its kind's warm pool, and passes the gateway Service's address, which the worker resolves.
-	for (const kind of ["review", "conversation", "action"]) {
+	for (const kind of ["review", "conversation"]) {
 		const pool = envValue(worker, `HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_${kind.toUpperCase()}`);
 		assert.ok(
 			resources.some(
@@ -1635,7 +1635,7 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 			{
 				key: "hephaestus.build/sandbox-kind",
 				operator: "In",
-				values: ["review", "conversation", "action"],
+				values: ["review", "conversation"],
 			},
 		],
 	};
@@ -4698,7 +4698,6 @@ await test("each sandbox kind has a cold-start template of one container, behind
 	const runc = rendered([...layersFor("small"), workerLayer]);
 	const templates = templatesOf(runc);
 	assert.deepEqual(templates.map(nameOf).toSorted(byCodePoint), [
-		"heph-sandbox-action",
 		"heph-sandbox-conversation",
 		"heph-sandbox-review",
 	]);

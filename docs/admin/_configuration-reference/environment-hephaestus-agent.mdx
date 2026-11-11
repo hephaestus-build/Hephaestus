@@ -8,6 +8,5 @@
 | `HEPHAESTUS_AGENT_IMAGE_REFERENCE` | `hephaestus.agent.image.reference` |  | `server`, `webhook`, `worker` | Image reference used by Pi practice sandboxes and the Hephaestus container. Production must be digest-pinned (registry/path@sha256:\<64 lowercase hex\>). |
 | `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` | `hephaestus.agent.image.require-digest` |  | `server`, `webhook`, `worker` | Refuses startup unless the agent image reference is pinned by digest. |
 | `HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL` | `hephaestus.agent.sandbox.gateway-url` |  | `worker` | The gateway address that a claim passes to its sandbox, such as `http://10.43.0.12:8081`. The server resolves the host to an address when it creates a claim, so the sandbox needs no DNS. Empty where this process creates no claim. |
-| `HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_ACTION` | `hephaestus.agent.sandbox.warm-pools.action` |  | `worker` | The warm pool that an action task's sandbox is claimed from. |
 | `HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_CONVERSATION` | `hephaestus.agent.sandbox.warm-pools.conversation` |  | `worker` | The warm pool that a conversation's sandbox is claimed from. |
 | `HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_REVIEW` | `hephaestus.agent.sandbox.warm-pools.review` |  | `worker` | The warm pool that a review's sandbox is claimed from. |

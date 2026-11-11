@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794362616000-1" author="hephaestus">
+        <comment>A sandbox serves a review or a conversation. A product feedback draft is one model call in the server (ADR 0097), so no sandbox has the action kind.</comment>
+        <sql>
+ALTER TABLE agent_sandbox DROP CONSTRAINT ck_agent_sandbox_kind;
+ALTER TABLE agent_sandbox ADD CONSTRAINT ck_agent_sandbox_kind CHECK (kind IN ('REVIEW', 'CONVERSATION'));
+        </sql>
+        <rollback>
+ALTER TABLE agent_sandbox DROP CONSTRAINT ck_agent_sandbox_kind;
+ALTER TABLE agent_sandbox ADD CONSTRAINT ck_agent_sandbox_kind CHECK (kind IN ('REVIEW', 'CONVERSATION', 'ACTION'));
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
