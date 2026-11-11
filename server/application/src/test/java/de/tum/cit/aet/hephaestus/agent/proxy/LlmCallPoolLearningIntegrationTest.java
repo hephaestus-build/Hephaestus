@@ -16,6 +16,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -80,6 +81,9 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         final AtomicInteger inFlight = new AtomicInteger();
         final AtomicInteger served = new AtomicInteger();
         final AtomicInteger refused = new AtomicInteger();
+        /** For each served call in order: how many calls were in flight at the provider when it started. */
+        final List<Integer> concurrencyServed = Collections.synchronizedList(new ArrayList<>());
+
         final Duration callTakes;
 
         FakeProvider(int capacity, Duration callTakes) {
@@ -89,12 +93,14 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
 
         boolean call() throws InterruptedException {
             try {
-                if (inFlight.incrementAndGet() > capacity.get()) {
+                int concurrent = inFlight.incrementAndGet();
+                if (concurrent > capacity.get()) {
                     refused.incrementAndGet();
                     return false;
                 }
                 Thread.sleep(callTakes.toMillis());
                 served.incrementAndGet();
+                concurrencyServed.add(concurrent);
                 return true;
             } finally {
                 inFlight.decrementAndGet();
@@ -176,32 +182,41 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     void shouldSettleNearTheProvidersCapacityWithFewRefusals(TestReporter reporter) throws Exception {
         long pool = ownPool();
         var provider = new FakeProvider(12, Duration.ofMillis(200));
-        Duration runs = Duration.ofSeconds(20);
-        long ends = System.nanoTime() + runs.toNanos();
+        // A fixed amount of work, not a time window: the pool's behaviour, not the host's speed, decides the counts.
+        int callers = 60;
+        int callsEach = 6;
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
             List<Future<?>> running = new ArrayList<>();
-            for (int i = 0; i < 60; i++) {
+            for (int i = 0; i < callers; i++) {
                 LlmCallPermits worker = i % 2 == 0 ? workerA : workerB;
                 UUID source = UUID.randomUUID();
                 long workspace = 1L + i % 3;
                 running.add(calls.submit(() -> {
-                    while (System.nanoTime() < ends) callUntilServed(provider, worker, pool, source, workspace);
+                    for (int call = 0; call < callsEach; call++)
+                        callUntilServed(provider, worker, pool, source, workspace);
                     return null;
                 }));
             }
-            for (var call : running) call.get(120, TimeUnit.SECONDS);
+            for (var call : running) call.get(300, TimeUnit.SECONDS);
         }
-        long ideal = 12 * runs.toMillis() / 200;
         int limit = limit(pool);
+        List<Integer> served = List.copyOf(provider.concurrencyServed);
+        // After the pool learned: the later half of the served calls shows how many calls the pool keeps in flight.
+        double settled = served.subList(served.size() / 2, served.size()).stream()
+                .mapToInt(Integer::intValue)
+                .average()
+                .orElse(0);
         reporter.publishEntry(Map.of(
                 "settleCapacity", "12",
                 "settleLimit", Integer.toString(limit),
-                "settleServed", provider.served.toString(),
-                "settleIdeal", Long.toString(ideal),
+                "settleServed", Integer.toString(served.size()),
+                "settleConcurrency", Double.toString(settled),
                 "settleRefused", provider.refused.toString()));
-        // Real time on a shared machine: this guards against a collapse, and the reporter records the share.
-        assertThat(provider.served.get()).isGreaterThan((int) (ideal * 2 / 5));
-        assertThat(provider.refused.get()).isLessThan(provider.served.get() / 4);
+        assertThat(served).hasSize(callers * callsEach);
+        assertThat(settled)
+                .as("the pool keeps the provider near its capacity of 12 once it learned it")
+                .isGreaterThanOrEqualTo(12 * 2 / 5.0);
+        assertThat(provider.refused.get()).isLessThan(served.size() / 4);
         assertThat(limit).isBetween(6, 24);
     }
 
