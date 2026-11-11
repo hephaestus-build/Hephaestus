@@ -97,7 +97,7 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
     @ParameterizedTest
     @EnumSource(
             value = Account.Status.class,
-            names = {"SUSPENDED", "DELETING", "DELETED"})
+            names = {"BLOCKED", "DELETING", "DELETED"})
     void shouldWithholdSecurityNoticesForInactiveAccounts(Account.Status status) {
         Account account = account(status);
         long id = Objects.requireNonNull(account.getId());

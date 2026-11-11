@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -51,6 +52,14 @@ public class AccountAdminController {
 
     public record UpdateAccountRequestDTO(@Nullable String appRole) {}
 
+    /** {@code BLOCKED} blocks the account; {@code ACTIVE} unblocks it. */
+    public record UpdateAccountStatusRequestDTO(@NotNull UpdateAccountStatusRequestDTO.TargetStatus status) {
+        public enum TargetStatus {
+            ACTIVE,
+            BLOCKED,
+        }
+    }
+
     public record RevokeSessionsResultDTO(
             @Schema(requiredMode = RequiredMode.REQUIRED) int revoked) {}
 
@@ -69,6 +78,22 @@ public class AccountAdminController {
     public ResponseEntity<AdminAccountViewDTO> update(
             @PathVariable Long id, @Valid @RequestBody UpdateAccountRequestDTO body) {
         Account account = accountService.adminSetRole(id, body.appRole(), CurrentAccount.requireId());
+        return ResponseEntity.ok(toView(account));
+    }
+
+    @PatchMapping("/{id}/status")
+    @Operation(
+            summary = "Block an account, which ends its sessions and refuses its sign-in, or unblock it",
+            operationId = "adminUpdateUserStatus")
+    @RequiresRecentSignIn
+    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "ACCOUNT_STATUS_CHANGED")
+    public ResponseEntity<AdminAccountViewDTO> updateStatus(
+            @PathVariable Long id, @Valid @RequestBody UpdateAccountStatusRequestDTO body) {
+        Status target = switch (body.status()) {
+            case ACTIVE -> Status.ACTIVE;
+            case BLOCKED -> Status.BLOCKED;
+        };
+        Account account = accountService.adminSetStatus(id, target, CurrentAccount.requireId());
         return ResponseEntity.ok(toView(account));
     }
 

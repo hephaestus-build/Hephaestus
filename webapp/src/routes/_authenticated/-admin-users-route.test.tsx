@@ -234,6 +234,49 @@ describe("instance users route", () => {
 		expect(screen.queryByText(/could not sign the user out/u)).toBeNull();
 	});
 
+	it("blocks an account after confirmation and then offers to unblock it", async () => {
+		let account: AdminAccountView = {
+			id: 7,
+			displayName: "Ada Lovelace",
+			primaryEmail: "ada@example.com",
+			appRole: "USER",
+			status: "ACTIVE",
+		};
+		const changes: unknown[] = [];
+		server.use(
+			http.get("*/admin/users", () => HttpResponse.json(accountPage([account]))),
+			http.patch("*/admin/users/:id/status", async ({ request }) => {
+				changes.push(await request.json());
+				account = { ...account, status: "BLOCKED" };
+				return HttpResponse.json(account);
+			}),
+		);
+
+		renderRouteAt("/admin/users");
+		const user = await chooseRowAction("Actions for Ada Lovelace", "Block account");
+		const dialog = await screen.findByRole("alertdialog", { name: "Block Ada Lovelace?" });
+		await user.click(within(dialog).getByRole("button", { name: "Block account" }));
+
+		await screen.findByText("Ada Lovelace is blocked and signed out everywhere.");
+		expect(changes).toStrictEqual([{ status: "BLOCKED" }]);
+		const table = screen.getByRole("table", { name: "Application users" });
+		await within(table).findByText("Blocked", { exact: true });
+		await user.click(screen.getByRole("button", { name: "Actions for Ada Lovelace" }));
+		await screen.findByRole("menuitem", { name: "Unblock account" });
+		expect(screen.queryByRole("menuitem", { name: "Block account" })).toBeNull();
+	});
+
+	it("asks for a fresh sign-in instead of reporting a block failure", async () => {
+		server.use(http.patch("*/admin/users/:id/status", () => stepUpRefusal()));
+
+		renderRouteAt("/admin/users");
+		const user = await chooseRowAction("Actions for Ada Lovelace", "Block account");
+		await user.click(await screen.findByRole("button", { name: "Block account" }));
+
+		await screen.findByRole("dialog", { name: "Confirm access" });
+		expect(screen.queryByText(/could not change the account/u)).toBeNull();
+	});
+
 	it("says nothing about a recent sign-in when the refusal is an ordinary one", async () => {
 		server.use(
 			http.patch("*/admin/users/:id", () =>

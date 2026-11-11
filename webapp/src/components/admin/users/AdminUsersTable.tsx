@@ -1,4 +1,4 @@
-import { LogOut, MoreHorizontal, UserCog, Users } from "lucide-react";
+import { Ban, LogOut, MoreHorizontal, UserCheck, UserCog, Users } from "lucide-react";
 import type { AdminAccountView } from "@/api/types.gen";
 import { LOADING_MORE_ROWS } from "@/components/common/InfiniteListEnd";
 import { QueryErrorAlert, type QueryErrorAlertProps } from "@/components/common/QueryErrorAlert";
@@ -43,6 +43,8 @@ export interface AdminUsersTableProps extends Pick<MorePages, "loadMoreError" | 
 	onLoadMore: () => void;
 	onChangeRole: (user: AdminAccountView) => void;
 	onForceSignOut: (user: AdminAccountView) => void;
+	/** Asks to block an active account or to unblock a blocked one. */
+	onChangeStatus: (user: AdminAccountView) => void;
 }
 
 const COLUMN_COUNT = 6;
@@ -169,6 +171,7 @@ function UserRows({
 	refreshFailure,
 	onChangeRole,
 	onForceSignOut,
+	onChangeStatus,
 }: Omit<AdminUsersTableProps, "totalLoaded" | "onLoadMore" | "isLoading" | "loadFailure">) {
 	if (users.length === 0) {
 		// A failed read stops the search from loading more, so it must not keep promising results.
@@ -245,6 +248,19 @@ function UserRows({
 									<LogOut className="size-4" />
 									Force sign out
 								</DropdownMenuItem>
+								{/* An admin never blocks themselves, so the action is hidden, not disabled. */}
+								{user.status === "ACTIVE" && !isSelf && (
+									<DropdownMenuItem variant="destructive" onClick={() => onChangeStatus(user)}>
+										<Ban className="size-4" />
+										Block account
+									</DropdownMenuItem>
+								)}
+								{user.status === "BLOCKED" && (
+									<DropdownMenuItem onClick={() => onChangeStatus(user)}>
+										<UserCheck className="size-4" />
+										Unblock account
+									</DropdownMenuItem>
+								)}
 							</DropdownMenuGroup>
 						</DropdownMenuContent>
 					</DropdownMenu>

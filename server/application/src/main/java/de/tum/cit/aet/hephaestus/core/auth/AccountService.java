@@ -83,7 +83,7 @@ public class AccountService {
         sessionRevocation.lockAccount(accountId);
         Account account = requireById(accountId);
         if (account.getStatus() == Account.Status.DELETING || account.getStatus() == Account.Status.DELETED) {
-            // Idempotent: only ACTIVE/SUSPENDED → DELETING starts the Art.17 cooldown. A
+            // Idempotent: only ACTIVE/BLOCKED → DELETING starts the Art.17 cooldown. A
             // re-invocation
             // must NOT reset deleted_at (restarting the 48h purge clock) or re-emit
             // ACCOUNT_DELETED.
@@ -191,10 +191,10 @@ public class AccountService {
                 }
                 // Locked (FOR UPDATE) count so concurrent demotions serialize instead of both
                 // passing.
-                long activeAdmins = accountRepository
-                        .findByAppRoleAndStatusForUpdate(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE)
-                        .size();
-                if (activeAdmins <= 1) {
+                List<Account> activeAdmins = accountRepository.findByAppRoleAndStatusForUpdate(
+                        Account.AppRole.APP_ADMIN, Account.Status.ACTIVE);
+                boolean targetIsActiveAdmin = activeAdmins.stream().anyMatch(admin -> accountId.equals(admin.getId()));
+                if (targetIsActiveAdmin && activeAdmins.size() <= 1) {
                     throw new ResponseStatusException(
                             HttpStatus.CONFLICT,
                             "You cannot revoke the last admin. Grant admin to another account" + " first.");
@@ -208,10 +208,8 @@ public class AccountService {
             accountRepository.save(account);
             if (isDemotion) {
                 // Privilege drop must take effect promptly: revoke the demoted admin's live
-                // sessions so a
-                // stripped APP_ADMIN cannot retain admin authority until the access token's 15-min
-                // TTL
-                // lapses. The revoked rows carry revoked_reason=ADMIN_REVOKE for forensics.
+                // sessions so a stripped APP_ADMIN cannot retain admin authority until the access
+                // token expires. The revoked rows carry revoked_reason=ADMIN_REVOKE for forensics.
                 // Promotion is
                 // deliberately NOT revoked — the new role is picked up on the next silent refresh
                 // with no
@@ -231,6 +229,62 @@ public class AccountService {
                     .record();
             eventPublisher.publishEvent(new AccountSecurityChangedEvent(
                     accountId, AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED, clock.instant()));
+        }
+        return account;
+    }
+
+    /**
+     * Blocks or unblocks an account. A blocked account loses every session at once, and sign-in, token
+     * renewal and installed clients refuse it until an instance admin unblocks it, so a provider sign-in
+     * cannot undo the block.
+     */
+    @Transactional
+    public Account adminSetStatus(Long accountId, Account.Status status, Long actingAccountId) {
+        if (status != Account.Status.ACTIVE && status != Account.Status.BLOCKED) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_CONTENT, "An admin can only block or unblock an account.");
+        }
+        boolean block = status == Account.Status.BLOCKED;
+        if (block && accountId.equals(actingAccountId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "You cannot block your own account. Ask another admin to do it.");
+        }
+        // The admin set first, then the target: the order a demotion uses, so the two never wait on
+        // each other. The locked set keeps two admins from blocking each other at the same time.
+        List<Account> activeAdmins = block
+                ? accountRepository.findByAppRoleAndStatusForUpdate(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE)
+                : List.of();
+        sessionRevocation.lockAccount(accountId);
+        Account account = requireById(accountId);
+        Account.Status previous = account.getStatus();
+        if (previous == status) {
+            return account;
+        }
+        if (previous != Account.Status.ACTIVE && previous != Account.Status.BLOCKED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Only an active or blocked account can be blocked or unblocked.");
+        }
+        if (block && account.getAppRole() == Account.AppRole.APP_ADMIN && activeAdmins.size() <= 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "You cannot block the last instance admin. Grant admin to another account first.");
+        }
+        account.setStatus(status);
+        accountRepository.save(account);
+        if (block) {
+            sessionRevocation.revokeAccount(accountId, IssuedJwt.RevokedReason.ADMIN_REVOKE, null, null);
+        }
+        authEventLogger
+                .event(AuthEvent.EventType.ACCOUNT_STATUS_CHANGED, AuthEvent.Result.SUCCESS)
+                .account(accountId)
+                .actingAccount(actingAccountId)
+                .details("{\"from\":\"" + previous.name() + "\",\"to\":\"" + status.name() + "\"}")
+                .record();
+        if (!block) {
+            // A blocked account gets no mail (contacts are read for active accounts only), so the notice
+            // goes out when the account can sign in again.
+            eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                    accountId, AccountSecurityChangedEvent.Kind.ACCOUNT_UNBLOCKED, clock.instant()));
         }
         return account;
     }

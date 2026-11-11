@@ -16,7 +16,7 @@ export const APP_ROLE_LABELS: Record<AppRole, string> = {
 export const ACCOUNT_STATUS_LABELS: Record<AccountRef["status"], string> = {
 	UNCLAIMED: "Unclaimed",
 	ACTIVE: "Active",
-	SUSPENDED: "Suspended",
+	BLOCKED: "Blocked",
 	DELETING: "Being deleted",
 	DELETED: "Deleted",
 };

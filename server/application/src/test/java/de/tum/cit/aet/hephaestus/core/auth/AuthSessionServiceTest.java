@@ -259,7 +259,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void refresh_whenAccountNotActive_recordsSuspendedAndDoesNotReMint() {
+    void refresh_whenAccountNotActive_recordsInactiveAndDoesNotReMint() {
         UUID jti = UUID.randomUUID();
         when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(false);
         when(issuedJwtRepository.revokeOwned(
@@ -270,7 +270,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
         assertThat(service.refresh(ACCOUNT_ID, jti, ctx(SESSION_CEILING), mock(HttpServletRequest.class), response))
                 .isFalse();
 
-        assertThat(refreshResult("suspended")).isEqualTo(1.0);
+        assertThat(refreshResult("inactive")).isEqualTo(1.0);
         assertCookieCleared(response);
         verify(issuedJwtRepository)
                 .revokeOwned(eq(jti), eq(ACCOUNT_ID), any(), eq(IssuedJwt.RevokedReason.ACCOUNT_INACTIVE));

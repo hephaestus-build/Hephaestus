@@ -116,7 +116,7 @@ public class AuthSessionService {
             // so an account-wide revocation either sees the rotated token or this refresh sees it.
             if (!accountRepository.lockForIssuance(accountId)) {
                 revokeBrowserTokenAndSuccessor(accountId, jti, RevokedReason.ACCOUNT_INACTIVE);
-                metrics.recordRefreshResult(AuthMetrics.RefreshResult.SUSPENDED);
+                metrics.recordRefreshResult(AuthMetrics.RefreshResult.INACTIVE);
                 clearCookie(response);
                 return false;
             }

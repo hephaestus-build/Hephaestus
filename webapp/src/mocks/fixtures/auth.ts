@@ -127,10 +127,10 @@ export const adminUsers: AdminAccountView[] = [
 	},
 	{
 		id: 99,
-		displayName: "Suspended Sam",
+		displayName: "Blocked Sam",
 		primaryEmail: "sam@example.com",
 		appRole: "USER",
-		status: "SUSPENDED",
+		status: "BLOCKED",
 	},
 ];
 

@@ -96,7 +96,7 @@ export const AccountRefSchema = {
             enum: [
                 'UNCLAIMED',
                 'ACTIVE',
-                'SUSPENDED',
+                'BLOCKED',
                 'DELETING',
                 'DELETED'
             ]
@@ -624,7 +624,7 @@ export const AdminAccountViewSchema = {
             enum: [
                 'UNCLAIMED',
                 'ACTIVE',
-                'SUSPENDED',
+                'BLOCKED',
                 'DELETING',
                 'DELETED'
             ]
@@ -18987,6 +18987,23 @@ export const UpdateAccountRequestSchema = {
             type: 'string'
         }
     }
+} as const;
+
+export const UpdateAccountStatusRequestSchema = {
+    type: 'object',
+    description: '<code>BLOCKED</code> blocks the account; <code>ACTIVE</code> unblocks it.',
+    properties: {
+        status: {
+            type: 'string',
+            enum: [
+                'ACTIVE',
+                'BLOCKED'
+            ]
+        }
+    },
+    required: [
+        'status'
+    ]
 } as const;
 
 export const UpdateConnectionStatusRequestSchema = {

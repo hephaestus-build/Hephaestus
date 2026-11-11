@@ -92,6 +92,32 @@ class HephaestusAuthFailureHandlerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldTellTheClientThatTheAccountIsBlockedWhenAnAdminBlockedIt() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler(List.of(EXTENSION_ID), intentCookie)
+                .onAuthenticationFailure(
+                        requestWithClientIntent(),
+                        response,
+                        new OAuth2AuthenticationException(AccountProvisioningService.ACCOUNT_BLOCKED));
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(CALLBACK + "?error=account_blocked&state=state-1");
+    }
+
+    @Test
+    void shouldShowTheBlockedPageInTheBrowserWhenAnAdminBlockedTheAccount() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler(List.of(), intentCookie)
+                .onAuthenticationFailure(
+                        new MockHttpServletRequest(),
+                        response,
+                        new OAuth2AuthenticationException(AccountProvisioningService.ACCOUNT_BLOCKED));
+
+        assertThat(response.getRedirectedUrl()).isEqualTo("/auth/error?code=account_blocked");
+    }
+
+    @Test
     void shouldUseTheServerErrorPageWhenTheCallbacksRegistrationWasRemovedMidFlow() throws Exception {
         MockHttpServletResponse response = new MockHttpServletResponse();
 

@@ -239,6 +239,7 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | Term | Meaning | Avoid for this concept |
 | --- | --- | --- |
 | **Account** | One person's record on the instance. It can exist before the person signs in. |  |
+| **Blocked account** | An account that an instance admin blocked. It has no sessions and cannot sign in until an instance admin unblocks it. | suspended account, banned, deactivated |
 | **Member** | An account with membership in a workspace. |  |
 | **Identity** | A provider login linked to an account. |  |
 | **Workspace** | One team's tenant, with its connected repositories, members, practices and feedback. |  |

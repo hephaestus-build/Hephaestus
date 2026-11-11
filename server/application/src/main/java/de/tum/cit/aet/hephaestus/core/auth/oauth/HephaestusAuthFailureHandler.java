@@ -64,7 +64,8 @@ public class HephaestusAuthFailureHandler implements AuthenticationFailureHandle
                     registered.request().state()));
             return;
         }
-        response.sendRedirect(appBaseUrl + "/auth/error?code=oauth_failure");
+        response.sendRedirect(appBaseUrl + "/auth/error?code="
+                + (blocked(exception) ? AccountProvisioningService.ACCOUNT_BLOCKED : "oauth_failure"));
     }
 
     /** {@code access_denied} when the person cancelled at the identity provider, so the client can stay quiet. */
@@ -73,7 +74,13 @@ public class HephaestusAuthFailureHandler implements AuthenticationFailureHandle
                 && "access_denied".equals(oauth.getError().getErrorCode())) {
             return "access_denied";
         }
-        return "oauth_failure";
+        return blocked(exception) ? AccountProvisioningService.ACCOUNT_BLOCKED : "oauth_failure";
+    }
+
+    private static boolean blocked(AuthenticationException exception) {
+        return exception instanceof OAuth2AuthenticationException oauth
+                && AccountProvisioningService.ACCOUNT_BLOCKED.equals(
+                        oauth.getError().getErrorCode());
     }
 
     private static String stripTrailingSlash(String value) {

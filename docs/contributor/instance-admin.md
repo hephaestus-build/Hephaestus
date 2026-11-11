@@ -46,6 +46,7 @@ Instance metadata endpoints under `/admin`, all gated by `hasAuthority('app_admi
 | --- | --- |
 | `GET /admin/users` (`adminListUsers`) | Paged account list |
 | `PATCH /admin/users/{id}` (`adminUpdateUser`) | Change an account's app role (last-admin guard. Cannot self-demote) |
+| `PATCH /admin/users/{id}/status` (`adminUpdateUserStatus`) | **Block** (`BLOCKED`) or **unblock** (`ACTIVE`) an account. Blocking revokes every session and makes sign-in, token renewal and installed clients refuse the account. Cannot block yourself or the last active instance admin. Audited as `ACCOUNT_STATUS_CHANGED`. |
 | `DELETE /admin/users/{id}/sessions` (`adminRevokeUserSessions`) | **Force sign out**: revoke all of an account's active sessions. Audited as `JWT_REVOKED`. |
 | `GET /admin/workspaces` (`adminListWorkspaces`) | **Metadata-only** overview of every workspace (slug, status, provider, owner login, member count, created-at). Cross-tenant through `@WorkspaceAgnostic`. This endpoint itself returns **no tenant content**. Private user content is reached through [read-only user views](#read-only-user-views). |
 | `GET /admin/audit` (`adminListAuthEvents`) | Read-only viewer over the append-only `auth_event` log (logins, user views, role changes, deletions). Paged, newest-first, filterable by event type. [read-only user views](#read-only-user-views) says what a `USER_VIEW` row carries. |
@@ -66,7 +67,7 @@ when releasing the brake. Provider gateways enforce it independently from result
 ## Recent sign-in gate
 
 Instance-admin actions that change access require a completed sign-in younger than `hephaestus.auth.step-up-max-age` (`HEPHAESTUS_AUTH_STEP_UP_MAX_AGE`, default 5m).
-These actions include app-role changes, force sign-out, user views, login-provider mutations, and LLM connection registration or removal.
+These actions include app-role changes, block and unblock, force sign-out, user views, login-provider mutations, and LLM connection registration or removal.
 The same requirement applies to identity attachment for every user.
 A new link is a permanent second way into the account.
 

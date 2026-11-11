@@ -38,6 +38,14 @@ const ERROR_COPY = new Map<string, { title: string; description: string }>([
 			description: "We could not reach the identity provider. Wait a moment, then try again.",
 		},
 	],
+	[
+		"account_blocked",
+		{
+			title: "This account is blocked",
+			description:
+				"An instance admin blocked this account, so it cannot sign in. Ask your instance admin to unblock it.",
+		},
+	],
 	["already_linked", ALREADY_CONNECTED],
 	["identity_already_linked", ALREADY_CONNECTED],
 	[

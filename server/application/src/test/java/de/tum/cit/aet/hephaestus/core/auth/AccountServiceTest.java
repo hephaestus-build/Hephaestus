@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
@@ -214,9 +216,9 @@ class AccountServiceTest extends BaseUnitTest {
 
     @Test
     void cannotRevokeTheLastRemainingActiveAdmin() {
-        accountWithRole(2L, Account.AppRole.APP_ADMIN);
+        Account account = accountWithRole(2L, Account.AppRole.APP_ADMIN);
         when(accountRepository.findByAppRoleAndStatusForUpdate(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE))
-                .thenReturn(List.of(new Account()));
+                .thenReturn(List.of(account));
 
         assertThatThrownBy(() -> service.adminSetRole(2L, "USER", 1L))
                 .isInstanceOfSatisfying(
@@ -279,5 +281,118 @@ class AccountServiceTest extends BaseUnitTest {
         assertThat(event.getValue().accountId()).isEqualTo(2L);
         assertThat(event.getValue().actingAccountId()).isEqualTo(1L);
         assertThat(event.getValue().details()).contains("ADMIN_REVOKE", "\"count\":3");
+    }
+
+    @Test
+    void shouldRevokeSessionsAndAuditWhenAnAdminBlocksAnAccount() {
+        Account account = accountWithRole(2L, Account.AppRole.USER);
+
+        service.adminSetStatus(2L, Account.Status.BLOCKED, 1L);
+
+        assertThat(account.getStatus()).isEqualTo(Account.Status.BLOCKED);
+        verify(accountRepository).save(account);
+        verify(sessionRevocation).lockAccount(2L);
+        verify(sessionRevocation).revokeAccount(2L, IssuedJwt.RevokedReason.ADMIN_REVOKE, null, null);
+        ArgumentCaptor<AuthEventData> event = ArgumentCaptor.forClass(AuthEventData.class);
+        verify(auditWriter).write(event.capture());
+        assertThat(event.getValue().type()).isEqualTo(AuthEvent.EventType.ACCOUNT_STATUS_CHANGED);
+        assertThat(event.getValue().actingAccountId()).isEqualTo(1L);
+        assertThat(event.getValue().details()).contains("\"from\":\"ACTIVE\"", "\"to\":\"BLOCKED\"");
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void shouldNotifyTheAccountWhenAnAdminUnblocksIt() {
+        Account account = accountWithRole(2L, Account.AppRole.USER);
+        account.setStatus(Account.Status.BLOCKED);
+
+        service.adminSetStatus(2L, Account.Status.ACTIVE, 1L);
+
+        assertThat(account.getStatus()).isEqualTo(Account.Status.ACTIVE);
+        verify(sessionRevocation, never()).revokeAccount(anyLong(), any(), any(), any());
+        verify(eventPublisher)
+                .publishEvent(new AccountSecurityChangedEvent(
+                        2L, AccountSecurityChangedEvent.Kind.ACCOUNT_UNBLOCKED, clock.instant()));
+        ArgumentCaptor<AuthEventData> event = ArgumentCaptor.forClass(AuthEventData.class);
+        verify(auditWriter).write(event.capture());
+        assertThat(event.getValue().details()).contains("\"from\":\"BLOCKED\"", "\"to\":\"ACTIVE\"");
+    }
+
+    @Test
+    void shouldRefuseToBlockTheLastActiveInstanceAdmin() {
+        accountWithRole(2L, Account.AppRole.APP_ADMIN);
+        when(accountRepository.findByAppRoleAndStatusForUpdate(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE))
+                .thenReturn(List.of(new Account()));
+
+        assertThatThrownBy(() -> service.adminSetStatus(2L, Account.Status.BLOCKED, 1L))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+
+        verify(accountRepository, never()).save(any());
+        verify(sessionRevocation, never()).revokeAccount(anyLong(), any(), any(), any());
+        verifyNoInteractions(auditWriter);
+    }
+
+    @Test
+    void shouldBlockAnInstanceAdminWhileAnotherActiveAdminRemains() {
+        Account account = accountWithRole(2L, Account.AppRole.APP_ADMIN);
+        when(accountRepository.findByAppRoleAndStatusForUpdate(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE))
+                .thenReturn(List.of(new Account(), new Account()));
+
+        service.adminSetStatus(2L, Account.Status.BLOCKED, 1L);
+
+        assertThat(account.getStatus()).isEqualTo(Account.Status.BLOCKED);
+    }
+
+    @Test
+    void shouldRefuseToBlockTheActingAdmin() {
+        accountWithRole(1L, Account.AppRole.APP_ADMIN);
+
+        assertThatThrownBy(() -> service.adminSetStatus(1L, Account.Status.BLOCKED, 1L))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        verifyNoInteractions(auditWriter);
+    }
+
+    @Test
+    void shouldRefuseAStatusThatIsNotBlockOrUnblock() {
+        assertThatThrownBy(() -> service.adminSetStatus(2L, Account.Status.DELETED, 1L))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT));
+        verifyNoInteractions(sessionRevocation, auditWriter);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "UNCLAIMED, ACTIVE", "UNCLAIMED, BLOCKED",
+        "DELETING, ACTIVE", "DELETING, BLOCKED",
+        "DELETED, ACTIVE", "DELETED, BLOCKED"
+    })
+    void shouldRefuseAdminStatusChangesOutsideTheActiveAndBlockedStates(
+            Account.Status previous, Account.Status requested) {
+        Account account = accountWithRole(2L, Account.AppRole.USER);
+        account.setStatus(previous);
+
+        assertThatThrownBy(() -> service.adminSetStatus(2L, requested, 1L))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        verify(accountRepository, never()).save(any());
+        assertThat(account.getStatus()).isEqualTo(previous);
+        verifyNoInteractions(auditWriter, eventPublisher);
+    }
+
+    @Test
+    void shouldChangeNothingWhenTheAccountIsAlreadyBlocked() {
+        Account account = accountWithRole(2L, Account.AppRole.USER);
+        account.setStatus(Account.Status.BLOCKED);
+
+        service.adminSetStatus(2L, Account.Status.BLOCKED, 1L);
+
+        verify(accountRepository, never()).save(any());
+        verifyNoInteractions(auditWriter, eventPublisher);
     }
 }

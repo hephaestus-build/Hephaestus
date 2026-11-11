@@ -127,7 +127,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
     @Test
     void shouldEndAtTheCallbackWithAnErrorWhenTheClientAccountIsInactive() throws Exception {
         when(provisioningService.resolveOrProvision(any(), any(), any(), any()))
-                .thenReturn(provision(account(Account.Status.SUSPENDED), false));
+                .thenReturn(provision(account(Account.Status.BLOCKED), false));
         when(authIntentCookie.read(any())).thenReturn(clientIntent());
 
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -177,7 +177,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
     @ParameterizedTest
     @EnumSource(
             value = Account.Status.class,
-            names = {"SUSPENDED", "DELETING", "DELETED"})
+            names = {"BLOCKED", "DELETING", "DELETED"})
     void nonActiveAccountIsRefusedAtLoginWithNoCookie(Account.Status status) throws Exception {
         Account account = account(status);
         when(provisioningService.resolveOrProvision(any(), any(), any(), any())).thenReturn(provision(account, false));

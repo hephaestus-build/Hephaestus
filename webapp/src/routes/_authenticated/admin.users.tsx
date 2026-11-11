@@ -16,6 +16,7 @@ import {
 	adminListUsersInfiniteOptions,
 	adminRevokeUserSessionsMutation,
 	adminUpdateUserMutation,
+	adminUpdateUserStatusMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { AdminAccountView } from "@/api/types.gen";
 import {
@@ -23,6 +24,7 @@ import {
 	APP_ROLE_LABELS,
 	type AppRole,
 } from "@/components/admin/users/account-labels";
+import { AccountStatusDialog } from "@/components/admin/users/AccountStatusDialog";
 import { AdminUsersTable } from "@/components/admin/users/AdminUsersTable";
 import { ChangeRoleDialog } from "@/components/admin/users/ChangeRoleDialog";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
@@ -71,6 +73,15 @@ function AdminUsersPage() {
 
 	const [roleTarget, setRoleTarget] = useState<DialogTarget>(null);
 	const [signOutTarget, setSignOutTarget] = useState<DialogTarget>(null);
+	// The block dialog keeps its account while it animates closed, so its words do not flip mid-close.
+	const [statusDialog, setStatusDialog] = useState<{
+		user: AdminAccountView;
+		open: boolean;
+	} | null>(null);
+	const statusTarget = statusDialog?.open === true ? statusDialog : null;
+	// Closes the dialog only if it still shows the account whose change settled.
+	const closeStatusDialogFor = (id: number) =>
+		setStatusDialog((dialog) => (dialog?.user.id === id ? { ...dialog, open: false } : dialog));
 	// The role dialog on screen, read when a change settles (ADR 0027). A layout effect updates it in
 	// the commit itself, so a change that settles right after a dismissal does not see the old one.
 	const roleOnScreen = useRef<DialogTarget>(null);
@@ -95,10 +106,11 @@ function AdminUsersPage() {
 	if (
 		list.status === "error" &&
 		!queryErrorIsRetryable(list.error) &&
-		(roleTarget !== null || signOutTarget !== null)
+		(roleTarget !== null || signOutTarget !== null || statusDialog !== null)
 	) {
 		setRoleTarget(null);
 		setSignOutTarget(null);
+		setStatusDialog(null);
 	}
 
 	const term = deferredSearch.trim().toLowerCase();
@@ -151,6 +163,7 @@ function AdminUsersPage() {
 		}
 		setRoleTarget(null);
 		setSignOutTarget(null);
+		setStatusDialog(null);
 		setChallenge(stepUp);
 		return true;
 	};
@@ -192,6 +205,26 @@ function AdminUsersPage() {
 		},
 	});
 
+	const changeStatus = useMutation({
+		...adminUpdateUserStatusMutation(),
+		onSuccess: async (account, variables) => {
+			toast.success(
+				account.status === "BLOCKED"
+					? `${account.displayName ?? "The account"} is blocked and signed out everywhere.`
+					: `${account.displayName ?? "The account"} can sign in again.`,
+			);
+			closeStatusDialogFor(variables.path.id);
+			await invalidateList();
+		},
+		onError: (error, variables) => {
+			if (openConfirmAccess(error)) {
+				return;
+			}
+			toast.error(problemDetailOf(error, "We could not change the account. Try again."));
+			closeStatusDialogFor(variables.path.id);
+		},
+	});
+
 	const handleConfirmSignOut = () => {
 		const id = signOutTarget?.user.id;
 		if (id == null) {
@@ -219,7 +252,7 @@ function AdminUsersPage() {
 			<PageHeader
 				icon={<UserCog />}
 				title="Users"
-				description="Manage application accounts, roles, sessions, and support access."
+				description="Manage application accounts, roles, sessions, blocks, and support access."
 			/>
 
 			<InputGroup className="w-full sm:max-w-sm">
@@ -264,6 +297,10 @@ function AdminUsersPage() {
 					setRoleTarget({ user });
 				}}
 				onForceSignOut={(user) => setSignOutTarget({ user })}
+				onChangeStatus={(user) => {
+					changeStatus.reset();
+					setStatusDialog({ user, open: true });
+				}}
 			/>
 
 			<ChangeRoleDialog
@@ -330,6 +367,27 @@ function AdminUsersPage() {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+
+			<AccountStatusDialog
+				user={statusDialog?.user ?? null}
+				open={statusTarget !== null}
+				pending={changeStatus.isPending}
+				onOpenChange={(open) => {
+					if (!open) {
+						setStatusDialog((dialog) => (dialog === null ? null : { ...dialog, open: false }));
+						changeStatus.reset();
+					}
+				}}
+				onConfirm={(user) => {
+					if (user.id == null) {
+						return;
+					}
+					changeStatus.mutate({
+						path: { id: user.id },
+						body: { status: user.status === "BLOCKED" ? "ACTIVE" : "BLOCKED" },
+					});
+				}}
+			/>
 		</PageLayout>
 	);
 }

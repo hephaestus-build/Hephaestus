@@ -293,7 +293,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 workspace.getId(),
                 developerId);
         try {
-            jdbc.update("UPDATE account SET status='SUSPENDED' WHERE id=?", developerId);
+            jdbc.update("UPDATE account SET status='BLOCKED' WHERE id=?", developerId);
             assertThat(history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 10))
                     .isEmpty();
             assertThat(history.forItem(workspace.getId(), itemId, developerId, 10))

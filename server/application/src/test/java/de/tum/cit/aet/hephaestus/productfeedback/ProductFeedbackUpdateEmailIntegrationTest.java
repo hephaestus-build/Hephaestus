@@ -209,7 +209,7 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
                 }
             }
             case "suspended" -> {
-                reporter.setStatus(Account.Status.SUSPENDED);
+                reporter.setStatus(Account.Status.BLOCKED);
                 accounts.save(reporter);
             }
             case "unverified" -> {

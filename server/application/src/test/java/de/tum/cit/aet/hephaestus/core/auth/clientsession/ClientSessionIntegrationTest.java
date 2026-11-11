@@ -5,6 +5,7 @@ import static de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInFlow
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.auth.AccountPurger;
+import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
@@ -69,6 +70,9 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private AccountPurger accountPurger;
+
+    @Autowired
+    private AccountService accountService;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -468,15 +472,19 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
-    void shouldRefuseRefreshAndExchangeWhenTheAccountIsNoLongerActive() {
+    void shouldRefuseRefreshAndExchangeAfterAnInstanceAdminBlocksTheAccount() {
         ClientSignInFlow.Tokens tokens = flow.signIn("ext-suspended");
         ClientSignInFlow.Handoff pending = flow.handoff("ext-suspended");
         UUID sid = sidOf(tokens.accessToken());
         Account account =
                 accountRepository.findById(session(sid).getAccountId()).orElseThrow();
-        account.setStatus(Account.Status.SUSPENDED);
-        accountRepository.save(account);
+        Account admin = new Account("Blocking admin");
+        admin.setAppRole(Account.AppRole.APP_ADMIN);
+        accountRepository.saveAndFlush(admin);
+        accountService.adminSetStatus(
+                Objects.requireNonNull(account.getId()), Account.Status.BLOCKED, Objects.requireNonNull(admin.getId()));
 
+        flow.assertRejected(tokens.accessToken());
         flow.assertRefreshRefused(tokens.refreshToken());
         flow.exchange(CLIENT_ID, CALLBACK, pending.code(), pending.verifier())
                 .expectStatus()
