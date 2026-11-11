@@ -319,6 +319,7 @@ function run(entry: Case) {
 	const github = {
 		event_name: entry.event,
 		repository: "hephaestus-build/Hephaestus",
+		run_attempt: 1,
 		event: {
 			action: "synchronize",
 			pull_request:

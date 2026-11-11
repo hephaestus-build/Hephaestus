@@ -45,7 +45,11 @@ jobs:
       extension: ${{ steps.filter.outputs.extension }}
       application-server: ${{ steps.filter.outputs.application-server }}
       # Whether the server suites run. The package job reads it too, because the suites run its classes.
-      server-tests: ${{ steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+      server-tests: ${{ steps.opt_in.outputs.light != 'true' && (steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+      # A layer of a stack runs only format, lint, types, prose and the quality legs' own tests. The
+      # merge group, which runs everything, is the verdict on the stack: ci-cd.mdx § Light tier for
+      # stacked layers.
+      light-tier: ${{ steps.opt_in.outputs.light == 'true' }}
       tooling: ${{ steps.filter.outputs.tooling }}
       windows: ${{ steps.filter.outputs.windows }}
       application-server-image: ${{ steps.filter.outputs.application-server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' || steps.filter.outputs.image-scan == 'true' }}
@@ -102,7 +106,7 @@ jobs:
       # inputs. A merge group, a push and a dispatch also run the queue tier: the integration shards
       # other than `review`, database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
       # ci-cd.mdx § Two verification tiers says why.
-      queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' || (github.event.pull_request.draft != true && (steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true')) }}
+      queue-tier: ${{ github.event_name != 'pull_request' || (steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.full != 'false' || (github.event.pull_request.draft != true && (steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true')))) }}
       # A draft runs the fast tier and builds no image: no cluster jobs, no image scan, unless it
       # carries `preview`. A release candidate always builds its evidence. Marking it
       # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
@@ -111,18 +115,20 @@ jobs:
       # A same-repository pull request needs every image at its head tag for the `preview` label, the
       # Kubernetes cluster jobs. An unreadable `preview` label counts as present,
       # except on a draft.
-      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.kubernetes == 'true'))) }}
+      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.kubernetes == 'true'))) }}
       # Whether this run builds images at all: every event except a pull request, unless that pull
       # request is a release candidate or needs head images. The merge group builds every other
       # changed image before it lands. ci-cd.mdx § The `preview` label.
-      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.kubernetes == 'true')))) }}
+      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.kubernetes == 'true')))) }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
       # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
       # run without the opt-in may be skipped as a duplicate.
       # A pull request marked ready repeats the draft's tree but builds what the draft skipped.
       # A run with the `preview` label repeats a tree whose earlier run may have built no image.
-      should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.preview == 'false' && github.event.action != 'ready_for_review' }}
+      # A re-run was asked for, by a person or after a retarget, so it is never a duplicate: its tree's
+      # earlier run may have run only the light tier.
+      should_skip: ${{ github.run_attempt == 1 && steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.preview == 'false' && github.event.action != 'ready_for_review' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -165,6 +171,10 @@ jobs:
 
       # Read from the pull request rather than the event payload, so a re-run after a label was
       # added sees it. A `labeled` trigger would let any label cancel the running CI.
+      # The base too is read from the pull request, so a re-run after a retarget sees the new base.
+      # A layer of a stack, whose base is another pull request's branch, runs the light tier unless
+      # it carries `ci:full` or is a release candidate: ci-cd.mdx § Light tier for stacked layers.
+      # An unreadable pull request runs the full tier.
       - name: Read the opt-in labels
         id: opt_in
         if: github.event_name == 'pull_request'
@@ -172,10 +182,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_CANDIDATE: ${{ steps.release_candidate.outputs.release-candidate }}
         run: |
-          labels=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '[.labels[].name]')
-          echo "full=$(jq -r 'any(. == "ci:full")' <<< "$labels")" >> "$GITHUB_OUTPUT"
-          echo "preview=$(jq -r 'any(. == "preview")' <<< "$labels")" >> "$GITHUB_OUTPUT"
+          pull_request=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")
+          full=$(jq -r '[.labels[].name] | any(. == "ci:full")' <<< "$pull_request")
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+          echo "preview=$(jq -r '[.labels[].name] | any(. == "preview")' <<< "$pull_request")" >> "$GITHUB_OUTPUT"
+          base=$(jq -er .base.ref <<< "$pull_request")
+          light=false
+          if [ "$base" != "$DEFAULT_BRANCH" ] && [ "$full" != true ] && [ "$RELEASE_CANDIDATE" != true ]; then light=true; fi
+          echo "light=$light" >> "$GITHUB_OUTPUT"
 
       - id: skip_check
         if: github.event_name == 'pull_request' && steps.release_candidate.outputs.release-candidate != 'true'
@@ -794,7 +811,8 @@ jobs:
       extension_changed: ${{ (needs.detect-changes.outputs.extension == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       tooling_changed: ${{ (needs.detect-changes.outputs.tooling == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
-      windows_changed: ${{ (needs.detect-changes.outputs.windows != 'false' || needs.detect-changes.outputs.queue-tier != 'false') && 'true' || 'false' }}
+      windows_changed: ${{ needs.detect-changes.outputs.light-tier != 'true' && (needs.detect-changes.outputs.windows != 'false' || needs.detect-changes.outputs.queue-tier != 'false') && 'true' || 'false' }}
+      light_tier: ${{ needs.detect-changes.outputs.light-tier }}
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       gradle_dependencies: ${{ needs.detect-changes.outputs.gradle-dependencies }}
 
@@ -806,6 +824,7 @@ jobs:
     needs: [detect-changes, Security-merge-group]
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') &&
+      needs.detect-changes.outputs.light-tier != 'true' &&
       needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.head-images == 'true' ||

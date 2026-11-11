@@ -43,6 +43,11 @@ on:
         required: false
         type: string
         default: "false"
+      light_tier:
+        description: "Whether a stacked layer runs the light tier, which skips the story tests"
+        required: false
+        type: string
+        default: "false"
     secrets:
       CHROMATIC_PROJECT_TOKEN:
         required: false
@@ -148,7 +153,7 @@ jobs:
 
   webapp-stories:
     name: "Webapp: Stories"
-    if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true'
+    if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true' && inputs.light_tier != 'true'
     # Browser rasterization depends on the OS; keep the canonical generated assets on one version.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
