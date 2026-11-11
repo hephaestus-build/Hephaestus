@@ -77,7 +77,7 @@ export const RELEASE = "heph";
 export const NAMESPACE = "hephaestus";
 export const SANDBOXES = "hephaestus-sandboxes";
 /** The kinds of the chart's SandboxTemplates (templates/sandbox-templates.yaml). */
-const SANDBOX_KINDS = ["review", "conversation", "action"] as const;
+const SANDBOX_KINDS = ["review", "conversation"] as const;
 /** The port of the application API on the server's and the workers' Pods. */
 const APPLICATION_PORT = 8080;
 const GATEWAY_NAMESPACE = "gateway";

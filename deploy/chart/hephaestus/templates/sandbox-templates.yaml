@@ -19,7 +19,7 @@ default policy allows the internet.
 {{- $runtime := .Values.worker.runtime }}
 {{- $templates := .Values.worker.sandbox.templates }}
 {{- $class := $templates.runtimeClassName }}
-{{- range $kind, $tier := dict "review" "reviews" "conversation" "conversations" "action" "conversations" }}
+{{- range $kind, $tier := dict "review" "reviews" "conversation" "conversations" }}
 {{- $name := include "hephaestus.name" (dict "root" $ "component" (printf "sandbox-%s" $kind)) }}
 apiVersion: extensions.agents.x-k8s.io/v1beta1
 kind: SandboxTemplate

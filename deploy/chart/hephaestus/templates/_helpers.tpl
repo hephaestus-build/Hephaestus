@@ -516,7 +516,7 @@ Pods never match.
 matchExpressions:
   - key: hephaestus.build/sandbox-kind
     operator: In
-    values: ["review", "conversation", "action"]
+    values: ["review", "conversation"]
 {{- end -}}
 
 {{/* The scraper's way in, on the named port of the metrics: management for the roles, metrics for the exporter. */}}

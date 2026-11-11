@@ -362,10 +362,6 @@ worker:
         resources:
           requests: { cpu: 100m, memory: 384Mi, ephemeral-storage: 256Mi }
           limits: { cpu: "2", memory: 1Gi, ephemeral-storage: 2Gi }
-      action:
-        resources:
-          requests: { cpu: 50m, memory: 256Mi, ephemeral-storage: 128Mi }
-          limits: { cpu: "1", memory: 512Mi, ephemeral-storage: 512Mi }
 
 # The conversation loop runs every conversation turn of the installation. It runs with the workers,
 # when turns is above 0. docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md § The Heph loop.

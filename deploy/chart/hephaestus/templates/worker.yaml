@@ -436,7 +436,7 @@ spec:
               value: {{ $sandboxes | quote }}
             # A sandbox claim names its kind's warm pool (sandbox-templates.yaml) and the gateway Service, whose
             # address the worker resolves for the sandbox: a sandbox has no DNS.
-            {{- range $kind := list "review" "conversation" "action" }}
+            {{- range $kind := list "review" "conversation" }}
             - name: {{ printf "HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_%s" (upper $kind) }}
               value: {{ include "hephaestus.name" (dict "root" $ "component" (printf "sandbox-%s" $kind)) | quote }}
             {{- end }}

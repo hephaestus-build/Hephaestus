@@ -834,12 +834,11 @@
 							"description": "The SandboxTemplates of the sandbox kinds.",
 							"type": "object",
 							"additionalProperties": false,
-							"required": ["runtimeClassName", "review", "conversation", "action"],
+							"required": ["runtimeClassName", "review", "conversation"],
 							"properties": {
 								"runtimeClassName": { "type": "string" },
 								"review": { "$ref": "#/definitions/sandboxTemplate" },
-								"conversation": { "$ref": "#/definitions/sandboxTemplate" },
-								"action": { "$ref": "#/definitions/sandboxTemplate" }
+								"conversation": { "$ref": "#/definitions/sandboxTemplate" }
 							}
 						}
 					}

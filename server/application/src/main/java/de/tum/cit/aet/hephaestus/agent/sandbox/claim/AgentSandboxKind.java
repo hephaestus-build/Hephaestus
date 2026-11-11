@@ -7,9 +7,7 @@ public enum AgentSandboxKind {
     /** A practice review: it measures, then composes. */
     REVIEW,
     /** A conversation: its turns and digests, while the conversation is in use. */
-    CONVERSATION,
-    /** One action task, such as a product feedback draft. */
-    ACTION;
+    CONVERSATION;
 
     /** The kind as the sandbox's template and its loop name it. */
     public String value() {

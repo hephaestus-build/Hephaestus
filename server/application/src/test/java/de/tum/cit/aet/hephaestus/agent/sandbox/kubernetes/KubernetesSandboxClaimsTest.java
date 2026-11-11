@@ -23,8 +23,8 @@ import org.junit.jupiter.api.Test;
 class KubernetesSandboxClaimsTest {
 
     private static final String NAMESPACE = "hephaestus-sandboxes";
-    private static final AgentSandboxProperties.WarmPools POOLS = new AgentSandboxProperties.WarmPools(
-            "rel-sandbox-review", "rel-sandbox-conversation", "rel-sandbox-action");
+    private static final AgentSandboxProperties.WarmPools POOLS =
+            new AgentSandboxProperties.WarmPools("rel-sandbox-review", "rel-sandbox-conversation");
 
     private @Nullable KubernetesClient client;
 
