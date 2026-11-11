@@ -539,5 +539,197 @@
 		],
 		"consulted": false,
 		"tied": true
+	},
+	{
+		"name": "whole-word search does not split an underscore identifier",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retry_count",
+		"texts": [
+			"The repository has no retry_count."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "whole-word search does not split a camel-case identifier",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retryCount",
+		"texts": [
+			"The repository has no retryCount."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a leading boundary cannot start after an underscore",
+		"patterns": [
+			"(?i)\\bretry"
+		],
+		"subject": "foo_retry",
+		"texts": [
+			"The repository has no foo_retry."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a trailing boundary cannot end before a camel-case suffix",
+		"patterns": [
+			"(?i)retry\\b"
+		],
+		"subject": "retryCount",
+		"texts": [
+			"The repository has no retryCount."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a whole underscore identifier can carry both boundaries",
+		"patterns": [
+			"(?i)\\bretry_count\\b"
+		],
+		"subject": "retry_count",
+		"texts": [
+			"The repository has no retry_count."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a hyphen supplies a real word boundary",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retry-count",
+		"texts": [
+			"The repository has no retry-count."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a bounded search cannot substitute an inflected word",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retries",
+		"texts": [
+			"The repository has no retries."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a letter after the subject prevents the trailing boundary",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retryé",
+		"texts": [
+			"The repository has no retryé."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "an astral letter after the subject prevents the trailing boundary",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retry𐐀",
+		"texts": [
+			"The repository has no retry𐐀."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "case-insensitive boundary searches still match the full word",
+		"patterns": [
+			"(?i)\\bRetry\\b"
+		],
+		"subject": "retry",
+		"texts": [
+			"The repository has no retry."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "case-sensitive boundary searches retain case",
+		"patterns": [
+			"\\bRetry\\b"
+		],
+		"subject": "retry",
+		"texts": [
+			"The repository has no retry."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a boundary does not make a generic repository prefix a subject",
+		"patterns": [
+			"(?i)\\brepositor"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a boundary does not make a generic logic prefix a subject",
+		"patterns": [
+			"(?i)\\blogi"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "case folding cannot expand one pattern character into two subject positions",
+		"patterns": [
+			"(?i)\\bİdd\\b"
+		],
+		"subject": "i̇dd",
+		"texts": [
+			"The repository has no i̇dd."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "an identical Unicode word retains its boundaries",
+		"patterns": [
+			"(?i)\\bİdd\\b"
+		],
+		"subject": "İdd",
+		"texts": [
+			"The repository has no İdd."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "whole-word case folding retains Greek final sigma",
+		"patterns": [
+			"(?i)\\bοσος\\b"
+		],
+		"subject": "ΟΣΟΣ",
+		"texts": [
+			"The repository has no ΟΣΟΣ."
+		],
+		"consulted": true,
+		"tied": true
 	}
 ]

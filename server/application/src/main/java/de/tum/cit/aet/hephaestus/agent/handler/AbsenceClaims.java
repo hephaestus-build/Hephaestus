@@ -194,6 +194,7 @@ final class AbsenceClaims {
     private static final Pattern WORD_BREAK = Pattern.compile("(?<=\\p{Ll})(?=\\p{Lu})|[^\\p{L}\\p{N}]+");
     private static final Pattern WORD_EDGE = Pattern.compile("^[_-]|[_-]$");
     private static final Pattern TOKEN_BREAK = Pattern.compile("[^\\p{L}\\p{N}_-]+");
+    private static final Pattern WORD_BOUNDARY = Pattern.compile("\\b", Pattern.UNICODE_CHARACTER_CLASS);
     private static final Set<String> GENERIC =
             GENERIC_WORDS.stream().map(AbsenceClaims::stem).collect(Collectors.toSet());
 
@@ -258,13 +259,14 @@ final class AbsenceClaims {
         return patterns.stream().flatMap(pattern -> terms(pattern).stream()).toList();
     }
 
-    private record Term(String word, boolean ignoresCase, boolean bounded) {}
+    private record Term(String word, boolean ignoresCase, boolean leadingBoundary, boolean bounded) {}
 
     private static List<Term> terms(String pattern) {
         if (!PLAIN.matcher(pattern).matches()) return List.of();
         boolean ignoresCase = pattern.startsWith("(?i)");
         return Arrays.stream(pattern.replace("(?i)", "").split("\\|"))
-                .map(word -> new Term(word.replace("\\b", ""), ignoresCase, word.endsWith("\\b")))
+                .map(word ->
+                        new Term(word.replace("\\b", ""), ignoresCase, word.startsWith("\\b"), word.endsWith("\\b")))
                 .filter(term -> !content(term.word()).isEmpty()
                         && !WORD_EDGE.matcher(term.word()).find())
                 .toList();
@@ -275,15 +277,43 @@ final class AbsenceClaims {
         var tokens = TOKEN_BREAK.splitAsStream(text).collect(Collectors.toSet());
         var folded =
                 tokens.stream().map(token -> token.toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
-        return terms.stream()
-                .anyMatch(term -> term.ignoresCase()
-                        ? folded.contains(term.word().toLowerCase(Locale.ROOT)) || finds(term, words)
-                        : tokens.contains(term.word()));
+        return terms.stream().anyMatch(term -> {
+            boolean names = term.ignoresCase()
+                    ? folded.contains(term.word().toLowerCase(Locale.ROOT)) || finds(term, words)
+                    : tokens.contains(term.word());
+            return names && (!(term.leadingBoundary() || term.bounded()) || boundedFinds(term, text));
+        });
+    }
+
+    /** Ripgrep's Unicode word boundary applies before words splits an identifier. */
+    private static boolean boundedFinds(Term term, String text) {
+        int length = term.word().codePointCount(0, term.word().length());
+        int points = text.codePointCount(0, text.length());
+        String word = term.ignoresCase() ? term.word().toLowerCase(Locale.ROOT) : term.word();
+        for (int first = 0, at = 0;
+                first <= points - length;
+                first++, at += Character.charCount(text.codePointAt(at))) {
+            if (term.leadingBoundary() && !boundaryAt(text, at)) continue;
+            // Keep the original count: lowercasing İ must not join extra pattern positions.
+            int end = text.offsetByCodePoints(at, length);
+            String original = text.substring(at, end);
+            String selected = term.ignoresCase() ? original.toLowerCase(Locale.ROOT) : original;
+            if (selected.equals(word) && (!term.bounded() || boundaryAt(text, end))) return true;
+        }
+        return false;
+    }
+
+    private static boolean boundaryAt(String text, int at) {
+        return WORD_BOUNDARY
+                .matcher(text)
+                .useTransparentBounds(true)
+                .region(at, text.length())
+                .lookingAt();
     }
 
     /**
      * Whether a search for {@code term} finds these words. It runs over them in order, past a separator only where one
-     * word ends, and ends inside the last unless a word boundary ends it. It starts and ends at a word that names a
+     * word ends, and ends inside the last. It starts and ends at a word that names a
      * subject, so that a prefix of a generic word names nothing.
      */
     private static boolean finds(Term term, List<String> words) {

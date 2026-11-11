@@ -685,6 +685,7 @@ const CLAUSE_END = new RegExp(ABSENCE_CLAUSE_END, "u");
 const PLAIN_SEARCH = new RegExp(`^(?:${ABSENCE_PLAIN_SEARCH})$`, "u");
 const WORD_BREAK = /(?<=\p{Ll})(?=\p{Lu})|[^\p{L}\p{N}]+/u;
 const TOKEN_BREAK = /[^\p{L}\p{N}_-]+/u;
+const WORD_CHARACTER = /[\p{Alphabetic}\p{M}\p{Nd}\p{Pc}\p{Join_Control}]/u;
 
 /** The same crude stem as `AbsenceClaims.java`: a miss costs one more search. */
 function stem(word: string): string {
@@ -713,6 +714,7 @@ const content = (text: string) =>
 interface SearchTerm {
 	word: string;
 	ignoresCase: boolean;
+	leadingBoundary: boolean;
 	bounded: boolean;
 }
 
@@ -727,6 +729,7 @@ function termsOf(pattern: string): SearchTerm[] {
 		.map((word) => ({
 			word: word.replaceAll(String.raw`\b`, ""),
 			ignoresCase,
+			leadingBoundary: word.startsWith(String.raw`\b`),
 			bounded: word.endsWith(String.raw`\b`),
 		}))
 		.filter(({ word }) => content(word).length > 0 && !/^[_-]|[_-]$/u.test(word));
@@ -734,7 +737,7 @@ function termsOf(pattern: string): SearchTerm[] {
 
 /**
  * Whether a search for `term` finds these words. It runs over them in order, past a separator only where one word
- * ends, and ends inside the last unless a word boundary ends it. It starts and ends at a word that names a subject,
+ * ends, and ends inside the last. It starts and ends at a word that names a subject,
  * so that a prefix of a generic word names nothing.
  */
 function finds(term: SearchTerm, words: readonly string[]): boolean {
@@ -766,15 +769,50 @@ function finds(term: SearchTerm, words: readonly string[]): boolean {
 	});
 }
 
+/** Regex word boundaries count code points, not grapheme clusters. */
+function codePoints(text: string): string[] {
+	return text.match(/./gsu) ?? [];
+}
+
+/** Ripgrep's Unicode word boundary applies to the original identifier, before wordsOf splits it. */
+function boundaryAt(text: string, at: number): boolean {
+	const before = codePoints(text.slice(Math.max(0, at - 2), at)).at(-1) ?? "";
+	const after = codePoints(text.slice(at, at + 2)).at(0) ?? "";
+	return WORD_CHARACTER.test(before) !== WORD_CHARACTER.test(after);
+}
+
+function boundedFinds(term: SearchTerm, text: string): boolean {
+	const points = codePoints(text);
+	const { length } = codePoints(term.word);
+	const word = term.ignoresCase ? term.word.toLowerCase() : term.word;
+	for (
+		let first = 0, at = 0;
+		first <= points.length - length;
+		at += (points[first] ?? "").length, first += 1
+	) {
+		if (term.leadingBoundary && !boundaryAt(text, at)) {
+			continue;
+		}
+		// Keep the original character count: lowercasing İ must not join extra pattern positions.
+		const original = points.slice(first, first + length).join("");
+		const selected = term.ignoresCase ? original.toLowerCase() : original;
+		if (selected === word && (!term.bounded || boundaryAt(text, at + original.length))) {
+			return true;
+		}
+	}
+	return false;
+}
+
 function holdsTerm(terms: readonly SearchTerm[], text: string): boolean {
 	const words = wordsOf(text);
 	const tokens = text.split(TOKEN_BREAK);
 	const folded = new Set(tokens.map((token) => token.toLowerCase()));
-	return terms.some((term) =>
-		term.ignoresCase
+	return terms.some((term) => {
+		const names = term.ignoresCase
 			? folded.has(term.word.toLowerCase()) || finds(term, words)
-			: tokens.includes(term.word),
-	);
+			: tokens.includes(term.word);
+		return names && (!(term.leadingBoundary || term.bounded) || boundedFinds(term, text));
+	});
 }
 
 const claimed = (clause: string) =>
