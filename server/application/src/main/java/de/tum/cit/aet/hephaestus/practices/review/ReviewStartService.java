@@ -48,11 +48,21 @@ public class ReviewStartService implements ReviewStart {
         if (review.getStatus().isTerminal() || review.isCancelRequested()) return false;
         if (review.getStatus() == ReviewStatus.QUEUED) {
             review.setStatus(ReviewStatus.RUNNING);
-            var checks = (ObjectNode) review.getChecks().deepCopy();
-            checks.put("startedAt", clock.instant().toString());
-            review.setChecks(checks);
+            // A requeued review starts again; it keeps the time it first started.
+            if (!review.getChecks().has("startedAt")) {
+                var checks = (ObjectNode) review.getChecks().deepCopy();
+                checks.put("startedAt", clock.instant().toString());
+                review.setChecks(checks);
+            }
         }
         return true;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requeue(long workspaceId, UUID reviewId) {
+        var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
+        if (review.getStatus() == ReviewStatus.RUNNING) review.setStatus(ReviewStatus.QUEUED);
     }
 
     @Override
@@ -71,6 +81,7 @@ public class ReviewStartService implements ReviewStart {
     public boolean replaceByNewerOccasion(long workspaceId, UUID reviewId) {
         var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
         if (review.getStatus() != ReviewStatus.QUEUED
+                || review.getChecks().has("startedAt")
                 || review.getKind() != ReviewKind.ITEM
                 || review.getOrigin() != ReviewOrigin.EVENT
                 || review.isCancelRequested()) return false;

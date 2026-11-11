@@ -183,6 +183,28 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query("SELECT j.id FROM ReviewJob j WHERE j.runId = :runId AND j.workspaceId = :workspaceId")
     Optional<UUID> findIdByRun(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
 
+    /** The review locked before finding a completed job whose composition can resume. */
+    @Query(value = """
+            SELECT r.id FROM review r WHERE r.workspace_id=:workspaceId AND r.id=:reviewId FOR UPDATE
+            """, nativeQuery = true)
+    Optional<UUID> lockParentByReview(@Param("workspaceId") long workspaceId, @Param("reviewId") UUID reviewId);
+
+    /** The parent of a run's job, locked before the job, as every writer of the review and its job takes them. */
+    @WorkspaceAgnostic("Run-based lock; the run carries its workspace")
+    @Query(value = """
+            SELECT r.id FROM review r JOIN review_job j ON j.review_id=r.id AND j.workspace_id=r.workspace_id
+            WHERE j.run_id=:runId AND j.workspace_id=:workspaceId FOR UPDATE OF r
+            """, nativeQuery = true)
+    Optional<UUID> lockParentByRun(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
+
+    /** The parent of a job, locked before the job, as every writer of the review and its job takes them. */
+    @WorkspaceAgnostic("ID-based lock; the caller holds the job's run")
+    @Query(value = """
+            SELECT r.id FROM review r JOIN review_job j ON j.review_id=r.id AND j.workspace_id=r.workspace_id
+            WHERE j.id=:jobId FOR UPDATE OF r
+            """, nativeQuery = true)
+    Optional<UUID> lockParentOfJob(@Param("jobId") UUID jobId);
+
     /** The job of a run, locked: the run's reaper takes it before it takes the run back. */
     @WorkspaceAgnostic("Run-based lock; the run carries its workspace")
     @Lock(LockModeType.PESSIMISTIC_WRITE)

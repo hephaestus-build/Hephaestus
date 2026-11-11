@@ -128,7 +128,13 @@ public class ScanReportTestData {
                 .budgetUsd(BigDecimal.ONE)
                 .createdAt(at)
                 .orderedAt(at)
-                .completedAt(status == ReviewStatus.COMPLETE ? at : null)
+                .completedAt(status.isTerminal() ? at : null)
+                .stopReason(
+                        status.isTerminal() && status != ReviewStatus.COMPLETE
+                                ? status == ReviewStatus.CANCELLED
+                                        ? ReviewStopReason.CANCELLED
+                                        : ReviewStopReason.EXECUTION_INCOMPLETE
+                                : null)
                 .requestKey(key)
                 .requestDigest(ProblemComparison.sha256(key.toString()))
                 .checks(json.createObjectNode()

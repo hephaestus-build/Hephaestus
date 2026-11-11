@@ -1859,8 +1859,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     /** A running attempt of one ITEM review of a GitHub pull request, leased under its own run, with its capture. */
-    @Test
-    void shouldResumeTheApprovedCompositionFromItsOriginalInputsWithoutMeasuringAgain() {
+    @ParameterizedTest(name = "review settled: {0}")
+    @ValueSource(booleans = {true, false})
+    void shouldResumeTheApprovedCompositionFromItsOriginalInputsWithoutMeasuringAgain(boolean settled) {
         try (var review = claimedReview(FeedbackMode.APPROVE_FIRST)) {
             var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
@@ -1877,10 +1878,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     originalReport.toString(),
                     review.workspaceId(),
                     review.identity().jobId());
-            jdbc.update(
-                    "UPDATE review SET status='COMPLETE',completed_at=now() WHERE workspace_id=? AND id=?",
-                    review.workspaceId(),
-                    review.reviewId());
+            if (settled) {
+                jdbc.update(
+                        "UPDATE review SET status='COMPLETE',completed_at=now() WHERE workspace_id=? AND id=?",
+                        review.workspaceId(),
+                        review.reviewId());
+            }
             var ended = jobs.findById(review.identity().jobId()).orElseThrow();
             continuation.forget(ended);
             assertThat(compositionBases.findByWorkspaceIdAndJobId(review.workspaceId(), ended.getId()))
@@ -1897,6 +1900,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             digests.current(review.workspaceId(), feedbackId)));
             var resumed = jobs.findById(ended.getId()).orElseThrow();
             assertThat(resumed.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            assertThat(jdbc.queryForObject(
+                            "SELECT status FROM review WHERE workspace_id=? AND id=?",
+                            String.class,
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .isEqualTo(settled ? "COMPLETE" : "QUEUED");
             assertThat(resumed.getAttempt()).isEqualTo(ended.getAttempt() + 1);
             assertThat(resumed.getOutput()).isEqualTo(originalReport);
             assertThat(resultIds(review)).containsExactlyElementsOf(sealedIds);
@@ -1909,7 +1918,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             String.class,
                             review.workspaceId(),
                             review.reviewId()))
-                    .isEqualTo("COMPLETE");
+                    .isEqualTo(settled ? "COMPLETE" : "RUNNING");
             RuntimeJobTestData.updateJobs(
                     jdbc,
                     "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",

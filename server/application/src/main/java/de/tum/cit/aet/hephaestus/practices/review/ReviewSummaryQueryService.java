@@ -33,7 +33,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewScriptQuery;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
 import de.tum.cit.aet.hephaestus.practices.trace.ItemTraceRepository;
 import java.time.Duration;
 import java.util.Collection;
@@ -85,34 +84,27 @@ public class ReviewSummaryQueryService {
     }
 
     public ReviewRefDTO ref(Review review) {
-        var jobs = runtime.jobCounts(review.getWorkspaceId(), List.of(review.getId()));
-        return ref(review, item(review), jobs.getOrDefault(review.getId(), Map.of()));
+        return ref(review, item(review));
     }
 
     /** Each review's reference, keyed by review id, with the reviewed work of all of them read at once. */
     public Map<UUID, ReviewRefDTO> refs(long workspaceId, Collection<Review> reviews) {
         var items = references.items(
                 workspaceId, reviews.stream().map(Review::getItemId).distinct().toList());
-        var jobs = runtime.jobCounts(
-                workspaceId, reviews.stream().map(Review::getId).toList());
         Map<UUID, ReviewRefDTO> refs = new LinkedHashMap<>();
-        reviews.forEach(review -> refs.put(
-                review.getId(),
-                ref(
-                        review,
-                        Objects.requireNonNull(items.get(review.getItemId())),
-                        jobs.getOrDefault(review.getId(), Map.of()))));
+        reviews.forEach(review ->
+                refs.put(review.getId(), ref(review, Objects.requireNonNull(items.get(review.getItemId())))));
         return refs;
     }
 
-    private static ReviewRefDTO ref(Review review, ItemRefDTO item, Map<ReviewJobStatus, Long> jobs) {
+    private static ReviewRefDTO ref(Review review, ItemRefDTO item) {
         return new ReviewRefDTO(
                 review.getId(),
                 review.getKind(),
                 item,
                 review.getItemVersion(),
                 review.getOrigin(),
-                ReviewShownStatus.of(review.getStatus(), jobs),
+                review.getStatus(),
                 review.getCreatedAt(),
                 review.getCompletedAt());
     }
@@ -156,7 +148,7 @@ public class ReviewSummaryQueryService {
                             Objects.requireNonNull(reads.items.get(review.getItemId())),
                             review.getItemVersion(),
                             review.getOrigin(),
-                            ReviewShownStatus.of(review.getStatus(), jobs),
+                            review.getStatus(),
                             review.getCreatedAt(),
                             review.getCompletedAt(),
                             event,
@@ -197,12 +189,7 @@ public class ReviewSummaryQueryService {
             var ids = page.stream().map(Review::getId).toList();
             jobCounts = runtime.jobCounts(ws, ids);
             progress = progressService.progress(
-                    ws,
-                    page.stream()
-                            .collect(Collectors.toMap(
-                                    Review::getId,
-                                    r -> ReviewShownStatus.of(
-                                            r.getStatus(), jobCounts.getOrDefault(r.getId(), Map.of())))));
+                    ws, page.stream().collect(Collectors.toMap(Review::getId, Review::getStatus)));
             assignmentsByReview =
                     assignments.findByWorkspaceIdAndReviewIdInOrderByReviewIdAscPracticeIdAsc(ws, ids).stream()
                             .collect(Collectors.groupingBy(ReviewPractice::getReviewId));

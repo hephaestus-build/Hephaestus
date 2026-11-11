@@ -24,7 +24,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -47,7 +46,6 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
 
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final ReviewAssignmentQuery assignments = mock(ReviewAssignmentQuery.class);
-    private final ReviewRuntimeQuery runtime = mock(ReviewRuntimeQuery.class);
     private final ItemSourceAccess source = mock(ItemSourceAccess.class);
     private final RegisteredItemLabels labels = mock(RegisteredItemLabels.class);
 
@@ -55,7 +53,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         when(source.kinds()).thenReturn(Set.of(RuntimeReviewTestData.ITEM.kind()));
         when(source.permits(RuntimeReviewTestData.ITEM, SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(true);
-        return new ReviewAttemptsContentSource(jobs, assignments, runtime, List.of(source), labels, new JsonMapper());
+        return new ReviewAttemptsContentSource(jobs, assignments, List.of(source), labels, new JsonMapper());
     }
 
     private final Map<UUID, List<ReviewAssignmentQuery.Retained>> attribution = new HashMap<>();
@@ -171,23 +169,29 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
                 .isEmpty();
     }
 
-    @Test
-    void shouldStateAStartedReviewWhoseJobWaitsAsQueuedAsTheScreensDo() {
+    @ParameterizedTest
+    @EnumSource(ReviewStatus.class)
+    void shouldStateThePersistedReviewStatusBesideTheRetainedJobStatus(ReviewStatus status) {
         var waiting = RuntimeReviewTestData.job();
-        waiting.setStatus(ReviewJobStatus.QUEUED);
+        waiting.setStatus(
+                switch (status) {
+                    case QUEUED -> ReviewJobStatus.QUEUED;
+                    case RUNNING -> ReviewJobStatus.RUNNING;
+                    case COMPLETE, PARTIAL -> ReviewJobStatus.COMPLETED;
+                    case FAILED -> ReviewJobStatus.FAILED;
+                    case CANCELLED -> ReviewJobStatus.CANCELLED;
+                });
         attributed(waiting, List.of(about(5L)));
         listed(waiting);
         when(labels.labels(eq(1L), any())).thenReturn(Map.of());
         var reviewed = new ReviewAssignmentQuery.ReviewedItem(RuntimeReviewTestData.REVIEW, ASSIGNMENT.itemId());
         when(assignments.recorded(1L, 5L, Set.of(reviewed)))
-                .thenReturn(Map.of(reviewed, new ReviewAssignmentQuery.Recorded(ReviewStatus.RUNNING, null, null)));
-        when(runtime.jobCounts(1L, Set.of(RuntimeReviewTestData.REVIEW)))
-                .thenReturn(Map.of(RuntimeReviewTestData.REVIEW, Map.of(ReviewJobStatus.QUEUED, 1L)));
+                .thenReturn(Map.of(reviewed, new ReviewAssignmentQuery.Recorded(status, null, null)));
 
         var row = attempts().overview(1, 5).path("attempts").path(0);
 
-        assertThat(row.path("status").asString()).isEqualTo("QUEUED");
-        assertThat(row.path("reviewStatus").asString()).isEqualTo("QUEUED");
+        assertThat(row.path("status").asString()).isEqualTo(waiting.getStatus().name());
+        assertThat(row.path("reviewStatus").asString()).isEqualTo(status.name());
     }
 
     @Test
@@ -269,8 +273,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         attributed(nobody, List.of(about(null)));
 
         // No source is consulted: the developer filter comes first.
-        var payload = new ReviewAttemptsContentSource(
-                        jobs, assignments, runtime, List.of(source), labels, new JsonMapper())
+        var payload = new ReviewAttemptsContentSource(jobs, assignments, List.of(source), labels, new JsonMapper())
                 .overview(1, 5);
 
         assertThat(payload.path("attempts")).isEmpty();
@@ -285,8 +288,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         var unknown = RuntimeReviewTestData.job();
         listed(unknown);
         attributed(unknown, List.of());
-        var attempts =
-                new ReviewAttemptsContentSource(jobs, assignments, runtime, List.of(source), labels, new JsonMapper());
+        var attempts = new ReviewAttemptsContentSource(jobs, assignments, List.of(source), labels, new JsonMapper());
 
         var answer = attempts.read(1, 5, "inputs/context/review_attempts/pull_request/42.json");
 
@@ -304,12 +306,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         when(jobs.findAttemptsByWorkspaceIdAndAvailableAtGreaterThanEqualOrderByAvailableAtDesc(eq(1L), any(), any()))
                 .thenReturn(List.of());
         var attempts = new ReviewAttemptsContentSource(
-                jobs,
-                mock(ReviewAssignmentQuery.class),
-                runtime,
-                List.of(),
-                mock(RegisteredItemLabels.class),
-                new JsonMapper());
+                jobs, mock(ReviewAssignmentQuery.class), List.of(), mock(RegisteredItemLabels.class), new JsonMapper());
 
         assertThat(attempts.read(1, 5, "inputs/context/review_attempts/pull_request/42.json"))
                 .hasValueSatisfying(

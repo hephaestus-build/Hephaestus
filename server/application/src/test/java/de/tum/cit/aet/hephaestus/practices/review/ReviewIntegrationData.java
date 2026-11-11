@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -318,13 +319,15 @@ public class ReviewIntegrationData {
     }
 
     /**
-     * A running review of {@code practices} practices whose job waits for its next attempt, after earlier attempts
-     * staged the first {@code ended} of them.
+     * A started review of {@code practices} practices, queued again while its job waits for its next attempt, after
+     * earlier attempts staged the first {@code ended} of them.
      */
     @Transactional
     public Review continuingReview(Scenario s, long subject, int ended, int practices) {
-        var review =
-                activeReview(s, subject, ReviewStatus.RUNNING, Instant.now().minusSeconds(600), null);
+        var review = activeReview(s, subject, ReviewStatus.QUEUED, Instant.now().minusSeconds(600), null);
+        jdbc.sql("UPDATE review SET checks=checks||jsonb_build_object('startedAt',now()::text) WHERE id=:id")
+                .param("id", review.getId())
+                .update();
         for (int i = 1; i < practices; i++) {
             var practice = versions.create(new PracticeVersionService.NewPractice(
                     s.workspace(),
@@ -470,6 +473,23 @@ public class ReviewIntegrationData {
                 .param("at", Timestamp.from(result.getRecordedAt()))
                 .update();
         return id;
+    }
+
+    @Transactional
+    public void reviewStatus(Result result, ReviewStatus status) {
+        var review = reviews.findByIdAndWorkspaceId(result.getReviewId(), result.getWorkspaceId())
+                .orElseThrow();
+        review.setStatus(status);
+        review.setCompletedAt(status.isTerminal() ? result.getRecordedAt() : null);
+        review.setStopReason(
+                switch (status) {
+                    case QUEUED, RUNNING, COMPLETE -> null;
+                    case PARTIAL -> ReviewStopReason.EXECUTION_INCOMPLETE;
+                    case FAILED -> ReviewStopReason.EXECUTION_FAILED;
+                    case CANCELLED -> ReviewStopReason.CANCELLED;
+                });
+        reviews.saveAndFlush(review);
+        if (!status.isTerminal()) activeJob(result, status.name(), null);
     }
 
     /** An unfinished job of the result's review: QUEUED (waiting, or held by {@code hold}) or RUNNING. */

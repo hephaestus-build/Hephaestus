@@ -81,6 +81,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -252,10 +254,12 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                 });
     }
 
-    @Test
-    void shouldListAStartedScanWhoseInvocationWaitsAsQueuedInItsRowFilterAndDetail() {
-        var scan = data.scan(scenario, ReviewStatus.RUNNING, Instant.now());
-        invocation(scan.getWorkspaceId(), scan.getId(), ReviewJobStatus.QUEUED);
+    @ParameterizedTest
+    @EnumSource(ReviewStatus.class)
+    void shouldReportEachPersistedScanStateInItsListFilterAndDetail(ReviewStatus status) {
+        var scan = data.scan(scenario, status, Instant.now());
+        if (!status.isTerminal())
+            invocation(scan.getWorkspaceId(), scan.getId(), ReviewJobStatus.valueOf(status.name()));
         var adapter = new ReviewRuntimeQueryAdapter(
                 jobs, mock(ReviewAssignmentQuery.class), runtimeRows, mock(ReviewTimingFactsQuery.class));
         when(runtime.jobCounts(anyLong(), anyCollection()))
@@ -263,18 +267,19 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         when(runtime.usage(scan.getWorkspaceId(), scan.getId()))
                 .thenAnswer(call -> adapter.usage(scan.getWorkspaceId(), scan.getId()));
 
-        assertThat(query.list(scan.getWorkspaceId(), null, ReviewStatus.QUEUED, PageRequest.of(0, 20))
+        assertThat(query.list(scan.getWorkspaceId(), null, status, PageRequest.of(0, 20))
                         .getContent())
                 .singleElement()
                 .satisfies(row -> {
                     assertThat(row.id()).isEqualTo(scan.getId());
-                    assertThat(row.status()).isEqualTo(ReviewStatus.QUEUED);
+                    assertThat(row.status()).isEqualTo(status);
                 });
-        assertThat(query.list(scan.getWorkspaceId(), null, ReviewStatus.RUNNING, PageRequest.of(0, 20))
+        var excluded = status == ReviewStatus.QUEUED ? ReviewStatus.RUNNING : ReviewStatus.QUEUED;
+        assertThat(query.list(scan.getWorkspaceId(), null, excluded, PageRequest.of(0, 20))
                         .getContent())
                 .isEmpty();
         assertThat(query.detail(scan.getWorkspaceId(), scan.getId()).summary().status())
-                .isEqualTo(ReviewStatus.QUEUED);
+                .isEqualTo(status);
     }
 
     @Test

@@ -14,8 +14,6 @@ import de.tum.cit.aet.hephaestus.practices.review.MemberReviewReadinessService;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewProgressService;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Clock;
@@ -39,7 +37,6 @@ public class PracticeProfileOverviewService {
     private final Clock clock;
     private final ProfileChangeQuery profileChanges;
     private final PracticeStandingService standings;
-    private final ReviewRuntimeQuery runtime;
     private final MemberReviewReadinessService readiness;
     private final ProfileOverviewRepository overview;
     private final ResultSourceAuthorization sources;
@@ -84,9 +81,7 @@ public class PracticeProfileOverviewService {
 
     private ProfileReviewRefDTO latestRef(long ws, ResultView latest) {
         var review = latest.review();
-        var status = ReviewShownStatus.of(
-                review.getStatus(),
-                runtime.jobCounts(ws, List.of(review.getId())).getOrDefault(review.getId(), Map.of()));
+        var status = review.getStatus();
         return new ProfileReviewRefDTO(
                 review.getId(),
                 latest.result().getRecordedAt(),

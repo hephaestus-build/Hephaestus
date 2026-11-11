@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewScanReuse;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewScanStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ScanExecutionSnapshot;
@@ -62,6 +63,7 @@ class ScanDriverTest extends BaseUnitTest {
             scans,
             reuse,
             reviews,
+            mock(ReviewStart.class),
             inventory,
             budget,
             queue,
@@ -274,6 +276,7 @@ class ScanDriverTest extends BaseUnitTest {
                         scans,
                         reuse,
                         reviews,
+                        mock(ReviewStart.class),
                         inventory,
                         budget,
                         queue,

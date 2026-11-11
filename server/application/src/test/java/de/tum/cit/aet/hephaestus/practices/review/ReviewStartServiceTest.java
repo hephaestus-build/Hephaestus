@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import tools.jackson.databind.node.JsonNodeFactory;
@@ -98,6 +99,33 @@ class ReviewStartServiceTest extends BaseUnitTest {
 
         assertThat(starts().start(WORKSPACE, REVIEW)).isFalse();
         assertThat(review.getStatus()).isEqualTo(status);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "RUNNING, QUEUED",
+        "QUEUED, QUEUED",
+        "COMPLETE, COMPLETE",
+        "PARTIAL, PARTIAL",
+        "FAILED, FAILED",
+        "CANCELLED, CANCELLED"
+    })
+    void shouldRequeueOnlyARunningReviewAndKeepItsFirstStart(ReviewStatus before, ReviewStatus after) {
+        var checks = JsonNodeFactory.instance
+                .objectNode()
+                .put("startedAt", NOW.minusSeconds(60).toString());
+        var review = Review.builder()
+                .id(REVIEW)
+                .workspaceId(WORKSPACE)
+                .status(before)
+                .checks(checks)
+                .build();
+        when(reviews.lockByIdAndWorkspaceId(REVIEW, WORKSPACE)).thenReturn(Optional.of(review));
+
+        starts().requeue(WORKSPACE, REVIEW);
+
+        assertThat(review.getStatus()).isEqualTo(after);
+        assertThat(review.getChecks()).isEqualTo(checks);
     }
 
     @Test

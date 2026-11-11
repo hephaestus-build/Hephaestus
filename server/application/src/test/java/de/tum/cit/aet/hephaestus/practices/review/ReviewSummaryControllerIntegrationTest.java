@@ -29,13 +29,15 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.IntConsumer;
-import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -476,62 +478,34 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    @Test
-    void shouldReportAStartedReviewWhoseJobWaitsAsQueuedInTheListFilterDetailAndCounts() {
-        var at = Instant.parse("2026-10-20T00:00:00Z");
-        var waiting = data.result(scenario, ResultOutcome.MET, at);
-        data.activeJob(waiting, "QUEUED", null);
-        data.end(waiting, at.plusSeconds(30));
-        var held = data.result(scenario, ResultOutcome.MET, at.plusSeconds(60));
-        data.activeJob(held, "QUEUED", AgentRunHold.BUDGET);
-        data.end(held, at.plusSeconds(90));
-        var running = data.result(scenario, ResultOutcome.MET, at.plusSeconds(120));
-        data.activeJob(running, "RUNNING", null);
-        // The stored status turns Running when a review is handed to the queue, before a worker claims it.
-        jdbc.sql("UPDATE review SET status='RUNNING',stop_reason=NULL,completed_at=NULL WHERE id IN (:ids)")
-                .param("ids", List.of(waiting.getReviewId(), held.getReviewId(), running.getReviewId()))
-                .update();
+    @ParameterizedTest
+    @EnumSource(ReviewStatus.class)
+    void shouldExposeEachPersistedStateInReviewDetailListAndCounts(ReviewStatus status) {
+        var result = data.result(scenario, ResultOutcome.MET, Instant.now());
+        data.reviewStatus(result, status);
 
-        for (var expected : List.of(
-                List.of(waiting.getReviewId().toString(), "QUEUED"),
-                List.of(held.getReviewId().toString(), "QUEUED"),
-                List.of(running.getReviewId().toString(), "RUNNING"))) {
-            get("/practices/reviews/" + expected.getFirst())
-                    .expectStatus()
-                    .isOk()
-                    .expectBody()
-                    .jsonPath("$.status")
-                    .isEqualTo(expected.getLast());
-        }
-        get("/practices/reviews?status=QUEUED")
+        get("/practices/reviews/" + result.getReviewId())
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.content[*].id")
-                .value(ids -> assertThat(ids)
-                        .asInstanceOf(InstanceOfAssertFactories.LIST)
-                        .containsExactlyInAnyOrder(
-                                waiting.getReviewId().toString(),
-                                held.getReviewId().toString()))
-                .jsonPath("$.content[*].status")
-                .value(statuses -> assertThat(statuses)
-                        .asInstanceOf(InstanceOfAssertFactories.LIST)
-                        .containsOnly("QUEUED"));
-        get("/practices/reviews?status=RUNNING")
+                .jsonPath("$.status")
+                .isEqualTo(status.name());
+        get("/practices/reviews?status=" + status)
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.content[*].id")
-                .value(ids -> assertThat(ids)
-                        .asInstanceOf(InstanceOfAssertFactories.LIST)
-                        .containsExactly(running.getReviewId().toString()));
+                .jsonPath("$.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(result.getReviewId().toString())
+                .jsonPath("$.content[0].status")
+                .isEqualTo(status.name());
+        var count = status.name().toLowerCase(Locale.ROOT);
         get("/practices/reviews/overview?allTime=true")
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.reviews.queued")
-                .isEqualTo(2)
-                .jsonPath("$.reviews.running")
+                .jsonPath("$.reviews." + count)
                 .isEqualTo(1);
     }
 

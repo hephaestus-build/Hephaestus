@@ -31,7 +31,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.trace.OwnItemTraceQueryService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -67,8 +66,7 @@ class ProfileReviewPaginationTest extends BaseUnitTest {
             reviews,
             mock(OwnItemTraceQueryService.class),
             authorization,
-            mock(ProductItemRepository.class),
-            mock(ReviewRuntimeQuery.class));
+            mock(ProductItemRepository.class));
 
     @Test
     void shouldKeepReviewsWithHiddenTextInsidePageBoundaries() {
