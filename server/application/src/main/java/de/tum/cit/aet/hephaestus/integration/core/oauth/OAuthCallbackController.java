@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.IntegrationKindRouting;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -81,24 +82,34 @@ public class OAuthCallbackController {
     @PreAuthorize("permitAll()")
     public ResponseEntity<?> callbackGet(
             @PathVariable String kind,
-            @RequestParam(value = "state", required = false) @Nullable String state,
-            @RequestParam(value = "error", required = false) @Nullable String error,
-            @RequestParam(value = "error_description", required = false) @Nullable String errorDescription,
             @RequestParam Map<String, String> allParams,
-            HttpServletRequest request) {
-        return handleCallback(kind, state, error, errorDescription, allParams, wantsJson(request));
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        return handleCallback(
+                kind,
+                allParams.get("state"),
+                allParams.get("error"),
+                allParams.get("error_description"),
+                allParams,
+                request,
+                response);
     }
 
     @PostMapping("/{kind}")
     @PreAuthorize("permitAll()")
     public ResponseEntity<?> callbackPost(
             @PathVariable String kind,
-            @RequestParam(value = "state", required = false) @Nullable String state,
-            @RequestParam(value = "error", required = false) @Nullable String error,
-            @RequestParam(value = "error_description", required = false) @Nullable String errorDescription,
             @RequestParam Map<String, String> allParams,
-            HttpServletRequest request) {
-        return handleCallback(kind, state, error, errorDescription, allParams, wantsJson(request));
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        return handleCallback(
+                kind,
+                allParams.get("state"),
+                allParams.get("error"),
+                allParams.get("error_description"),
+                allParams,
+                request,
+                response);
     }
 
     /** Shared core for GET + POST callbacks. Package-visible for unit tests. */
@@ -108,7 +119,13 @@ public class OAuthCallbackController {
             @Nullable String vendorError,
             @Nullable String vendorErrorDescription,
             Map<String, String> allParams,
-            boolean wantsJson) {
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        boolean wantsJson = wantsJson(request);
+        if (state != null && !state.isBlank()) {
+            // A state is used once, whatever happens next.
+            OAuthBrowserBinding.release(response, state);
+        }
         Optional<IntegrationKind> kindOpt = kindRouting.resolve(kindPathSegment);
         if (kindOpt.isEmpty()) {
             log.info("OAuth callback for unknown kind path segment: {}", sanitize(kindPathSegment));
@@ -122,19 +139,24 @@ public class OAuthCallbackController {
         IntegrationKind kind = kindOpt.get();
 
         if (vendorError != null && !vendorError.isBlank()) {
-            var response = failure(kind.name(), vendorError, vendorErrorDescription, HttpStatus.BAD_REQUEST, wantsJson);
+            var cancelled =
+                    failure(kind.name(), vendorError, vendorErrorDescription, HttpStatus.BAD_REQUEST, wantsJson);
             // Cancellation needs no state; only a verified binding can supply workspace return context.
-            if (kind == IntegrationKind.SLACK && !wantsJson && state != null && !state.isBlank()) {
+            if (kind == IntegrationKind.SLACK
+                    && !wantsJson
+                    && state != null
+                    && !state.isBlank()
+                    && OAuthBrowserBinding.startedHere(request, state)) {
                 try {
                     var binding = oauthStateService.consume(state);
                     if (binding.kind() == kind) {
-                        return workspaceRedirect(response, binding);
+                        return workspaceRedirect(cancelled, binding);
                     }
                 } catch (IllegalArgumentException ignored) {
-                    return response;
+                    return cancelled;
                 }
             }
-            return response;
+            return cancelled;
         }
 
         if (state == null || state.isBlank()) {
@@ -150,6 +172,18 @@ public class OAuthCallbackController {
                     kind.name(),
                     "missing_state",
                     "The state parameter is required.",
+                    HttpStatus.BAD_REQUEST,
+                    wantsJson);
+        }
+        if (!OAuthBrowserBinding.startedHere(request, state)) {
+            // Another browser, a reload of a finished callback, an expired flow and a forged state all end here, so
+            // the text names no cause. The state stays usable for the browser that started the flow.
+            log.warn("OAuth callback for kind={} arrived without the browser binding of its state", kind);
+            return failure(
+                    kind.name(),
+                    "browser_unconfirmed",
+                    "Hephaestus could not confirm that this browser started the connection. Start it again from"
+                            + " Hephaestus in this browser.",
                     HttpStatus.BAD_REQUEST,
                     wantsJson);
         }
@@ -316,8 +350,7 @@ public class OAuthCallbackController {
     }
 
     /** True iff the caller wants JSON (curl/devtools): {@code Accept} contains application/json AND not text/html. */
-    private static boolean wantsJson(@Nullable HttpServletRequest request) {
-        if (request == null) return false;
+    private static boolean wantsJson(HttpServletRequest request) {
         String accept = request.getHeader(HttpHeaders.ACCEPT);
         if (accept == null) return false;
         String lower = accept.toLowerCase(Locale.ROOT);

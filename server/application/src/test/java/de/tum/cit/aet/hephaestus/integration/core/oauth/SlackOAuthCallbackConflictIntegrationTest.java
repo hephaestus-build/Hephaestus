@@ -119,12 +119,15 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
         connectSlack(source, IntegrationState.ACTIVE);
         Workspace target = workspaceOwnedBy(admin, "Intro Course");
 
+        String issued = state(target, admin);
+
         URI location = webTestClient
                 .get()
                 .uri(uri -> uri.path("/oauth/callback/slack")
-                        .queryParam("state", state(target, admin))
+                        .queryParam("state", issued)
                         .queryParam("code", "code")
                         .build())
+                .cookie(OAuthBrowserBinding.cookieName(issued), OAuthBrowserBinding.cookieValue(issued))
                 .accept(MediaType.TEXT_HTML)
                 .exchange()
                 .expectStatus()
@@ -216,12 +219,14 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     private Connection reauthorize(Workspace workspace, User admin, Connection existing) {
+        String issued = state(workspace, admin);
         webTestClient
                 .get()
                 .uri(uri -> uri.path("/oauth/callback/slack")
-                        .queryParam("state", state(workspace, admin))
+                        .queryParam("state", issued)
                         .queryParam("code", "code")
                         .build())
+                .cookie(OAuthBrowserBinding.cookieName(issued), OAuthBrowserBinding.cookieValue(issued))
                 .accept(MediaType.TEXT_HTML)
                 .exchange()
                 .expectStatus()
@@ -257,12 +262,14 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     private ProblemDetail jsonCallback(Workspace workspace, User caller) {
+        String issued = state(workspace, caller);
         ProblemDetail problem = webTestClient
                 .get()
                 .uri(uri -> uri.path("/oauth/callback/slack")
-                        .queryParam("state", state(workspace, caller))
+                        .queryParam("state", issued)
                         .queryParam("code", "code")
                         .build())
+                .cookie(OAuthBrowserBinding.cookieName(issued), OAuthBrowserBinding.cookieValue(issued))
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus()

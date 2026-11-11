@@ -9483,9 +9483,6 @@ export type CallbackGetData = {
         kind: string;
     };
     query: {
-        state?: string;
-        error?: string;
-        error_description?: string;
         allParams: {
             [key: string]: string;
         };
@@ -9510,9 +9507,6 @@ export type CallbackPostData = {
         kind: string;
     };
     query: {
-        state?: string;
-        error?: string;
-        error_description?: string;
         allParams: {
             [key: string]: string;
         };

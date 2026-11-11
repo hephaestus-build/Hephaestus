@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.UnaryOperator;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,10 +74,11 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
         Workspace workspace = workspaceOwnedBy(admin, "Acme");
         givenOwnedByTheAuthorizingPerson();
 
-        URI location = browserCallback(uri -> uri.queryParam("state", state(workspace, admin))
-                .queryParam("code", "code-1")
-                .queryParam("installation_id", installationId)
-                .queryParam("setup_action", "install"));
+        URI location = browserCallback(
+                state(workspace, admin),
+                uri -> uri.queryParam("code", "code-1")
+                        .queryParam("installation_id", installationId)
+                        .queryParam("setup_action", "install"));
 
         assertThat(location).hasPath("/integrations").hasParameter("status", "success");
         Connection connection = connectionRepository
@@ -90,13 +92,29 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     @Test
+    void shouldNotConnectWhenTheCallbackArrivesInABrowserThatDidNotStartTheFlow() {
+        User admin = accountHolder("other-browser");
+        Workspace workspace = workspaceOwnedBy(admin, "Acme");
+        givenOwnedByTheAuthorizingPerson();
+
+        URI location = browserCallback(uri -> uri.queryParam("state", state(workspace, admin))
+                .queryParam("code", "code-1")
+                .queryParam("installation_id", installationId)
+                .queryParam("setup_action", "install"));
+
+        assertThat(location).hasParameter("reason", "browser_unconfirmed");
+        assertThat(connectionRepository.findActive(workspace.getId(), IntegrationKind.GITHUB))
+                .isEmpty();
+    }
+
+    @Test
     void shouldNotConnectAnInstallationIdThatArrivesWithoutAnAuthorization() {
         User admin = accountHolder("forger");
         Workspace workspace = workspaceOwnedBy(admin, "Forger");
 
-        URI location = browserCallback(uri -> uri.queryParam("state", state(workspace, admin))
-                .queryParam("installation_id", installationId)
-                .queryParam("setup_action", "install"));
+        URI location = browserCallback(
+                state(workspace, admin),
+                uri -> uri.queryParam("installation_id", installationId).queryParam("setup_action", "install"));
 
         assertThat(location).hasPath("/integrations").hasParameter("status", "error");
         assertThat(connectionRepository.findActive(workspace.getId(), IntegrationKind.GITHUB))
@@ -190,10 +208,26 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
         when(userAuthorization.ownsOrganization("ghu_user", "acme")).thenReturn(true);
     }
 
+    /** A callback in the browser that started the flow of {@code state}. */
+    private URI browserCallback(String state, UnaryOperator<UriBuilder> query) {
+        return browserCallback(uri -> query.apply(uri.queryParam("state", state)), state);
+    }
+
     private URI browserCallback(UnaryOperator<UriBuilder> query) {
+        return browserCallback(query, null);
+    }
+
+    private URI browserCallback(UnaryOperator<UriBuilder> query, @Nullable String startedHere) {
         URI location = webTestClient
                 .get()
                 .uri(uri -> query.apply(uri.path("/oauth/callback/github")).build())
+                .cookies(cookies -> {
+                    if (startedHere != null) {
+                        cookies.add(
+                                OAuthBrowserBinding.cookieName(startedHere),
+                                OAuthBrowserBinding.cookieValue(startedHere));
+                    }
+                })
                 .accept(MediaType.TEXT_HTML)
                 .exchange()
                 .expectStatus()
@@ -206,14 +240,16 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     private ProblemDetail jsonCallback(Workspace workspace, User caller, int status) {
+        String issued = state(workspace, caller);
         ProblemDetail problem = webTestClient
                 .get()
                 .uri(uri -> uri.path("/oauth/callback/github")
-                        .queryParam("state", state(workspace, caller))
+                        .queryParam("state", issued)
                         .queryParam("code", "code-1")
                         .queryParam("installation_id", installationId)
                         .queryParam("setup_action", "install")
                         .build())
+                .cookie(OAuthBrowserBinding.cookieName(issued), OAuthBrowserBinding.cookieValue(issued))
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus()

@@ -21,6 +21,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.OAuthBrowserBinding;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.InstallationCredential;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
@@ -34,7 +36,9 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import jakarta.servlet.http.Cookie;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +55,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -80,6 +85,11 @@ class ConnectionControllerTest extends BaseUnitTest {
         SecurityContextHolder.clearContext();
     }
 
+    private static final OAuthBrowserBinding BROWSER_BINDING =
+            new OAuthBrowserBinding(new OAuthStateProperties(null, Duration.ofMinutes(10), Duration.ofDays(7)));
+
+    private final MockHttpServletResponse servletResponse = new MockHttpServletResponse();
+
     @BeforeEach
     void setUp() {
         var jwt = Jwt.withTokenValue("test").header("alg", "none").subject("42").build();
@@ -93,7 +103,7 @@ class ConnectionControllerTest extends BaseUnitTest {
         // it.
         lenient().when(admin.manifests()).thenReturn(manifests);
         controller = new ConnectionController(
-                admin, connectionService, objectMapper, List.of(githubStrategy, gitlabStrategy));
+                admin, connectionService, objectMapper, List.of(githubStrategy, gitlabStrategy), BROWSER_BINDING);
     }
 
     @Test
@@ -136,7 +146,8 @@ class ConnectionControllerTest extends BaseUnitTest {
         githubStrategy.nextInitiation = new ConnectInitiation.RedirectToVendor(vendor, "abc");
 
         InitiateConnectionRequestDTO req = new InitiateConnectionRequestDTO(IntegrationKind.GITHUB, Map.of());
-        ResponseEntity<InitiateConnectionResponseDTO> response = controller.initiate(ctx(7L), req, null);
+        ResponseEntity<InitiateConnectionResponseDTO> response =
+                controller.initiate(ctx(7L), req, null, servletResponse);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         InitiateConnectionResponseDTO redirect = response.getBody();
@@ -145,6 +156,16 @@ class ConnectionControllerTest extends BaseUnitTest {
         assertThat(redirect.vendorUrl()).isEqualTo(vendor);
         assertThat(redirect.connectionId()).isNull();
         verify(admin, never()).createInlineConnection(anyLong(), any(), any(), any(), any(), any());
+        // The browser that starts the flow is the one whose callback may finish it.
+        Cookie binding = servletResponse.getCookie(OAuthBrowserBinding.cookieName("abc"));
+        assertNotNull(binding);
+        assertThat(binding.getValue()).isEqualTo(OAuthBrowserBinding.cookieValue("abc"));
+        assertThat(binding.getName()).startsWith("__Host-");
+        assertThat(binding.isHttpOnly()).isTrue();
+        assertThat(binding.getSecure()).isTrue();
+        assertThat(binding.getPath()).isEqualTo("/");
+        assertThat(binding.getMaxAge()).isEqualTo(600);
+        assertThat(binding.getAttribute("SameSite")).isEqualTo("Lax");
     }
 
     @Test
@@ -161,7 +182,8 @@ class ConnectionControllerTest extends BaseUnitTest {
                 IntegrationKind.GITLAB,
                 Map.of("pat", "glpat-fake", "group_id", "200", "server_url", "https://gitlab.com"));
         Authentication auth = new UsernamePasswordAuthenticationToken("alice@example.com", "");
-        ResponseEntity<InitiateConnectionResponseDTO> response = controller.initiate(ctx(workspaceId), req, auth);
+        ResponseEntity<InitiateConnectionResponseDTO> response =
+                controller.initiate(ctx(workspaceId), req, auth, servletResponse);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         InitiateConnectionResponseDTO linked = response.getBody();
@@ -169,6 +191,8 @@ class ConnectionControllerTest extends BaseUnitTest {
         assertThat(linked.type()).isEqualTo(InitiateConnectionResponseDTO.Type.LINKED);
         assertThat(linked.connectionId()).isEqualTo(99L);
         assertThat(linked.vendorUrl()).isNull();
+        // A pasted token returns to no callback, so nothing binds the browser.
+        assertThat(servletResponse.getCookies()).isEmpty();
 
         verify(admin)
                 .createInlineConnection(
@@ -183,9 +207,10 @@ class ConnectionControllerTest extends BaseUnitTest {
     @Test
     @DisplayName("initiate with no registered strategy throws IllegalArgumentException (→ 400 via" + " advice)")
     void initiate_unknownKind_throwsBadRequest() {
-        ConnectionController bare = new ConnectionController(admin, connectionService, objectMapper, List.of());
+        ConnectionController bare =
+                new ConnectionController(admin, connectionService, objectMapper, List.of(), BROWSER_BINDING);
         InitiateConnectionRequestDTO req = new InitiateConnectionRequestDTO(IntegrationKind.SLACK, Map.of());
-        assertThatThrownBy(() -> bare.initiate(ctx(1L), req, null))
+        assertThatThrownBy(() -> bare.initiate(ctx(1L), req, null, servletResponse))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("This instance cannot connect that integration.");
     }

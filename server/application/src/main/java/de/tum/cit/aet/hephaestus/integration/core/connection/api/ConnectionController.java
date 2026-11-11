@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionBusyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.OAuthBrowserBinding;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectInitiation;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
@@ -73,13 +75,16 @@ public class ConnectionController {
     private final ConnectionService connectionService;
     private final ObjectMapper objectMapper;
     private final Map<IntegrationKind, ConnectionStrategy> strategies;
+    private final OAuthBrowserBinding browserBinding;
 
     public ConnectionController(
             ConnectionAdminService admin,
             ConnectionService connectionService,
             ObjectMapper objectMapper,
-            List<ConnectionStrategy> strategyBeans) {
+            List<ConnectionStrategy> strategyBeans,
+            OAuthBrowserBinding browserBinding) {
         this.admin = admin;
+        this.browserBinding = browserBinding;
         this.connectionService = connectionService;
         this.objectMapper = objectMapper;
         this.strategies = strategyBeans.stream()
@@ -111,7 +116,8 @@ public class ConnectionController {
     public ResponseEntity<InitiateConnectionResponseDTO> initiate(
             WorkspaceContext workspace,
             @Valid @RequestBody @NotNull InitiateConnectionRequestDTO body,
-            @Nullable Authentication authentication) {
+            @Nullable Authentication authentication,
+            HttpServletResponse response) {
         Long workspaceId = workspace.id();
         if (body == null || body.kind() == null) {
             throw new IllegalArgumentException("Choose an integration to connect.");
@@ -129,8 +135,10 @@ public class ConnectionController {
                 workspaceId, body.kind(), userInput, CurrentAccount.requireId()));
 
         return switch (initiation) {
-            case ConnectInitiation.RedirectToVendor r ->
-                ResponseEntity.ok(InitiateConnectionResponseDTO.redirect(r.vendorUrl()));
+            case ConnectInitiation.RedirectToVendor r -> {
+                browserBinding.bind(response, r.oauthState());
+                yield ResponseEntity.ok(InitiateConnectionResponseDTO.redirect(r.vendorUrl()));
+            }
             case ConnectInitiation.AcceptInline inline -> {
                 Connection connection = admin.createInlineConnection(
                         workspaceId,
