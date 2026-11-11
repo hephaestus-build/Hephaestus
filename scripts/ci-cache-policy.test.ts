@@ -32,14 +32,8 @@ await describe("CI cache policy", async () => {
 		assert.doesNotMatch(e2e, /setup-caches/u);
 	});
 
-	await test("browser consumers share one cache-and-install action", () => {
-		assert.match(
-			browserAction,
-			/key: \$\{\{ runner\.os \}\}-playwright-\$\{\{ steps\.playwright\.outputs\.version \}\}/u,
-		);
-		assert.doesNotMatch(browserAction, /restore-keys:/u);
-		assert.match(browserAction, /playwright install chromium/u);
-		assert.match(browserAction, /node scripts\/install-browser-deps\.ts/u);
-		assert.doesNotMatch(browserAction, /--with-deps/u);
+	await test("browser consumers use the pinned image without runtime package installation", () => {
+		assert.match(browserAction, /node scripts\/ci-browser\.ts pull/u);
+		assert.doesNotMatch(browserAction, /actions\/cache|playwright install|install-deps|apt-get/u);
 	});
 });

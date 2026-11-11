@@ -5103,7 +5103,7 @@ void test(
 			assert.equal(result.failed, false, result.diagnosis);
 			assert.equal(
 				result.outputs.command,
-				`vp run ${leg === "windows" ? "--no-cache " : ""}ci:${leg}`,
+				`${leg === "extension" ? "node scripts/ci-browser.ts " : ""}vp run ${leg === "windows" ? "--no-cache " : ""}ci:${leg}`,
 			);
 			assert.equal(result.outputs.deadline, "scripts/ci-deadline.ts 900");
 		}

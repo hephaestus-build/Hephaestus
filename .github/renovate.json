@@ -219,6 +219,12 @@
 			"prBodyNotes": [
 				"Review chart and image versions together. For a k3s update, independently verify and update the installer SHA-256 on the pin line. Run the Platform pins check and the platform tests on the update branch. Review the rescan before merge. For an agent-sandbox or gVisor update, follow docs/contributor/release-management.mdx § Platform pins."
 			]
+		},
+		{
+			"description": "The Playwright image version must match the installed package",
+			"matchDepNames": ["mcr.microsoft.com/playwright"],
+			"matchUpdateTypes": ["major", "minor", "patch"],
+			"enabled": false
 		}
 	],
 	"customManagers": [
@@ -376,6 +382,15 @@
 			"datasourceTemplate": "github-releases",
 			"extractVersionTemplate": "^release-(?<version>.*)$",
 			"versioningTemplate": "loose"
+		},
+		{
+			"description": "Track the Playwright browser image digest with its package version",
+			"customType": "regex",
+			"managerFilePatterns": ["/^\\.github/playwright-image\\.json$/"],
+			"matchStrings": [
+				"\"repository\": \"(?<depName>[^\" ]+)\",\\s+\"tag\": \"(?<currentValue>[^\" ]+)\",\\s+\"digest\": \"(?<currentDigest>sha256:[a-f0-9]{64})\""
+			],
+			"datasourceTemplate": "docker"
 		}
 	],
 	"vulnerabilityAlerts": {

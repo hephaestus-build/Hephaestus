@@ -265,6 +265,10 @@ function extractedDatasources(matchStrings: string[], content: string): string[]
 
 void test("every custom manager reads every file it claims to read", async () => {
 	const sources = new Map<string, string[]>([
+		[
+			"Track the Playwright browser image digest with its package version",
+			[".github/playwright-image.json"],
+		],
 		["Track platform chart versions", ["deploy/platform/k3s-platform.yaml"]],
 		["Track platform image tags and digests", ["deploy/platform/k3s-platform.yaml"]],
 		["Track the one-host k3s release", ["deploy/platform/k3s-platform.yaml"]],

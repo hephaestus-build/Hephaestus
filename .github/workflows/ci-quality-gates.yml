@@ -173,8 +173,8 @@ jobs:
         id: tests
         continue-on-error: true
         run: |
-          timeout --kill-after=30s 15m vp run test:webapp:stories
-          vp run --filter webapp export:assets
+          timeout --kill-after=30s 15m node scripts/ci-browser.ts vp run test:webapp:stories
+          node scripts/ci-browser.ts vp run --filter webapp export:assets
           BRAND_ASSETS=(webapp/brand webapp/public extension/public/icon docs/images/readme docs/static/img/brand docs/static/img/favicon.png docs/static/img/hephaestus-social-card.png)
           if [[ -n "$(git status --porcelain --untracked-files=all -- "${BRAND_ASSETS[@]}")" ]]; then
             echo "::error::Brand assets are stale. Run 'vp run --filter webapp export:assets' and commit the result."
