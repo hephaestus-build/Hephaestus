@@ -84,7 +84,7 @@ jobs:
         uses: ./.github/actions/setup-ci-tool
         with:
           tool: ripgrep
-      - name: Put ripgrep on PATH
+      - name: Install verified ripgrep on the tools server PATH
         if: inputs.leg == 'tooling'
         run: node scripts/setup-ripgrep.ts
 
@@ -109,7 +109,7 @@ jobs:
             server) deadline vp run ci:server ;;
             tooling) if [ -n "$HEPHAESTUS_NODE_TEST_SHARD" ]; then deadline vp run ci:tooling-tests; else deadline vp run ci:tooling; fi ;;
             webapp) deadline vp run ci:webapp ;;
-            extension) deadline node scripts/ci-browser.ts vp run ci:extension ;;
+            extension) node scripts/ci-browser.ts node scripts/ci-deadline.ts 900 vp run ci:extension ;;
             windows) deadline vp run --no-cache ci:windows ;;
             *) echo "::error::Unknown quality leg: $LEG"; exit 1 ;;
           esac

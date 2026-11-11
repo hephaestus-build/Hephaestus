@@ -1,9 +1,6 @@
-import { appendFile } from "node:fs/promises";
-import path from "node:path";
-
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
-import { requiredEnv } from "./lib/env.ts";
 import { installPinnedBinary, toolCache } from "./lib/pinned-binary.ts";
+import { run } from "./lib/process.ts";
 
 const pin = await ciToolPin("ripgrep");
 const binary = await installPinnedBinary({
@@ -14,4 +11,6 @@ const binary = await installPinnedBinary({
 	executable: "rg",
 	member: pin.member,
 });
-await appendFile(requiredEnv(process.env, "GITHUB_PATH"), `${path.dirname(binary)}\n`);
+// The tools server deliberately uses a fixed PATH, including /usr/local/bin.
+await run("sudo", ["install", "-m", "0755", binary, "/usr/local/bin/rg"]);
+await run("/usr/local/bin/rg", ["--version"]);

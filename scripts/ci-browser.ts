@@ -79,6 +79,8 @@ if (import.meta.main) {
 			"GITHUB_BASE_REF",
 			"GITHUB_HEAD_REF",
 			"GITHUB_SHA",
+			"PR_BASE_SHA",
+			"BUNDLE_BASE",
 			"E2E_SERVER_URL",
 			"E2E_PORT",
 			"E2E_BASE_URL",
@@ -87,6 +89,10 @@ if (import.meta.main) {
 			if (process.env[name] !== undefined) {
 				args.push("--env", name);
 			}
+		}
+		const summary = process.env.GITHUB_STEP_SUMMARY;
+		if (summary !== undefined) {
+			args.push("--volume", `${summary}:${summary}`, "--env", "GITHUB_STEP_SUMMARY");
 		}
 		await run("docker", [...args, image, ...command]);
 	}

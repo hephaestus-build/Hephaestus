@@ -593,7 +593,7 @@ The container runs as the runner user and writes reports into the checkout.
 See [Playwright's Docker guidance](https://playwright.dev/docs/docker) for the image, `--init`, and shared memory.
 
 CI jobs do not install system packages. Tooling jobs install ripgrep from the release archive in `.github/ci-tools/ripgrep.json`.
-The shared resolver checks its SHA-256 before the installer puts `rg` on `PATH`.
+The shared resolver checks its SHA-256 before the installer puts `rg` in `/usr/local/bin`, on the tools server's fixed `PATH`.
 
 Repository-local actions require checkout first. Jobs without checkout use the external SHA-pinned
 action directly rather than checking out the repository only to reach a wrapper. The reusable
