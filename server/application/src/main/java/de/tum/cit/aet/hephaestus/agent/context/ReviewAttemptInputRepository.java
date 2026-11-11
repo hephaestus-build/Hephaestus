@@ -27,7 +27,7 @@ public interface ReviewAttemptInputRepository extends Repository<ReviewAttemptIn
     @Query(
             value =
                     "INSERT INTO review_attempt_input(id,workspace_id,job_id,attempt,run_id,path,sha256,permissions,content)"
-                            + " SELECT gen_random_uuid(),j.workspace_id,j.id,:attempt,j.run_id,:path,:sha256,:permissions,:content"
+                            + " SELECT gen_random_uuid(),j.workspace_id,j.id,:attempt,j.run_id,:#{#input.path()},:#{#input.sha256()},:#{#input.permissions()},:content"
                             + " FROM review_job j JOIN agent_run r ON r.id=j.run_id AND r.workspace_id=j.workspace_id"
                             + " WHERE j.id=:jobId AND j.workspace_id=:workspaceId AND j.status='RUNNING'"
                             + " AND " + ReviewRunKind.ATTEMPT_OF_RUN + "=:attempt",
@@ -36,9 +36,7 @@ public interface ReviewAttemptInputRepository extends Repository<ReviewAttemptIn
             @Param("workspaceId") long workspaceId,
             @Param("jobId") UUID jobId,
             @Param("attempt") int attempt,
-            @Param("path") String path,
-            @Param("sha256") String sha256,
-            @Param("permissions") String permissions,
+            @Param("input") AttemptInputs.RecordedFile input,
             @Param("content") byte[] content);
 
     @Query(value = """

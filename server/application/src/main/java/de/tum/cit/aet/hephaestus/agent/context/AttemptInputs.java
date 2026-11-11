@@ -57,9 +57,7 @@ public class AttemptInputs {
                         workspaceId,
                         jobId,
                         attempt,
-                        file.getKey(),
-                        ProvenanceDigest.sha256Hex(content),
-                        permissions,
+                        new RecordedFile(file.getKey(), ProvenanceDigest.sha256Hex(content), permissions),
                         content);
                 // An attempt that no longer runs gets no folder that another server could rebuild: its capture fails.
                 if (recorded != 1) throw new IllegalStateException("The attempt no longer runs its job");

@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -32,8 +31,7 @@ class AttemptInputsTest {
     @Test
     void shouldFailTheCaptureWhenTheAttemptNoLongerRunsItsJob() throws Exception {
         Path file = Files.writeString(root.resolve("item.json"), "{}");
-        when(rows.record(anyLong(), any(), anyInt(), anyString(), anyString(), anyString(), any()))
-                .thenReturn(0);
+        when(rows.record(anyLong(), any(), anyInt(), any(), any())).thenReturn(0);
 
         assertThatThrownBy(() -> inputs.record(UUID.randomUUID(), 1L, 0, Map.of("context/item.json", file)))
                 .isInstanceOf(IllegalStateException.class)
@@ -43,8 +41,7 @@ class AttemptInputsTest {
     @Test
     void shouldRecordEveryFileOfARunningAttempt() throws Exception {
         Path file = Files.writeString(root.resolve("item.json"), "{}");
-        when(rows.record(anyLong(), any(), anyInt(), anyString(), anyString(), anyString(), any()))
-                .thenReturn(1);
+        when(rows.record(anyLong(), any(), anyInt(), any(), any())).thenReturn(1);
 
         assertThatCode(() -> inputs.record(UUID.randomUUID(), 1L, 0, Map.of("context/item.json", file)))
                 .doesNotThrowAnyException();
