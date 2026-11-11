@@ -486,7 +486,12 @@ class KubernetesSandboxRuntimeTest {
         CompletableFuture<ToolsPods.Started> created =
                 CompletableFuture.supplyAsync(() -> tools.create(sandboxId, nonce, LIMITS), background);
         String name = "hephaestus-tools-" + sandboxId;
+        watchedPod.set(name + "-child");
         String child = startChild(name);
+        // The Pod runs only once the create waits on a watch of it: the mock replays no event from before (watching).
+        assertThat(watching.await(10, TimeUnit.SECONDS))
+                .as("fixture condition: the create waits on a registered watch of its Pod")
+                .isTrue();
         Pod pod = awaitPod(SANDBOXES, child);
         pod.setStatus(new PodStatusBuilder()
                 .withPhase("Running")
