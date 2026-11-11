@@ -121,6 +121,11 @@ jobs:
       # The latest minor on amd64, the pull request's leg, runs the sandbox templates on gVisor, as
       # the one-host platform does. The other legs prove the default runtime with hostUsers: false.
       GVISOR: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+      # The drills of the latest minor on amd64 run on the pull request's own head, which the
+      # `kubernetes` filter selects for every change they exercise, and each night on main. A
+      # merge group installs and upgrades the combined tree only; the release preflight refuses
+      # a release while the newest nightly run failed.
+      DRILLS: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' && github.event_name != 'merge_group' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -132,9 +137,9 @@ jobs:
       - uses: ./.github/actions/setup-helm
       - uses: ./.github/actions/setup-kubernetes-tools
       - uses: ./.github/actions/setup-caches
-        if: ${{ inputs.application-artifact != '' && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        if: ${{ inputs.application-artifact != '' && env.DRILLS == 'true' }}
       - uses: ./.github/actions/restore-server-build
-        if: ${{ inputs.application-artifact != '' && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        if: ${{ inputs.application-artifact != '' && env.DRILLS == 'true' }}
         with:
           artifact: ${{ inputs.application-artifact }}
       - name: Resolve this run's images
@@ -186,14 +191,14 @@ jobs:
       # A conversation turn runs bash in its tools Pod through a worker roll and then a loop roll.
       # The fake model provider runs in the Pod network, which k3s gives 10.42.0.0/16.
       - name: Keep a conversation turn through a worker roll and a loop roll
-        if: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        if: ${{ env.DRILLS == 'true' }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2086 # PROFILES is a list of flags.
           node scripts/kubernetes-cluster.ts turn-roll --work "$RUNNER_TEMP/kubernetes-cluster" $PROFILES \
             --set "release.version=v0.0.1-cluster" --pod-cidr 10.42.0.0/16
       - name: Qualify the sandbox adapters in the chart worker Pod
-        if: ${{ inputs.application-artifact != '' && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        if: ${{ inputs.application-artifact != '' && env.DRILLS == 'true' }}
         run: |
           set -euo pipefail
           echo "Live sandbox kernel: $(uname -r)" >> "$GITHUB_STEP_SUMMARY"
@@ -204,7 +209,7 @@ jobs:
         if: ${{ inputs.backup-drill && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
         run: node scripts/kubernetes-cluster.ts backup-drill --work "$RUNNER_TEMP/kubernetes-cluster" --pod-cidr 10.42.0.0/16
       - name: Verify kubelet memory eviction order on a disposable node
-        if: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        if: ${{ env.DRILLS == 'true' }}
         run: node scripts/kubernetes-memory-drill.ts release-images.tsv
       - name: Record the cluster state
         if: ${{ failure() }}

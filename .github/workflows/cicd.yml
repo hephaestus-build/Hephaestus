@@ -1189,6 +1189,7 @@ jobs:
     timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       packages: read
     steps:
@@ -1201,6 +1202,13 @@ jobs:
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "none"
+
+      # A merge group runs none of the Kubernetes drills, so a break that two merged changes cause
+      # together shows first in the nightly run. No release ships past it.
+      - name: Require a passing nightly Kubernetes run on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-nightly-kubernetes.ts
 
       - uses: ./.github/actions/setup-release-security-tools
 

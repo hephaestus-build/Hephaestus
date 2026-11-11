@@ -62,6 +62,7 @@ sequenceDiagram
 
    Every CI/CD run on that branch includes the **release evidence preflight** below, regardless of its start event.
    `CI Status Gate` fails unless the same run's preflight succeeds.
+   The preflight also requires a passing nightly Kubernetes run on `main` ([Two verification tiers](./ci-cd.mdx#two-verification-tiers)).
    More than one run can report the gate for a Version PR head, and either satisfies the ruleset.
    Thus, a green gate proves preflight success only if no run can pass without it.
 
