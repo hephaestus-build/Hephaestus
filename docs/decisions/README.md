@@ -109,7 +109,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0032](0032-generated-clients-build-boundary.md) | Generated clients have an independent build boundary | Superseded by [0043](0043-gradle-java-build.md) |
 | [0033](0033-bun-is-the-javascript-runtime-and-package-manager.md) | Bun is the JavaScript runtime and package manager | Superseded by [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) |
 | [0034](0034-signed-release-image-lock.md) | Production consumes one signed release image lock | Superseded by [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) |
-| [0035](0035-pull-request-previews-are-label-gated.md) | Pull request previews are label-gated and driven from the default branch | Accepted |
+| [0035](0035-pull-request-previews-are-label-gated.md) | Pull request previews are label-gated and driven from the default branch | Deprecated |
 | [0036](0036-agent-runtime-runs-on-node-24.md) | Agent runtime runs on Node.js 24 with bounded resources | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) | Node.js 24 and pnpm 12 are the JavaScript toolchain | Superseded by [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) |
 | [0038](0038-postgresql-18-release-baseline.md) | PostgreSQL 18 is the only supported major version | Accepted |
@@ -133,7 +133,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0056](0056-one-practice-model-for-items-and-scans.md) | One practice model for items and scans | Superseded by [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) |
 | [0057](0057-one-heph-conversation-per-developer.md) | One Heph conversation per developer, on a stateless shared Heph host | Superseded by [0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) |
 | [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) | The Helm chart is the only supported deployment from 1.0 | Superseded by [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) |
-| [0059](0059-previews-run-on-the-staging-cluster.md) | Previews run on the staging cluster | Accepted |
+| [0059](0059-previews-run-on-the-staging-cluster.md) | Previews run on the staging cluster | Deprecated |
 | [0060](0060-the-kubernetes-floor-follows-upstream-support.md) | The Kubernetes floor follows upstream support | Superseded by [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) |
 | [0061](0061-review-seals-then-feedback-composes.md) | A practice review seals its results, then feedback is composed | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
 | [0062](0062-the-item-is-the-review-scope.md) | The item is the review scope | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
