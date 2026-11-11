@@ -372,9 +372,9 @@ If the controller does not support one of them, the route does not work as descr
 The chart cannot detect this. Confirm both features for the controller that you select.
 
 The live streams of Hephaestus stay open for much longer than one request.
-They do not need a route timeout. Instead, the server sends an event on each live stream at least every 20 seconds.
-Thus, the controller and each proxy in front of it must keep a response open while it receives an event every 20 seconds.
-Set each idle timeout on that path above 20 seconds.
+They do not need a route timeout. Instead, the server sends a heartbeat on each live stream about every 20 seconds.
+The server skips a heartbeat while the previous one is still being sent, so two events can be about 40 seconds apart.
+Thus, set each idle timeout between the browser and the server to at least 60 seconds.
 
 The `/api` rule also sets `timeouts.request` and `timeouts.backendRequest` to `0s`, which asks the controller for no time limit.
 A controller with the `HTTPRouteRequestTimeout` and `HTTPRouteBackendTimeout` features applies them.
@@ -404,9 +404,9 @@ The Gateway API has no portable request body limit or idle timeout.
 Configure these values on the Gateway:
 
 - A request body limit of 25 MiB on `/webhooks` and `/api`.
-- An idle timeout of more than 20 seconds for the Hephaestus live stream.
+- An idle timeout of at least 60 seconds for the Hephaestus live stream.
 
-An idle timeout of more than 20 seconds does not replace the request and backend timeouts.
+An idle timeout of at least 60 seconds does not replace the request and backend timeouts.
 No Gateway controller or version is qualified yet.
 A qualification must include these tests on the selected controller and its idle settings:
 
