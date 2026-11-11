@@ -148,7 +148,7 @@ An admin who configures a provider must not be able to send requests into your p
 To keep model calls inside your network, for example to vLLM or Ollama on your own GPUs, allow the endpoint explicitly.
 
 Set `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` on the server and on the worker to a comma-separated list.
-On Kubernetes, set `config.llmPrivateHosts` ([A model endpoint on a private network](./kubernetes#a-model-endpoint-on-a-private-network)).
+On Kubernetes, set `config.llmPrivateHosts` ([A model endpoint on a private network](./private-network#admit-a-model-endpoint-on-a-private-network)).
 Each entry is one of these:
 
 | Entry | Example | Allows |

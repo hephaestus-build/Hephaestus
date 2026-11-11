@@ -48,7 +48,7 @@ not your production data. They do not replace this staging update.
 
 Before the 1.0 migration, back up the database and encryption keys.
 Stop all database writers.
-For chart hosts, use [Stopped schema upgrades](./kubernetes#stopped-schema-upgrades).
+For chart hosts, use [Stopped schema upgrades](#stopped-schema-upgrades).
 Run the [migrate run mode](./runtime-roles#database-migrations) with the existing system encryption key and the active credential key and version.
 Configure any missing keys before the migration.
 Keep the prior credential key and its version configured if stored credentials still use them.
@@ -71,11 +71,159 @@ Check the [database prerequisites](./compatibility-policy#database-baseline-prer
 1. Pause [pull-based deployment](./pull-based-deployment#operating-it), if enabled, and wait for its active run to finish.
 2. Complete the [silent deployment checklist](./production-operations-runbook#silent-deployment-checklist), including a verified backup and a migration rehearsal.
 3. Read the target release's migration instructions and update your protected `site.yaml` and Secret as required.
-4. Verify the target release's joint lock, as [Independent verification](./release-image-lock#independent-verification) describes. Then follow [Upgrade on Kubernetes](./kubernetes#upgrades): verify the chart and apply the verified package with your site values.
+4. Verify the target release's joint lock, as [Independent verification](./release-image-lock#independent-verification) describes. Then follow [Upgrade a schema-compatible release](#upgrade-a-schema-compatible-release): verify the chart and apply the verified package with your site values.
 5. Check the migration Job and each role's readiness before traffic or provider writes resume.
 6. If Helm times out or reports a pending or failed release, follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover).
    A failed Helm status does not prove that the migration Job has stopped.
 7. If reconciliation is enabled, make its channel name the installed release before you resume its timer.
+
+## Upgrade a schema-compatible release
+
+Read the release notes and migration instructions before an upgrade.
+If any intervening release says **Stop every role**, use [Stopped schema upgrades](#stopped-schema-upgrades).
+One-host installations use that procedure for every release change.
+Do not use automatic rollback across a migration that cannot run with the previous release.
+
+For an upgrade whose schema remains compatible with the previous release, [verify the release chart](./kubernetes#verify-the-release-chart).
+Then apply the new chart, its profile, and your own values:
+
+```bash
+helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
+  -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml \
+  --rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
+```
+
+The migration Job of the new revision and the new Pods start together.
+The new Pods wait for the migrated schema, and the previous release serves until they are ready.
+`--wait-for-jobs` fails the upgrade when the migration fails, and `--rollback-on-failure` then returns the Deployments to the previous revision.
+The timeout is longer than the 10 minutes that a new Pod waits for the schema.
+
+The server stops before its new version starts (`Recreate`).
+The webhook role rolls. In the single-node profile, the worker drains and stops before its replacement starts.
+The replacement proves the cluster with the isolation probe before it claims work.
+
+An old worker drains for up to `worker.drainTimeoutSeconds`, and Kubernetes no longer counts it while it stops.
+The value is 30 minutes by default and 10 minutes in the single-node profile.
+
+With `Recreate`, the Helm `--timeout` must cover the drain, 2 minutes of shutdown and up to 5 minutes of start.
+Past the timeout, Helm rolls the release back. If you set a longer drain, set a longer timeout.
+Start the next upgrade only after the old worker is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=worker` shows no `Terminating` Pod.
+A review runs for up to 3 hours.
+
+When the drain ends first, the review stops.
+An attempt that was not yet admitted runs again on another worker, and an admitted one keeps its results.
+A drained attempt spends none of the review's retries. After 3 drains, the next drain cancels the review with the message "Workers stopped this review for updates too often. It is not tried again."
+The metric `agent_job_drained_total{outcome}` counts drained reviews that run again (`requeued`) and that are cancelled (`cancelled`).
+
+For other database maintenance, use [Database maintenance](./maintenance#database-maintenance).
+
+Roll forward to fix a failed upgrade.
+`helm rollback` and an older image do not undo a migration: restore the database from the backup taken before the upgrade ([Restore](./backup-restore#restore)).
+
+## Stopped schema upgrades
+
+Use this procedure for a one-host release change or when the migration guide says **Stop every role**.
+It takes precedence over the normal upgrade and database-maintenance procedures.
+Do not use `--rollback-on-failure`: a rollback can restart old roles against a changed schema.
+Pause deployment automation that can change the release until this procedure is complete.
+
+Before the first phase, record the current chart, profile, site values and all three replica counts.
+Prepare PostgreSQL and JetStream backups, verify the restore, and keep the matching signed release lock and encryption keys.
+After phase 1, take and verify the final restore point while all roles are stopped, before phase 2 can change the schema.
+Verify the new release's chart before you use it.
+Each phase is a separate `helm upgrade` with that phase's chart, profile and site values:
+
+| Phase | Chart | `migration.enabled` | `server.replicas` | `worker.replicas` | `webhook.replicas` | Before the next phase |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1. Stop every role | Current release | `false` | 0 | 0 | 0 | Every old role Pod, including terminating Pods, and its sandbox Pods and Jobs are gone. |
+| 2. Migrate | New release | `true` | 0 | 0 | 0 | The migration Job of this revision completed successfully. |
+| 3. Start the new roles | New release | `true` | Recorded count | Recorded count | Recorded count | Readiness, authenticated reads, a practice review and a conversation pass. |
+
+Keep PostgreSQL and NATS running throughout these phases.
+Use `worker.replicas=0`, not `worker.enabled=false`, to stop the worker.
+
+The conversation loop keeps its replicas in every phase. It uses no database, and it gets no turn while no worker runs.
+
+While no worker runs, no worker removes the conversation's tools Pods. After phase 1, remove them so that the sandbox namespace empties:
+`kubectl --namespace <sandbox namespace> delete jobs --selector hephaestus.build/sandbox-kind=tools --cascade=foreground`.
+They hold nothing that outlives their turn. The pull-based reconciler does this step itself.
+
+Apply each row's values after your profile and site values, so that they take precedence.
+Use `--wait=watcher --wait-for-jobs --timeout 20m`, without automatic rollback.
+A worker can drain for up to its configured timeout. If the first phase times out, keep all counts at zero and wait for every old Pod and sandbox to stop before phase 2.
+
+In phase 2, identify the migration Job of the new Helm revision.
+Its default name is `hephaestus-migration-<revision>` for release `hephaestus`.
+Save its log with `kubectl --namespace hephaestus logs job/<migration-job> -c migration > migration.log`.
+Require its `Complete` condition: `kubectl --namespace hephaestus wait --for=condition=complete job/<migration-job> --timeout=20m`.
+A failed or timed-out Job does not permit phase 3.
+Keep all roles stopped, preserve the log and failed change set before the Job's 24-hour expiry, and follow [failed-migration recovery](./upgrade#if-migration-fails).
+
+A refusal can follow earlier committed changesets.
+Before you return to the old release, restore the matching pre-upgrade backup.
+An image or Helm rollback does not undo those changes.
+
+Phase 3 creates another migration Job for the same release.
+It has no new schema changes to apply.
+Resume deployment automation only after its release and replica counts match the verified installation.
+On one host, keep it paused through the final installer run in [Upgrade the host](./k3s#upgrade-the-host).
+
+## Change a volume size
+
+A StatefulSet does not allow a change of its `volumeClaimTemplates`.
+Two StatefulSets of the chart have a volume claim template:
+
+- `<release>-postgresql`, sized by `postgresql.persistence.size`.
+- `<release>-nats`, sized from `nats.jetstream.maxFileBytes`, plus 25 %.
+
+If an upgrade changes either size, for example through a new profile, `helm upgrade` fails.
+The error says `StatefulSet ... is invalid: spec: Forbidden: updates to statefulset spec for fields other than ...`.
+With `--rollback-on-failure`, Helm then returns to the previous revision, and nothing changes.
+
+Kubernetes cannot shrink a volume.
+If the new size is smaller, keep the current size in your own values file, as [Storage and retention](./helm-chart#storage-and-retention) says.
+
+If the new size is larger, follow these steps for each StatefulSet whose size changes.
+The volume of PostgreSQL is `data-<release>-postgresql-0`, and the volume of NATS is `data-<release>-nats-0`.
+
+1. Check that the storage class allows expansion:
+
+   ```bash
+   kubectl get storageclass
+   ```
+
+   If `ALLOWVOLUMEEXPANSION` is not `true` for the class of the volume, stop.
+   Keep the current size in your own values file.
+
+2. Make the volume larger. Use the new size from the chart in place of `<new size>`:
+
+   ```bash
+   kubectl --namespace hephaestus patch pvc data-hephaestus-nats-0 \
+     --patch '{"spec":{"resources":{"requests":{"storage":"<new size>"}}}}'
+   ```
+
+3. Wait until `kubectl --namespace hephaestus get pvc` shows the new capacity.
+   If the capacity stays at the old size, check the conditions of the volume:
+
+   ```bash
+   kubectl --namespace hephaestus get pvc data-hephaestus-nats-0 -o jsonpath='{.status.conditions[*].type}'
+   ```
+
+   `FileSystemResizePending` means that the storage driver resizes the file system only when the Pod starts again.
+   Then continue with steps 4 and 5, and after step 5 delete the Pod: `kubectl --namespace hephaestus delete pod hephaestus-nats-0`.
+   The StatefulSet starts it again with the larger volume.
+4. Delete the StatefulSet and keep its Pods and volumes:
+
+   ```bash
+   kubectl --namespace hephaestus delete statefulset hephaestus-nats --cascade=orphan
+   ```
+
+5. Run the same `helm upgrade` again.
+   Helm creates the StatefulSet with the new template.
+   The new StatefulSet takes over the Pods and the volumes.
+   It restarts a Pod only if the upgrade also changes the Pod template.
+
+Before you change the volume of PostgreSQL, take a backup ([Backup and restore](./backup-restore#back-up-the-database)).
 
 ## If migration fails
 
@@ -144,7 +292,7 @@ workspace data or configuration.
 GitHub sees the source IP and the time.
 
 1. On an air-gapped host, set `config.releaseCheckEnabled: false` in `site.yaml`.
-2. Apply the values with the [upgrade command](./kubernetes#upgrades).
+2. Apply the values with the [upgrade command](#upgrade-a-schema-compatible-release).
 
 The overview then shows the identity without a check.
 A failed check reaches only instance administration, never health or readiness.
@@ -152,7 +300,7 @@ A failed check reaches only instance administration, never health or readiness.
 ## Deployment environment and release history
 
 Set `deploymentEnvironment` in `site.yaml` to the name of the deployment, such as `production` or `staging`.
-Apply the values with the [upgrade command](./kubernetes#upgrades).
+Apply the values with the [upgrade command](#upgrade-a-schema-compatible-release).
 Use lowercase letters, digits, `.`, `_` or `-`, at most 64 characters.
 Hephaestus refuses to start with another value.
 When it is unset, the instance reports `local`.

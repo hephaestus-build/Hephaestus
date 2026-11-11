@@ -173,7 +173,7 @@ Thus, give your log store an age limit, for example 30 days in Loki.
 
 | Data | Retention | Where to change it |
 | --- | --- | --- |
-| pgBackRest backups, when enabled in the chart | Two full backups, with their differential backups and WAL. [Backup and restore on Kubernetes](./kubernetes#backup-and-restore) gives the schedule. | `postgresql.backup.retentionFull` in site values |
+| pgBackRest backups, when enabled in the chart | Two full backups, with their differential backups and WAL. [Back up the database](./backup-restore#back-up-the-database) gives the schedule. | `postgresql.backup.retentionFull` in site values |
 | A plain `pg_dump` file | No automatic deletion | Delete the file yourself |
 
 A backup contains the whole database, so it also contains data that the instance deleted later.

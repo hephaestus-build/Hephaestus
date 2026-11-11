@@ -7,7 +7,7 @@ type: application
 # (scripts/kubernetes-chart.ts), never into this file.
 version: 0.0.0-source
 # The lowest Kubernetes that the templates and the worker need: a technical floor. The support
-# statement is docs/admin/kubernetes.mdx § Supported clusters.
+# statement is docs/admin/helm-chart.md § Supported clusters.
 kubeVersion: ">=1.35.0-0"
 home: https://github.com/hephaestus-build/Hephaestus
 sources:

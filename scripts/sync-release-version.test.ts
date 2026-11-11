@@ -39,7 +39,7 @@ void test("real Changesets prerelease cycle starts at rc.1, increments and exits
 		await readFile(new URL("../.changeset/changelog.cjs", import.meta.url)),
 	);
 	await writeFile(
-		path.join(cwd, "docs/admin/kubernetes.mdx"),
+		path.join(cwd, "docs/admin/k3s.md"),
 		'   VERSION=0.95.1   # the release, without the leading "v"\n',
 	);
 	const history = "### v0.95.1\n\nReleased history: keep $& and `literal`.\n\n";
@@ -153,7 +153,7 @@ void test("refreshes an empty history without inventing a release, including on 
 	await mkdir(path.join(cwd, "docs/admin"), { recursive: true });
 	await writeFile(path.join(cwd, "package.json"), '{"version":"99.0.0"}');
 	await writeFile(
-		path.join(cwd, "docs/admin/kubernetes.mdx"),
+		path.join(cwd, "docs/admin/k3s.md"),
 		'   VERSION=0.0.0   # the release, without the leading "v"\n',
 	);
 	await writeFile(path.join(cwd, "MIGRATION.md"), original);
@@ -186,7 +186,7 @@ void test("synchronizes every release-owned version reference", async (t) => {
 	await mkdir(path.join(cwd, ".migration"));
 	await writeFile(path.join(cwd, "package.json"), '{"version":"0.75.0"}');
 	await writeFile(
-		path.join(cwd, "docs/admin/kubernetes.mdx"),
+		path.join(cwd, "docs/admin/k3s.md"),
 		'   VERSION=0.74.0   # the release, without the leading "v"\n',
 	);
 	await writeFile(
@@ -208,7 +208,7 @@ void test("synchronizes every release-owned version reference", async (t) => {
 	await syncReleaseVersion(cwd);
 
 	assert.equal(
-		await readFile(path.join(cwd, "docs/admin/kubernetes.mdx"), "utf8"),
+		await readFile(path.join(cwd, "docs/admin/k3s.md"), "utf8"),
 		'   VERSION=0.75.0   # the release, without the leading "v"\n',
 	);
 	const stamped = guide(

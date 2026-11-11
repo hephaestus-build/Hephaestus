@@ -1,5 +1,5 @@
 -- Keeps the SCRAM verifiers that the next file of the same psql session sets out of the statement statistics and the
--- server log (docs/admin/kubernetes.mdx § Database roles). Run it first, in that session:
+-- server log (docs/admin/helm-chart.md § Database roles). Run it first, in that session:
 --
 --   psql -f database-quiet.sql -f database-roles.sql
 --

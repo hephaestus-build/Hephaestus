@@ -112,7 +112,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 
 ## Observability and security
 
-- Log through SLF4J. Name a structured event with `event.name` and add typed fields with `addKeyValue`. [Observability](/admin/observability#reading-log-records) owns the record shape.
+- Log through SLF4J. Name a structured event with `event.name` and add typed fields with `addKeyValue`. [Log records](/admin/log-records#fields) owns the record shape.
 - Logs are not redacted. Do not write an exception's message or `toString()` into a log message.
   It can quote SQL values, a request URL, a provider response or model output.
   Write its class. To keep its frames, pass the exception as the last argument.

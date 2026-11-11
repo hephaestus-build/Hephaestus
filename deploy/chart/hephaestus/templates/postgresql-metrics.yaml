@@ -70,7 +70,7 @@ spec:
 # for the server, not a Helm hook. Each statement is idempotent, and the password is set every time, so
 # a changed DATABASE_MONITOR_PASSWORD takes effect with the next upgrade. The extension goes in a schema
 # of its own, so the application's schema stays unchanged. An external PostgreSQL gets no Job: its
-# operator runs the same two files (docs/admin/observability.mdx § Database metrics).
+# operator runs the same two files (docs/admin/monitoring.md § Turn on database metrics).
 apiVersion: batch/v1
 kind: Job
 metadata:

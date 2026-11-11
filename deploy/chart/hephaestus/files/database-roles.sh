@@ -1,4 +1,4 @@
-# Sets up the database roles of Hephaestus (docs/admin/kubernetes.mdx § Database roles). Run it as the PostgreSQL
+# Sets up the database roles of Hephaestus (docs/admin/helm-chart.md § Database roles). Run it as the PostgreSQL
 # administrator, with the passwords in the environment, and give it the connection options of psql:
 #
 #   DATABASE_OWNER_PASSWORD=… DATABASE_APP_PASSWORD=… sh database-roles.sh "host=… dbname=hephaestus user=…"

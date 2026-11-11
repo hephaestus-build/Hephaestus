@@ -74,7 +74,7 @@ A run with retries left is queued again, after a backoff. At the kind's limit, o
 A queued run past its deadline also ends.
 A run whose take-back fails is skipped until the next tick, so it cannot hold back the runs behind it.
 
-Each take-back writes one event that names `run.id`, `run.epoch` and `subject.key` ([observability contract](/admin/observability#agent-run-and-outbox-events)).
+Each take-back writes one event that names `run.id`, `run.epoch` and `subject.key` ([Log records](/admin/log-records#agent-run-and-outbox-events)).
 The holder of a review run puts the same three fields in its thread-scoped log context, and on its execution span.
 
 ## Reviews

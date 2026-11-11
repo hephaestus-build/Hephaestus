@@ -351,7 +351,7 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
 - **Page experience** — if you turn it on, read [Page experience](#page-experience) first.
 - **Browser fault reports** — if you turn them on, read [Browser fault reports](#browser-fault-reports) first.
 - **Product feedback** — before you name a repository, complete [Product feedback on GitHub](#product-feedback-on-github).
-- **Log collection** — you can ship container logs to a log store such as Loki ([Collecting logs](./observability.mdx#collecting-logs)).
+- **Log collection** — you can ship container logs to a log store such as Loki ([Collecting logs](./monitoring.md#collect-logs)).
   Name the store's operator and retention in the notice.
   Hephaestus ships no error telemetry service.
 - **Public activity page** — if you allow it, use the [template below](#the-public-activity-page).
@@ -406,7 +406,7 @@ also leave every total on the page.
 **`PAGE_EXPERIENCE_METRICS`** is off by default.
 When it is on, the browser of each signed-in reader measures how fast each page loaded and responded.
 It sends new measurements to your server when the reader leaves the page, and it sends each measurement once.
-The server adds them to counters that name no person, workspace or page address ([Page experience metrics](./observability.mdx#page-experience-metrics)).
+The server adds them to counters that name no person, workspace or page address ([Page experience metrics](./metrics.md#page-experience-metrics)).
 It keeps no record of the report.
 The report is a request, so it carries the same request metadata as every other request.
 
@@ -444,7 +444,7 @@ the server with your IP address and browser information, which the server logs k
 When it is on, the browser of each reader reports the failures that it meets on a page, also before sign-in.
 A report names the kind of failure, the page type, the class of the error, the release and positions in the web app's scripts.
 For a failed request, it also names the request's reference and its status code.
-It names no person, workspace, page address or error message ([Browser faults](./observability.mdx#browser-faults)).
+It names no person, workspace, page address or error message ([Browser faults](./metrics.md#browser-faults)).
 The browser stores nothing on the device for it.
 
 The server writes each failure to its log and counts it. It keeps no other record.

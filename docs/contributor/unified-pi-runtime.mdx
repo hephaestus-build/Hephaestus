@@ -242,7 +242,7 @@ It never writes a failure's message, name, or stack, because any of them can car
 
 The worker logs an admission refusal at `INFO`.
 The reaper on the server role logs a lost second attempt at `INFO`.
-[Observability](/admin/observability#conversation-turn-metrics) names the log lines.
+[Metrics](/admin/metrics#conversation-turn-metrics) names the log lines.
 
 ### Delivery of shown feedback
 
@@ -769,7 +769,7 @@ The request fixtures `sandbox-document`, `sandbox-discard` and `sandbox-load` in
 | Folder | `/tmp/tools/workspace`, on the one `/tmp` volume on the node's disk |
 | Network | Ingress on TCP port 7100 from the conversation loop only. No egress and no DNS. |
 | Credentials | No service account token and no credential. The worker writes a fresh nonce into the Pod spec and into the Pod's row. |
-| Limits | The tools Pod row of the [Pod-kind resource table](/admin/kubernetes#sandbox-sizes). The kubelet sets the process limit |
+| Limits | The tools Pod row of the [Pod-kind resource table](/admin/sandboxes#sandbox-sizes). The kubelet sets the process limit |
 | Labels | `hephaestus.build/sandbox-kind=tools`, the sandbox id, and the labels of the worker that created it. No cleanup reads the worker labels. |
 
 A row is pooled, with no turn, or bound to one attempt (`turn_id`, `attempt`).

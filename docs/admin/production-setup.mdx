@@ -280,7 +280,7 @@ For a GitLab practice-review rollout, enable this bundle together:
 | `GITLAB_OAUTH_DISPLAY_NAME`       | Login-button label, default `GitLab`. Example: `gitlab.lrz.de`.                                                                                                                                                                                                                                                                                                                                                       |
 | `GITLAB_DEFAULT_SERVER_URL`       | The one GitLab instance for workspace creation, sync, and checkout, not login. Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every worker the same value.                                                                                                                                                                                                                                    |
 | `GITLAB_ENABLED`                  | Enables GitLab on the application server and every worker. The webhook receiver does not read it. Without it, a worker cannot check out merge requests. Each claimed GitLab review fails preparation with `SCM Git preparation is unavailable`. It stops before any result.                                                                                                                                           |
-| `HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS` | A Git provider on your own network, as comma-separated host names, IP addresses, or CIDR ranges. Empty by default. [A Git provider on a private network](./kubernetes#a-git-provider-on-a-private-network) has the rules. |
+| `HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS` | A Git provider on your own network, as comma-separated host names, IP addresses, or CIDR ranges. Empty by default. [A Git provider on a private network](./private-network#admit-a-git-provider-on-a-private-network) has the rules. |
 | `WEBHOOK_SECRET`                  | Instance-wide secret for GitHub webhook verification. GitLab does not use it. Each GitLab group hook that Hephaestus registers posts to its own connection endpoint with a signed route credential. See `WEBHOOK_ROUTING_SECRET`. |
 | `WEBHOOK_ROUTING_SECRET`          | Signs each Hephaestus-registered GitLab group hook token. Each hook can deliver only for its registered GitLab connection. Requires at least 32 characters. Must differ from `WEBHOOK_SECRET` and every encryption key. Give the application server and webhook receiver the same value. Required for every production deployment, including GitHub-only instances. The chart and readiness checks reject absent values. |
 | `WEBHOOK_ROUTING_PREVIOUS_SECRET` | Previous value, used only during `WEBHOOK_ROUTING_SECRET` rotation. Its signed hooks keep delivering until registration replaces them with new-value hooks. After replacement, remove it.                                                                                                                                                                                                                             |
@@ -378,7 +378,7 @@ The runtime role decides whether a process uses NATS: the server and webhook rol
 Production startup refuses a server or webhook role without NATS, as [Runtime roles](./runtime-roles#boot-log) describes.
 
 One conversation loop runs all conversation turns of the installation, as a Deployment beside the workers.
-[Runtime Roles](./runtime-roles.mdx#the-conversation-loop) gives its lifecycle, and [Kubernetes § Conversation loop](./kubernetes#conversation-loop) gives its values.
+[Runtime Roles](./runtime-roles.mdx#the-conversation-loop) gives its lifecycle, and [Helm chart reference § Conversation loop](./helm-chart#conversation-loop) gives its values.
 The application server needs no memory for Conversation runtimes.
 [Runtime Roles](./runtime-roles.mdx#conversation-turns) explains dispatch and capacity.
 
@@ -504,7 +504,7 @@ Existing unpriced usage continues to block a capped purse for the current UTC mo
 historical records, and the stopped-writer upgrade requirement.
 
 **Alerting hook:** there is no built-in push notification for a crossed workspace cap.
-Use the private endpoint and example rules in [Scrape metrics](./observability.mdx#scrape-metrics) for these Micrometer counters:
+Use the private endpoint and example rules in [Scrape metrics](./monitoring.md#scrape-metrics) for these Micrometer counters:
 
 - `llm.budget.exhausted`: increments once per usage event whose confirmed contribution crosses the workspace's monthly **instance** cap.
   This is your funded purse and the one that alerts you.

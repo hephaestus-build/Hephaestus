@@ -1,4 +1,4 @@
--- The database roles of Hephaestus (docs/admin/kubernetes.mdx § Database roles). Run it as the PostgreSQL
+-- The database roles of Hephaestus (docs/admin/helm-chart.md § Database roles). Run it as the PostgreSQL
 -- administrator, connected to the Hephaestus database, before each migration, after database-quiet.sql in the same
 -- session. It takes the SCRAM-SHA-256 verifier of each password from the environment of psql, never a password:
 --

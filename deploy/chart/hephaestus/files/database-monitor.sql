@@ -1,4 +1,4 @@
--- The login of the PostgreSQL exporter (docs/admin/observability.mdx § Database metrics). Run it as the PostgreSQL
+-- The login of the PostgreSQL exporter (docs/admin/monitoring.md § Turn on database metrics). Run it as the PostgreSQL
 -- administrator, connected to the Hephaestus database, after database-quiet.sql in the same session. It takes the
 -- SCRAM-SHA-256 verifier of the password from the environment of psql, never the password:
 --
