@@ -562,13 +562,11 @@ The k3d job also serves the release through the same Gateway, and sends the same
 
 ### Webhook receiver
 
-The webhook receiver lives in the Java server (`integration.core.webhook` package). In local
-development the monolith default boots both runtime roles (`server`, `webhook`),
-so `vp run dev:server` exposes the unified `/webhooks/{kind}` endpoint (kinds: `github` and
+The webhook receiver lives in the Java server (`integration.core.webhook` package).
+`vp run dev:server` exposes the unified `/webhooks/{kind}` endpoint (kinds: `github` and
 `slack`) alongside the rest of the API. GitLab and Outline post to their connection routes.
 
-Production runs the receiver in its own container — [Runtime roles](../admin/runtime-roles#monolith-vs-split-pod)
-and [ADR 0008](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md).
+Production runs the receiver in the server too — [Runtime roles](../admin/runtime-roles#reception-during-a-restart).
 
 Set the webhook secret before the first start, so that GitHub signature checks succeed.
 In the native stack, add it to `server/.env`:
