@@ -9,9 +9,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
@@ -111,6 +114,9 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private ActionExecutor executor;
 
     private @Nullable String previousPublic;
     private @Nullable String previousPrivate;
@@ -324,6 +330,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         ReflectionTestUtils.setField(target, "lastWrite", Instant.EPOCH);
 
         target.fileDue();
+        ActionTestSupport.drain(executor, jdbc);
 
         assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.SAVED);
         verify(issues, never()).create(any(), anyString(), anyString(), any());
@@ -373,6 +380,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         ReflectionTestUtils.setField(target, "lastWrite", Instant.EPOCH);
 
         target.fileDue();
+        ActionTestSupport.drain(executor, jdbc);
 
         var body = ArgumentCaptor.forClass(String.class);
         verify(issues).create(eq(PRIVATE_REPOSITORY), anyString(), body.capture(), isNull());
@@ -495,9 +503,113 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         FilingService target = AopTestUtils.getUltimateTargetObject(filing);
         ReflectionTestUtils.setField(target, "lastWrite", Instant.EPOCH);
         target.fileDue();
+        ActionTestSupport.drain(executor, jdbc);
 
         verify(issues).create(eq(PRIVATE_REPOSITORY), anyString(), anyString(), any());
         assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.FILED);
+    }
+
+    @Test
+    void shouldFindTheIssueByItsMarkerInsteadOfFilingItAgainWhenGitHubsAnswerWasLost() {
+        UUID id = privateReportDue();
+        when(issues.create(any(), anyString(), anyString(), any()))
+                .thenThrow(new ProductFeedbackIssues.Unknown("read timed out", null));
+        fileDueAndDrain();
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.FILING);
+
+        when(issues.findByMarker(eq(PRIVATE_REPOSITORY), eq(id.toString()), any()))
+                .thenReturn(Optional.of(new ProductFeedbackIssues.Issue(
+                        92, "I_92", "https://github.com/acme/feedback-private/issues/92")));
+        jdbc.update(
+                "UPDATE agent_action SET leased_until = now() - interval '1 second'"
+                        + " WHERE lane_key = ? AND state = 'EXECUTING'",
+                "file_issue:" + id);
+        ActionTestSupport.drain(executor, jdbc);
+        executor.runDue();
+
+        verify(issues, times(1)).create(any(), anyString(), anyString(), any());
+        var filed = filings.findById(id).orElseThrow();
+        assertThat(filed.getState()).isEqualTo(FilingState.FILED);
+        assertThat(filed.getIssueNumber()).isEqualTo(92L);
+    }
+
+    @Test
+    void shouldStopWhenGitHubRefusesTheIssue() {
+        UUID id = privateReportDue();
+        when(issues.create(any(), anyString(), anyString(), any()))
+                .thenThrow(new ProductFeedbackIssues.Refused("422 validation failed"));
+
+        fileDueAndDrain();
+
+        var stopped = filings.findById(id).orElseThrow();
+        assertThat(stopped.getState()).isEqualTo(FilingState.STOPPED);
+        assertThat(stopped.getReason()).isEqualTo(FilingReason.GITHUB_REFUSED);
+    }
+
+    @Test
+    void shouldRouteARetriedReportAgainWhenNoEarlierIssueIsOnGitHub() {
+        UUID id = privateReportDue();
+        when(issues.create(any(), anyString(), anyString(), any()))
+                .thenThrow(new ProductFeedbackIssues.Refused("422 validation failed"));
+        fileDueAndDrain();
+        when(issues.findByMarker(any(), eq(id.toString()), any())).thenReturn(Optional.empty());
+
+        assertThat(filing.retry(id)).isTrue();
+        ActionTestSupport.drain(executor, jdbc);
+
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.QUEUED);
+    }
+
+    @Test
+    void shouldNotFileAReportThatWasErasedWhileItsIssueWaitedInTheOutbox() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, true);
+        heldForPublic(id);
+        reports.keepPrivate(Objects.requireNonNull(reporter.getId()), id);
+        when(issues.isPrivate(any())).thenReturn(Optional.of(true));
+        when(issues.issueTypes(any())).thenReturn(List.of());
+        jdbc.update(
+                "UPDATE product_feedback_filing SET next_attempt_at = ? WHERE feedback_id = ?",
+                Timestamp.from(Instant.EPOCH),
+                id);
+        FilingService target = AopTestUtils.getUltimateTargetObject(filing);
+        ReflectionTestUtils.setField(target, "lastWrite", Instant.EPOCH);
+        target.fileDue();
+
+        // The report's own store goes; its action stays, as a workspace purge leaves an instance action.
+        feedbackErasure.eraseAccount(Objects.requireNonNull(reporter.getId()));
+        ActionTestSupport.drain(executor, jdbc);
+
+        verify(issues, never()).create(any(), anyString(), anyString(), any());
+        assertThat(jdbc.queryForObject(
+                        "SELECT next_attempt_at > now() + interval '2 minutes' FROM product_feedback_cleanup"
+                                + " WHERE marker = ?",
+                        Boolean.class,
+                        id))
+                .as("cleanup reconciles only after the action's lease")
+                .isTrue();
+    }
+
+    /** A private report that filing takes next. */
+    private UUID privateReportDue() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, true);
+        heldForPublic(id);
+        reports.keepPrivate(Objects.requireNonNull(reporter.getId()), id);
+        when(issues.isPrivate(any())).thenReturn(Optional.of(true));
+        when(issues.issueTypes(any())).thenReturn(List.of());
+        jdbc.update(
+                "UPDATE product_feedback_filing SET next_attempt_at = ? WHERE feedback_id = ?",
+                Timestamp.from(Instant.EPOCH),
+                id);
+        return id;
+    }
+
+    private void fileDueAndDrain() {
+        FilingService target = AopTestUtils.getUltimateTargetObject(filing);
+        ReflectionTestUtils.setField(target, "lastWrite", Instant.EPOCH);
+        target.fileDue();
+        ActionTestSupport.drain(executor, jdbc);
     }
 
     /** A report from before the composer named the model. */
@@ -959,15 +1071,14 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
     private void fileWhatIsDue(UUID id) {
         jdbc.update(
-                "UPDATE product_feedback_filing SET next_attempt_at = ?, filed_after = ?, lease_until = ?"
-                        + " WHERE feedback_id = ?",
-                Timestamp.from(Instant.EPOCH),
+                "UPDATE product_feedback_filing SET next_attempt_at = ?, filed_after = ? WHERE feedback_id = ?",
                 Timestamp.from(Instant.EPOCH),
                 Timestamp.from(Instant.EPOCH),
                 id);
         FilingService target = AopTestUtils.getUltimateTargetObject(filing);
         ReflectionTestUtils.setField(target, "lastWrite", Instant.EPOCH);
         target.fileDue();
+        ActionTestSupport.drain(executor, jdbc);
     }
 
     private double refusedMoves() {

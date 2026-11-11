@@ -3,11 +3,11 @@ package de.tum.cit.aet.hephaestus.core.action;
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -37,8 +37,19 @@ class ActionStore {
             UUID id,
             @Nullable Long workspaceId,
             ActionKind kind,
+            String idempotencyKey,
             ActionState state,
-            @Nullable ActionStopReason reason) {}
+            @Nullable ActionStopReason reason,
+            @Nullable String readbackRef) {
+
+        /** The action as its adapter learns it, when it ended. */
+        Optional<ActionEnded> ended() {
+            ActionStopReason stop = reason;
+            return stop == null
+                    ? Optional.empty()
+                    : Optional.of(new ActionEnded(id, workspaceId, kind, idempotencyKey, state, stop, readbackRef));
+        }
+    }
 
     private static final List<String> AT_MOST_ONCE = Arrays.stream(ActionKind.values())
             .filter(ActionKind::atMostOnce)
@@ -98,9 +109,12 @@ class ActionStore {
         return actions.beginWrite(id, epoch, margin.toSeconds()) == 1;
     }
 
-    /** Records the attempt's result; empty when another claim took the action or an erasure deleted it. */
+    /**
+     * Records the attempt's result; empty when another claim took the action or an erasure deleted it. When the action
+     * ends, {@code onEnd} runs in this transaction, so the domain row ends with it.
+     */
     @Transactional
-    public Optional<Settled> settle(UUID id, long epoch, ActionResult result) {
+    public Optional<Settled> settle(UUID id, long epoch, ActionResult result, Consumer<ActionEnded> onEnd) {
         Optional<AgentActionRepository.SettledRow> row = switch (result) {
             case ActionResult.Done done ->
                 actions.end(id, epoch, "DONE", ActionStopReason.COMPLETED.name(), done.readbackRef());
@@ -108,6 +122,8 @@ class ActionStore {
                 actions.retry(id, epoch, retry.after().toSeconds());
             case ActionResult.Defer defer ->
                 actions.defer(id, epoch, defer.after().toSeconds());
+            case ActionResult.Reread reread ->
+                actions.reread(id, epoch, reread.after().toSeconds());
             case ActionResult.Uncertain uncertain ->
                 actions.end(id, epoch, "UNCERTAIN", uncertain.reason().name(), null);
             case ActionResult.Failed failed ->
@@ -116,16 +132,28 @@ class ActionStore {
                 actions.end(id, epoch, "CANCELLED", cancelled.reason().name(), null);
             case ActionResult.Abandoned abandoned -> Optional.empty();
         };
-        return row.map(ActionStore::settled);
+        Optional<Settled> settled = row.map(ActionStore::settled);
+        settled.flatMap(Settled::ended).ifPresent(onEnd);
+        return settled;
     }
 
-    /** Ends what can no longer run: what expired before it started, and what lost its lease for good. */
+    /** Up to {@code limit} actions that {@link #endStale} can end. */
+    @Transactional(readOnly = true)
+    public List<UUID> findStale(int limit) {
+        return actions.findStale(AT_MOST_ONCE, limit);
+    }
+
+    /**
+     * Ends one action that can no longer run: it expired before it started, or lost its lease for good. {@code onEnd}
+     * runs in this transaction, so a failing domain row holds back only its own action.
+     */
     @Transactional
-    public List<Settled> endStale() {
-        var ended = new ArrayList<Settled>();
-        actions.endExpired().forEach(row -> ended.add(settled(row)));
-        actions.endLost(AT_MOST_ONCE).forEach(row -> ended.add(settled(row)));
-        return ended;
+    public Optional<Settled> endStale(UUID id, Consumer<ActionEnded> onEnd) {
+        Optional<Settled> settled = actions.endExpired(id)
+                .or(() -> actions.endLost(id, AT_MOST_ONCE))
+                .map(ActionStore::settled);
+        settled.flatMap(Settled::ended).ifPresent(onEnd);
+        return settled;
     }
 
     /** Deletes what ended more than {@code retention} ago. */
@@ -140,8 +168,10 @@ class ActionStore {
                 row.getId(),
                 row.getWorkspaceId(),
                 ActionKind.valueOf(row.getKind()),
+                row.getIdempotencyKey(),
                 ActionState.valueOf(row.getState()),
-                reason == null ? null : ActionStopReason.valueOf(reason));
+                reason == null ? null : ActionStopReason.valueOf(reason),
+                row.getReadbackRef());
     }
 
     private static Claim claim(AgentActionRepository.ClaimRow row) {

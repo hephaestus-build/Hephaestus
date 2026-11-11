@@ -109,8 +109,8 @@ Resolution in that list does not reply to the reporter.
 3. Select **Retry** for the report.
 4. Check that one issue exists in the intended repository.
 
-Automatic retries use backoff, with up to three retries before manual action.
-An uncertain GitHub response requires reconciliation before another write.
+Automatic retries use backoff, with up to five attempts before manual action.
+After an uncertain GitHub response, the next attempt first looks for the issue by its marker. It writes again only when that issue is not there.
 Do not create another report or clear its state to bypass that check.
 
 Every report that is not on GitHub stays saved in the console: no destination, or filing stopped.

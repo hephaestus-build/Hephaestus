@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.action.ActionEnded;
+import de.tum.cit.aet.hephaestus.core.action.ActionState;
+import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ProductFeedbackAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
@@ -17,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -30,9 +34,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Files routed reports on GitHub, one at a time per instance. The target and the payload are frozen before each
- * write, and a write with an unclear result is reconciled by the marker before anything is written again. A report
- * that is not on GitHub stays saved for the admins.
+ * Routes reports to GitHub, one at a time per instance. Routing freezes the target and the payload, then hands the
+ * report to the outbox as one {@code file_issue} action ({@link FileIssueAdapter}), which writes it and reads it back
+ * by its marker. The report records the action's end in the same transaction. A report that is not on GitHub stays
+ * saved for the admins.
  */
 @Service
 @ConditionalOnServerRole
@@ -45,14 +50,14 @@ class FilingService {
     static final Duration SPACING = Duration.ofSeconds(10);
     static final int HOURLY_LIMIT = 30;
     static final int PUBLIC_PER_ACCOUNT_DAILY = 5;
-    static final int MAX_FAILURES = 5;
-    static final Duration WRITE_DEADLINE = Duration.ofSeconds(40);
+    /** Attempts of one hand-over before the report stops and waits in Needs action. */
+    static final int MAX_ATTEMPTS = 5;
+
     static final int MOVE_BATCH = 500;
 
     private final ProductFeedbackFilingRepository filings;
     private final ProductFeedbackRepository feedback;
     private final DestinationSettings destinations;
-    private final ProductFeedbackDestinationRepository destinationRows;
     private final ProductFeedbackIssues issues;
     private final RoutingService routing;
     private final ProductFeedbackConsentRepository consents;
@@ -60,6 +65,7 @@ class FilingService {
     private final TransactionTemplate transactions;
     private final ProductFeedbackMeters meters;
     private final ProductFeedbackAudit audit;
+    private final FileIssueQueue fileIssues;
     private final Clock clock;
 
     private volatile Instant lastWrite = Instant.EPOCH;
@@ -68,7 +74,6 @@ class FilingService {
             ProductFeedbackFilingRepository filings,
             ProductFeedbackRepository feedback,
             DestinationSettings destinations,
-            ProductFeedbackDestinationRepository destinationRows,
             ProductFeedbackIssues issues,
             RoutingService routing,
             ProductFeedbackConsentRepository consents,
@@ -76,11 +81,11 @@ class FilingService {
             TransactionTemplate transactions,
             ProductFeedbackMeters meters,
             ProductFeedbackAudit audit,
+            FileIssueQueue fileIssues,
             Clock clock) {
         this.filings = filings;
         this.feedback = feedback;
         this.destinations = destinations;
-        this.destinationRows = destinationRows;
         this.issues = issues;
         this.routing = routing;
         this.consents = consents;
@@ -88,33 +93,21 @@ class FilingService {
         this.transactions = transactions;
         this.meters = meters;
         this.audit = audit;
+        this.fileIssues = fileIssues;
         this.clock = clock;
     }
-
-    /** What one claim decided to send. Without a payload it only looks for an earlier attempt's issue. */
-    private record Write(
-            UUID feedbackId,
-            int attempt,
-            ProductFeedbackIssues.Repository repository,
-            @Nullable Payload payload,
-            Instant since) {}
-
-    private record Payload(String title, String body, String type) {}
 
     @Scheduled(fixedDelayString = "PT5S", initialDelayString = "PT20S")
     void fileDue() {
         if (Duration.between(lastWrite, clock.instant()).compareTo(SPACING) < 0) return;
-        Write write;
         try {
-            write = transactions.execute(status -> claim());
+            if (Boolean.TRUE.equals(transactions.execute(status -> claim()))) lastWrite = clock.instant();
         } catch (RuntimeException failed) {
             meters.failed(failed);
             log.warn(
                     "Product feedback filing claim failed: error={}",
                     failed.getClass().getSimpleName());
-            return;
         }
-        if (write != null) send(write);
     }
 
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT30S")
@@ -126,31 +119,26 @@ class FilingService {
                 .orElse(0L));
     }
 
-    private @Nullable Write claim() {
+    /** Routes the next due report, and hands it to the outbox when it goes to GitHub. */
+    private boolean claim() {
         Instant now = clock.instant();
-        if (!filings.tryPaceLock(PACE_LOCK)) return null;
+        if (!filings.tryPaceLock(PACE_LOCK)) return false;
         // The limit is about GitHub: a report bound for the admins must not wait behind it, or they cannot see it.
         boolean atLimit = filings.countFiledSince(now.minus(Duration.ofHours(1))) >= HOURLY_LIMIT;
         UUID id = (atLimit ? filings.claimableForAdmins(now) : filings.claimableFiling(now)).orElse(null);
-        if (id == null) return null;
+        if (id == null) return false;
         ProductFeedbackFiling filing = filings.lock(id).orElseThrow();
         ProductFeedback report = feedback.findById(id).orElseThrow();
         ProductFeedbackIssues.Repository frozen = frozen(filing);
-        if (filing.getState() == FilingState.FILING && frozen != null && filing.getFirstAttemptAt() != null) {
-            // An earlier write may have reached GitHub. Find it in its own repository before Pause, consent or a
-            // destination change can send the report anywhere else.
-            lease(filing, now);
-            return new Write(id, filing.getAttempt(), frozen, null, filing.getFirstAttemptAt());
-        }
         ProductFeedbackDestination destination = destinations.current();
         if (destination.isPaused() || !destination.configured() || filing.getRoute() == FilingRoute.ADMINS) {
             keepForAdmins(filing, report, filing.getRoute() == FilingRoute.ADMINS ? filing.getReason() : null, now);
-            return null;
+            return false;
         }
         if (filing.publicRoute() && !consentCurrent(filing, destination)) {
             filing.setAllowPublic(false);
             reroutePrivate(filing, report, destination, now);
-            return null;
+            return false;
         }
         boolean isPublic = filing.publicRoute();
         if (isPublic
@@ -158,19 +146,19 @@ class FilingService {
                         >= PUBLIC_PER_ACCOUNT_DAILY) {
             filing.setAllowPublic(false);
             reroutePrivate(filing, report, destination, now);
-            return null;
+            return false;
         }
         String target = isPublic ? destination.getPublicRepository() : destination.getPrivateRepository();
         if (target == null || (filing.getRepository() != null && !target.equalsIgnoreCase(filing.getRepository()))) {
             keepForAdmins(filing, report, FilingReason.DESTINATION_CHANGED, now);
-            return null;
+            return false;
         }
         ProductFeedbackIssues.Repository repository = frozen;
         if (repository == null) {
             repository = issues.repository(target).orElse(null);
             if (repository == null || (!isPublic && !repository.isPrivate())) {
                 stop(filing, report, FilingReason.DESTINATION_UNAVAILABLE, now);
-                return null;
+                return false;
             }
             filing.setRepository(repository.fullName());
             filing.setRepositoryId(repository.id());
@@ -188,126 +176,97 @@ class FilingService {
                 isPublic ? filing.getMentionLogin() : null,
                 id.toString(),
                 routing.version());
-        lease(filing, now);
         filing.setPayloadHash(sha256(rendered.title() + "\n" + rendered.body()));
         if (filing.getFirstAttemptAt() == null) filing.setFirstAttemptAt(now.minusSeconds(60));
-        String type = draft.type() == Draft.Type.BUG ? "Bug" : "Feature";
-        return new Write(
-                id,
-                filing.getAttempt(),
-                repository,
-                new Payload(rendered.title(), rendered.body(), type),
-                Objects.requireNonNull(filing.getFirstAttemptAt()));
-    }
-
-    private static void lease(ProductFeedbackFiling filing, Instant now) {
-        filing.setAttempt(filing.getAttempt() + 1);
         filing.apply(FilingLifecycle.Event.FILING_CLAIMED);
-        filing.setLeaseUntil(now.plus(WRITE_DEADLINE.multipliedBy(2)));
-        filing.setUpdatedAt(now);
+        handOver(
+                filing,
+                report,
+                repository,
+                new FileIssueAdapter.IssueText(
+                        rendered.title(), rendered.body(), draft.type() == Draft.Type.BUG ? "Bug" : "Feature"),
+                now);
+        return true;
     }
 
-    private void send(Write write) {
-        lastWrite = clock.instant();
-        try {
-            Payload payload = write.payload();
-            if (payload == null) {
-                var found = issues.findByMarker(
-                        write.repository(), write.feedbackId().toString(), write.since());
-                if (found.isPresent()) finish(write, found.get(), null);
-                else requeue(write);
-                return;
-            }
-            if (write.repository().isPrivate()
-                    && !issues.isPrivate(write.repository()).orElse(false)) {
-                finish(write, null, FilingReason.DESTINATION_UNAVAILABLE);
-                return;
-            }
-            String type = issues.issueTypes(write.repository()).contains(payload.type()) ? payload.type() : null;
-            finish(write, issues.create(write.repository(), payload.title(), payload.body(), type), null);
-        } catch (ProductFeedbackIssues.Refused refused) {
-            meters.step("file", "refused");
-            finish(write, null, FilingReason.GITHUB_REFUSED);
-        } catch (RuntimeException unclear) {
-            // Unknown, or anything else after the request may have left: the lease expires, and the next claim
-            // reconciles by the marker before it writes again.
-            meters.failed(unclear);
-            meters.step("file", "unknown");
-            transactions.executeWithoutResult(status -> filings.lock(write.feedbackId())
-                    .filter(filing -> filing.getState() == FilingState.FILING && filing.getAttempt() == write.attempt())
-                    .ifPresent(filing -> {
-                        filing.setFailures(filing.getFailures() + 1);
-                        Instant now = clock.instant();
-                        if (filing.getFailures() >= MAX_FAILURES) {
-                            stop(
-                                    filing,
-                                    feedback.findById(filing.getFeedbackId()).orElseThrow(),
-                                    FilingReason.DESTINATION_UNAVAILABLE,
-                                    now);
-                        } else {
-                            filing.setLeaseUntil(now.plus(Duration.ofMinutes(filing.getFailures())));
-                            filing.setUpdatedAt(now);
-                        }
-                    }));
+    /**
+     * Hands the report to the outbox as the next generation of its {@code file_issue} action. Without {@code issue}
+     * the action only looks for an earlier generation's issue by its marker.
+     */
+    private void handOver(
+            ProductFeedbackFiling filing,
+            ProductFeedback report,
+            ProductFeedbackIssues.Repository repository,
+            FileIssueAdapter.@Nullable IssueText issue,
+            Instant now) {
+        filing.setAttempt(filing.getAttempt() + 1);
+        filing.setUpdatedAt(now);
+        fileIssues.enqueue(
+                new FileIssueAdapter.Payload(
+                        filing.getFeedbackId(),
+                        filing.getAttempt(),
+                        repository,
+                        Objects.requireNonNull(filing.getFirstAttemptAt()),
+                        issue),
+                report.getAccountId());
+    }
+
+    /** Whether the report still waits for this generation of its {@code file_issue} action. */
+    boolean current(UUID feedbackId, int generation) {
+        return filings.findById(feedbackId)
+                .filter(row -> row.getState() == FilingState.FILING && row.getAttempt() == generation)
+                .isPresent();
+    }
+
+    /**
+     * Records how the report's {@code file_issue} action ended, in the transaction that ended it. An end of an
+     * older generation, or of a report that is no longer filing, changes nothing.
+     */
+    void ended(UUID feedbackId, int generation, ActionEnded ended, FileIssueAdapter.@Nullable Ref issue) {
+        ProductFeedbackFiling filing = filings.lock(feedbackId)
+                .filter(row -> row.getState() == FilingState.FILING && row.getAttempt() == generation)
+                .orElse(null);
+        if (filing == null) return;
+        Instant now = clock.instant();
+        ProductFeedback report = feedback.findById(feedbackId).orElseThrow();
+        if (ended.state() == ActionState.DONE && issue != null) {
+            filed(filing, report, issue, now);
+        } else if (ended.reason() == ActionStopReason.ABSENT) {
+            // No earlier generation reached GitHub: the report takes the ordinary path again, from routing.
+            filing.apply(FilingLifecycle.Event.FILING_REQUEUED);
+            filing.setNextAttemptAt(now);
+            filing.setUpdatedAt(now);
+        } else {
+            meters.step("file", ended.reason().name().toLowerCase(Locale.ROOT));
+            stop(
+                    filing,
+                    report,
+                    ended.reason() == ActionStopReason.REJECTED
+                            ? FilingReason.GITHUB_REFUSED
+                            : FilingReason.DESTINATION_UNAVAILABLE,
+                    now);
         }
     }
 
-    /** No earlier attempt reached GitHub: the report takes the ordinary path again, from its frozen recipient. */
-    private void requeue(Write write) {
-        transactions.executeWithoutResult(status -> filings.lock(write.feedbackId())
-                .filter(filing -> filing.getState() == FilingState.FILING && filing.getAttempt() == write.attempt())
-                .ifPresent(filing -> {
-                    Instant now = clock.instant();
-                    filing.apply(FilingLifecycle.Event.FILING_REQUEUED);
-                    filing.setLeaseUntil(null);
-                    filing.setNextAttemptAt(now);
-                    filing.setUpdatedAt(now);
-                }));
-    }
-
-    private void finish(Write write, ProductFeedbackIssues.@Nullable Issue issue, @Nullable FilingReason stopped) {
-        transactions.executeWithoutResult(status -> {
-            ProductFeedbackFiling filing = filings.lock(write.feedbackId())
-                    .filter(row -> row.getState() == FilingState.FILING && row.getAttempt() == write.attempt())
-                    .orElse(null);
-            if (filing == null) return;
-            Instant now = clock.instant();
-            if (issue == null) {
-                stop(
-                        filing,
-                        feedback.findById(filing.getFeedbackId()).orElseThrow(),
-                        stopped == null ? FilingReason.GITHUB_REFUSED : stopped,
-                        now);
-                return;
-            }
-            filing.apply(FilingLifecycle.Event.FILED);
-            filing.setIssueNumber(issue.number());
-            filing.setIssueNodeId(issue.nodeId());
-            filing.setIssueUrl(issue.url());
-            filing.setIssueOpen(true);
-            filing.setLeaseUntil(null);
-            filing.setUpdatedAt(now);
-            meters.step("file", "ok");
-            Payload payload = write.payload();
-            if (filing.publicRoute() && payload != null) appendToSnapshot(issue.number(), payload.title());
-            ProductFeedback report = feedback.findById(filing.getFeedbackId()).orElseThrow();
-            events.publishEvent(new ProductFeedbackUpdatedEvent(
-                    filing.getFeedbackId(),
-                    report.getAccountId(),
-                    ProductFeedbackUpdatedEvent.Kind.FILED,
-                    filing.publicRoute() ? issue.url() : null,
-                    filing.publicRoute(),
-                    null,
-                    now));
-        });
-    }
-
-    private void appendToSnapshot(long number, String title) {
-        destinationRows.findById(ProductFeedbackDestination.SINGLETON).ifPresent(destination -> {
-            var entries = new ArrayList<>(Snapshot.read(destination.getSnapshot()));
-            entries.addFirst(new Snapshot.Entry(number, title));
-            destination.setSnapshot(Snapshot.write(entries));
-        });
+    private void filed(ProductFeedbackFiling filing, ProductFeedback report, FileIssueAdapter.Ref issue, Instant now) {
+        filing.apply(FilingLifecycle.Event.FILED);
+        filing.setIssueNumber(issue.number());
+        filing.setIssueNodeId(issue.nodeId());
+        filing.setIssueUrl(issue.url());
+        filing.setIssueOpen(true);
+        filing.setUpdatedAt(now);
+        meters.step("file", "ok");
+        Draft draft = routing.read(filing.getDraft());
+        if (filing.publicRoute() && draft != null)
+            destinations.recordPublicIssue(issue.number(), IssueRenderer.title(draft.title()));
+        events.publishEvent(new ProductFeedbackUpdatedEvent(
+                filing.getFeedbackId(),
+                report.getAccountId(),
+                ProductFeedbackUpdatedEvent.Kind.FILED,
+                filing.publicRoute() ? issue.url() : null,
+                filing.publicRoute(),
+                null,
+                now));
     }
 
     /** The report may still go public: the person allowed it, under the notice version that is current now. */
@@ -353,7 +312,6 @@ class FilingService {
         filing.apply(FilingLifecycle.Event.SAVED);
         filing.setRoute(FilingRoute.ADMINS);
         if (reason != null) filing.setReason(reason);
-        filing.setLeaseUntil(null);
         filing.setUpdatedAt(now);
         notifyAdmins(report);
     }
@@ -361,7 +319,6 @@ class FilingService {
     private void stop(ProductFeedbackFiling filing, ProductFeedback report, FilingReason reason, Instant now) {
         filing.apply(FilingLifecycle.Event.STOPPED);
         filing.setReason(reason);
-        filing.setLeaseUntil(null);
         filing.setUpdatedAt(now);
         meters.step("file", "stopped");
         log.warn("Product feedback filing stopped: feedbackId={}, reason={}", filing.getFeedbackId(), reason.tag());
@@ -445,10 +402,11 @@ class FilingService {
                     filing.setFailures(0);
                     filing.setNextAttemptAt(now);
                     filing.setUpdatedAt(now);
-                    if (filing.getFirstAttemptAt() != null && filing.getRepositoryId() != null) {
-                        // A write may have reached GitHub: the next claim reconciles by the marker before it writes.
+                    ProductFeedbackIssues.Repository frozen = frozen(filing);
+                    if (filing.getFirstAttemptAt() != null && frozen != null) {
+                        // A write may have reached GitHub: look for it by its marker before anything writes again.
                         filing.apply(FilingLifecycle.Event.RETRIED_RECONCILE);
-                        filing.setLeaseUntil(now);
+                        handOver(filing, feedback.findById(feedbackId).orElseThrow(), frozen, null, now);
                     } else if (filing.getDraft() == null) {
                         filing.apply(FilingLifecycle.Event.RETRIED_DRAFT);
                     } else {

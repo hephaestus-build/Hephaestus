@@ -9,7 +9,13 @@ public enum ActionKind {
      * One email through the SMTP relay. Email has no readback, so it is sent at most once: an attempt whose write may
      * have started ends {@link ActionState#UNCERTAIN} and is never sent again. It may belong to no workspace.
      */
-    EMAIL(true, true);
+    EMAIL(true, true),
+
+    /**
+     * One product-feedback issue on GitHub, for the instance. GitHub can list the app's issues by their marker, so an
+     * attempt whose write may have started reads back before it writes again.
+     */
+    FILE_ISSUE(false, true);
 
     private final boolean atMostOnce;
     private final boolean instanceLevel;

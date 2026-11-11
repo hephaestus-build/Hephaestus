@@ -5,8 +5,8 @@ page_type: reference
 ---
 
 An effect on the outside world is one action in the `agent_action` table.
-Email is the only kind of action in this release.
-Feedback posts, Slack replies and product-feedback issues still use their own delivery code until they move here.
+Email and product-feedback issues (`FILE_ISSUE`) are the kinds of action in this release.
+Feedback posts and Slack replies still use their own delivery code until they move here.
 One executor carries out the actions on every server replica.
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) records why there is one outbox.
 The code is in `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/action/`.
@@ -76,12 +76,22 @@ No provider call runs inside a transaction ([Transactions and side effects](./tr
 | `Done` | The provider confirmed the effect. | `DONE`, with the provider's reference in `readback_ref`. |
 | `Retry` | The provider proved that it holds nothing, and a later attempt may succeed. | `ADMITTED` after the wait, or `FAILED` at the last attempt. The fence is cleared. |
 | `Defer` | Not now, and nothing was written, such as a rate limit. | `ADMITTED` after the wait. The attempt does not count. |
+| `Reread` | The effect may exist, and the provider can be read back. | Still `EXECUTING`, with its fence. The lease ends after the wait, and the next attempt reads back first. At the last attempt, `UNCERTAIN`. |
 | `Uncertain` | The effect may exist. | `UNCERTAIN`. Nothing sends it again. |
 | `Failed` | The provider refused it, or nobody can receive it. | `FAILED`. |
 | `Cancelled` | Nothing should be written. | `CANCELLED`. |
 | `Abandoned` | The fence refused. | Nothing. Another holder owns the action. |
 
-An exception from an adapter counts as `Uncertain` after the fence, and as `Retry` before it.
+An exception from an adapter counts as `Retry` before the fence.
+After the fence, it counts as `Reread` for a kind that reads back, and as `Uncertain` for an at-most-once kind.
+`ABSENT` ends an action whose readback proved that the effect does not exist and should not be made now.
+
+## End the domain row
+
+`ActionAdapter.ended` gets each action of its kind that ended, in the transaction that ended it.
+An attempt, an expiry or the reaper can end an action, and each one calls it.
+Use it to move the domain row on, such as a filing to `FILED` or `STOPPED`.
+It writes to the database only and never calls a provider.
 
 ## Read back or send at most once
 
@@ -127,7 +137,7 @@ Each names `action.id` and `action.kind`, never the payload.
 1. Add the value to `ActionKind`. Set `atMostOnce` and `instanceLevel`.
 2. Add the value to `ck_agent_action_kind` in your branch's changelog. If the kind is at most once, add it to `guard_agent_action`. If it is instance-level, add it to `ck_agent_action_workspace`.
 3. Write the adapter in the module that owns the effect.
-4. Keep the domain lifecycle, such as a feedback's state, on the domain row. The outbox owns only the delivery of the effect.
+4. Keep the domain lifecycle, such as a feedback's state, on the domain row. The outbox owns only the delivery of the effect. Move the domain row in `ended`.
 5. Delete the delivery code that the kind replaces, in the same pull request.
 
 ## Test it

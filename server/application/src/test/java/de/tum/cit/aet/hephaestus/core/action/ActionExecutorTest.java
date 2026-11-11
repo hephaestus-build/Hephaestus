@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.action;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,7 +39,7 @@ class ActionExecutorTest extends BaseUnitTest {
                 .run(claim(false));
 
         assertThat(result).isEqualTo(new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED));
-        verify(store).settle(ID, 7L, result);
+        verify(store).settle(eq(ID), eq(7L), eq(result), any());
     }
 
     @Test
@@ -49,7 +51,7 @@ class ActionExecutorTest extends BaseUnitTest {
                     .run(claim(false));
 
             assertThat(result).isEqualTo(new ActionResult.Retry(ActionExecutor.backoff(1)));
-            verify(store).settle(ID, 7L, result);
+            verify(store).settle(eq(ID), eq(7L), eq(result), any());
             assertThat(logs.events("action.attempt.failed"))
                     .as("the event names the action and the failure class, never the provider's message")
                     .singleElement()
@@ -66,9 +68,15 @@ class ActionExecutorTest extends BaseUnitTest {
     @Test
     void shouldNameTheActionAndItsWorkspaceWhenItEndsUncertain() {
         var executor = executor(attempt -> new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED));
-        when(store.settle(any(), anyLong(), any()))
+        when(store.settle(any(), anyLong(), any(), any()))
                 .thenReturn(Optional.of(new ActionStore.Settled(
-                        ID, 42L, ActionKind.EMAIL, ActionState.UNCERTAIN, ActionStopReason.WRITE_UNCONFIRMED)));
+                        ID,
+                        42L,
+                        ActionKind.EMAIL,
+                        "key",
+                        ActionState.UNCERTAIN,
+                        ActionStopReason.WRITE_UNCONFIRMED,
+                        null)));
 
         try (var logs = new LogCapture(ActionExecutor.class)) {
             executor.run(claim(true));
@@ -85,7 +93,8 @@ class ActionExecutorTest extends BaseUnitTest {
     @Test
     void shouldShowEveryUncertainEndAtZeroFromTheStartSoItsFirstCountIsAnIncrease() {
         var meters = new SimpleMeterRegistry();
-        new ActionExecutor(store, JsonMapper.builder().build(), List.of(emailAdapter()), meters);
+        new ActionExecutor(
+                store, JsonMapper.builder().build(), adapters(attempt -> new ActionResult.Done(null)), meters);
 
         for (ActionStopReason reason : ActionStopReason.values())
             assertThat(meters.get(CoreMetrics.ACTION_ENDED)
@@ -108,6 +117,16 @@ class ActionExecutorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReadBackAgainWhenAKindThatCanReadBackThrowsAfterTheFence() {
+        ActionResult result = executor(attempt -> {
+                    throw new IllegalStateException("socket closed");
+                })
+                .run(new ActionStore.Claim(ID, null, ActionKind.FILE_ISSUE, "key", "{}", 2, 7L, true, null));
+
+        assertThat(result).isEqualTo(new ActionResult.Reread(ActionExecutor.backoff(2)));
+    }
+
+    @Test
     void shouldStopWaitingForAProviderThatHoldsTheCallPastTheWait() throws InterruptedException {
         var release = new CountDownLatch(1);
         var executor = executor(attempt -> {
@@ -126,28 +145,41 @@ class ActionExecutorTest extends BaseUnitTest {
         release.countDown();
     }
 
+    @Test
+    void shouldEndTheOtherStaleActionsAndStillClaimWhenOneDomainRowFails() {
+        UUID failing = UUID.randomUUID();
+        UUID ending = UUID.randomUUID();
+        var executor = executor(attempt -> new ActionResult.Done(null));
+        when(store.findStale(anyInt())).thenReturn(List.of(failing, ending));
+        when(store.endStale(eq(failing), any())).thenThrow(new IllegalStateException("domain row refused"));
+        when(store.endStale(eq(ending), any())).thenReturn(Optional.empty());
+        when(store.claim(anyInt(), any())).thenReturn(List.of());
+
+        executor.runDue();
+
+        verify(store).endStale(eq(ending), any());
+        verify(store).claim(anyInt(), any());
+    }
+
     private ActionExecutor executor(Function<ActionAttempt, ActionResult> execute) {
-        when(store.settle(any(), anyLong(), any())).thenReturn(Optional.empty());
-        return new ActionExecutor(
-                store, JsonMapper.builder().build(), List.of(adapter(execute)), new SimpleMeterRegistry());
+        when(store.settle(any(), anyLong(), any(), any())).thenReturn(Optional.empty());
+        return new ActionExecutor(store, JsonMapper.builder().build(), adapters(execute), new SimpleMeterRegistry());
     }
 
-    private static ActionAdapter emailAdapter() {
-        return adapter(attempt -> new ActionResult.Done(null));
-    }
+    private static List<ActionAdapter> adapters(Function<ActionAttempt, ActionResult> execute) {
+        return Arrays.stream(ActionKind.values())
+                .map(kind -> (ActionAdapter) new ActionAdapter() {
+                    @Override
+                    public ActionKind kind() {
+                        return kind;
+                    }
 
-    private static ActionAdapter adapter(Function<ActionAttempt, ActionResult> execute) {
-        return new ActionAdapter() {
-            @Override
-            public ActionKind kind() {
-                return ActionKind.EMAIL;
-            }
-
-            @Override
-            public ActionResult execute(ActionAttempt attempt) {
-                return execute.apply(attempt);
-            }
-        };
+                    @Override
+                    public ActionResult execute(ActionAttempt attempt) {
+                        return execute.apply(attempt);
+                    }
+                })
+                .toList();
     }
 
     private static ActionStore.Claim claim(boolean writeStarted) {

@@ -26,8 +26,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             """;
 
     String ENDED = """
-            SELECT id AS "id", workspace_id AS "workspaceId", kind AS "kind", state AS "state",
-                   stop_reason AS "stopReason" FROM ended
+            SELECT id AS "id", workspace_id AS "workspaceId", kind AS "kind", idempotency_key AS "idempotencyKey",
+              state AS "state", stop_reason AS "stopReason", readback_ref AS "readbackRef" FROM ended
             """;
 
     interface ClaimRow {
@@ -57,6 +57,11 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
 
         @Nullable
         Long getWorkspaceId();
+
+        String getIdempotencyKey();
+
+        @Nullable
+        String getReadbackRef();
 
         String getKind();
 
@@ -205,7 +210,7 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
               UPDATE agent_action SET state = :state, stop_reason = :reason, readback_ref = COALESCE(CAST(:ref AS varchar), readback_ref),
                      ended_at = clock_timestamp(), payload = NULL, leased_until = NULL, updated_at = clock_timestamp()
                WHERE id = :id AND lease_epoch = :epoch AND state = 'EXECUTING'
-              RETURNING id, workspace_id, kind, state, stop_reason)
+              RETURNING id, workspace_id, kind, idempotency_key, state, stop_reason, readback_ref)
             """ + ENDED, nativeQuery = true)
     Optional<SettledRow> end(
             @Param("id") UUID id,
@@ -230,9 +235,29 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
                      next_attempt_at = clock_timestamp() + make_interval(secs => :after),
                      leased_until = NULL, updated_at = clock_timestamp()
                WHERE id = :id AND lease_epoch = :epoch AND state = 'EXECUTING'
-              RETURNING id, workspace_id, kind, state, stop_reason)
+              RETURNING id, workspace_id, kind, idempotency_key, state, stop_reason, readback_ref)
             """ + ENDED, nativeQuery = true)
     Optional<SettledRow> retry(@Param("id") UUID id, @Param("epoch") long epoch, @Param("after") long afterSeconds);
+
+    /**
+     * Keeps the action and its write fence, and lets the lease run out after {@code after}. The next claim then reads
+     * the provider back before it writes again.
+     */
+    @WorkspaceAgnostic("Settles one claimed action by its id and epoch")
+    @Query(value = """
+            WITH ended AS (
+              UPDATE agent_action
+                 SET state = CASE WHEN attempts >= max_attempts THEN 'UNCERTAIN' ELSE state END,
+                     stop_reason = CASE WHEN attempts >= max_attempts THEN 'WRITE_UNCONFIRMED' END,
+                     ended_at = CASE WHEN attempts >= max_attempts THEN clock_timestamp() END,
+                     payload = CASE WHEN attempts >= max_attempts THEN NULL ELSE payload END,
+                     leased_until = CASE WHEN attempts >= max_attempts THEN NULL
+                       ELSE clock_timestamp() + make_interval(secs => :after) END,
+                     updated_at = clock_timestamp()
+               WHERE id = :id AND lease_epoch = :epoch AND state = 'EXECUTING'
+              RETURNING id, workspace_id, kind, idempotency_key, state, stop_reason, readback_ref)
+            """ + ENDED, nativeQuery = true)
+    Optional<SettledRow> reread(@Param("id") UUID id, @Param("epoch") long epoch, @Param("after") long afterSeconds);
 
     /** Admits the action again without spending the attempt: nothing was written. */
     @WorkspaceAgnostic("Settles one claimed action by its id and epoch")
@@ -242,7 +267,7 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
                  SET state = 'ADMITTED', attempts = attempts - 1, write_started_at = NULL, leased_until = NULL,
                      next_attempt_at = clock_timestamp() + make_interval(secs => :after), updated_at = clock_timestamp()
                WHERE id = :id AND lease_epoch = :epoch AND state = 'EXECUTING'
-              RETURNING id, workspace_id, kind, state, stop_reason)
+              RETURNING id, workspace_id, kind, idempotency_key, state, stop_reason, readback_ref)
             """ + ENDED, nativeQuery = true)
     Optional<SettledRow> defer(@Param("id") UUID id, @Param("epoch") long epoch, @Param("after") long afterSeconds);
 
@@ -252,10 +277,10 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             WITH ended AS (
               UPDATE agent_action SET state = 'CANCELLED', stop_reason = 'EXPIRED', payload = NULL,
                      ended_at = clock_timestamp(), updated_at = clock_timestamp()
-               WHERE state IN ('PROPOSED', 'ADMITTED') AND expires_at <= clock_timestamp()
-              RETURNING id, workspace_id, kind, state, stop_reason)
+               WHERE id = :id AND state IN ('PROPOSED', 'ADMITTED') AND expires_at <= clock_timestamp()
+              RETURNING id, workspace_id, kind, idempotency_key, state, stop_reason, readback_ref)
             """ + ENDED, nativeQuery = true)
-    List<SettledRow> endExpired();
+    Optional<SettledRow> endExpired(@Param("id") UUID id);
 
     /**
      * Ends an attempt whose lease expired when no other attempt may follow: the last attempt, or an at-most-once kind
@@ -269,11 +294,25 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
                      stop_reason = CASE WHEN write_started_at IS NULL THEN 'ATTEMPTS_EXHAUSTED'
                        ELSE 'LEASE_LOST_AFTER_WRITE' END,
                      payload = NULL, leased_until = NULL, ended_at = clock_timestamp(), updated_at = clock_timestamp()
-               WHERE state = 'EXECUTING' AND leased_until <= clock_timestamp()
+               WHERE id = :id AND state = 'EXECUTING' AND leased_until <= clock_timestamp()
                  AND (attempts >= max_attempts OR (write_started_at IS NOT NULL AND kind IN (:atMostOnce)))
-              RETURNING id, workspace_id, kind, state, stop_reason)
+              RETURNING id, workspace_id, kind, idempotency_key, state, stop_reason, readback_ref)
             """ + ENDED, nativeQuery = true)
-    List<SettledRow> endLost(@Param("atMostOnce") Collection<String> atMostOnceKinds);
+    Optional<SettledRow> endLost(@Param("id") UUID id, @Param("atMostOnce") Collection<String> atMostOnceKinds);
+
+    /**
+     * Up to {@code limit} actions that can no longer run: expired before they started, or lost their lease when no
+     * other attempt may follow. {@link #endExpired} and {@link #endLost} end each one in its own transaction.
+     */
+    @WorkspaceAgnostic("The reaper finds stale actions of every workspace")
+    @Query(value = """
+            SELECT id FROM agent_action
+             WHERE (state IN ('PROPOSED', 'ADMITTED') AND expires_at <= clock_timestamp())
+                OR (state = 'EXECUTING' AND leased_until <= clock_timestamp()
+                    AND (attempts >= max_attempts OR (write_started_at IS NOT NULL AND kind IN (:atMostOnce))))
+             ORDER BY id LIMIT :limit
+            """, nativeQuery = true)
+    List<UUID> findStale(@Param("atMostOnce") Collection<String> atMostOnceKinds, @Param("limit") int limit);
 
     /** Deletes what ended before the cutoff: the ledger of a sent effect is kept only as long as a replay can come. */
     @WorkspaceAgnostic("The retention sweep deletes ended actions of every workspace")

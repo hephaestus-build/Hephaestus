@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -70,7 +71,11 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 .as("the edit waits for the create")
                 .isEmpty();
 
-        assertThat(store.settle(create, first.getFirst().epoch(), new ActionResult.Done("ref")))
+        assertThat(store.settle(
+                        create,
+                        first.getFirst().epoch(),
+                        new ActionResult.Done("ref"),
+                        ActionStoreIntegrationTest::ignore))
                 .isPresent();
 
         assertThat(claimOwn(List.of(create, edit)))
@@ -88,13 +93,18 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
 
         assertThat(current.epoch()).isEqualTo(stale.epoch() + 1);
         assertThat(store.beginWrite(id, stale.epoch(), MARGIN)).isFalse();
-        assertThat(store.settle(id, stale.epoch(), new ActionResult.Done("stale")))
+        assertThat(store.settle(id, stale.epoch(), new ActionResult.Done("stale"), ActionStoreIntegrationTest::ignore))
                 .isEmpty();
         assertThat(store.beginWrite(id, current.epoch(), MARGIN)).isTrue();
-        assertThat(store.settle(id, current.epoch(), new ActionResult.Done("current")))
+        assertThat(store.settle(
+                        id, current.epoch(), new ActionResult.Done("current"), ActionStoreIntegrationTest::ignore))
                 .as("the settled action names itself, so its events can")
-                .contains(new ActionStore.Settled(
-                        id, null, ActionKind.EMAIL, ActionState.DONE, ActionStopReason.COMPLETED));
+                .get()
+                .satisfies(settled -> {
+                    assertThat(settled.id()).isEqualTo(id);
+                    assertThat(settled.state()).isEqualTo(ActionState.DONE);
+                    assertThat(settled.reason()).isEqualTo(ActionStopReason.COMPLETED);
+                });
         assertThat(row(id))
                 .containsEntry("readback_ref", "current")
                 .containsEntry("stop_reason", "COMPLETED")
@@ -114,15 +124,13 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                         id))
                 .hasMessageContaining("never taken again");
 
-        assertThat(store.endStale())
-                .contains(new ActionStore.Settled(
-                        id, null, ActionKind.EMAIL, ActionState.UNCERTAIN, ActionStopReason.LEASE_LOST_AFTER_WRITE));
+        endStale(ActionStoreIntegrationTest::ignore);
 
         assertThat(row(id))
                 .containsEntry("state", "UNCERTAIN")
                 .containsEntry("stop_reason", "LEASE_LOST_AFTER_WRITE")
                 .containsEntry("payload", null);
-        assertThat(store.settle(id, claim.epoch(), new ActionResult.Done("late")))
+        assertThat(store.settle(id, claim.epoch(), new ActionResult.Done("late"), ActionStoreIntegrationTest::ignore))
                 .as("a result that arrives after the reaper ended the action changes nothing")
                 .isEmpty();
     }
@@ -189,7 +197,8 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var reclaimed = claimOwn(List.of(later, earlier));
         assertThat(reclaimed).extracting(ActionStore.Claim::id).containsExactly(later);
 
-        store.settle(later, reclaimed.getFirst().epoch(), new ActionResult.Done(null));
+        store.settle(
+                later, reclaimed.getFirst().epoch(), new ActionResult.Done(null), ActionStoreIntegrationTest::ignore);
         assertThat(claimOwn(List.of(earlier))).extracting(ActionStore.Claim::id).containsExactly(earlier);
     }
 
@@ -210,11 +219,11 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var first = claimOwn(List.of(id)).getFirst();
         assertThat(store.beginWrite(id, first.epoch(), MARGIN)).isTrue();
 
-        store.settle(id, first.epoch(), new ActionResult.Retry(Duration.ZERO));
+        store.settle(id, first.epoch(), new ActionResult.Retry(Duration.ZERO), ActionStoreIntegrationTest::ignore);
         assertThat(row(id)).containsEntry("state", "ADMITTED").containsEntry("write_started_at", null);
 
         var second = claimOwn(List.of(id)).getFirst();
-        store.settle(id, second.epoch(), new ActionResult.Retry(Duration.ZERO));
+        store.settle(id, second.epoch(), new ActionResult.Retry(Duration.ZERO), ActionStoreIntegrationTest::ignore);
         assertThat(row(id))
                 .containsEntry("state", "FAILED")
                 .containsEntry("stop_reason", "ATTEMPTS_EXHAUSTED")
@@ -226,7 +235,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 1));
         var claim = claimOwn(List.of(id)).getFirst();
 
-        store.settle(id, claim.epoch(), new ActionResult.Defer(Duration.ZERO));
+        store.settle(id, claim.epoch(), new ActionResult.Defer(Duration.ZERO), ActionStoreIntegrationTest::ignore);
 
         assertThat(row(id)).containsEntry("state", "ADMITTED").containsEntry("attempts", 0);
     }
@@ -244,9 +253,13 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 3,
                 Instant.now().minusSeconds(1)));
 
-        assertThat(store.endStale())
-                .contains(new ActionStore.Settled(
-                        id, null, ActionKind.EMAIL, ActionState.CANCELLED, ActionStopReason.EXPIRED));
+        assertThat(endStale(ActionStoreIntegrationTest::ignore))
+                .filteredOn(settled -> settled.id().equals(id))
+                .singleElement()
+                .satisfies(settled -> {
+                    assertThat(settled.state()).isEqualTo(ActionState.CANCELLED);
+                    assertThat(settled.reason()).isEqualTo(ActionStopReason.EXPIRED);
+                });
         assertThat(claimOwn(List.of(id))).isEmpty();
         assertThat(row(id)).containsEntry("state", "CANCELLED").containsEntry("payload", null);
     }
@@ -263,6 +276,53 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForList("SELECT id FROM agent_action WHERE id = ?", pending))
                 .isEmpty();
         assertThat(row(other)).containsEntry("state", "ADMITTED");
+    }
+
+    @Test
+    void shouldKeepTheFenceAndTakeTheActionAgainToReadBack() {
+        UUID id = actions.enqueue(fileIssue("key:" + UUID.randomUUID(), 3));
+        var first = claimOwn(List.of(id)).getFirst();
+        assertThat(store.beginWrite(id, first.epoch(), MARGIN)).isTrue();
+
+        store.settle(id, first.epoch(), new ActionResult.Reread(Duration.ZERO), ActionStoreIntegrationTest::ignore);
+
+        assertThat(row(id)).containsEntry("state", "EXECUTING");
+        assertThat(claimOwn(List.of(id))).singleElement().satisfies(claim -> {
+            assertThat(claim.writeStarted())
+                    .as("the next attempt reads back first")
+                    .isTrue();
+            assertThat(claim.epoch()).isEqualTo(first.epoch() + 1);
+        });
+    }
+
+    @Test
+    void shouldHandEveryEndToTheAdapterInTheTransactionThatEndsIt() {
+        UUID done = actions.enqueue(fileIssue("key:" + UUID.randomUUID(), 3));
+        UUID lost = actions.enqueue(fileIssue("key:" + UUID.randomUUID(), 1));
+        var claims = claimOwn(List.of(done, lost));
+        var ended = new ArrayList<ActionEnded>();
+        for (var claim : claims) {
+            if (claim.id().equals(done)) store.settle(done, claim.epoch(), new ActionResult.Done("ref"), ended::add);
+            else assertThat(store.beginWrite(lost, claim.epoch(), MARGIN)).isTrue();
+        }
+        expireLease(lost);
+
+        endStale(ended::add);
+
+        assertThat(ended)
+                .filteredOn(end -> end.id().equals(done))
+                .singleElement()
+                .satisfies(end -> {
+                    assertThat(end.state()).isEqualTo(ActionState.DONE);
+                    assertThat(end.readbackRef()).isEqualTo("ref");
+                });
+        assertThat(ended)
+                .filteredOn(end -> end.id().equals(lost))
+                .singleElement()
+                .satisfies(end -> {
+                    assertThat(end.state()).isEqualTo(ActionState.UNCERTAIN);
+                    assertThat(end.reason()).isEqualTo(ActionStopReason.LEASE_LOST_AFTER_WRITE);
+                });
     }
 
     /**
@@ -323,7 +383,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
             case CANCELLED -> new ActionResult.Cancelled(ActionStopReason.SILENCED);
             default -> null;
         };
-        if (result != null) store.settle(id, claim.epoch(), result);
+        if (result != null) store.settle(id, claim.epoch(), result, ActionStoreIntegrationTest::ignore);
         return id;
     }
 
@@ -348,13 +408,27 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var claimed = new ArrayList<ActionStore.Claim>();
         for (ActionStore.Claim claim : store.claim(1000, LEASE)) {
             if (ids.contains(claim.id())) claimed.add(claim);
-            else store.settle(claim.id(), claim.epoch(), new ActionResult.Cancelled(ActionStopReason.SILENCED));
+            else
+                store.settle(
+                        claim.id(),
+                        claim.epoch(),
+                        new ActionResult.Cancelled(ActionStopReason.SILENCED),
+                        ActionStoreIntegrationTest::ignore);
         }
         return claimed;
     }
 
     private static @Nullable String sqlState(DataAccessException refused) {
         return refused.getMostSpecificCause() instanceof SQLException sql ? sql.getSQLState() : null;
+    }
+
+    private static void ignore(ActionEnded ended) {}
+
+    /** Ends every stale action, as one reaper run does. */
+    private List<ActionStore.Settled> endStale(Consumer<ActionEnded> onEnd) {
+        var ended = new ArrayList<ActionStore.Settled>();
+        for (UUID id : store.findStale(1000)) store.endStale(id, onEnd).ifPresent(ended::add);
+        return ended;
     }
 
     private void expireLease(UUID id) {
@@ -366,6 +440,18 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 "SELECT state, stop_reason, readback_ref, payload::text AS payload, attempts, write_started_at"
                         + " FROM agent_action WHERE id = ?",
                 id);
+    }
+
+    private static ActionRequest fileIssue(String key, int maxAttempts) {
+        return new ActionRequest(
+                ActionKind.FILE_ISSUE,
+                null,
+                key,
+                key,
+                JsonNodeFactory.instance.objectNode().put("n", 1),
+                null,
+                maxAttempts,
+                null);
     }
 
     private static ActionRequest request(String lane, String key, @Nullable Long subject, int maxAttempts) {

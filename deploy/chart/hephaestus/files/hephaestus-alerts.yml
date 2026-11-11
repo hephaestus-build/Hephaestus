@@ -38,6 +38,19 @@ groups:
         annotations:
           summary: Product feedback stopped filing to GitHub; the reports wait in Needs action
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A server that fails before its first scrape shows the counter first at a nonzero value, so increase() has no
+      # earlier sample. The second operand counts a series that is new in the window, as for tenancy violations.
+      - alert: HephaestusOutboxRecordFailing
+        expr: >-
+          sum(
+            increase(action_record_failed_total{job="hephaestus"}[15m]) > 0
+            or (action_record_failed_total{job="hephaestus"} > 0 unless action_record_failed_total{job="hephaestus"} offset 15m)
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: The outbox could not record an action's result or end, so its email, issue or record did not move on
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusProductFeedbackMoveRefused
         expr: sum(increase(product_feedback_steps_total{job="hephaestus",step="transition",outcome="refused"}[1h])) > 0
         labels:

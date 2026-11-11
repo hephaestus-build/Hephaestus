@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794216534346-1" author="hephaestus"><sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_action
+  DROP CONSTRAINT ck_agent_action_kind,
+  ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE')),
+  DROP CONSTRAINT ck_agent_action_workspace,
+  ADD CONSTRAINT ck_agent_action_workspace CHECK (workspace_id IS NOT NULL OR kind IN ('EMAIL','FILE_ISSUE')),
+  DROP CONSTRAINT ck_agent_action_stop_reason,
+  ADD CONSTRAINT ck_agent_action_stop_reason CHECK (stop_reason IS NULL OR stop_reason IN ('COMPLETED','REJECTED','RECIPIENT_UNAVAILABLE','NOT_CONFIGURED','WITHDRAWN','SILENCED','ATTEMPTS_EXHAUSTED','EXPIRED','ABSENT','WRITE_UNCONFIRMED','LEASE_LOST_AFTER_WRITE'));
+-- A report that a server was filing when the instance stopped may already be on GitHub.
+-- Its next generation only looks for that issue by its marker; if none is there, the report is routed again.
+UPDATE product_feedback_filing SET attempt = attempt + 1, lease_until = NULL
+ WHERE state = 'FILING';
+INSERT INTO agent_action (id, kind, lane_key, idempotency_key, state, payload, subject_account_id, max_attempts,
+  next_attempt_at, created_at, updated_at)
+SELECT uuidv7(), 'FILE_ISSUE', 'file_issue:' || f.feedback_id, 'file_issue:' || f.feedback_id || ':' || f.attempt,
+       'ADMITTED',
+       jsonb_build_object(
+         'feedbackId', f.feedback_id, 'generation', f.attempt,
+         'repository', jsonb_build_object('id', f.repository_id, 'nodeId', f.repository_node_id,
+           'fullName', f.repository, 'installationId', f.installation_id, 'isPrivate', f.route IS DISTINCT FROM 'PUBLIC'),
+         'since', to_char(f.first_attempt_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+         'issue', NULL),
+       p.account_id, 5, clock_timestamp(), clock_timestamp(), clock_timestamp()
+  FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
+ WHERE f.state = 'FILING' AND f.repository_id IS NOT NULL AND f.repository_node_id IS NOT NULL
+   AND f.repository IS NOT NULL AND f.installation_id IS NOT NULL AND f.first_attempt_at IS NOT NULL;
+UPDATE product_feedback_filing SET state = 'QUEUED', next_attempt_at = clock_timestamp()
+ WHERE state = 'FILING' AND (repository_id IS NULL OR repository_node_id IS NULL OR repository IS NULL
+   OR installation_id IS NULL OR first_attempt_at IS NULL);
+]]></sql></changeSet>
+</databaseChangeLog>

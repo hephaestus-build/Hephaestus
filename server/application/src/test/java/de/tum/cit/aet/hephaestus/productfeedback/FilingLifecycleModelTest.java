@@ -137,8 +137,7 @@ class FilingLifecycleModelTest {
     }
 
     private static void filing(World w, List<Step> out) {
-        // A lease that ends takes the row over; a row that may have written is only ever reconciled.
-        out.add(new Step("lease ends", w.with(Event.FILING_CLAIMED)));
+        // The outbox owns the write; a row that may have written is only ever reconciled by its marker.
         if (!w.has(Fact.ATTEMPTED)) {
             out.add(new Step("write succeeds", w.written().with(Event.FILED)));
             out.add(new Step("write answer is lost", w.written().set(Fact.UNCLEAR, true)));

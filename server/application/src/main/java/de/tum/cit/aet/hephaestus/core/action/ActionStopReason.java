@@ -21,8 +21,10 @@ public enum ActionStopReason {
     ATTEMPTS_EXHAUSTED,
     /** It was no longer timely before an attempt started. */
     EXPIRED,
+    /** A readback proved that the effect does not exist, and nothing should create it now. */
+    ABSENT,
     /** A write may have reached the provider, and the outcome is unknown. */
     WRITE_UNCONFIRMED,
-    /** The lease expired after a write may have started, and the kind cannot read back. */
+    /** The lease expired after a write may have started, and no attempt may follow. */
     LEASE_LOST_AFTER_WRITE
 }

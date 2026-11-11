@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -38,9 +39,9 @@ public class CleanupRecords {
                     filing.getFirstAttemptAt() == null ? now.minusSeconds(3600) : filing.getFirstAttemptAt(),
                     now);
             record.setIssueNodeId(filing.getIssueNodeId());
-            // An in-flight write can still land; reconcile only after its deadline has passed.
-            Instant lease = filing.getLeaseUntil();
-            if (lease != null && lease.isAfter(now)) record.setNextAttemptAt(lease.plusSeconds(60));
+            // The report's file_issue action may still be writing; reconcile only after its lease has passed.
+            if (filing.getState() == FilingState.FILING)
+                record.setNextAttemptAt(now.plus(ActionExecutor.LEASE).plusSeconds(60));
             cleanups.save(record);
         }
     }
