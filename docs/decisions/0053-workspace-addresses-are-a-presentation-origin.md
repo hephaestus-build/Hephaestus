@@ -5,6 +5,7 @@
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md) (cookie session),
 [ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) (sign-in handoff)
+**Amended by:** [ADR 0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md)
 
 ## Context
 

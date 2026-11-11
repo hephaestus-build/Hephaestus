@@ -1,6 +1,6 @@
 # ADR 0058: The Helm chart is the only supported deployment from 1.0
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md)
 **Date:** 2026-10-25
 **Authors:** Felix T.J. Dietrich
 
