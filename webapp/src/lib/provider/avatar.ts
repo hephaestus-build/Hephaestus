@@ -19,16 +19,3 @@ export function getWorkspaceAvatarUrl(
 	// bogus link.
 	return null;
 }
-
-/**
- * Returns the avatar URL for a team.
- *
- * - GitHub: public avatar via `avatars.githubusercontent.com/t/<id>`
- * - GitLab: returns `null` (fallback to initials).
- */
-export function getTeamAvatarUrl(provider: ProviderType, teamId: number): string | null {
-	if (provider === "GITHUB") {
-		return `https://avatars.githubusercontent.com/t/${teamId}?s=512&v=4`;
-	}
-	return null;
-}

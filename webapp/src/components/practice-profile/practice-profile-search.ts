@@ -218,7 +218,8 @@ const practiceProfileFilterSchema = z.object({
 	observationSince: z.enum(REVIEW_TIMEFRAMES).optional().catch(undefined),
 	feedbackCard: z.uuid().optional().catch(undefined),
 	observationWork: itemIdSchema.optional().catch(undefined),
-	// Free strings, for the reason `TraceKindFilter` gives; a link from before named one kind.
+	// Free strings: the server derives kinds from the registered integrations, so an unknown kind
+	// costs a 400 the list reports instead of a filter quietly ignored. A link from before named one kind.
 	reviewKind: multiValue.transform((values) =>
 		nonEmpty(
 			(values ?? []).filter((kind) => kind.length > 0 && kind.length <= REVIEW_FILTER_MAX_LENGTH),

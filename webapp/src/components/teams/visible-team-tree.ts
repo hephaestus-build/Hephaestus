@@ -54,21 +54,3 @@ export function visibleTeamTree<TTeam extends TeamNode>(teams: TTeam[]): Visible
 	}
 	return { roots, childrenOf };
 }
-
-/**
- * Every team in the tree, parent before child, each named by its path so two "Backend" teams under
- * different parents stay apart: "Platform / Backend".
- */
-export function visibleTeamPaths<TTeam extends TeamNode>(
-	teams: TTeam[],
-): { team: TTeam; path: string }[] {
-	const { roots, childrenOf } = visibleTeamTree(teams);
-	const walk = (team: TTeam, parentPath?: string): { team: TTeam; path: string }[] => {
-		const path = parentPath === undefined ? team.name : `${parentPath} / ${team.name}`;
-		return [
-			{ team, path },
-			...(childrenOf.get(team.id) ?? []).flatMap((child) => walk(child, path)),
-		];
-	};
-	return roots.flatMap((root) => walk(root));
-}

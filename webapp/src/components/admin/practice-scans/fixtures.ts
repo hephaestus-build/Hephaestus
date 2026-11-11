@@ -51,12 +51,6 @@ export function fileRef(id: string, path: string, removedAt: Date | null = null)
 
 export const REPOSITORIES: ItemRef[] = [repositoryRef("300"), repositoryRef("301", "artemis")];
 
-export const ELIGIBLE_PRACTICES = [
-	{ slug: "error-handling", name: "Errors are handled where they occur" },
-	{ slug: "comment-quality", name: "Comments explain why" },
-	{ slug: "test-coverage", name: "Changed code is tested" },
-];
-
 export const COMPLETE_COUNTS: ScanCounts = {
 	files: 3,
 	practiceItemPairs: 6,

@@ -7,8 +7,6 @@ import type {
 	PracticeGroup,
 	PracticeReleaseProposal,
 	PracticeVersion,
-	ReviewBatch,
-	ReviewSchedule,
 } from "@/api/types.gen";
 import { definitionOf, mockScan } from "@/components/admin/practice-editor/fixtures";
 import type { FeedbackMode } from "@/lib/practice-feedback-mode";
@@ -22,53 +20,6 @@ export const mockAdmin: AccountRef = {
 	status: "ACTIVE",
 	identities: [{ provider: "GITHUB", login: "ada", displayName: "Ada Lovelace", avatarUrl: null }],
 };
-
-export function reviewSchedule(overrides: Partial<ReviewSchedule> = {}): ReviewSchedule {
-	return {
-		id: "22222222-2222-2222-2222-222222222222",
-		itemKind: "scm.pull_request",
-		cadence: "DAILY",
-		lookbackDays: 2,
-		budgetUsd: null,
-		enabled: true,
-		nextRunAt: new Date("2026-08-10T02:17:00Z"),
-		lastRunAt: new Date("2026-08-09T02:17:00Z"),
-		createdBy: mockAdmin,
-		createdAt: new Date("2026-08-01T09:00:00Z"),
-		updatedAt: new Date("2026-08-01T09:00:00Z"),
-		version: "0",
-		...overrides,
-	};
-}
-
-export function reviewBatch(overrides: Partial<ReviewBatch> = {}): ReviewBatch {
-	return {
-		id: "11111111-1111-1111-1111-111111111111",
-		itemKind: "scm.pull_request",
-		origin: "BACKFILL",
-		from: new Date("2026-07-08T00:00:00Z"),
-		to: new Date("2026-08-07T00:00:00Z"),
-		status: "AWAITING_CONFIRMATION",
-		pauseReason: null,
-		estimatedItems: 128,
-		estimatedCostUsd: "15.36",
-		budgetUsd: null,
-		submittedCount: 0,
-		skippedCount: 0,
-		failedCount: 0,
-		reviewIds: [],
-		scheduleId: null,
-		targetItemIds: "",
-		requestedBy: mockAdmin,
-		confirmedBy: null,
-		createdAt: new Date("2026-08-07T09:00:00Z"),
-		startedAt: null,
-		finishedAt: null,
-		etag: '"0"',
-		version: "0",
-		...overrides,
-	};
-}
 
 export function inheritedFeedbackMode(
 	effective: FeedbackMode = "AUTOMATIC",

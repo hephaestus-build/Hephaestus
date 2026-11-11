@@ -6,7 +6,7 @@ import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
 import { parseDocument } from "yaml";
 
 import { asArray, asRecord, asString, asStringArray, at } from "./lib/json.ts";
-import { releaseSignerIdentity, releaseSignerRepository } from "./lib/release-signer.ts";
+import { releaseSignerRepository } from "./lib/release-signer.ts";
 import { POSTGRES_IMAGE_INPUTS } from "./reconcile-deployment.ts";
 
 const release = readFileSync(".github/workflows/release.yml", "utf8");
@@ -192,21 +192,10 @@ await test("a host following commits watches every path CI rebuilds the database
 	assert.deepEqual(unconditional, ["all-images"]);
 });
 
-await test("derives the canonical signer identity and refuses missing CI identity", () => {
-	const canonicalRun = {
-		CI: "true",
-		GITHUB_SERVER_URL: "https://github.com",
-		GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
-	};
+await test("derives the signer repository and refuses missing CI identity", () => {
+	const canonicalRun = { CI: "true", GITHUB_REPOSITORY: "hephaestus-build/Hephaestus" };
 	assert.equal(releaseSignerRepository(canonicalRun), "hephaestus-build/Hephaestus");
-	assert.equal(
-		releaseSignerIdentity(canonicalRun),
-		"https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main",
-	);
-	assert.equal(
-		releaseSignerIdentity({}),
-		"https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main",
-	);
+	assert.equal(releaseSignerRepository({}), "hephaestus-build/Hephaestus");
 	assert.throws(() => releaseSignerRepository({ CI: "true" }), /GITHUB_REPOSITORY/u);
 });
 

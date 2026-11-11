@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getTeamAvatarUrl, getWorkspaceAvatarUrl } from "@/lib/provider/avatar";
+import { getWorkspaceAvatarUrl } from "@/lib/provider/avatar";
 
 describe("getWorkspaceAvatarUrl", () => {
 	it("returns GitHub avatar URL with login", () => {
@@ -17,17 +17,5 @@ describe("getWorkspaceAvatarUrl", () => {
 
 	it("returns null for GitLab (instance-specific, backend-provided)", () => {
 		expect(getWorkspaceAvatarUrl("GITLAB", "some-group")).toBeNull();
-	});
-});
-
-describe("getTeamAvatarUrl", () => {
-	it("returns GitHub team avatar URL with team ID", () => {
-		expect(getTeamAvatarUrl("GITHUB", 12_345)).toBe(
-			"https://avatars.githubusercontent.com/t/12345?s=512&v=4",
-		);
-	});
-
-	it("returns null for GitLab", () => {
-		expect(getTeamAvatarUrl("GITLAB", 12_345)).toBeNull();
 	});
 });

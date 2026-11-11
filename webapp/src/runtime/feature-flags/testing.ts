@@ -8,13 +8,6 @@ type FeatureFlags = Record<FeatureFlagName, boolean>;
  *
  * @example
  * ```ts
- * // In a test
- * vi.mocked(useFeatureFlag).mockReturnValue({
- *   enabled: true,
- *   isLoading: false,
- * });
- *
- * // For mocking the full flags endpoint
  * const flags = mockFeatureFlags({ ADMIN: true });
  * ```
  */

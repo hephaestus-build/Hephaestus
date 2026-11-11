@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
 	detailEntryState,
 	detailStackSchema,
-	encodeDetailStack,
 	openInStack,
 	parseDetailStack,
 	pushedLevels,
@@ -87,24 +86,6 @@ describe("openInStack", () => {
 			detail: ["feedback:a"],
 			pushed: true,
 		});
-	});
-});
-
-describe("encodeDetailStack", () => {
-	it("writes the wire form the schema reads back", () => {
-		const stack = [
-			{ kind: "group", id: "code-review" },
-			{ kind: "practice", id: "describe-what-and-why" },
-		];
-		expect(encodeDetailStack(stack)).toStrictEqual([
-			"group:code-review",
-			"practice:describe-what-and-why",
-		]);
-		expect(parseDetailStack(parse(encodeDetailStack(stack)), KINDS)).toStrictEqual(stack);
-	});
-
-	it("omits the param entirely when nothing is open, so a closed stack leaves no URL trace", () => {
-		expect(encodeDetailStack([])).toBeUndefined();
 	});
 });
 

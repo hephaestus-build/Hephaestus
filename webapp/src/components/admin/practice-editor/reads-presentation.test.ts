@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-	groupReadSources,
-	readSourceLabel,
-} from "@/components/admin/practice-editor/reads-presentation";
+import { groupReadSources } from "@/components/admin/practice-editor/reads-presentation";
 
 import { mockDefinitionOptions, mockDocumentItemType, mockPullRequestItemType } from "./fixtures";
 
@@ -41,14 +38,5 @@ describe("groupReadSources", () => {
 		]);
 
 		expect(groups.map((group) => group.family)).toStrictEqual(["other"]);
-	});
-});
-
-describe("readSourceLabel", () => {
-	it("uses the item type's own name, and the vocabulary's for a source it does not offer", () => {
-		expect(readSourceLabel("scm.pull-request.diff", mockPullRequestItemType.readSources)).toBe(
-			"Code changes",
-		);
-		expect(readSourceLabel("scm.pull-request.diff", [])).not.toBe("scm.pull-request.diff");
 	});
 });

@@ -129,22 +129,6 @@ export async function expectTargetSize(control: HTMLElement) {
 	await expect(rect.height).toBeGreaterThanOrEqual(MIN_TARGET_PX);
 }
 
-/** SC 2.5.8's *Spacing* exception: an undersized target passes when its 24 px circle hits no other. */
-export async function expectTargetSpacing(controls: HTMLElement[]) {
-	await expect(controls.length).toBeGreaterThan(0);
-	const centres = controls.map((control) => {
-		const rect = control.getBoundingClientRect();
-		return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-	});
-	for (const [index, centre] of centres.entries()) {
-		for (const other of centres.slice(index + 1)) {
-			await expect(Math.hypot(centre.x - other.x, centre.y - other.y)).toBeGreaterThanOrEqual(
-				MIN_TARGET_PX,
-			);
-		}
-	}
-}
-
 export async function expectWithinViewport(control: HTMLElement) {
 	const rect = control.getBoundingClientRect();
 	await expect(rect.top).toBeGreaterThanOrEqual(-LAYOUT_SLACK_PX);

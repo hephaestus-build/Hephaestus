@@ -170,10 +170,6 @@ export function jobProgress(job: Pick<SyncJob, "progress">): SyncJobProgress {
 	};
 }
 
-export function jobCurrentStep(job: Pick<SyncJob, "progress">): string | undefined {
-	return jobProgress(job).currentStep;
-}
-
 /**
  * Display names for the phase tokens `SyncPhase` emits. Unknown tokens are sentence-cased by
  * {@link phaseLabel} rather than dropped — an integration can add a phase without the UI shipping

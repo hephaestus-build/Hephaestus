@@ -18,7 +18,6 @@ const READS_OF_RESULT_MARKS: ReadonlySet<string> = new Set([
 	...PRACTICE_REVIEW_READS,
 	"listOwnResults",
 	"getOwnResult",
-	"getOwnResultSummary",
 	"getOwnPracticeStandings",
 	"getOwnGroupStandings",
 	"listOwnGroupReviews",

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { readSourceLabel } from "@/components/admin/practice-editor/reads-presentation";
 import {
 	WITHDRAWN_EVENT_LABEL,
 	withdrawnEvents,
@@ -28,9 +27,8 @@ describe("a value this build has no words for", () => {
 		expect(withdrawn?.label).toBe(WITHDRAWN_EVENT_LABEL);
 	});
 
-	it("names a read source generically, the same way in the editor and on the evidence", () => {
+	it("names a read source generically", () => {
 		expect(evidenceSourceDef("scm.future-source").label).toBe("Another source");
-		expect(readSourceLabel("scm.future-source", [])).toBe("Another source");
 	});
 
 	it("keeps a filter pill whose value the options cannot name, without printing the value", () => {
