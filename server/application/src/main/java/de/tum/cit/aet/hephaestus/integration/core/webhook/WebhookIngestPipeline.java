@@ -13,6 +13,9 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -209,7 +212,16 @@ public class WebhookIngestPipeline {
 
         JsonNode payload;
         try {
-            payload = objectMapper.readTree(body);
+            // Erasure reads the stored bytes as PostgreSQL UTF-8 text. Jackson's byte parser also accepts UTF-16/32.
+            String json = StandardCharsets.UTF_8
+                    .newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(body))
+                    .toString();
+            if (json.indexOf('\0') >= 0) return problem(HttpStatus.BAD_REQUEST, "invalid-json");
+            payload = objectMapper.readTree(json);
+            if (!postgresJsonText(payload)) return problem(HttpStatus.BAD_REQUEST, "invalid-json");
         } catch (Exception e) {
             return problem(HttpStatus.BAD_REQUEST, "invalid-json");
         }
@@ -276,6 +288,31 @@ public class WebhookIngestPipeline {
                 sanitizeForLog(dedupId),
                 stored);
         return ResponseEntity.accepted().body(Map.of("status", "ok"));
+    }
+
+    private static boolean postgresJsonText(JsonNode node) {
+        if (node.isString()) return postgresText(node.asString());
+        if (node.isObject()) {
+            for (var field : node.properties()) {
+                if (!postgresText(field.getKey()) || !postgresJsonText(field.getValue())) return false;
+            }
+        } else if (node.isArray()) {
+            for (JsonNode child : node) {
+                if (!postgresJsonText(child)) return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean postgresText(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            char value = text.charAt(i);
+            if (value == 0 || Character.isLowSurrogate(value)) return false;
+            if (Character.isHighSurrogate(value)) {
+                if (++i == text.length() || !Character.isLowSurrogate(text.charAt(i))) return false;
+            }
+        }
+        return true;
     }
 
     static ResponseEntity<ProblemDetail> busy() {

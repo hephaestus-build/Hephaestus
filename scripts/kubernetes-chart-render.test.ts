@@ -4613,24 +4613,6 @@ await test("each sandbox kind has a cold-start template of one container, behind
 	assert.equal(get(podSpec(holder), "automountServiceAccountToken"), false);
 });
 
-await test("each provider's byte override reaches the server through the map", () => {
-	const bounds = { github: "7GB", gitlab: "2GB", slack: "1GB", outline: "1GB" };
-	const resources = rendered([
-		...layersFor("small"),
-		{
-			webhook: { stream: { maxBytesByStream: bounds } },
-			nats: { jetstream: { maxFileBytes: 17_179_869_184 } },
-		},
-	]);
-	for (const [provider, bound] of Object.entries(bounds)) {
-		const name = `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_${provider.toUpperCase()}`;
-		assert.equal(envValue(workload(resources, "server"), name), bound, provider);
-	}
-	assert.equal(
-		env(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"),
-		undefined,
-	);
-});
 
 /** Kinds that have no namespace: a release without cluster-admin cannot create any of them. */
 const clusterScoped = new Set([

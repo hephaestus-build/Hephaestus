@@ -12,6 +12,9 @@ import org.jspecify.annotations.Nullable;
         "ArrayRecordComponent") // The payload is read once, by the handler that parses it; no caller compares events.
 public record ProviderEvent(String subject, Map<String, String> headers, byte[] payload, Instant receivedAt) {
 
+    /** Exact source namespace from the verified connection, retained after that connection is removed. */
+    public static final String SOURCE_SERVER_URL = "Hephaestus-Source-Server-Url";
+
     public ProviderEvent {
         headers = Map.copyOf(headers);
     }

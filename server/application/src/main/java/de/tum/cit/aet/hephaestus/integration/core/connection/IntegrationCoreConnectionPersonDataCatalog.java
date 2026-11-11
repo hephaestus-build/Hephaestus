@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -53,7 +54,9 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         400),
                 // A stored provider delivery copies the words and ids of the people it names. An erasure deletes each
                 // one whose payload names one of the person's identities of that provider: a GitHub or GitLab user
-                // object with the person's id, or a Slack or Outline id as a whole token. A leased event stays: its
+                // object with the person's id, a GitLab sender or item participant id, or a Slack or Outline id as a
+                // whole token.
+                // Names and email addresses do not prove an identity (PersonScope). A leased event stays: its
                 // handler stores what the delivery says under the same erasure, and its retention removes it. The
                 // export lists the deliveries, not their payloads.
                 new JdbcPersonDataStore(
@@ -64,15 +67,22 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         "t.state <> 'LEASED' AND EXISTS (SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb))"
                                 + " AS i(\"providerId\" bigint, subject text, \"teamId\" text)"
                                 + " JOIN identity_provider p ON p.id = i.\"providerId\""
-                                + " WHERE lower(p.type) = t.provider AND CASE"
+                                + " WHERE lower(p.type) = t.provider AND p.server_url = t.headers->>'"
+                                + ProviderEvent.SOURCE_SERVER_URL + "' AND CASE"
                                 // CASE, not AND: PostgreSQL evaluates CASE branches in order, so no cast meets a
                                 // subject or a payload that the guard refused.
                                 + " WHEN t.provider IN ('github', 'gitlab') THEN CASE"
                                 + " WHEN i.subject !~ '^[0-9]{1,18}$'"
                                 + " OR NOT pg_input_is_valid(convert_from(t.payload, 'UTF8'), 'jsonb') THEN false"
-                                + " ELSE jsonb_path_exists(CAST(convert_from(t.payload, 'UTF8') AS jsonb),"
+                                + " ELSE (jsonb_path_exists(CAST(convert_from(t.payload, 'UTF8') AS jsonb),"
                                 + " '$.** ? (@.id == $id && (exists(@.login) || exists(@.username)))',"
-                                + " jsonb_build_object('id', CAST(i.subject AS numeric))) END"
+                                + " jsonb_build_object('id', CAST(i.subject AS numeric)))"
+                                + " OR (t.provider = 'gitlab' AND jsonb_path_exists("
+                                + " CAST(convert_from(t.payload, 'UTF8') AS jsonb),"
+                                + " '$.** ? (@.user_id == $id || @.author_id == $id || @.assignee_id == $id"
+                                + " || @.merge_user_id == $id || @.updated_by_id == $id || @.last_edited_by_id == $id"
+                                + " || exists(@.assignee_ids ? (@ == $id)))',"
+                                + " jsonb_build_object('id', CAST(i.subject AS numeric))))) END"
                                 + " WHEN i.subject !~ '^[A-Za-z0-9-]{1,64}$' THEN false"
                                 + " WHEN t.provider = 'slack' AND i.\"teamId\" IS NOT NULL"
                                 + " AND split_part(t.subject, '.', 2) <> i.\"teamId\" THEN false"

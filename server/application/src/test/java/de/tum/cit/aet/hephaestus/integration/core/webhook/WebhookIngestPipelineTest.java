@@ -30,10 +30,13 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.slf4j.LoggerFactory;
@@ -275,6 +278,52 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
         assertProblem(resp, HttpStatus.BAD_REQUEST, "invalid-json");
         verify(publisher, never()).receive(any(), any(), any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @MethodSource("payloadsThatCannotBeStoredAsUtf8Text")
+    void shouldRejectPayloadsThatCannotBeReadAsPostgresUtf8Text(byte[] body) {
+        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+                List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
+                List.of(stubDeriver(IntegrationKind.GITHUB, "github.foo.bar.push", "github-uuid")),
+                publisher,
+                objectMapper);
+
+        var response = pipeline.handle(IntegrationKind.GITHUB, body, headers());
+
+        assertProblem(response, HttpStatus.BAD_REQUEST, "invalid-json");
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
+    }
+
+    private static Stream<byte[]> payloadsThatCannotBeStoredAsUtf8Text() {
+        return Stream.of(
+                "{}".getBytes(StandardCharsets.UTF_16),
+                "{}".getBytes(StandardCharsets.UTF_16BE),
+                "{}".getBytes(StandardCharsets.UTF_16LE),
+                new byte[] {0, 0, 0, '{', 0, 0, 0, '}'},
+                new byte[] {'{', 0, 0, 0, '}', 0, 0, 0},
+                new byte[] {'{', '}', 0},
+                "{\"x\":\"\\u0000\"}".getBytes(StandardCharsets.UTF_8),
+                "{\"\\u0000\":\"value\"}".getBytes(StandardCharsets.UTF_8),
+                "{\"x\":[{\"nested\":\"\\ud800\"}]}".getBytes(StandardCharsets.UTF_8),
+                "{\"x\":\"\\udc00\"}".getBytes(StandardCharsets.UTF_8),
+                new byte[] {'{', '"', 'x', '"', ':', '"', (byte) 0xc0, (byte) 0xaf, '"', '}'},
+                new byte[] {'{', '"', 'x', '"', ':', '"', (byte) 0xed, (byte) 0xa0, (byte) 0x80, '"', '}'});
+    }
+
+    @Test
+    void shouldKeepValidNonAsciiUtf8PayloadsUnchanged() {
+        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+                List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
+                List.of(stubDeriver(IntegrationKind.GITHUB, "github.foo.bar.push", "github-uuid")),
+                publisher,
+                objectMapper);
+        byte[] body = "{\"message\":\"Grüße 🌍 \\\\u0000\"}".getBytes(StandardCharsets.UTF_8);
+
+        var response = pipeline.handle(IntegrationKind.GITHUB, body, headers());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        verify(publisher).receive(any(), any(), any(), any(), eq(body));
     }
 
     @Test

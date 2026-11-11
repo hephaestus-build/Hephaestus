@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
@@ -84,11 +83,7 @@ public class WorkspaceEventSubscriptions implements ProviderEventSubscriptions {
                     .map(Workspace::getId)
                     .toList();
         }
-        return monitors.findAllWithWorkspaceByNameWithOwner(owner + "/" + tokens[2].replace('~', '.')).stream()
-                .map(RepositoryToMonitor::getWorkspace)
-                .filter(Objects::nonNull)
-                .map(Workspace::getId)
-                .toList();
+        return monitors.findWorkspaceIdsByNameWithOwner(owner + "/" + tokens[2].replace('~', '.'));
     }
 
     /** The subject filters of an active workspace in scope, or none. */

@@ -64,7 +64,7 @@ class WorkspaceEventSubscriptionsTest extends BaseUnitTest {
         lenient().when(monitor.getWorkspace()).thenReturn(workspace);
         lenient().when(workspace.getRepositoriesToMonitor()).thenReturn(Set.of(monitor));
         lenient().when(scope.isRepositoryAllowed("acme/app")).thenReturn(true);
-        lenient().when(monitors.findAllWithWorkspaceByNameWithOwner("acme/app")).thenReturn(List.of(monitor));
+        lenient().when(monitors.findWorkspaceIdsByNameWithOwner("acme/app")).thenReturn(List.of(WS));
         lenient().when(connections.findActiveProviderKind(WS)).thenReturn(Optional.of(IntegrationKind.GITHUB));
     }
 

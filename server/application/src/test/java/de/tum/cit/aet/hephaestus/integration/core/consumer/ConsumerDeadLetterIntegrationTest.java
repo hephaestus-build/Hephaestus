@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationCoreConnectionPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
@@ -23,7 +24,10 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -249,6 +253,61 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .containsExactlyInAnyOrder(numberOnly, otherUser);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"push", "tag_push.create", "tag_push.delete"})
+    void shouldEraseGitLabPushEventsByTheSendersProviderIdentity(String fixture) throws Exception {
+        long provider = Objects.requireNonNull(ensureGitLabProvider().getId());
+        String payload =
+                new ClassPathResource("gitlab/" + fixture + ".json").getContentAsString(StandardCharsets.UTF_8);
+        long named = dead(workspace.getId(), fixture, payload, "gitlab");
+        long otherUser = dead(workspace.getId(), "other-user", "{\"user_id\":900010}", "gitlab");
+        long otherProvider = dead(workspace.getId(), "other-provider", payload);
+        long otherSource = dead(workspace.getId(), "other-source", payload, "gitlab");
+        jdbc.update(
+                "UPDATE provider_event SET headers = jsonb_build_object(?, ?) WHERE id = ?",
+                ProviderEvent.SOURCE_SERVER_URL,
+                "https://other.gitlab.example.test",
+                otherSource);
+        var scope = new PersonScope(null, List.of(new PersonIdentity(provider, "90001", null)), List.of());
+        var events = store("provider_event");
+
+        var selected = events.select(scope);
+        transactions.executeWithoutResult(status -> events.erase(selected, scope));
+
+        assertThat(jdbc.queryForList(
+                        "SELECT id FROM provider_event WHERE id IN (?, ?, ?, ?)",
+                        Long.class,
+                        named,
+                        otherUser,
+                        otherProvider,
+                        otherSource))
+                .containsExactlyInAnyOrder(otherUser, otherProvider, otherSource);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {"author_id", "assignee_id", "merge_user_id", "updated_by_id", "last_edited_by_id", "assignee_ids"
+            })
+    void shouldEraseGitLabEventsThatNameThePersonAsAnItemParticipant(String field) {
+        long provider = Objects.requireNonNull(ensureGitLabProvider().getId());
+        String value = field.equals("assignee_ids") ? "[90001]" : "90001";
+        long named = dead(
+                workspace.getId(),
+                field,
+                "{\"user\":{\"id\":2,\"username\":\"other\"},\"object_attributes\":{\"" + field + "\":" + value + "}}",
+                "gitlab");
+        long entityOnly =
+                dead(workspace.getId(), "entity", "{\"object_attributes\":{\"id\":90001,\"iid\":90001}}", "gitlab");
+        var scope = new PersonScope(null, List.of(new PersonIdentity(provider, "90001", null)), List.of());
+        var events = store("provider_event");
+
+        var selected = events.select(scope);
+        transactions.executeWithoutResult(status -> events.erase(selected, scope));
+
+        assertThat(jdbc.queryForList("SELECT id FROM provider_event WHERE id IN (?, ?)", Long.class, named, entityOnly))
+                .containsExactly(entityOnly);
+    }
+
     private PersonDataContributor store(String name) {
         return privacy.contributors().stream()
                 .filter(candidate -> candidate.store().equals(name))
@@ -262,13 +321,17 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private long dead(@Nullable Long workspaceId, String marker, String payload) {
+        return dead(workspaceId, marker, payload, "github");
+    }
+
+    private long dead(@Nullable Long workspaceId, String marker, String payload, String provider) {
         String delivery = UUID.randomUUID().toString() + "-" + marker;
         store.store(List.of(new ProviderEventStore.Arrival(
                 workspaceId,
-                "github",
-                workspaceId == null ? "github.?.?.installation" : "github.acme.repo.issues",
+                provider,
+                workspaceId == null ? provider + ".?.?.installation" : provider + ".acme.repo.issues",
                 delivery,
-                Map.of(),
+                Map.of(ProviderEvent.SOURCE_SERVER_URL, "https://" + provider + ".com"),
                 payload.getBytes(StandardCharsets.UTF_8))));
         jdbc.update(
                 "UPDATE provider_event SET state = 'DEAD', ended_at = now(), error_class = 'com.example.Failure' "

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -60,7 +61,12 @@ class ProviderEventReceiverIntegrationTest extends BaseIntegrationTest {
         Workspace first = workspace("fanout-a", 20001L);
         Workspace second = workspace("fanout-b", 20002L);
 
-        assertThat(receiver.receive(IntegrationKind.GITHUB, SUBJECT, "github-d-1", Map.of(), BODY))
+        assertThat(receiver.receive(
+                        IntegrationKind.GITHUB,
+                        SUBJECT,
+                        "github-d-1",
+                        Map.of(ProviderEvent.SOURCE_SERVER_URL, "https://untrusted.example.test"),
+                        BODY))
                 .isEqualTo(2);
         assertThat(receiver.receive(IntegrationKind.GITHUB, SUBJECT, "github-d-1", Map.of(), BODY))
                 .as("GitHub keeps X-GitHub-Delivery on a redelivery")
@@ -69,6 +75,12 @@ class ProviderEventReceiverIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForList(
                         "SELECT workspace_id FROM provider_event WHERE delivery_key = 'github-d-1'", Long.class))
                 .containsExactlyInAnyOrder(first.getId(), second.getId());
+        assertThat(jdbc.queryForList(
+                        "SELECT headers->>? FROM provider_event WHERE delivery_key = ?",
+                        String.class,
+                        ProviderEvent.SOURCE_SERVER_URL,
+                        "github-d-1"))
+                .containsExactlyInAnyOrder("https://github.com", "https://github.com");
     }
 
     @Test

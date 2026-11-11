@@ -636,6 +636,8 @@ final class PersonErasureAllStoresFixture {
                 "github",
                 "subject",
                 "github.acme.app.issues",
+                "headers",
+                "{\"Hephaestus-Source-Server-Url\":\"https://github.com\"}",
                 "scope_key",
                 workspace + ":github.acme.app",
                 "payload",

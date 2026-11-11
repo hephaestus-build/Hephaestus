@@ -1,9 +1,13 @@
 package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.EventTraceContext;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderEventSubscriptions;
 import jakarta.annotation.PreDestroy;
@@ -41,6 +45,7 @@ public class ProviderEventReceiver {
 
     private final ProviderEventStore store;
     private final ProviderEventSubscriptions subscriptions;
+    private final ConnectionService connections;
     private final EventTraceContext traceContext;
     private final TransactionTemplate transactions;
     private final ExecutorService stores = Executors.newVirtualThreadPerTaskExecutor();
@@ -48,10 +53,12 @@ public class ProviderEventReceiver {
     public ProviderEventReceiver(
             ProviderEventStore store,
             ProviderEventSubscriptions subscriptions,
+            ConnectionService connections,
             EventTraceContext traceContext,
             TransactionTemplate transactions) {
         this.store = store;
         this.subscriptions = subscriptions;
+        this.connections = connections;
         this.traceContext = traceContext;
         this.transactions = transactions;
     }
@@ -101,10 +108,29 @@ public class ProviderEventReceiver {
             if (kind == IntegrationKind.GITHUB
                     && ConsumerSubjectMath.matchesFilter(
                             ConsumerSubjectMath.installationAwareSubjectFilter(kind), subject)) {
-                arrivals.add(new ProviderEventStore.Arrival(null, provider, subject, deliveryKey, stored, body));
+                var installationHeaders = new LinkedHashMap<>(stored);
+                installationHeaders.put(ProviderEvent.SOURCE_SERVER_URL, PersonSourceNamespace.GITHUB_DEFAULT_URL);
+                arrivals.add(new ProviderEventStore.Arrival(
+                        null, provider, subject, deliveryKey, installationHeaders, body));
             }
             for (long workspaceId : subscriptions.subscribers(subject)) {
-                arrivals.add(new ProviderEventStore.Arrival(workspaceId, provider, subject, deliveryKey, stored, body));
+                if (kind == IntegrationKind.GITHUB) {
+                    var workspaceHeaders = new LinkedHashMap<>(stored);
+                    workspaceHeaders.put(ProviderEvent.SOURCE_SERVER_URL, PersonSourceNamespace.GITHUB_DEFAULT_URL);
+                    arrivals.add(new ProviderEventStore.Arrival(
+                            workspaceId, provider, subject, deliveryKey, workspaceHeaders, body));
+                    continue;
+                }
+                connections.findActive(workspaceId, kind).ifPresent(connection -> {
+                    var source = PersonSourceNamespace.from(
+                                    kind.name(), SourceProviderNamespaces.configuredUrl(connection.getConfig()))
+                            .orElseThrow(() ->
+                                    new IllegalStateException("An active connection requires its source namespace"));
+                    var workspaceHeaders = new LinkedHashMap<>(stored);
+                    workspaceHeaders.put(ProviderEvent.SOURCE_SERVER_URL, source.serverUrl());
+                    arrivals.add(new ProviderEventStore.Arrival(
+                            workspaceId, provider, subject, deliveryKey, workspaceHeaders, body));
+                });
             }
             return store.store(arrivals);
         });

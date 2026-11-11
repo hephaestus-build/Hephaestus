@@ -5,6 +5,9 @@ page_type: explanation
 ---
 
 The receiver stores a verified delivery in `provider_event` in the request's transaction, and answers `202` after the commit.
+The receiver requires UTF-8 JSON without raw NUL bytes, so person erasure can read every stored payload as PostgreSQL text.
+Each stored row keeps the connection's exact source URL in `Hephaestus-Source-Server-Url`.
+The receiver sets that header from the connection, and person erasure matches its registered source namespace.
 It reads the subscriptions in the same transaction through `ProviderEventSubscriptions` and stores one row for each subscribing workspace.
 A GitHub App installation subject (`github.?.?.<event>`) also gets one row with a NULL workspace, because its handler can create the workspace.
 A subscription change is visible to every delivery that the receiver stores after the change commits.
