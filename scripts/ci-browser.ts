@@ -80,6 +80,8 @@ if (import.meta.main) {
 			"GITHUB_HEAD_REF",
 			"GITHUB_SHA",
 			"E2E_SERVER_URL",
+			"E2E_PORT",
+			"E2E_BASE_URL",
 			"E2E_WEB_APP_URL",
 		]) {
 			if (process.env[name] !== undefined) {
