@@ -726,6 +726,19 @@ await test("release cutovers distinguish major changes, first installs and an un
 	assert.equal(isMajorCutover("v1.0.0", "c".repeat(40), "1.0.0"), false);
 });
 
+await test("a host on a release candidate stops for its major's stable release", () => {
+	assert.equal(isMajorCutover("v1.0.0", "v1.0.0-rc.6", "1.0.0-rc.6"), true);
+	assert.equal(isMajorCutover("v1.0.0", undefined, "1.0.0-rc.6"), true);
+	assert.equal(isMajorCutover("v1.0.0", "v1.0.0-rc.6"), true);
+	// Between candidates, and from a stable release to the next, the upgrade is not a cutover.
+	assert.equal(isMajorCutover("v1.0.0-rc.7", "v1.0.0-rc.6", "1.0.0-rc.6"), false);
+	assert.equal(isMajorCutover("v1.0.1", "v1.0.0", "1.0.0"), false);
+	assert.equal(isMajorCutover("v2.0.0", "v2.0.0-rc.1", "2.0.0-rc.1"), true);
+	// A candidate of a patch or minor release is not the major's cutover.
+	assert.equal(isMajorCutover("v1.0.1", "v1.0.1-rc.1", "1.0.1-rc.1"), false);
+	assert.equal(isMajorCutover("v1.1.0", "v1.1.0-rc.2", "1.1.0-rc.2"), false);
+});
+
 await test("major cutovers order 9 and 10 numerically", () => {
 	assert.equal(isMajorCutover("v10.0.0", "v9.2.1", "9.2.1"), true);
 	assert.equal(isMajorCutover("v10.1.0", "v10.0.0", "10.0.0"), false);

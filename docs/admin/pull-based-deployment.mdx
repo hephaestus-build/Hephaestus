@@ -269,7 +269,9 @@ A tick before that applies your edited file to the source release and starts the
 
 The reconciler checks both its applied record and the installed chart version.
 For a major transition, it requires zero server and worker replicas in the installed values and no remaining writer workloads.
-It then applies the verified target chart with one server and zero workers.
+The step from a release candidate to its major's first stable release, such as `1.0.0-rc.6` to `1.0.0`, is a major transition too.
+
+After that check, the reconciler applies the verified target chart with one server and zero workers.
 If Helm finished before the applied record was written, the next tick checks the target identity and image pins.
 A matching deployed target completes its record without running the migration hooks again.
 This also applies after you restore the worker count.
