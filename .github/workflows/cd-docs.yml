@@ -10,6 +10,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - "docs/**"
+      - "scripts/docs-preview.ts"
       - "scripts/render-preview-comment.ts"
       - "scripts/publish-preview-comments.ts"
       - "scripts/lib/preview-comment.ts"
@@ -18,16 +19,17 @@ on:
       - ".github/workflows/cd-docs.yml"
   workflow_dispatch:
 
-concurrency:
-  group: docs-deploy-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.ref }}
-  cancel-in-progress: true
-
 permissions: {}
 
 jobs:
   build-preview:
     name: Build (preview)
     if: github.event_name == 'pull_request'
+    concurrency:
+      group: docs-preview-build-${{ github.event.number }}
+      cancel-in-progress: true
+    outputs:
+      docs-changed: ${{ steps.docs.outputs.changed }}
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
@@ -39,6 +41,13 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Detect documentation changes in this update
+        id: docs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { docsChanged } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/docs-preview.ts`);
+            core.setOutput("changed", docsChanged(context.payload));
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
@@ -72,6 +81,9 @@ jobs:
 
   build-production:
     name: Build (production)
+    concurrency:
+      group: docs-production-build-${{ github.ref }}
+      cancel-in-progress: true
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 15
     runs-on: ubuntu-latest
@@ -105,7 +117,11 @@ jobs:
   preview:
     name: PR Preview
     needs: build-preview
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.build-preview.outputs.docs-changed == 'true'
+    concurrency:
+      group: docs-preview-${{ github.event.number }}
+      cancel-in-progress: false
+      queue: max
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
@@ -114,6 +130,8 @@ jobs:
       statuses: write
     env:
       PREVIEW_URL: hephaestus-build-docs-pr-${{ github.event.number }}.surge.sh
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -129,35 +147,47 @@ jobs:
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
+      - name: Claim this head's preview deployment
+        id: claim
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { claimDocsPreview } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/docs-preview.ts`);
+            const decision = await claimDocsPreview({ github, repo: context.repo, pullNumber: context.issue.number, headSha: process.env.HEAD_SHA, runUrl: process.env.RUN_URL });
+            core.setOutput("deploy", decision.kind === "claimed");
+            await core.summary.addHeading("Docs preview").addRaw(decision.summary).write();
       - name: Deploy to Surge.sh
+        id: surge
+        if: steps.claim.outputs.deploy == 'true'
+        continue-on-error: true
         env:
           SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
         run: ./node_modules/.bin/surge ./docs-build "$PREVIEW_URL" --token "$SURGE_TOKEN"
+      - name: Report the preview outcome
+        if: ${{ always() && steps.claim.outputs.deploy == 'true' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SURGE_OUTCOME: ${{ steps.surge.outcome }}
+        with:
+          script: |
+            const { finishDocsPreview } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/docs-preview.ts`);
+            const result = await finishDocsPreview({ github, repo: context.repo, headSha: process.env.HEAD_SHA, runUrl: process.env.RUN_URL, previewUrl: `https://${process.env.PREVIEW_URL}`, outcome: process.env.SURGE_OUTCOME });
+            await core.summary.addHeading("Docs preview result").addRaw(result.summary).write();
+            if (result.state !== "success") core.warning(result.summary);
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        if: steps.claim.outputs.deploy == 'true' && steps.surge.outcome == 'success'
         env:
           PREVIEW_COMMENT_PATH: preview-comment/docs-preview-comment.json
         with:
           script: |
             const { publishPreviewComments } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/publish-preview-comments.ts`);
             await publishPreviewComments({ github, context, kind: "docs", path: process.env.PREVIEW_COMMENT_PATH });
-      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          TARGET_URL: https://${{ env.PREVIEW_URL }}
-        with:
-          script: |
-            const sha = context.payload.pull_request?.head?.sha || context.sha;
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: sha,
-              state: 'success',
-              target_url: process.env.TARGET_URL,
-              description: 'Click Details to view Docs Preview',
-              context: 'Preview / Docs'
-            });
 
   deploy:
     name: GitHub Pages
+    concurrency:
+      group: docs-production-deploy-${{ github.ref }}
+      cancel-in-progress: false
     needs: build-production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 15
