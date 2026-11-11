@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "@/lib/toast";
 
 import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
+import { problemType } from "@/lib/problem-detail";
 import { ownMembership } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
@@ -129,6 +130,33 @@ describe("useWorkspaceDangerZone", () => {
 			WAIT,
 		);
 		screen.getByRole("alertdialog");
+	});
+
+	it("asks for a recent sign-in instead of reporting a failure, and replaces the confirmation", async () => {
+		server.use(
+			membershipHandler("OWNER"),
+			http.delete("*/workspaces/demo", () =>
+				HttpResponse.json(
+					{
+						status: 403,
+						title: "Confirm access",
+						detail: "This action requires a recent sign-in.",
+						type: problemType("step-up-required"),
+						maxAgeSeconds: 300,
+					},
+					{ status: 403 },
+				),
+			),
+		);
+		await renderContainer();
+
+		fireEvent.change(await openDialog(), { target: { value: "demo" } });
+		fireEvent.click(confirmButton());
+
+		const ask = await screen.findByRole("dialog", { name: "Confirm access" }, WAIT);
+		expect(ask.textContent).toContain("sign-in from the last 5 minutes");
+		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull(), WAIT);
+		expect(toast.error).not.toHaveBeenCalled();
 	});
 
 	it("does not guess the role while permissions load", async () => {

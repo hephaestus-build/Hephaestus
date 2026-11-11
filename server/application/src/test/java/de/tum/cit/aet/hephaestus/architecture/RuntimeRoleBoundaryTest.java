@@ -97,8 +97,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // The outbox executor runs on every server replica and nowhere else.
             Map.entry("de.tum.cit.aet.hephaestus.core.action.ActionExecutor", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailAdminController", RuntimeRole.SERVER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.notification.AccountDeletionEmailListener", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.notification.NotificationPublicationConfiguration",

@@ -9,11 +9,10 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
-import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
+import de.tum.cit.aet.hephaestus.core.event.AccountDeletionRequestedEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
@@ -34,7 +33,6 @@ public class AccountService {
     private final IdentityRepository identityRepository;
     private final SessionRevocation sessionRevocation;
     private final AuthEventLogger authEventLogger;
-    private final AuthProperties authProperties;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
     private final GitProviderRegistry providers;
@@ -44,7 +42,6 @@ public class AccountService {
             IdentityRepository identityRepository,
             SessionRevocation sessionRevocation,
             AuthEventLogger authEventLogger,
-            AuthProperties authProperties,
             ApplicationEventPublisher eventPublisher,
             Clock clock,
             GitProviderRegistry providers) {
@@ -52,7 +49,6 @@ public class AccountService {
         this.identityRepository = identityRepository;
         this.sessionRevocation = sessionRevocation;
         this.authEventLogger = authEventLogger;
-        this.authProperties = authProperties;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
         this.providers = providers;
@@ -69,11 +65,10 @@ public class AccountService {
     }
 
     /**
-     * GDPR Art. 17 soft-delete: status → DELETING + deleted_at (start of the cooldown window), and
-     * revoke all sessions immediately. Once {@code deleted_at} is older than {@code
-     * hephaestus.auth.delete-cooldown} (default 48h), {@link AccountHardDeleteSweeper} purges the
-     * account's personal/auth child rows (identity, account_feature, issued_jwt, account_export)
-     * and flips the row to DELETED. Retained, lawful-basis audit data (auth_event, Art. 30) and the
+     * GDPR Art. 17 deletion of the person's own account: status {@code DELETING}, {@code deleted_at}, and every
+     * session revoked, in one step. Once this commits, {@link AccountHardDeleteSweeper} purges the account at once,
+     * and its hourly sweep retries a purge that did not finish. There is no undo window: the person confirmed with a
+     * recent sign-in, and nothing remains to stop. Retained, lawful-basis audit data (auth_event, Art. 30) and the
      * read-only git-activity mirror (Art. 17(3)) are intentionally kept.
      */
     @Transactional
@@ -83,25 +78,19 @@ public class AccountService {
         sessionRevocation.lockAccount(accountId);
         Account account = requireById(accountId);
         if (account.getStatus() == Account.Status.DELETING || account.getStatus() == Account.Status.DELETED) {
-            // Idempotent: only ACTIVE/BLOCKED → DELETING starts the Art.17 cooldown. A
-            // re-invocation
-            // must NOT reset deleted_at (restarting the 48h purge clock) or re-emit
-            // ACCOUNT_DELETED.
+            // Idempotent: only ACTIVE/BLOCKED → DELETING records ACCOUNT_DELETED and asks for the purge once.
             return;
         }
-        Instant deletedAt = clock.instant();
         account.setStatus(Account.Status.DELETING);
-        account.setDeletedAt(deletedAt);
+        account.setDeletedAt(clock.instant());
         accountRepository.save(account);
         sessionRevocation.revokeAccount(accountId, IssuedJwt.RevokedReason.ACCOUNT_DELETED, null, null);
         authEventLogger
                 .event(AuthEvent.EventType.ACCOUNT_DELETED, AuthEvent.Result.SUCCESS)
                 .account(accountId)
                 .record();
-        // Same transaction as the status flip: the confirmation email is only owed once the
-        // cooldown really started, and the registry row commits with it.
-        eventPublisher.publishEvent(
-                new AccountDeletionScheduledEvent(accountId, deletedAt.plus(authProperties.deleteCooldown())));
+        // Same transaction as the status flip: the purge runs only once the deletion committed.
+        eventPublisher.publishEvent(new AccountDeletionRequestedEvent(accountId));
     }
 
     /**

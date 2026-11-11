@@ -3,12 +3,12 @@
 import { client } from '../client.gen.js';
 import type { RequestResult } from '../client/index.js';
 import type { Options } from '../sdk.gen.js';
-import type { PurgeWorkspaceData, PurgeWorkspaceResponses } from '../types.gen.js';
+import type { PurgeWorkspaceData, PurgeWorkspaceErrors, PurgeWorkspaceResponses } from '../types.gen.js';
 
 /**
  * Permanently delete a workspace and purge its data
  */
-export const purgeWorkspace = <ThrowOnError extends boolean = false>(options: Options<PurgeWorkspaceData, ThrowOnError>): RequestResult<PurgeWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).delete<PurgeWorkspaceResponses, unknown, ThrowOnError>({
+export const purgeWorkspace = <ThrowOnError extends boolean = false>(options: Options<PurgeWorkspaceData, ThrowOnError>): RequestResult<PurgeWorkspaceResponses, PurgeWorkspaceErrors, ThrowOnError> => (options.client ?? client).delete<PurgeWorkspaceResponses, PurgeWorkspaceErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/workspaces/{workspaceSlug}',
     ...options

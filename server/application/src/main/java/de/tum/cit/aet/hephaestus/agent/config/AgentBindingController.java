@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.config;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -78,6 +79,7 @@ public class AgentBindingController {
         return ResponseEntity.ok(dto(binding, routing.servedTiers(workspaceContext.id())));
     }
 
+    @RecentSignInExempt(reason = "a workspace admin can bind the model again")
     @DeleteMapping("/{purpose}")
     @Operation(summary = "Remove the agent for one purpose (turn it off)")
     @ApiResponse(responseCode = "204", description = "Binding removed")

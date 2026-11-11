@@ -1,15 +1,15 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { currentUser } from "@/mocks/fixtures/auth";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, loadRouteCode, renderRouteAt } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => loadRouteCode("/settings", "/login"), ROUTE_RENDER_WAIT.timeout);
 
 const realLocation = window.location;
 
@@ -87,7 +87,7 @@ describe("account deletion on the settings page", () => {
 
 		await waitFor(() => expect(assigned).toStrictEqual(["/login"]));
 		const notice = await signInPageNotice();
-		expect(notice?.textContent).toContain("Your account is scheduled for deletion");
+		expect(notice?.textContent).toContain("Your account is deleted");
 	});
 
 	it("does not show the notice to another person who signs in and out in the same tab", async () => {

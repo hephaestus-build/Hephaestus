@@ -73,7 +73,6 @@ class EmailRendererTest extends BaseUnitTest {
                                 "https://github.com/example/feedback/issues/1",
                                 "publicIssue",
                                 true);
-                    case ACCOUNT_DELETION_SCHEDULED -> Map.of("purgeAfter", "14 September 2026 at 10:00 UTC");
                     case ACCOUNT_SECURITY_CHANGED ->
                         Map.of("change", "A sign-in identity is now linked to your account.");
                     case WORKSPACE_ALERT ->
@@ -101,7 +100,7 @@ class EmailRendererTest extends BaseUnitTest {
         if (kind.optional()) model.put("unsubscribeUrl", unsubscribeUrl);
         RenderedEmail rendered = renderer.render(kind, model);
         String actionPath = switch (kind) {
-            case TEST_MESSAGE, ACCOUNT_DELETION_SCHEDULED -> "";
+            case TEST_MESSAGE -> "";
             case ACCOUNT_SECURITY_CHANGED -> "/settings";
             case PRODUCT_FEEDBACK -> "/admin/feedback";
             case PRODUCT_FEEDBACK_UPDATE -> "/product-feedback";
@@ -161,22 +160,11 @@ class EmailRendererTest extends BaseUnitTest {
     @Test
     void shouldEscapeModelValuesInHtmlButNotInText() {
         RenderedEmail rendered =
-                renderer.render(EmailKind.ACCOUNT_DELETION_SCHEDULED, Map.of("purgeAfter", "<b>soon</b> & later"));
+                renderer.render(EmailKind.ACCOUNT_SECURITY_CHANGED, Map.of("change", "<b>soon</b> & later"));
 
         assertThat(rendered.html())
                 .contains("&lt;b&gt;soon&lt;/b&gt; &amp; later")
                 .doesNotContain("<b>soon</b>");
         assertThat(rendered.text()).contains("<b>soon</b> & later");
-    }
-
-    @Test
-    void shouldTellThePersonWhenThePurgeRuns() {
-        RenderedEmail rendered = renderer.render(
-                EmailKind.ACCOUNT_DELETION_SCHEDULED, Map.of("purgeAfter", "14 September 2026 at 10:00 UTC"));
-
-        assertThat(rendered.subject()).isEqualTo("Your Hephaestus account is scheduled for deletion");
-        assertThat(rendered.text())
-                .contains("After 14 September 2026 at 10:00 UTC")
-                .contains("You cannot undo this yourself");
     }
 }

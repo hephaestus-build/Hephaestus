@@ -173,7 +173,7 @@ Therefore a registry redelivery still needs an idempotency rule; the framework c
 | `SlackWeeklyDigestPointer.on` | Uses the stored message claim and receipt; uncertain sends are reconciled from Slack history rather than posted again. |
 | `ProviderTeardown.on` | Connection lock, credentials generation and pending teardown state fence the work. Provider teardown calls retain their external-effect limitation. |
 | `ExportGenerationWorker.on` | Locks the export row and assembles only a pending export; bundle and ready state commit together. |
-| `AccountDeletionEmailListener.on` | Checks expiry and the verified contact. SMTP delivery can repeat after a crash. |
+| `AccountHardDeleteSweeper.on` | The erasure locks the account and its request and skips each store that it already erased. A purge that does not finish stays `DELETING` for the hourly sweep. |
 | `AccountSecurityEmailListener.on` | Resolves the security-event recipient and sends SMTP outside a transaction; delivery can repeat after a crash. |
 | `ProductFeedbackEmailListener.on` | Checks the feedback, expiry and subscription. SMTP delivery can repeat after a crash. |
 | `ProductFeedbackUpdateEmailListener.on` | Checks the feedback update, expiry and subscription. SMTP delivery can repeat after a crash. |

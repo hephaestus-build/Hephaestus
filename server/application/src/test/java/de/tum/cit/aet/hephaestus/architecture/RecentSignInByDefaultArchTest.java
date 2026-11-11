@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 
 /**
  * Every instance-admin mutation, and every workspace role mutation, must declare whether it needs a recent
@@ -67,6 +68,30 @@ class RecentSignInByDefaultArchTest extends HephaestusArchitectureTest {
     }
 
     /**
+     * A delete is where a re-authentication matters most when it cannot be undone, so every delete handler records
+     * the decision: {@link RequiresRecentSignIn} for one that removes an account or a workspace for good,
+     * {@link RecentSignInExempt} with the reason for one that can be added back.
+     */
+    @Test
+    void everyDeleteHandlerDeclaresItsRecentSignInStatus() {
+        List<String> undeclared = classes.stream()
+                .filter(AuditByDefaultArchTest::isController)
+                .flatMap(c -> c.getMethods().stream())
+                .filter(m -> m.isAnnotatedWith(DeleteMapping.class))
+                .filter(m -> !m.isAnnotatedWith(RequiresRecentSignIn.class)
+                        && !m.isAnnotatedWith(RecentSignInExempt.class)
+                        && !m.getOwner().isAnnotatedWith(RecentSignInExempt.class))
+                .map(RecentSignInByDefaultArchTest::name)
+                .sorted()
+                .toList();
+
+        assertThat(undeclared).as("""
+                These delete handlers declare neither @RequiresRecentSignIn nor @RecentSignInExempt. One that \
+                removes something for good, such as an account or a workspace, declares @RequiresRecentSignIn; one \
+                whose effect can be undone declares @RecentSignInExempt(reason="…").""").isEmpty();
+    }
+
+    /**
      * {@link RequiresRecentSignIn.When#OWNER_CHANGE} leaves the decision to the workspace membership service, so
      * on any other endpoint it would ask for nothing.
      */
@@ -98,18 +123,35 @@ class RecentSignInByDefaultArchTest extends HephaestusArchitectureTest {
         List<String> unrecordable = classes.stream()
                 .filter(AuditByDefaultArchTest::isController)
                 .flatMap(c -> c.getMethods().stream())
-                .filter(m -> Optional.ofNullable(
-                                AnnotatedElementUtils.findMergedAnnotation(m.reflect(), RequiresRecentSignIn.class))
-                        .filter(a -> a.value() == RequiresRecentSignIn.When.EVERY_CALL)
-                        .isPresent())
-                .flatMap(m -> malformedReason(m).map(reason -> name(m) + ": " + reason).stream())
+                .flatMap(m -> unrecordableReason(m).map(reason -> name(m) + ": " + reason).stream())
                 .sorted()
                 .toList();
 
         assertThat(unrecordable).as("""
                 These @RequiresRecentSignIn endpoints cannot record a refusal. Each needs \
                 @Audited(ledger = AuditLedger.AUTH_EVENT, type = "…") naming an AuthEvent.EventType \
-                constant on the same method.""").isEmpty();
+                constant on the same method, or a refusal = "…" that names one beside an @Audited on any \
+                ledger.""").isEmpty();
+    }
+
+    /**
+     * Why a handler that asks on every call cannot record its refusal, or empty when it can. A {@code refusal}
+     * names only where the refusal goes, so the handler still needs an {@link Audited} for its successful calls.
+     */
+    static Optional<String> unrecordableReason(JavaMethod method) {
+        return Optional.ofNullable(
+                        AnnotatedElementUtils.findMergedAnnotation(method.reflect(), RequiresRecentSignIn.class))
+                .filter(a -> a.value() == RequiresRecentSignIn.When.EVERY_CALL)
+                .flatMap(a -> a.refusal().isEmpty() ? malformedReason(method) : refusalReason(method, a.refusal()));
+    }
+
+    private static Optional<String> refusalReason(JavaMethod method, String refusal) {
+        if (AnnotatedElementUtils.findMergedAnnotation(method.reflect(), Audited.class) == null) {
+            return Optional.of("refusal '" + refusal + "' without @Audited: its successful calls go unrecorded");
+        }
+        return AuditLedger.AUTH_EVENT.vocabulary().contains(refusal)
+                ? Optional.empty()
+                : Optional.of("refusal '" + refusal + "' is not an " + AuthEvent.EventType.class.getSimpleName());
     }
 
     private static Optional<String> malformedReason(JavaMethod method) {

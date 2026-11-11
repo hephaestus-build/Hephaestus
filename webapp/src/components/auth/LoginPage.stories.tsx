@@ -40,12 +40,12 @@ export const Default: Story = {
 	},
 };
 /** After the person deleted their own account: the notice stays until they leave the page. */
-export const AccountDeletionScheduled: Story = {
-	args: { notice: "account-deletion-scheduled" },
+export const AccountDeleted: Story = {
+	args: { notice: "account-deleted" },
 	play: async () => {
 		const notice = await screen.findByRole("note");
-		await expect(notice).toHaveTextContent("Your account is scheduled for deletion");
-		await expect(notice).toHaveTextContent("contact your instance operator");
+		await expect(notice).toHaveTextContent("Your account is deleted");
+		await expect(notice).toHaveTextContent("nobody can sign in to this account again");
 		await expect(screen.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
 	},
 };

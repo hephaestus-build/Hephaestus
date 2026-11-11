@@ -11,7 +11,9 @@ import type {
 	DangerZoneSectionProps,
 	DataExportState,
 } from "@/components/settings/DangerZoneSection";
+import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { saveBlobFile } from "@/lib/download";
+import { type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 import { recordAccountDeleted } from "@/runtime/auth/account-deleted-notice";
 import { useAuth } from "@/runtime/auth/AuthContext";
@@ -39,7 +41,6 @@ export function useAccountDangerZone({
 function useDataExport(): DangerZoneSectionProps["dataExport"] {
 	const [exportId, setExportId] = useState<number | null>(null);
 	const [requestedAt, setRequestedAt] = useState<number | null>(null);
-	const [downloading, setDownloading] = useState(false);
 
 	const requestExport = useMutation({
 		...requestDataExportMutation(),
@@ -91,39 +92,37 @@ function useDataExport(): DangerZoneSectionProps["dataExport"] {
 		state = "failed";
 	}
 
-	const download = async () => {
-		if (exportId === null) {
-			return;
-		}
-		setDownloading(true);
-		try {
-			const response = await downloadDataExport({ path: { id: exportId }, parseAs: "blob" });
-			// parseAs: "blob" yields a Blob at runtime even though the generated
-			// response type is `string`; normalise defensively for other shapes.
-			const payload: unknown = response.data;
-			let blob: Blob;
-			if (payload instanceof Blob) {
-				blob = payload;
-			} else if (typeof payload === "string") {
-				blob = new Blob([payload], { type: "application/json" });
-			} else {
-				blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-			}
-			saveBlobFile(blob, "hephaestus-export.json");
-		} catch {
+	const download = useMutation({
+		mutationFn: saveDataExport,
+		onError: () => {
 			toast.error("We could not download your export. Try again.");
-		}
-		setDownloading(false);
-	};
+		},
+	});
 
 	return {
 		state,
-		downloading,
+		downloading: download.isPending,
 		onRequest: () => requestExport.mutate({}),
 		onDownload: () => {
-			void download();
+			if (exportId !== null) {
+				download.mutate(exportId);
+			}
 		},
 	};
+}
+
+async function saveDataExport(exportId: number): Promise<void> {
+	const response = await downloadDataExport({
+		path: { id: exportId },
+		parseAs: "blob",
+		throwOnError: true,
+	});
+	// The SDK types this response as a string, although parseAs returns a Blob.
+	const payload: unknown = response.data;
+	if (!(payload instanceof Blob)) {
+		throw new Error("The data export response is not a file.");
+	}
+	saveBlobFile(payload, "hephaestus-export.json");
 }
 
 // The server requires the confirmation header to equal the caller's own account id
@@ -140,12 +139,20 @@ function useAccountDeletion(
 ): DangerZoneSectionProps["deletion"] {
 	const { getUserId } = useAuth();
 	const accountId = getUserId();
+	// Deleting an account cannot be undone, so the server asks for a recent sign-in instead of deleting.
+	const [challenge, setChallenge] = useState<StepUpChallenge>();
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
 	const deleteAccount = useMutation({
 		mutationFn: deleteOwnAccount,
 		onSuccess: async () => {
 			await onAccountDeleted();
 		},
-		onError: () => {
+		onError: (error) => {
+			const stepUp = stepUpChallengeOf(error);
+			if (stepUp !== undefined) {
+				setChallenge(stepUp);
+				return;
+			}
 			toast.error("We could not delete your account. Try again.");
 		},
 	});
@@ -156,6 +163,20 @@ function useAccountDeletion(
 			if (hasText(accountId)) {
 				deleteAccount.mutate(accountId);
 			}
+		},
+		confirmation: {
+			open: challenge !== undefined,
+			onOpenChange: (open) => {
+				if (!open) {
+					setChallenge(undefined);
+				}
+			},
+			maxAgeSeconds: challenge?.maxAgeSeconds,
+			providers: confirmAccess.providers,
+			loading: confirmAccess.loading,
+			error: confirmAccess.error,
+			onRetry: confirmAccess.retry,
+			onSignIn: confirmAccess.signIn,
 		},
 	};
 }

@@ -21,11 +21,10 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
-import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
+import de.tum.cit.aet.hephaestus.core.event.AccountDeletionRequestedEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -59,7 +58,6 @@ class AccountServiceTest extends BaseUnitTest {
                 identityRepository,
                 sessionRevocation,
                 new AuthEventLogger(auditWriter),
-                AuthPropertiesFixture.defaults(),
                 eventPublisher,
                 clock,
                 providers);
@@ -245,22 +243,20 @@ class AccountServiceTest extends BaseUnitTest {
         assertThat(event.getValue().accountId()).isEqualTo(2L);
         // Self-service deletion: the victim acted, so no separate operator is attributed.
         assertThat(event.getValue().actingAccountId()).isNull();
-        // The confirmation email is owed once the cooldown started: purge date = now + cooldown.
-        verify(eventPublisher)
-                .publishEvent(
-                        new AccountDeletionScheduledEvent(2L, clock.instant().plus(Duration.ofDays(2))));
+        // The purge follows the commit at once; there is no waiting period.
+        verify(eventPublisher).publishEvent(new AccountDeletionRequestedEvent(2L));
     }
 
     @Test
     void softDeleteIsIdempotentForAnAlreadyDeletingAccount() {
         Account account = accountWithRole(2L, Account.AppRole.USER);
         account.setStatus(Account.Status.DELETING);
-        Instant cooldownStart = Instant.parse("2025-12-01T00:00:00Z");
-        account.setDeletedAt(cooldownStart);
+        Instant deletedAt = Instant.parse("2025-12-01T00:00:00Z");
+        account.setDeletedAt(deletedAt);
 
         service.softDelete(2L);
 
-        assertThat(account.getDeletedAt()).isEqualTo(cooldownStart);
+        assertThat(account.getDeletedAt()).isEqualTo(deletedAt);
         verify(accountRepository, never()).save(any());
         verify(sessionRevocation, never()).revokeAccount(anyLong(), any(), any(), any());
         verifyNoInteractions(auditWriter, eventPublisher);

@@ -102,7 +102,20 @@ const defaultAiChoiceProps = {
 
 const dangerZoneProps = {
 	dataExport: { state: "idle", downloading: false, onRequest: fn(), onDownload: fn() },
-	deletion: { available: true, deleting: false, onDelete: fn() },
+	deletion: {
+		available: true,
+		deleting: false,
+		onDelete: fn(),
+		confirmation: {
+			open: false,
+			onOpenChange: fn(),
+			providers: [],
+			loading: false,
+			error: false,
+			onSignIn: fn(),
+			onRetry: fn(),
+		},
+	},
 } satisfies SettingsPageProps["dangerZoneProps"];
 
 const defaultSlackPreferencesProps = {

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -30,7 +31,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-// Set deletion times relative to the production clock and bound cooldown; overriding the clock would change selection.
 class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
 
     private static final String TOMBSTONE_DISPLAY_NAME = "deleted-account";
@@ -67,7 +67,7 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
     private Clock clock;
 
     @Autowired
-    private AuthProperties authProperties;
+    private AccountService accountService;
 
     @BeforeEach
     void cleanState() {
@@ -75,13 +75,12 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void sweepNow_pastCooldown_purgesChildrenClearsPiiAndFlipsToDeleted() {
+    void sweepNow_deletingAccount_purgesChildrenClearsPiiAndFlipsToDeleted() {
         Account account = newAccount("Ada Lovelace", "ada@example.com");
         account.setTimeZone("Europe/Berlin");
         Long id = persistedId(accountRepository.save(account).getId());
         seedChildRows(id);
-        // deleted_at = now - (cooldown + 1h) → strictly older than the cutoff → must be swept.
-        markDeleting(id, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofHours(1)));
+        markDeleting(id, clock.instant());
 
         assertThat(childRowCounts(id))
                 .as("precondition: all four child tables seeded")
@@ -91,9 +90,7 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
         int purged = sweeper.sweepNow();
 
         // Assert: return count + every observable side effect.
-        assertThat(purged)
-                .as("exactly one account past the cooldown was purged")
-                .isEqualTo(1);
+        assertThat(purged).as("exactly one deleting account was purged").isEqualTo(1);
 
         Account tombstone = accountRepository.findById(id).orElseThrow();
         assertThat(tombstone.getStatus())
@@ -113,29 +110,21 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void sweepNow_withinCooldown_leavesAccountAndChildrenIntact() {
+    void shouldPurgeAnAccountAsSoonAsItsOwnerDeletesIt() {
         Account account = newAccount("Grace Hopper", "grace@example.com");
         Long id = persistedId(account.getId());
         seedChildRows(id);
-        // One hour ago is inside the configured recovery window.
-        markDeleting(id, clock.instant().minus(Duration.ofHours(1)));
 
-        int purged = sweeper.sweepNow();
+        accountService.softDelete(id);
 
-        assertThat(purged)
-                .as("an account still in cooldown is excluded from the count")
-                .isZero();
-
-        Account stillDeleting = accountRepository.findById(id).orElseThrow();
-        assertThat(stillDeleting.getStatus()).as("status stays DELETING").isEqualTo(Account.Status.DELETING);
-        assertThat(stillDeleting.getDisplayName()).as("display_name untouched").isEqualTo("Grace Hopper");
-        assertThat(stillDeleting.getPrimaryEmail())
-                .as("primary_email untouched")
-                .isEqualTo("grace@example.com");
-
-        assertThat(childRowCounts(id))
-                .as("child rows are intact while in cooldown")
-                .containsExactly(1, 1, 1, 1);
+        // No sweep runs here: the purge follows the committed deletion on its own.
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(
+                                accountRepository.findById(id).orElseThrow().getStatus())
+                        .isEqualTo(Account.Status.DELETED));
+        assertThat(accountRepository.findById(id).orElseThrow().getPrimaryEmail())
+                .isNull();
+        assertThat(childRowCounts(id)).containsExactly(0, 0, 0, 0);
     }
 
     @Test
@@ -143,7 +132,7 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
         Account account = newAccount("Alan Turing", "alan@example.com");
         Long id = persistedId(account.getId());
         seedChildRows(id);
-        markDeleting(id, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofHours(1)));
+        markDeleting(id, clock.instant());
 
         // First sweep purges it.
         assertThat(sweeper.sweepNow()).isEqualTo(1);
@@ -163,29 +152,6 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void sweepNow_cutoffIsDrivenByDeleteCooldown_boundaryAccountsSplit() {
-        // One account is just past the configured cooldown and one is just inside it.
-        Account past = newAccount("Past Cutoff", "past@example.com");
-        Long pastId = persistedId(past.getId());
-        markDeleting(
-                pastId, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofMinutes(5)));
-
-        Account inside = newAccount("Inside Cutoff", "inside@example.com");
-        Long insideId = persistedId(inside.getId());
-        markDeleting(
-                insideId, clock.instant().minus(authProperties.deleteCooldown()).plus(Duration.ofMinutes(5)));
-
-        int purged = sweeper.sweepNow();
-
-        assertThat(purged)
-                .as("only the account older than the cooldown is swept")
-                .isEqualTo(1);
-        assertThat(accountRepository.findById(pastId).orElseThrow().getStatus()).isEqualTo(Account.Status.DELETED);
-        assertThat(accountRepository.findById(insideId).orElseThrow().getStatus())
-                .isEqualTo(Account.Status.DELETING);
-    }
-
-    @Test
     void sweepNow_anonymizesSubjectAndImpersonatorAuditRows() {
         Account account = newAccount("Erased User", "erased@example.com");
         Long erasedId = persistedId(account.getId());
@@ -200,8 +166,7 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                 "198.51.100.9",
                 "UA-B",
                 "{\"reason\":\"abuse\"}");
-        markDeleting(
-                erasedId, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofHours(1)));
+        markDeleting(erasedId, clock.instant());
 
         sweeper.sweepNow();
 
@@ -232,8 +197,7 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
         linkedLater.setProviderId(persistedId(provider.getId()));
         linkedLater.setProviderUserKey("77777");
         identityRepository.save(linkedLater);
-        markDeleting(
-                erasedId, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofHours(1)));
+        markDeleting(erasedId, clock.instant());
 
         sweeper.sweepNow();
 
@@ -251,8 +215,7 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                 newAccount("Retained", "retained-submissions@example.com").getId());
         UUID erasedFeedback = seedProductFeedback(erasedId);
         UUID retainedFeedback = seedProductFeedback(retainedId);
-        markDeleting(
-                erasedId, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofHours(1)));
+        markDeleting(erasedId, clock.instant());
 
         sweeper.sweepNow();
 

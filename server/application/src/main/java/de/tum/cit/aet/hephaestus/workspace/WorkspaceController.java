@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireWorkspaceOwner;
@@ -19,6 +20,7 @@ import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -65,8 +67,13 @@ public class WorkspaceController {
     @DeleteMapping
     @Operation(summary = "Permanently delete a workspace and purge its data")
     @ApiResponse(responseCode = "204", description = "Workspace purged")
+    @ApiResponse(
+            responseCode = "403",
+            description = "The caller has not signed in recently (problem type step-up-required), or is not an owner",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @RequireWorkspaceOwner
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_STATUS")
+    @RequiresRecentSignIn(refusal = "WORKSPACE_DELETION")
     public ResponseEntity<Void> purgeWorkspace(WorkspaceContext workspaceContext) {
         workspaceLifecycleService.purgeWorkspace(workspaceContext);
         return ResponseEntity.noContent().build();

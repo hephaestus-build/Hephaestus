@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.reviewoutput;
 
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
@@ -110,6 +111,7 @@ public class PracticeReviewOutputController {
         return ResponseEntity.status(201).body(presentation.mark(ws.id(), m));
     }
 
+    @RecentSignInExempt(reason = "removes a mark that a workspace admin can set again")
     @DeleteMapping("/results/{resultId}/marks/{markId}")
     @AuditExempt(reason = "The result mark records removal, actor and reason")
     @Operation(operationId = "removeResultMark", summary = "Remove a result mark")

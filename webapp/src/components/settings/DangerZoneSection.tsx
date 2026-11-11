@@ -1,6 +1,10 @@
 import { useState } from "react";
 
 import {
+	ConfirmAccessDialog,
+	type ConfirmAccessDialogProps,
+} from "@/components/auth/ConfirmAccessDialog";
+import {
 	AlertDialog,
 	AlertDialogAction,
 	AlertDialogCancel,
@@ -33,6 +37,8 @@ export interface DangerZoneSectionProps {
 		available: boolean;
 		deleting: boolean;
 		onDelete: () => void;
+		/** Shown when the server asks for a recent sign-in before it deletes the account. */
+		confirmation: ConfirmAccessDialogProps;
 	};
 }
 
@@ -109,7 +115,13 @@ function DataExportRow({
  * GDPR Art. 17 account deletion. Requires typing a confirmation phrase before the
  * destructive action enables.
  */
-function DeleteAccountRow({ available, deleting, onDelete }: DangerZoneSectionProps["deletion"]) {
+function DeleteAccountRow({
+	available,
+	deleting,
+	onDelete,
+	confirmation,
+}: DangerZoneSectionProps["deletion"]) {
+	const [open, setOpen] = useState(false);
 	const [confirmText, setConfirmText] = useState("");
 	const confirmed = confirmText.trim().toLowerCase() === DELETE_CONFIRM_PHRASE;
 
@@ -125,13 +137,17 @@ function DeleteAccountRow({ available, deleting, onDelete }: DangerZoneSectionPr
 				<h3 className="text-base font-medium">Delete account</h3>
 				<p className="text-sm leading-relaxed text-muted-foreground">
 					Permanently delete your account and erase your personal data (GDPR Art. 17). Hephaestus
-					signs you out on all devices at once, then deletes the account after a waiting period that
-					your instance operator sets. You cannot recover it from here.
+					signs you out on all devices and deletes the account at once. Nobody can recover it. If
+					Hephaestus posted feedback for you on GitHub, GitLab, or Slack, erasure finishes after
+					your instance operator removes those comments.
 				</p>
 			</div>
 			<AlertDialog
-				onOpenChange={(open) => {
-					if (!open) {
+				// The sign-in request replaces the confirmation while it is open.
+				open={open && !confirmation.open}
+				onOpenChange={(next) => {
+					setOpen(next);
+					if (!next) {
 						setConfirmText("");
 					}
 				}}
@@ -147,9 +163,8 @@ function DeleteAccountRow({ available, deleting, onDelete }: DangerZoneSectionPr
 					<AlertDialogHeader>
 						<AlertDialogTitle>Delete your account?</AlertDialogTitle>
 						<AlertDialogDescription>
-							This signs you out on all devices and disables your account. After a waiting period,
-							Hephaestus permanently deletes the account and your data. You cannot undo this from
-							here. To confirm, enter{" "}
+							This signs you out on all devices and permanently deletes your account at once. Nobody
+							can undo this. To confirm, enter{" "}
 							<span className="font-medium text-foreground">{DELETE_CONFIRM_PHRASE}</span> below.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
@@ -179,6 +194,7 @@ function DeleteAccountRow({ available, deleting, onDelete }: DangerZoneSectionPr
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+			<ConfirmAccessDialog {...confirmation} />
 		</div>
 	);
 }

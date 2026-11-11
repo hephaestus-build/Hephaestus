@@ -22,7 +22,6 @@ import org.springframework.web.util.UriComponentsBuilder;
  *                   and no Domain.
  * @param stateCookieKey Base64-encoded 32-byte AES key that seals the OAuth state and sign-in intent cookies.
  *                       Required outside development.
- * @param deleteCooldown interval during which a soft-deleted account can be restored
  * @param loginProviders initial login providers keyed by registration ID; seeding never overwrites
  *                       later administrator edits
  * @param bootstrapAdmins Identities that become instance admins when they sign in, as {@code provider:@username} or
@@ -50,7 +49,6 @@ public record AuthProperties(
         @DefaultValue("24h") Duration accessTtl,
         @DefaultValue(DEFAULT_COOKIE_NAME) String cookieName,
         @DefaultValue("") String stateCookieKey,
-        @DefaultValue("48h") Duration deleteCooldown,
         Map<String, LoginProviderSeed> loginProviders,
         @DefaultValue List<String> bootstrapAdmins,
         @DefaultValue("") String bootstrapToken,

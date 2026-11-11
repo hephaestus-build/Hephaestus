@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794344584684-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conrelid='public.auth_event'::regclass AND conname='ck_auth_event_event_type' AND contype='c'</sqlCheck>
+        </preConditions>
+        <comment>Preserve every existing audit event type and admit a workspace deletion that was refused for want of a recent sign-in.</comment>
+        <sql><![CDATA[
+ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'ACCOUNT_STATUS_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'WORKSPACE_OWNER_CHANGE', 'WORKSPACE_DELETION', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN')) NOT VALID;
+        ]]></sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $workspace_deletion_audit_rollback$
+BEGIN
+    IF EXISTS (SELECT 1 FROM auth_event WHERE event_type = 'WORKSPACE_DELETION') THEN
+        RAISE EXCEPTION 'Workspace deletion audit rows exist; retain the widened audit constraint';
+    END IF;
+    ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+    ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'ACCOUNT_STATUS_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'WORKSPACE_OWNER_CHANGE', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN')) NOT VALID;
+END
+$workspace_deletion_audit_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+    <changeSet id="1794344584684-2" author="hephaestus">
+        <comment>Check the existing audit rows in a later transaction, so the scan does not block audit writes.</comment>
+        <sql>ALTER TABLE auth_event VALIDATE CONSTRAINT ck_auth_event_event_type</sql>
+        <rollback/>
+    </changeSet>
+    <changeSet id="1794344584684-3" author="hephaestus">
+        <comment>Account deletion no longer sends a confirmation email, and its event class and email kind are gone. Remove its queued publications, which hold only an account id, and withdraw its waiting emails, so that no retry tries to read them.</comment>
+        <sql><![CDATA[
+DELETE FROM event_publication WHERE event_type = 'de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent';
+UPDATE agent_action
+   SET state = 'CANCELLED', stop_reason = 'WITHDRAWN', ended_at = CURRENT_TIMESTAMP, payload = NULL,
+       updated_at = CURRENT_TIMESTAMP
+ WHERE kind = 'EMAIL' AND state IN ('PROPOSED', 'ADMITTED') AND payload ->> 'kind' = 'ACCOUNT_DELETION_SCHEDULED';
+        ]]></sql>
+        <rollback/>
+    </changeSet>
+</databaseChangeLog>

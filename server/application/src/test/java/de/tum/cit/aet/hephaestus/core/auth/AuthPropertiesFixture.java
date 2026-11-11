@@ -89,7 +89,6 @@ public final class AuthPropertiesFixture {
                 Duration.ofHours(24),
                 AuthProperties.DEFAULT_COOKIE_NAME,
                 "",
-                Duration.ofHours(48),
                 providers,
                 List.of(),
                 "",

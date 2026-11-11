@@ -3,12 +3,12 @@
 import { client } from '../client.gen.js';
 import type { RequestResult } from '../client/index.js';
 import type { Options } from '../sdk.gen.js';
-import type { DeleteCurrentUserData, DeleteCurrentUserResponses } from '../types.gen.js';
+import type { DeleteCurrentUserData, DeleteCurrentUserErrors, DeleteCurrentUserResponses } from '../types.gen.js';
 
 /**
  * Delete the current account (GDPR Art. 17)
  */
-export const deleteCurrentUser = <ThrowOnError extends boolean = false>(options?: Options<DeleteCurrentUserData, ThrowOnError>): RequestResult<DeleteCurrentUserResponses, unknown, ThrowOnError> => (options?.client ?? client).delete<DeleteCurrentUserResponses, unknown, ThrowOnError>({
+export const deleteCurrentUser = <ThrowOnError extends boolean = false>(options?: Options<DeleteCurrentUserData, ThrowOnError>): RequestResult<DeleteCurrentUserResponses, DeleteCurrentUserErrors, ThrowOnError> => (options?.client ?? client).delete<DeleteCurrentUserResponses, DeleteCurrentUserErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/user',
     ...options
