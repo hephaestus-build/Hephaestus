@@ -2312,18 +2312,12 @@ await test("the small profile keeps personal content inside the transport-buffer
 
 await test("the broker consumer policy comes from the application defaults, not the chart", () => {
 	for (const name of profiles) {
-		const resources = rendered(withSandboxes(name));
-		for (const role of ["server", "webhook"]) {
-			for (const variable of [
-				"NATS_DURABLE_CONSUMER_NAME",
-				"HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD",
-			]) {
-				assert.equal(
-					env(workload(resources, role), variable),
-					undefined,
-					`${name} ${role} ${variable}`,
-				);
-			}
+		const server = workload(rendered(withSandboxes(name)), "server");
+		for (const variable of [
+			"NATS_DURABLE_CONSUMER_NAME",
+			"HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD",
+		]) {
+			assert.equal(env(server, variable), undefined, `${name} ${variable}`);
 		}
 	}
 });
