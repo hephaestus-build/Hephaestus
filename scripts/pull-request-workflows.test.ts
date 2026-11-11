@@ -35,7 +35,7 @@ const identityCommit = (login: string | null) => ({
 });
 
 void test("title preflight loads without dependencies and validates the current title on reruns", async (t) => {
-	const steps = await stepsIn(".github/workflows/pull-request.yml", [
+	const steps = await stepsIn(".github/workflows/pull-request-policy.yml", [
 		"jobs",
 		"validate-pr",
 		"steps",
@@ -58,7 +58,7 @@ void test("title preflight loads without dependencies and validates the current 
 		await copyFile(file, path.join(workspace, file));
 	}
 
-	const policy = steps.find((step) => step.get("id") === "policy");
+	const policy = steps.find((step) => step.get("id") === "title");
 	const script = policy?.getIn(["with", "script"]);
 	assert.equal(typeof script, "string");
 	const cases = [
@@ -78,28 +78,20 @@ void test("title preflight loads without dependencies and validates the current 
 				"--input-type=module",
 				"-e",
 				`
-			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 7, title: ${JSON.stringify(valid ? "fix!: stale invalid title" : "fix: stale valid title")} } } };
-			const github = { rest: { pulls: { get: async () => ({ data: { title: ${JSON.stringify(title)} } }) } } };
+			const assert = (await import("node:assert/strict")).default;
+			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 99, title: ${JSON.stringify(valid ? "fix!: stale invalid title" : "fix: stale valid title")} } } };
+			const github = { rest: { pulls: { get: async ({pull_number}) => { assert.equal(pull_number, 7); return { data: { title: ${JSON.stringify(title)} } }; } } } };
 			const outputs = {};
 			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; } };
 			${String(script)}
 		`,
 			],
-			{ encoding: "utf8", env: { ...process.env, GITHUB_WORKSPACE: workspace } },
+			{ encoding: "utf8", env: { ...process.env, GITHUB_WORKSPACE: workspace, PR_NUMBER: "7" } },
 		);
 		assert.equal(result.status, valid ? 0 : 1, `${title}: ${result.stderr}`);
 		assert.equal(result.stderr, "", title);
 	}
 
-	const validator = steps.find((step) => step.get("id") === "title");
-	assert.ok(validator);
-	assert.match(
-		String(validator.get("uses")),
-		/^amannn\/action-semantic-pull-request@[a-f0-9]{40}$/u,
-	);
-	for (const input of ["types", "scopes", "headerPattern", "subjectPattern"]) {
-		assert.equal(validator.getIn(["with", input]), `\${{ steps.policy.outputs.${input} }}`);
-	}
 	// The comment carries the validator's own message; a link to the run is not the reason.
 	const explanation = steps.find((step) => step.get("id") === "explain");
 	assert.ok(explanation);
@@ -114,11 +106,13 @@ void test("title preflight loads without dependencies and validates the current 
 	assert.equal(comment.getIn(["with", "path"]), `\${{ runner.temp }}/title-error.md`);
 });
 
-void test("PR metadata shares a lightweight runner without skipping policies after a failure", async () => {
-	const workflow = parseDocument(await readFile(".github/workflows/pull-request.yml", "utf8"));
+void test("the trusted policy checks every rule even after another rule fails", async () => {
+	const workflow = parseDocument(
+		await readFile(".github/workflows/pull-request-policy.yml", "utf8"),
+	);
 	assert.equal(workflow.getIn(["jobs", "validate-pr", "runs-on"]), "ubuntu-slim");
 	assert.equal(workflow.getIn(["jobs", "verify-commit-identity"]), undefined);
-	const steps = await stepsIn(".github/workflows/pull-request.yml", [
+	const steps = await stepsIn(".github/workflows/pull-request-policy.yml", [
 		"jobs",
 		"validate-pr",
 		"steps",
@@ -129,7 +123,7 @@ void test("PR metadata shares a lightweight runner without skipping policies aft
 });
 
 void test("commit identity accepts only the current author or a resolved listed maintainer", async (t) => {
-	const steps = await stepsIn(".github/workflows/pull-request.yml", [
+	const steps = await stepsIn(".github/workflows/pull-request-policy.yml", [
 		"jobs",
 		"validate-pr",
 		"steps",
@@ -252,9 +246,10 @@ void test("commit identity accepts only the current author or a resolved listed 
 			const assert = require("node:assert/strict");
 			const pages = ${JSON.stringify(entry.pages)};
 			let calls = 0;
-			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 7, user: { login: "stale-payload" }, base: { ref: "main" } } } };
+			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 99, user: { login: "stale-payload" }, base: { ref: "main" } } } };
 			const github = { graphql: async (query, variables) => {
 				assert.ok(query.includes("authors(first:1)"));
+				assert.equal(variables.number, 7);
 				assert.equal(variables.after, calls === 0 ? null : "page-" + calls);
 				const nodes = pages[calls++];
 				return { repository: { pullRequest: { author: { __typename: ${JSON.stringify(entry.type)}, login: ${JSON.stringify(entry.author)} }, commits: { nodes, pageInfo: { hasNextPage: calls < pages.length, endCursor: "page-" + calls } } } } };
@@ -271,6 +266,7 @@ void test("commit identity accepts only the current author or a resolved listed 
 					GITHUB_WORKSPACE: workspace,
 					RUNNER_TEMP: workspace,
 					MAINTAINERS: entry.maintainers,
+					PR_NUMBER: "7",
 				},
 			},
 		);
@@ -280,7 +276,7 @@ void test("commit identity accepts only the current author or a resolved listed 
 });
 
 void test("attribution checks current metadata and the complete commit list beyond the REST limit", async (t) => {
-	const steps = await stepsIn(".github/workflows/pull-request.yml", [
+	const steps = await stepsIn(".github/workflows/pull-request-policy.yml", [
 		"jobs",
 		"validate-pr",
 		"steps",
@@ -315,9 +311,9 @@ void test("attribution checks current metadata and the complete commit list beyo
 				"-e",
 				`
 			const assert = require("node:assert/strict");
-			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 7, title: "Generated with stale text", body: "Generated with stale text" } } };
+			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 99, title: "Generated with stale text", body: "Generated with stale text" } } };
 			const github = { rest: { pulls: {
-				get: async () => ({ data: { title: ${JSON.stringify(title)}, body: ${JSON.stringify(body)} } }),
+				get: async ({pull_number}) => { assert.equal(pull_number, 7); return { data: { title: ${JSON.stringify(title)}, body: ${JSON.stringify(body)} } }; },
 			} } };
 			const outputs = {};
 			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; } };
@@ -326,7 +322,12 @@ void test("attribution checks current metadata and the complete commit list beyo
 			],
 			{
 				encoding: "utf8",
-				env: { ...process.env, GITHUB_WORKSPACE: process.cwd(), RUNNER_TEMP: directory },
+				env: {
+					...process.env,
+					GITHUB_WORKSPACE: process.cwd(),
+					RUNNER_TEMP: directory,
+					PR_NUMBER: "7",
+				},
 			},
 		);
 		assert.equal(result.status, valid ? 0 : 1, result.stderr);
@@ -335,7 +336,7 @@ void test("attribution checks current metadata and the complete commit list beyo
 });
 
 void test("policy comments require a recorded violation, even when the API or another policy fails", async () => {
-	const steps = await stepsIn(".github/workflows/pull-request.yml", [
+	const steps = await stepsIn(".github/workflows/pull-request-policy.yml", [
 		"jobs",
 		"validate-pr",
 		"steps",
@@ -386,7 +387,7 @@ void test("policy comments require a recorded violation, even when the API or an
 });
 
 void test("unavailable PR metadata fails without claiming a policy violation", async (t) => {
-	const steps = await stepsIn(".github/workflows/pull-request.yml", [
+	const steps = await stepsIn(".github/workflows/pull-request-policy.yml", [
 		"jobs",
 		"validate-pr",
 		"steps",
@@ -419,7 +420,12 @@ void test("unavailable PR metadata fails without claiming a policy violation", a
 			],
 			{
 				encoding: "utf8",
-				env: { ...process.env, GITHUB_WORKSPACE: process.cwd(), RUNNER_TEMP: directory },
+				env: {
+					...process.env,
+					GITHUB_WORKSPACE: process.cwd(),
+					RUNNER_TEMP: directory,
+					PR_NUMBER: "7",
+				},
 			},
 		);
 		assert.equal(result.status, 0, `${id}: ${result.stderr}`);
