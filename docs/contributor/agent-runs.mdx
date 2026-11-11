@@ -48,6 +48,13 @@ It never rises into `INTERACTIVE`. Thus scheduled work waits a bounded time behi
 A run of a workspace that is not active is not offered.
 A queued run sends a PostgreSQL notification on the channel `agent_run`, which wakes an idle claimer.
 
+## Model call permits
+
+A model call takes a permit of its call pool (`llm_call_permit`) in the band of its work, with the same aging rule.
+Its aging is `hephaestus.agent.capacity.permit-aging` (30 seconds), because a call waits seconds where a run waits minutes.
+`LlmCallPermitRepository.grantRound` grants a round in one statement.
+[Runtime roles § Call pools](../admin/runtime-roles#call-pools) owns the grant order and the interactive reserve.
+
 ## Fence
 
 A holder writes under its `AgentRunFence`: the run, its workspace and the epoch of its claim.

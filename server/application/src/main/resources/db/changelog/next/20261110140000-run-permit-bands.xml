@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794319200705-1" author="hephaestus">
+        <comment>A model call permit carries the band of its call in place of its call class. A permit lives for one call, so each existing permit takes the band of its class: a conversation turn is interactive, a requested, event or composition call is batch, and a scheduled, backfill or product feedback call is background. An unknown class stays unmapped, and the new check then stops the change set. The rule that only a product feedback call has no workspace becomes: a call without a workspace is a background call.</comment>
+        <sql>ALTER TABLE llm_call_permit DROP CONSTRAINT IF EXISTS ck_llm_call_permit_workspace_by_class</sql>
+        <renameColumn tableName="llm_call_permit" oldColumnName="call_class" newColumnName="band" columnDataType="VARCHAR(16)"/>
+        <sql>UPDATE llm_call_permit SET band = CASE band WHEN 'TURN' THEN 'INTERACTIVE' WHEN 'REQUEST' THEN 'BATCH' WHEN 'EVENT' THEN 'BATCH' WHEN 'COMPOSITION' THEN 'BATCH' WHEN 'SCHEDULE' THEN 'BACKGROUND' WHEN 'BACKFILL' THEN 'BACKGROUND' WHEN 'PRODUCT_FEEDBACK' THEN 'BACKGROUND' ELSE band END</sql>
+        <sql>ALTER TABLE llm_call_permit ADD CONSTRAINT ck_llm_call_permit_band CHECK (band IN ('INTERACTIVE', 'BATCH', 'BACKGROUND') AND (workspace_id IS NOT NULL OR band = 'BACKGROUND'))</sql>
+        <rollback>
+            <sql>ALTER TABLE llm_call_permit DROP CONSTRAINT ck_llm_call_permit_band</sql>
+            <sql>UPDATE llm_call_permit SET band = CASE WHEN workspace_id IS NULL THEN 'PRODUCT_FEEDBACK' WHEN band = 'INTERACTIVE' THEN 'TURN' WHEN band = 'BATCH' THEN 'REQUEST' ELSE 'SCHEDULE' END</sql>
+            <renameColumn tableName="llm_call_permit" oldColumnName="band" newColumnName="call_class" columnDataType="VARCHAR(16)"/>
+            <sql>ALTER TABLE llm_call_permit ADD CONSTRAINT ck_llm_call_permit_workspace_by_class CHECK ((workspace_id IS NULL) = (call_class = 'PRODUCT_FEEDBACK'))</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

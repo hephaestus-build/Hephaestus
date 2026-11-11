@@ -403,7 +403,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
         var busy = create(slug("busy"), 4);
         var idle = create(slug("idle"), 4);
         jdbc.update(
-                "INSERT INTO llm_call_permit (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,granted_at,requests,tokens) VALUES (?,?,?, 'EVENT',1,?,0,'ACTIVE',clock_timestamp(),clock_timestamp(),clock_timestamp(),1,0)",
+                "INSERT INTO llm_call_permit (id,pool_id,worker_id,band,workspace_id,source_id,attempt,state,acquired_at,renewed_at,granted_at,requests,tokens) VALUES (?,?,?, 'BATCH',1,?,0,'ACTIVE',clock_timestamp(),clock_timestamp(),clock_timestamp(),1,0)",
                 UUID.randomUUID(),
                 busy.id(),
                 "busy-worker",
@@ -420,7 +420,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
         var pool = create(slug("closing"), 4);
         UUID call = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO llm_call_permit (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,granted_at,requests,tokens) VALUES (?,?,?, 'EVENT',1,?,0,'ACTIVE',clock_timestamp(),clock_timestamp(),clock_timestamp(),1,0)",
+                "INSERT INTO llm_call_permit (id,pool_id,worker_id,band,workspace_id,source_id,attempt,state,acquired_at,renewed_at,granted_at,requests,tokens) VALUES (?,?,?, 'BATCH',1,?,0,'ACTIVE',clock_timestamp(),clock_timestamp(),clock_timestamp(),1,0)",
                 call,
                 pool.id(),
                 "closing-worker",
@@ -468,7 +468,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     void shouldRemoveAnExpiredWaiterWhenDeletingAnIdlePool() {
         var pool = create(slug("expired-waiter"), 4);
         jdbc.update(
-                "INSERT INTO llm_call_permit (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,requests,tokens) VALUES (?,?,?, 'EVENT',1,?,0,'WAITING',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',0,0)",
+                "INSERT INTO llm_call_permit (id,pool_id,worker_id,band,workspace_id,source_id,attempt,state,acquired_at,renewed_at,requests,tokens) VALUES (?,?,?, 'BATCH',1,?,0,'WAITING',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',0,0)",
                 UUID.randomUUID(),
                 pool.id(),
                 "lost-waiter",
@@ -488,7 +488,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     void shouldAllowEditingAndDeletingAfterACrashedOwnersLeaseAndRateWindowExpire() {
         var pool = create(slug("crashed-owner"), 4);
         jdbc.update(
-                "INSERT INTO llm_call_permit (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,granted_at,requests,tokens) VALUES (?,?,?, 'EVENT',1,?,0,'ACTIVE',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',1,17)",
+                "INSERT INTO llm_call_permit (id,pool_id,worker_id,band,workspace_id,source_id,attempt,state,acquired_at,renewed_at,granted_at,requests,tokens) VALUES (?,?,?, 'BATCH',1,?,0,'ACTIVE',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',1,17)",
                 UUID.randomUUID(),
                 pool.id(),
                 "crashed-worker",

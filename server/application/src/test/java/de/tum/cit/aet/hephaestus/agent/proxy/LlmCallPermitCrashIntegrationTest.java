@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermit;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
@@ -12,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -77,6 +77,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                 rows,
                 transactions,
                 PROPERTIES,
+                LlmCallPermitsTestFixtures.PERMIT_AGING,
                 "survivor-" + UUID.randomUUID(),
                 meters,
                 mock(LlmModelResolver.class));
@@ -120,7 +121,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                 survivor.start();
                 try (var replacement = Objects.requireNonNull(survivor.acquire(
                         poolId,
-                        LlmCallClass.EVENT,
+                        AgentRunBand.BATCH,
                         new LlmCallPermits.Caller(2L, UUID.randomUUID(), 0, null),
                         () -> false,
                         Instant.now().plus(PROPERTIES.permitLease()).plusSeconds(3)))) {
@@ -168,6 +169,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                 rows,
                 transactions,
                 PROPERTIES,
+                LlmCallPermitsTestFixtures.PERMIT_AGING,
                 "survivor-" + UUID.randomUUID(),
                 new SimpleMeterRegistry(),
                 mock(LlmModelResolver.class));
@@ -222,7 +224,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                 survivor.start();
                 try (var replacement = Objects.requireNonNull(survivor.acquire(
                         poolId,
-                        LlmCallClass.EVENT,
+                        AgentRunBand.BATCH,
                         new LlmCallPermits.Caller(2L, UUID.randomUUID(), 0, null),
                         () -> false,
                         Instant.now().plus(PROPERTIES.permitLease()).plusSeconds(3)))) {
@@ -335,13 +337,14 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                         repositories.getRepository(LlmCallPermitRepository.class),
                         new TransactionTemplate(new JpaTransactionManager(entityManagerFactory)),
                         PROPERTIES,
+                        LlmCallPermitsTestFixtures.PERMIT_AGING,
                         "crashed-" + UUID.randomUUID(),
                         new SimpleMeterRegistry(),
                         mock(LlmModelResolver.class));
                 permits.start();
                 try (var permit = Objects.requireNonNull(permits.acquire(
                                 Long.parseLong(args[0]),
-                                LlmCallClass.EVENT,
+                                AgentRunBand.BATCH,
                                 new LlmCallPermits.Caller(1L, UUID.randomUUID(), 0, null),
                                 () -> false,
                                 Instant.now().plusSeconds(60)));

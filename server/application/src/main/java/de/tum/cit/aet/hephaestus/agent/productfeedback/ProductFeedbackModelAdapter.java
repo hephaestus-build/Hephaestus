@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.productfeedback;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.composer.ModelSession;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.proxy.UpstreamHeaders;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
@@ -34,9 +34,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Drafts product feedback with the operator's instance model, in the lowest model-call class. It holds a permit for
- * every physical call and closes it only after the response body is read or the transport is closed. Product
- * feedback validates and routes the answer; this adapter only carries it.
+ * Drafts product feedback with the operator's instance model, in the background band, after every other waiting call.
+ * It holds a permit for every physical call and closes it only after the response body is read or the transport is
+ * closed. Product feedback validates and routes the answer; this adapter only carries it.
  */
 @Component
 @ConditionalOnWorkerRole
@@ -114,7 +114,7 @@ class ProductFeedbackModelAdapter {
         var usage = new long[2];
         try (var permit = permits.acquire(
                 permits.poolFor(model.ref()),
-                LlmCallClass.PRODUCT_FEEDBACK,
+                AgentRunBand.BACKGROUND,
                 new LlmCallPermits.Caller(null, work.feedbackId(), work.attempt(), model.ref()),
                 ended,
                 work.deadline())) {

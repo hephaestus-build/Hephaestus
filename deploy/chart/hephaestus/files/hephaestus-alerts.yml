@@ -296,22 +296,23 @@ groups:
       # A conversation's reader waits for the answer, so its calls get a bound of seconds.
       - alert: HephaestusConversationModelWaitLong
         expr: >-
-          1 - sum by (pool) (increase(llm_pool_permit_wait_seconds_bucket{job="hephaestus",class=~"turn|product_feedback",le="5.0"}[15m]))
-          / sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",class=~"turn|product_feedback"}[15m]))
+          1 - sum by (pool) (increase(llm_pool_permit_wait_seconds_bucket{job="hephaestus",band="interactive",le="5.0"}[15m]))
+          / sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",band="interactive"}[15m]))
           > 0.1
-          and sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",class=~"turn|product_feedback"}[15m])) >= 10
+          and sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",band="interactive"}[15m])) >= 10
         labels:
           severity: warning
         annotations:
           summary: More than 10 % of a model's conversation calls waited over 5 seconds for a free call in 15 minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A review's calls queue by design. A call that waits two minutes holds its sandbox idle inside its deadline.
+      # Product feedback is a background call too, and it waits only for capacity that no other call waits for.
       - alert: HephaestusReviewModelWaitLong
         expr: >-
-          1 - sum by (pool) (increase(llm_pool_permit_wait_seconds_bucket{job="hephaestus",class!~"turn|product_feedback",le="120.0"}[1h]))
-          / sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",class!~"turn|product_feedback"}[1h]))
+          1 - sum by (pool) (increase(llm_pool_permit_wait_seconds_bucket{job="hephaestus",band!="interactive",le="120.0"}[1h]))
+          / sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",band!="interactive"}[1h]))
           > 0.25
-          and sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",class!~"turn|product_feedback"}[1h])) >= 20
+          and sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",band!="interactive"}[1h])) >= 20
         for: 15m
         labels:
           severity: warning

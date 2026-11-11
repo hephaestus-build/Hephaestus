@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallLimit;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -23,8 +24,8 @@ import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The meters of each pool, registered for every class and reason at once, so a rate or an absence alert starts from
- * zero. Labels are {@code pool}, {@code class}, {@code reason}, {@code status} and {@code queue} only; never a workspace,
+ * The meters of each pool, registered for every band and reason at once, so a rate or an absence alert starts from
+ * zero. Labels are {@code pool}, {@code band}, {@code reason}, {@code status} and {@code cause} only; never a workspace,
  * job or turn. An instance model's own pool is labelled by that model. All pools that workspaces' own models have to
  * themselves share one label, as there can be many of them and their ids are no one else's concern.
  */
@@ -89,6 +90,11 @@ final class LlmPoolMeters {
      */
     static final List<String> CANCEL_REASONS = List.of("no_renewal", "lease_lost", "attempt_ended", "past_deadline");
 
+    /** The {@code band} label of a call: its band in lower case. */
+    static String tag(AgentRunBand band) {
+        return band.name().toLowerCase(Locale.ROOT);
+    }
+
     private final MeterRegistry registry;
     private final Map<String, Pool> pools = new ConcurrentHashMap<>();
     private final Counter renewalFailures;
@@ -110,25 +116,32 @@ final class LlmPoolMeters {
 
     /** Sets the gauges from what the database says. A pool without a row here has no one waiting. */
     void observe(List<LlmCallPermitRepository.Backlog> backlog) {
-        Map<String, long[]> sums = new HashMap<>();
+        Map<String, Backlog> sums = new HashMap<>();
         for (var row : backlog) {
-            long[] sum = sums.computeIfAbsent(label(row.getSlug()), key -> new long[4]);
+            Backlog sum = sums.computeIfAbsent(label(row.getSlug()), key -> new Backlog());
             Integer baseline = row.getBaselineFirstTokenMs();
-            if (baseline != null) sum[3] = Math.max(sum[3], baseline);
-            sum[0] += LlmCallLimit.effective(row.getLearnedLimit(), row.getMaxConcurrentCalls());
-            sum[1] += row.getWaitingTurns();
-            sum[2] += row.getWaitingBackground();
+            if (baseline != null) sum.baselineMillis = Math.max(sum.baselineMillis, baseline);
+            sum.limit += LlmCallLimit.effective(row.getLearnedLimit(), row.getMaxConcurrentCalls());
+            sum.waiting.merge(AgentRunBand.INTERACTIVE, row.getWaitingInteractive(), Long::sum);
+            sum.waiting.merge(AgentRunBand.BATCH, row.getWaitingBatch(), Long::sum);
+            sum.waiting.merge(AgentRunBand.BACKGROUND, row.getWaitingBackground(), Long::sum);
         }
         sums.keySet().forEach(this::pool);
         pools.forEach((label, pool) -> {
-            long[] sum = sums.get(label);
+            Backlog sum = sums.get(label);
             if (sum != null) {
-                pool.limit.set(sum[0]);
-                pool.baselineMillis.set(sum[3]);
+                pool.limit.set(sum.limit);
+                pool.baselineMillis.set(sum.baselineMillis);
             }
-            pool.waitingTurns.set(sum == null ? 0 : sum[1]);
-            pool.waitingBackground.set(sum == null ? 0 : sum[2]);
+            pool.waiting.forEach((band, waiting) -> waiting.set(sum == null ? 0 : sum.waiting.getOrDefault(band, 0L)));
         });
+    }
+
+    /** What the pools of one label stand at. */
+    private static final class Backlog {
+        private long limit;
+        private long baselineMillis;
+        private final Map<AgentRunBand, Long> waiting = new EnumMap<>(AgentRunBand.class);
     }
 
     void renewalFailed() {
@@ -136,20 +149,24 @@ final class LlmPoolMeters {
     }
 
     private Pool register(String slug) {
-        Map<LlmCallClass, AtomicInteger> active = new EnumMap<>(LlmCallClass.class);
-        for (LlmCallClass callClass : LlmCallClass.values()) {
+        Map<AgentRunBand, AtomicInteger> active = new EnumMap<>(AgentRunBand.class);
+        Map<AgentRunBand, AtomicLong> waiting = new EnumMap<>(AgentRunBand.class);
+        for (AgentRunBand band : AgentRunBand.values()) {
             AtomicInteger count = new AtomicInteger();
             Gauge.builder(AgentMetrics.LLM_POOL_PERMITS_ACTIVE, count, AtomicInteger::get)
                     .description("Permits this worker holds")
                     .tag("pool", slug)
-                    .tag("class", callClass.tag())
+                    .tag("band", tag(band))
                     .strongReference(true)
                     .register(registry);
-            active.put(callClass, count);
-            grantedCounter(slug, callClass);
+            active.put(band, count);
+            waiting.put(
+                    band,
+                    poolGauge(AgentMetrics.LLM_POOL_WAITERS, "Live model calls that wait for a pool", slug, band));
+            grantedCounter(slug, band);
             for (String reason : WAIT_REASONS) {
-                waitTimer(slug, callClass, reason);
-                if (!reason.equals("none")) abandonedCounter(slug, callClass, reason);
+                waitTimer(slug, band, reason);
+                if (!reason.equals("none")) abandonedCounter(slug, band, reason);
             }
         }
         for (String reason : CANCEL_REASONS) cancelledCounter(slug, reason);
@@ -168,20 +185,19 @@ final class LlmPoolMeters {
         absorbedCounter(slug);
         expiredCounter(slug);
         for (String bucket : RateLimitHeaders.TAGS) bucketReachedCounter(slug, bucket);
-        for (LlmCallClass callClass : LlmCallClass.values()) {
-            firstTokenTimer(slug, callClass);
-            operationTimer(slug, callClass);
-            for (String outcome : CALL_OUTCOMES) callsCounter(slug, callClass, outcome);
-            for (String type : TOKEN_TYPES) tokensCounter(slug, callClass, type);
+        for (AgentRunBand band : AgentRunBand.values()) {
+            firstTokenTimer(slug, band);
+            operationTimer(slug, band);
+            for (String outcome : CALL_OUTCOMES) callsCounter(slug, band, outcome);
+            for (String type : TOKEN_TYPES) tokensCounter(slug, band, type);
         }
         baselineResetsCounter(slug);
         return new Pool(
                 slug,
                 active,
                 coolingUntil,
+                waiting,
                 poolGauge(AgentMetrics.LLM_POOL_LIMIT, "The calls in flight a pool allows now", slug, null),
-                poolGauge(AgentMetrics.LLM_POOL_WAITERS, "Live model calls that wait for a pool", slug, "conversation"),
-                poolGauge(AgentMetrics.LLM_POOL_WAITERS, "Live model calls that wait for a pool", slug, "background"),
                 poolGauge(
                         AgentMetrics.LLM_POOL_FIRST_TOKEN_BASELINE,
                         "The fastest first token known from a pool's provider, in milliseconds",
@@ -189,13 +205,13 @@ final class LlmPoolMeters {
                         null));
     }
 
-    private AtomicLong poolGauge(String name, String description, String slug, @Nullable String queue) {
+    private AtomicLong poolGauge(String name, String description, String slug, @Nullable AgentRunBand band) {
         AtomicLong value = new AtomicLong();
         var gauge = Gauge.builder(name, value, AtomicLong::get)
                 .description(description)
                 .tag("pool", slug)
                 .strongReference(true);
-        if (queue != null) gauge.tag("queue", queue);
+        if (band != null) gauge.tag("band", tag(band));
         gauge.register(registry);
         return value;
     }
@@ -216,38 +232,38 @@ final class LlmPoolMeters {
                 .register(registry);
     }
 
-    private Timer firstTokenTimer(String slug, LlmCallClass callClass) {
+    private Timer firstTokenTimer(String slug, AgentRunBand band) {
         return Timer.builder(AgentMetrics.GEN_AI_CLIENT_TIME_TO_FIRST_CHUNK)
                 .description("How long a served stream waited for its provider's first event, after its pool's grant")
                 .tag("pool", slug)
-                .tag("class", callClass.tag())
+                .tag("band", tag(band))
                 .serviceLevelObjectives(FIRST_CHUNK_BUCKETS)
                 .register(registry);
     }
 
-    private Timer operationTimer(String slug, LlmCallClass callClass) {
+    private Timer operationTimer(String slug, AgentRunBand band) {
         return Timer.builder(AgentMetrics.GEN_AI_CLIENT_OPERATION_DURATION)
                 .description("How long a model call took from its pool's grant to its end")
                 .tag("pool", slug)
-                .tag("class", callClass.tag())
+                .tag("band", tag(band))
                 .serviceLevelObjectives(FIRST_CHUNK_BUCKETS)
                 .register(registry);
     }
 
-    private Counter callsCounter(String slug, LlmCallClass callClass, String outcome) {
+    private Counter callsCounter(String slug, AgentRunBand band, String outcome) {
         return Counter.builder(AgentMetrics.GEN_AI_CLIENT_CALLS)
                 .description("Model calls that reached their provider, by how they ended")
                 .tag("pool", slug)
-                .tag("class", callClass.tag())
+                .tag("band", tag(band))
                 .tag("outcome", outcome)
                 .register(registry);
     }
 
-    private Counter tokensCounter(String slug, LlmCallClass callClass, String type) {
+    private Counter tokensCounter(String slug, AgentRunBand band, String type) {
         return Counter.builder(AgentMetrics.GEN_AI_CLIENT_TOKENS)
                 .description("Tokens that providers reported for model calls")
                 .tag("pool", slug)
-                .tag("class", callClass.tag())
+                .tag("band", tag(band))
                 .tag("type", type)
                 .register(registry);
     }
@@ -274,19 +290,19 @@ final class LlmPoolMeters {
                 .register(registry);
     }
 
-    private Counter grantedCounter(String slug, LlmCallClass callClass) {
+    private Counter grantedCounter(String slug, AgentRunBand band) {
         return Counter.builder(AgentMetrics.LLM_POOL_PERMITS_GRANTED)
                 .description("Model calls that received a grant of their pool")
                 .tag("pool", slug)
-                .tag("class", callClass.tag())
+                .tag("band", tag(band))
                 .register(registry);
     }
 
-    private Timer waitTimer(String slug, LlmCallClass callClass, String reason) {
+    private Timer waitTimer(String slug, AgentRunBand band, String reason) {
         return Timer.builder(AgentMetrics.LLM_POOL_PERMIT_WAIT)
                 .description("How long a model call waited for its pool")
                 .tag("pool", slug)
-                .tag("class", callClass.tag())
+                .tag("band", tag(band))
                 .tag("reason", reason)
                 .serviceLevelObjectives(WAIT_BOUNDS)
                 .register(registry);
@@ -299,11 +315,11 @@ final class LlmPoolMeters {
                 .register(registry);
     }
 
-    private Counter abandonedCounter(String slug, LlmCallClass callClass, String reason) {
+    private Counter abandonedCounter(String slug, AgentRunBand band, String reason) {
         return Counter.builder(AgentMetrics.LLM_POOL_PERMIT_ABANDONED)
                 .description("Model calls that ended while they waited for their pool")
                 .tag("pool", slug)
-                .tag("class", callClass.tag())
+                .tag("band", tag(band))
                 .tag("reason", reason)
                 .register(registry);
     }
@@ -319,48 +335,45 @@ final class LlmPoolMeters {
     /** The meters of one pool. */
     final class Pool {
         private final String slug;
-        private final Map<LlmCallClass, AtomicInteger> active;
+        private final Map<AgentRunBand, AtomicInteger> active;
         private final AtomicLong coolingUntil;
+        private final Map<AgentRunBand, AtomicLong> waiting;
         private final AtomicLong limit;
-        private final AtomicLong waitingTurns;
-        private final AtomicLong waitingBackground;
         private final AtomicLong baselineMillis;
 
         private Pool(
                 String slug,
-                Map<LlmCallClass, AtomicInteger> active,
+                Map<AgentRunBand, AtomicInteger> active,
                 AtomicLong coolingUntil,
+                Map<AgentRunBand, AtomicLong> waiting,
                 AtomicLong limit,
-                AtomicLong waitingTurns,
-                AtomicLong waitingBackground,
                 AtomicLong baselineMillis) {
             this.slug = slug;
             this.active = active;
             this.coolingUntil = coolingUntil;
+            this.waiting = waiting;
             this.limit = limit;
-            this.waitingTurns = waitingTurns;
-            this.waitingBackground = waitingBackground;
             this.baselineMillis = baselineMillis;
         }
 
-        AtomicInteger active(LlmCallClass callClass) {
-            return Objects.requireNonNull(active.get(callClass));
+        AtomicInteger active(AgentRunBand band) {
+            return Objects.requireNonNull(active.get(band));
         }
 
-        void waited(LlmCallClass callClass, String reason, long nanos) {
-            waitTimer(slug, callClass, reason).record(nanos, TimeUnit.NANOSECONDS);
+        void waited(AgentRunBand band, String reason, long nanos) {
+            waitTimer(slug, band, reason).record(nanos, TimeUnit.NANOSECONDS);
         }
 
-        void abandoned(LlmCallClass callClass, String reason) {
-            abandonedCounter(slug, callClass, reason).increment();
+        void abandoned(AgentRunBand band, String reason) {
+            abandonedCounter(slug, band, reason).increment();
         }
 
         void cancelled(String reason) {
             cancelledCounter(slug, reason).increment();
         }
 
-        void granted(LlmCallClass callClass) {
-            grantedCounter(slug, callClass).increment();
+        void granted(AgentRunBand band) {
+            grantedCounter(slug, band).increment();
         }
 
         void throttled(int status) {
@@ -371,20 +384,20 @@ final class LlmPoolMeters {
             limitDecreasesCounter(slug, cause).increment();
         }
 
-        void firstToken(LlmCallClass callClass, int millis) {
-            firstTokenTimer(slug, callClass).record(millis, TimeUnit.MILLISECONDS);
+        void firstToken(AgentRunBand band, int millis) {
+            firstTokenTimer(slug, band).record(millis, TimeUnit.MILLISECONDS);
         }
 
-        void called(LlmCallClass callClass, String outcome, long nanos) {
-            operationTimer(slug, callClass).record(nanos, TimeUnit.NANOSECONDS);
-            callsCounter(slug, callClass, outcome).increment();
+        void called(AgentRunBand band, String outcome, long nanos) {
+            operationTimer(slug, band).record(nanos, TimeUnit.NANOSECONDS);
+            callsCounter(slug, band, outcome).increment();
         }
 
-        void tokens(LlmCallClass callClass, ProxyTokenUsage usage) {
-            tokensCounter(slug, callClass, "input").increment(usage.billableInputTokens());
-            tokensCounter(slug, callClass, "output").increment(usage.outputTokens());
-            tokensCounter(slug, callClass, "cache_read").increment(usage.cacheReadTokens());
-            tokensCounter(slug, callClass, "cache_write").increment(usage.cacheWriteTokens());
+        void tokens(AgentRunBand band, ProxyTokenUsage usage) {
+            tokensCounter(slug, band, "input").increment(usage.billableInputTokens());
+            tokensCounter(slug, band, "output").increment(usage.outputTokens());
+            tokensCounter(slug, band, "cache_read").increment(usage.cacheReadTokens());
+            tokensCounter(slug, band, "cache_write").increment(usage.cacheWriteTokens());
         }
 
         void baselineReset() {

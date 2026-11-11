@@ -693,6 +693,8 @@ hephaestus:
           review-retries: ${AGENT_MAX_RETRIES:5}
           # A queued run that waited this long orders one band higher, never into the interactive band.
           band-aging: 10m
+          # A model call that waited this long for its call pool orders one band higher, never into the interactive band.
+          permit-aging: 30s
 
     # ═══════════════════════════════════════════════════════════════════════════
     # LLM GOVERNANCE

@@ -249,6 +249,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     callRows,
                     transactionTemplate,
                     new LlmCallPoolProperties(Duration.ofSeconds(20), Duration.ofSeconds(30)),
+                    LlmCallPermitsTestFixtures.PERMIT_AGING,
                     "worker-1",
                     meterRegistry,
                     modelResolver);
@@ -490,6 +491,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     callRows,
                     transactionTemplate,
                     new LlmCallPoolProperties(Duration.ofMinutes(1), Duration.ofMinutes(5)),
+                    LlmCallPermitsTestFixtures.PERMIT_AGING,
                     "worker-1",
                     meterRegistry,
                     modelResolver);
@@ -587,6 +589,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     callRows,
                     transactionTemplate,
                     new LlmCallPoolProperties(Duration.ofMinutes(1), Duration.ofMinutes(5)),
+                    LlmCallPermitsTestFixtures.PERMIT_AGING,
                     "worker-1",
                     meterRegistry,
                     modelResolver);
@@ -792,6 +795,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 callRows,
                 transactionTemplate,
                 new LlmCallPoolProperties(Duration.ofMinutes(1), Duration.ofMinutes(5)),
+                LlmCallPermitsTestFixtures.PERMIT_AGING,
                 "worker-1",
                 meterRegistry,
                 modelResolver);

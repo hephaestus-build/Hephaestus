@@ -21,6 +21,9 @@ import org.springframework.validation.annotation.Validated;
  * @param bandAging how long a queued run waits after it was due before the claim orders it one band higher, and one
  *     more for each further wait. It never rises into the interactive band. This bounds how long scheduled work waits
  *     behind a steady stream of requested work.
+ * @param permitAging how long a model call that is not interactive waits for its call pool before the pool orders it one
+ *     band higher, and one more for each further wait. It never rises into the interactive band. This bounds how long
+ *     a scheduled review's call waits behind a steady stream of other reviews' calls.
  * @param sandboxStart how long a sandbox may take from its claim to its first call to the gateway. A sandbox that
  *     takes longer is deleted, and its subject's next need requests a new one.
  * @param sandboxIdle how long a review or action sandbox stays after its subject has no queued or leased run. It
@@ -35,6 +38,7 @@ public record AgentCapacityProperties(
         @DefaultValue("25s") @NotNull Duration leaseRenewal,
         @DefaultValue("5") @Min(0) int reviewRetries,
         @DefaultValue("10m") @NotNull Duration bandAging,
+        @DefaultValue("30s") @NotNull Duration permitAging,
         @DefaultValue("2m") @NotNull Duration sandboxStart,
         @DefaultValue("1m") @NotNull Duration sandboxIdle,
         @DefaultValue("15m") @NotNull Duration conversationSandboxIdle) {
@@ -47,6 +51,8 @@ public record AgentCapacityProperties(
                                 + " least 1s");
         if (bandAging.compareTo(Duration.ofSeconds(1)) < 0)
             throw new IllegalArgumentException("hephaestus.agent.capacity.band-aging must be at least 1s");
+        if (permitAging.compareTo(Duration.ofSeconds(1)) < 0)
+            throw new IllegalArgumentException("hephaestus.agent.capacity.permit-aging must be at least 1s");
         if (leaseRenewal.compareTo(Duration.ofSeconds(1)) < 0)
             throw new IllegalArgumentException("hephaestus.agent.capacity.lease-renewal must be at least 1s");
         if (leaseRenewal.multipliedBy(2).compareTo(leaseTtl) > 0)

@@ -226,6 +226,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         Duration.ofSeconds(25),
                         5,
                         Duration.ofMinutes(10),
+                        Duration.ofSeconds(30),
                         Duration.ofMinutes(2),
                         Duration.ofMinutes(1),
                         Duration.ofMinutes(15)));

@@ -85,6 +85,7 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
                         Duration.ofSeconds(25),
                         5,
                         Duration.ofMinutes(10),
+                        Duration.ofSeconds(30),
                         Duration.ofSeconds(1),
                         Duration.ofSeconds(1),
                         conversationIdle),

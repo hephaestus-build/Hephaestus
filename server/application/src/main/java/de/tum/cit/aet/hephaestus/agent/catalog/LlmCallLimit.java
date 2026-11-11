@@ -16,9 +16,9 @@ import org.jspecify.annotations.Nullable;
 public record LlmCallLimit(int learned, int credit) {
 
     /**
-     * One background call beside one conversation call. Below this, a pool could not keep its reserve. No higher value
-     * is safe, as a server with one slot queues from the second call on, and a delay from elsewhere cannot hold a pool
-     * here: at this floor, {@link LlmCallDelay} takes a new baseline.
+     * One call outside the reserve beside one interactive call. Below this, a pool could not keep its reserve. No
+     * higher value is safe, as a server with one slot queues from the second call on, and a delay from elsewhere cannot
+     * hold a pool here: at this floor, {@link LlmCallDelay} takes a new baseline.
      */
     public static final int FLOOR = 2;
 
@@ -48,8 +48,8 @@ public record LlmCallLimit(int learned, int credit) {
     }
 
     /**
-     * The calls in flight that only conversations may use: a quarter of the limit, rounded up. Only a limit of one call
-     * has none, since a pool must leave a background call.
+     * The calls in flight that only interactive calls, such as a conversation's, may use: a quarter of the limit, rounded
+     * up. Only a limit of one call has none, since a pool must leave one call outside the reserve.
      */
     public static int reserve(int limit) {
         return Math.min((limit + 3) / 4, limit - 1);

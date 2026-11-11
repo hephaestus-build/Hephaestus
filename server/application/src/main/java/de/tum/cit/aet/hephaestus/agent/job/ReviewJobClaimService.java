@@ -365,7 +365,7 @@ public class ReviewJobClaimService {
         if (!composing) {
             if (reviewRoom != null && !reviewRoom.getAsBoolean()) return ClaimOutcome.QUOTA_FULL;
             long poolId = callPermits.poolFor(snapshot.model().connectionRef());
-            if (callPermits.hasBackgroundWaiters(poolId)) return new PoolWait(fence.runId(), poolId);
+            if (callPermits.hasReviewCallsWaiting(poolId)) return new PoolWait(fence.runId(), poolId);
         }
 
         if (!(ResultAdmissionService.isContinuation(job)

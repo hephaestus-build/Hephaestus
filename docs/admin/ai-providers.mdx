@@ -520,7 +520,7 @@ A model server on your own GPUs, such as vLLM, queues calls by default. The pool
 | What the system learns | What you can set |
 | --- | --- |
 | The limit of calls in flight | A maximum, as a ceiling on that limit |
-| The conversation reserve: a quarter of the limit, rounded up | Nothing. The limit sets it |
+| The interactive reserve, for conversation calls: a quarter of the limit, rounded up | Nothing. The limit sets it |
 | The pause after a refusal, from the provider's `Retry-After` | The longest pause, `HEPHAESTUS_LLM_CALL_POOLS_MAX_COOLDOWN` |
 | A short pause before a refusal, when the provider's rate limit headers show an empty bucket | The same longest pause |
 | What each call used, from the provider's usage report | Nothing. It replaces the call's token bound when the call ends |

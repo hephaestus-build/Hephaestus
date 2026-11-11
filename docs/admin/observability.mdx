@@ -348,8 +348,8 @@ For the volume rules, change their name patterns.
 | `HephaestusModelRefusalsReachCallers` | `llm_pool_upstream_throttled_total` less `llm_pool_upstream_absorbed_total`, per pool | Callers wait out most refusals. Refusals that reach callers for 15 minutes mean a spent account, a pause longer than a call can wait, or an outage |
 | `HephaestusModelLimitAtFloor` | `llm_pool_limit` at 2 while `llm_pool_limit_decreases_total` or `llm_pool_first_token_baseline_resets_total` rises | A pool that an admin capped at 2 does not fire it. A provider that refuses or queues even two calls for 30 minutes does |
 | `HephaestusAgentJobsFailing` | `agent_job_total` with `failed` or `timed_out` | All terminal failures, whatever their cause. Three in one hour point to the platform also on a small instance that runs a few reviews each day. Cancellations do not count. The alert stays up for up to one hour after the last failure |
-| `HephaestusConversationModelWaitLong` | `llm_pool_permit_wait_seconds` of `turn` and `product_feedback` calls, per pool | A reader waits for the answer. More than 10 % of at least 10 calls over 5 seconds in 15 minutes |
-| `HephaestusReviewModelWaitLong` | `llm_pool_permit_wait_seconds` of the other classes, per pool | Review calls queue by design. Calls over two minutes hold a sandbox idle. More than a quarter of at least 20 calls in one hour, for 15 minutes |
+| `HephaestusConversationModelWaitLong` | `llm_pool_permit_wait_seconds` of `interactive` calls, per pool | A reader waits for the answer. More than 10 % of at least 10 calls over 5 seconds in 15 minutes |
+| `HephaestusReviewModelWaitLong` | `llm_pool_permit_wait_seconds` of `batch` and `background` calls, per pool | Review calls queue by design. Calls over two minutes hold a sandbox idle. More than a quarter of at least 20 calls in one hour, for 15 minutes |
 | `HephaestusModelPermitsExpired` | `llm_pool_permits_expired_total`, per pool | Three in one hour. A worker that stops with calls in flight leaves them to expire. The count rises when the pool next admits a call, so on an idle pool it comes late |
 | `HephaestusModelPermitRenewalFailing` | `llm_pool_lease_renewal_failures_total` | Three in 15 minutes. A worker renews each permit several times per lease, so one failure is a passing error |
 | `HephaestusPrivacyJobFailing` | `privacy_job_completed_total` with `failure` or `incomplete`, per `exported_job` | Twice in 26 hours: an hourly sweep failed twice, or a daily job failed on two days. Erasure is a legal duty, so two are enough |
@@ -1076,32 +1076,33 @@ A claim that fails answers the loop's pull with `503`. The loop then pulls again
 
 ## Call pool metrics
 
-Each worker reports the [call pools](./runtime-roles.mdx#call-pools) whose models it calls.
+Each worker reports the [call pools](./runtime-roles#call-pools) whose models it calls.
 A worker registers every series of a shared pool at start, so a rate starts from zero. It registers a model's own pool at that pool's first call.
 
-The labels are `pool`, `class`, `reason`, `status`, `queue` and `cause`.
+The labels are `pool`, `band`, `reason`, `status` and `cause`.
 `pool` is the pool's slug. An instance model's own pool has the slug `own-model-<id>`.
 All pools of workspaces' own models report under the one label `workspace-models`.
 
-`status` is `429`, `503`, or `529`. `queue` is `conversation` or `background`. `cause` is `refusal` or `delay`.
+`status` is `429`, `503`, or `529`. `cause` is `refusal` or `delay`.
 
-`class` is `turn`, `composition`, `request`, `event`, `schedule`, `backfill`, or `product_feedback`.
-It identifies conversation, composition, product feedback, or the origin of a review call.
+`band` is `interactive`, `batch`, or `background`: the [band](./runtime-roles#call-pools) of the call.
+A conversation call is `interactive`. A composition call and the calls of a requested or event review are `batch`.
+The calls of a scheduled or backfill review and product feedback are `background`.
 No series names a workspace, a workspace's model, a job or a turn.
 
 | Prometheus name                            | Type      | Labels                     | Meaning |
 | ------------------------------------------ | --------- | -------------------------- | ------- |
-| `llm_pool_permits_active`                  | Gauge     | `pool`, `class`            | Permits that this worker holds. Sum over the workers for the pool's calls in flight |
-| `llm_pool_permit_wait_seconds`             | Histogram | `pool`, `class`, `reason`  | How long a queued call waited for its permit. `reason=capacity` includes concurrency, rate, and cooldown admission |
-| `llm_pool_permit_abandoned_total`          | Counter   | `pool`, `class`, `reason`  | Calls whose attempt ended, or whose work deadline passed, while they waited |
-| `llm_pool_permits_granted_total`           | Counter   | `pool`, `class`            | Grants that this worker's calls received |
+| `llm_pool_permits_active`                  | Gauge     | `pool`, `band`             | Permits that this worker holds. Sum over the workers for the pool's calls in flight |
+| `llm_pool_permit_wait_seconds`             | Histogram | `pool`, `band`, `reason`   | How long a queued call waited for its permit. `reason=capacity` includes concurrency, rate, and cooldown admission |
+| `llm_pool_permit_abandoned_total`          | Counter   | `pool`, `band`, `reason`   | Calls whose attempt ended, or whose work deadline passed, while they waited |
+| `llm_pool_permits_granted_total`           | Counter   | `pool`, `band`             | Grants that this worker's calls received |
 | `llm_pool_limit`                           | Gauge     | `pool`                     | The calls in flight that the pool allows now: the learned limit under its ceiling. All workers read it from the database. Take the maximum over the workers. `workspace-models` is the sum of its pools |
-| `llm_pool_waiters`                         | Gauge     | `pool`, `queue`            | Live calls that wait for the pool. All workers read it from the database. Take the maximum over the workers |
+| `llm_pool_waiters`                         | Gauge     | `pool`, `band`             | Live calls that wait for the pool, by the band that each call asked for. All workers read it from the database. Take the maximum over the workers |
 | `llm_pool_limit_decreases_total`           | Counter   | `pool`, `cause`            | How often a provider's refusal (`refusal`), queue (`delay`) or stream without an answer (`unanswered`) lowered the limit |
-| `gen_ai_client_operation_time_to_first_chunk_seconds` | Histogram | `pool`, `class` | How long a served stream waited for its provider's first content event, from the request after the grant. A role, an error event or a comment is not content. The limit learns from the same samples. Buckets follow the GenAI semantic conventions, up to 327.68 seconds |
-| `gen_ai_client_operation_duration_seconds` | Histogram | `pool`, `class` | How long a call took from its pool's grant to its end, with the GenAI buckets. The wait for the grant is `llm_pool_permit_wait_seconds` |
-| `gen_ai_client_calls_total` | Counter | `pool`, `class`, `outcome` | Calls that reached their provider, by how they ended |
-| `gen_ai_client_tokens_total` | Counter | `pool`, `class`, `type` | Tokens that the provider reported. `type` is `input`, `output`, `cache_read`, or `cache_write`. `input` excludes the cached tokens |
+| `gen_ai_client_operation_time_to_first_chunk_seconds` | Histogram | `pool`, `band` | How long a served stream waited for its provider's first content event, from the request after the grant. A role, an error event or a comment is not content. The limit learns from the same samples. Buckets follow the GenAI semantic conventions, up to 327.68 seconds |
+| `gen_ai_client_operation_duration_seconds` | Histogram | `pool`, `band` | How long a call took from its pool's grant to its end, with the GenAI buckets. The wait for the grant is `llm_pool_permit_wait_seconds` |
+| `gen_ai_client_calls_total` | Counter | `pool`, `band`, `outcome` | Calls that reached their provider, by how they ended |
+| `gen_ai_client_tokens_total` | Counter | `pool`, `band`, `type` | Tokens that the provider reported. `type` is `input`, `output`, `cache_read`, or `cache_write`. `input` excludes the cached tokens |
 | `llm_pool_first_token_baseline`            | Gauge     | `pool`                     | The fastest first token that the pool knows, in milliseconds. All workers read it from the database. `workspace-models` is the largest of its pools |
 | `llm_pool_first_token_baseline_resets_total` | Counter | `pool`                     | How often a pool at its floor took a new baseline. A repeating rise means that the provider stays slow with no load from this instance |
 | `llm_pool_upstream_bucket_reached_total`   | Counter   | `pool`, `bucket`           | Served answers whose rate limit headers showed an empty bucket, which also pauses the pool. `bucket` is `requests`, `tokens`, `input_tokens`, or `output_tokens` |
