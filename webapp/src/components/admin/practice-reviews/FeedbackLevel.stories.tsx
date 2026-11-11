@@ -7,6 +7,7 @@ import type {
 	FeedbackSend,
 	ReviewFeedbackDetail,
 } from "@/api/types.gen";
+import { ModelLinkHostsContext } from "@/components/common/model-links";
 import { FEEDBACK_LOCATION_DEFS } from "@/components/practice-vocabulary/feedback-location-defs";
 import { withPageBehind } from "@/stories/decorators";
 import { InLevelStack } from "@/stories/level-stack";
@@ -214,7 +215,15 @@ const UNACKNOWLEDGED_REMOVAL = {
 const meta = {
 	component: FeedbackLevel,
 	parameters: { layout: "fullscreen" },
-	decorators: [withPageBehind],
+	// A workspace page lists the hosts that model-written links may reach; here, the fixtures' hosts.
+	decorators: [
+		withPageBehind,
+		(Story) => (
+			<ModelLinkHostsContext.Provider value={["example.com", "hephaestus.example"]}>
+				<Story />
+			</ModelLinkHostsContext.Provider>
+		),
+	],
 	tags: ["autodocs"],
 	args: {
 		path: { behind: [{ label: "Practice reviews", depth: 0 }], onClose: fn() },
