@@ -17,6 +17,8 @@ public final class StructuredLogKeys {
     public static final String SUBJECT_KEY = "subject.key";
     /** The agent sandbox that the record is about: its claim's name, which is also its Pod's. */
     public static final String SANDBOX_NAME = "sandbox.name";
+    /** The review whose subject is running. */
+    public static final String REVIEW_ID = "review.id";
 
     public static final String REVIEW_ID = "review.id";
 

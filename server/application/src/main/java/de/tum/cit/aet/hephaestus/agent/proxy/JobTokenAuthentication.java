@@ -9,7 +9,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 /**
  * A verified sandbox credential. Token scopes become {@code SCOPE_} authorities, as Spring's {@code hasScope}
- * requires. A turn's token is also the details, which the turn endpoints read the attempt from.
+ * requires. The details hold a turn's token for its endpoints, or a checked sandbox run for log correlation.
  */
 class JobTokenAuthentication extends AbstractAuthenticationToken {
 

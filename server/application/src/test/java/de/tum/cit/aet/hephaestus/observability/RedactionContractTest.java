@@ -228,7 +228,7 @@ class RedactionContractTest {
             event.setThrowableProxy(new ThrowableProxy(new IllegalStateException("x")));
         });
         JsonNode json = new ObjectMapper().readTree(line);
-        assertEquals("server", text(json, "runtime.role"));
+        assertNull(node(json, "runtime.role"), line);
         assertTrue(node(json, "context.runtime.server.enabled") != null, line);
         assertEquals("caller-supplied", text(json, "context.error.type"));
         assertEquals(IllegalStateException.class.getName(), text(json, "error.type"));
@@ -295,11 +295,11 @@ class RedactionContractTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"application.yml, -1, server", "application.yml, 1, all"})
-    void shouldNameTheRuntimeRoleOfEveryProfile(String file, int document, String role) throws IOException {
+    @CsvSource({"application.yml, -1", "application.yml, 1"})
+    void shouldKeepServiceMetadataWithoutARetiredRuntimeRole(String file, int document) throws IOException {
         JsonNode json = new ObjectMapper()
                 .readTree(encode(shippedEnvironment(file, document), event -> event.setMessage("ready")));
-        assertEquals(role, text(json, "runtime.role"));
+        assertNull(node(json, "runtime.role"));
         assertEquals("Hephaestus", text(json, "service.name"));
         assertFalse(text(json, "service.version").isBlank());
         assertFalse(text(json, "service.environment").isBlank());

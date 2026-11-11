@@ -26,6 +26,15 @@ import org.springframework.web.filter.OncePerRequestFilter;
 final class SandboxTokenAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER = "Bearer ";
+    static final List<String> LOG_CONTEXT_KEYS = List.of(
+            StructuredLogKeys.SANDBOX_NAME,
+            StructuredLogKeys.SUBJECT_KEY,
+            StructuredLogKeys.WORKSPACE_ID,
+            StructuredLogKeys.RUN_ID,
+            StructuredLogKeys.RUN_EPOCH,
+            StructuredLogKeys.REVIEW_ID,
+            StructuredLogKeys.JOB_ID,
+            StructuredLogKeys.JOB_ATTEMPT);
 
     private final AttemptTokenVerifier verifier;
     private final @Nullable AgentSandboxes sandboxes;
@@ -54,18 +63,15 @@ final class SandboxTokenAuthenticationFilter extends OncePerRequestFilter {
         var context = contexts.createEmptyContext();
         context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(live, null, List.of()));
         contexts.setContext(context);
-        // Every record of the request names its sandbox. The run's resolver adds the run and the epoch once it has
-        // checked them; this filter removes all of them, so a pooled thread carries none into the next request.
+        // The resolver adds the checked run and epoch. No enclosing run belongs to this request; all of its
+        // correlation is restored when the request ends, including when a handler fails.
+        var previous = MDC.getCopyOfContextMap();
+        for (String key : LOG_CONTEXT_KEYS) MDC.remove(key);
         MDC.put(StructuredLogKeys.SANDBOX_NAME, live.claimName());
         MDC.put(StructuredLogKeys.SUBJECT_KEY, live.subjectKey());
         MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(live.workspaceId()));
-        MDC.remove(StructuredLogKeys.RUN_ID);
-        MDC.remove(StructuredLogKeys.RUN_EPOCH);
-        MDC.remove(StructuredLogKeys.JOB_ATTEMPT);
-        MDC.remove(StructuredLogKeys.JOB_ID);
-        if (live.subjectKey().startsWith("review:"))
-            MDC.put(StructuredLogKeys.REVIEW_ID, live.subjectKey().substring(7));
-        else MDC.remove(StructuredLogKeys.REVIEW_ID);
+        String reviewId = live.reviewId();
+        if (reviewId != null) MDC.put(StructuredLogKeys.REVIEW_ID, reviewId);
         try {
             chain.doFilter(request, response);
         } finally {

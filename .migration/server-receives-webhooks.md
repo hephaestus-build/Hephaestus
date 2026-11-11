@@ -13,5 +13,6 @@ The server now receives provider webhooks. The chart has no webhook Deployment, 
 3. Outside the chart, stop the webhook container. Remove `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED` and the `webhook` Spring profile.
    Route `/webhooks` and every path below it to the server.
 4. Replace `HephaestusWebhookReceiverDown` and `HephaestusWebhookReceiverUnready` in your own alert routing with `HephaestusServerDown` and `HephaestusServerUnready`.
-5. Continue with phase 2 of the procedure.
+5. Remove filters on `runtime.role` from your log queries. Logs now identify the one application through its service metadata.
+6. Continue with phase 2 of the procedure.
    The upgrade deletes the webhook Deployment, its Service, its ServiceAccount, its disruption budget and its network policy.

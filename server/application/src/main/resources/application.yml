@@ -935,9 +935,6 @@ logging:
                 # The container id under Docker, as ReplicaIdentityFilter reports it.
                 node-name: ${HOSTNAME:}
         json:
-            add:
-                # The webhook profile and the all-roles local profile override this.
-                "[runtime.role]": server
             # MDC and key-value pairs share one `context` object of their own, so `runtime.*` or an
             # `error.*` pair cannot collide with these members. LogContextCustomizer writes it: Boot's
             # own context pairs refuse a name that the MDC and the event both carry, and drop the event.
@@ -998,12 +995,6 @@ spring:
             "[mail.smtp.auth]": false
             "[mail.smtp.starttls.enable]": false
             "[mail.smtp.starttls.required]": false
-
-logging:
-    structured:
-        json:
-            add:
-                "[runtime.role]": all
 
 hephaestus:
     email:

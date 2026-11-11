@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -18,11 +20,15 @@ import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
@@ -125,6 +131,10 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     }
 
     private FilterChainProxy chains(SandboxGatewayProperties gateway) throws Exception {
+        return chains(gateway, List.of());
+    }
+
+    private FilterChainProxy chains(SandboxGatewayProperties gateway, List<SandboxRunKind> kinds) throws Exception {
         var context = new GenericApplicationContext();
         context.refresh();
         var config = new LlmProxySecurityConfig();
@@ -156,7 +166,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         new ConversationLoopProperties(LOOP_SECRET),
                         jwtVerifier,
                         owners.getBeanProvider(AgentSandboxes.class),
-                        List.of(),
+                        kinds,
                         resolver,
                         new SandboxGatewayBodyBudget(bodyBudgetBytes),
                         accounting,
@@ -166,6 +176,117 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         new SandboxGatewayConnector(GATEWAY_PORT, gateway.maxConnections()),
                         accounting),
                 config.blockLlmProxyOnOtherConnectors(httpSecurity(context))));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldCorrelateASandboxModelCallAndRestoreItsCallersContext(boolean fail) throws Exception {
+        var token = new SandboxJwt(
+                UUID.randomUUID(), 7L, "review:9", "jti", Instant.now().plusSeconds(60));
+        var live = new AgentSandboxes.LiveSandbox(token.sandboxId(), 7L, "review:9", AgentSandboxKind.REVIEW);
+        when(jwtVerifier.verify("sandbox-token")).thenThrow(new AttemptTokenInvalidException("not an attempt", "typ"));
+        when(jwtVerifier.verifySandbox("sandbox-token")).thenReturn(token);
+        when(agentSandboxes.authenticate(token)).thenReturn(Optional.of(live));
+        var run = mock(AgentRun.class);
+        when(run.getConcurrencyKey()).thenReturn(live.subjectKey());
+        when(run.getKind()).thenReturn(AgentRunKind.REVIEW);
+        when(run.getAttempt()).thenReturn(3);
+        when(agentRuns.find(new AgentRunRef(LEASE, 7L))).thenReturn(Optional.of(run));
+        when(agentRuns.isCurrent(new AgentRunRef(LEASE, 7L), 3)).thenReturn(true);
+        var kind = mock(SandboxRunKind.class);
+        when(kind.kind()).thenReturn(AgentRunKind.REVIEW);
+        when(kind.sandbox()).thenReturn(AgentSandboxKind.REVIEW);
+        when(kind.attempt(any()))
+                .thenReturn(Optional.of(new ProxyAttempt(
+                        ProxyAttempt.Caller.REVIEW,
+                        UUID.randomUUID(),
+                        7L,
+                        2,
+                        LEASE,
+                        Instant.now().plusSeconds(60))));
+        chains = chains(GATEWAY, List.of(kind));
+        var previous =
+                Map.of(StructuredLogKeys.RUN_ID, "enclosing-run", StructuredLogKeys.REVIEW_ID, "enclosing-review");
+        MDC.setContextMap(previous);
+        try {
+            var request = withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "sandbox-token");
+            request.addHeader(SandboxRunArgumentResolver.RUN_HEADER, LEASE.toString());
+            request.addHeader(SandboxRunArgumentResolver.EPOCH_HEADER, "3");
+            if (fail) {
+                assertThatThrownBy(
+                                () -> chains.doFilter(request, new MockHttpServletResponse(), (incoming, response) -> {
+                                    servedWithLogContext.set(MDC.getCopyOfContextMap());
+                                    throw new IllegalStateException("model handler failed");
+                                }))
+                        .isInstanceOf(IllegalStateException.class);
+            } else {
+                assertThat(answerTo(request)).isEqualTo(200);
+            }
+            assertThat(servedWithLogContext.get())
+                    .containsEntry(StructuredLogKeys.RUN_ID, LEASE.toString())
+                    .containsEntry(StructuredLogKeys.RUN_EPOCH, "3")
+                    .containsEntry(StructuredLogKeys.WORKSPACE_ID, "7")
+                    .containsEntry(StructuredLogKeys.SUBJECT_KEY, "review:9")
+                    .containsEntry(StructuredLogKeys.REVIEW_ID, "9");
+            assertThat(MDC.getCopyOfContextMap()).isEqualTo(previous);
+        } finally {
+            MDC.clear();
+        }
+    }
+
+    @Test
+    void shouldNotAttributeAConversationRequestToAnEnclosingReview() throws Exception {
+        var token = new SandboxJwt(
+                UUID.randomUUID(), 7L, "conversation:42", "jti", Instant.now().plusSeconds(60));
+        var live =
+                new AgentSandboxes.LiveSandbox(token.sandboxId(), 7L, "conversation:42", AgentSandboxKind.CONVERSATION);
+        when(jwtVerifier.verifySandbox("sandbox-token")).thenReturn(token);
+        when(agentSandboxes.authenticate(token)).thenReturn(Optional.of(live));
+        var previous =
+                Map.of(StructuredLogKeys.REVIEW_ID, "enclosing-review", StructuredLogKeys.RUN_ID, "enclosing-run");
+        MDC.setContextMap(previous);
+        try {
+            assertThat(answerTo(withToken(request("POST", "/internal/agent/next", GATEWAY_PORT), "sandbox-token")))
+                    .isEqualTo(200);
+            assertThat(servedWithLogContext.get())
+                    .containsEntry(StructuredLogKeys.SUBJECT_KEY, "conversation:42")
+                    .doesNotContainKeys(
+                            StructuredLogKeys.REVIEW_ID, StructuredLogKeys.RUN_ID, StructuredLogKeys.RUN_EPOCH);
+            assertThat(MDC.getCopyOfContextMap()).isEqualTo(previous);
+        } finally {
+            MDC.clear();
+        }
+    }
+
+    @Test
+    void shouldRestoreEnclosingLogContextWhenASandboxHandlerFails() throws Exception {
+        var token = new SandboxJwt(
+                UUID.randomUUID(), 7L, "review:9", "jti", Instant.now().plusSeconds(60));
+        var live = new AgentSandboxes.LiveSandbox(token.sandboxId(), 7L, "review:9", AgentSandboxKind.REVIEW);
+        when(jwtVerifier.verifySandbox("sandbox-token")).thenReturn(token);
+        when(agentSandboxes.authenticate(token)).thenReturn(Optional.of(live));
+        var previous = Map.of(
+                StructuredLogKeys.RUN_ID,
+                "enclosing-run",
+                StructuredLogKeys.REVIEW_ID,
+                "enclosing-review",
+                StructuredLogKeys.WORKSPACE_ID,
+                "41");
+        MDC.setContextMap(previous);
+        try {
+            assertThatThrownBy(() -> chains.doFilter(
+                            withToken(request("POST", "/internal/agent/next", GATEWAY_PORT), "sandbox-token"),
+                            new MockHttpServletResponse(),
+                            (request, response) -> {
+                                assertThat(MDC.get(StructuredLogKeys.REVIEW_ID)).isEqualTo("9");
+                                assertThat(MDC.get(StructuredLogKeys.RUN_ID)).isNull();
+                                throw new IllegalStateException("handler failed");
+                            }))
+                    .isInstanceOf(IllegalStateException.class);
+            assertThat(MDC.getCopyOfContextMap()).isEqualTo(previous);
+        } finally {
+            MDC.clear();
+        }
     }
 
     @Test
@@ -183,6 +304,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .as("every record of the request names its sandbox")
                 .containsEntry(StructuredLogKeys.SANDBOX_NAME, live.claimName())
                 .containsEntry(StructuredLogKeys.SUBJECT_KEY, "review:9")
+                .containsEntry(StructuredLogKeys.REVIEW_ID, "9")
                 .containsEntry(StructuredLogKeys.WORKSPACE_ID, "7");
         assertThat(MDC.get(StructuredLogKeys.SANDBOX_NAME))
                 .as("the request's thread carries no sandbox into the next one")

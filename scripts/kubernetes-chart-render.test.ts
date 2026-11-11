@@ -4610,7 +4610,10 @@ await test("each provider's byte override reaches the server through the map", (
 		const name = `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_${provider.toUpperCase()}`;
 		assert.equal(envValue(workload(resources, "server"), name), bound, provider);
 	}
-	assert.equal(env(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"), undefined);
+	assert.equal(
+		env(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"),
+		undefined,
+	);
 });
 
 /** Kinds that have no namespace: a release without cluster-admin cannot create any of them. */

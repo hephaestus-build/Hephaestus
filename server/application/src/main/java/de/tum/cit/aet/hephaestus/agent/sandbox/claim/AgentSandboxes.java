@@ -19,8 +19,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -91,6 +93,13 @@ public class AgentSandboxes {
         /** The name of its claim, Sandbox and Pod, as its log records and the cluster name it. */
         public String claimName() {
             return AgentSandboxes.claimName(id);
+        }
+
+        /** The review subject's identifier; another kind has no review. */
+        public @Nullable String reviewId() {
+            return kind == AgentSandboxKind.REVIEW && subjectKey.startsWith("review:")
+                    ? subjectKey.substring("review:".length())
+                    : null;
         }
     }
 
@@ -195,9 +204,20 @@ public class AgentSandboxes {
             if (sandboxes
                     .lockLive(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey())
                     .isEmpty()) return Optional.<AgentRunLease>empty();
-            var lease = runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), kinds)
-                    .filter(claimed);
-            lease.ifPresent(leased -> {
+            var lease = runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), kinds);
+            if (lease.isEmpty()) return lease;
+            var leased = lease.get();
+            var previous = MDC.getCopyOfContextMap();
+            try {
+                MDC.put(StructuredLogKeys.SANDBOX_NAME, sandbox.claimName());
+                MDC.put(StructuredLogKeys.SUBJECT_KEY, sandbox.subjectKey());
+                MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(sandbox.workspaceId()));
+                MDC.put(StructuredLogKeys.RUN_ID, leased.runId().toString());
+                MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(leased.epoch()));
+                String reviewId = sandbox.reviewId();
+                if (reviewId == null) MDC.remove(StructuredLogKeys.REVIEW_ID);
+                else MDC.put(StructuredLogKeys.REVIEW_ID, reviewId);
+                if (!claimed.test(leased)) return Optional.<AgentRunLease>empty();
                 sandboxes.used(sandbox.id(), sandbox.workspaceId());
                 log.atInfo()
                         .addKeyValue("event.name", "agent.sandbox.leased")
@@ -207,8 +227,11 @@ public class AgentSandboxes {
                         .addKeyValue(StructuredLogKeys.RUN_ID, leased.runId())
                         .addKeyValue(StructuredLogKeys.RUN_EPOCH, leased.epoch())
                         .log("Sandbox leased its subject's next run");
-            });
-            return lease;
+                return lease;
+            } finally {
+                if (previous == null) MDC.clear();
+                else MDC.setContextMap(previous);
+            }
         }));
     }
 

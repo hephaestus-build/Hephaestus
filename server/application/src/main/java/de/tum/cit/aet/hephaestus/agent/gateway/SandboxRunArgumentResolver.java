@@ -63,12 +63,7 @@ public final class SandboxRunArgumentResolver implements HandlerMethodArgumentRe
         SandboxRun run = resolve(runs, sandbox, runId, request.getHeader(EPOCH_HEADER))
                 .orElseThrow(SandboxRunArgumentResolver::hidden);
         // Checked: the run is the sandbox's own. The token filter removes these with the request's other fields.
-        MDC.put(StructuredLogKeys.RUN_ID, run.fence().runId().toString());
-        MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(run.fence().epoch()));
-        if (sandbox.subjectKey().startsWith("review:"))
-            MDC.put(
-                    StructuredLogKeys.JOB_ATTEMPT,
-                    Integer.toString(ReviewRunKind.attempt(run.fence().epoch())));
+        setLogContext(run);
         Span span = tracer.currentSpan();
         if (span != null)
             span.tag("hephaestus.run.id", run.fence().runId().toString())
@@ -76,6 +71,23 @@ public final class SandboxRunArgumentResolver implements HandlerMethodArgumentRe
                     .tag("hephaestus.subject.key", sandbox.subjectKey())
                     .tag("hephaestus.sandbox.name", sandbox.claimName());
         return run;
+    }
+
+    /** Correlates a checked sandbox run; its authentication filter restores the enclosing context. */
+    public static void setLogContext(SandboxRun run) {
+        var sandbox = run.sandbox();
+        MDC.put(StructuredLogKeys.SANDBOX_NAME, sandbox.claimName());
+        MDC.put(StructuredLogKeys.RUN_ID, run.fence().runId().toString());
+        MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(run.fence().epoch()));
+        MDC.put(StructuredLogKeys.SUBJECT_KEY, sandbox.subjectKey());
+        MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(sandbox.workspaceId()));
+        MDC.remove(StructuredLogKeys.JOB_ID);
+        if (sandbox.subjectKey().startsWith("review:"))
+            MDC.put(StructuredLogKeys.JOB_ATTEMPT, Integer.toString(ReviewRunKind.attempt(run.fence().epoch())));
+        else MDC.remove(StructuredLogKeys.JOB_ATTEMPT);
+        String reviewId = sandbox.reviewId();
+        if (reviewId == null) MDC.remove(StructuredLogKeys.REVIEW_ID);
+        else MDC.put(StructuredLogKeys.REVIEW_ID, reviewId);
     }
 
     /**
