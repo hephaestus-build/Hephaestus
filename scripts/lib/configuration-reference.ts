@@ -692,9 +692,9 @@ export function renderReference(
 	}
 	const page = [
 		"---",
-		"id: configuration-reference",
 		"title: Configuration reference",
 		"description: Helm values and application settings for a Kubernetes deployment.",
+		"page_type: reference",
 		"---",
 		"",
 		'import HelmValues from "./_configuration-reference/helm.mdx";',
