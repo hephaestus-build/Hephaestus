@@ -40,9 +40,6 @@ public final class ModelSession {
     /** One tool call: its id, its tool, and its arguments as the model wrote them. */
     public record ToolCall(String id, String name, JsonNode arguments) {}
 
-    /** The tool's answer to one call. */
-    record ToolResult(String callId, String text) {}
-
     /** The model's reply: its text and the tools it called, or why the call failed. */
     public record Reply(
             @Nullable String text,
@@ -79,7 +76,6 @@ public final class ModelSession {
     private final String system;
     private final List<Tool> tools;
     private final ArrayNode history = JSON.arrayNode();
-    private int calls;
 
     public ModelSession(Transport transport, ObjectMapper mapper, Settings settings, String system, List<Tool> tools) {
         this.transport = transport;
@@ -91,10 +87,6 @@ public final class ModelSession {
             history.add(JSON.objectNode().put("role", "system").put("content", system));
     }
 
-    int calls() {
-        return calls;
-    }
-
     /** Sends a user turn and returns the model's reply. */
     public Reply send(String text) {
         history.add(JSON.objectNode().put("role", "user").put("content", text));
@@ -103,35 +95,6 @@ public final class ModelSession {
 
     /** Sends the same request again, after a provider failure left the conversation unchanged. */
     public Reply retry() {
-        return call();
-    }
-
-    /** Answers the model's tool calls, and optionally adds a user turn after them, and returns its next reply. */
-    Reply answer(List<ToolResult> results, @Nullable String then) {
-        if (settings.protocol() == LlmApiProtocol.ANTHROPIC_MESSAGES) {
-            var content = JSON.arrayNode();
-            for (var result : results)
-                content.add(JSON.objectNode()
-                        .put("type", "tool_result")
-                        .put("tool_use_id", result.callId())
-                        .put("content", result.text()));
-            if (then != null) content.add(JSON.objectNode().put("type", "text").put("text", then));
-            history.add(JSON.objectNode().put("role", "user").set("content", content));
-            return call();
-        }
-        for (var result : results) {
-            if (settings.protocol() == LlmApiProtocol.OPENAI_COMPLETIONS)
-                history.add(JSON.objectNode()
-                        .put("role", "tool")
-                        .put("tool_call_id", result.callId())
-                        .put("content", result.text()));
-            else
-                history.add(JSON.objectNode()
-                        .put("type", "function_call_output")
-                        .put("call_id", result.callId())
-                        .put("output", result.text()));
-        }
-        if (then != null) history.add(JSON.objectNode().put("role", "user").put("content", then));
         return call();
     }
 
@@ -202,7 +165,6 @@ public final class ModelSession {
     }
 
     private Reply call() {
-        calls++;
         Answer answer = transport.call(mapper.writeValueAsBytes(request()));
         if (!answer.owned()) return new Reply(null, List.of(), Failure.OWNERSHIP_LOST);
         var refusal = answer.refusal();

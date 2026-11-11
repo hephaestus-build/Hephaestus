@@ -2,10 +2,14 @@ package de.tum.cit.aet.hephaestus.agent.composer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextCheck;
+import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +18,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,8 +28,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -87,7 +95,8 @@ final class CompositionEvalCases {
             Map<String, String> ids,
             Map<String, String> back,
             Map<String, byte[]> inputs,
-            JsonNode response) {
+            JsonNode response,
+            JsonNode history) {
         JsonNode toModel(JsonNode review) {
             return rename(review, ids);
         }
@@ -176,6 +185,139 @@ final class CompositionEvalCases {
             entry.set("review", scenario.fromModel(ReviewOnWork.unwrapArguments(arguments)));
         }
         return file;
+    }
+
+    // ---------------------------------------------------------------- the composer loop
+
+    /**
+     * The review on the work of a case as the composer's server side reads it: the item supports every copy form, and
+     * no private destination has anything eligible, so only the review on the work composes.
+     */
+    static ComposerReplay.Basis basis(Scenario scenario, @Nullable ReasoningEffort effort, int maxOutputTokens) {
+        return new ComposerReplay.Basis(
+                scenario.inputs(),
+                scenario.response(),
+                scenario.history(),
+                Set.of(CopyCapability.values()),
+                false,
+                Map.of(),
+                effort,
+                maxOutputTokens);
+    }
+
+    /**
+     * A private case as the composer's server side reads it: the item supports only the case's destination, and the
+     * review on the work was decided earlier, so only that destination composes.
+     */
+    static ComposerReplay.Basis basis(PrivateScenario scenario, @Nullable ReasoningEffort effort, int maxOutputTokens) {
+        return new ComposerReplay.Basis(
+                scenario.inputs(),
+                scenario.response(),
+                null,
+                Set.of(CopyCapability.valueOf(scenario.destination())),
+                true,
+                Map.of(),
+                effort,
+                maxOutputTokens);
+    }
+
+    /** One check_package call of a composition and the server's answer to it; null when no answer was read back. */
+    private record CheckCall(JsonNode arguments, @Nullable String result) {}
+
+    /**
+     * Composes one case with the composer loop that production runs, the Node {@code review_compose} loop over the real
+     * composer sessions, and grades what it decided for {@code destination}. A case is accepted when the loop
+     * published a draft that the server checked; its review is that draft, or else the last one it checked. The eval
+     * stops at preparation, before approval and delivery.
+     *
+     * @param output maps the model's review back to the case's own ids
+     */
+    static ObjectNode compose(
+            String id,
+            ComposerReplay.Basis basis,
+            FeedbackDestination destination,
+            UnaryOperator<JsonNode> output,
+            Function<byte[], ModelSession.Answer> model)
+            throws IOException, InterruptedException {
+        var requests = new ArrayList<JsonNode>();
+        var answers = new ArrayList<JsonNode>();
+        long started = System.nanoTime();
+        var outcome = ComposerReplay.node(basis, body -> {
+            requests.add(MAPPER.readTree(body));
+            var answer = model.apply(body);
+            answers.add(answer.status() == 200 ? MAPPER.readTree(answer.body()) : JSON.nullNode());
+            return answer;
+        });
+        var results = new HashMap<String, String>();
+        for (JsonNode request : requests)
+            for (JsonNode message : request.path("messages"))
+                if ("tool".equals(message.path("role").asString()))
+                    results.put(
+                            message.path("tool_call_id").asString(),
+                            message.path("content").asString());
+        var checks = new ArrayList<CheckCall>();
+        for (JsonNode answer : answers)
+            for (JsonNode call : answer.path("choices").path(0).path("message").path("tool_calls"))
+                if ("check_package".equals(call.path("function").path("name").asString()))
+                    checks.add(new CheckCall(
+                            MAPPER.readTree(
+                                    call.path("function").path("arguments").asString()),
+                            results.get(call.path("id").asString())));
+        String published = outcome.decisions().stream()
+                .filter(decision -> decision.destination() == destination && decision.published())
+                .map(CompositionToolTrace.Decision::draftId)
+                .filter(Objects::nonNull)
+                .reduce((earlier, later) -> later)
+                .orElse(null);
+        CheckCall last = checks.isEmpty() ? null : checks.getLast();
+        CheckCall shown = published == null
+                ? last
+                : checks.stream()
+                        .filter(check -> published.equals(checkedDraft(check.result())))
+                        .findFirst()
+                        .orElse(last);
+        boolean accepted = published != null;
+
+        var entry = JSON.objectNode().put("id", id);
+        entry.put("calls", answers.size());
+        entry.put("elapsedMs", Duration.ofNanos(System.nanoTime() - started).toMillis());
+        String failure = accepted ? null : failure(outcome);
+        if (failure != null) entry.put("failure", failure);
+        else entry.putNull("failure");
+        if (checks.isEmpty()) entry.putNull("firstAccepted");
+        else entry.put("firstAccepted", checkedDraft(checks.getFirst().result()) != null);
+        entry.put("accepted", accepted);
+        entry.set("errors", strings(accepted || last == null ? List.of() : refusal(last.result())));
+        if (shown != null) entry.set("review", output.apply(ReviewOnWork.unwrapArguments(shown.arguments())));
+        else entry.putNull("review");
+        return entry;
+    }
+
+    /** The draft ID of a check the server accepted, or null for a refusal. */
+    private static @Nullable String checkedDraft(@Nullable String result) {
+        if (result == null || !result.startsWith("{")) return null;
+        JsonNode receipt = MAPPER.readTree(result);
+        return receipt.path("checked").asBoolean() ? receipt.path("draftId").asString(null) : null;
+    }
+
+    /** Why the server refused the last checked draft, one reason per line it listed. */
+    private static List<String> refusal(@Nullable String result) {
+        if (result == null) return List.of();
+        if (checkedDraft(result) != null) return List.of("checked, but not published");
+        var listed = result.lines()
+                .filter(line -> line.startsWith("- "))
+                .map(line -> line.substring(2))
+                .toList();
+        return listed.isEmpty() ? List.of(result) : listed;
+    }
+
+    /** Why the loop decided nothing: the cause that handed the attempt on, the review's stop, or no decision. */
+    private static String failure(ComposerReplay.Outcome outcome) {
+        if (outcome.handedOn() != null) return outcome.handedOn();
+        String stop = null;
+        for (JsonNode reviewStop : outcome.reviewStops())
+            if (!"COMPLETE".equals(reviewStop.asString())) stop = reviewStop.asString();
+        return Objects.requireNonNullElse(stop, "NO_DECISION");
     }
 
     // ---------------------------------------------------------------- the scenario
@@ -489,7 +631,7 @@ final class CompositionEvalCases {
             }
         }
 
-        return new Scenario(id, item, render(files, admission, history), ids, back, files, admission);
+        return new Scenario(id, item, render(files, admission, history), ids, back, files, admission, history);
     }
 
     static List<PrivateScenario> privateScenarios(List<Scenario> scenarios) throws Exception {
@@ -513,6 +655,8 @@ final class CompositionEvalCases {
             String id,
             String sourceCase,
             String destination,
+            Map<String, byte[]> inputs,
+            JsonNode response,
             ComposerFiles files,
             String turn,
             ObjectNode toolParameters,
@@ -590,6 +734,8 @@ final class CompositionEvalCases {
                 scenario.id() + "/" + destination + "/" + supportCount,
                 scenario.id(),
                 destination,
+                scenario.inputs(),
+                response,
                 files,
                 turn,
                 PrivateFeedback.toolParameters(List.copyOf(slugs), request),

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.context.PublicFeedbackSnapshot;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
+import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
@@ -94,12 +96,17 @@ final class ComposerReplay {
 
     private ComposerReplay() {}
 
-    /** What a replay admitted. */
+    /**
+     * What a replay admitted.
+     *
+     * @param decisions what each tool call decided, as the server's tool trace keeps it; not part of the replayed outcome
+     */
     record Outcome(
             JsonNode packages,
             JsonNode reviewStops,
             @Nullable String handedOn,
-            JsonNode calls) {
+            JsonNode calls,
+            List<CompositionToolTrace.Decision> decisions) {
         ObjectNode toJson() {
             var node = JSON.objectNode();
             node.set("packages", packages);
@@ -132,6 +139,51 @@ final class ComposerReplay {
                 StandardCharsets.UTF_8);
     }
 
+    /**
+     * A sealed review as the composer's server side reads it.
+     *
+     * @param inputs the retained inputs the sessions render from
+     * @param admission the admission response, in its JSON shape
+     * @param history the public feedback history of the work; null when the work has none
+     * @param capabilities the copy forms the item supports, which open the destinations
+     * @param reviewedEarlier whether an earlier attempt already decided the review on the work
+     * @param earlierDecisions what an earlier attempt's prepared rows decide, by destination
+     * @param reasoningEffort the model's reasoning effort, as the job froze it
+     * @param maxOutputTokens the model's output bound, as the job froze it
+     */
+    record Basis(
+            Map<String, byte[]> inputs,
+            JsonNode admission,
+            @Nullable JsonNode history,
+            Set<CopyCapability> capabilities,
+            boolean reviewedEarlier,
+            Map<FeedbackDestination, Set<UUID>> earlierDecisions,
+            @Nullable ReasoningEffort reasoningEffort,
+            int maxOutputTokens) {}
+
+    /** The basis that a case file names: a golden scenario, the item's copy forms and what was decided earlier. */
+    static Basis basis(JsonNode replay) throws IOException {
+        Path scenario = SCENARIOS.resolve(replay.path("scenario").asString());
+        var capabilities = new HashSet<CopyCapability>();
+        replay.path("copyCapabilities").forEach(name -> capabilities.add(CopyCapability.valueOf(name.asString())));
+        var earlier = new EnumMap<FeedbackDestination, Set<UUID>>(FeedbackDestination.class);
+        replay.path("earlierDecisions").properties().forEach(entry -> {
+            var ids = new HashSet<UUID>();
+            entry.getValue().forEach(id -> ids.add(UUID.fromString(id.asString())));
+            earlier.put(FeedbackDestination.valueOf(entry.getKey()), Set.copyOf(ids));
+        });
+        Path history = scenario.resolve("public-history.json");
+        return new Basis(
+                workspace(scenario.resolve("workspace")),
+                MAPPER.readTree(Files.readAllBytes(scenario.resolve("admission.json"))),
+                Files.exists(history) ? MAPPER.readTree(Files.readAllBytes(history)) : null,
+                Set.copyOf(capabilities),
+                replay.path("reviewedEarlier").asBoolean(false),
+                earlier,
+                null,
+                4_000);
+    }
+
     /** The Node composer driver that replays a case against a loopback gateway, run from the module directory. */
     private static final Path NODE_DRIVER = Path.of("src/test/resources/agent/review-composer-replay.ts");
 
@@ -141,7 +193,13 @@ final class ComposerReplay {
      */
     static Outcome node(JsonNode replay, Function<byte[], ModelSession.Answer> model)
             throws IOException, InterruptedException {
-        var state = new Server(replay);
+        return node(basis(replay), model);
+    }
+
+    /** Runs the Node composer loop on a sealed basis, with each model call answered by {@code model}. */
+    static Outcome node(Basis basis, Function<byte[], ModelSession.Answer> model)
+            throws IOException, InterruptedException {
+        var state = new Server(basis);
         var sessions = state.sessions();
         var calls = JSON.arrayNode();
         var previous = new ArrayList<JsonNode>();
@@ -169,7 +227,8 @@ final class ComposerReplay {
             state.accepted.forEach(accepted -> packages.add(MAPPER.valueToTree(accepted)));
             var stops = JSON.arrayNode();
             state.reviewStops.forEach(stops::add);
-            return new Outcome(packages, stops, outcome.path("handedOn").asString(null), calls);
+            return new Outcome(
+                    packages, stops, outcome.path("handedOn").asString(null), calls, state.trace.decisions(identity));
         }
     }
 
@@ -312,19 +371,11 @@ final class ComposerReplay {
         final ReviewJob job = RuntimeReviewTestData.job();
         final List<FeedbackPackage> accepted = new ArrayList<>();
         final List<String> reviewStops = new ArrayList<>();
-        private final Path scenario;
-        private final boolean reviewedEarlier;
-        /** What an earlier attempt's prepared rows decide, by destination. */
-        private final Map<FeedbackDestination, Set<UUID>> earlierDecisions = new EnumMap<>(FeedbackDestination.class);
+        final CompositionToolTrace trace = CompositionTraces.inMemory();
+        private final Basis basis;
 
-        Server(JsonNode replay) throws IOException {
-            scenario = SCENARIOS.resolve(replay.path("scenario").asString());
-            reviewedEarlier = replay.path("reviewedEarlier").asBoolean(false);
-            replay.path("earlierDecisions").properties().forEach(entry -> {
-                var ids = new HashSet<UUID>();
-                entry.getValue().forEach(id -> ids.add(UUID.fromString(id.asString())));
-                earlierDecisions.put(FeedbackDestination.valueOf(entry.getKey()), Set.copyOf(ids));
-            });
+        Server(Basis basis) {
+            this.basis = basis;
             RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, 0), 0);
             job.setAdmissionAttempt(0);
             job.setAdmissionDigest("a".repeat(64));
@@ -340,11 +391,11 @@ final class ComposerReplay {
                                     null,
                                     null,
                                     DataHandlingTier.UNDECLARED,
-                                    null,
+                                    basis.reasoningEffort(),
                                     null,
                                     false),
                             200_000,
-                            4_000,
+                            basis.maxOutputTokens(),
                             600,
                             null)
                     .toJson(MAPPER));
@@ -352,16 +403,14 @@ final class ComposerReplay {
                     .thenReturn(
                             RuntimeReviewTestData.review(ReviewKind.ITEM, RuntimeReviewTestData.assignment(5L, null)));
             var descriptor = mock(ItemDescriptor.class);
-            var capabilities = new HashSet<CopyCapability>();
-            replay.path("copyCapabilities").forEach(name -> capabilities.add(CopyCapability.valueOf(name.asString())));
-            when(descriptor.copyCapabilities()).thenReturn(Set.copyOf(capabilities));
+            when(descriptor.copyCapabilities()).thenReturn(basis.capabilities());
             when(items.descriptorFor(any())).thenReturn(Optional.of(descriptor));
             when(admission.privateProgress(job)).thenAnswer(invocation -> progress());
             when(admission.admittedResponse(job)).thenAnswer(invocation -> admissionResponse());
-            Path history = scenario.resolve("public-history.json");
-            if (Files.exists(history))
+            JsonNode history = basis.history();
+            if (history != null)
                 when(admission.publicFeedbackHistory(any()))
-                        .thenReturn(MAPPER.readValue(Files.readAllBytes(history), PublicFeedbackSnapshot.class));
+                        .thenReturn(MAPPER.treeToValue(history, PublicFeedbackSnapshot.class));
             when(admission.publishPackage(any(), any())).thenAnswer(invocation -> accept(invocation.getArgument(1)));
             when(admission.preparedReview(job)).thenAnswer(invocation -> preparedReview());
             doAnswer(invocation -> {
@@ -370,7 +419,7 @@ final class ComposerReplay {
                     })
                     .when(repairs)
                     .stop(anyLong(), any(), any());
-            var inputs = workspace(scenario.resolve("workspace"));
+            var inputs = new TreeMap<>(basis.inputs());
             inputs.remove(SandboxLayout.FEEDBACK_COMPOSITION_PATH);
             when(continuation.retainedInputs(job)).thenReturn(inputs);
         }
@@ -386,7 +435,7 @@ final class ComposerReplay {
                     new SimpleMeterRegistry(),
                     MAPPER,
                     repairs,
-                    CompositionTraces.inMemory(),
+                    trace,
                     Duration.ZERO);
         }
 
@@ -432,7 +481,8 @@ final class ComposerReplay {
         }
 
         private PrivateFeedbackProgress progress() {
-            var decided = new EnumMap<FeedbackDestination, Set<UUID>>(earlierDecisions);
+            var decided = new EnumMap<FeedbackDestination, Set<UUID>>(FeedbackDestination.class);
+            decided.putAll(basis.earlierDecisions());
             for (var request : accepted)
                 for (var piece : request.composition())
                     if (piece.destination() != FeedbackDestination.ON_WORK)
@@ -446,8 +496,8 @@ final class ComposerReplay {
             return new PrivateFeedbackProgress(all, 0, 0, decided);
         }
 
-        private AdmissionResponseDTO admissionResponse() throws IOException {
-            JsonNode response = MAPPER.readTree(Files.readAllBytes(scenario.resolve("admission.json")));
+        private AdmissionResponseDTO admissionResponse() {
+            JsonNode response = basis.admission();
             var admitted = new ArrayList<AdmittedResultDTO>();
             for (JsonNode result : response.path("admitted"))
                 admitted.add(MAPPER.treeToValue(result, AdmittedResultDTO.class));
@@ -455,7 +505,8 @@ final class ComposerReplay {
             var practices = new ArrayList<PracticePageSupportDTO.PracticeSupportDTO>();
             for (JsonNode practice : support.path("practices"))
                 practices.add(MAPPER.treeToValue(practice, PracticePageSupportDTO.PracticeSupportDTO.class));
-            boolean publicReviewed = reviewedEarlier || accepted.stream().anyMatch(FeedbackPackage::publicComposition);
+            boolean publicReviewed =
+                    basis.reviewedEarlier() || accepted.stream().anyMatch(FeedbackPackage::publicComposition);
             return new AdmissionResponseDTO(
                     AdmissionResponseDTO.CONTRACT_VERSION,
                     job.getReviewId(),

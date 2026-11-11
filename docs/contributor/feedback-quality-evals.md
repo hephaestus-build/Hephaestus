@@ -208,8 +208,11 @@ The first one writes the model requests and the check of every labelled composit
 ```
 
 A live run composes every case with the model that the three `HEPHAESTUS_LIVE_LLM_*` variables name.
-It uses main's `ModelSession` and the `OPENAI_COMPLETIONS` protocol.
-The session follows the composer's review session: its call bound, one finish reminder, the nudge, and its answer to a refused review:
+It runs the composer that production runs: the Node `review_compose` loop, over the real composer sessions and the `OPENAI_COMPLETIONS` protocol.
+The sessions render the prompts, check each draft and accept its publication, as in production.
+A case is accepted when the loop publishes a draft that the server checked.
+Its review is that draft, or else the last draft that the loop checked.
+The run stops at preparation, before approval and delivery:
 
 ```bash
 (cd server && COMPOSITION_EVAL_CHECKED=/tmp/ev/in-house.json \
@@ -227,6 +230,8 @@ A rerun composes only the selected cases that the file does not hold yet.
 
 A rerun refuses a file from another model, other settings or other rendered requests.
 The run sends requests directly to the endpoint, without the proxy that fences and bills them in production.
+A private case opens only its own destination, and the review on the work counts as decided.
+Its composition request comes from the item's copy forms, as in production.
 
 A run from another runner writes one `check_package` argument object for each case into a file such as `outputs.json`.
 This command applies main's check to that file and writes the checked run:

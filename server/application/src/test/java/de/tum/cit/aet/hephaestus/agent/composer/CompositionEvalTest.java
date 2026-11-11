@@ -5,6 +5,7 @@ import static de.tum.cit.aet.hephaestus.agent.composer.CompositionEvalCases.MAPP
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -203,5 +204,94 @@ class CompositionEvalTest {
         assertThat(refused)
                 .as("main's composer refuses these reference compositions")
                 .isEmpty();
+    }
+
+    @Test
+    void shouldGradeTheReviewThatTheComposerLoopPublishedWhenTheModelSendsTheReferenceReview() throws Exception {
+        var scenario = CompositionEvalCases.load().getFirst();
+        JsonNode reference = reference(scenario);
+        var script = JSON.objectNode();
+        var responses = script.putArray("responses");
+        responses.addObject().put("tool", "check_package").set("arguments", scenario.toModel(reference));
+        responses
+                .addObject()
+                .put("tool", "publish_package")
+                .putObject("arguments")
+                .put("draftId", "${draftId}");
+
+        var entry = CompositionEvalCases.compose(
+                scenario.id(),
+                CompositionEvalCases.basis(scenario, null, 4_000),
+                FeedbackDestination.ON_WORK,
+                scenario::fromModel,
+                ComposerReplay.replayed(script));
+
+        assertThat(entry.path("failure").isNull()).as(entry.toString()).isTrue();
+        assertThat(entry.path("accepted").asBoolean()).isTrue();
+        assertThat(entry.path("firstAccepted").asBoolean()).isTrue();
+        assertThat(entry.path("errors")).isEmpty();
+        assertThat(entry.path("review"))
+                .isEqualTo(scenario.fromModel(ReviewOnWork.unwrapArguments(scenario.toModel(reference))));
+    }
+
+    @Test
+    void shouldGradeAPrivateCaseThatTheComposerLoopPublishedForItsDestination() throws Exception {
+        var scenario = CompositionEvalCases.privateScenarios(CompositionEvalCases.load())
+                .getFirst();
+        var feedback = JSON.objectNode();
+        var pieces = feedback.putArray("feedback");
+        for (var result : scenario.admission().results()) {
+            if (!result.path("outcome").asString().equals("NOT_MET")) continue;
+            var piece = pieces.addObject()
+                    .put("destination", scenario.destination())
+                    .put("practiceSlug", result.path("practiceSlug").asString())
+                    .put("action", "WITHHOLD")
+                    .put("withholdReason", "BELOW_BAR");
+            piece.putArray("basedOn").add(result.path("resultId").asString());
+        }
+        var script = JSON.objectNode();
+        var responses = script.putArray("responses");
+        responses.addObject().put("tool", "check_package").set("arguments", feedback);
+        responses
+                .addObject()
+                .put("tool", "publish_package")
+                .putObject("arguments")
+                .put("draftId", "${draftId}");
+
+        var entry = CompositionEvalCases.compose(
+                scenario.id(),
+                CompositionEvalCases.basis(scenario, null, 4_000),
+                FeedbackDestination.valueOf(scenario.destination()),
+                review -> review,
+                ComposerReplay.replayed(script));
+
+        assertThat(entry.path("failure").isNull()).as(entry.toString()).isTrue();
+        assertThat(entry.path("accepted").asBoolean()).isTrue();
+        assertThat(entry.path("review").path("feedback")).hasSize(pieces.size());
+    }
+
+    @Test
+    void shouldRecordNoDecisionWhenTheComposerLoopsModelNeverChecksADraft() throws Exception {
+        var scenario = CompositionEvalCases.load().getFirst();
+        var script = JSON.objectNode();
+        script.putArray("responses").addObject().put("text", "I have nothing to add.");
+
+        var entry = CompositionEvalCases.compose(
+                scenario.id(),
+                CompositionEvalCases.basis(scenario, null, 4_000),
+                FeedbackDestination.ON_WORK,
+                scenario::fromModel,
+                ComposerReplay.replayed(script));
+
+        assertThat(entry.path("accepted").asBoolean()).isFalse();
+        assertThat(entry.path("failure").isString()).as(entry.toString()).isTrue();
+        assertThat(entry.path("firstAccepted").isNull()).isTrue();
+        assertThat(entry.path("review").isNull()).isTrue();
+    }
+
+    private static JsonNode reference(CompositionEvalCases.Scenario scenario) {
+        for (JsonNode composition : scenario.item().path("compositions"))
+            if ("reference".equals(composition.path("id").asString())) return composition.path("review");
+        throw new IllegalStateException(scenario.id() + " has no reference composition");
     }
 }
