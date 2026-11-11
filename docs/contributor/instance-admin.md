@@ -96,7 +96,10 @@ Every other delete records why it is exempt.
 A handler whose `@Audited` names another ledger declares the refusal type with `@RequiresRecentSignIn(refusal = …)`.
 Thus, a new administrative action cannot ship without a recorded decision.
 
-Only the member's current role decides whether a workspace role change needs the gate.
+The member's current role and the target role decide together whether a workspace role change needs the gate.
+A change needs it when it grants the owner role, or when it demotes or removes an owner other than the caller.
+The current role is known only under the workspace lock.
+
 Thus, those handlers declare `@RequiresRecentSignIn(OWNER_CHANGE)`, and the method interceptor does not ask.
 `MembershipService.authorizeRoleChange` decides under the workspace lock, with the same policy.
 Every HTTP path that changes a workspace role calls it.

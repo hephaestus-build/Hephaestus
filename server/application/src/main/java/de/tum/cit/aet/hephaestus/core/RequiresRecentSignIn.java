@@ -35,9 +35,10 @@ public @interface RequiresRecentSignIn {
         /** Every call, asked before the handler runs. */
         EVERY_CALL,
         /**
-         * A workspace membership change that grants, demotes or removes an owner. Only the current role decides,
-         * so {@code MembershipService} asks under its lock, with the same policy, and records a refusal on
-         * {@code WORKSPACE_OWNER_CHANGE}.
+         * A workspace membership change that grants, demotes or removes an owner. The member's current role and the
+         * target role decide together, and the current role is known only under the workspace lock, so
+         * {@code MembershipService} asks there, with the same policy, and records a refusal on
+         * {@code WORKSPACE_OWNER_CHANGE}. The contributor guide on instance administration owns the rule.
          */
         OWNER_CHANGE,
     }
