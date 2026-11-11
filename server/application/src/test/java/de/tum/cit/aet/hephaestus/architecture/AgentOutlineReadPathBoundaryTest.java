@@ -17,8 +17,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Guards the structural inversion of the Outline documentation read path.
  *
- * <p>The {@code agent} module consumes a workspace's mirrored Outline documents only through the agent-owned
- * {@code agent.documentation} SPI ({@code DocumentProjection}), which {@code integration.outline} implements. The
+ * <p>The {@code agent} module consumes a workspace's mirrored Outline documents only through the
+ * {@code integration.docs.item} SPI ({@code DocumentProjection}), which {@code integration.outline} implements. The
  * agent never imports an {@code integration.outline} type ({@link PracticeReviewModuleBoundaryTest} forbids it
  * for the agent module). The agent must also:
  *
@@ -93,7 +93,7 @@ class AgentOutlineReadPathBoundaryTest extends HephaestusArchitectureTest {
         }
         assertThat(offenders)
                 .as("agent source files must not embed raw SQL against Outline's private table (outline_document) — "
-                        + "read it through the agent.documentation SPI implemented by integration.outline")
+                        + "read it through the integration.docs.item SPI implemented by integration.outline")
                 .isEmpty();
     }
 

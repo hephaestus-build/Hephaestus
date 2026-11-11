@@ -20,8 +20,6 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     List<Item> findByWorkspaceIdAndIdIn(long workspaceId, List<Long> ids);
 
-    List<Item> findByWorkspaceIdAndParentIdAndRemovedAtIsNull(long workspaceId, long parentId);
-
     @Query(
             value = "SELECT * FROM item WHERE workspace_id = :workspaceId AND kind = :kind AND source_id = :sourceId",
             nativeQuery = true)

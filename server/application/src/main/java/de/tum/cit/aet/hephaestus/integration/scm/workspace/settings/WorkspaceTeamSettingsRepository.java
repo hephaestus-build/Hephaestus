@@ -20,12 +20,6 @@ public interface WorkspaceTeamSettingsRepository
     Optional<WorkspaceTeamSettings> findByWorkspaceIdAndTeamId(Long workspaceId, Long teamId);
 
     @Query("""
-        SELECT wts FROM WorkspaceTeamSettings wts
-        WHERE wts.workspace.id = :workspaceId AND wts.hidden = true
-        """)
-    List<WorkspaceTeamSettings> findHiddenTeamsByWorkspace(@Param("workspaceId") Long workspaceId);
-
-    @Query("""
         SELECT wts.team.id FROM WorkspaceTeamSettings wts
         WHERE wts.workspace.id = :workspaceId AND wts.hidden = true
         """)

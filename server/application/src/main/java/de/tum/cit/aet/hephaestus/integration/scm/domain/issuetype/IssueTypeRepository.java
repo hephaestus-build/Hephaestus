@@ -10,15 +10,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface IssueTypeRepository extends JpaRepository<IssueType, String> {
-    @Query("""
-        SELECT it
-        FROM IssueType it
-        WHERE it.organization.id = :organizationId
-        AND it.isEnabled = true
-        ORDER BY it.name ASC
-        """)
-    List<IssueType> findEnabledByOrganizationId(@Param("organizationId") long organizationId);
-
     /**
      * Find all issue types for an organization (including disabled).
      * Used for cleanup of deleted issue types during sync.

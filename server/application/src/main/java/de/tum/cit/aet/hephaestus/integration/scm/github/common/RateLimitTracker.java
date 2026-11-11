@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRateLimit;
-import java.time.Duration;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.client.ClientGraphQlResponse;
@@ -51,9 +50,6 @@ public interface RateLimitTracker {
     /** Critical means requests should stop immediately to avoid exhausting the limit entirely. */
     boolean isCritical(Long scopeId);
 
-    /** Low means callers should consider throttling or skipping non-essential operations like backfill. */
-    boolean isLow(Long scopeId);
-
     /**
      * Blocks the calling thread until either the rate limit resets or the maximum wait duration
      * (5 minutes) is reached.
@@ -65,12 +61,4 @@ public interface RateLimitTracker {
 
     @Nullable
     Instant getResetAt(Long scopeId);
-
-    /**
-     * When rate limit is low, provides adaptive throttling that distributes remaining points evenly
-     * until reset.
-     *
-     * @return recommended delay, or Duration.ZERO if no throttling needed
-     */
-    Duration getRecommendedDelay(Long scopeId);
 }

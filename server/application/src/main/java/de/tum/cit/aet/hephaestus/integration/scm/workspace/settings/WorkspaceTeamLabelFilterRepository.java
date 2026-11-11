@@ -29,13 +29,6 @@ public interface WorkspaceTeamLabelFilterRepository
     Set<Label> findLabelsByWorkspaceAndTeam(@Param("workspaceId") Long workspaceId, @Param("teamId") Long teamId);
 
     @Query("""
-        SELECT DISTINCT wtlf.team.id
-        FROM WorkspaceTeamLabelFilter wtlf
-        WHERE wtlf.workspace.id = :workspaceId
-        """)
-    Set<Long> findTeamIdsWithLabelFilters(@Param("workspaceId") Long workspaceId);
-
-    @Query("""
         SELECT wtlf
         FROM WorkspaceTeamLabelFilter wtlf
         JOIN FETCH wtlf.label l

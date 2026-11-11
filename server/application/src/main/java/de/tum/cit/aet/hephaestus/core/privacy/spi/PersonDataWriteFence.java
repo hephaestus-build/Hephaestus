@@ -17,10 +17,6 @@ public interface PersonDataWriteFence {
     @CheckReturnValue
     boolean holdForAccountWrite(long accountId);
 
-    /** Acquire one ordered lock set, then return only the existing, non-suppressed accounts. */
-    @CheckReturnValue
-    List<Long> holdForAccountWrites(List<Long> accountIds);
-
     /** Finish admitted writers before checking the preview and installing permanent controls. */
     void holdForErasure(List<PersonIdentity> identities);
 }

@@ -23,25 +23,10 @@ public interface WorkspaceTeamRepositorySettingsRepository
             Long workspaceId, Long teamId, Long repositoryId);
 
     @Query("""
-        SELECT wtrs FROM WorkspaceTeamRepositorySettings wtrs
-        WHERE wtrs.workspace.id = :workspaceId AND wtrs.hiddenFromContributions = true
-        """)
-    List<WorkspaceTeamRepositorySettings> findHiddenRepositoriesByWorkspace(@Param("workspaceId") Long workspaceId);
-
-    @Query("""
         SELECT wtrs.repository.id FROM WorkspaceTeamRepositorySettings wtrs
         WHERE wtrs.workspace.id = :workspaceId AND wtrs.hiddenFromContributions = true
         """)
     Set<Long> findHiddenRepositoryIdsByWorkspace(@Param("workspaceId") Long workspaceId);
-
-    @Query("""
-        SELECT wtrs.repository.id FROM WorkspaceTeamRepositorySettings wtrs
-        WHERE wtrs.workspace.id = :workspaceId
-          AND wtrs.team.id IN :teamIds
-          AND wtrs.hiddenFromContributions = true
-        """)
-    Set<Long> findHiddenRepositoryIdsByWorkspaceAndTeams(
-            @Param("workspaceId") Long workspaceId, @Param("teamIds") Set<Long> teamIds);
 
     @Modifying
     @Transactional

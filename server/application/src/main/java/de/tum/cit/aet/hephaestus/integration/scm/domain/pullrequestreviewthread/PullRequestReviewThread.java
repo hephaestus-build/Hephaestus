@@ -126,21 +126,6 @@ public class PullRequestReviewThread extends BaseGitServiceEntity {
         }
     }
 
-    /**
-     * Removes a comment from this thread and maintains bidirectional consistency.
-     * <p>
-     * CRITICAL: This method must be called BEFORE deleting the comment entity
-     * when orphanRemoval=true to avoid TransientObjectException.
-     *
-     * @param comment the comment to remove
-     */
-    public void removeComment(PullRequestReviewComment comment) {
-        if (comment != null) {
-            this.comments.remove(comment);
-            comment.setThread(null);
-        }
-    }
-
     public enum State {
         RESOLVED,
         UNRESOLVED,

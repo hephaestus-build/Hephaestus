@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.feature;
 
-import java.util.EnumMap;
-import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.Authentication;
@@ -48,49 +46,6 @@ public class FeatureFlagService {
             case ROLE -> hasAuthority(flag.key());
             case CONFIG -> featureProperties.isEnabled(flag.key());
         };
-    }
-
-    /**
-     * Check if ALL of the given flags are enabled (AND composition).
-     *
-     * @param flags the flags to check
-     * @return true only if every flag is enabled
-     */
-    public boolean allEnabled(FeatureFlag... flags) {
-        for (FeatureFlag flag : flags) {
-            if (!isEnabled(flag)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Check if ANY of the given flags are enabled (OR composition).
-     *
-     * @param flags the flags to check
-     * @return true if at least one flag is enabled
-     */
-    public boolean anyEnabled(FeatureFlag... flags) {
-        for (FeatureFlag flag : flags) {
-            if (isEnabled(flag)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Evaluate all feature flags for the current user.
-     *
-     * @return a map of every {@link FeatureFlag} to its enabled state
-     */
-    public Map<FeatureFlag, Boolean> evaluateAll() {
-        Map<FeatureFlag, Boolean> result = new EnumMap<>(FeatureFlag.class);
-        for (FeatureFlag flag : FeatureFlag.values()) {
-            result.put(flag, isEnabled(flag));
-        }
-        return result;
     }
 
     private boolean hasAuthority(String role) {

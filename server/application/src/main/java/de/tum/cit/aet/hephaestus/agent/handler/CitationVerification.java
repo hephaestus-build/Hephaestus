@@ -11,9 +11,6 @@ import tools.jackson.databind.JsonNode;
 /** Server-produced verdicts travel with admitted results, never with unverified model output. */
 public final class CitationVerification {
 
-    /** A pinned Git object id, in a SHA-1 or a SHA-256 repository. */
-    public static final String GIT_OBJECT_ID = "(?:[0-9a-f]{40}|[0-9a-f]{64})";
-
     /** A lowercase hex SHA-256 digest. */
     public static final String SHA256_HEX = "[0-9a-f]{64}";
 

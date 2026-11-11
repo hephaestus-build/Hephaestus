@@ -243,57 +243,6 @@ class GitHubGraphQlErrorUtilsTest {
     }
 
     @Nested
-    class HasAnyNotFoundError {
-
-        @Test
-        void anyNotFoundError() {
-            ResponseError error = mock(ResponseError.class);
-            when(error.getExtensions()).thenReturn(Map.of("type", "NOT_FOUND"));
-            when(error.getParsedPath()).thenReturn(List.of("some", "random", "path"));
-
-            ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
-            when(response.getErrors()).thenReturn(List.of(error));
-
-            assertThat(GitHubGraphQlErrorUtils.hasAnyNotFoundError(response)).isTrue();
-        }
-    }
-
-    @Nested
-    class GetNotFoundErrorMessage {
-
-        @Test
-        void nullResponse() {
-            assertThat(GitHubGraphQlErrorUtils.getNotFoundErrorMessage(null)).isNull();
-        }
-
-        @Test
-        void returnsMessage() {
-            ResponseError error = mock(ResponseError.class);
-            when(error.getExtensions()).thenReturn(Map.of("type", "NOT_FOUND"));
-            when(error.getMessage()).thenReturn("Could not resolve to an Issue with the number of 7.");
-
-            ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
-            when(response.getErrors()).thenReturn(List.of(error));
-
-            assertThat(GitHubGraphQlErrorUtils.getNotFoundErrorMessage(response))
-                    .isEqualTo("Could not resolve to an Issue with the number of 7.");
-        }
-
-        @Test
-        void noNotFoundError() {
-            ResponseError error = mock(ResponseError.class);
-            when(error.getExtensions()).thenReturn(Map.of("type", "FORBIDDEN"));
-            when(error.getMessage()).thenReturn("Forbidden");
-
-            ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
-            when(response.getErrors()).thenReturn(List.of(error));
-
-            assertThat(GitHubGraphQlErrorUtils.getNotFoundErrorMessage(response))
-                    .isNull();
-        }
-    }
-
-    @Nested
     class DetectTransientError {
 
         @Test
@@ -487,26 +436,6 @@ class GitHubGraphQlErrorUtilsTest {
             var error = new GitHubGraphQlErrorUtils.TransientError(
                     GitHubGraphQlErrorUtils.TransientErrorType.RESOURCE_LIMIT, "test");
             assertThat(error.getRecommendedWait()).isEqualTo(Duration.ofSeconds(0));
-        }
-
-        @Test
-        void shouldReduceComplexity() {
-            assertThat(new GitHubGraphQlErrorUtils.TransientError(
-                                    GitHubGraphQlErrorUtils.TransientErrorType.RESOURCE_LIMIT, "test")
-                            .shouldReduceComplexity())
-                    .isTrue();
-            assertThat(new GitHubGraphQlErrorUtils.TransientError(
-                                    GitHubGraphQlErrorUtils.TransientErrorType.TIMEOUT, "test")
-                            .shouldReduceComplexity())
-                    .isFalse();
-            assertThat(new GitHubGraphQlErrorUtils.TransientError(
-                                    GitHubGraphQlErrorUtils.TransientErrorType.RATE_LIMIT, "test")
-                            .shouldReduceComplexity())
-                    .isFalse();
-            assertThat(new GitHubGraphQlErrorUtils.TransientError(
-                                    GitHubGraphQlErrorUtils.TransientErrorType.SERVER_ERROR, "test")
-                            .shouldReduceComplexity())
-                    .isFalse();
         }
     }
 }

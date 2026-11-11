@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -27,10 +26,6 @@ public class ScmSummaryPoster {
         if (!fence.beforeCreate(List.of(content.copyId()), List.<CopyReceipt>of()))
             throw new FeedbackNotSentException("Feedback write was not admitted");
         return writer.postSummary(target, content);
-    }
-
-    public SummaryLookup findExisting(FeedbackTarget target, SummaryContent expected) {
-        return writer(target).findExistingSummary(target, expected);
     }
 
     public CopyUpdateReceipt update(FeedbackTarget target, SummaryHandle existing, SummaryContent content) {

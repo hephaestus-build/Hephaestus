@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommen
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaborator;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -128,13 +127,5 @@ public class User extends BaseGitServiceEntity {
         public String toValue() {
             return name();
         }
-    }
-
-    public void addTeam(Team team) {
-        teamMemberships.add(new TeamMembership(team, this, TeamMembership.Role.MEMBER));
-    }
-
-    public void removeTeam(Team team) {
-        teamMemberships.removeIf(m -> m.getTeam() != null && m.getTeam().equals(team));
     }
 }

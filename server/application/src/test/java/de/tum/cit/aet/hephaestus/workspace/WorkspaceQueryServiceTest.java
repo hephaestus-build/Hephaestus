@@ -28,9 +28,6 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
     private MembershipRepository workspaceMembershipRepository;
 
     @Mock
-    private RepositoryToMonitorRepository repositoryToMonitorRepository;
-
-    @Mock
     private ConnectionService connectionService;
 
     @Mock
@@ -43,7 +40,6 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
         return new WorkspaceQueryService(
                 workspaceRepository,
                 workspaceMembershipRepository,
-                repositoryToMonitorRepository,
                 connectionService,
                 connectionMetadata,
                 publicActivityPolicy,

@@ -61,9 +61,6 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
 
     long deleteByWorkspaceId(Long workspaceId);
 
-    /** Live (non-tombstoned) mirrored documents in the workspace — the admin status figure. */
-    long countByWorkspaceIdAndDeletedAtIsNull(Long workspaceId);
-
     /** One collection's live (non-tombstoned) document count — the single-row admin DTO figure. */
     long countByWorkspaceIdAndConnectionIdAndCollectionIdAndDeletedAtIsNull(
             Long workspaceId, Long connectionId, String collectionId);

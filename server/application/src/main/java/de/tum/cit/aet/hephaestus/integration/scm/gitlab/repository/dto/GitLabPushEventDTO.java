@@ -75,16 +75,7 @@ public record GitLabPushEventDTO(
             @JsonProperty("namespace") @Nullable String namespace,
             @JsonProperty("path_with_namespace") @Nullable String pathWithNamespace,
             @JsonProperty("default_branch") @Nullable String defaultBranch,
-            @JsonProperty("visibility_level") int visibilityLevel) {
-        /** Visibility level 0 = private. */
-        public static final int VISIBILITY_PRIVATE = 0;
-
-        /** Visibility level 10 = internal. */
-        public static final int VISIBILITY_INTERNAL = 10;
-
-        /** Visibility level 20 = public. */
-        public static final int VISIBILITY_PUBLIC = 20;
-    }
+            @JsonProperty("visibility_level") int visibilityLevel) {}
 
     /**
      * Returns whether this push is to the default branch.

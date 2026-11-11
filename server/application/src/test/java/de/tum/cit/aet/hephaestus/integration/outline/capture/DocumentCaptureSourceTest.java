@@ -52,7 +52,26 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     }
 
     private static ProjectedDocument doc(String collection, String slug, String title, String body) {
-        return ProjectedDocument.withoutAuthors(collection, slug, title, body, false);
+        return new ProjectedDocument(
+                collection,
+                slug,
+                title,
+                body,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                false,
+                null,
+                null,
+                null,
+                null);
     }
 
     private static final Instant CREATED = Instant.parse("2025-11-01T08:00:00Z");

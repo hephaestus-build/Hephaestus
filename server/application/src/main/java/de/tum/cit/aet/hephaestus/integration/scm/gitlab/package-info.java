@@ -31,8 +31,6 @@
             "workspace::spi",
             "workspace::events",
             "workspace::dto",
-            // Provider availability gated by FeatureFlagService.
-            "feature",
         })
 @org.jspecify.annotations.NullMarked
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab;

@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRateLimit;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -183,42 +182,6 @@ class ScopedRateLimitTrackerTest extends BaseUnitTest {
     }
 
     @Nested
-    class IsLow {
-
-        @Test
-        void shouldReturnTrueWhenBelowLowThreshold() {
-            Long scopeId = 1L;
-            OffsetDateTime resetTime = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1);
-            tracker.updateFromResponse(scopeId, mockResponseWithRateLimit(300, 5000, 10, resetTime));
-
-            assertThat(tracker.isLow(scopeId)).isTrue();
-        }
-
-        @Test
-        void shouldReturnFalseWhenAtLowThreshold() {
-            Long scopeId = 1L;
-            OffsetDateTime resetTime = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1);
-            tracker.updateFromResponse(scopeId, mockResponseWithRateLimit(500, 5000, 10, resetTime));
-
-            assertThat(tracker.isLow(scopeId)).isFalse();
-        }
-
-        @Test
-        void shouldReturnFalseWhenAboveLowThreshold() {
-            Long scopeId = 1L;
-            OffsetDateTime resetTime = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1);
-            tracker.updateFromResponse(scopeId, mockResponseWithRateLimit(4000, 5000, 5, resetTime));
-
-            assertThat(tracker.isLow(scopeId)).isFalse();
-        }
-
-        @Test
-        void shouldReturnFalseForUnknownScope() {
-            assertThat(tracker.isLow(999L)).isFalse();
-        }
-    }
-
-    @Nested
     class WaitIfNeeded {
 
         @Test
@@ -252,50 +215,6 @@ class ScopedRateLimitTrackerTest extends BaseUnitTest {
             boolean waited = tracker.waitIfNeeded(scopeId);
 
             assertThat(waited).isFalse();
-        }
-    }
-
-    @Nested
-    class GetRecommendedDelay {
-
-        @Test
-        void shouldReturnZeroWhenAboveLowThreshold() {
-            Long scopeId = 1L;
-            OffsetDateTime resetTime = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1);
-            tracker.updateFromResponse(scopeId, mockResponseWithRateLimit(4000, 5000, 5, resetTime));
-
-            Duration delay = tracker.getRecommendedDelay(scopeId);
-
-            assertThat(delay).isEqualTo(Duration.ZERO);
-        }
-
-        @Test
-        void shouldReturnZeroWhenResetTimeInPast() {
-            Long scopeId = 1L;
-            OffsetDateTime pastResetTime = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(5);
-            tracker.updateFromResponse(scopeId, mockResponseWithRateLimit(300, 5000, 10, pastResetTime));
-
-            Duration delay = tracker.getRecommendedDelay(scopeId);
-
-            assertThat(delay).isEqualTo(Duration.ZERO);
-        }
-
-        @Test
-        void shouldReturnPositiveDelayWhenLow() {
-            Long scopeId = 1L;
-            OffsetDateTime resetTime = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(30);
-            tracker.updateFromResponse(scopeId, mockResponseWithRateLimit(300, 5000, 10, resetTime));
-
-            Duration delay = tracker.getRecommendedDelay(scopeId);
-
-            assertThat(delay).isPositive();
-        }
-
-        @Test
-        void shouldReturnZeroForUnknownScope() {
-            Duration delay = tracker.getRecommendedDelay(999L);
-
-            assertThat(delay).isEqualTo(Duration.ZERO);
         }
     }
 
@@ -497,8 +416,6 @@ class ScopedRateLimitTrackerTest extends BaseUnitTest {
             // Exercise every decision API that could mutate state back up.
             tracker.getRemaining(scopeId);
             tracker.isCritical(scopeId);
-            tracker.isLow(scopeId);
-            tracker.getRecommendedDelay(scopeId);
             assertThatNoException().isThrownBy(() -> tracker.waitIfNeeded(scopeId));
 
             var remainingGauge = meterRegistry

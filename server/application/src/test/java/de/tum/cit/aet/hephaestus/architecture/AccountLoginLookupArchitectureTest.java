@@ -18,8 +18,6 @@ import org.junit.jupiter.api.Test;
 class AccountLoginLookupArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> ALLOWED_CALLERS = Set.of(
-            "de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService",
-            "de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver",
             "de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceContextResolverAdapter",
             "de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener");
 

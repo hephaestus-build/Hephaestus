@@ -47,16 +47,6 @@ public final class GitHubGraphQlErrorUtils {
     }
 
     /**
-     * Checks if the GraphQL response contains any NOT_FOUND error.
-     *
-     * @param response the GraphQL response to check
-     * @return true if the response contains any NOT_FOUND error
-     */
-    public static boolean hasAnyNotFoundError(@Nullable ClientGraphQlResponse response) {
-        return hasErrorType(response, ERROR_TYPE_NOT_FOUND, null);
-    }
-
-    /**
      * Checks if the GraphQL response contains an error of the specified type.
      *
      * @param response the GraphQL response to check
@@ -146,34 +136,6 @@ public final class GitHubGraphQlErrorUtils {
         String actualPath = pathBuilder.toString();
         // Only match if the error path is at or under the expected location
         return actualPath.startsWith(pathPrefix);
-    }
-
-    /**
-     * Extracts a human-readable error message for NOT_FOUND errors.
-     * <p>
-     * Useful for logging at an appropriate level (WARN instead of ERROR).
-     *
-     * @param response the GraphQL response
-     * @return a descriptive message about the NOT_FOUND error, or null if no such error
-     */
-    @Nullable
-    public static String getNotFoundErrorMessage(@Nullable ClientGraphQlResponse response) {
-        if (response == null) {
-            return null;
-        }
-
-        List<ResponseError> errors = response.getErrors();
-        if (errors == null) {
-            return null;
-        }
-
-        for (int index = 0; index < errors.size(); index++) {
-            if (ERROR_TYPE_NOT_FOUND.equals(errorType(response, index))) {
-                return errors.get(index).getMessage();
-            }
-        }
-
-        return null;
     }
 
     // Transient Error Detection for Retry Logic
@@ -277,14 +239,6 @@ public final class GitHubGraphQlErrorUtils {
                 case SERVER_ERROR -> Duration.ofSeconds(10);
                 case RESOURCE_LIMIT -> Duration.ofSeconds(0); // No wait - must reduce query complexity
             };
-        }
-
-        /**
-         * Returns true if reducing query complexity might help.
-         * For RESOURCE_LIMIT errors, the query should be retried with smaller page size.
-         */
-        public boolean shouldReduceComplexity() {
-            return type == TransientErrorType.RESOURCE_LIMIT;
         }
 
         /**

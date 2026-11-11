@@ -230,14 +230,6 @@ public class RepositoryToMonitor {
     }
 
     /**
-     * Checks if backfill is in progress (initialized but not complete).
-     * @return true if backfill has started and is not yet complete
-     */
-    public boolean isBackfillInProgress() {
-        return isBackfillInitialized() && !isBackfillComplete();
-    }
-
-    /**
      * Returns the number of issues remaining to backfill.
      * @return issues remaining, or 0 if not initialized or complete
      */

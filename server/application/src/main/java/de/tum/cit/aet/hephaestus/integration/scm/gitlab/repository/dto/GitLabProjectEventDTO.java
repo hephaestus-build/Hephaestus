@@ -39,7 +39,6 @@ public record GitLabProjectEventDTO(
     public static final String EVENT_PROJECT_DESTROY = "project_destroy";
     public static final String EVENT_PROJECT_RENAME = "project_rename";
     public static final String EVENT_PROJECT_TRANSFER = "project_transfer";
-    public static final String EVENT_PROJECT_UPDATE = "project_update";
 
     public boolean isCreation() {
         return EVENT_PROJECT_CREATE.equals(eventName);

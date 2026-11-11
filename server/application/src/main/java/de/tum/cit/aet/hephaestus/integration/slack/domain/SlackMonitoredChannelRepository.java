@@ -17,8 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 public interface SlackMonitoredChannelRepository extends JpaRepository<SlackMonitoredChannel, Long> {
     Optional<SlackMonitoredChannel> findByWorkspaceIdAndSlackChannelId(Long workspaceId, String slackChannelId);
 
-    boolean existsByWorkspaceIdAndSlackChannelId(Long workspaceId, String slackChannelId);
-
     /**
      * The consent lifecycle state of one allow-listed channel, if the row exists. Read by the ingest
      * gate: a message is only persisted when this is {@link ConsentState#ACTIVE}.

@@ -294,57 +294,6 @@ public class PullRequest extends Issue {
         }
     }
 
-    /**
-     * Adds a review thread to this pull request and maintains bidirectional consistency.
-     *
-     * @param thread the thread to add
-     */
-    public void addReviewThread(PullRequestReviewThread thread) {
-        if (thread != null) {
-            this.reviewThreads.add(thread);
-            thread.setPullRequest(this);
-        }
-    }
-
-    /**
-     * Removes a review thread from this pull request and maintains bidirectional consistency.
-     *
-     * @param thread the thread to remove
-     */
-    public void removeReviewThread(PullRequestReviewThread thread) {
-        if (thread != null) {
-            this.reviewThreads.remove(thread);
-            thread.setPullRequest(null);
-        }
-    }
-
-    /**
-     * Adds a review comment to this pull request and maintains bidirectional consistency.
-     * <p>
-     * Note: This is a denormalized relationship - comments are also accessible via
-     * reviews.*.comments or reviewThreads.*.comments. Use with care.
-     *
-     * @param comment the comment to add
-     */
-    public void addReviewComment(PullRequestReviewComment comment) {
-        if (comment != null) {
-            this.reviewComments.add(comment);
-            comment.setPullRequest(this);
-        }
-    }
-
-    /**
-     * Removes a review comment from this pull request and maintains bidirectional consistency.
-     *
-     * @param comment the comment to remove
-     */
-    public void removeReviewComment(PullRequestReviewComment comment) {
-        if (comment != null) {
-            this.reviewComments.remove(comment);
-            comment.setPullRequest(null);
-        }
-    }
-
     /** The requested reviewers, read-only: {@link #replaceRequestedReviewers} is the one way to change them. */
     public Set<RequestedReviewer> getRequestedReviewers() {
         return Collections.unmodifiableSet(requestedReviewers);

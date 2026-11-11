@@ -18,8 +18,8 @@ import org.junit.jupiter.api.Test;
  * Guards the structural inversion of the Slack conversation read path (ADR: "invert the Slack conversation
  * read-path off agent's raw-JDBC tunnel").
  *
- * <p>The {@code agent} module consumes settled Slack conversation threads only through the agent-owned
- * {@code agent.conversation} SPIs ({@code ConversationThreadProjection} / {@code ConversationSourceLiveness} /
+ * <p>The {@code agent} module consumes settled Slack conversation threads only through the
+ * {@code integration.chat.item} SPIs ({@code ConversationThreadProjection} / {@code ConversationSourceLiveness} /
  * {@code ConversationCandidateSource}), which {@code integration.slack} implements. The agent never imports an {@code integration.slack} type
  * ({@link PracticeReviewModuleBoundaryTest} forbids it for the agent module). The agent must also:
  *
@@ -92,7 +92,7 @@ class AgentSlackReadPathBoundaryTest extends HephaestusArchitectureTest {
         assertThat(offenders)
                 .as("agent source files must not embed raw SQL against Slack's private tables "
                         + "(slack_thread/slack_message/slack_monitored_channel) — read them through the "
-                        + "agent.conversation SPIs implemented by integration.slack")
+                        + "integration.chat.item SPIs implemented by integration.slack")
                 .isEmpty();
     }
 

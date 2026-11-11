@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.identity;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery.IdentityView;
-import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -43,40 +42,6 @@ public class AuthenticatedGitProviderUserService {
             }
         }
         return Optional.empty();
-    }
-
-    /**
-     * The account's synchronized GitLab profile on the instance at {@code serverUrl}. A link to
-     * another GitLab instance, or to GitHub, never stands in for it. Without exactly one matching
-     * link this is 409: identity providers recorded before instances were compared by origin can
-     * name one instance twice, and neither link may be picked.
-     */
-    @Transactional
-    public User resolveCurrentGitLabUser(String serverUrl) {
-        Optional<String> instance = ScmOrigin.of(serverUrl);
-        List<IdentityView> matching = activeLinksForCurrentAccount().stream()
-                .filter(link -> instance.isPresent()
-                        && gitProviderRepository
-                                .findById(link.providerId())
-                                .filter(provider -> provider.getType() == IdentityProviderType.GITLAB)
-                                .map(provider -> instance.equals(ScmOrigin.of(provider.getServerUrl())))
-                                .orElse(false))
-                .toList();
-        if (matching.size() > 1) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Your account has more than one GitLab identity on "
-                            + serverUrl
-                            + ". Disconnect the one you do not use in User settings, under Connected accounts.");
-        }
-        if (matching.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Connect your GitLab account on "
-                            + serverUrl
-                            + " before you create a workspace there. Do this in User settings, under Connected accounts.");
-        }
-        return resolveUser(matching.getFirst());
     }
 
     private List<IdentityView> activeLinksForCurrentAccount() {

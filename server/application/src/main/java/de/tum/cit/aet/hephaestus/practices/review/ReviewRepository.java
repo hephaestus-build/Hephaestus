@@ -145,11 +145,6 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQue
     @Query("SELECT r FROM Review r WHERE r.id = :id AND r.workspaceId = :workspaceId")
     Optional<Review> lockByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
-    @Query("SELECT r FROM Review r WHERE r.workspaceId = :workspaceId AND r.kind = :kind ORDER BY r.createdAt DESC,"
-            + " r.id DESC")
-    Page<Review> findByWorkspaceAndKind(
-            @Param("workspaceId") long workspaceId, @Param("kind") ReviewKind kind, Pageable pageable);
-
     /** Filters on the status that a scan reports ({@link ReviewShownStatus}), as its row shows it. */
     @Query(
             value = "SELECT q.* FROM review q WHERE " + SCANS_WHERE + " ORDER BY q.created_at DESC,q.id DESC",

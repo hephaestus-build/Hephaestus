@@ -49,9 +49,4 @@ public class GitLabScmTokenSource implements ScmTokenSource {
                 ? Optional.of("refs/merge-requests/" + pullRequestNumber + "/head")
                 : Optional.empty();
     }
-
-    @Override
-    public boolean recordsReviewDiffBase() {
-        return true;
-    }
 }

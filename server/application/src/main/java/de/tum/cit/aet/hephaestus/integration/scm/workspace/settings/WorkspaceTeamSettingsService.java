@@ -107,24 +107,8 @@ public class WorkspaceTeamSettingsService {
     // Repository Contribution Visibility Settings
 
     @Transactional(readOnly = true)
-    public boolean isRepositoryHiddenFromContributions(Long workspaceId, Long teamId, Long repositoryId) {
-        return repositorySettingsRepository
-                .findByWorkspaceIdAndTeamIdAndRepositoryId(workspaceId, teamId, repositoryId)
-                .map(WorkspaceTeamRepositorySettings::isHiddenFromContributions)
-                .orElse(false);
-    }
-
-    @Transactional(readOnly = true)
     public Set<Long> getHiddenRepositoryIds(Long workspaceId) {
         return repositorySettingsRepository.findHiddenRepositoryIdsByWorkspace(workspaceId);
-    }
-
-    @Transactional(readOnly = true)
-    public Set<Long> getHiddenRepositoryIdsByTeams(Long workspaceId, Set<Long> teamIds) {
-        if (teamIds == null || teamIds.isEmpty()) {
-            return Set.of();
-        }
-        return repositorySettingsRepository.findHiddenRepositoryIdsByWorkspaceAndTeams(workspaceId, teamIds);
     }
 
     /** Returns empty when the team or repository does not exist in the workspace. */
@@ -206,11 +190,6 @@ public class WorkspaceTeamSettingsService {
                 .collect(Collectors.groupingBy(
                         filter -> filter.getTeam().getId(),
                         Collectors.mapping(WorkspaceTeamLabelFilter::getLabel, Collectors.toSet())));
-    }
-
-    @Transactional(readOnly = true)
-    public Set<Long> getTeamIdsWithLabelFilters(Long workspaceId) {
-        return labelFilterRepository.findTeamIdsWithLabelFilters(workspaceId);
     }
 
     @Transactional
@@ -301,16 +280,6 @@ public class WorkspaceTeamSettingsService {
                 .resolve(workspace)
                 .map(scope -> scope.contains(team))
                 .orElse(false);
-    }
-
-    @Transactional
-    public WorkspaceTeamSettings getOrCreateTeamSettings(Workspace workspace, Team team) {
-        return teamSettingsRepository
-                .findByWorkspaceIdAndTeamId(workspace.getId(), team.getId())
-                .orElseGet(() -> {
-                    WorkspaceTeamSettings settings = new WorkspaceTeamSettings(workspace, team);
-                    return teamSettingsRepository.save(settings);
-                });
     }
 
     @Transactional(readOnly = true)

@@ -80,23 +80,6 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldAdmitOnlyExistingUnsuppressedUsersFromABatchWithDuplicateAndMissingKeys() {
-        databaseTestUtils.cleanDatabase();
-        var provider = providers.saveAndFlush(
-                new IdentityProvider(IdentityProviderType.GITLAB, "https://batch-fence.example.test"));
-        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "target", provider));
-        var other = users.saveAndFlush(TestUserFactory.createUser(84L, "other", provider));
-        long targetAccountId = accountId(target);
-        long otherAccountId = accountId(other);
-        databaseTestUtils.erase(Objects.requireNonNull(provider.getId()), "42", "");
-        new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            assertThat(fence.holdForAccountWrites(List.of(otherAccountId, targetAccountId, otherAccountId, -1L)))
-                    .containsExactly(otherAccountId);
-            assertThat(fence.holdForAccountWrites(List.of())).isEmpty();
-        });
-    }
-
-    @Test
     void shouldSuppressAProviderAliasRegisteredAfterErasureWithoutMatchingAnotherInstanceOrPerson() {
         databaseTestUtils.cleanDatabase();
         var original = providers.saveAndFlush(
@@ -178,8 +161,7 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
                 .isTrue();
         assertThat(suppression.isSourceSuppressed(-1L, "scm.issue", 812205L)).isFalse();
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            assertThat(fence.holdForAccountWrites(List.of(targetAccountId, otherAccountId)))
-                    .containsExactly(otherAccountId);
+            assertThat(fence.holdForAccountWrite(otherAccountId)).isTrue();
             assertThat(fence.holdForAccountWrite(targetAccountId)).isFalse();
         });
     }

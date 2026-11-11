@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Limit;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -114,23 +113,6 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     @Query(value = "SELECT i.id FROM issue i WHERE i.id = :id FOR NO KEY UPDATE", nativeQuery = true)
     Optional<Long> lockById(@Param("id") long id);
 
-    /** Pull request by id with assignees eagerly fetched, for access after the Hibernate session closes. */
-    @Query("""
-        SELECT p FROM PullRequest p
-        LEFT JOIN FETCH p.assignees
-        WHERE p.id = :id
-        """)
-    Optional<PullRequest> findByIdWithAssignees(@Param("id") Long id);
-
-    /** Pull request by id with assignees and repository eagerly fetched, for access outside the original session (async listeners, scheduled tasks). */
-    @Query("""
-        SELECT p FROM PullRequest p
-        LEFT JOIN FETCH p.assignees
-        LEFT JOIN FETCH p.repository
-        WHERE p.id = :id
-        """)
-    Optional<PullRequest> findByIdWithAssigneesAndRepository(@Param("id") Long id);
-
     /** Pull request by id with repository eagerly fetched, for passing across transaction boundaries (e.g. logging nameWithOwner). */
     @Query("""
         SELECT p FROM PullRequest p
@@ -193,13 +175,6 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
         """)
     Optional<PullRequest> findByIdForReviewContext(@Param("id") Long id);
 
-    /**
-     * The head commit alone, for keying a signal without paying for the gate's fetch graph — a
-     * reconciliation pass records what it saw and never looks at the rest of the pull request.
-     */
-    @Query("SELECT p.headRefOid FROM PullRequest p WHERE p.id = :id")
-    Optional<String> findHeadRefOidById(@Param("id") Long id);
-
     List<PullRequest> findAllByRepository_Id(Long repositoryId);
 
     /** The pull requests of a repository in {@code state} that hold check runs read for some head. */
@@ -214,10 +189,6 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     @Query(
             "SELECT DISTINCT i FROM PullRequest p JOIN p.closingIssues i LEFT JOIN FETCH i.labels WHERE p.id = :id AND i.repository = p.repository ORDER BY i.number")
     List<Issue> findClosingIssuesById(@Param("id") Long id);
-
-    @Query(
-            "SELECT DISTINCT i.id FROM PullRequest p JOIN p.closingIssues i WHERE p.id = :id AND i.repository = p.repository ORDER BY i.id")
-    List<Long> findClosingIssueIdsById(@Param("id") Long id);
 
     /** How many rows {@link #findClosingIssuesById} would return, without loading them. */
     @Query("SELECT COUNT(i) FROM PullRequest p JOIN p.closingIssues i WHERE p.id = :id AND i.repository = p.repository")
@@ -236,22 +207,6 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
             "SELECT p FROM PullRequest p WHERE p.repository.id = :repositoryId AND p.headRefOid = :headRefOid ORDER BY p.id")
     List<PullRequest> findAllForUpdateByRepositoryIdAndHeadRefOid(
             @Param("repositoryId") long repositoryId, @Param("headRefOid") String headRefOid);
-
-    /**
-     * Repository-wide pull-request inventory ordered newest-first by number, for the cross-artifact
-     * project-context telescope. The author is fetched up front to avoid a per-row lazy load; review
-     * threads/diffs/bodies are intentionally NOT fetched — the inventory is a compact "what else exists
-     * in this project" index, not a full body. Tombstones are excluded: something deleted upstream is no
-     * longer in the project.
-     *
-     * @param repositoryId the repository ID
-     * @param pageable the cap (newest N) — caller supplies {@code PageRequest.of(0, cap)}
-     * @return newest-first pull requests for the repository
-     */
-    @Query(
-            "SELECT p FROM PullRequest p LEFT JOIN FETCH p.author LEFT JOIN FETCH p.milestone WHERE p.repository.id = :repositoryId AND p.deletedAt IS NULL ORDER BY p.number DESC")
-    List<PullRequest> findPullRequestInventoryByRepositoryId(
-            @Param("repositoryId") long repositoryId, Pageable pageable);
 
     /**
      * Atomically inserts or updates a pull request's core fields (race-condition safe).

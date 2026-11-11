@@ -302,9 +302,6 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
             """)
     List<EntryPlace> findUnredactedPlaces(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
-    @Query("SELECT e.text FROM MentorEntry e WHERE e.id = :id AND e.workspaceId = :workspaceId")
-    Optional<String> findTextByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
-
     @Query(value = """
             SELECT id AS "id", conversation_id AS "conversationId", seq AS "seq", kind AS "kind",
                    turn_id AS "turnId",

@@ -27,11 +27,10 @@ class OutlineIntegrationArchitectureTest extends HephaestusArchitectureTest {
 
     private static final String OUTLINE = "de.tum.cit.aet.hephaestus.integration.outline..";
 
-    /** The integration module and the projection SPI it implements. */
+    /** The integration module. */
     private static final DescribedPredicate<JavaClass> OUTLINE_FOOTPRINT = DescribedPredicate.describe(
-            "belong to the Outline footprint (integration.outline, agent.documentation)",
-            javaClass -> javaClass.getPackageName().startsWith("de.tum.cit.aet.hephaestus.integration.outline")
-                    || javaClass.getPackageName().startsWith("de.tum.cit.aet.hephaestus.agent.documentation"));
+            "belong to the Outline footprint (integration.outline)",
+            javaClass -> javaClass.getPackageName().startsWith("de.tum.cit.aet.hephaestus.integration.outline"));
 
     @Test
     @DisplayName("every Outline REST controller is workspace-scoped or a hidden webhook receiver")

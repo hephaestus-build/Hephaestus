@@ -12,7 +12,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.util.Locale;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -112,23 +111,5 @@ public class CommitFileChange {
         CHANGED,
         /** Unknown change type. */
         UNKNOWN,
-    }
-
-    /**
-     * Parse a GitHub file status string to ChangeType.
-     */
-    public static ChangeType parseChangeType(String status) {
-        if (status == null) {
-            return ChangeType.UNKNOWN;
-        }
-        return switch (status.toLowerCase(Locale.ROOT)) {
-            case "added" -> ChangeType.ADDED;
-            case "modified" -> ChangeType.MODIFIED;
-            case "removed", "deleted" -> ChangeType.REMOVED;
-            case "renamed" -> ChangeType.RENAMED;
-            case "copied" -> ChangeType.COPIED;
-            case "changed" -> ChangeType.CHANGED;
-            default -> ChangeType.UNKNOWN;
-        };
     }
 }

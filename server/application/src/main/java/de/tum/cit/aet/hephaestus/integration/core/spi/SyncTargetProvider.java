@@ -256,37 +256,6 @@ public interface SyncTargetProvider
         }
     }
 
-    /**
-     * User sync state for a scope.
-     *
-     * @param scopeId       unique scope identifier
-     * @param usersSyncedAt last users sync timestamp
-     */
-    record UserSyncState(Long scopeId, @Nullable Instant usersSyncedAt) {
-        private static final long SECONDS_PER_MINUTE = 60L;
-
-        public boolean needsSync(int cooldownMinutes) {
-            return (usersSyncedAt == null
-                    || usersSyncedAt.isBefore(Instant.now().minusSeconds(cooldownMinutes * SECONDS_PER_MINUTE)));
-        }
-    }
-
-    /**
-     * Team sync state for a scope.
-     *
-     * @param scopeId           unique scope identifier
-     * @param teamsSyncedAt     last teams sync timestamp
-     * @param organizationNames GitHub organizations to sync teams from
-     */
-    record TeamSyncState(Long scopeId, @Nullable Instant teamsSyncedAt, List<String> organizationNames) {
-        private static final long SECONDS_PER_MINUTE = 60L;
-
-        public boolean needsSync(int cooldownMinutes) {
-            return (teamsSyncedAt == null
-                    || teamsSyncedAt.isBefore(Instant.now().minusSeconds(cooldownMinutes * SECONDS_PER_MINUTE)));
-        }
-    }
-
     enum SyncPass {
         RECENT,
         HISTORICAL_BACKFILL,

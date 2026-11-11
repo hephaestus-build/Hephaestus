@@ -3,24 +3,18 @@ package de.tum.cit.aet.hephaestus.core.auth;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
-import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
-import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.RecentSignInPolicy;
 import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyAssurancePolicy;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriUtils;
 import tools.jackson.databind.ObjectMapper;
@@ -30,7 +24,6 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @WorkspaceAgnostic("An instance administrator views across workspaces; every event records the one it read")
 public class UserViewAccessService implements UserViewAccess {
-    private final IdentityRepository identityLinks;
     private final AuthEventLogger audit;
     private final ObjectMapper mapper;
     private final RecentSignInPolicy recentSignIn;
@@ -41,35 +34,6 @@ public class UserViewAccessService implements UserViewAccess {
         passkeys.requireInstanceAdmin(authentication, true);
         recentSignIn.require(authentication, AuthEvent.EventType.USER_VIEW, actingAccountId);
     }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<Long, LinkedAccount> linkedAccounts(Collection<ActorIdentity> actors) {
-        if (actors.isEmpty()) {
-            return Map.of();
-        }
-        var providerIds =
-                actors.stream().map(ActorIdentity::providerId).distinct().toList();
-        var subjects = actors.stream().map(ActorIdentity::subject).distinct().toList();
-        Map<IdentityKey, LinkedAccount> byIdentity = new HashMap<>();
-        for (Identity link : identityLinks.findActiveScmLinks(providerIds, subjects)) {
-            byIdentity.put(
-                    new IdentityKey(link.getProviderId(), link.getProviderUserKey()),
-                    new LinkedAccount(
-                            Objects.requireNonNull(link.getAccount().getId()),
-                            link.getAccount().getStatus().name()));
-        }
-        Map<Long, LinkedAccount> linked = new HashMap<>();
-        for (ActorIdentity actor : actors) {
-            var account = byIdentity.get(new IdentityKey(actor.providerId(), actor.subject()));
-            if (account != null) {
-                linked.put(actor.actorId(), account);
-            }
-        }
-        return linked;
-    }
-
-    private record IdentityKey(long providerId, String subject) {}
 
     @Override
     public void record(

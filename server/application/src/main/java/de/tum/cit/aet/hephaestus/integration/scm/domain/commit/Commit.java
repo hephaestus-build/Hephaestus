@@ -326,13 +326,6 @@ public class Commit {
     // Helper Methods
 
     /**
-     * Returns the short SHA (first 7 characters) for display purposes.
-     */
-    public String getShortSha() {
-        return sha != null && sha.length() >= 7 ? sha.substring(0, 7) : sha;
-    }
-
-    /**
      * Adds a file change to this commit and maintains bidirectional consistency.
      */
     public void addFileChange(CommitFileChange fileChange) {
@@ -349,26 +342,6 @@ public class Commit {
         if (fileChange != null) {
             this.fileChanges.remove(fileChange);
             fileChange.setCommit(null);
-        }
-    }
-
-    /**
-     * Adds a contributor to this commit and maintains bidirectional consistency.
-     */
-    public void addContributor(CommitContributor contributor) {
-        if (contributor != null) {
-            this.contributors.add(contributor);
-            contributor.setCommit(this);
-        }
-    }
-
-    /**
-     * Removes a contributor from this commit and maintains bidirectional consistency.
-     */
-    public void removeContributor(CommitContributor contributor) {
-        if (contributor != null) {
-            this.contributors.remove(contributor);
-            contributor.setCommit(null);
         }
     }
 

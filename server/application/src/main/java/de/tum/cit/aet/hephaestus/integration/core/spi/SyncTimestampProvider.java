@@ -2,8 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncMetadata;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.TeamSyncState;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.UserSyncState;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -41,28 +39,12 @@ public interface SyncTimestampProvider {
     void updateScopeSyncTimestamp(Long scopeId, SyncType syncType, Instant syncedAt);
 
     /**
-     * Gets the user sync state for a scope.
-     *
-     * @param scopeId the scope ID
-     * @return the user sync state, or empty if scope not found
-     */
-    Optional<UserSyncState> getUserSyncState(Long scopeId);
-
-    /**
      * Updates the users sync timestamp for a scope.
      *
      * @param scopeId  the scope ID
      * @param syncedAt the timestamp of the sync
      */
     void updateUsersSyncTimestamp(Long scopeId, Instant syncedAt);
-
-    /**
-     * Gets the team sync state for a scope.
-     *
-     * @param scopeId the scope ID
-     * @return the team sync state, or empty if scope not found
-     */
-    Optional<TeamSyncState> getTeamSyncState(Long scopeId);
 
     /**
      * Updates the teams sync timestamp for a scope.

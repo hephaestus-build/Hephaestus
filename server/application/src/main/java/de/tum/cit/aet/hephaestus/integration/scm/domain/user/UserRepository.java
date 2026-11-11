@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.user;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
-import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import java.time.Instant;
 import java.util.Collection;
@@ -81,20 +80,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
         """)
     Optional<Long> findGitHubUserIdByNativeId(@Param("nativeId") Long nativeId, @Param("providerId") Long providerId);
 
-    @Query("""
-            SELECT u
-            FROM User u
-            WHERE u.type = 'USER'
-        """)
-    List<User> findAllHuman();
-
     /** Only a verified actor pinned by the workspace boundary or a non-HTTP caller identifies the developer. */
     default Optional<User> getCurrentUser() {
         return CurrentScmIdentityHolder.getUserId().flatMap(this::findById);
-    }
-
-    default User getCurrentUserElseThrow() {
-        return getCurrentUser().orElseThrow(() -> new EntityNotFoundException("User", "current authenticated user"));
     }
 
     Optional<User> findByNativeIdAndProviderId(Long nativeId, Long providerId);

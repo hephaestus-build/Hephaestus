@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,41 +63,6 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
                 .stream()
                 .anyMatch(Boolean::booleanValue);
     }
-
-    @Override
-    @Transactional(propagation = Propagation.MANDATORY)
-    public List<Long> holdForAccountWrites(List<Long> accountIds) {
-        requireFreshControlReads();
-        if (accountIds.isEmpty()) return List.of();
-        var rows = jdbc.query(
-                "SELECT i.account_id,i.provider_id,i.provider_user_key,NULLIF(i.team_key,'') FROM"
-                        + " identity i JOIN account a ON a.id=i.account_id WHERE"
-                        + " i.account_id=ANY(?) AND a.status IN ('ACTIVE','UNCLAIMED') ORDER BY"
-                        + " i.account_id,i.id",
-                (rs, row) -> new AccountIdentity(
-                        rs.getLong(1),
-                        new PersonIdentity(rs.getLong(2), Objects.requireNonNull(rs.getString(3)), rs.getString(4))),
-                new SqlArrayValue("bigint", accountIds.toArray()));
-        lock(rows.stream().map(AccountIdentity::identity).toList(), true);
-        var usable = jdbc.query(
-                "SELECT id FROM account WHERE id=ANY(?) AND status IN"
-                        + " ('ACTIVE','UNCLAIMED') ORDER BY id FOR SHARE",
-                (rs, row) -> rs.getLong(1),
-                new SqlArrayValue("bigint", accountIds.toArray()));
-        return accountIds.stream()
-                .distinct()
-                .filter(usable::contains)
-                .filter(accountId -> rows.stream().anyMatch(row -> row.accountId() == accountId))
-                .filter(accountId -> rows.stream()
-                        .filter(row -> row.accountId() == accountId)
-                        .noneMatch(row -> suppression.isSuppressed(
-                                row.identity().providerId(),
-                                row.identity().subject(),
-                                row.identity().teamId())))
-                .toList();
-    }
-
-    private record AccountIdentity(long accountId, PersonIdentity identity) {}
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
