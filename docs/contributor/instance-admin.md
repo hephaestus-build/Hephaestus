@@ -93,7 +93,8 @@ Thus, a new administrative action cannot ship without a recorded decision.
 Only the member's current role decides whether a workspace role change needs the gate.
 Thus, those handlers declare `@RequiresRecentSignIn(OWNER_CHANGE)`, and the method interceptor does not ask.
 `MembershipService.authorizeRoleChange` decides under the workspace lock, with the same policy.
-Every path that changes a workspace role calls it.
+Every HTTP path that changes a workspace role calls it.
+Provider role sync (`syncWorkspaceMembers`, `applyProviderGrant`) does not call it.
 
 The architecture test refuses `OWNER_CHANGE` on any other handler, because there it would ask for nothing.
 A refusal records `WORKSPACE_OWNER_CHANGE` as `FAILURE`.
