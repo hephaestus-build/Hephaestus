@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: "false"
+      node_test_shard:
+        description: "On the tooling leg, the half (`1/2` or `2/2`) of `test:tooling` and `test:agents` to run instead of the gates"
+        required: false
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -60,9 +65,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/.vite/task-cache
-          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ inputs.leg }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ inputs.node_test_shard != '' && 'tests-' || '' }}${{ inputs.leg }}-${{ github.run_id }}-${{ github.run_attempt }}${{ inputs.node_test_shard != '' && format('-{0}', inputs.node_test_shard) || '' }}
           restore-keys: |
-            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ inputs.leg }}-
+            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ inputs.node_test_shard != '' && 'tests-' || '' }}${{ inputs.leg }}-
 
       - name: Setup application-server caches
         if: inputs.leg == 'server'
@@ -90,13 +95,14 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           # The bundle budget compares with the entry ahead in the queue; a pull request uses its merge base.
           BUNDLE_BASE: ${{ github.event.merge_group.base_sha }}
+          HEPHAESTUS_NODE_TEST_SHARD: ${{ inputs.node_test_shard }}
         # 15 minutes, under the job's 20: a hung task is named in the log and the summary before the
         # job limit cancels the run, which can lose its log. The step takes 5 to 11 minutes.
         run: |
           deadline() { node scripts/ci-deadline.ts 900 "$@"; }
           case "$LEG" in
             server) deadline vp run ci:server ;;
-            tooling) deadline vp run ci:tooling ;;
+            tooling) if [ -n "$HEPHAESTUS_NODE_TEST_SHARD" ]; then deadline vp run ci:tooling-tests; else deadline vp run ci:tooling; fi ;;
             webapp) deadline vp run ci:webapp ;;
             extension) deadline vp run ci:extension ;;
             windows) deadline vp run --no-cache ci:windows ;;

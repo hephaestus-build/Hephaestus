@@ -1069,6 +1069,10 @@ Right after a merge, that run is still building, so the pull request builds ever
 - `Security` starts from `Detect changes`. Only `Pinned upstream images` reads the advisory
   snapshot, so only it waits for `Image advisory database`.
 - Quality legs run independently. In a merge group, a failed leg cancels the run.
+- The `Tooling and Docs` leg runs in three jobs: the gates, and two halves of `test:tooling` and `test:agents`.
+  Those two suites took 9 of the leg's 12 minutes in one job.
+  `HEPHAESTUS_NODE_TEST_SHARD` (`1/2` or `2/2`) passes Node's [`--test-shard`](https://nodejs.org/api/cli.html#--test-shard) to both suites, so each test file runs in exactly one half.
+  Locally the variable is unset, and each suite runs whole.
   The platform matrix in `ci-docker-build.yml` uses `fail-fast: false`.
   A failed platform cancels a merge group through the isolated helper. Other events collect both scans.
 - All images of a run share one build job per platform and one manifest job.

@@ -105,6 +105,13 @@ const docsLintInputs = [
 const gradlew = "node scripts/run-gradlew.ts";
 // Each native test file can start subprocesses. Bound file workers independently of task concurrency.
 const nodeTestConcurrency = process.env[PUSH_CHECK_ENV] === "true" ? 1 : 2;
+// CI splits the two longest native suites, `test:tooling` and `test:agents`, across jobs with Node's
+// own file sharding (ci-cd.mdx § Parallelism and concurrency). Unset, each suite runs whole.
+const nodeTestShard = process.env.HEPHAESTUS_NODE_TEST_SHARD ?? "";
+if (nodeTestShard !== "" && !/^[1-9]\d*\/[1-9]\d*$/u.test(nodeTestShard)) {
+	throw new Error(`HEPHAESTUS_NODE_TEST_SHARD must be <index>/<total>, not '${nodeTestShard}'`);
+}
+const nodeTestFiles = `--test-concurrency=${nodeTestConcurrency}${nodeTestShard === "" ? "" : ` --test-shard=${nodeTestShard}`}`;
 // The gates, by the tree they judge. `quality` runs all of them; each CI job runs one tree's set.
 const policyGates = [
 	"gate:toolchain",
@@ -357,7 +364,7 @@ export default defineConfig({
 			]),
 			"gate:agent-tests": group(["test:agents"]),
 			"test:agents": run(
-				`node --test --test-concurrency=${nodeTestConcurrency} server/application/src/test/resources/agent/*.spec.ts docker/agents/practice-scripts/*.test.ts docker/agents/practice-scripts/lib/core/**/*.test.ts docker/agents/practice-scripts/kits/**/*.test.ts docker/agents/pi/*.test.ts`,
+				`node --test ${nodeTestFiles} server/application/src/test/resources/agent/*.spec.ts docker/agents/practice-scripts/*.test.ts docker/agents/practice-scripts/lib/core/**/*.test.ts docker/agents/practice-scripts/kits/**/*.test.ts docker/agents/pi/*.test.ts`,
 			),
 			// The chart suites alone, for a chart change. test:tooling already runs both in the normal
 			// graph; the render suite needs the Helm CLI that .github/actions/setup-helm pins.
@@ -365,7 +372,7 @@ export default defineConfig({
 				"node --test scripts/kubernetes-chart.test.ts scripts/kubernetes-chart-render.test.ts",
 			),
 			"test:tooling": run(
-				`node --test --test-concurrency=${nodeTestConcurrency} scripts/*.test.ts scripts/api-generator/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,
+				`node --test ${nodeTestFiles} scripts/*.test.ts scripts/api-generator/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,
 			),
 
 			// The Prometheus alert rules that operators load: promtool's checks and unit tests, in Docker.
@@ -411,19 +418,22 @@ export default defineConfig({
 				"gate:env",
 			]),
 			// Render docs after the checks: lint cannot detect broken theme contexts during static rendering.
+			// The two native suites run in `ci:tooling-tests`, in jobs of their own.
 			"ci:tooling": run("vp run verification:docs-build", {
 				dependsOn: [
 					// Excluded here because another job or workflow runs them; the Windows leg re-runs what it can.
 					...policyGates.filter(
 						(gate) => !["gate:contracts", "gate:env", "gate:changesets"].includes(gate),
 					),
-					...agentGates,
+					...agentStaticGates,
+					"gate:release-image-inventory",
 					...docsGates,
 					...loadGates,
 					"gate:load-syntax",
 					"gate:alerts",
 				],
 			}),
+			"ci:tooling-tests": group(["gate:tooling-tests", "gate:agent-tests"]),
 			"ci:webapp:static": group([
 				...webappGates,
 				"gate:owned-code",

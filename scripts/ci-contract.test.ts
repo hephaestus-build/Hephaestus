@@ -5093,8 +5093,9 @@ void test(
 		const script = runScript(workflow, ["jobs", "quality"], "Quality gates");
 		// The task runs under the step's deadline: `node scripts/ci-deadline.ts <seconds> <vp arguments>`.
 		const probe = `node() { printf 'deadline=%s %s\\n' "$1" "$2" >> "$GITHUB_OUTPUT"; shift 2; printf 'command=%s\\n' "$*" >> "$GITHUB_OUTPUT"; }\n${script}`;
+		// This suite itself runs in a tooling test job, so each probe sets the half explicitly.
 		for (const leg of ["server", "tooling", "webapp", "extension", "windows"]) {
-			const result = await runStep(probe, { LEG: leg });
+			const result = await runStep(probe, { LEG: leg, HEPHAESTUS_NODE_TEST_SHARD: "" });
 			assert.equal(result.failed, false, result.diagnosis);
 			assert.equal(
 				result.outputs.command,
@@ -5102,6 +5103,8 @@ void test(
 			);
 			assert.equal(result.outputs.deadline, "scripts/ci-deadline.ts 900");
 		}
+		const half = await runStep(probe, { LEG: "tooling", HEPHAESTUS_NODE_TEST_SHARD: "2/2" });
+		assert.equal(half.outputs.command, "vp run ci:tooling-tests");
 		const invalid = await runStep(probe, { LEG: "unknown" });
 		assert.equal(invalid.failed, true);
 		assert.deepEqual(invalid.outputs, {});
@@ -5735,9 +5738,11 @@ void test("every job that runs Helm installs the pinned one first, and the rende
 	}
 	assert.ok(dependencies("gate:tooling-tests").includes("test:tooling"));
 	assert.ok(dependencies("gate:agents").includes("gate:tooling-tests"));
-	for (const entry of ["quality", "ci:tooling", "ci:windows", "affected:agents"]) {
+	for (const entry of ["quality", "ci:windows", "affected:agents"]) {
 		assert.ok(dependencies(entry).includes("gate:agents"), `${entry} must run gate:agents`);
 	}
+	// The tooling leg runs the suite in its test jobs, which install Helm like its gates job.
+	assert.ok(dependencies("ci:tooling-tests").includes("gate:tooling-tests"));
 	// The convenience entry runs the two suites directly; the normal graph never runs them twice.
 	const chartTests = asRecord(tasks["test:kubernetes:chart"], "test:kubernetes:chart");
 	assert.deepEqual(commandsOf(chartTests), [
