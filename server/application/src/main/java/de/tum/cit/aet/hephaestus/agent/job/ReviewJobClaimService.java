@@ -204,7 +204,7 @@ public class ReviewJobClaimService {
         Optional<ReviewJob> locked =
                 jobRepository.lockParentForQueuedClaim(fence.runId()).isEmpty()
                         ? Optional.empty()
-                        : jobRepository.lockQueuedByRun(fence.runId());
+                        : jobRepository.lockQueuedByRun(fence.runId(), fence.workspaceId());
         if (locked.isEmpty()) {
             // A lifecycle write holds the review or its job; the run waits for the next pull.
             runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY, null);
