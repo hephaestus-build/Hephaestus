@@ -1,6 +1,6 @@
 # ADR 0042: Hosts pull their own releases
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md)
 **Date:** 2026-09-03
 **Supersedes:** the CI-driven SSH push deployment, which no ADR recorded.
 **Builds on:** [ADR 0034](0034-signed-release-image-lock.md). Its release evidence and image lock stay unchanged.
