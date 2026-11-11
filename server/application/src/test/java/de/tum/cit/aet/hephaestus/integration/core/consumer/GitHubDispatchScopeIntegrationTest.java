@@ -267,6 +267,17 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(monitoredHere ? 1L : 0L);
     }
 
+    @Test
+    void shouldHandleAnEventAfterTheConsumerIsPausedAndRestarted() throws Exception {
+        var target = workspace("dispatch-a", LOGIN);
+
+        consumer.stop();
+        consumer.start();
+        dispatchIssue(target);
+
+        assertIssueAndScope(target);
+    }
+
     private Workspace workspace(String slug, String login) {
         long installation = slug.equals("dispatch-a") ? 10001L : 10002L;
         return WorkspaceTestFixtures.persistInstallationWorkspace(

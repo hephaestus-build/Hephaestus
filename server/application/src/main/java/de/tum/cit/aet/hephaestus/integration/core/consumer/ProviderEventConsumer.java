@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHand
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.sync.activity.ConnectionActivityRecorder;
+import jakarta.annotation.PreDestroy;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -81,7 +82,6 @@ public class ProviderEventConsumer implements SmartLifecycle {
     private final EventTraceContext traceContext;
     private final IntegrationMessageMeters meters;
     private final ConnectionActivityRecorder activityRecorder;
-    private final ProviderEventNotifications notifications;
     private final ProviderEventConsumerProperties properties;
     private final ApplicationEventPublisher events;
     private final Clock clock;
@@ -116,10 +116,10 @@ public class ProviderEventConsumer implements SmartLifecycle {
         this.traceContext = traceContext;
         this.meters = meters;
         this.activityRecorder = activityRecorder;
-        this.notifications = notifications;
         this.properties = properties;
         this.events = events;
         this.clock = clock;
+        notifications.subscribe(this::wake);
     }
 
     @Override
@@ -129,7 +129,6 @@ public class ProviderEventConsumer implements SmartLifecycle {
         for (int i = 0; i < properties.claimers(); i++) {
             claimers.add(Thread.ofPlatform().name("provider-event-claimer-" + i).start(this::claimLoop));
         }
-        notifications.subscribe(this::wake);
     }
 
     @Override
@@ -150,7 +149,13 @@ public class ProviderEventConsumer implements SmartLifecycle {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    @PreDestroy
+    void close() {
+        stop();
         renewals.shutdownNow();
+        handlers.shutdownNow();
     }
 
     @Override
