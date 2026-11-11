@@ -969,9 +969,9 @@ Right after a merge, that run is still building, so the pull request builds ever
   [Fail fast in the merge queue](#fail-fast-in-the-merge-queue).
 - `App Server: Integration` has five shards.
   `providers` selects the `integration` package.
-  `runtime-and-startup` selects the `core.database`, `agent.job` and `core.privacy` packages, plus `StartupBudgetIntegrationTest`.
+  `runtime-and-startup` selects the `core.database`, `agent.job`, `agent.proxy`, `agent.mentor` and `core.privacy` packages, plus `StartupBudgetIntegrationTest`.
   `practices-and-agent` selects the `practices` and `agent` packages.
-  It excludes the `runtime-and-startup` selection, so `agent.job` stays in that shard.
+  It excludes the `runtime-and-startup` selection, so those `agent` packages stay in that shard.
   It also excludes `review`, which selects `ReviewEndToEndIntegrationTest` and also runs in the fast tier.
   Package patterns include their subpackages. `application` excludes the selections of all other shards.
   All shards retain the `integration` tag

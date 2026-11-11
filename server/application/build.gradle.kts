@@ -356,6 +356,8 @@ fun Test.selectIntegrationShard(shard: String) {
             "de.tum.cit.aet.hephaestus.StartupBudgetIntegrationTest",
             "de.tum.cit.aet.hephaestus.core.database.*",
             "de.tum.cit.aet.hephaestus.agent.job.*",
+            "de.tum.cit.aet.hephaestus.agent.proxy.*",
+            "de.tum.cit.aet.hephaestus.agent.mentor.*",
             "de.tum.cit.aet.hephaestus.core.privacy.*",
         )
     val practicesAndAgentTests =
@@ -368,7 +370,9 @@ fun Test.selectIntegrationShard(shard: String) {
         "" -> Unit
         "providers" -> filter { providerTests.forEach(::includeTestsMatching) }
         "runtime-and-startup" -> filter { runtimeAndStartupTests.forEach(::includeTestsMatching) }
-        // A Gradle exclusion wins over an inclusion, so agent.job stays in runtime-and-startup.
+        // A Gradle exclusion wins over an inclusion, so agent.job, agent.proxy and agent.mentor
+        // stay in
+        // runtime-and-startup.
         "practices-and-agent" ->
             filter {
                 practicesAndAgentTests.forEach(::includeTestsMatching)
