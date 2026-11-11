@@ -13,6 +13,8 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
+import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -45,6 +47,9 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private MembershipRepository membershipRepository;
 
     @Test
     void aStaleAdminIsAskedToConfirmAccessAndTheRoleIsUnchanged() {
@@ -188,6 +193,150 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                     assertThat(event.getViewedActorId()).isNull();
                     assertThat(event.getFailureReason()).isEqualTo(StepUpRequiredException.CODE);
                 });
+    }
+
+    @Test
+    void aStaleOwnerIsAskedToConfirmAccessBeforeGrantingOwnerAndNothingChanges() {
+        Workspace workspace = workspace("stale-owner-grant");
+        Account owner = persistUser("Stale Owner Olga");
+        Account member = persistUser("Member Mia");
+        join(workspace, owner, Membership.WorkspaceRole.OWNER);
+        join(workspace, member, Membership.WorkspaceRole.MEMBER);
+
+        webTestClient
+                .post()
+                .uri("/workspaces/stale-owner-grant/members/assign")
+                .headers(h -> h.setBearerAuth(tokenFor(owner, staleSignIn())))
+                .bodyValue(Map.of("accountId", String.valueOf(member.getId()), "role", "OWNER"))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString());
+
+        assertThat(role(workspace, member)).isEqualTo(Membership.WorkspaceRole.MEMBER);
+        assertThat(authEventRepository.findByAccountSince(
+                        persistedId(owner.getId()), Instant.now().minusSeconds(60)))
+                .filteredOn(event -> event.getEventType() == AuthEvent.EventType.WORKSPACE_OWNER_CHANGE)
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.getResult()).isEqualTo(AuthEvent.Result.FAILURE);
+                    assertThat(event.getFailureReason()).isEqualTo(StepUpRequiredException.CODE);
+                });
+    }
+
+    @Test
+    void aStaleOwnerCanNeitherDemoteNorRemoveAnotherOwner() {
+        Workspace workspace = workspace("stale-owner-demote");
+        Account owner = persistUser("Stale Owner Otto");
+        Account other = persistUser("Other Owner Oona");
+        join(workspace, owner, Membership.WorkspaceRole.OWNER);
+        join(workspace, other, Membership.WorkspaceRole.OWNER);
+
+        webTestClient
+                .post()
+                .uri("/workspaces/stale-owner-demote/members/assign")
+                .headers(h -> h.setBearerAuth(tokenFor(owner, staleSignIn())))
+                .bodyValue(Map.of("accountId", String.valueOf(other.getId()), "role", "ADMIN"))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+        webTestClient
+                .delete()
+                .uri("/workspaces/stale-owner-demote/members/{id}", persistedId(other.getId()))
+                .headers(h -> h.setBearerAuth(tokenFor(owner, staleSignIn())))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+
+        Membership kept = membershipRepository
+                .findByWorkspace_IdAndId_AccountId(workspace.getId(), persistedId(other.getId()))
+                .orElseThrow();
+        assertThat(kept.getRole()).isEqualTo(Membership.WorkspaceRole.OWNER);
+        assertThat(kept.getLeftAt()).isNull();
+    }
+
+    /** An ordinary role change, and an owner lowering their own role, stay one step on the same stale session. */
+    @Test
+    void aStaleOwnerStillMakesAnAdminAndLowersTheirOwnRole() {
+        Workspace workspace = workspace("stale-owner-ordinary");
+        Account owner = persistUser("Stale Owner Oskar");
+        Account other = persistUser("Second Owner Odile");
+        Account member = persistUser("Member Mo");
+        join(workspace, owner, Membership.WorkspaceRole.OWNER);
+        join(workspace, other, Membership.WorkspaceRole.OWNER);
+        join(workspace, member, Membership.WorkspaceRole.MEMBER);
+
+        webTestClient
+                .post()
+                .uri("/workspaces/stale-owner-ordinary/members/assign")
+                .headers(h -> h.setBearerAuth(tokenFor(owner, staleSignIn())))
+                .bodyValue(Map.of("accountId", String.valueOf(member.getId()), "role", "ADMIN"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        webTestClient
+                .post()
+                .uri("/workspaces/stale-owner-ordinary/members/assign")
+                .headers(h -> h.setBearerAuth(tokenFor(owner, staleSignIn())))
+                .bodyValue(Map.of("accountId", String.valueOf(owner.getId()), "role", "ADMIN"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        assertThat(role(workspace, member)).isEqualTo(Membership.WorkspaceRole.ADMIN);
+        assertThat(role(workspace, owner)).isEqualTo(Membership.WorkspaceRole.ADMIN);
+    }
+
+    @Test
+    void aFreshOwnerGrantsOwner() {
+        Workspace workspace = workspace("fresh-owner-grant");
+        Account owner = persistUser("Fresh Owner Flora");
+        Account member = persistUser("Member Max");
+        join(workspace, owner, Membership.WorkspaceRole.OWNER);
+        join(workspace, member, Membership.WorkspaceRole.MEMBER);
+
+        webTestClient
+                .post()
+                .uri("/workspaces/fresh-owner-grant/members/assign")
+                .headers(h -> h.setBearerAuth(tokenFor(owner, Instant.now())))
+                .bodyValue(Map.of("accountId", String.valueOf(member.getId()), "role", "OWNER"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        assertThat(role(workspace, member)).isEqualTo(Membership.WorkspaceRole.OWNER);
+    }
+
+    private Workspace workspace(String slug) {
+        Workspace workspace = new Workspace();
+        workspace.setWorkspaceSlug(slug);
+        workspace.setDisplayName(slug);
+        workspace.setAccountLogin(slug);
+        workspace.setAccountType(AccountType.ORG);
+        workspace.setRepositorySelection(RepositorySelection.ALL);
+        return workspaceRepository.save(workspace);
+    }
+
+    private void join(Workspace workspace, Account account, Membership.WorkspaceRole role) {
+        Membership membership = new Membership();
+        membership.setWorkspace(workspace);
+        membership.setId(new Membership.Id(workspace.getId(), persistedId(account.getId())));
+        membership.setRole(role);
+        membershipRepository.save(membership);
+    }
+
+    private Membership.WorkspaceRole role(Workspace workspace, Account account) {
+        return membershipRepository
+                .findByWorkspace_IdAndId_AccountId(workspace.getId(), persistedId(account.getId()))
+                .orElseThrow()
+                .getRole();
     }
 
     private Instant staleSignIn() {

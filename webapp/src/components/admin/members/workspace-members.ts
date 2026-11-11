@@ -36,11 +36,12 @@ export interface WorkspaceRoleChange {
 }
 
 /**
- * An owner can delete the workspace and change any role, and a reader who lowers their own role
- * may not be able to raise it again. Both ask first; every other change is one step.
+ * An owner can delete the workspace and change any role, so making or unmaking one asks first, and
+ * a reader who lowers their own role may not be able to raise it again. Every other change is one
+ * step.
  */
 export const roleChangeAsksFirst = (change: WorkspaceRoleChange) =>
-	change.to === "OWNER" || change.own;
+	change.to === "OWNER" || change.from === "OWNER" || change.own;
 
 const OWNER_ASSIGNS: readonly WorkspaceRole[] = ["OWNER", "ADMIN", "MEMBER"];
 const ADMIN_ASSIGNS: readonly WorkspaceRole[] = ["ADMIN", "MEMBER"];

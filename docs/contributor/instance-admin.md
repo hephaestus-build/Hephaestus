@@ -70,6 +70,10 @@ These actions include app-role changes, force sign-out, user views, login-provid
 The same requirement applies to identity attachment for every user.
 A new link is a permanent second way into the account.
 
+It also applies to a workspace membership change that grants the owner role, or demotes or removes an owner.
+An owner who lowers their own role is not asked.
+Changes between member and admin are not asked.
+
 The completed OAuth login stamps the standard `auth_time` claim once.
 Every rotation copies it unchanged.
 Thus, silent keep-alive cannot make a session appear newly signed in.
@@ -83,7 +87,18 @@ Local clock skew must never tell a newly signed-in administrator to sign in agai
 Declare the requirement with `@RequiresRecentSignIn` on the handler.
 To decline it, use `@RecentSignInExempt(reason = …)` on the handler or controller.
 `RecentSignInByDefaultArchTest` fails the build when an instance-admin mutation carries neither annotation.
+The same rule applies to every workspace role mutation: a mutation that `@Audited` files as `WORKSPACE_ROLE`.
 Thus, a new administrative action cannot ship without a recorded decision.
+
+Only the member's current role decides whether a workspace role change needs the gate.
+Thus, those handlers declare `@RequiresRecentSignIn(OWNER_CHANGE)`, and the method interceptor does not ask.
+`MembershipService.authorizeRoleChange` decides under the workspace lock, with the same policy.
+Every HTTP path that changes a workspace role calls it.
+Provider role sync (`syncWorkspaceMembers`, `applyProviderGrant`) does not call it.
+
+The architecture test refuses `OWNER_CHANGE` on any other handler, because there it would ask for nothing.
+A refusal records `WORKSPACE_OWNER_CHANGE` as `FAILURE`.
+The completed change stays on the workspace's `WORKSPACE_ROLE` configuration audit trail.
 `AuditByDefaultArchTest` gives the audit trail the same structure.
 
 The refusal uses the `auth_event` type that the handler already declares for `@Audited`.

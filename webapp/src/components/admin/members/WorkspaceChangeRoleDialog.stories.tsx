@@ -92,6 +92,21 @@ export const GiveUpOwnOwnerRole: Story = {
 	},
 };
 
+/** Unmaking another owner asks first, as making one does: only an owner can undo it. */
+export const RemoveAnotherOwner: Story = {
+	args: { change: { ...makeOwner, from: "OWNER", to: "ADMIN" } },
+	play: async () => {
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Remove Ada Lovelace’s owner role?",
+		});
+		await expectSettledVisible(dialog);
+		await expect(dialog).toHaveAccessibleDescription(
+			/Only an owner can make them an owner again\.$/u,
+		);
+		await expect(within(dialog).getByRole("button", { name: "Remove owner role" })).toBeEnabled();
+	},
+};
+
 /** An owner who becomes a member is told that only an owner can restore the owner role. */
 export const OwnerBecomesMember: Story = {
 	args: { change: { ...ownDemotion, from: "OWNER" } },

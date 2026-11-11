@@ -125,6 +125,9 @@ public class AuthEvent {
         // An instance admin's decision on a GitHub App installation: GLOBAL, like the installation's record.
         GITHUB_INSTALLATION_ADOPTED,
         GITHUB_INSTALLATION_DECLINED,
+        // A workspace membership change that grants, demotes or removes an owner. Only its refusal for want of a
+        // recent sign-in lands here; the change itself is on the workspace's config audit trail.
+        WORKSPACE_OWNER_CHANGE,
         // Instance LLM catalog: GLOBAL, so the workspace-scoped config trail cannot carry it.
         LLM_CONNECTION_CREATED,
         LLM_CONNECTION_UPDATED,

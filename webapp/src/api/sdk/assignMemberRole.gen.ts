@@ -4,12 +4,12 @@ import { client } from '../client.gen.js';
 import type { RequestResult } from '../client/index.js';
 import type { Options } from '../sdk.gen.js';
 import { assignMemberRoleResponseTransformer } from '../transformers.gen.js';
-import type { AssignMemberRoleData, AssignMemberRoleResponses } from '../types.gen.js';
+import type { AssignMemberRoleData, AssignMemberRoleErrors, AssignMemberRoleResponses } from '../types.gen.js';
 
 /**
  * Assign a workspace role
  */
-export const assignMemberRole = <ThrowOnError extends boolean = false>(options: Options<AssignMemberRoleData, ThrowOnError>): RequestResult<AssignMemberRoleResponses, unknown, ThrowOnError> => (options.client ?? client).post<AssignMemberRoleResponses, unknown, ThrowOnError>({
+export const assignMemberRole = <ThrowOnError extends boolean = false>(options: Options<AssignMemberRoleData, ThrowOnError>): RequestResult<AssignMemberRoleResponses, AssignMemberRoleErrors, ThrowOnError> => (options.client ?? client).post<AssignMemberRoleResponses, AssignMemberRoleErrors, ThrowOnError>({
     responseTransformer: assignMemberRoleResponseTransformer,
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/workspaces/{workspaceSlug}/members/assign',

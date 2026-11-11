@@ -9,6 +9,7 @@ import type {
 	WorkspaceMembership,
 } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
+import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -543,6 +544,47 @@ describe("workspace members route", () => {
 
 		await waitFor(() => expect(assigned).toStrictEqual([{ accountId: "8", role: "OWNER" }]));
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+	});
+
+	it("asks an owner who has not signed in recently to confirm access, and keeps the role", async () => {
+		let assigns = 0;
+		mockMembersRoute();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/members/me", () =>
+				HttpResponse.json(ownMembership("OWNER")),
+			),
+			http.post("*/workspaces/:workspaceSlug/members/assign", () => {
+				assigns += 1;
+				return HttpResponse.json(
+					{
+						title: "Confirm access",
+						status: 403,
+						detail: "This action requires a recent sign-in. Sign in again to confirm access.",
+						type: problemType("step-up-required"),
+						maxAgeSeconds: 300,
+					},
+					{ status: 403 },
+				);
+			}),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole("combobox", { name: "Role of Sam Unclaimed" }, ROUTE_RENDER_WAIT),
+		);
+		await user.click(await screen.findByRole("option", { name: "Owner" }));
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Make Sam Unclaimed an owner?",
+		});
+		await user.click(within(dialog).getByRole("button", { name: "Make owner" }));
+
+		await screen.findByRole("dialog", { name: "Confirm access" });
+		expect(assigns).toBe(1);
+		// The refused change is not replayed, and the row still shows the server's role.
+		within(screen.getByRole("combobox", { name: "Role of Sam Unclaimed", hidden: true })).getByText(
+			"Member",
+		);
 	});
 
 	it("asks before you lower your own role, and Cancel sends nothing", async () => {

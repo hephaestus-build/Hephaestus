@@ -218,13 +218,11 @@ public class AccountService {
                 // forced re-login.
                 sessionRevocation.revokeAccount(accountId, IssuedJwt.RevokedReason.ADMIN_REVOKE, null, null);
             }
-            // Dedicated APP_ROLE_CHANGED type so the most security-sensitive mutation
-            // (granting/revoking
-            // APP_ADMIN) is queryable and alertable on the indexed event_type column — the ADR's
-            // stated
-            // mitigation for omitting step-up re-auth. Enum names are [A-Z_] only, so the inline
-            // JSON is
-            // injection-safe. previousRole/role are both non-null (app_role is NOT NULL).
+            // Dedicated APP_ROLE_CHANGED type so the most security-sensitive mutation (granting or
+            // revoking APP_ADMIN) is queryable and alertable on the indexed event_type column. The
+            // handler also requires a recent sign-in (ADR 0017), and a refusal lands on this same type.
+            // Enum names are [A-Z_] only, so the inline JSON is injection-safe. previousRole/role are
+            // both non-null (app_role is NOT NULL).
             authEventLogger
                     .event(AuthEvent.EventType.APP_ROLE_CHANGED, AuthEvent.Result.SUCCESS)
                     .account(accountId)

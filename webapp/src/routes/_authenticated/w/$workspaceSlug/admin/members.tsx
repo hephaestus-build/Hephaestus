@@ -25,9 +25,11 @@ import { WorkspaceChangeRoleDialog } from "@/components/admin/members/WorkspaceC
 import { WorkspaceMembersPage } from "@/components/admin/members/WorkspaceMembersPage";
 import type { WorkspaceMembersTableView } from "@/components/admin/members/WorkspaceMembersTable";
 import { accountName } from "@/components/admin/users/account-labels";
+import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
+import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { workspaceAdminHead } from "@/lib/page-title";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
 import { pageParam, useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import type { WorkspaceRole } from "@/lib/workspace-roles";
@@ -142,6 +144,9 @@ function AdminMembersContainer() {
 			});
 		},
 	});
+	// Making or unmaking an owner needs a recent sign-in; the server says so instead of changing the role.
+	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>(undefined);
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
 	const assignRole = useMutation({
 		...assignMemberRoleMutation(),
 		onSuccess: (updated) => {
@@ -155,6 +160,11 @@ function AdminMembersContainer() {
 			});
 		},
 		onError: (error) => {
+			const stepUp = stepUpChallengeOf(error);
+			if (stepUp !== undefined) {
+				setChallenge(stepUp);
+				return;
+			}
 			toast.error("We could not change the role", { description: problemDetailOf(error) });
 		},
 	});
@@ -259,6 +269,20 @@ function AdminMembersContainer() {
 				onConfirm={sendRoleChange}
 				onClose={() => setRoleChange(null)}
 				finalFocus={roleChangeTrigger}
+			/>
+			<ConfirmAccessDialog
+				open={challenge !== undefined}
+				onOpenChange={(open) => {
+					if (!open) {
+						setChallenge(undefined);
+					}
+				}}
+				maxAgeSeconds={challenge?.maxAgeSeconds}
+				providers={confirmAccess.providers}
+				loading={confirmAccess.loading}
+				error={confirmAccess.error}
+				onRetry={confirmAccess.retry}
+				onSignIn={confirmAccess.signIn}
 			/>
 		</>
 	);

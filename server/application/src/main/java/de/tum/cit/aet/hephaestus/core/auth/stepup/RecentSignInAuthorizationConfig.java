@@ -43,14 +43,23 @@ public class RecentSignInAuthorizationConfig {
     @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
     static Advisor recentSignInAuthorizationAdvisor(ObjectProvider<RecentSignInPolicy> policy) {
         AuthorizationManager<MethodInvocation> manager = (authentication, invocation) -> {
-            Authentication current = authentication.get();
-            policy.getObject().require(current, auditType(invocation), actingAccountId(current));
+            if (asksOnEveryCall(invocation)) {
+                Authentication current = authentication.get();
+                policy.getObject().require(current, auditType(invocation), actingAccountId(current));
+            }
             return new AuthorizationDecision(true);
         };
         AuthorizationManagerBeforeMethodInterceptor interceptor = new AuthorizationManagerBeforeMethodInterceptor(
                 new AnnotationMatchingPointcut(null, RequiresRecentSignIn.class, true), manager);
         interceptor.setOrder(AuthorizationInterceptorsOrder.PRE_AUTHORIZE.getOrder() + 2);
         return interceptor;
+    }
+
+    /** An owner change is decided by the member's current role, which only the workspace service reads. */
+    private static boolean asksOnEveryCall(MethodInvocation invocation) {
+        RequiresRecentSignIn declared =
+                AnnotatedElementUtils.findMergedAnnotation(invocation.getMethod(), RequiresRecentSignIn.class);
+        return declared == null || declared.value() == RequiresRecentSignIn.When.EVERY_CALL;
     }
 
     /**
