@@ -82,6 +82,9 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
                     List.of(),
                     null,
                     null,
+                    List.of(),
+                    List.of(),
+                    List.of(),
                     List.of());
         });
         SimpleMeterRegistry registry = new SimpleMeterRegistry();

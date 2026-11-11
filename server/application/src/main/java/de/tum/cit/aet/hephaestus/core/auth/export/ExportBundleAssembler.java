@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountConversationExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountFeedbackExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
@@ -46,6 +48,8 @@ public class ExportBundleAssembler {
     private final AccountAiChoiceExport aiChoiceExport;
     private final ResearchParticipationQuery researchParticipation;
     private final NotificationPreferencesExportQuery notificationPreferences;
+    private final AccountConversationExport conversations;
+    private final AccountFeedbackExport feedback;
 
     public ExportBundleAssembler(
             AccountService accountService,
@@ -59,7 +63,11 @@ public class ExportBundleAssembler {
             NotificationPreferencesExportQuery notificationPreferences,
             ResearchParticipationQuery researchParticipation,
             PasskeyCredentialRepository passkeys,
-            PasskeyJson passkeyJson) {
+            PasskeyJson passkeyJson,
+            AccountConversationExport conversations,
+            AccountFeedbackExport feedback) {
+        this.conversations = conversations;
+        this.feedback = feedback;
         this.passkeys = passkeys;
         this.passkeyJson = passkeyJson;
         this.accountService = accountService;
@@ -142,7 +150,10 @@ public class ExportBundleAssembler {
                             return new ExportBundle.Passkey(
                                     credential.getLabel(), credential.getCreated(), credential.getLastUsed());
                         })
-                        .toList());
+                        .toList(),
+                conversations.messages(accountId),
+                feedback.received(accountId),
+                feedback.responses(accountId));
     }
 
     private static GitProviderRegistry.IdentityKey key(Identity identity) {

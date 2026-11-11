@@ -70,6 +70,9 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
                 List.of(),
                 null,
                 null,
+                List.of(),
+                List.of(),
+                List.of(),
                 List.of());
         when(assembler.assemble(ACCOUNT_ID)).thenReturn(bundle);
         when(objectMapper.writeValueAsBytes(bundle)).thenReturn(new byte[] {1, 2, 3});

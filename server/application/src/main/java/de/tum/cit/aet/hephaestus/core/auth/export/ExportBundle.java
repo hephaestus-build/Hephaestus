@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountConversationExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountFeedbackExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery;
 import java.time.Instant;
 import java.util.List;
@@ -27,9 +29,12 @@ public record ExportBundle(
         List<AuthEvent> authEvents,
         AccountAiChoiceExport.@Nullable Choice aiChoice,
         NotificationPreferencesExportQuery.@Nullable Preferences notificationPreferences,
-        List<Passkey> passkeys) {
-    /** Current export schema version. Bump on any breaking shape change. */
-    public static final String SCHEMA_VERSION = "2.1";
+        List<Passkey> passkeys,
+        List<AccountConversationExport.Message> conversationMessages,
+        List<AccountFeedbackExport.Received> feedbackReceived,
+        List<AccountFeedbackExport.Response> feedbackResponses) {
+    /** Current export schema version: the major part changes on a breaking shape change, the minor on a new field. */
+    public static final String SCHEMA_VERSION = "2.2";
 
     public record Passkey(
             String label,

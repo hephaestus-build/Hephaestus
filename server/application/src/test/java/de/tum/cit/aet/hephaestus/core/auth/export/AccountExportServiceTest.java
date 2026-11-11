@@ -20,6 +20,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountConversationExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountFeedbackExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery.MembershipView;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
@@ -38,6 +40,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -54,6 +57,8 @@ class AccountExportServiceTest extends BaseUnitTest {
 
     private static final Long ACCOUNT_ID = 42L;
     private static final Long OTHER_ACCOUNT_ID = 99L;
+    private static final UUID CONVERSATION_ID = UUID.fromString("00000000-0000-0000-0000-00000000c0de");
+    private static final UUID FEEDBACK_ID = UUID.fromString("00000000-0000-0000-0000-00000000fee0");
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-05-29T12:00:00Z"), ZoneOffset.UTC);
 
@@ -131,11 +136,42 @@ class AccountExportServiceTest extends BaseUnitTest {
                 accountId -> new NotificationPreferencesExportQuery.Preferences(false, false, false, true),
                 research,
                 passkeys,
-                passkeyJson);
+                passkeyJson,
+                accountId -> List.of(new AccountConversationExport.Message(
+                        "tum-ase", CONVERSATION_ID, "WEB", "USER", "How do I split this PR?", clock.instant(), null)),
+                new AccountFeedbackExport() {
+                    @Override
+                    public List<Received> received(long accountId) {
+                        return List.of(new Received(
+                                "tum-ase",
+                                FEEDBACK_ID,
+                                "PRACTICE_PAGE",
+                                "Name the tests after the behaviour.",
+                                List.of(),
+                                clock.instant(),
+                                clock.instant(),
+                                null));
+                    }
+
+                    @Override
+                    public List<Response> responses(long accountId) {
+                        return List.of(
+                                new Response("tum-ase", FEEDBACK_ID, "DISAGREE", null, "It is", clock.instant()));
+                    }
+                });
 
         ExportBundle bundle = assembler.assemble(ACCOUNT_ID);
 
-        assertThat(bundle.schemaVersion()).isEqualTo("2.1");
+        assertThat(bundle.schemaVersion()).isEqualTo("2.2");
+        assertThat(bundle.conversationMessages())
+                .extracting(AccountConversationExport.Message::text)
+                .containsExactly("How do I split this PR?");
+        assertThat(bundle.feedbackReceived())
+                .extracting(AccountFeedbackExport.Received::body)
+                .containsExactly("Name the tests after the behaviour.");
+        assertThat(bundle.feedbackResponses())
+                .extracting(AccountFeedbackExport.Response::comment)
+                .containsExactly("It is");
         assertThat(bundle.account().id()).isEqualTo(ACCOUNT_ID.toString());
         assertThat(bundle.account().primaryEmail()).isEqualTo("ada@example.com");
         assertThat(bundle.account().timeZone()).isEqualTo("Europe/Berlin");

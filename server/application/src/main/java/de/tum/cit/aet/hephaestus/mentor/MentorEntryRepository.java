@@ -407,6 +407,37 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
     List<UUID> findUnredactedCopyingToolResultIdsWrittenBefore(
             @Param("workspaceId") long workspaceId, @Param("cutoff") Instant cutoff, @Param("limit") int limit);
 
+    /** The messages of the account's conversations as the app shows them, in every workspace, oldest first. */
+    @WorkspaceAgnostic("The self-service export reads the account's own messages in every workspace")
+    @Query(value = """
+            SELECT w.slug AS workspace, e.conversation_id AS conversationId, e.surface AS surface,
+                   e.kind AS author, e.text AS text,
+                   e.created_at AS writtenAt, e.edited_at AS editedAt
+            FROM mentor_entry e
+            JOIN mentor_conversation c ON c.id = e.conversation_id AND c.workspace_id = e.workspace_id
+            JOIN workspace w ON w.id = c.workspace_id
+            WHERE c.account_id = :accountId AND e.kind IN ('USER', 'HEPH', 'DIGEST') AND e.redacted_at IS NULL
+            ORDER BY c.created_at, c.id, e.seq
+            """, nativeQuery = true)
+    List<OwnMessage> findOwnMessages(@Param("accountId") long accountId);
+
+    interface OwnMessage {
+        String getWorkspace();
+
+        UUID getConversationId();
+
+        String getSurface();
+
+        String getAuthor();
+
+        String getText();
+
+        Instant getWrittenAt();
+
+        @Nullable
+        Instant getEditedAt();
+    }
+
     /** The workspaces that hold a conversation entry not erased yet. */
     @WorkspaceAgnostic("The conversation retention sweep finds its workspaces first and then erases in each one")
     @Query(value = "SELECT DISTINCT workspace_id FROM mentor_entry WHERE redacted_at IS NULL", nativeQuery = true)
