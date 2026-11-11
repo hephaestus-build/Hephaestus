@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
@@ -34,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegist
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
@@ -45,6 +49,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
+import org.mockito.AdditionalAnswers;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration;
@@ -106,7 +111,7 @@ public final class ComposeRunGateway implements AutoCloseable {
                 runs.capacity(),
                 context.getBean(MeterRegistry.class),
                 context.getBean(JsonMapper.class),
-                context.getBean(FeedbackRepair.class),
+                deliveredElsewhere(context.getBean(FeedbackRepair.class)),
                 context.getBean(CompositionToolTrace.class));
         sandboxes = new AgentSandboxes(
                 context.getBean(AgentSandboxRepository.class),
@@ -239,4 +244,16 @@ public final class ComposeRunGateway implements AutoCloseable {
     })
     @Import(SandboxGatewayConfiguration.class)
     static class GatewayApplication {}
+
+    /**
+     * The repair of the review on the work, with its readback answered at once. This gateway runs no delivery, so a
+     * published review is never read back; the real readback would wait until the composition's deadline.
+     */
+    private static FeedbackRepair deliveredElsewhere(FeedbackRepair repair) {
+        var answered = mock(FeedbackRepair.class, AdditionalAnswers.delegatesTo(repair));
+        doReturn(new FeedbackRepairStatus(null, FeedbackRepairStatus.State.STOPPED, 0, List.of()))
+                .when(answered)
+                .status(anyLong(), any());
+        return answered;
+    }
 }
