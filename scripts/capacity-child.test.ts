@@ -82,9 +82,8 @@ process.disconnect();`;
 			child.kill("SIGTERM");
 			const secondSignal: unknown = await acknowledged;
 			assert.equal(asArray(secondSignal, "child second signal")[0], "second-signal");
-			await new Promise<void>((resolve, reject) => {
-				child.send("finish", (error) => (error === null ? resolve() : reject(error)));
-			});
+			// A failed send emits `error`, which rejects `ended`.
+			child.send("finish");
 			const result: unknown = await ended;
 			assert.equal(asArray(result, "child exit")[0], 0);
 			assert.equal(await readFile(receipt, "utf8"), "cleanup complete");

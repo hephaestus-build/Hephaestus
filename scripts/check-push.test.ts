@@ -372,15 +372,15 @@ function watched(t: TestContext, program: string, args: string[]) {
 /** A connection held by the actual worker, whose close proves that the worker stopped. */
 async function workerConnection(t: TestContext) {
 	const connected = Promise.withResolvers<Socket>();
+	let socket: Socket | undefined;
 	const server = createServer((connection) => {
-		t.after(() => {
-			connection.destroy();
-		});
+		socket = connection;
 		connected.resolve(connection);
 	});
 	server.listen(0, "127.0.0.1");
 	await once(server, "listening");
 	t.after(() => {
+		socket?.destroy();
 		server.close();
 	});
 	const address = server.address();
@@ -435,6 +435,27 @@ void test("a stalled run whose leader ends on the report signal leaves no worker
 	assert.equal(await run.result, 1, run.output.stderr);
 	await stopped;
 });
+
+void test(
+	"a stalled run closes its output even when a detached worker retains the pipe",
+	{ timeout: 10_000 },
+	async (t) => {
+		if (process.platform === "win32") {
+			t.skip("Windows has no detached POSIX process groups");
+			return;
+		}
+		const worker = await workerConnection(t);
+		const detached = `const { spawn } = require('node:child_process');
+const worker = spawn(process.execPath, ['-e', "const connection = require('node:net').connect(${worker.port}, '127.0.0.1'); connection.on('connect', () => console.log('ready')); connection.on('close', () => process.exit(0));"], { detached: true, stdio: 'inherit' });
+worker.unref();`;
+		const run = watched(t, process.execPath, ["-e", detached]);
+		await worker.connected;
+		await run.until(({ stdout }) => stdout.includes("ready"));
+		t.mock.timers.tick(1500);
+		t.mock.timers.tick(5000);
+		assert.equal(await run.result, 1);
+	},
+);
 
 void test("a frontend run that keeps printing may run longer than the stall limit", async (t) => {
 	const worker = await workerConnection(t);

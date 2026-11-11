@@ -298,6 +298,9 @@ export async function runUnlessStalled(
 			signal("SIGUSR2");
 			force = globalThis.setTimeout(() => {
 				signal("SIGKILL");
+				// A descendant can leave the process group while retaining its inherited pipes.
+				child.stdout.destroy();
+				child.stderr.destroy();
 				stopped.resolve(undefined);
 			}, reportGraceMs);
 		},
