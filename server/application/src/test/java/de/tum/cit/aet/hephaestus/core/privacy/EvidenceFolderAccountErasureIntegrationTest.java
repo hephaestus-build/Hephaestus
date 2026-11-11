@@ -20,12 +20,15 @@ import de.tum.cit.aet.hephaestus.agent.context.HistoryCopy;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -49,6 +52,7 @@ import de.tum.cit.aet.hephaestus.workspace.PracticeModelTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -151,6 +155,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 recorder,
                 captureFence,
                 executor,
+                new DefaultListableBeanFactory().getBeanProvider(AgentSandboxes.class),
+                new DefaultListableBeanFactory().getBeanProvider(SandboxGatewaySessions.class),
                 lifecycles);
     }
 
@@ -981,6 +987,144 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=?", String.class, job.getId()))
                 .isEqualTo("READY");
+    }
+
+    @Test
+    void shouldAcknowledgeOnlyAfterTheSandboxAndItsGatewayArchiveAreRemoved() throws Exception {
+        databaseTestUtils.cleanDatabase();
+        var recorder = new ExactPersonDataCopyRecorder();
+        var sandboxOwner = mock(AgentSandboxes.class);
+        var gateway = new SandboxGatewaySessions();
+        var runtime = new DefaultListableBeanFactory();
+        runtime.registerSingleton("sandboxes", sandboxOwner);
+        runtime.registerSingleton("sessions", gateway);
+        var owner = new EvidenceFolderPersonDataCatalog(
+                new FabricLayout(root.toString()),
+                jdbc,
+                namedJdbc,
+                mapper,
+                recorder,
+                fence,
+                runtime.getBeanProvider(ReviewAttemptCustody.class),
+                runtime.getBeanProvider(AgentSandboxes.class),
+                runtime.getBeanProvider(SandboxGatewaySessions.class),
+                lifecycles);
+        var job = job("folder-runtime-removal");
+        UUID sandboxId = UUID.randomUUID();
+        String subject = ReviewRunKind.subject(job.getReviewId());
+        jdbc.update(
+                "INSERT INTO agent_sandbox(id,workspace_id,subject_key,kind,claim_name,state,shutdown_at) VALUES (?,?,?,'REVIEW',?,'READY',now()+interval '1 hour')",
+                sandboxId,
+                job.getWorkspaceId(),
+                subject,
+                "agent-" + sandboxId);
+        var captured = copy(
+                root, owner, recorder, job, new PersonCopyIdentity("GITLAB", "https://runtime.example", "42", null));
+        Path copiedPerson = Objects.requireNonNull(captured.filesOnDisk().get("context/people/person.json"));
+        captured.close();
+        Path folder = root.resolve("jobs")
+                .resolve(Long.toString(job.getWorkspaceId()))
+                .resolve(job.getId().toString());
+        Path sandboxCopy = Files.writeString(root.resolve("sandbox-copy"), "personal evidence in the sandbox");
+        Path archive = Files.writeString(root.resolve("input.tar"), "personal evidence archive");
+        gateway.register(job.getId(), "credential", archive, "out");
+        jdbc.update(
+                "UPDATE person_evidence_copy SET state='ERASE_REQUESTED' WHERE job_id=? AND workspace_id=?",
+                job.getId(),
+                job.getWorkspaceId());
+        doAnswer(call -> {
+                    jdbc.update(
+                            "UPDATE agent_sandbox SET state='DELETING' WHERE id=? AND workspace_id=?",
+                            sandboxId,
+                            job.getWorkspaceId());
+                    throw new IllegalStateException("Sandbox deletion has not completed");
+                })
+                .when(sandboxOwner)
+                .release(job.getWorkspaceId(), sandboxId);
+
+        // A replica without the sandbox owner cannot acknowledge the runtime's physical copy.
+        catalog(root, recorder).removeLocalRequests();
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
+                        String.class,
+                        job.getId(),
+                        job.getWorkspaceId()))
+                .isEqualTo("ERASE_REQUESTED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM agent_sandbox WHERE id=? AND workspace_id=?",
+                        String.class,
+                        sandboxId,
+                        job.getWorkspaceId()))
+                .isEqualTo("READY");
+        assertThat(copiedPerson).exists();
+        assertThat(sandboxCopy).exists();
+        assertThat(archive).exists();
+
+        assertThatThrownBy(owner::removeLocalRequests).isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
+                        String.class,
+                        job.getId(),
+                        job.getWorkspaceId()))
+                .isEqualTo("ERASE_REQUESTED");
+        assertThat(copiedPerson).exists();
+        assertThat(sandboxCopy).exists();
+        assertThat(archive).exists();
+
+        UUID newerSandbox = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO agent_sandbox(id,workspace_id,subject_key,kind,claim_name,state,shutdown_at) VALUES (?,?,?,'REVIEW',?,'READY',now()+interval '1 hour')",
+                newerSandbox,
+                job.getWorkspaceId(),
+                subject,
+                "agent-" + newerSandbox);
+        doAnswer(call -> {
+                    jdbc.update(
+                            "DELETE FROM agent_sandbox WHERE id=? AND workspace_id=?", sandboxId, job.getWorkspaceId());
+                    Files.deleteIfExists(sandboxCopy);
+                    return null;
+                })
+                .when(sandboxOwner)
+                .release(job.getWorkspaceId(), sandboxId);
+        Files.delete(archive);
+        Files.createDirectory(archive);
+        Path obstruction = Files.writeString(archive.resolve("retained"), "personal evidence");
+        assertThatThrownBy(owner::removeLocalRequests).isInstanceOf(UncheckedIOException.class);
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
+                        String.class,
+                        job.getId(),
+                        job.getWorkspaceId()))
+                .isEqualTo("ERASE_REQUESTED");
+        assertThat(sandboxCopy).doesNotExist();
+        assertThat(copiedPerson).exists();
+        assertThat(obstruction).exists();
+
+        Files.delete(obstruction);
+        owner.removeLocalRequests();
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
+                        String.class,
+                        job.getId(),
+                        job.getWorkspaceId()))
+                .isEqualTo("ERASED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM agent_sandbox WHERE id=? AND workspace_id=?",
+                        String.class,
+                        newerSandbox,
+                        job.getWorkspaceId()))
+                .isEqualTo("READY");
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_sandbox WHERE id=? AND workspace_id=?",
+                        Integer.class,
+                        sandboxId,
+                        job.getWorkspaceId()))
+                .isZero();
+        assertThat(folder).doesNotExist();
+        assertThat(archive).doesNotExist();
+        assertThat(sandboxCopy).doesNotExist();
+        assertThatThrownBy(() -> gateway.require(job.getId(), "Bearer credential"))
+                .isInstanceOf(ResponseStatusException.class);
     }
 
     @Test

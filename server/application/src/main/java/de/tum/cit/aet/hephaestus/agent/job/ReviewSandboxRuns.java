@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
@@ -33,6 +34,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -233,63 +235,84 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     }
 
     private Measurement prepare(SandboxRun run, ReviewJob job, AdmissionIdentity attempt) {
-        ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-        var stage = new AtomicReference<>(PreparationFailure.Stage.INPUTS);
-        ReviewAttemptPreparation.PreparedSandbox prepared;
-        try {
-            prepared = preparation.prepare(job.getId(), job, run.fence(), snapshot, stage);
-        } catch (ResultAdmissionService.StaleAttemptException lost) {
-            throw new StaleRunException(run.fence(), lost);
-        } catch (RuntimeException failed) {
-            results.unprepared(job, run.fence(), PreparationFailure.of(stage.get(), failed), failed);
-            throw new StaleRunException(run.fence(), failed);
-        }
-        custody.hold(attempt, prepared::stagedInputs);
-        SandboxSpec spec = prepared.spec();
-        if (spec == null) {
-            // Nothing is left to measure: the attempt completes without its sandbox.
-            transactions.executeWithoutResult(status -> {
-                if (terminal.transition(job.getId(), run.fence(), ReviewJobStatus.COMPLETED, Instant.now(), null) > 0)
-                    jobs.findById(job.getId()).ifPresent(completed -> {
-                        completed.setProcessingStatus(ProcessingStatus.PENDING);
-                        jobs.saveAndFlush(completed);
-                    });
-            });
-            custody.release(attempt);
-            throw new StaleRunException(run.fence());
-        }
-        Instant started = Instant.now();
-        Integer marked = transactions.execute(
-                status -> jobs.markExecutionStarted(job.getId(), job.getRunId(), job.getAttempt(), started));
-        if (marked == null || marked != 1) {
-            custody.release(attempt);
-            throw new StaleRunException(run.fence());
-        }
-        try {
-            Path input = workspaces.createInputTar(spec.inputFiles(), spec.inputFilesOnDisk(), spec.inputDirectories());
+        var measurement = new AtomicReference<Measurement>();
+        custody.hold(attempt, () -> {
+            ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
+            var stage = new AtomicReference<>(PreparationFailure.Stage.INPUTS);
+            ReviewAttemptPreparation.PreparedSandbox prepared;
             try {
-                var session = sessions.registerAttempt(
-                        job.getId(),
-                        job.getAttempt(),
-                        spec.image(),
-                        UUID.randomUUID().toString(),
-                        input,
-                        "out");
-                return new Measurement(
-                        spec,
-                        started,
-                        started.plusSeconds(snapshot.timeoutSeconds()),
-                        handler.endedPractices(job),
-                        session);
-            } catch (IOException | RuntimeException failure) {
-                Files.deleteIfExists(input);
-                throw failure;
+                prepared = preparation.prepare(job.getId(), job, run.fence(), snapshot, stage);
+            } catch (ResultAdmissionService.StaleAttemptException lost) {
+                throw new StaleRunException(run.fence(), lost);
+            } catch (RuntimeException failed) {
+                results.unprepared(job, run.fence(), PreparationFailure.of(stage.get(), failed), failed);
+                throw new StaleRunException(run.fence(), failed);
             }
-        } catch (IOException failure) {
-            throw unstarted(run, job, attempt, new UncheckedIOException(failure));
-        } catch (RuntimeException failure) {
-            throw unstarted(run, job, attempt, failure);
-        }
+            PreparedJobInputs inputs = prepared.stagedInputs();
+            boolean transferred = false;
+            try {
+                SandboxSpec spec = prepared.spec();
+                if (spec == null) {
+                    // Nothing is left to measure: the attempt completes without its sandbox.
+                    transactions.executeWithoutResult(status -> {
+                        if (terminal.transition(
+                                        job.getId(), run.fence(), ReviewJobStatus.COMPLETED, Instant.now(), null)
+                                > 0)
+                            jobs.findById(job.getId()).ifPresent(completed -> {
+                                completed.setProcessingStatus(ProcessingStatus.PENDING);
+                                jobs.saveAndFlush(completed);
+                            });
+                    });
+                    custody.release(attempt);
+                    throw new StaleRunException(run.fence());
+                }
+                Instant started = Instant.now();
+                Integer marked = transactions.execute(
+                        status -> jobs.markExecutionStarted(job.getId(), job.getRunId(), job.getAttempt(), started));
+                if (marked == null || marked != 1) {
+                    custody.release(attempt);
+                    throw new StaleRunException(run.fence());
+                }
+                try {
+                    Path input = workspaces.createInputTar(
+                            spec.inputFiles(), spec.inputFilesOnDisk(), spec.inputDirectories());
+                    try {
+                        var session = sessions.registerAttempt(
+                                job.getId(),
+                                job.getAttempt(),
+                                spec.image(),
+                                UUID.randomUUID().toString(),
+                                input,
+                                "out");
+                        measurement.set(new Measurement(
+                                spec,
+                                started,
+                                started.plusSeconds(snapshot.timeoutSeconds()),
+                                handler.endedPractices(job),
+                                session));
+                        var retained = new PreparedJobInputs(
+                                inputs.filesOnDisk(),
+                                inputs.directories(),
+                                List.of(() -> close(session), inputs),
+                                inputs.folderIndex(),
+                                inputs.automatedReviewReadinessReport(),
+                                inputs.copiesExpireAt());
+                        transferred = true;
+                        return retained;
+                    } catch (IOException | RuntimeException failure) {
+                        Files.deleteIfExists(input);
+                        throw failure;
+                    }
+                } catch (IOException failure) {
+                    throw unstarted(run, job, attempt, new UncheckedIOException(failure));
+                } catch (RuntimeException failure) {
+                    throw unstarted(run, job, attempt, failure);
+                }
+            } finally {
+                if (!transferred) inputs.close();
+            }
+        });
+        return Objects.requireNonNull(measurement.get());
     }
 
     /** Its execution started, and its sandbox cannot measure it: the attempt ends, or goes back to the queue. */

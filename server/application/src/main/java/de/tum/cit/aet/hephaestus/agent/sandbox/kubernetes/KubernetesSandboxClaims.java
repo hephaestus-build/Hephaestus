@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxClaims;
+import io.fabric8.kubernetes.api.model.DeletionPropagation;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResource;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResourceBuilder;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResourceList;
@@ -16,6 +17,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Claims through the generic resource API: agent-sandbox ships no Java client, and the claim is the only one of
@@ -61,8 +64,10 @@ public final class KubernetesSandboxClaims implements SandboxClaims {
 
     @Override
     public void delete(String name) {
-        // A claim that is gone answers an empty list rather than an error.
-        claims().withName(name).delete();
+        // Foreground deletion keeps the claim until its sandbox and Pod are gone. Erasure cannot acknowledge sooner.
+        var claim = claims().withName(name);
+        claim.withPropagationPolicy(DeletionPropagation.FOREGROUND).delete();
+        claim.waitUntilCondition(Objects::isNull, 30, TimeUnit.SECONDS);
     }
 
     @Override

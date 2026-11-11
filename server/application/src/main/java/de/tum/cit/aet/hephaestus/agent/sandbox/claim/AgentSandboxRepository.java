@@ -116,6 +116,13 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
             RETURNING""" + COLUMNS, nativeQuery = true)
     Optional<SandboxRow> releaseSandbox(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
+    /** Takes back this physical sandbox, including a deletion that must be retried. */
+    @Query(value = """
+            UPDATE agent_sandbox SET state = 'DELETING'
+             WHERE id = :id AND workspace_id = :workspaceId AND state IN ('REQUESTED', 'READY', 'DELETING')
+            RETURNING""" + COLUMNS, nativeQuery = true)
+    Optional<SandboxRow> releaseCopy(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
+
     /** Takes back the subject's live sandbox, as an erasure or a change of access does. */
     @Query(value = """
             UPDATE agent_sandbox SET state = 'DELETING'

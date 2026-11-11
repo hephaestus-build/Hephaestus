@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -102,6 +103,17 @@ public class SandboxGatewaySessions {
             throw new IllegalStateException("Gateway session already exists for this job");
         }
         return session;
+    }
+
+    /** Removes the local archive and its selections before a job's evidence removal is acknowledged. */
+    public void closeJob(UUID jobId) {
+        Session session = sessions.get(jobId);
+        if (session == null) return;
+        try {
+            session.close();
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
     }
 
     /** A wrong credential and an unknown session look the same to the caller. */
@@ -324,12 +336,15 @@ public class SandboxGatewaySessions {
         @Override
         public synchronized void close() throws IOException {
             closed = true;
-            sessions.remove(id, this);
             try {
                 for (Path selection : selections.values()) Files.deleteIfExists(selection);
             } finally {
                 Files.deleteIfExists(inputTar);
             }
+            selections.clear();
+            result = null;
+            resultDigest = null;
+            sessions.remove(id, this);
         }
     }
 }

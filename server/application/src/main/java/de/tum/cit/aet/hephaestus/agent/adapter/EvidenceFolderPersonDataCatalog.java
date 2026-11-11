@@ -2,10 +2,13 @@ package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopy;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
@@ -75,6 +78,8 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     private final PersonDataCopyRecorder recorder;
     private final PersonDataCopyFence fence;
     private final ObjectProvider<ReviewAttemptCustody> custody;
+    private final ObjectProvider<AgentSandboxes> sandboxes;
+    private final ObjectProvider<SandboxGatewaySessions> sessions;
     private final ObjectProvider<ReviewJobLifecycleService> lifecycles;
     private static final ThreadLocal<ActiveCapture> ACTIVE = new ThreadLocal<>();
     /** Whether a receipt indexes the receipts of every job whose rows its capture copied. */
@@ -97,6 +102,8 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
             PersonDataCopyRecorder recorder,
             PersonDataCopyFence fence,
             ObjectProvider<ReviewAttemptCustody> custody,
+            ObjectProvider<AgentSandboxes> sandboxes,
+            ObjectProvider<SandboxGatewaySessions> sessions,
             ObjectProvider<ReviewJobLifecycleService> lifecycles) {
         this.layout = layout;
         this.jdbc = jdbc;
@@ -105,6 +112,8 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         this.recorder = recorder;
         this.fence = fence;
         this.custody = custody;
+        this.sandboxes = sandboxes;
+        this.sessions = sessions;
         this.lifecycles = lifecycles;
     }
 
@@ -123,6 +132,15 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
             provenance = recorder.begin();
             ObjectNode receipt = mapper.createObjectNode();
             receipt.put("attempt", job.getAttempt());
+            jdbc
+                    .queryForList(
+                            "SELECT id FROM agent_sandbox WHERE workspace_id=? AND subject_key=? AND state='READY'",
+                            UUID.class,
+                            workspace,
+                            ReviewRunKind.subject(job.getReviewId()))
+                    .stream()
+                    .findFirst()
+                    .ifPresent(id -> receipt.put("sandboxId", id.toString()));
             receipt.putArray("identities");
             receipt.putArray("repositories");
             int changed = jdbc.update(
@@ -966,13 +984,20 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         String owner = storeId().toString();
         jdbc.query(
                 """
-                SELECT c.job_id,c.workspace_id,c.id FROM person_evidence_copy c
+                SELECT c.job_id,c.workspace_id,c.id,CAST(c.payload->>'sandboxId' AS uuid) FROM person_evidence_copy c
                 WHERE c.store_id=CAST(? AS uuid) AND c.state IN ('ERASE_REQUESTED','PURGE_REQUESTED') ORDER BY c.job_id,c.id
                 """,
                 (RowCallbackHandler) rs -> {
                     UUID jobId = Objects.requireNonNull(rs.getObject(1, UUID.class));
                     long workspaceId = rs.getLong(2);
                     String copyId = Objects.requireNonNull(rs.getString(3));
+                    UUID sandboxId = rs.getObject(4, UUID.class);
+                    AgentSandboxes sandboxOwner = sandboxes.getIfAvailable();
+                    if (sandboxId != null) {
+                        if (sandboxOwner == null) return;
+                        sandboxOwner.release(workspaceId, sandboxId);
+                    }
+                    SandboxGatewaySessions gateway = sessions.getIfAvailable();
                     // An attempt that this replica holds keeps the folder's lease until its inputs are released.
                     ReviewAttemptCustody held = custody.getIfAvailable();
                     if (held != null) held.releaseJob(jobId);
@@ -980,6 +1005,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     if (acquired.isEmpty()) return;
                     var lease = acquired.get();
                     try (lease) {
+                        if (gateway != null) gateway.closeJob(jobId);
                         deleteFolder(workspaceId, jobId);
                         jdbc.update("""
                             UPDATE person_evidence_copy SET state='ERASED',

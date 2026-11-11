@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -105,10 +106,28 @@ public class ReviewAttemptCustody {
         private @Nullable PreparedJobInputs inputs;
         private boolean closed;
 
-        synchronized PreparedJobInputs get(Supplier<PreparedJobInputs> prepare) {
-            if (closed) throw new IllegalStateException("The attempt's inputs were released");
-            if (inputs == null) inputs = prepare.get();
-            return inputs;
+        private final ReentrantLock preparation = new ReentrantLock();
+
+        PreparedJobInputs get(Supplier<PreparedJobInputs> prepare) {
+            preparation.lock();
+            try {
+                synchronized (this) {
+                    if (closed) throw new IllegalStateException("The attempt's inputs were released");
+                    if (inputs != null) return inputs;
+                }
+                // Capture admission can wait for erasure. Release must never wait for that admission.
+                PreparedJobInputs prepared = prepare.get();
+                synchronized (this) {
+                    if (closed) {
+                        prepared.close();
+                        throw new IllegalStateException("The attempt's inputs were released");
+                    }
+                    inputs = prepared;
+                    return prepared;
+                }
+            } finally {
+                preparation.unlock();
+            }
         }
 
         synchronized void close() {
