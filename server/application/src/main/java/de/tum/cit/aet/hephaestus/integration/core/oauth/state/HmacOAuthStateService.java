@@ -8,6 +8,7 @@ import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
@@ -49,18 +50,20 @@ public class HmacOAuthStateService implements OAuthStateService {
 
     private final byte[] secret;
     private final Duration ttl;
+    private final Clock clock;
 
     @Nullable
     private final OAuthStateNonceStore nonceStore;
 
     /** Test factory: HMAC + TTL only, no single-use enforcement. */
-    public static HmacOAuthStateService withoutNonceStore(@Nullable String secret, Duration ttl) {
-        return new HmacOAuthStateService(secret, ttl, (OAuthStateNonceStore) null);
+    public static HmacOAuthStateService withoutNonceStore(@Nullable String secret, Duration ttl, Clock clock) {
+        return new HmacOAuthStateService(secret, ttl, null, clock);
     }
 
     /** Test factory: HMAC + TTL + custom nonce store. */
-    public static HmacOAuthStateService withNonceStore(String secret, Duration ttl, OAuthStateNonceStore store) {
-        return new HmacOAuthStateService(secret, ttl, store);
+    public static HmacOAuthStateService withNonceStore(
+            String secret, Duration ttl, OAuthStateNonceStore store, Clock clock) {
+        return new HmacOAuthStateService(secret, ttl, store, clock);
     }
 
     /**
@@ -83,8 +86,9 @@ public class HmacOAuthStateService implements OAuthStateService {
             OAuthStateProperties properties,
             WebhookProperties webhookProperties,
             Environment environment,
-            @Nullable OAuthStateNonceStore nonceStore) {
-        this(resolveSecret(properties, webhookProperties, environment), properties.ttl(), nonceStore);
+            @Nullable OAuthStateNonceStore nonceStore,
+            Clock clock) {
+        this(resolveSecret(properties, webhookProperties, environment), properties.ttl(), nonceStore, clock);
     }
 
     private static String resolveSecret(
@@ -119,7 +123,10 @@ public class HmacOAuthStateService implements OAuthStateService {
      * is present — same fail-fast contract as before.
      */
     private HmacOAuthStateService(
-            @Nullable String configuredSecret, @Nullable Duration ttl, @Nullable OAuthStateNonceStore nonceStore) {
+            @Nullable String configuredSecret,
+            @Nullable Duration ttl,
+            @Nullable OAuthStateNonceStore nonceStore,
+            Clock clock) {
         if (configuredSecret == null || configuredSecret.isBlank()) {
             throw new IllegalStateException(
                     "Set hephaestus.integration.oauth-state.secret or hephaestus.webhook.secret. The OAuth state HMAC needs one of them.");
@@ -127,6 +134,7 @@ public class HmacOAuthStateService implements OAuthStateService {
         this.secret = configuredSecret.getBytes(StandardCharsets.UTF_8);
         this.ttl = ttl == null ? DEFAULT_TTL : ttl;
         this.nonceStore = nonceStore;
+        this.clock = clock;
     }
 
     @Override
@@ -143,7 +151,7 @@ public class HmacOAuthStateService implements OAuthStateService {
      */
     @Override
     public String issue(long workspaceId, IntegrationKind kind, @Nullable Long actorAccountId) {
-        long issuedAt = Instant.now().getEpochSecond();
+        long issuedAt = clock.instant().getEpochSecond();
         byte[] nonceBytes = new byte[12];
         RANDOM.nextBytes(nonceBytes);
         String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
@@ -197,7 +205,7 @@ public class HmacOAuthStateService implements OAuthStateService {
             throw new IllegalArgumentException("The issuedAt value of the OAuth state has an incorrect format.", e);
         }
         Instant issued = Instant.ofEpochSecond(issuedAt);
-        if (Instant.now().minus(ttl).isAfter(issued)) {
+        if (clock.instant().minus(ttl).isAfter(issued)) {
             throw new IllegalArgumentException("The connection request expired. Start the connection again.");
         }
         IntegrationKind kind;
