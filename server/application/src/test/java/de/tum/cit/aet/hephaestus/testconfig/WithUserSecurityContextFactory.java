@@ -11,6 +11,6 @@ public class WithUserSecurityContextFactory implements WithSecurityContextFactor
     @Override
     public SecurityContext createSecurityContext(WithUser annotation) {
         return MockSecurityContextUtils.createSecurityContext(
-                annotation.username(), annotation.userId(), annotation.authorities(), "mock-jwt-token-for-test-user");
+                annotation.userId(), annotation.authorities(), "mock-jwt-token-for-test-user");
     }
 }

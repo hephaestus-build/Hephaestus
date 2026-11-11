@@ -11,6 +11,6 @@ public class WithAdminUserSecurityContextFactory implements WithSecurityContextF
     @Override
     public SecurityContext createSecurityContext(WithAdminUser annotation) {
         return MockSecurityContextUtils.createSecurityContext(
-                annotation.username(), annotation.userId(), annotation.authorities(), "mock-jwt-token-for-admin-user");
+                annotation.userId(), annotation.authorities(), "mock-jwt-token-for-admin-user");
     }
 }

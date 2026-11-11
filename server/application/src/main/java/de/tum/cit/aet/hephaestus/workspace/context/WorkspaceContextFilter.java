@@ -212,11 +212,9 @@ public class WorkspaceContextFilter implements Filter {
 
             WorkspaceContextHolder.setContext(context);
 
-            // Pin the verified actor id; a session's display login may belong to a different
-            // provider.
+            // Pin the verified actor id.
             resolveWorkspaceIdentity(workspace, currentUsers, membership.memberUserIds())
-                    .ifPresent(user ->
-                            CurrentScmIdentityHolder.set(user.actorId(), user.login(), membership.memberUserIds()));
+                    .ifPresent(user -> CurrentScmIdentityHolder.set(user.actorId(), membership.memberUserIds()));
 
             log.debug(
                     "Set workspace context: workspaceSlug={}, workspaceId={}, roles={}",

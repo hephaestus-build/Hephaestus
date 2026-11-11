@@ -215,7 +215,7 @@ class WorkspaceAccessServiceTest {
     void hasRole_WithSuperAdminButNoMembership_DeniesAccess() {
         // Given: Global admin user with no workspace membership
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "admin-user", "admin-123", new String[] {"app_admin"}, "super-admin-token"));
+                "admin-123", new String[] {"app_admin"}, "super-admin-token"));
 
         WorkspaceContext context = new WorkspaceContext(
                 1L, "test", "Test", AccountType.ORG, 123L, Set.of() // No workspace roles - not a member
@@ -235,7 +235,7 @@ class WorkspaceAccessServiceTest {
     void hasRole_WithSuperAdminAndMemberRole_AllowsAdminAccess() {
         // Given: Global admin user who is also a MEMBER of the workspace
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "admin-user", "admin-123", new String[] {"app_admin"}, "super-admin-token"));
+                "admin-123", new String[] {"app_admin"}, "super-admin-token"));
 
         WorkspaceContext context = new WorkspaceContext(
                 1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.MEMBER) // Only MEMBER role in workspace
@@ -252,7 +252,7 @@ class WorkspaceAccessServiceTest {
     void hasRole_WithSuperAdminAndOwnerRole_KeepsOwnerPermissions() {
         // Given: Global admin user who is also OWNER of the workspace
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "admin-user", "admin-123", new String[] {"app_admin"}, "super-admin-token"));
+                "admin-123", new String[] {"app_admin"}, "super-admin-token"));
 
         WorkspaceContext context =
                 new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.OWNER));
@@ -268,7 +268,7 @@ class WorkspaceAccessServiceTest {
     void canManageRole_WithSuperAdminAndMembership_CanManageAdminAndMember() {
         // Given: Global admin user with MEMBER workspace role
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "admin-user", "admin-123", new String[] {"app_admin"}, "super-admin-token"));
+                "admin-123", new String[] {"app_admin"}, "super-admin-token"));
 
         WorkspaceContext context = new WorkspaceContext(
                 1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.MEMBER) // Has workspace membership
@@ -285,7 +285,6 @@ class WorkspaceAccessServiceTest {
     void hasRole_WithNonAdminUser_DoesNotGetElevation() {
         // Given: Regular user without admin realm role
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "regular-user",
                 "user-123",
                 new String[] {"user"}, // Not "admin"
                 "regular-user-token"));

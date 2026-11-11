@@ -25,7 +25,6 @@ public class WithMockUserSecurityContextFactory implements WithSecurityContextFa
         // Create mock JWT claims
         Map<String, Object> claims = new HashMap<>();
         claims.put("sub", annotation.userId());
-        claims.put("preferred_username", annotation.username());
         claims.put("iss", "https://test-issuer");
         claims.put("aud", "test-audience");
 

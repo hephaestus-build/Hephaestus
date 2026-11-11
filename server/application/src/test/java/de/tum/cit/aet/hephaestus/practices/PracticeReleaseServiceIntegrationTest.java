@@ -53,7 +53,7 @@ class PracticeReleaseServiceIntegrationTest extends AbstractWorkspaceIntegration
         var owner = persistUser("admin");
         var workspace = createWorkspace("release-accept", "Release", "accept-org", AccountType.ORG, owner);
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "admin", Long.toString(accountId(owner)), new String[] {"app_admin"}, "mock-jwt-token-for-admin-user"));
+                Long.toString(accountId(owner)), new String[] {"app_admin"}, "mock-jwt-token-for-admin-user"));
         installer.install(workspace.getId());
         var source = catalog.effectiveCatalog().installablePractices().getFirst();
         var ctx = WorkspaceContext.fromWorkspace(workspace, Set.of(), null);
@@ -106,7 +106,7 @@ class PracticeReleaseServiceIntegrationTest extends AbstractWorkspaceIntegration
         var owner = persistUser("admin");
         var workspace = createWorkspace("release-decline", "Release", "release-org", AccountType.ORG, owner);
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "admin", Long.toString(accountId(owner)), new String[] {"app_admin"}, "mock-jwt-token-for-admin-user"));
+                Long.toString(accountId(owner)), new String[] {"app_admin"}, "mock-jwt-token-for-admin-user"));
         installer.install(workspace.getId());
         var source = catalog.effectiveCatalog().installablePractices().stream()
                 .filter(offer -> offer.effective().groupSlug() != null)

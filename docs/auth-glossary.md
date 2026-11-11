@@ -50,12 +50,11 @@ Cookie access tokens combine standard JWT/OIDC claims with application-specific 
 | `jti` | UUID | Inserted into `issued_jwt`. |
 | `iat`, `exp` | Unix seconds | Issued-at and expiry; see [session deadlines](./admin/configuration-readiness.mdx#session-deadlines). |
 | `roles` | array | The account's roles, including `APP_ADMIN`. |
-| `preferred_username` | string | The account's login. |
-| `given_name` | string | Present when the account has one. |
 | `session_exp` | Unix seconds | When the session, as opposed to this access token, expires. |
 | `auth_time` | Unix seconds | Standard OIDC claim: when the account last completed an interactive sign-in here. Stamped at login and copied unchanged through refresh, so it measures the age of the sign-in and not of the token. Read by the [recent sign-in gate](./contributor/instance-admin.md#recent-sign-in-gate); it is not evidence that an upstream credential was entered. |
 | `sid` | UUID | Only on installed-client tokens: the client session they belong to. The cookie `/auth/refresh` refuses a token that carries it. |
 
+The token carries no personal data, such as a name, login or email address ([NIST SP 800-63B-4 § 5.1.1](https://pages.nist.gov/800-63-4/sp800-63b.html)). The web app reads them from `GET /user`.
 `HephaestusJwtIssuer` emits these claims. `exp` is the earliest of the access-token deadline,
 `session_exp`. Renewal preserves the absolute deadlines and `auth_time`. `RevocationAwareJwtDecoder`
 rejects any token carrying an `act` claim: nothing here acts for another account.

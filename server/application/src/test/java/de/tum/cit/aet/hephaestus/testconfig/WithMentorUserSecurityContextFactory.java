@@ -11,6 +11,6 @@ public class WithMentorUserSecurityContextFactory implements WithSecurityContext
     @Override
     public SecurityContext createSecurityContext(WithMentorUser annotation) {
         return MockSecurityContextUtils.createSecurityContext(
-                annotation.username(), annotation.userId(), annotation.authorities(), "mock-jwt-token-for-mentor-user");
+                annotation.userId(), annotation.authorities(), "mock-jwt-token-for-mentor-user");
     }
 }

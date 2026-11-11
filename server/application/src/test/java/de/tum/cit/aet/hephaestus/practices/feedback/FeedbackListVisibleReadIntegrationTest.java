@@ -216,10 +216,7 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
 
     private void authenticate(ReviewIntegrationData.Scenario scenario) {
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "feedback-reader",
-                Objects.requireNonNull(scenario.account().getId()).toString(),
-                new String[0],
-                "feedback-reader-token"));
+                Objects.requireNonNull(scenario.account().getId()).toString(), new String[0], "feedback-reader-token"));
     }
 
     private UUID feedback(Result result, FeedbackDestination destination, @Nullable String body) {

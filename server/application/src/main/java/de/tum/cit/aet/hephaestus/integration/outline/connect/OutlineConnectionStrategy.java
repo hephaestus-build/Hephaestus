@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.outline.connect;
 
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
@@ -123,8 +122,9 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
         if (derived > 0 || erased > 0 || collections > 0) {
             log.info(
                     "outline.audit: disconnect erase — actor={} erased {} derived result and feedback row(s), {} mirrored document(s), and {} collection registration(s) for workspace={}",
-                    LoggingUtils.sanitizeForLog(
-                            SecurityUtils.getCurrentUserLogin().orElse("system")),
+                    SecurityUtils.getCurrentAccountId()
+                            .map(id -> "account " + id)
+                            .orElse("system"),
                     derived,
                     erased,
                     collections,
