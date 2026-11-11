@@ -1,6 +1,6 @@
 # ADR 0044: Email is a notification transport, delivered through the event publication registry
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0098](0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md)
 **Date:** 2026-09-12
 **Amended by:** [ADR 0079](0079-one-agent-system.md)
 
