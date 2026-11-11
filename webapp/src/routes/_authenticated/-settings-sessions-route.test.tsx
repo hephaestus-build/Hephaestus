@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
+import { problemType } from "@/lib/problem-detail";
 import { sessions } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
@@ -103,6 +104,69 @@ describe("active sessions on the settings page", () => {
 
 		await waitFor(() => expect(within(region).getAllByRole("listitem")).toHaveLength(1));
 		expect(signedOutOthers).toBe(true);
+	});
+
+	it("asks for a fresh sign-in instead of reporting a failure when signing out others needs one", async () => {
+		server.use(
+			http.delete("*/user/sessions", () =>
+				HttpResponse.json(
+					{
+						status: 403,
+						title: "Confirm access",
+						detail: "This action requires a recent sign-in.",
+						type: problemType("step-up-required"),
+						maxAgeSeconds: 300,
+					},
+					{ status: 403 },
+				),
+			),
+		);
+		renderRouteAt("/settings");
+		const region = await sessionsRegion();
+
+		fireEvent.click(
+			await within(region).findByRole(
+				"button",
+				{ name: "Sign out 3 other sessions" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		fireEvent.click(await screen.findByRole("button", { name: "Sign out other sessions" }));
+
+		await screen.findByRole("dialog", { name: "Confirm access" });
+		expect(screen.queryByText(/could not sign out your other sessions/u)).toBeNull();
+		// The open dialog makes the page behind it inert, so the rows are read as hidden ones.
+		expect(within(region).getAllByRole("listitem", { hidden: true })).toHaveLength(sessions.length);
+	});
+
+	it("asks to confirm access when signing out one other session needs a recent sign-in", async () => {
+		server.use(
+			http.delete("*/user/sessions/:jti", () =>
+				HttpResponse.json(
+					{
+						status: 403,
+						title: "Confirm access",
+						detail: "This action requires a recent sign-in.",
+						type: problemType("step-up-required"),
+						maxAgeSeconds: 300,
+					},
+					{ status: 403 },
+				),
+			),
+		);
+		renderRouteAt("/settings");
+		const region = await sessionsRegion();
+		const row = await within(region).findByRole(
+			"listitem",
+			{ name: "Firefox 126 on Ubuntu" },
+			ROUTE_RENDER_WAIT,
+		);
+
+		fireEvent.click(within(row).getByRole("button", { name: "Sign out Firefox 126 on Ubuntu" }));
+
+		await screen.findByRole("dialog", { name: "Confirm access" });
+		expect(screen.queryByText(/could not sign out that session/u)).toBeNull();
+		expect(within(region).getAllByRole("listitem", { hidden: true })).toHaveLength(sessions.length);
 	});
 
 	it("offers a retry when the list fails to load, and the retry reads it again", async () => {

@@ -178,11 +178,18 @@ class AuthSessionServiceTest extends BaseUnitTest {
         UUID oldJti = UUID.randomUUID();
         UUID sid = UUID.randomUUID();
         when(issuedJwtRepository.findSessionIdOwnedBy(oldJti, ACCOUNT_ID)).thenReturn(Optional.of(sid));
+        when(clientSessionService.endSession(ACCOUNT_ID, sid, IssuedJwt.RevokedReason.SELF_REVOKE))
+                .thenReturn(true);
 
         service.revokeSession(ACCOUNT_ID, oldJti);
 
         verify(clientSessionService).endSession(ACCOUNT_ID, sid, IssuedJwt.RevokedReason.SELF_REVOKE);
         verify(issuedJwtRepository, never()).revokeOwned(any(), any(), any(), any());
+        AuthEventData event = capturedEvent();
+        assertThat(event.type()).isEqualTo(AuthEvent.EventType.JWT_REVOKED);
+        assertThat(event.result()).isEqualTo(AuthEvent.Result.SUCCESS);
+        assertThat(event.accountId()).isEqualTo(ACCOUNT_ID);
+        assertThat(event.actingAccountId()).isEqualTo(ACCOUNT_ID);
     }
 
     @Test
@@ -194,6 +201,10 @@ class AuthSessionServiceTest extends BaseUnitTest {
         service.revokeSession(ACCOUNT_ID, jti);
 
         verify(issuedJwtRepository).revokeBrowserDescendants(eq(ACCOUNT_ID), eq(jti), any(), eq("SELF_REVOKE"));
+        AuthEventData event = capturedEvent();
+        assertThat(event.type()).isEqualTo(AuthEvent.EventType.JWT_REVOKED);
+        assertThat(event.result()).isEqualTo(AuthEvent.Result.SUCCESS);
+        assertThat(event.details()).isEqualTo("{\"reason\":\"SELF_REVOKE\"}");
     }
 
     @Test

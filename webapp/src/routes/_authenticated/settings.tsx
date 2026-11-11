@@ -11,8 +11,9 @@ import {
 	useLocation,
 	useNavigate,
 } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAccountDangerZone } from "@/hooks/use-account-danger-zone";
+import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { usePasskeySettings } from "@/hooks/use-passkey-settings";
 import { toast } from "@/lib/toast";
 import type { Route as RootRoute } from "@/routes/__root";
@@ -59,6 +60,7 @@ import type {
 	UpdateUserSettingsResponse,
 	UserSettings,
 } from "@/api/types.gen";
+import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import type { EmailPreferencesSectionProps } from "@/components/settings/EmailPreferencesSection";
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
@@ -73,7 +75,12 @@ import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { browserTimeZone, TIME_ZONES } from "@/lib/dates";
 import { pageHead } from "@/lib/page-title";
-import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import {
+	problemDetailOf,
+	problemStatusOf,
+	type StepUpChallenge,
+	stepUpChallengeOf,
+} from "@/lib/problem-detail";
 import { announcePublicActivityChoice } from "@/lib/public-activity-choice";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
@@ -493,13 +500,19 @@ function RouteComponent() {
 	const sessionsQuery = useQuery(listSessionsOptions({}));
 	const invalidateSessions = async () =>
 		queryClient.invalidateQueries({ queryKey: listSessionsQueryKey() });
+	const [signOutChallenge, setSignOutChallenge] = useState<StepUpChallenge | undefined>(undefined);
 	const revokeSession = useMutation({
 		...revokeSessionMutation(),
 		onSuccess: () => {
 			void invalidateSessions();
 			toast.success("Signed out of that session");
 		},
-		onError: () => {
+		onError: (error) => {
+			const challenge = stepUpChallengeOf(error);
+			if (challenge) {
+				setSignOutChallenge(challenge);
+				return;
+			}
 			toast.error("We could not sign out that session. Try again.");
 		},
 	});
@@ -509,7 +522,12 @@ function RouteComponent() {
 			void invalidateSessions();
 			toast.success("Signed out of all other sessions");
 		},
-		onError: () => {
+		onError: (error) => {
+			const challenge = stepUpChallengeOf(error);
+			if (challenge) {
+				setSignOutChallenge(challenge);
+				return;
+			}
 			toast.error("We could not sign out your other sessions. Try again.");
 		},
 	});
@@ -534,59 +552,65 @@ function RouteComponent() {
 	}
 
 	return (
-		<SettingsPage
-			passkeys={<PasskeySettings {...passkeys} />}
-			emailPreferencesProps={emailPreferencesProps}
-			weeklyDigestProps={{ state: weeklyDigestState }}
-			isLoading={isLoading}
-			settingsError={settingsError}
-			onRetrySettings={() => {
-				void refetchSettings();
-			}}
-			practiceFeedbackProps={{
-				practiceFeedbackDeliveryEnabled: settings?.practiceFeedbackDeliveryEnabled ?? true,
-				onTogglePracticeFeedback: handlePracticeFeedbackToggle,
-				isLoading: updateSettingsMutation.isPending,
-			}}
-			// No configured organisation means no research on this deployment, and a switch for it
-			// nobody runs is a promise the instance cannot keep.
-			// Setup owns the question until it is answered for the organisation currently named; a switch
-			// before that would stand in for a consent this account has not given. A failed read still
-			// shows the section, because its Retry is the only way to find out whether there is one.
-			showResearchSection={
-				consentQuery.isError ||
-				(accountConsent?.researchOrganization !== undefined && accountConsent.completed)
-			}
-			researchProps={{
-				organization: accountConsent?.researchOrganization ?? "",
-				participateInResearch: accountConsent?.participateInResearch ?? false,
-				onToggleResearch: handleResearchToggle,
-				isLoading: consentQuery.isLoading || researchConsentMutation.isPending,
-				isError: consentQuery.isError,
-				error: consentQuery.error,
-				onRetry: () => {
-					void consentQuery.refetch();
-				},
-			}}
-			aiChoiceProps={{
-				choice: aiChoiceQuery.data?.choice ?? undefined,
-				onSave: (choice) => aiChoiceMutation.mutate({ body: { choice } }),
-				isSaving: aiChoiceMutation.isPending,
-				isLoading: aiChoiceQuery.isLoading,
-				isError: aiChoiceQuery.isError,
-				error: aiChoiceQuery.error,
-				onRetry: () => {
-					void aiChoiceQuery.refetch();
-				},
-			}}
-			publicActivityProps={{ state: publicActivityState }}
-			productFeedbackSharingProps={{ state: productFeedbackSharingState }}
-			linkedAccountsProps={linkedAccountsProps}
-			showSlackPreferencesSection={slackAvailable}
-			slackPreferencesProps={slackPreferencesProps}
-			sessionsProps={{ state: sessionsState }}
-			dangerZoneProps={dangerZoneProps}
-		/>
+		<>
+			<SettingsPage
+				passkeys={<PasskeySettings {...passkeys} />}
+				emailPreferencesProps={emailPreferencesProps}
+				weeklyDigestProps={{ state: weeklyDigestState }}
+				isLoading={isLoading}
+				settingsError={settingsError}
+				onRetrySettings={() => {
+					void refetchSettings();
+				}}
+				practiceFeedbackProps={{
+					practiceFeedbackDeliveryEnabled: settings?.practiceFeedbackDeliveryEnabled ?? true,
+					onTogglePracticeFeedback: handlePracticeFeedbackToggle,
+					isLoading: updateSettingsMutation.isPending,
+				}}
+				// No configured organisation means no research on this deployment, and a switch for it
+				// nobody runs is a promise the instance cannot keep.
+				// Setup owns the question until it is answered for the organisation currently named; a switch
+				// before that would stand in for a consent this account has not given. A failed read still
+				// shows the section, because its Retry is the only way to find out whether there is one.
+				showResearchSection={
+					consentQuery.isError ||
+					(accountConsent?.researchOrganization !== undefined && accountConsent.completed)
+				}
+				researchProps={{
+					organization: accountConsent?.researchOrganization ?? "",
+					participateInResearch: accountConsent?.participateInResearch ?? false,
+					onToggleResearch: handleResearchToggle,
+					isLoading: consentQuery.isLoading || researchConsentMutation.isPending,
+					isError: consentQuery.isError,
+					error: consentQuery.error,
+					onRetry: () => {
+						void consentQuery.refetch();
+					},
+				}}
+				aiChoiceProps={{
+					choice: aiChoiceQuery.data?.choice ?? undefined,
+					onSave: (choice) => aiChoiceMutation.mutate({ body: { choice } }),
+					isSaving: aiChoiceMutation.isPending,
+					isLoading: aiChoiceQuery.isLoading,
+					isError: aiChoiceQuery.isError,
+					error: aiChoiceQuery.error,
+					onRetry: () => {
+						void aiChoiceQuery.refetch();
+					},
+				}}
+				publicActivityProps={{ state: publicActivityState }}
+				productFeedbackSharingProps={{ state: productFeedbackSharingState }}
+				linkedAccountsProps={linkedAccountsProps}
+				showSlackPreferencesSection={slackAvailable}
+				slackPreferencesProps={slackPreferencesProps}
+				sessionsProps={{ state: sessionsState }}
+				dangerZoneProps={dangerZoneProps}
+			/>
+			<SignOutConfirmAccess
+				challenge={signOutChallenge}
+				onClose={() => setSignOutChallenge(undefined)}
+			/>
+		</>
 	);
 }
 
@@ -649,4 +673,31 @@ function weeklyDigestStateOf(
 		},
 		onChangeTimeZone: (timeZone) => writes.updateSetting({ timeZone }),
 	};
+}
+
+/** Asks for a recent sign-in before other sessions can be signed out. */
+function SignOutConfirmAccess({
+	challenge,
+	onClose,
+}: {
+	challenge: StepUpChallenge | undefined;
+	onClose: () => void;
+}) {
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
+	return (
+		<ConfirmAccessDialog
+			open={challenge !== undefined}
+			onOpenChange={(open) => {
+				if (!open) {
+					onClose();
+				}
+			}}
+			maxAgeSeconds={challenge?.maxAgeSeconds}
+			providers={confirmAccess.providers}
+			loading={confirmAccess.loading}
+			error={confirmAccess.error}
+			onRetry={confirmAccess.retry}
+			onSignIn={confirmAccess.signIn}
+		/>
+	);
 }

@@ -8,6 +8,9 @@ import type { RevokeOtherSessionsData, RevokeOtherSessionsResponse } from '../..
 
 /**
  * Revoke all sessions except the current one
+ *
+ * Ending other sessions, individually or together, needs a recent sign-in (ASVS 5.0 V7.5.2).
+ * The account menu's sign-out remains available without a recent sign-in.
  */
 export const revokeOtherSessionsMutation = (options?: Partial<Options<RevokeOtherSessionsData>>): UseMutationOptions<RevokeOtherSessionsResponse, DefaultError, Options<RevokeOtherSessionsData>> => {
     const mutationOptions: UseMutationOptions<RevokeOtherSessionsResponse, DefaultError, Options<RevokeOtherSessionsData>> = {

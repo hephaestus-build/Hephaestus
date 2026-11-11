@@ -9,7 +9,7 @@ import type { RevokeSessionData, RevokeSessionResponse } from '../../types.gen.j
 /**
  * Revoke a single session
  *
- * Any token of an installed-client session, even one it rotated away, ends that session.
+ * Requires a recent sign-in. Any token of an installed-client session, even one it rotated away, ends that session.
  */
 export const revokeSessionMutation = (options?: Partial<Options<RevokeSessionData>>): UseMutationOptions<RevokeSessionResponse, DefaultError, Options<RevokeSessionData>> => {
     const mutationOptions: UseMutationOptions<RevokeSessionResponse, DefaultError, Options<RevokeSessionData>> = {

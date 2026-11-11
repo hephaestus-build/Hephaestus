@@ -114,6 +114,29 @@ Turning silent mode off affects all workspaces and never flushes suppressed feed
 37. Prove that only a fresh eligible event can deliver.
 38. If either check fails, turn silent mode on again immediately.
 
+## End every session on the instance
+
+End every session after a suspected leak of the signing key, the database or many session cookies.
+Every person must sign in again, and installed clients must sign in again too.
+
+Connect `psql` to the application database with an operator account, then run:
+
+```sql
+\set ON_ERROR_STOP on
+BEGIN;
+LOCK TABLE account IN EXCLUSIVE MODE;
+UPDATE client_sign_in_handoff SET consumed_at = now() WHERE consumed_at IS NULL;
+UPDATE client_session SET revoked_at = now(), revoked_reason = 'ADMIN_REVOKE' WHERE revoked_at IS NULL;
+UPDATE issued_jwt SET revoked_at = now(), revoked_reason = 'ADMIN_REVOKE' WHERE revoked_at IS NULL;
+COMMIT;
+```
+
+The account table lock waits for session issuance in progress and blocks new issuance until the transaction commits.
+The updates then include the credentials that those issuers committed.
+The server checks each request against `issued_jwt`, so every session ends at once.
+If the signing key leaked, also rotate it.
+Record the action in your incident record.
+
 ## Upgrade and failed-migration recovery
 
 <a id="validate-the-actual-production-data"></a>

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
@@ -24,6 +25,8 @@ import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -50,6 +53,100 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private MembershipRepository membershipRepository;
+
+    @Autowired
+    private IssuedJwtRepository issuedJwtRepository;
+
+    @Test
+    void shouldAskAStaleSessionToConfirmAccessBeforeItSignsOutEveryOtherSession() {
+        Account owner = persistUser("Cautious Cora");
+        long ownerId = persistedId(owner.getId());
+        tokenFor(owner, Instant.now());
+        String stale = tokenFor(owner, staleSignIn());
+
+        webTestClient
+                .delete()
+                .uri("/user/sessions")
+                .headers(h -> h.setBearerAuth(stale))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString());
+
+        assertThat(issuedJwtRepository.findActiveByAccountId(ownerId, Instant.now()))
+                .hasSize(2);
+    }
+
+    @Test
+    void shouldAskAStaleSessionToConfirmAccessBeforeItEndsOneOtherSession() {
+        Account owner = persistUser("Quick Quinn");
+        long ownerId = persistedId(owner.getId());
+        HephaestusJwtIssuer.Token other = jwtIssuer.issue(ownerId, TokenConstraints.session(null, Instant.now()), null);
+        String stale = tokenFor(owner, staleSignIn());
+
+        webTestClient
+                .delete()
+                .uri("/user/sessions/{jti}", other.jti())
+                .headers(h -> h.setBearerAuth(stale))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString());
+
+        assertThat(issuedJwtRepository.findActiveByAccountId(ownerId, Instant.now()))
+                .hasSize(2);
+    }
+
+    @Test
+    void shouldKeepTheAccountMenuSignOutAvailableWithAStaleSignIn() {
+        Account owner = persistUser("Signing Out Sam");
+        long ownerId = persistedId(owner.getId());
+        String stale = tokenFor(owner, staleSignIn());
+
+        webTestClient
+                .post()
+                .uri("/auth/logout")
+                .headers(h -> h.setBearerAuth(stale))
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        assertThat(issuedJwtRepository.findActiveByAccountId(ownerId, Instant.now()))
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldEndOtherSessionsAfterARecentSignIn(boolean allOthers) {
+        Account owner = persistUser("Confirmed Cora");
+        long ownerId = persistedId(owner.getId());
+        HephaestusJwtIssuer.Token other = jwtIssuer.issue(ownerId, TokenConstraints.session(null, Instant.now()), null);
+        String fresh = tokenFor(owner, Instant.now());
+
+        webTestClient
+                .delete()
+                .uri(allOthers ? "/user/sessions" : "/user/sessions/" + other.jti())
+                .headers(h -> h.setBearerAuth(fresh))
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        assertThat(issuedJwtRepository.findActiveByAccountId(ownerId, Instant.now()))
+                .hasSize(1);
+        assertThat(issuedJwtRepository.findById(other.jti()).orElseThrow().getRevokedAt())
+                .isNotNull();
+        assertThat(authEventRepository.findByAccountSince(ownerId, Instant.now().minusSeconds(60)))
+                .anySatisfy(event -> {
+                    assertThat(event.getEventType()).isEqualTo(AuthEvent.EventType.JWT_REVOKED);
+                    assertThat(event.getResult()).isEqualTo(AuthEvent.Result.SUCCESS);
+                });
+    }
 
     @Test
     void aStaleAdminIsAskedToConfirmAccessAndTheRoleIsUnchanged() {

@@ -173,6 +173,11 @@ The browser never stores them in local storage.
 A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`), regardless of activity.
 Access token renewal stays within that deadline, never past it.
 
+An account can hold any number of parallel sessions, one per browser or installed client.
+Each one appears under **User settings → Active sessions**, where its owner can end it.
+An instance admin can end every session of one account with **Force sign out**, or block the account.
+To end every session on the instance, see [End every session on the instance](./production-operations-runbook#end-every-session-on-the-instance).
+
 Reads through a [user view](/contributor/instance-admin#read-only-user-views) have a per-instance-admin budget.
 `hephaestus.auth.rate-limit.user-view.capacity` per `hephaestus.auth.rate-limit.user-view.period` defaults to 120 per minute.
 Every read about the viewed member counts, so one page usually uses several.
