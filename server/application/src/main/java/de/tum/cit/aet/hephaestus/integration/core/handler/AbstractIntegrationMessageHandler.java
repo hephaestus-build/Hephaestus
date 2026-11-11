@@ -139,8 +139,13 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
 
     /** Override when external preparation must run before short persistence transactions. */
     protected void dispatchEvent(T eventPayload) {
+        handleOnce(() -> handleEvent(eventPayload));
+    }
+
+    /** Runs {@code handling} in one transaction, at most once per delivery of this handler's event. */
+    protected void handleOnce(Runnable handling) {
         transactionTemplate.executeWithoutResult(status -> {
-            if (DeliveryInbox.claim("handler." + key.kind() + "." + key.eventType())) handleEvent(eventPayload);
+            if (DeliveryInbox.claim("handler." + key.kind() + "." + key.eventType())) handling.run();
         });
     }
 
