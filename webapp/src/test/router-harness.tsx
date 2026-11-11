@@ -88,6 +88,27 @@ export function testQueryClient(): QueryClient {
 	});
 }
 
+/**
+ * Loads the code of every route that `paths` match, as `beforeAll(() => loadRouteCode(...),
+ * ROUTE_RENDER_WAIT.timeout)`. A route's first mount loads its split modules, and Vitest transforms
+ * each one on that first import: seconds on a busy file pool. Inside a test, that load counts against
+ * the test's own timeout, although the test checks routing or rendering, not how fast code loads.
+ */
+export async function loadRouteCode(...paths: string[]): Promise<void> {
+	const router = createRouter({
+		...ROUTER_SEARCH,
+		routeTree,
+		context: { queryClient: testQueryClient(), auth: undefined },
+	});
+	for (const path of paths) {
+		const url = new URL(path, "http://localhost");
+		const matches = router.matchRoutes(url.pathname, Object.fromEntries(url.searchParams));
+		for (const match of matches) {
+			await router.loadRouteChunk(router.routesById[match.routeId]);
+		}
+	}
+}
+
 export function renderRouteAtWithRouter(
 	path: string | string[],
 	queryClient: QueryClient = testQueryClient(),

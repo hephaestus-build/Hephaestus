@@ -16,7 +16,12 @@ import {
 } from "@/runtime/user-view/session";
 import { deferred } from "@/test/async";
 import { captureNavigation, restoreNavigation } from "@/test/navigation";
-import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	ROUTE_RENDER_WAIT,
+	loadRouteCode,
+	renderRouteAt,
+	renderRouteAtWithRouter,
+} from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
 
 const workspace = {
@@ -210,7 +215,10 @@ describe("view as user entry", () => {
 });
 
 describe("user view guard", () => {
-	beforeAll(() => client.interceptors.request.use(applyUserViewHeaders));
+	beforeAll(async () => {
+		client.interceptors.request.use(applyUserViewHeaders);
+		await loadRouteCode("/w/engineering/practice-profile", "/w/engineering/workspace-activity");
+	}, ROUTE_RENDER_WAIT.timeout);
 	beforeEach(() => {
 		storeUserView();
 		server.use(http.get("*/workspaces", () => HttpResponse.json([workspace])));

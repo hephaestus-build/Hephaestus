@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, assert, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { ReviewSummary } from "@/api/types.gen";
 import {
@@ -20,11 +20,7 @@ import { ownMembership } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { precedes } from "@/test/dom";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
-
-// Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
-// deadlock backstop, not a budget these renders were meant to fit inside.
-vi.setConfig({ testTimeout: 15_000 });
+import { ROUTE_RENDER_WAIT, loadRouteCode, renderRouteAtWithRouter } from "@/test/router-harness";
 
 /**
  * Repeated params and comma-joined params both, because which one the generated client emits is its
@@ -164,6 +160,15 @@ function serveTwoFlatPages(tab: string, [first, second, third]: readonly unknown
 }
 
 describe("practice review list routes", () => {
+	beforeAll(
+		async () =>
+			loadRouteCode(
+				...["", "overview", "results", "problems", "feedback"].map(
+					(list) => `/w/acme/admin/practices/reviews/${list}`,
+				),
+			),
+		ROUTE_RENDER_WAIT.timeout,
+	);
 	afterEach(() => {
 		vi.unstubAllGlobals();
 	});
