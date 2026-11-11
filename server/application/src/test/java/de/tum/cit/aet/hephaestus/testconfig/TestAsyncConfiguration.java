@@ -2,13 +2,19 @@ package de.tum.cit.aet.hephaestus.testconfig;
 
 import de.tum.cit.aet.hephaestus.config.CredentialReadabilityExecutor;
 import de.tum.cit.aet.hephaestus.config.FeedbackLaneExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
+import org.aopalliance.intercept.MethodInterceptor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.aop.Advisor;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
 import org.springframework.aop.interceptor.SimpleAsyncUncaughtExceptionHandler;
+import org.springframework.aop.support.DefaultPointcutAdvisor;
+import org.springframework.aop.support.NameMatchMethodPointcut;
 import org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +34,19 @@ import org.springframework.scheduling.annotation.EnableAsync;
 public class TestAsyncConfiguration implements AsyncConfigurer {
 
     private final AsyncTaskExecutor syncExecutor = new TaskExecutorAdapter(new SyncTaskExecutor());
+
+    /** Manual outbox drains join scheduled calls without treating a readback lease as a running Java call. */
+    @Bean
+    public Advisor actionExecutorTestBarrier() {
+        var calls = new NameMatchMethodPointcut();
+        calls.setMappedName("runDue");
+        calls.setClassFilter(ActionExecutor.class::isAssignableFrom);
+        return new DefaultPointcutAdvisor(calls, (MethodInterceptor) invocation -> {
+            synchronized (Objects.requireNonNull(invocation.getThis())) {
+                return invocation.proceed();
+            }
+        });
+    }
 
     @Override
     public Executor getAsyncExecutor() {
