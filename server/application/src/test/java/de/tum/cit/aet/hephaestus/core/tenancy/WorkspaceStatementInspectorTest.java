@@ -520,6 +520,20 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
     }
 
     @Test
+    void mirrorReadByItsScopeInEachUnionBranchIsAllowedButNotBehindADerivedTable() {
+        when(scopedTables.isScoped("git_commit")).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        String branch =
+                "select distinct on (gc.author_email) gc.author_email as email, gc.sha as sha from git_commit gc"
+                        + " where gc.repository_id = ? and gc.author_id is null";
+        inspector.inspect(branch + " union all " + branch);
+        verifyNoInteractions(reporter);
+
+        inspector.inspect("select sub.email, sub.sha from (" + branch + ") sub");
+        verify(reporter).report(any(), eq(Set.of("git_commit")), eq(TenancyEnforcement.LOG));
+    }
+
+    @Test
     void hibernateOneToManyByParentFkIsAllowed() {
         // @OneToMany owned by the child via FK: SELECT c.* FROM comment c WHERE c.issue_id = ?
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);

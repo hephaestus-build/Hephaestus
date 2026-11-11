@@ -141,24 +141,21 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
     /**
      * Find one representative SHA per unresolved email for GraphQL author lookup.
      * Returns pairs of (email, sha) where author_id or committer_id is NULL.
-     * Uses DISTINCT ON to pick exactly one SHA per email efficiently.
+     * Uses DISTINCT ON to pick exactly one SHA per email efficiently. Each branch reads the mirror by its repository
+     * directly, so the tenancy guard sees the monitored scope that keys it (ADR 0077).
      */
     @Query(value = """
-        SELECT sub.email, sub.sha FROM (
-            SELECT DISTINCT ON (gc.author_email)
-                gc.author_email AS email, gc.sha AS sha
-            FROM git_commit gc
-            WHERE gc.repository_id = :repositoryId
-              AND gc.author_id IS NULL
-              AND gc.author_email IS NOT NULL
-            UNION ALL
-            SELECT DISTINCT ON (gc.committer_email)
-                gc.committer_email AS email, gc.sha AS sha
-            FROM git_commit gc
-            WHERE gc.repository_id = :repositoryId
-              AND gc.committer_id IS NULL
-              AND gc.committer_email IS NOT NULL
-        ) sub
+        SELECT DISTINCT ON (gc.author_email) gc.author_email AS email, gc.sha AS sha
+        FROM git_commit gc
+        WHERE gc.repository_id = :repositoryId
+          AND gc.author_id IS NULL
+          AND gc.author_email IS NOT NULL
+        UNION ALL
+        SELECT DISTINCT ON (gc.committer_email) gc.committer_email AS email, gc.sha AS sha
+        FROM git_commit gc
+        WHERE gc.repository_id = :repositoryId
+          AND gc.committer_id IS NULL
+          AND gc.committer_email IS NOT NULL
         """, nativeQuery = true)
     List<Object[]> findRepresentativeShasByUnresolvedEmail(@Param("repositoryId") Long repositoryId);
 
