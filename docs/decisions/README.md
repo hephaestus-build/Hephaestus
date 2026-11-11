@@ -147,7 +147,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Superseded by [0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md) |
 | [0071](0071-every-user-visible-failure-is-observable.md) | Every user-visible failure is observable, through one first-party pipeline | Accepted |
 | [0072](0072-few-dependencies-owned-slivers-kept-foundations.md) | Few dependencies — own a sliver, keep a foundation | Accepted |
-| [0073](0073-product-feedback-is-worked-on-in-github.md) | Product feedback is worked on in GitHub | Accepted |
+| [0073](0073-product-feedback-is-worked-on-in-github.md) | Product feedback is worked on in GitHub | Superseded by [0097](0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md) |
 | [0074](0074-a-reviews-width-and-count-follow-the-provider.md) | A review's width and count follow the provider | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) | A transaction is one use case and talks to nothing | Accepted |
 | [0076](0076-reads-are-shaped-like-the-screen.md) | Reads are shaped like the screen, entities are for writes | Accepted |
@@ -170,6 +170,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md) | A provider mirror changes only on a definitive provider answer, and a tombstone is never an erasure | Accepted |
 | [0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) | Each provider has one adapter behind a vendor-neutral SPI, and Outline is a documentation source with a link-only identity | Accepted |
 | [0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md) | 1.0 is one stopped cutover from 1.0.0-rc.1, and it keeps nothing for 0.x | Accepted |
+| [0097](0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md) | Product feedback becomes a GitHub issue, and only the reporter's tick and a code gate make it public | Accepted |
 | [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) | Each module owns its aggregates, declares its dependencies, and changes a lifecycle only through the aggregate | Accepted |
 | [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
 
