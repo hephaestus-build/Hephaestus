@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,9 +54,12 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         var transactions = mock(TransactionTemplate.class);
         UUID jobId = UUID.randomUUID();
         var fence = new AgentRunFence(UUID.randomUUID(), 7, 1);
-        var job = mock(ReviewJob.class);
-        when(job.getId()).thenReturn(jobId);
-        when(job.getWorkspaceId()).thenReturn(7L);
+        var job = new ReviewJob();
+        job.setId(jobId);
+        job.setWorkspaceId(7);
+        job.setRunId(fence.runId());
+        job.setReviewId(UUID.randomUUID());
+        job.setStatus(ReviewJobStatus.RUNNING);
         var snapshot = new ConfigSnapshot(
                 ConfigSnapshot.SCHEMA_VERSION,
                 new FrozenModel(
@@ -74,7 +78,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 null,
                 600,
                 null);
-        when(job.getConfigSnapshot()).thenReturn(snapshot.toJson(mapper));
+        job.setConfigSnapshot(snapshot.toJson(mapper));
         when(jobs.findByRunIdAndWorkspaceId(fence.runId(), 7)).thenReturn(Optional.of(job));
         Path archive = Files.writeString(root.resolve("input.tar"), "personal evidence archive");
         Path copiedPerson = Files.writeString(root.resolve("person.json"), "personal evidence");

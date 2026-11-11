@@ -128,7 +128,7 @@ The worker's service account has these permissions in the sandbox namespace, and
 - Jobs: `get`, `list`, `watch`, `create`, and `delete`. Each tools Pod and each isolation probe Pod is a Job. A cancellation or a timeout deletes the Job, and Kubernetes deletes its Pod before the Job goes.
 - Events: `list`. The Job controller reports a Pod that the sandbox quota refuses as an event.
 - ResourceQuotas: `list` and `watch`. The quota tells whether a tools Pod fits now and whether it can ever fit.
-- SandboxClaims (`extensions.agents.x-k8s.io`): `list`, `create`, and `delete`. A subject's sandbox is a claim, and the agent-sandbox controller creates its Pod from the kind's template. The worker deletes each claim that no work needs.
+- SandboxClaims (`extensions.agents.x-k8s.io`): `get`, `list`, `watch`, `create`, and `delete`. A subject's sandbox is a claim, and the agent-sandbox controller creates its Pod from the kind's template. The worker deletes each claim that no work needs. It watches foreground deletion until the sandbox and Pod are gone.
 
 The worker cannot patch or delete a Pod, and it cannot run a command in one.
 A patch could change the image of a sandbox that runs.
@@ -219,6 +219,8 @@ Their names are `<release>-sandbox-review` and `<release>-sandbox-conversation`.
 Each template has a `SandboxWarmPool` of the same name with no replicas.
 The agent-sandbox controller creates a sandbox's Pod from the template when a `SandboxClaim` names the warm pool.
 The release pins the controller in `k3s-agent-sandbox.yaml`: the one-host platform installs it, and on another cluster you apply it yourself ([Install](./kubernetes#install)).
+
+Claims use `DeleteForeground` at expiry. The claim stays visible until its Sandbox and Pod are gone.
 
 A template's Pod has one container, the agent image, and these settings:
 

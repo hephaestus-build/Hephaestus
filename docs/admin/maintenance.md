@@ -28,17 +28,26 @@ Keep PostgreSQL and NATS running until the workers have drained:
 2. Cordon the node: `kubectl cordon <node>`.
 3. Stop the workers with `kubectl --namespace hephaestus scale deployment/hephaestus-worker --replicas=0`.
    Wait for their Pods to disappear: `kubectl --namespace hephaestus wait --for=delete pod -l app.kubernetes.io/instance=hephaestus,app.kubernetes.io/component=worker --timeout=35m`.
-   Check the sandbox namespace: `kubectl --namespace hephaestus-sandboxes get pods`. Expect no Pods.
-   Do not proceed while worker Pods or their sandbox Pods remain.
    Their termination grace is the configured drain plus 120 seconds.
-4. Stop the server and the receiver: `kubectl --namespace hephaestus scale deployment/hephaestus-server deployment/hephaestus-webhook --replicas=0`.
+4. Remove the remaining sandbox workloads after all workers have stopped.
+   A sandbox claim can outlive its worker. The worker's reaper does not run after shutdown.
+
+   ```bash
+   kubectl --namespace hephaestus-sandboxes delete sandboxclaims.extensions.agents.x-k8s.io --selector=hephaestus.build/sandbox-id --cascade=foreground --wait=true --timeout=5m
+   kubectl --namespace hephaestus-sandboxes delete jobs --selector=app.kubernetes.io/part-of=hephaestus --cascade=foreground --wait=true --timeout=5m
+   kubectl --namespace hephaestus-sandboxes wait --for=delete pods --all --timeout=5m
+   ```
+
+   Check the sandbox namespace: `kubectl --namespace hephaestus-sandboxes get pods`. Expect no Pods.
+   Do not proceed while worker Pods or sandbox Pods remain.
+5. Stop the server and the receiver: `kubectl --namespace hephaestus scale deployment/hephaestus-server deployment/hephaestus-webhook --replicas=0`.
    Wait for both roles to stop: `kubectl --namespace hephaestus wait --for=delete pod -l 'app.kubernetes.io/instance=hephaestus,app.kubernetes.io/component in (server,webhook)' --timeout=5m`.
-5. List the release's budgets: `kubectl --namespace hephaestus get pdb -l app.kubernetes.io/instance=hephaestus`.
+6. List the release's budgets: `kubectl --namespace hephaestus get pdb -l app.kubernetes.io/instance=hephaestus`.
    Remove only these budgets for this maintenance: `kubectl --namespace hephaestus delete pdb -l app.kubernetes.io/instance=hephaestus`.
-6. Drain the node: `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data --timeout=10m`.
+7. Drain the node: `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data --timeout=10m`.
    The emptyDir data is disposable sandbox and cache data. Persistent volumes remain.
    If another workload's budget blocks the drain, follow its maintenance procedure.
-7. Complete the host work and uncordon the node: `kubectl uncordon <node>`.
+8. Complete the host work and uncordon the node: `kubectl uncordon <node>`.
    Reapply the verified release with its saved values and replica counts through [Upgrades](./upgrade#upgrade-a-schema-compatible-release).
    This restores the budgets. Verify that the roles and budgets are ready before you resume reconciliation.
 
@@ -61,6 +70,7 @@ Each phase is one `helm upgrade` with the replica counts of that phase:
 | 4. Restore | 1 | The prior count | The pods of the two roles are ready. The server consumes the deliveries that the receiver published meanwhile. |
 
 Phase 1 uses the verified chart and the values of the current release, with only the two counts changed.
+After the workers stop, remove the remaining sandbox workloads as in step 4 of [Planned node maintenance](#planned-node-maintenance) before phase 2.
 Phase 2 applies the change.
 The change can be the new release values, a new PostgreSQL configuration, or a new CA in the TLS Secret and a restart of PostgreSQL.
 Phase 3 runs the new release's migration Job and starts its server alone.

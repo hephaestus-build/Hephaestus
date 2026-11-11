@@ -138,24 +138,23 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
-  # One Job per practice-review attempt, and one per conversation's tools Pod.
+  # One Job per conversation tools Pod or isolation probe.
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "delete"]
-  # The Job controller reports a quota refusal of a review Pod as an event. The worker lists them.
+  # The Job controller reports a quota refusal of a tools or probe Pod as an event. The worker lists them.
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["list"]
-  # The quota tells how many reviews fit and whether one can ever fit. The worker watches it, as it watches Pods
-  # and Jobs, so a claim poll sends the API server nothing.
+  # Tools-Pod creation reads the quota cache, populated by the same watches as Pods and Jobs.
   - apiGroups: [""]
     resources: ["resourcequotas"]
     verbs: ["list", "watch"]
-  # A subject's sandbox is an agent-sandbox claim. The worker creates and deletes claims and lists its own; the
-  # controller creates the sandbox and its Pod from the kind's template.
+  # The controller creates each claim's sandbox and Pod. The worker watches foreground deletion to completion
+  # before acknowledging removal of evidence that the sandbox copied.
   - apiGroups: ["extensions.agents.x-k8s.io"]
     resources: ["sandboxclaims"]
-    verbs: ["list", "create", "delete"]
+    verbs: ["get", "list", "watch", "create", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

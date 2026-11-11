@@ -86,13 +86,14 @@ public final class KubernetesSandboxClaims implements SandboxClaims {
                 .toList();
         var spec = new LinkedHashMap<String, Object>();
         spec.put("warmPoolRef", Map.of("name", warmPools.of(claim.kind())));
+        // Expiry must retain the claim until its dependents are gone, just as an explicit foreground delete does.
         spec.put(
                 "lifecycle",
                 Map.of(
                         "shutdownTime",
                         DateTimeFormatter.ISO_INSTANT.format(claim.shutdownAt().truncatedTo(ChronoUnit.SECONDS)),
                         "shutdownPolicy",
-                        "Delete"));
+                        "DeleteForeground"));
         spec.put("env", env);
         return new GenericKubernetesResourceBuilder()
                 .withApiVersion(API_VERSION)

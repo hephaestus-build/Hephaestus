@@ -424,7 +424,8 @@ For a review, acknowledgement follows sandbox teardown and deletion of the local
 A failed deletion leaves the receipt pending and the erasure request reports a failure.
 Correct the deletion failure and retry the request.
 Preparation that is waiting for capture admission does not block release.
-The receipt names the physical sandbox, so erasure does not stop a newer sandbox of the same review.
+Each receipt names its physical sandbox.
+Cleanup also releases the inputs of every local attempt of the affected job, closes that job’s gateway session, and deletes its evidence folder.
 
 ### Copied evidence and secondary subjects
 
