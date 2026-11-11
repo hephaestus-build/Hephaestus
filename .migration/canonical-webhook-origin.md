@@ -23,11 +23,3 @@ If the full GitLab receiver base already matches, remove the settings and upgrad
 Outline needs no manual subscription removal or separate stop step. After upgrading, run Outline collection synchronization for each affected connection. It replaces subscriptions whose full address differs and removes the previous subscription. Replacement subscriptions can have new route IDs and signing credentials.
 
 GitHub App webhook registration still uses `/webhooks/github`. Slack keeps its Events API and separately routed interactivity addresses.
-
-#### 🔴 Use a root HTTPS API issuer in production
-
-**Who is affected:** Every production server whose `hephaestus.auth.issuer` is absent, uses HTTP, or contains a path, credentials, query or fragment. Chart installations already supply a root HTTPS issuer.
-
-**Action:** Before upgrading, set `HEPHAESTUS_AUTH_ISSUER` or `hephaestus.auth.issuer` to the public API root origin, for example `https://api.example.test`. Keep a public API prefix in `hephaestus.auth.api-base-path`, not in the issuer. The production server refuses startup until the issuer passes this check, even when GitLab, Outline and Slack are disabled.
-
-Changing the issuer changes the JWT `iss` claim. Existing access tokens are rejected, so users must sign in again. Verify API routing, then register the canonical Slack callback before upgrading if Slack connections are enabled. A process that runs only the webhook or worker role does not require this issuer check.
