@@ -520,6 +520,24 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
     }
 
     @Test
+    void aKeyedUnionBranchDoesNotExemptAnUnkeyedOne() {
+        when(scopedTables.isScoped("practice")).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect(
+                "select p.id from practice p where p.id=? union all select p.id from practice p where p.slug=?");
+        verify(reporter).report(any(), eq(Set.of("practice")), eq(TenancyEnforcement.LOG));
+    }
+
+    @Test
+    void aKeyInsideANestedSubqueryDoesNotPinTheOuterRows() {
+        when(scopedTables.isScoped("practice")).thenReturn(true);
+        when(scopedTables.isScoped("result")).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect("select p.id from practice p where exists (select 1 from result p where p.id=?)");
+        verify(reporter).report(any(), eq(Set.of("practice", "result")), eq(TenancyEnforcement.LOG));
+    }
+
+    @Test
     void mirrorReadByItsScopeInEachUnionBranchIsAllowedButNotBehindADerivedTable() {
         when(scopedTables.isScoped("git_commit")).thenReturn(true);
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);

@@ -151,6 +151,10 @@ public class WorkspaceStatementInspector implements StatementInspector {
     private static final Pattern SURROGATE_KEY_COLUMN =
             Pattern.compile("^\"?(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?$", Pattern.CASE_INSENSITIVE);
 
+    /** A set operation that joins two SELECTs into one statement. */
+    private static final Pattern SET_OPERATION_PATTERN =
+            Pattern.compile("\\b(?:UNION|INTERSECT|EXCEPT)(?:\\s+(?:ALL|DISTINCT))?\\b", Pattern.CASE_INSENSITIVE);
+
     private static final int FAST_PATH_SQL_LIMIT = 8192;
 
     /** One conjunct of that WHERE clause, and the only shape allowed in it: {@code column = ?}. */
@@ -387,28 +391,62 @@ public class WorkspaceStatementInspector implements StatementInspector {
 
     /**
      * True iff {@code sql} loads rows of one table by a key its caller already held: the table's primary key, or the key
-     * of a mapped collection. A disjunction (OR) would broaden the result past the keyed rows, so it disqualifies it.
+     * of a mapped collection. A disjunction (OR) would broaden the result past the keyed rows, so it disqualifies it. A
+     * set operation qualifies only when each of its branches does, so a keyed branch cannot carry an unkeyed one.
      */
     private boolean keyedSelect(String sql) {
         if (sql.length() > FAST_PATH_SQL_LIMIT) return false;
-        Matcher select = PK_ONLY_SELECT_PATTERN.matcher(sql);
-        if (!select.matches() || OR_TOKEN_PATTERN.matcher(sql).find()) return false;
+        String text = COMMENT_OR_LITERAL_PATTERN.matcher(sql).replaceAll(" ");
+        if (OR_TOKEN_PATTERN.matcher(text).find()) return false;
+        int[] depth = depths(text);
+        if (depth == null) return false;
+        int start = 0;
+        Matcher operation = SET_OPERATION_PATTERN.matcher(text);
+        while (operation.find()) {
+            if (depth[operation.start()] != 0) continue;
+            if (!keyedBranch(text.substring(start, operation.start()))) return false;
+            start = operation.end();
+        }
+        return keyedBranch(text.substring(start));
+    }
+
+    /** One SELECT without a top-level set operation, keyed by a predicate of its own WHERE clause. */
+    private boolean keyedBranch(String branch) {
+        Matcher select = PK_ONLY_SELECT_PATTERN.matcher(branch);
+        if (!select.matches()) return false;
         String table = unqualify(select.group(1));
-        // Only a predicate of the WHERE clause pins the rows: a key compared in the select list or a join condition
-        // does not.
+        int[] depth = depths(branch);
+        if (depth == null) return false;
+        // Only a predicate of the WHERE clause pins the rows: a key compared in the select list, a join condition or a
+        // nested subquery, whose alias can shadow the outer one, does not.
         Matcher key = Pattern.compile(
                         "\\b" + Pattern.quote(select.group(2)) + "\\s*\\.\\s*\"?([A-Za-z_][A-Za-z0-9_]*)\"?\\s*"
                                 + KEY_BINDING,
                         Pattern.CASE_INSENSITIVE)
-                .matcher(sql);
-        key.region(select.end(3), sql.length());
+                .matcher(branch);
+        key.region(select.end(3), branch.length());
         while (key.find()) {
             String column = key.group(1);
-            if (!column.equalsIgnoreCase("workspace_id")
-                    && !negated(sql, key.start())
+            if (depth[key.start()] == 0
+                    && !column.equalsIgnoreCase("workspace_id")
+                    && !negated(branch, key.start())
                     && singleKey(table, column, false)) return true;
         }
         return false;
+    }
+
+    /** The parenthesis depth before each character of {@code text}, or null when its parentheses do not balance. */
+    private static int @Nullable [] depths(String text) {
+        int[] depth = new int[text.length() + 1];
+        int level = 0;
+        for (int i = 0; i < text.length(); i++) {
+            depth[i] = level;
+            char c = text.charAt(i);
+            if (c == '(') level++;
+            else if (c == ')' && --level < 0) return null;
+        }
+        depth[text.length()] = level;
+        return level == 0 ? depth : null;
     }
 
     /**
