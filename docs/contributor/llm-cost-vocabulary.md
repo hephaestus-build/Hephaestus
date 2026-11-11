@@ -45,7 +45,7 @@ A workspace can spend under two independent caps:
 | Whose money | The **host's** — the instance pays the provider | The **workspace's** — its own provider bills it directly |
 | Who sets it | Instance admin | Workspace admin |
 | Who can lift it | Instance admin only | The workspace admin themselves |
-| Funding source | `FundingSource.INSTANCE` | `FundingSource.WORKSPACE` |
+| Funding source | `UsageFundingSource.INSTANCE` | `UsageFundingSource.WORKSPACE` |
 
 They pause **independently**: an exhausted shared-model budget must never stop work a workspace is paying for out of its own pocket.
 Thus, there is no combined figure, combined meter, or "total spend" across the two.
@@ -225,7 +225,7 @@ It is not a per-purse count and must not be used as one in budget banners.
 | --- | --- |
 | Price wording (rules 1, 4) | `webapp/src/lib/llm-pricing.ts` |
 | USD rendering (rules 1, 5) | `webapp/src/lib/money.ts` |
-| Which purse, and whether it pauses (rules 2, 4) | `LlmBudgetVerdict`, `FundingSource`, `LlmBudgetService` |
+| Which purse, and whether it pauses (rules 2, 4) | `LlmBudgetVerdict`, `UsageFundingSource`, `LlmBudgetService` |
 | Measurement acceptance and repair eligibility (rule 9) | `MeasurementVerification`, `LlmUsageRecorder`, `LlmUsageRepricer`, `LlmUsageEventRepository` |
 | One measurement per review attempt, late calls (rule 10) | `ReviewAttemptUsageService`, `ReviewAttemptUsage`, `ReviewAttemptCharge`, `ProxyUsageAccumulator` |
 | The in-flight bound behind rule 7's "within a minute" | [ADR 0026](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0026-per-purpose-agent-bindings-and-llm-governance.md) |
