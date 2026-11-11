@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -384,7 +384,11 @@ void test("build cancellation cannot interrupt an upload, and queued teardown sh
 	);
 });
 
-void test("a delayed closed-event teardown performs no mutation after reopening", () => {
+void test("a delayed closed-event teardown performs no mutation after reopening", (t) => {
+	const directory = mkdtempSync(path.join(tmpdir(), "docs-preview-guard-#%-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const workspace = path.join(directory, "checkout");
+	symlinkSync(path.resolve(import.meta.dirname, ".."), workspace, "junction");
 	const teardown = asRecord(
 		asRecord(workflow("cd-docs-teardown.yml").jobs, "jobs").teardown,
 		"teardown",
@@ -408,7 +412,7 @@ void test("a delayed closed-event teardown performs no mutation after reopening"
 			{
 				encoding: "utf8",
 				env: environmentForGitFixture({
-					GITHUB_WORKSPACE: path.resolve(import.meta.dirname, ".."),
+					GITHUB_WORKSPACE: workspace,
 				}),
 			},
 		);

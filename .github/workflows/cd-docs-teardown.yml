@@ -30,7 +30,8 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const { shouldTeardownPreviews } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/docs-preview.ts`);
+            const { pathToFileURL } = await import("node:url");
+            const { shouldTeardownPreviews } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/docs-preview.ts`).href);
             const closed = await shouldTeardownPreviews({ github, repo: context.repo, pullNumber: context.issue.number });
             core.setOutput("closed", closed);
             if (!closed) core.notice("The pull request reopened. Its previews are preserved.");
