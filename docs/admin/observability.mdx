@@ -147,17 +147,37 @@ VictoriaMetrics also serves the [dashboards](#dashboards).
 Before you turn it on:
 
 1. Write the routes and receivers in a file `alertmanager.yml`.
-   Route `HephaestusWatchdog` to an outside dead-man check: a service that alerts you when the alert stops arriving.
+   Route each alert by its [severity](#alert-rules):
+   - Send `critical` alerts to a person at once, for example through a paging service.
+   - Send `warning` alerts to a queue that you read during working hours, and repeat them once a day.
+   - Route `HephaestusWatchdog` to an outside dead-man check: a service that alerts you when the alert stops arriving.
 
    ```yaml title="alertmanager.yml"
    route:
-     receiver: team
+     receiver: tickets
+     group_by: [alertname]
+     repeat_interval: 24h
      routes:
        - matchers: ['alertname="HephaestusWatchdog"']
          receiver: dead-man
          repeat_interval: 5m
+       - matchers: ['severity="critical"']
+         receiver: pager
+         repeat_interval: 1h
+   inhibit_rules:
+     # A fast budget burn pages. Its slower windows of the same objective add nothing.
+     - source_matchers: ['alertname="HephaestusApiErrorBudgetBurnFast"']
+       target_matchers: ['alertname=~"HephaestusApiErrorBudgetBurn(Slow|Ticket)"']
+     - source_matchers: ['alertname="HephaestusApiLatencyBudgetBurnFast"']
+       target_matchers: ['alertname=~"HephaestusApiLatencyBudgetBurn(Slow|Ticket)"']
+     # No ready receiver includes each unavailable one.
+     - source_matchers: ['alertname="HephaestusWebhookReceiverDown"']
+       target_matchers: ['alertname="HephaestusWebhookReceiverUnready"']
    receivers:
-     - name: team
+     - name: pager
+       webhook_configs:
+         - url: https://pager.example.com/hooks/<key>
+     - name: tickets
        email_configs:
          - to: ops@example.com
            from: alerts@example.com
@@ -169,7 +189,7 @@ Before you turn it on:
          - url: https://dead-man.example.com/ping/<id>
    ```
 
-   Replace `<id>` with the check ID that your dead-man service gives you.
+   Replace `<key>` with the key of your paging service, and `<id>` with the check ID that your dead-man service gives you.
 
 2. Put it in a Secret in the release's namespace, with any password file beside it:
    `kubectl create secret generic hephaestus-alertmanager --from-file=alertmanager.yml --from-file=smtp-password`.
@@ -249,7 +269,11 @@ CI runs these tests for each change to the rules.
 
 Each alert has one of three `severity` labels:
 
-- `critical`: data is at risk now. Send these alerts to a person at once. The critical alerts include a full PostgreSQL volume, a failing WAL archive, a stale backup, and no ready webhook receiver. A high transaction ID age is critical too.
+- `critical`: data, isolation or the service is at risk now. Send these alerts to a person at once. These alerts are critical:
+  - `HephaestusPostgresVolumeFilling`, `HephaestusWalArchiveFailing` and `HephaestusBackupStale`.
+  - `HephaestusDatabaseTransactionIdAgeHigh` and `HephaestusWebhookReceiverDown`.
+  - `HephaestusAgentSandboxUnisolated`.
+  - `HephaestusApiErrorBudgetBurnFast` and `HephaestusApiLatencyBudgetBurnFast`.
 - `warning`: a fault needs work during working hours. All other alerts are warnings.
 - `none`: `HephaestusWatchdog` only. It fires while the monitoring works. Route it to an outside dead-man check.
 
