@@ -1,11 +1,10 @@
 /**
- * Turns the report of the last `vp run` into what a CI job needs to say about it: one workflow error
- * annotation per task that did not pass, naming the command that reproduces it, and the report
+ * Turns the report of the last `vp run` into what a CI job needs to say about it: one workflow
+ * notice per task that did not pass, naming the command that reproduces it, and the report
  * itself in the job summary. Reads the report on stdin; exits non-zero when any task did not pass.
  *
  * The runner stops the tasks still running when one fails and reports them exactly like the task
- * that failed, so an annotation says a task did not pass rather than claiming it failed on its own.
- * The report in the summary keeps the order, which is where the first failure is.
+ * that failed. Neither the cross nor report order identifies which task failed.
  */
 import { appendFileSync } from "node:fs";
 import { text } from "node:stream/consumers";
@@ -37,12 +36,32 @@ export function unpassedTasks(report: string): string[] {
 if (import.meta.main) {
 	const report = await text(process.stdin);
 	const unpassed = unpassedTasks(report);
+	const {
+		GITHUB_SERVER_URL: server,
+		GITHUB_REPOSITORY: repository,
+		GITHUB_RUN_ID: runId,
+		GITHUB_RUN_ATTEMPT: attempt,
+	} = process.env;
+	const logUrl =
+		isSet(server) && isSet(repository) && isSet(runId) && isSet(attempt)
+			? `${server}/${repository}/actions/runs/${runId}/attempts/${attempt}`
+			: undefined;
 	for (const task of unpassed) {
-		console.log(`::error::${task} did not pass. Reproduce with: vp run ${task}`);
+		const message =
+			`${task}: unpassed, cause unavailable. Reproduce with: vp run ${task}.${logUrl === undefined ? "" : ` Raw output: ${logUrl}`}`
+				.replaceAll("%", "%25")
+				.replaceAll("\r", "%0D")
+				.replaceAll("\n", "%0A");
+		console.log(`::notice::${message}`);
 	}
 	const summary = process.env.GITHUB_STEP_SUMMARY;
 	if (isSet(summary)) {
-		appendFileSync(summary, `\n\`\`\`text\n${report.trim()}\n\`\`\`\n`);
+		const explanation =
+			unpassed.length === 0
+				? ""
+				: "Crossed tasks are **unpassed, cause unavailable**. This report does not distinguish failures from tasks the runner stopped.\n\n";
+		const source = logUrl === undefined ? "" : `[Raw task output](${logUrl})\n\n`;
+		appendFileSync(summary, `\n${explanation}${source}\`\`\`text\n${report.trim()}\n\`\`\`\n`);
 	}
 	process.exitCode = unpassed.length === 0 ? 0 : 1;
 }
