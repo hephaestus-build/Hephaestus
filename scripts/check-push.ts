@@ -3,7 +3,6 @@ import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { setTimeout } from "node:timers/promises";
 
 import { changedPaths, parseBase, pathFilters, scopesFor, type Scope } from "./check-affected.ts";
 import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
@@ -288,6 +287,8 @@ export async function runUnlessStalled(
 	// Time for each process to write its report before the whole run is killed.
 	const reportGraceMs = 5000;
 	const state = { stalledAt: 0 };
+	const stopped = Promise.withResolvers<undefined>();
+	let force: ReturnType<typeof globalThis.setTimeout> | undefined;
 	const watch = setInterval(
 		() => {
 			if (state.stalledAt !== 0 || Date.now() - lastOutput < stallLimitMs) {
@@ -295,28 +296,25 @@ export async function runUnlessStalled(
 			}
 			state.stalledAt = Date.now();
 			signal("SIGUSR2");
-			void (async () => {
-				await setTimeout(reportGraceMs);
+			force = globalThis.setTimeout(() => {
 				signal("SIGKILL");
-			})();
+				stopped.resolve(undefined);
+			}, reportGraceMs);
 		},
 		Math.min(10_000, stallLimitMs / 4),
 	);
 	try {
-		await once(child, "exit");
-		// A grandchild can hold the pipes open, so wait for the last output only briefly.
-		const drained = [child.stdout, child.stderr]
-			.filter((stream) => !stream.readableEnded)
-			.map(async (stream) => once(stream, "end"));
-		await Promise.race([Promise.all(drained), setTimeout(1000)]);
+		// Inherited pipes stay open until workers end, even when their leader exits first.
+		await once(child, "close");
+		if (state.stalledAt !== 0) {
+			await stopped.promise;
+		}
 	} finally {
 		clearInterval(watch);
+		clearTimeout(force);
 		process.off("SIGINT", onInterrupt).off("SIGTERM", onTerminate).off("SIGHUP", onHangup);
 	}
 	if (state.stalledAt !== 0) {
-		// The leader can end before its workers do; nothing of the run may outlive the hook.
-		await setTimeout(Math.max(0, state.stalledAt + reportGraceMs - Date.now()));
-		signal("SIGKILL");
 		const where = posix
 			? `\nDiagnostic reports of its Node processes, with what each waited on: ${reports}`
 			: "";

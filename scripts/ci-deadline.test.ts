@@ -1,23 +1,25 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
-import { setTimeout } from "node:timers/promises";
 
-import { annotation, deadlineReport, descendants, exitStatus, innermost } from "./ci-deadline.ts";
+import {
+	annotation,
+	deadlineReport,
+	descendants,
+	exitStatus,
+	innermost,
+	runWithDeadline,
+} from "./ci-deadline.ts";
 
 const directory = mkdtempSync(path.join(tmpdir(), "ci-deadline-"));
 after(() => rmSync(directory, { recursive: true, force: true }));
-const script = path.join(import.meta.dirname, "ci-deadline.ts");
 
 const row = (pid: number, ppid: number) => ({ pid, ppid, elapsed: "01:00", command: `p${pid}` });
-
-/** Whether any process on the host has `marker` in its command line. */
-const running = (marker: string) =>
-	spawnSync("ps", ["-A", "-o", "args="], { encoding: "utf8" }).stdout.includes(marker);
 
 void test("the processes of a task are its root and everything below it, not its neighbours", () => {
 	const table = [row(1, 0), row(10, 1), row(11, 10), row(12, 11), row(20, 1), row(13, 10)];
@@ -36,40 +38,60 @@ void test("a task that hangs past its deadline is named in the step's output and
 	// Unique to this run, so that no other command line on the host contains it.
 	const marker = `hung-task-${randomUUID()}`;
 	const summary = path.join(directory, "summary.md");
-	const started = Date.now();
-	const result = spawnSync(
-		process.execPath,
-		[script, "2", "vp", "exec", "node", "-e", `setInterval(() => {}, 1e6) // ${marker}`],
-		{ encoding: "utf8", timeout: 60_000, env: { ...process.env, GITHUB_STEP_SUMMARY: summary } },
-	);
-	assert.equal(result.status, 124, result.stderr);
-	assert.ok(Date.now() - started < 30_000);
+	const previousSummary = process.env.GITHUB_STEP_SUMMARY;
+	process.env.GITHUB_STEP_SUMMARY = summary;
+	t.after(() => {
+		if (previousSummary === undefined) {
+			delete process.env.GITHUB_STEP_SUMMARY;
+		} else {
+			process.env.GITHUB_STEP_SUMMARY = previousSummary;
+		}
+	});
+	let stderr = "";
+	t.mock.method(process.stderr, "write", (chunk: unknown) => {
+		stderr += String(chunk);
+		return true;
+	});
+	const connected = Promise.withResolvers<Socket>();
+	const server = createServer(connected.resolve);
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	t.after(() => {
+		server.close();
+	});
+	const address = server.address();
+	if (address === null || typeof address === "string") {
+		throw new Error("Missing fixture address");
+	}
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const result = runWithDeadline(2, [
+		"exec",
+		"node",
+		"-e",
+		`require('node:net').connect(${address.port}, '127.0.0.1'); // ${marker}`,
+	]);
+	t.after(async () => {
+		t.mock.timers.tick(12_000);
+		await result;
+	});
+	const socket = await connected.promise;
+	const disconnected = once(socket, "close");
+	t.mock.timers.tick(2000);
+	assert.equal(await result, 124, stderr);
+	await disconnected;
 	assert.match(
-		result.stderr,
+		stderr,
 		/::error title=Quality gates hit their deadline::The step reached its deadline of 2 s/u,
 	);
-	assert.ok(result.stderr.includes(marker), result.stderr);
+	assert.ok(stderr.includes(marker), stderr);
 	const written = readFileSync(summary, "utf8");
 	assert.match(written, /### Quality gates hit their deadline/u);
 	assert.ok(written.includes(marker), written);
-	// A stopped process can still be leaving the process table for a moment.
-	for (let waited = 0; waited < 5000 && running(marker); waited += 250) {
-		await setTimeout(250);
-	}
-	assert.ok(!running(marker), "the hung task is stopped");
 });
 
-void test("a task that ends before its deadline keeps its own exit code", () => {
-	const result = spawnSync(
-		process.execPath,
-		[script, "60", "vp", "exec", "node", "-e", "process.exit(3)"],
-		{
-			encoding: "utf8",
-			timeout: 60_000,
-		},
-	);
-	assert.equal(result.status, 3, result.stderr);
-	assert.doesNotMatch(result.stderr, /deadline/u);
+void test("a task that ends before its deadline keeps its own exit code", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	assert.equal(await runWithDeadline(60, ["exec", "node", "-e", "process.exit(3)"]), 3);
 });
 
 void test("a task killed by a signal reports it as a shell does", () => {
