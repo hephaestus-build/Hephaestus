@@ -26,7 +26,7 @@ Only a maintainer adds a pull request to the merge queue.
 
 A pull request is ready when all of these are true on its latest head:
 
-- The required checks pass: `CI Status Gate`, `Actionlint`, and `Zizmor`.
+- The required checks pass: `CI Status Gate`.
 - A reviewer approved it after the last push. A push dismisses an earlier approval.
 - Every review thread is resolved.
 - It does not conflict with `main` (`DIRTY`).

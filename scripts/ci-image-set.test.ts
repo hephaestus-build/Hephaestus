@@ -14,10 +14,21 @@ import { isMap, isSeq, parseDocument } from "yaml";
 // resolve-alias-base.test.ts owns whether the resolver returns only such a commit.
 
 const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+const docker = parseDocument(await readFile(".github/workflows/reusable-docker-build.yml", "utf8"));
 const reusableBuild = parseDocument(
 	await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 );
+
+function asImageInputs(): Record<string, string> {
+	const inputs = reusableBuild.getIn(["on", "workflow_call", "inputs"]);
+	assert.ok(isMap(inputs));
+	return Object.fromEntries(
+		inputs.items.map(({ key, value }) => {
+			assert.ok(isMap(value));
+			return [String(key), String(value.get("type"))];
+		}),
+	);
+}
 
 const functions = [
 	{ name: "cancelled", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(false) },
@@ -282,7 +293,7 @@ const CONSUMERS = ["Kubernetes", "Release-preflight"];
 // The detect-changes outputs that these jobs read; evaluating only those keeps the test fast.
 const READ = new Set(
 	[
-		...["server-package", "vulnerability-database", "Docker", "Kubernetes-chart", ...CONSUMERS].map(
+		...["server-package", "vulnerability-database", "Docker", "Kubernetes", ...CONSUMERS].map(
 			(name) => String(cicd.getIn(["jobs", name, "if"])),
 		),
 		JSON.stringify(cicd.getIn(["jobs", "Docker", "with"])),
@@ -390,7 +401,7 @@ function run(entry: Case) {
 		);
 	};
 	// A merge group's heavy legs wait for its Security scan, which passes in this model.
-	needs["Security-merge-group"] = { result: job("Security-merge-group") ? "success" : "skipped" };
+	needs.Security = { result: job("Security") ? "success" : "skipped" };
 	let packageResult = "skipped";
 	if (job("server-package")) {
 		packageResult = entry.skip === "package-fails" ? "failure" : "success";
@@ -401,7 +412,7 @@ function run(entry: Case) {
 	};
 	const dockerRuns = job("Docker");
 
-	const inputs: Record<string, string> = {};
+	const inputs: Record<string, string | boolean> = {};
 	const declaredInputs = cicd.getIn(["jobs", "Docker", "with"]);
 	assert.ok(isMap(declaredInputs));
 	const caller = dictionary({ needs, github });
@@ -411,32 +422,23 @@ function run(entry: Case) {
 			? evaluate(value, ["needs", "github"], caller)
 			: value;
 	}
+	const declarations = asImageInputs();
+	for (const [key, value] of Object.entries(inputs)) {
+		if (declarations[key] === "boolean") {
+			inputs[key] = value === "true";
+		}
+	}
 	const called = dictionary({ inputs, github });
 	const reusable = (path: string[]) =>
 		dockerRuns && evaluate(docker.getIn(path), ["inputs", "github"], called) === "true";
-	const selects = reusable(["jobs", "images", "if"]);
 	const aliases = reusable(["jobs", "tag-unchanged-images", "if"]);
-	// reusable-docker-build.yml's inputs, typed as it declares them, and its build job's condition.
 	const selected = Object.fromEntries(
-		Object.keys(IMAGES).map((image) => [
-			image,
-			selects && reusable(["jobs", "images", "with", image]),
-		]),
+		Object.keys(IMAGES).map((image) => [image, dockerRuns && inputs[image] === true]),
 	);
-	const reuseImages = String(inputs.reuse_images);
+	const reuseImages = String(inputs["reuse-images"]);
 	const builds =
-		evaluate(
-			reusableBuild.getIn(["jobs", "build", "if"]),
-			["inputs", "github"],
-			dictionary({
-				inputs: {
-					...selected,
-					"reuse-images": reuseImages,
-					phase: docker.getIn(["jobs", "images", "with", "phase"]),
-				},
-				github,
-			}),
-		) === "true";
+		dockerRuns &&
+		evaluate(reusableBuild.getIn(["jobs", "build", "if"]), ["inputs", "github"], called) === "true";
 	const reuseList: unknown = JSON.parse(reuseImages);
 	assert.ok(Array.isArray(reuseList));
 	const reused = new Set<unknown>(reuseList);
@@ -446,7 +448,7 @@ function run(entry: Case) {
 	const published = Object.fromEntries(
 		Object.keys(IMAGES).map((image) => [
 			image,
-			inputs.publish === "true" && selected[image] === true && (reused.has(image) || builds),
+			inputs.publish === true && selected[image] === true && (reused.has(image) || builds),
 		]),
 	);
 	const aliased = Object.fromEntries(
@@ -467,7 +469,7 @@ function run(entry: Case) {
 		dockerResult = fails ? "failure" : "success";
 	}
 	needs.Docker = { result: dockerResult };
-	needs["Kubernetes-chart"] = { result: job("Kubernetes-chart") ? "success" : "skipped" };
+	needs.Kubernetes = { result: job("Kubernetes") ? "success" : "skipped" };
 	return {
 		present,
 		published,

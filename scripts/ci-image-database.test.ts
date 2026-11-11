@@ -47,7 +47,7 @@ function evaluates(
 					]),
 				),
 				// A pull request's merge-group Security scan skips.
-				"Security-merge-group": { result: results["Security-merge-group"] ?? "skipped" },
+				Security: { result: results.Security ?? "skipped" },
 				"detect-changes": { result: results["detect-changes"] ?? "success", outputs },
 			},
 		}),
@@ -122,7 +122,7 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 	assert.ok(!runs("Docker", { "any-code": "true", "all-images": "true", images: "false" }));
 	// The application-server image needs this run's packaged JAR. The other images do not, so the
 	// job still builds them when packaging failed or did not run.
-	const serverImage = ["jobs", "Docker", "with", "application_server_image"];
+	const serverImage = ["jobs", "Docker", "with", "application-server"];
 	const dockerfileImages = ["jobs", "Docker", "with", "dockerfile_images"];
 	assert.equal(evaluates(serverImage, fork), "true");
 	for (const result of ["failure", "skipped"]) {
@@ -198,7 +198,7 @@ void test("every CI image scan receives the producer's immutable artifact ID acr
 			`\${{ needs.vulnerability-database.outputs.artifact-id }}`,
 		);
 	}
-	for (const name of ["ci-docker-build.yml", "reusable-docker-build.yml"]) {
+	for (const name of ["reusable-docker-build.yml"]) {
 		const workflow = parseDocument(await readFile(`.github/workflows/${name}`, "utf8"));
 		assert.equal(
 			workflow.getIn(["on", "workflow_call", "inputs", "database-artifact", "required"]),
@@ -208,12 +208,8 @@ void test("every CI image scan receives the producer's immutable artifact ID acr
 			workflow.getIn(["on", "workflow_call", "inputs", "database-artifact", "default"]),
 			undefined,
 		);
-		if (name === "ci-docker-build.yml") {
-			assert.equal(
-				workflow.getIn(["jobs", "images", "with", "database-artifact"]),
-				`\${{ inputs.database-artifact }}`,
-			);
-		} else {
+
+		{
 			const steps = workflow.getIn(["jobs", "build", "steps"]);
 			assert.ok(isSeq(steps));
 			const restore = steps.items.find(

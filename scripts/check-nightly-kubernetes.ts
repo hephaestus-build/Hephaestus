@@ -12,10 +12,13 @@ type Api = (path: string) => Promise<unknown>;
 /** A nightly run older than this is no evidence for a release. */
 export const maxAgeHours = 48;
 
-/** The nightly jobs that qualify the cluster; the sandbox footprint benchmark is not one. */
+/** The nightly jobs that qualify the cluster; the sandbox footprint benchmark is not one.
+ * Keep Chart for runs still inside the admission window from before lint joined its consumer. */
 function isClusterJob(name: string): boolean {
 	return (
-		name === "Newest main build" || name === "Kubernetes / Chart" || name.startsWith("Kubernetes (")
+		name === "Newest main build" ||
+		name === "Kubernetes / Chart" ||
+		/^Kubernetes(?: \(.*\))? \/ (?:k3s |kind )/u.test(name)
 	);
 }
 
@@ -70,7 +73,8 @@ export async function nightlyRefusal(
 	if (
 		!jobs.some(
 			(job) =>
-				asString(job.name, "job name").startsWith("Kubernetes (") && job.conclusion === "success",
+				/^Kubernetes(?: \(.*\))? \/ (?:k3s |kind )/u.test(asString(job.name, "job name")) &&
+				job.conclusion === "success",
 		)
 	) {
 		return {

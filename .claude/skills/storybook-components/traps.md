@@ -36,7 +36,7 @@ renders every sibling as the error state while every isolated story stays green.
 
 ## 5. `test:storybook` does not run the brand-asset check — CI does, right after
 
-The `Webapp: Stories` job runs the webapp package's `export:assets` immediately after `test:storybook`.
+The `Quality / Webapp stories` job runs the webapp package's `export:assets` immediately after `test:storybook`.
 It fails if any exported asset is dirty afterwards.
 Thus, the job can fail after printing a clean pass line. If a change moves or renames a story that exports an asset, run
 `vp run --filter webapp export:assets`.

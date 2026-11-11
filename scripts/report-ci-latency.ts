@@ -44,6 +44,8 @@ export function selectLatencyRuns(
 }
 
 // The sampling window still holds runs from earlier integration shard layouts.
+// The numeric legacy layout had eight shards, independently of the current partition.
+const historicalNumericShards = 8;
 const INTEGRATION_LAYOUTS = [
 	["providers-and-startup", "application"],
 	["providers", "runtime-and-startup", "application"],
@@ -55,22 +57,26 @@ const INTEGRATION_LAYOUTS = [
 export function isFullVerification(jobs: readonly { name: string }[]) {
 	const names = new Set(jobs.map((job) => canonicalCiJobName(job.name)));
 	const integrationJobs = [...names].filter((name) =>
-		name.startsWith("Test / App Server: Integration ("),
+		name.startsWith("Server tests / Integration ("),
 	);
 	return (
-		(names.has("Test / App Server: Unit and architecture") ||
-			(names.has("Test / App Server: Unit") && names.has("Test / App Server: Architecture"))) &&
+		(names.has("Server tests / Unit and architecture") ||
+			(names.has("Server tests / Unit") && names.has("Server tests / Architecture"))) &&
 		[
-			"Quality / Webapp: Stories",
-			"Build / Webapp: E2E",
-			"Build / App Server: Database",
-			"Build / App Server: Generated artifacts",
+			"Quality / Webapp stories",
+			"Browser tests / Webapp",
+			"Build / Database migrations",
+			"Build / Generated API",
 		].every((name) => names.has(name)) &&
 		(names.has("Quality / Webapp") || names.has("Quality / Webapp / Gates")) &&
 		INTEGRATION_LAYOUTS.some(
 			(shards) =>
 				shards.length === integrationJobs.length &&
-				shards.every((shard) => names.has(`Test / App Server: Integration (${shard})`)),
+				shards.every((shard) =>
+					names.has(
+						`Server tests / Integration (${/^\d+$/u.test(shard) ? `${shard} of ${historicalNumericShards}` : shard})`,
+					),
+				),
 		)
 	);
 }
@@ -83,11 +89,11 @@ export function isLatencySample(jobs: readonly { name: string }[]) {
 // The queue tier's job names, past drill names included; ci-contract.test.ts holds them to the
 // jobs that carry the tier guard. The `review` integration shard also runs in the fast tier.
 export const QUEUE_TIER_JOBS = [
-	/^Test(?: \([a-z-]+\))? \/ App Server: Integration \((?!review\))/u,
-	/^Build \/ App Server: Database$/u,
-	/^Build \/ App Server: PostgreSQL drill/u,
-	/^Build \/ Webapp: E2E$/u,
-	/^Build \/ Extension: E2E$/u,
+	/^Server tests \/ Integration \((?!review\))/u,
+	/^Build \/ Database migrations$/u,
+	/^Build \/ PostgreSQL drill/u,
+	/^Browser tests \/ Webapp$/u,
+	/^Browser tests \/ Extension$/u,
 ];
 
 /**
@@ -98,9 +104,12 @@ export function isFastTier(jobs: readonly { name: string }[]) {
 	return (
 		jobs.some(
 			(job) =>
-				canonicalCiJobName(job.name) === "Test / App Server: Unit" ||
-				canonicalCiJobName(job.name) === "Test / App Server: Unit and architecture",
-		) && !jobs.some((job) => QUEUE_TIER_JOBS.some((pattern) => pattern.test(job.name)))
+				canonicalCiJobName(job.name) === "Server tests / Unit" ||
+				canonicalCiJobName(job.name) === "Server tests / Unit and architecture",
+		) &&
+		!jobs.some((job) =>
+			QUEUE_TIER_JOBS.some((pattern) => pattern.test(canonicalCiJobName(job.name))),
+		)
 	);
 }
 
@@ -119,7 +128,9 @@ export function queueTierFailures(
 	);
 	const failed = completed.filter((group) => group.conclusion === "failure");
 	const queueTier = failed.filter((group) =>
-		group.failedJobs.some((name) => QUEUE_TIER_JOBS.some((pattern) => pattern.test(name))),
+		group.failedJobs.some((name) =>
+			QUEUE_TIER_JOBS.some((pattern) => pattern.test(canonicalCiJobName(name))),
+		),
 	).length;
 	return {
 		groups: completed.length,

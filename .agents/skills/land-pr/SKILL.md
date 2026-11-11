@@ -37,7 +37,7 @@ Nothing staged or modified means nothing to land.
 Read it instead of guessing.
 Two path groups need attention:
 
-- `docs/**`, `scripts/**`, and the root lint, format, and tsconfig files select the `Tooling and Docs` leg.
+- `docs/**`, `scripts/**`, and the root lint, format, and tsconfig files select the `Tooling and docs` leg.
   They do not select the App Server leg.
 - `package.json` or `pnpm-lock.yaml` select every source leg.
 

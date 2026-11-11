@@ -42,7 +42,7 @@ concurrency:
 
 jobs:
   upgrade:
-    name: Upgrade
+    name: Migrate a seeded database
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

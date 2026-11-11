@@ -48,7 +48,7 @@ Anything pending means you do not yet know the failure set.
 
 ## 2. Read the job summaries before the logs
 
-The `Quality` legs and the `App Server: Generated artifacts` job write a table to
+The `Quality` legs and the `Build / Generated API` job write a table to
 `$GITHUB_STEP_SUMMARY` naming the fixing command per failed check, and emit the same text as
 `::error::` annotations. That table is the prescription. Logs are for what it cannot express — a
 test assertion, a type error.
@@ -78,11 +78,11 @@ This table adds only what the annotation cannot tell you.
 | Failure | What it actually means |
 |---|---|
 | `routeTree.gen.ts is stale` | A Vite build writes it. `vp run build:webapp`, then commit the file. |
-| `Brand assets are stale` | `Webapp: Stories` runs `export:assets` after `test:storybook`. Thus, the job fails after a clean pass line. Run `vp run --filter webapp export:assets`. Commit `webapp/brand`, `webapp/public`, `docs/images/readme` and `docs/static/img`. |
-| `App Server: Generated artifacts` | OpenAPI out of sync → `vp run generate:api`. Schema drift → `vp run db:draft-changelog`. ERD outdated → `vp run db:generate-erd-docs`. |
+| `Brand assets are stale` | `Quality / Webapp stories` runs `export:assets` after `test:storybook`. Thus, the job fails after a clean pass line. Run `vp run --filter webapp export:assets`. Commit `webapp/brand`, `webapp/public`, `docs/images/readme` and `docs/static/img`. |
+| `Build / Generated API` | OpenAPI out of sync → `vp run generate:api`. Schema drift → `vp run db:draft-changelog`. ERD outdated → `vp run db:generate-erd-docs`. |
 | `Changelog immutability guard` (Security → `Dependencies, secrets, and policy`) | A changelog that reached `main` was edited, renamed or deleted, or the baseline include changed, or a new timestamped file sorts before existing history. Fix forward with a new changeset. Never edit the released file. |
 | `Verify changesets` | The PR touches shipped code with no `.changeset/*.md`. `/land-pr` step 7 has the rules. |
-| `Tooling and Docs` red on a docs-only PR | Expected: `docs/**` is in the tooling path filter, where `docs:lint` and `gate:diagrams` run. |
+| `Tooling and docs` red on a docs-only PR | Expected: `docs/**` is in the tooling path filter, where `docs:lint` and `gate:diagrams` run. |
 
 ## 4. Reproduce locally before pushing
 

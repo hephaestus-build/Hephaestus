@@ -38,7 +38,7 @@ jobs:
           echo "Commit: \`$commit\`" >> "$GITHUB_STEP_SUMMARY"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
 
-  Kubernetes-chart:
+  Kubernetes:
     name: "Kubernetes"
     needs: build
     uses: ./.github/workflows/ci-kubernetes.yml
@@ -47,34 +47,13 @@ jobs:
       contents: read
       packages: read
     with:
-      leg: chart
       commit: ${{ needs.build.outputs.commit }}
       ref: ${{ needs.build.outputs.commit }}
       queue: true
       arm64: true
-
-  Kubernetes:
-    name: "Kubernetes (${{ matrix.leg }} ${{ matrix.minor }} ${{ matrix.arch }})"
-    needs: [build, Kubernetes-chart]
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.Kubernetes-chart.outputs.matrix) }}
-    uses: ./.github/workflows/ci-kubernetes.yml
-    permissions:
-      contents: read
-      actions: write
-      packages: read
-    with:
-      leg: ${{ matrix.leg }}
-      minor: ${{ matrix.minor }}
-      arch: ${{ matrix.arch }}
-      queue: ${{ needs.Kubernetes-chart.outputs.queue == 'true' }}
       backup-drill: true
-      commit: ${{ needs.build.outputs.commit }}
-      ref: ${{ needs.build.outputs.commit }}
 
-  # The review sandbox's memory on the newest main: two reviews of a large repository at once, from
-  # the agent image that main published. The model is a stand-in, so no credential is needed.
+  # Two reviews of a large repository run against main's agent image with a credential-free model stand-in.
   footprint:
     name: "Sandbox footprint"
     needs: build
@@ -171,7 +150,7 @@ jobs:
   # A scheduled run has no pull request to fail, so each failed job reports on its own tracking issue.
   report:
     name: "Report a failure"
-    needs: [build, Kubernetes-chart, Kubernetes, footprint]
+    needs: [build, Kubernetes, footprint]
     if: failure()
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -185,7 +164,6 @@ jobs:
           COMMIT: ${{ needs.build.outputs.commit }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BUILD: ${{ needs.build.result }}
-          CHART: ${{ needs.Kubernetes-chart.result }}
           KUBERNETES: ${{ needs.Kubernetes.result }}
           FOOTPRINT: ${{ needs.footprint.result }}
         run: |
@@ -200,7 +178,7 @@ jobs:
               gh issue create -R "$REPOSITORY" --title "$title" --body "$body"
             fi
           }
-          if [ "$BUILD" = failure ] || [ "$KUBERNETES" = failure ] || [ "$CHART" = failure ]; then
+          if [ "$BUILD" = failure ] || [ "$KUBERNETES" = failure ]; then
             report "The nightly Kubernetes run failed" \
               "The nightly cluster run on \`${COMMIT:-no commit}\` failed: $RUN_URL"
           fi

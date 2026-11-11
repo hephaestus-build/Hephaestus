@@ -15,7 +15,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { setTimeout } from "node:timers/promises";
 
-import { isMap, isSeq, parseDocument } from "yaml";
+import { isAlias, isMap, isSeq, parseDocument } from "yaml";
 
 const amd64 = `sha256:${"a".repeat(64)}`;
 const arm64 = `sha256:${"b".repeat(64)}`;
@@ -347,21 +347,28 @@ void test("the image workflow shares the resolver and retains its immutable subj
 	const workflow = parseDocument(
 		readFileSync(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
-	const steps = workflow.getIn(["jobs", "build", "steps"]);
-	assert.ok(isSeq(steps));
-	const scan = steps.items.find((item) => isMap(item) && item.get("id") === "scan");
-	assert.ok(isMap(scan));
-	assert.equal(scan.getIn(["env", "SCAN_PLATFORM"]), `\${{ inputs.platform }}`);
-	assert.equal(scan.getIn(["env", "IMAGES"]), `\${{ steps.prep.outputs.images }}`);
-	const run = String(scan.get("run"));
-	// Each image resolves its own subject from the directory its build exported.
-	assert.match(
-		run,
-		/GITHUB_OUTPUT="\$subject" DIGEST_DIRECTORY="\$RUNNER_TEMP\/digests\/\$name\/\$PLATFORM_PAIR" \\\n\s+IMAGE_REPOSITORY="\$REGISTRY\/hephaestus-build\/\$name" INPUT_IMAGE_NAME="hephaestus-build\/\$name" \\\n\s+node scripts\/resolve-image-scan-subject\.ts/u,
-	);
-	// The scan and the policy read the resolved subject, never a tag.
-	assert.match(run, /"\$repository@\$digest"/u);
-	assert.doesNotMatch(run, /\$repository:/u);
+	for (const [job, platform] of [
+		["build", "linux/amd64"],
+		["build-arm64", "linux/arm64"],
+	] as const) {
+		const raw = workflow.getIn(["jobs", job, "steps"]);
+		const steps = isAlias(raw) ? raw.resolve(workflow) : raw;
+		assert.ok(isSeq(steps));
+		const scan = steps.items.find((item) => isMap(item) && item.get("id") === "scan");
+		assert.ok(isMap(scan));
+		assert.equal(workflow.getIn(["jobs", job, "env", "IMAGE_PLATFORM"]), platform);
+		assert.equal(scan.getIn(["env", "SCAN_PLATFORM"]), `\${{ env.IMAGE_PLATFORM }}`);
+		assert.equal(scan.getIn(["env", "IMAGES"]), `\${{ steps.prep.outputs.images }}`);
+		const run = String(scan.get("run"));
+		// Each image resolves its own subject from the directory its build exported.
+		assert.match(
+			run,
+			/GITHUB_OUTPUT="\$subject" DIGEST_DIRECTORY="\$RUNNER_TEMP\/digests\/\$name\/\$PLATFORM_PAIR" \\\n\s+IMAGE_REPOSITORY="\$REGISTRY\/hephaestus-build\/\$name" INPUT_IMAGE_NAME="hephaestus-build\/\$name" \\\n\s+node scripts\/resolve-image-scan-subject\.ts/u,
+		);
+		// The scan and the policy read the resolved subject, never a tag.
+		assert.match(run, /"\$repository@\$digest"/u);
+		assert.doesNotMatch(run, /\$repository:/u);
+	}
 });
 
 // The export step runs on the Linux build runners only; its shell reads its image list with jq.

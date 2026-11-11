@@ -33,7 +33,7 @@ permissions: {}
 
 jobs:
   detect-changes:
-    name: "Detect changes"
+    name: Changes
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -478,6 +478,7 @@ jobs:
               - 'pnpm-workspace.yaml'
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-build.yml'
+              - '.github/workflows/ci-browser-tests.yml'
               - '.github/workflows/ci-tests.yml'
               - '.github/actions/setup-caches/**'
               - '.github/actions/setup-toolchain/**'
@@ -522,6 +523,7 @@ jobs:
               - 'pnpm-workspace.yaml'
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-build.yml'
+              - '.github/workflows/ci-browser-tests.yml'
               - '.github/actions/setup-toolchain/**'
               - '.github/actions/setup-browsers/**'
             # The generated clients and their generator configuration: a hand edit or a generator bump
@@ -556,6 +558,7 @@ jobs:
               - 'server/application/src/main/java/**/Application.java'
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-build.yml'
+              - '.github/workflows/ci-browser-tests.yml'
               - 'deploy/chart/**'
               - 'deploy/platform/**'
               - 'scripts/kubernetes-cluster.ts'
@@ -609,7 +612,6 @@ jobs:
             quality-config:
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-quality-gates.yml'
-              - '.github/workflows/ci-quality-leg.yml'
               - 'vite.config.ts'
               - 'scripts/lib/push-gates.ts'
               - '.vite-hooks/**'
@@ -624,6 +626,7 @@ jobs:
               - '.github/workflows/cicd.yml'
               - '.java-version'
               - '.github/workflows/ci-build.yml'
+              - '.github/workflows/ci-browser-tests.yml'
               - 'scripts/postgres-backup-restore-test.ts'
               - 'scripts/postgres-pitr-test.ts'
               - 'deploy/postgresql/**'
@@ -669,7 +672,6 @@ jobs:
               - 'scripts/lib/process.ts'
               - '.github/workflows/cicd.yml'
             docker-config:
-              - '.github/workflows/ci-docker-build.yml'
               - '.github/workflows/reusable-docker-build.yml'
               - 'docker/docker-bake.hcl'
             # The scan's runner preparation changes no image, so it builds and scans the App Server
@@ -698,7 +700,6 @@ jobs:
               - 'package.json'
               - 'scripts/run-gradlew.ts'
               - '.github/workflows/ci-quality-gates.yml'
-              - '.github/workflows/ci-quality-leg.yml'
             gradle-dependencies:
               - 'server/**/*.gradle.kts'
               - 'server/**/gradle.lockfile'
@@ -708,32 +709,43 @@ jobs:
               - 'server/gradlew*'
               - 'scripts/check-gradle-verification-metadata.ts'
 
-  # `Actionlint` is a required context, and a required context that skips still satisfies the
-  # ruleset — docs/contributor/ci-cd.mdx § Merge policy says why.
+  Changesets:
+    name: "Release notes"
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/verify-changesets.yml
+    permissions:
+      contents: read
+
   workflow-lint:
-    name: "Actionlint"
+    name: Workflow lint
     timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: [detect-changes]
     if: |
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      needs.detect-changes.outputs.should_skip != 'true' && (
+      (
         needs.detect-changes.outputs.ci-config == 'true' ||
         needs.detect-changes.outputs.unfiltered == 'true'
       )
     permissions:
       contents: read
       packages: read
+      security-events: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-toolchain
+      - id: toolchain
+        if: needs.detect-changes.outputs.should_skip != 'true'
+        uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
 
-      - uses: ./.github/actions/setup-ci-tool
+      - id: shellcheck
+        if: needs.detect-changes.outputs.should_skip != 'true'
+        uses: ./.github/actions/setup-ci-tool
         with:
           tool: shellcheck
 
@@ -741,6 +753,7 @@ jobs:
       # cannot read. docs/contributor/ci-cd.mdx § Workflow validation says which check owns what.
       - name: Validate workflows with GitHub's parser
         id: native
+        if: needs.detect-changes.outputs.should_skip != 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-workflows.ts
@@ -755,24 +768,8 @@ jobs:
           fail_level: error
           filter_mode: nofilter
           reporter: github-annotations
-
-  # A required context as well; the note above `workflow-lint` says why filtering one is safe.
-  zizmor:
-    name: "Zizmor"
-    timeout-minutes: 15
-    runs-on: ubuntu-latest
-    needs: [detect-changes]
-    if: |
-      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.ci-config == 'true')
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - id: zizmor
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99 # v0.6.3
         with:
           min-confidence: medium
@@ -780,15 +777,131 @@ jobs:
           version: 1.29.0
 
       - name: Enforce Zizmor findings
+        if: ${{ !cancelled() && steps.zizmor.outcome == 'success' }}
         env:
           ZIZMOR_SARIF: ${{ steps.zizmor.outputs.output-file }}
         run: jq -e '[.runs[]?.results[]?] | length == 0' "$ZIZMOR_SARIF"
 
+  # One prerequisite scan on every event; advisory preparation and upstream scans stay independent.
+  Security:
+    uses: ./.github/workflows/ci-security-scan.yml
+    needs: [detect-changes]
+    if: |
+      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
+      needs.detect-changes.outputs.should_skip != 'true' && (
+        needs.detect-changes.outputs.any-code == 'true' ||
+        needs.detect-changes.outputs.security-config == 'true' ||
+        needs.detect-changes.outputs.release-images == 'true' ||
+        needs.detect-changes.outputs.unfiltered == 'true'
+      )
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+    with:
+      should_skip: ${{ needs.detect-changes.outputs.should_skip }}
+
+  # Image policy has one advisory set per attempt. Failed-job reruns retain the producer's
+  # artifact ID; rerunning every job creates a new snapshot. Java identification is separate.
+  vulnerability-database:
+    name: Image advisories
+    needs: [detect-changes]
+    if: |
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' &&
+      needs.detect-changes.outputs.queue-images-complete != 'true' && (
+        needs.detect-changes.outputs.release-preflight == 'true' ||
+        needs.detect-changes.outputs.release-images == 'true' ||
+        (needs.detect-changes.outputs.publishable == 'true' && needs.detect-changes.outputs.images == 'true' && (
+          needs.detect-changes.outputs.all-images == 'true' ||
+          needs.detect-changes.outputs.application-server-image == 'true' ||
+          needs.detect-changes.outputs.kubernetes == 'true' ||
+          needs.detect-changes.outputs.webapp-image == 'true' ||
+          needs.detect-changes.outputs.agent-images == 'true' ||
+          needs.detect-changes.outputs.postgres-image == 'true' ||
+          needs.detect-changes.outputs.docker-config == 'true'
+        ))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      artifact-id: ${{ steps.snapshot.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: ./.github/actions/setup-release-security-tools
+        with:
+          install-syft: "false"
+      - uses: ./.github/actions/download-trivy-db
+        id: database
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        id: snapshot
+        with:
+          name: trivy-db-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.database.outputs.database-directory }}
+          if-no-files-found: error
+          retention-days: 1
+
+  # Upstream images ship by digest without a repository build. Scan changed digests here so their
+  # vulnerabilities are checked before release evidence is generated. Only this scan reads the
+  # advisory snapshot, so Security starts without waiting for it.
+  upstream-images:
+    name: Pinned upstream images
+    needs: [detect-changes, vulnerability-database]
+    if: |
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
+      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
+        needs.detect-changes.outputs.release-images == 'true' ||
+        needs.detect-changes.outputs.unfiltered == 'true'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+
+      - uses: ./.github/actions/setup-release-security-tools
+        with:
+          install-syft: "true"
+
+      # A blocking gate inherits Trivy's database availability as a hard dependency, so the
+      # retries and the mirror fallback live in one action rather than in each caller.
+      - uses: ./.github/actions/download-trivy-db
+        with:
+          database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
+
+      - name: Enforce the release vulnerability policy on the pinned digests
+        run: node scripts/scan-upstream-images.ts reports
+
+      # The gate's exit status alone cannot say which digest carries which finding.
+      - name: Upload the vulnerability policy results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vulnerability-policy-upstream
+          path: reports
+          if-no-files-found: warn
+          retention-days: 7
+
   Quality:
     uses: ./.github/workflows/ci-quality-gates.yml
-    needs: [detect-changes, Security-merge-group]
+    needs: [detect-changes, Security]
     if: |
-      !cancelled() && needs.detect-changes.result == 'success' && (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') &&
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.Security.result == 'success' || needs.Security.result == 'skipped') &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.any-code == 'true' ||
@@ -820,10 +933,10 @@ jobs:
   # publishes every image packages even when its diff holds no code, such as a bot's pin bump in
   # ci-kubernetes.yml, which carries no changeset and starts the Kubernetes legs.
   server-package:
-    name: "App Server: Package"
-    needs: [detect-changes, Security-merge-group]
+    name: Server package
+    needs: [detect-changes, Security]
     if: |
-      !cancelled() && needs.detect-changes.result == 'success' && (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') &&
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.Security.result == 'success' || needs.Security.result == 'skipped') &&
       needs.detect-changes.outputs.light-tier != 'true' &&
       needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
@@ -904,56 +1017,10 @@ jobs:
           # A re-run of failed jobs keeps this artifact; a re-run of all jobs replaces it.
           overwrite: true
 
-  # Image policy has one advisory set per attempt. Failed-job reruns retain the producer's
-  # artifact ID; rerunning every job creates a new snapshot. Java identification is separate.
-  vulnerability-database:
-    name: "Image advisory database"
-    needs: [detect-changes]
-    if: |
-      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' &&
-      needs.detect-changes.outputs.queue-images-complete != 'true' && (
-        needs.detect-changes.outputs.release-preflight == 'true' ||
-        needs.detect-changes.outputs.release-images == 'true' ||
-        (needs.detect-changes.outputs.publishable == 'true' && needs.detect-changes.outputs.images == 'true' && (
-          needs.detect-changes.outputs.all-images == 'true' ||
-          needs.detect-changes.outputs.application-server-image == 'true' ||
-          needs.detect-changes.outputs.kubernetes == 'true' ||
-          needs.detect-changes.outputs.webapp-image == 'true' ||
-          needs.detect-changes.outputs.agent-images == 'true' ||
-          needs.detect-changes.outputs.postgres-image == 'true' ||
-          needs.detect-changes.outputs.docker-config == 'true'
-        ))
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      packages: read
-    outputs:
-      artifact-id: ${{ steps.snapshot.outputs.artifact-id }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-      - uses: ./.github/actions/setup-release-security-tools
-        with:
-          install-syft: "false"
-      - uses: ./.github/actions/download-trivy-db
-        id: database
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        id: snapshot
-        with:
-          name: trivy-db-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.database.outputs.database-directory }}
-          if-no-files-found: error
-          retention-days: 1
-
   Build:
     uses: ./.github/workflows/ci-build.yml
     needs: [detect-changes, server-package]
-    # The implicit success() also skips this call when a job further up was skipped. The package job
-    # needs Security-merge-group, which only a merge group runs, so pull requests never built this.
+    # The explicit status function preserves a selected build when an ancestor was skipped.
     if: ${{ !cancelled() && needs.detect-changes.result == 'success' && needs.server-package.result == 'success' }}
     permissions:
       actions: write
@@ -964,119 +1031,16 @@ jobs:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
       contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
-      e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
-      extension_e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.extension-e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
 
-  # Upstream images ship by digest without a repository build. Scan changed digests here so their
-  # vulnerabilities are checked before release evidence is generated. Only this scan reads the
-  # advisory snapshot, so Security starts without waiting for it.
-  upstream-images:
-    name: "Pinned upstream images"
-    needs: [detect-changes, vulnerability-database]
-    if: |
-      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
-      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
-        needs.detect-changes.outputs.release-images == 'true' ||
-        needs.detect-changes.outputs.unfiltered == 'true'
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "none"
-
-      - uses: ./.github/actions/setup-release-security-tools
-        with:
-          install-syft: "true"
-
-      # A blocking gate inherits Trivy's database availability as a hard dependency, so the
-      # retries and the mirror fallback live in one action rather than in each caller.
-      - uses: ./.github/actions/download-trivy-db
-        with:
-          database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
-
-      - name: Enforce the release vulnerability policy on the pinned digests
-        run: node scripts/scan-upstream-images.ts reports
-
-      # The gate's exit status alone cannot say which digest carries which finding.
-      - name: Upload the vulnerability policy results
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: vulnerability-policy-upstream
-          path: reports
-          if-no-files-found: warn
-          retention-days: 7
-
-  # The scan runs once per run, in one of two jobs. In a merge group the heavy legs wait for it, so
-  # a base-wide advisory ends the group before they take runners. `needs` cannot depend on the
-  # event, so that scan is a job of its own: elsewhere it skips with `Detect changes`, and the heavy
-  # legs start at once. Both jobs are named `Security`, so their checks keep one name.
-  # docs/contributor/ci-cd.mdx § Fail fast in the merge queue.
-  Security:
-    uses: ./.github/workflows/ci-security-scan.yml
-    needs: [detect-changes]
-    if: |
-      github.event_name != 'merge_group' &&
-      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      needs.detect-changes.outputs.should_skip != 'true' && (
-        needs.detect-changes.outputs.any-code == 'true' ||
-        needs.detect-changes.outputs.security-config == 'true' ||
-        needs.detect-changes.outputs.release-images == 'true' ||
-        needs.detect-changes.outputs.unfiltered == 'true'
-      )
-    permissions:
-      contents: read
-      security-events: write
-      packages: read
-    with:
-      should_skip: ${{ needs.detect-changes.outputs.should_skip }}
-
-  Security-merge-group:
-    name: "Security"
-    uses: ./.github/workflows/ci-security-scan.yml
-    needs: [detect-changes]
-    if: |
-      github.event_name == 'merge_group' &&
-      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      needs.detect-changes.outputs.should_skip != 'true' && (
-        needs.detect-changes.outputs.any-code == 'true' ||
-        needs.detect-changes.outputs.security-config == 'true' ||
-        needs.detect-changes.outputs.release-images == 'true' ||
-        needs.detect-changes.outputs.unfiltered == 'true'
-      )
-    permissions:
-      contents: read
-      security-events: write
-      packages: read
-    with:
-      should_skip: ${{ needs.detect-changes.outputs.should_skip }}
-
-  # The suites run the packaged classes, so a package skipped while they are selected fails them.
   Test:
-    name: "Test (${{ matrix.shard }})"
-    # Each invocation selects one worker; its cancel callback does not wait for other shards.
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ${{ fromJSON(needs.detect-changes.outputs.queue-tier == 'true' && '["unit","architecture","review","1","2","3","4","5","6","7","8"]' || '["unit","architecture","review"]') }}
+    name: Server tests
     uses: ./.github/workflows/ci-tests.yml
-    needs: [detect-changes, server-package, Security-merge-group]
+    needs: [detect-changes, server-package, Security]
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && needs.server-package.result != 'failure' &&
-      (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') &&
+      (needs.Security.result == 'success' || needs.Security.result == 'skipped') &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.server-tests == 'true'
@@ -1090,25 +1054,38 @@ jobs:
       # A stacked layer's own base published no image; the alias base is the nearest commit that did.
       postgres_base_sha: ${{ needs.detect-changes.outputs.alias-base || github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
-      shard: ${{ matrix.shard }}
       queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
 
-  Changesets:
-    if: github.event_name == 'pull_request'
-    uses: ./.github/workflows/verify-changesets.yml
+  Browser-tests:
+    name: Browser tests
+    uses: ./.github/workflows/ci-browser-tests.yml
+    needs: [detect-changes, server-package]
+    # The explicit status function preserves a selected build when an ancestor was skipped.
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && needs.server-package.result == 'success' }}
     permissions:
+      actions: write
       contents: read
+      checks: write
+      packages: read
+    with:
+      should_skip: ${{ needs.detect-changes.outputs.should_skip }}
+      postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+      e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      extension_e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.extension-e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
 
   # Every image of the run: one build job per platform and one manifest job. The application-server
   # image is built from the package job's executable JAR, so the job waits for it.
   # The `preview` label and the Kubernetes cluster jobs need every image at the head tag; unchanged images
   # are aliased here. Other runs' image builds stay path-filtered.
   Docker:
-    uses: ./.github/workflows/ci-docker-build.yml
-    needs: [detect-changes, vulnerability-database, server-package, Security-merge-group]
+    name: Images
+    uses: ./.github/workflows/reusable-docker-build.yml
+    needs: [detect-changes, vulnerability-database, server-package, Security]
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
-      (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') && (
+      (needs.Security.result == 'success' || needs.Security.result == 'skipped') && (
         (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) ||
         (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
@@ -1124,8 +1101,8 @@ jobs:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
       platforms: ${{ needs.detect-changes.outputs.platforms }}
-      reuse_run: ${{ needs.detect-changes.outputs.queue-run }}
-      reuse_images: ${{ needs.detect-changes.outputs.queue-images }}
+      reuse-run: ${{ needs.detect-changes.outputs.queue-run }}
+      reuse-images: ${{ needs.detect-changes.outputs.queue-images }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
@@ -1134,11 +1111,15 @@ jobs:
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true') && 'true' || 'false' }}
       alias_base: ${{ needs.detect-changes.outputs.alias-base }}
       dockerfile_images: ${{ (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false' }}
-      application_server_image: ${{ (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false' }}
       application-artifact: server-build-${{ github.run_id }}
       project-descriptor: "server/application/project.toml"
       # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny
       run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:dc90cbdbbff35916ff5a26409f29f0525cbc7fa76cc317adca856c4127ebf2ba"
+
+      application-server: ${{ ((needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false') == 'true' }}
+      webapp: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false') == 'true' }}
+      agent-pi: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false') == 'true' }}
+      postgres: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true') && 'true' || 'false') == 'true' }}
 
   # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed.
   # A push to main that a merge group tested runs none: its commit is the group's. A push with no
@@ -1146,9 +1127,9 @@ jobs:
   # (kubernetes-nightly.yml) covers changes that the filter does not select. `Docker` puts every image
   # under the head commit's tag, by building it or, in a pull request, by aliasing the base image; a
   # fork publishes none, so there is nothing to install.
-  # `Docker` succeeds with the Dockerfile images alone when `App Server: Package` failed, so this job
+  # `Docker` succeeds with the Dockerfile images alone when the server package failed, so this job
   # waits for the package too: the run reports that failure once, not again as a cluster failure.
-  Kubernetes-chart:
+  Kubernetes:
     name: "Kubernetes"
     needs: [detect-changes, server-package, Docker]
     if: >-
@@ -1163,37 +1144,13 @@ jobs:
       contents: read
       packages: read
     with:
-      leg: chart
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
       # A pull request runs the chart and latest k3s on amd64. The queue adds the floor on amd64 and
       # kind, using the commit that main receives. Only the nightly run adds arm64.
       queue: ${{ github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-
-  Kubernetes:
-    name: "Kubernetes (${{ matrix.leg }} ${{ matrix.minor }} ${{ matrix.arch }})"
-    needs: [detect-changes, Kubernetes-chart, server-package]
-    if: ${{ !cancelled() && needs.Kubernetes-chart.result == 'success' }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.Kubernetes-chart.outputs.matrix) }}
-    uses: ./.github/workflows/ci-kubernetes.yml
-    permissions:
-      contents: read
-      actions: write
-      packages: read
-    with:
       application-artifact: ${{ needs.server-package.result == 'success' && format('server-build-{0}', github.run_id) || '' }}
-      leg: ${{ matrix.leg }}
-      minor: ${{ matrix.minor }}
-      arch: ${{ matrix.arch }}
-      queue: ${{ needs.Kubernetes-chart.outputs.queue == 'true' }}
       backup-drill: ${{ needs.detect-changes.outputs.kubernetes-recovery == 'true' }}
-      commit: ${{ github.event.pull_request.head.sha || github.sha }}
 
-  # A migration or the baseline synchronization changes what an upgrade from the last release does.
-  # The merge group runs the release's seeded upgrade on the images it builds, so a migration that
-  # breaks the upgrade fails here and not at the next release. Without inputs, the reusable workflow
-  # takes the last release from the tags and this commit's images.
   Database-upgrade:
     name: "Seeded upgrade from the last release"
     needs: [detect-changes, Docker]
@@ -1317,17 +1274,15 @@ jobs:
         detect-changes,
         vulnerability-database,
         workflow-lint,
-        zizmor,
         Quality,
         server-package,
         Build,
+        Browser-tests,
         upstream-images,
         Security,
-        Security-merge-group,
         Test,
         Changesets,
         Docker,
-        Kubernetes-chart,
         Kubernetes,
         Release-preflight,
         Database-upgrade,
@@ -1344,22 +1299,6 @@ jobs:
           MERGE_GROUP: ${{ github.event_name == 'merge_group' }}
         run: |
           set -o pipefail
-          echo "detect-changes: ${{ needs.detect-changes.result }}"
-          echo "workflow-lint: ${{ needs.workflow-lint.result }}"
-          echo "zizmor:        ${{ needs.zizmor.result }}"
-          echo "Quality:        ${{ needs.Quality.result }}"
-          echo "Package:        ${{ needs.server-package.result }}"
-          echo "Build:          ${{ needs.Build.result }}"
-          echo "Upstream:       ${{ needs.upstream-images.result }}"
-          echo "Security:       ${{ needs.Security.result }}"
-          echo "Security (merge group): ${{ needs.Security-merge-group.result }}"
-          echo "Test:           ${{ needs.Test.result }}"
-          echo "Changesets:     ${{ needs.Changesets.result }}"
-          echo "Docker:         ${{ needs.Docker.result }}"
-          echo "Chart:          ${{ needs.Kubernetes-chart.result }}"
-          echo "Kubernetes:     ${{ needs.Kubernetes.result }}"
-          echo "Preflight:      ${{ needs.Release-preflight.result }}"
-          echo "Upgrade:        ${{ needs.Database-upgrade.result }}"
           echo "Release candidate: ${{ needs.detect-changes.outputs.release-candidate == 'true' }}"
 
           # Reporting uses only native results. A local summary write cannot change their verdict.
@@ -1368,7 +1307,23 @@ jobs:
               echo '## Required CI results'
               echo '| Job | Result |'
               echo '| --- | --- |'
-              jq -r 'to_entries[] | "| " + .key + " | " + (.value.result // "Unavailable" | tostring) + " |"' <<< "$NEEDS"
+              jq -r '{
+                  "detect-changes": "Changes",
+                  "vulnerability-database": "Image advisories",
+                  "workflow-lint": "Workflow lint",
+                  "Quality": "Quality",
+                  "server-package": "Server package",
+                  "Build": "Build",
+                  "Browser-tests": "Browser tests",
+                  "upstream-images": "Pinned upstream images",
+                  "Security": "Security",
+                  "Test": "Server tests",
+                  "Changesets": "Release notes",
+                  "Docker": "Images",
+                  "Kubernetes": "Kubernetes",
+                  "Release-preflight": "Release evidence preflight",
+                  "Database-upgrade": "Seeded upgrade from the last release"
+                } as $names | to_entries[] | "| " + $names[.key] + " | " + (.value.result // "Unavailable" | tostring) + " |"' <<< "$NEEDS"
             } >> "$GITHUB_STEP_SUMMARY" || echo '::warning::CI summary unavailable'
           fi
 
@@ -1506,114 +1461,199 @@ jobs:
   # starts when that leg ends. `always()` is required: without a status function, GitHub adds
   # `success()`, which is false after a failed leg. `CI Status Gate` still runs after the cancel and
   # fails. These jobs are not in its `needs`: they only end the run early and are not part of the verdict.
-  # Pull requests keep every leg's failures. docs/contributor/ci-cd.mdx § Fail fast in the merge queue.
+  # Pull requests keep independent legs running after failure; the shared Security prerequisite
+  # blocks dependent work on every event. docs/contributor/ci-cd.mdx § Fail fast in the merge queue.
   fail-fast-vulnerability-database:
-    name: "Fail fast: vulnerability-database"
+    name: Stop the merge group early
     needs: [vulnerability-database]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.vulnerability-database.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-workflow-lint:
-    name: "Fail fast: workflow-lint"
-    needs: [workflow-lint]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.workflow-lint.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-zizmor:
-    name: "Fail fast: zizmor"
-    needs: [zizmor]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.zizmor.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Quality:
-    name: "Fail fast: Quality"
-    needs: [Quality]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Quality.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-server-package:
-    name: "Fail fast: server-package"
-    needs: [server-package]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.server-package.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Build:
-    name: "Fail fast: Build"
-    needs: [Build]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Build.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-upstream-images:
-    name: "Fail fast: upstream-images"
-    needs: [upstream-images]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.upstream-images.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Security-merge-group:
-    name: "Fail fast: Security-merge-group"
-    needs: [Security-merge-group]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Security-merge-group.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Test:
-    name: "Fail fast: Test"
-    needs: [Test]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Test.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Docker:
-    name: "Fail fast: Docker"
-    needs: [Docker]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Docker.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Kubernetes:
-    name: "Fail fast: Kubernetes"
-    needs: [Kubernetes]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Kubernetes.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Database-upgrade:
-    name: "Fail fast: Database-upgrade"
-    needs: [Database-upgrade]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Database-upgrade.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Release-preflight:
-    name: "Fail fast: Release-preflight"
-    needs: [Release-preflight]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Release-preflight.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Kubernetes-chart:
-    needs: [Kubernetes-chart]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Kubernetes-chart.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     permissions:
       actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-workflow-lint:
+    name: Stop the merge group early
+    needs: [workflow-lint]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-Quality:
+    name: Stop the merge group early
+    needs: [Quality]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-server-package:
+    name: Stop the merge group early
+    needs: [server-package]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-Build:
+    name: Stop the merge group early
+    needs: [Build]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-upstream-images:
+    name: Stop the merge group early
+    needs: [upstream-images]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-Test:
+    name: Stop the merge group early
+    needs: [Test]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-Docker:
+    name: Stop the merge group early
+    needs: [Docker]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-Kubernetes:
+    name: Stop the merge group early
+    needs: [Kubernetes]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-Database-upgrade:
+    name: Stop the merge group early
+    needs: [Database-upgrade]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-Release-preflight:
+    name: Stop the merge group early
+    needs: [Release-preflight]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-Security:
+    name: Stop the merge group early
+    needs: [Security]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-Browser-tests:
+    name: Stop the merge group early
+    needs: [Browser-tests]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"

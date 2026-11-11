@@ -13,16 +13,6 @@ on:
         required: false
         type: string
         default: "true"
-      e2e_changed:
-        description: "Whether browser E2E runtime files changed"
-        required: false
-        type: string
-        default: "true"
-      extension_e2e_changed:
-        description: "Whether Chrome extension E2E runtime files changed"
-        required: false
-        type: string
-        default: "true"
       postgres_image_changed:
         description: "Whether PostgreSQL image inputs changed"
         required: false
@@ -46,7 +36,7 @@ env:
 # docs/contributor/ci-cd.mdx § Build once owns the artifact contract.
 jobs:
   server-api:
-    name: "App Server: Generated artifacts"
+    name: Generated API
     if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -164,7 +154,7 @@ jobs:
           fi
 
   server-database:
-    name: "App Server: Database"
+    name: Database migrations
     if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -207,7 +197,7 @@ jobs:
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
-          name: "Test Results - App Server Database"
+          name: "Test Results - Database migrations"
           path: "server/application/build/test-results/databaseTest/TEST-*.xml"
           reporter: java-junit
           list-suites: failed
@@ -229,8 +219,9 @@ jobs:
   # their own rather than queueing behind databaseTest's Gradle invocation. They share one job:
   # together they are shorter than the integration shards, and a job of its own costs each a
   # runner's setup.
+
   postgres-drill:
-    name: "App Server: PostgreSQL drills"
+    name: PostgreSQL drills
     if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -266,214 +257,47 @@ jobs:
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
         run: node scripts/postgres-pitr-test.ts --target-image hephaestus-postgres:ci
 
-  webapp-e2e:
-    name: "Webapp: E2E"
-    if: inputs.should_skip != 'true' && inputs.e2e_changed == 'true' && inputs.queue_tier == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "frozen"
-      # This job runs the packaged JAR, never Gradle; it needs no wrapper validation or build cache.
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        with:
-          distribution: "temurin"
-          java-version-file: .java-version
-          cache-jdk: false
-      # The browser install runs node and vp, so it starts after the toolchain.
-      - uses: ./.github/actions/setup-browsers
-      - name: Download the packaged server
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ${{ env.SERVER_BUILD_ARTIFACT }}
-          path: server
-      # `server/compose.yaml` resolves the database by the `dev` tag, so that is the name it needs.
-      - uses: ./.github/actions/postgres-image
-        with:
-          base-sha: ${{ inputs.postgres_base_sha }}
-          image-changed: ${{ inputs.postgres_image_changed }}
-          tag: ghcr.io/hephaestus-build/postgres:dev
-      - name: Run end-to-end tests against the built server
-        run: |
-          POSTGRES_PASSWORD="$(openssl rand -hex 24)"
-          echo "::add-mask::${POSTGRES_PASSWORD}"
-          export POSTGRES_PASSWORD
-          docker compose -f server/compose.yaml up -d --wait --no-build postgres
-          cleanup() {
-            if [[ -n "${SERVER_PID:-}" ]]; then
-              kill -TERM -- "-$SERVER_PID" 2>/dev/null || true
-              (sleep 10; kill -KILL -- "-$SERVER_PID" 2>/dev/null || true) &
-              KILL_WATCHDOG=$!
-              wait "$SERVER_PID" 2>/dev/null || true
-              if kill -0 -- "-$SERVER_PID" 2>/dev/null; then
-                wait "$KILL_WATCHDOG" 2>/dev/null || true
-              else
-                kill "$KILL_WATCHDOG" 2>/dev/null || true
-                wait "$KILL_WATCHDOG" 2>/dev/null || true
-              fi
-            fi
-            docker compose -f server/compose.yaml down -v
-          }
-          trap cleanup EXIT
-          mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
-          (( ${#SERVER_JARS[@]} == 1 ))
-          SERVER_JAR=${SERVER_JARS[0]}
-          SERVER_PORT=8080 MANAGEMENT_PORT=9090 POSTGRES_PORT=5432 \
-            SPRING_DOCKER_COMPOSE_ENABLED=false APPLICATION_HOST_URL=http://localhost:4200 \
-            setsid java -jar "$SERVER_JAR" --spring.profiles.active=e2e,playwright > e2e-server.log 2>&1 &
-          SERVER_PID=$!
-          # Liveness precedes ApplicationRunner completion; readiness includes signing-key initialization.
-          timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/readyz >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
-          curl --fail --silent --show-error -X POST http://localhost:8080/auth/dev-login \
-            -H 'content-type: application/json' -d '{"username":"e2e","admin":true}' >/dev/null
-          docker compose -f server/compose.yaml exec -T postgres \
-            psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql
-          timeout --kill-after=30s 10m node scripts/ci-browser.ts vp run --filter webapp test:e2e
-      # A green browser suite can still hide server startup failures. Preserve the raw log too.
-      - name: Upload diagnostics
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: webapp-e2e-results
-          path: |
-            webapp/test-results
-            e2e-server.log
-          if-no-files-found: warn
-          retention-days: 7
-
-  # The extension's `e2e` build — the development key, loopback access and pre-granted fixture
-  # origins, with the dev client login — against the same packaged server. It is not the production
-  # zip: the Extension quality leg builds that and checks its manifest (check:extension-package).
-  extension-e2e:
-    name: "Extension: E2E"
-    if: inputs.should_skip != 'true' && inputs.extension_e2e_changed == 'true' && inputs.queue_tier == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "frozen"
-      # This job runs the packaged JAR, never Gradle; it needs no wrapper validation or build cache.
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        with:
-          distribution: "temurin"
-          java-version-file: .java-version
-          cache-jdk: false
-      # The browser install runs node and vp, so it starts after the toolchain.
-      - uses: ./.github/actions/setup-browsers
-      - name: Download the packaged server
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ${{ env.SERVER_BUILD_ARTIFACT }}
-          path: server
-      # `server/compose.yaml` resolves the database by the `dev` tag, so that is the name it needs.
-      - uses: ./.github/actions/postgres-image
-        with:
-          base-sha: ${{ inputs.postgres_base_sha }}
-          image-changed: ${{ inputs.postgres_image_changed }}
-          tag: ghcr.io/hephaestus-build/postgres:dev
-      # `test:extension:e2e` builds the `e2e` bundle, then runs every Playwright project: the
-      # fixture-provider pages, and the real-server project, which fails rather than skips when the
-      # server below does not answer.
-      - name: Run extension end-to-end tests against the built server
-        env:
-          E2E_SERVER_URL: http://127.0.0.1:8080
-          E2E_WEB_APP_URL: http://localhost:4200
-        run: |
-          POSTGRES_PASSWORD="$(openssl rand -hex 24)"
-          echo "::add-mask::${POSTGRES_PASSWORD}"
-          export POSTGRES_PASSWORD
-          docker compose -f server/compose.yaml up -d --wait --no-build postgres
-          cleanup() {
-            if [[ -n "${SERVER_PID:-}" ]]; then
-              kill -TERM -- "-$SERVER_PID" 2>/dev/null || true
-              (sleep 10; kill -KILL -- "-$SERVER_PID" 2>/dev/null || true) &
-              KILL_WATCHDOG=$!
-              wait "$SERVER_PID" 2>/dev/null || true
-              if kill -0 -- "-$SERVER_PID" 2>/dev/null; then
-                wait "$KILL_WATCHDOG" 2>/dev/null || true
-              else
-                kill "$KILL_WATCHDOG" 2>/dev/null || true
-                wait "$KILL_WATCHDOG" 2>/dev/null || true
-              fi
-            fi
-            docker compose -f server/compose.yaml down -v
-          }
-          trap cleanup EXIT
-          mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
-          (( ${#SERVER_JARS[@]} == 1 ))
-          SERVER_JAR=${SERVER_JARS[0]}
-          SERVER_PORT=8080 MANAGEMENT_PORT=9090 POSTGRES_PORT=5432 \
-            SPRING_DOCKER_COMPOSE_ENABLED=false APPLICATION_HOST_URL=http://localhost:4200 \
-            setsid java -jar "$SERVER_JAR" --spring.profiles.active=e2e,playwright \
-            --hephaestus.integration.gitlab.enabled=true > e2e-server.log 2>&1 &
-          SERVER_PID=$!
-          # Liveness precedes ApplicationRunner completion; readiness includes signing-key initialization.
-          timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/readyz >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
-          curl --fail --silent --show-error -X POST http://localhost:8080/auth/dev-login \
-            -H 'content-type: application/json' -d '{"username":"e2e","admin":true}' >/dev/null
-          curl --fail --silent --show-error -X POST http://localhost:8080/auth/dev-login \
-            -H 'content-type: application/json' -d '{"username":"e2e-dev","admin":false}' >/dev/null
-          # The extension's seed builds on the web app's: it adds a GitLab workspace for the e2e developer.
-          docker compose -f server/compose.yaml exec -T postgres \
-            psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql
-          docker compose -f server/compose.yaml exec -T postgres \
-            psql -v ON_ERROR_STOP=1 -U root -d hephaestus < extension/e2e/seed.sql
-          timeout --kill-after=30s 10m node scripts/ci-browser.ts vp run test:extension:e2e
-      # A green browser suite can still hide server startup failures. Preserve the raw log too.
-      - name: Upload diagnostics
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: extension-e2e-results
-          path: |
-            extension/test-results
-            e2e-server.log
-          if-no-files-found: warn
-          retention-days: 7
-
   fail-fast-server-api:
+    name: Stop the merge group early
     needs: [server-api]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.server-api.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     permissions:
       actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
 
   fail-fast-server-database:
+    name: Stop the merge group early
     needs: [server-database]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.server-database.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     permissions:
       actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
 
   fail-fast-postgres-drill:
+    name: Stop the merge group early
     needs: [postgres-drill]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.postgres-drill.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     permissions:
       actions: write
-
-  fail-fast-webapp-e2e:
-    needs: [webapp-e2e]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.webapp-e2e.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write
-
-  fail-fast-extension-e2e:
-    needs: [extension-e2e]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.extension-e2e.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"

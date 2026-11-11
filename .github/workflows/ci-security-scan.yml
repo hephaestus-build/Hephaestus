@@ -13,7 +13,7 @@ permissions: {}
 
 jobs:
   security-scan:
-    name: "Dependencies, secrets, and policy"
+    name: "Dependencies, secrets and policy"
     runs-on: ubuntu-latest
     if: inputs.should_skip != 'true'
     timeout-minutes: 15

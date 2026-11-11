@@ -23,7 +23,7 @@ Extend the pipeline at the ownership boundary that changed. Do not copy an exist
    - A metadata step, its `bake-file-labels` entry, and the image list of the merge job's metadata step.
    - A digest output and an `Attest the <image> image` step.
    - `imageAttestations` in `scripts/resolve-server-build.ts`, so that a push can reuse the image.
-   - Its `*_changed` input in `ci-docker-build.yml` and `security/release-images.json`.
+   - Its `*_changed` input in `reusable-docker-build.yml` and `security/release-images.json`.
 5. Pass the change-detection output from `cicd.yml` to every reusable workflow that needs it.
 
 ## Check that it worked

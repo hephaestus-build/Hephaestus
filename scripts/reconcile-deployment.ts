@@ -374,7 +374,6 @@ const POSTGRES_IMAGE = "HEPHAESTUS_IMAGE_POSTGRES";
  */
 export const POSTGRES_IMAGE_INPUTS = [
 	"docker/postgres/**",
-	".github/workflows/ci-docker-build.yml",
 	".github/workflows/reusable-docker-build.yml",
 	"docker/docker-bake.hcl",
 ] as const;

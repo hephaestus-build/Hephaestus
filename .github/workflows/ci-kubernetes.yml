@@ -8,18 +8,6 @@ name: CI / Kubernetes
 on:
   workflow_call:
     inputs:
-      leg:
-        description: "The chart preflight or one cluster leg selected by the caller"
-        type: string
-        required: true
-      minor:
-        description: "Kubernetes minor for a k3s worker"
-        type: string
-        default: ""
-      arch:
-        description: "Native architecture for a k3s worker"
-        type: string
-        default: ""
       commit:
         description: The commit whose images the Docker jobs published under its tag
         type: string
@@ -45,14 +33,6 @@ on:
         type: string
         default: ""
 
-    outputs:
-      queue:
-        description: "Whether the chart selected all cluster legs"
-        value: ${{ jobs.schema.outputs.queue }}
-      matrix:
-        description: "Cluster legs selected by the chart preflight"
-        value: ${{ jobs.schema.outputs.matrix }}
-
 permissions: {}
 
 env:
@@ -60,33 +40,50 @@ env:
   KUBERNETES_SCHEMAS: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/f7d855e49c34b039c9ef2196444910275e31e09e/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json
   CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/501527ab9c40c827144c8f45945b25a023e344ce/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 
+  # One node image per minor, pinned by digest.
+  K3S_IMAGES: >-
+    {"1.35": "docker.io/rancher/k3s:v1.35.9-k3s1@sha256:ec9868c6a38d4e8c1869832fb5fd1eb8473c39794a0b44d2b952e7ba911951bc",
+    "1.37": "docker.io/rancher/k3s:v1.37.2-k3s1@sha256:21ea6e0fac4e3930c2ce8aa40ddd41a8b18cb3e9a0222c030dc005e7e88c4332"}
+
+# Leg names use the distribution, minor and architecture. Each summary records the pinned image.
+# The lowest amd64 minor uses the small profile; other legs use dev. Only the latest uses gVisor.
 jobs:
-  schema:
-    name: "Chart"
-    if: inputs.leg == 'chart'
+  k3d:
+    name: k3s 1.37 amd64
     permissions:
       contents: read
+      actions: read
       packages: read
-    outputs:
-      queue: ${{ inputs.queue }}
-      # Native workflow data stays independent of the tested ref, which a nightly run can select
-      # from before this workflow changed.
-      matrix: ${{ inputs.queue && inputs.arm64 && '{"include":[{"leg":"k3d","minor":"1.35","arch":"amd64"},{"leg":"k3d","minor":"1.35","arch":"arm64"},{"leg":"k3d","minor":"1.37","arch":"amd64"},{"leg":"calico","minor":"1.35","arch":"amd64"}]}' || inputs.queue && '{"include":[{"leg":"k3d","minor":"1.35","arch":"amd64"},{"leg":"k3d","minor":"1.37","arch":"amd64"},{"leg":"calico","minor":"1.35","arch":"amd64"}]}' || '{"include":[{"leg":"k3d","minor":"1.37","arch":"amd64"}]}' }}
-    timeout-minutes: 15
+    timeout-minutes: 60
     runs-on: ubuntu-24.04
-    steps:
+    env:
+      KUBERNETES_MINOR: "1.37"
+      KUBERNETES_ARCH: amd64
+      PROFILES: --profile dev
+      GVISOR: "true"
+      # The drills of the latest minor on amd64 run on the pull request's own head, which the
+      # `kubernetes` filter selects for every change they exercise, and each night on main. A
+      # merge group installs and upgrades the combined tree only; the release preflight refuses
+      # a release while the newest nightly run failed.
+      DRILLS: ${{ github.event_name != 'merge_group' }}
+    steps: &k3d-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      # crd-schemas.ts reads YAML with the repository's parser.
       - uses: ./.github/actions/setup-toolchain
+        if: ${{ !(env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64') }}
+        with:
+          install: "none"
+      - uses: ./.github/actions/setup-toolchain
+        if: env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64'
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-helm
       - uses: ./.github/actions/setup-kubernetes-tools
       # The render runs `helm lint --strict` on each set of values before it renders them.
       - name: Lint the chart and validate every rendered resource on the lowest and the latest Kubernetes
+        if: env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64'
         run: |
           set -euo pipefail
           node scripts/kubernetes-cluster.ts render > manifests.yaml
@@ -99,43 +96,6 @@ jobs:
               -schema-location "$CRD_SCHEMAS" manifests.yaml
           done
 
-  # A leg's name is its distribution, minor and architecture, so its check history survives an
-  # image update. The pinned image, which Renovate updates within the minor, is in the summary.
-  k3d:
-    name: "k3s ${{ inputs.minor }} ${{ inputs.arch }}"
-    if: inputs.leg == 'k3d'
-    permissions:
-      contents: read
-      actions: read
-      packages: read
-    timeout-minutes: 60
-    runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
-    env:
-      # One node image per minor, pinned by digest.
-      K3S_IMAGES: >-
-        {"1.35": "docker.io/rancher/k3s:v1.35.9-k3s1@sha256:ec9868c6a38d4e8c1869832fb5fd1eb8473c39794a0b44d2b952e7ba911951bc",
-        "1.37": "docker.io/rancher/k3s:v1.37.2-k3s1@sha256:21ea6e0fac4e3930c2ce8aa40ddd41a8b18cb3e9a0222c030dc005e7e88c4332"}
-      # The lowest minor on amd64 installs the profile of a 16 GiB host, which a runner is, so a
-      # shipped profile that cannot start fails here. The other legs install the dev profile.
-      PROFILES: ${{ inputs.minor == '1.35' && inputs.arch == 'amd64' && '--profile small' || '--profile dev' }}
-      # The latest minor on amd64, the pull request's leg, runs the sandbox templates on gVisor, as
-      # the one-host platform does. The other legs prove the default runtime with hostUsers: false.
-      GVISOR: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
-      # The drills of the latest minor on amd64 run on the pull request's own head, which the
-      # `kubernetes` filter selects for every change they exercise, and each night on main. A
-      # merge group installs and upgrades the combined tree only; the release preflight refuses
-      # a release while the newest nightly run failed.
-      DRILLS: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' && github.event_name != 'merge_group' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.ref }}
-          persist-credentials: false
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "none"
-      - uses: ./.github/actions/setup-helm
-      - uses: ./.github/actions/setup-kubernetes-tools
       - uses: ./.github/actions/setup-caches
         if: ${{ inputs.application-artifact != '' && env.DRILLS == 'true' }}
       - uses: ./.github/actions/restore-server-build
@@ -151,7 +111,7 @@ jobs:
       # k3s enforces NetworkPolicy with its embedded controller, so the isolation probe judges it.
       - name: Create a server and an agent node
         env:
-          NODE_IMAGE: ${{ fromJSON(env.K3S_IMAGES)[inputs.minor] }}
+          NODE_IMAGE: ${{ fromJSON(env.K3S_IMAGES)[env.KUBERNETES_MINOR] }}
         run: |
           set -euo pipefail
           echo "Node image: \`$NODE_IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
@@ -206,11 +166,11 @@ jobs:
       # k3s gives Pods 10.42.0.0/16, where the drill's S3 server runs.
       # Nightly and relevant pull requests opt in; merge groups keep the destructive drill off their path.
       - name: Back up, then restore to a point in time
-        if: ${{ inputs.backup-drill && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        if: ${{ inputs.backup-drill && env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' }}
         run: node scripts/kubernetes-cluster.ts backup-drill --work "$RUNNER_TEMP/kubernetes-cluster" --pod-cidr 10.42.0.0/16
       # A node that joins gets the agent image from the DaemonSet, and its first sandbox pulls nothing.
       - name: Start a sandbox on a new node without an image pull
-        if: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        if: ${{ env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' }}
         run: |
           set -euo pipefail
           if [ "$GVISOR" = true ]; then set -- --gvisor "$RUNNER_TEMP/gvisor"; fi
@@ -243,9 +203,51 @@ jobs:
           fi
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
 
+  k3d-1-35-amd64:
+    name: k3s 1.35 amd64
+    if: inputs.queue
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    timeout-minutes: 60
+    runs-on: ubuntu-24.04
+    env:
+      KUBERNETES_MINOR: "1.35"
+      KUBERNETES_ARCH: amd64
+      PROFILES: --profile small
+      GVISOR: "false"
+      # The drills of the latest minor on amd64 run on the pull request's own head, which the
+      # `kubernetes` filter selects for every change they exercise, and each night on main. A
+      # merge group installs and upgrades the combined tree only; the release preflight refuses
+      # a release while the newest nightly run failed.
+      DRILLS: "false"
+    steps: *k3d-steps
+
+  k3d-1-35-arm64:
+    name: k3s 1.35 arm64
+    if: inputs.queue && inputs.arm64
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    timeout-minutes: 60
+    runs-on: ubuntu-24.04-arm
+    env:
+      KUBERNETES_MINOR: "1.35"
+      KUBERNETES_ARCH: arm64
+      PROFILES: --profile dev
+      GVISOR: "false"
+      # The drills of the latest minor on amd64 run on the pull request's own head, which the
+      # `kubernetes` filter selects for every change they exercise, and each night on main. A
+      # merge group installs and upgrades the combined tree only; the release preflight refuses
+      # a release while the newest nightly run failed.
+      DRILLS: "false"
+    steps: *k3d-steps
+
   calico:
     name: "kind 1.35 Calico"
-    if: inputs.leg == 'calico'
+    if: inputs.queue
     permissions:
       contents: read
       packages: read
@@ -337,9 +339,62 @@ jobs:
           kubectl -n hephaestus-sandboxes get events --sort-by=.lastTimestamp || true
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
 
-  fail-fast:
-    needs: [schema, k3d, calico]
-    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    uses: ./.github/workflows/fail-fast.yml
+  fail-fast-k3d:
+    name: Stop the merge group early
+    needs: [k3d]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.k3d.result == 'failure' }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     permissions:
       actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-k3d-1-35-amd64:
+    name: Stop the merge group early
+    needs: [k3d-1-35-amd64]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.k3d-1-35-amd64.result == 'failure' }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-k3d-1-35-arm64:
+    name: Stop the merge group early
+    needs: [k3d-1-35-arm64]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.k3d-1-35-arm64.result == 'failure' }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-calico:
+    name: Stop the merge group early
+    needs: [calico]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.calico.result == 'failure' }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"

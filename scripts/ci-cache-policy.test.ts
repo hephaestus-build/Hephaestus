@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
+import { isMap, isSeq, parseDocument } from "yaml";
 
 const cacheAction = await readFile(".github/actions/setup-caches/action.yml", "utf8");
 const browserAction = await readFile(".github/actions/setup-browsers/action.yml", "utf8");
@@ -26,10 +27,12 @@ await describe("CI cache policy", async () => {
 		assert.match(setup, /validate-wrappers: true/u);
 		assert.match(setup, /cache-provider: enhanced/u);
 		assert.doesNotMatch(cacheAction, /~\/\.m2|target\//u);
-		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
-		const e2e = build.slice(build.indexOf("\n  webapp-e2e:"));
-		assert.match(e2e, /uses: actions\/setup-java@/u);
-		assert.doesNotMatch(e2e, /setup-caches/u);
+		const browser = parseDocument(await readFile(".github/workflows/ci-browser-tests.yml", "utf8"));
+		const steps = browser.getIn(["jobs", "webapp-e2e", "steps"]);
+		assert.ok(isSeq(steps));
+		const actions = steps.items.filter(isMap).map((step) => String(step.get("uses")));
+		assert.ok(actions.some((action) => action.startsWith("actions/setup-java@")));
+		assert.ok(!actions.includes("./.github/actions/setup-caches"));
 	});
 
 	await test("browser consumers use the pinned image without runtime package installation", () => {
