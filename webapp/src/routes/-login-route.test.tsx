@@ -2,7 +2,7 @@ import { createRouter } from "@tanstack/react-router";
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { currentUser } from "@/mocks/fixtures/auth";
@@ -15,9 +15,9 @@ import {
 } from "@/runtime/auth/account-deleted-notice";
 import { authClient } from "@/runtime/auth/auth-client";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, loadRouteCode, renderRouteAtWithRouter } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => loadRouteCode("/", "/about", "/login"), ROUTE_RENDER_WAIT.timeout);
 
 beforeEach(() => {
 	// JSDOM has no viewport observer; the landing page uses it only for decorative motion.
