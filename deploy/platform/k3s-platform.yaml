@@ -89,8 +89,8 @@ spec:
     image:
       registry: docker.io
       repository: traefik
-      tag: v3.7.17
-      digest: sha256:f4bb143d1135a579b630ed491e17ec50f6f7c9c6a30585ff3d385471d2a86f5a
+      tag: v3.7.18
+      digest: sha256:af6e7de981b23d51d8d967e0e508af6a8673f29831138720ab854617fd1b1229
     deployment:
       replicas: 1
     # Two Pods cannot hold the same host port: the old Pod stops before the new one starts.
@@ -101,13 +101,15 @@ spec:
         maxSurge: 0
     # A critical Pod: at a shutdown, the kubelet stops it in the last minute (k3s-kubelet.yaml).
     priorityClassName: system-cluster-critical
+    # Only the Gateway API provider: no route uses an Ingress or a Traefik resource, and each other
+    # provider adds cluster-wide RBAC. The chart enables the Traefik resource provider by default.
     providers:
       kubernetesGateway:
         enabled: true
       kubernetesIngress:
         enabled: false
       kubernetesCRD:
-        enabled: true
+        enabled: false
     gatewayClass:
       enabled: true
       name: traefik

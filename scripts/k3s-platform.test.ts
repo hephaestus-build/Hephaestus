@@ -291,6 +291,19 @@ function renderedTraefik(...args: string[]) {
 	};
 }
 
+await test("Traefik watches only Gateway API resources", () => {
+	const traefik = named(documents(read("k3s-platform.yaml")), "HelmChart", "traefik");
+	assert.ok(traefik && isRecord(traefik.spec));
+	const values: unknown = parse(String(traefik.spec.valuesContent));
+	assert.ok(isRecord(values));
+	// The chart turns on its Traefik resource provider unless the values turn it off.
+	assert.deepEqual(values.providers, {
+		kubernetesGateway: { enabled: true },
+		kubernetesIngress: { enabled: false },
+		kubernetesCRD: { enabled: false },
+	});
+});
+
 await test("each extra host gets an HTTPS listener and an HTTP-01 certificate, and the redirect covers it", () => {
 	const args = ["--host", "heph.example.org", "--email", "ops@example.org"];
 	assert.equal(renderedTraefik(...args).text, read("k3s-platform.yaml"));
