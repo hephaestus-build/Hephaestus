@@ -263,6 +263,12 @@ void test("commit identity accepts only the current author or a resolved listed 
 		},
 	];
 	for (const entry of cases) {
+		let expectedOutputs = {};
+		if ("superseded" in entry) {
+			expectedOutputs = { superseded: "true" };
+		} else if (!entry.valid) {
+			expectedOutputs = { violations: "true" };
+		}
 		await rm(path.join(workspace, "commit-messages.json"), { force: true });
 		const result = spawnSync(
 			process.execPath,
@@ -283,7 +289,7 @@ void test("commit identity accepts only the current author or a resolved listed 
 			} };
 			const outputs = {};
 			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; }, notice() {} };
-			(async () => { ${String(script)} })().then(() => { assert.equal(calls, pages.length); if (${JSON.stringify("superseded" in entry)}) { assert.equal(require("node:fs").existsSync(process.env.RUNNER_TEMP + "/commit-messages.json"), false); } else { assert.equal(JSON.parse(require("node:fs").readFileSync(process.env.RUNNER_TEMP + "/commit-messages.json", "utf8")).length, pages.flat().length); } assert.deepEqual(outputs, ${JSON.stringify("superseded" in entry ? { superseded: "true" } : entry.valid ? {} : { violations: "true" })}); }).catch(error => { console.error(error); process.exitCode = 2; });
+			(async () => { ${String(script)} })().then(() => { assert.equal(calls, pages.length); if (${JSON.stringify("superseded" in entry)}) { assert.equal(require("node:fs").existsSync(process.env.RUNNER_TEMP + "/commit-messages.json"), false); } else { assert.equal(JSON.parse(require("node:fs").readFileSync(process.env.RUNNER_TEMP + "/commit-messages.json", "utf8")).length, pages.flat().length); } assert.deepEqual(outputs, ${JSON.stringify(expectedOutputs)}); }).catch(error => { console.error(error); process.exitCode = 2; });
 		`,
 			],
 			{
