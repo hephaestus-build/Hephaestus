@@ -132,6 +132,15 @@ async function pullRequestPaths(file: string): Promise<string[]> {
 	return asArray(patterns.toJSON(), file).map((pattern) => asString(pattern, file));
 }
 
+function hasWorkflowTrigger(document: Document, event: string): boolean {
+	const trigger = asRecord(document.toJS(), "workflow").on;
+	return (
+		trigger === event ||
+		(Array.isArray(trigger) && trigger.includes(event)) ||
+		(isRecord(trigger) && Object.hasOwn(trigger, event))
+	);
+}
+
 async function workflowSources(): Promise<Map<string, string>> {
 	return readSources(await posixGlob(".github/workflows/*.{yml,yaml}"));
 }
@@ -4534,9 +4543,43 @@ void describe("CI contract", () => {
 	// GitHub blocks pull_request_target in public repositories by default. The pull request policy
 	// records on pull_request and judges on workflow_run instead; a new pull_request_target would
 	// also be a Zizmor dangerous-triggers finding, which this test keeps an ignore comment from hiding.
+	void test("the dangerous-trigger guard covers every YAML trigger form", () => {
+		for (const trigger of [
+			"pull_request_target",
+			"[push, pull_request_target]",
+			"{ pull_request_target: {} }",
+		]) {
+			assert.equal(
+				hasWorkflowTrigger(parseDocument(`on: ${trigger}`), "pull_request_target"),
+				true,
+				trigger,
+			);
+		}
+		for (const trigger of ["push", "[push, pull_request]", "{ pull_request: {} }"]) {
+			assert.equal(
+				hasWorkflowTrigger(parseDocument(`on: ${trigger}`), "pull_request_target"),
+				false,
+				trigger,
+			);
+		}
+	});
+
+	void test("the dangerous-trigger guard resolves YAML aliases", () => {
+		for (const source of [
+			"name: &event pull_request_target\non: *event",
+			"name: &events [push, pull_request_target]\non: *events",
+		]) {
+			assert.equal(hasWorkflowTrigger(parseDocument(source), "pull_request_target"), true);
+		}
+		assert.equal(
+			hasWorkflowTrigger(parseDocument("name: &event push\non: *event"), "pull_request_target"),
+			false,
+		);
+	});
+
 	void test("no workflow runs on pull_request_target", async () => {
 		for (const [file, source] of await workflowSources()) {
-			assert.equal(parseDocument(source).hasIn(["on", "pull_request_target"]), false, file);
+			assert.equal(hasWorkflowTrigger(parseDocument(source), "pull_request_target"), false, file);
 		}
 	});
 

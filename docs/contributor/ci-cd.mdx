@@ -331,7 +331,11 @@ Instead, two workflows split the work, as GitHub Security Lab recommends ([Preve
 The artifact is untrusted data. `scripts/pull-request-policy.ts` accepts only a number and a known action.
 It reads the pull request from the API and acts only while the pull request's head is the commit that the recording run tested.
 A run for a replaced head does nothing, and the newer run decides.
-A pull request can thus point the policy at itself only. It cannot change the policy or what the policy reads.
+
+First-time fork contributors need a maintainer to approve the recording run.
+A merge conflict prevents `pull_request` runs, so policy feedback waits until the conflict is resolved.
+A record can point only at a pull request with the tested head commit. It cannot change the policy or what the policy reads.
+The judging job checks the head on every page of commits and again before it posts the verdict.
 
 A `workflow_run` job reports on the default branch, not on the pull request.
 Thus, the judging job posts its verdict on the pull request's head commit as the `Validate PR` check, with the Checks API.

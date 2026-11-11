@@ -179,6 +179,7 @@ jobs:
             // credit, not the identity the commit is attributed to.
             const query = `query($owner:String!,$name:String!,$number:Int!,$after:String){
               repository(owner:$owner,name:$name){ pullRequest(number:$number){
+                headRefOid
                 author{ __typename login }
                 commits(first:100,after:$after){ pageInfo{hasNextPage endCursor}
                   nodes{ commit{ abbreviatedOid message authors(first:1){ nodes{ email name user{ login } } } } } } } } }`;
@@ -195,6 +196,11 @@ jobs:
                 after,
               });
               const data = page.repository.pullRequest;
+              if (data.headRefOid !== process.env.HEAD_SHA) {
+                core.setOutput("superseded", "true");
+                core.notice("The pull request head changed during policy evaluation; a newer run decides.");
+                return;
+              }
               author = data.author;
               nodes.push(...data.commits.nodes);
               after = data.commits.pageInfo.hasNextPage ? data.commits.pageInfo.endCursor : null;
@@ -257,7 +263,7 @@ jobs:
 
       - name: "Refuse model attribution in pull requests and commits"
         id: attribution
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.identity.outputs.superseded != 'true' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         continue-on-error: true
         with:
@@ -316,7 +322,7 @@ jobs:
       # failed check: main would show it. The verdict is posted on the pull request's head commit
       # as the `Validate PR` check.
       - name: Report the verdict on the pull request
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.identity.outputs.superseded != 'true' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           TITLE: ${{ steps.title.outcome }}
@@ -326,6 +332,11 @@ jobs:
         with:
           retries: 2
           script: |
+            const { data: pull } = await github.rest.pulls.get({ ...context.repo, pull_number: Number(process.env.PR_NUMBER) });
+            if (pull.state !== "open" || pull.head.sha !== process.env.HEAD_SHA) {
+              core.notice("The pull request is closed or its head changed; no verdict is posted.");
+              return;
+            }
             const parts = [
               ["Title", process.env.TITLE],
               ["Commit identity", process.env.IDENTITY],

@@ -82,7 +82,7 @@ void test("title preflight loads without dependencies and validates the current 
 			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 99, title: ${JSON.stringify(valid ? "fix!: stale invalid title" : "fix: stale valid title")} } } };
 			const github = { rest: { pulls: { get: async ({pull_number}) => { assert.equal(pull_number, 7); return { data: { title: ${JSON.stringify(title)} } }; } } } };
 			const outputs = {};
-			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; } };
+			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; }, notice() {} };
 			${String(script)}
 		`,
 			],
@@ -118,7 +118,12 @@ void test("the trusted policy checks every rule even after another rule fails", 
 		"steps",
 	]);
 	for (const id of ["identity", "attribution"]) {
-		assert.equal(steps.find((step) => step.get("id") === id)?.get("if"), `\${{ !cancelled() }}`);
+		assert.equal(
+			steps.find((step) => step.get("id") === id)?.get("if"),
+			id === "identity"
+				? `\${{ !cancelled() }}`
+				: `\${{ !cancelled() && steps.identity.outputs.superseded != 'true' }}`,
+		);
 	}
 });
 
@@ -226,6 +231,26 @@ void test("commit identity accepts only the current author or a resolved listed 
 			valid: false,
 		},
 		{
+			name: "head replaced before the first commit page",
+			author: "contributor",
+			type: "User",
+			maintainers: "",
+			pages: [[identityCommit("contributor")]],
+			heads: ["b".repeat(40)],
+			superseded: true,
+			valid: true,
+		},
+		{
+			name: "head replaced between commit pages",
+			author: "contributor",
+			type: "User",
+			maintainers: "",
+			pages: [[identityCommit("contributor")], [identityCommit("contributor")]],
+			heads: ["a".repeat(40), "b".repeat(40)],
+			superseded: true,
+			valid: true,
+		},
+		{
 			name: "offender after a full page",
 			author: "contributor",
 			type: "User",
@@ -238,6 +263,7 @@ void test("commit identity accepts only the current author or a resolved listed 
 		},
 	];
 	for (const entry of cases) {
+		await rm(path.join(workspace, "commit-messages.json"), { force: true });
 		const result = spawnSync(
 			process.execPath,
 			[
@@ -249,14 +275,15 @@ void test("commit identity accepts only the current author or a resolved listed 
 			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 99, user: { login: "stale-payload" }, base: { ref: "main" } } } };
 			const github = { graphql: async (query, variables) => {
 				assert.ok(query.includes("authors(first:1)"));
+				assert.ok(query.includes("headRefOid"));
 				assert.equal(variables.number, 7);
 				assert.equal(variables.after, calls === 0 ? null : "page-" + calls);
 				const nodes = pages[calls++];
-				return { repository: { pullRequest: { author: { __typename: ${JSON.stringify(entry.type)}, login: ${JSON.stringify(entry.author)} }, commits: { nodes, pageInfo: { hasNextPage: calls < pages.length, endCursor: "page-" + calls } } } } };
+				return { repository: { pullRequest: { headRefOid: ${JSON.stringify("heads" in entry ? entry.heads : [])}[calls - 1] ?? "a".repeat(40), author: { __typename: ${JSON.stringify(entry.type)}, login: ${JSON.stringify(entry.author)} }, commits: { nodes, pageInfo: { hasNextPage: calls < pages.length, endCursor: "page-" + calls } } } } };
 			} };
 			const outputs = {};
-			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; } };
-			(async () => { ${String(script)} })().then(() => { assert.equal(calls, pages.length); assert.equal(JSON.parse(require("node:fs").readFileSync(process.env.RUNNER_TEMP + "/commit-messages.json", "utf8")).length, pages.flat().length); assert.deepEqual(outputs, ${JSON.stringify(entry.valid ? {} : { violations: "true" })}); }).catch(error => { console.error(error); process.exitCode = 2; });
+			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; }, notice() {} };
+			(async () => { ${String(script)} })().then(() => { assert.equal(calls, pages.length); if (${JSON.stringify("superseded" in entry)}) { assert.equal(require("node:fs").existsSync(process.env.RUNNER_TEMP + "/commit-messages.json"), false); } else { assert.equal(JSON.parse(require("node:fs").readFileSync(process.env.RUNNER_TEMP + "/commit-messages.json", "utf8")).length, pages.flat().length); } assert.deepEqual(outputs, ${JSON.stringify("superseded" in entry ? { superseded: "true" } : entry.valid ? {} : { violations: "true" })}); }).catch(error => { console.error(error); process.exitCode = 2; });
 		`,
 			],
 			{
@@ -267,6 +294,7 @@ void test("commit identity accepts only the current author or a resolved listed 
 					RUNNER_TEMP: workspace,
 					MAINTAINERS: entry.maintainers,
 					PR_NUMBER: "7",
+					HEAD_SHA: "a".repeat(40),
 				},
 			},
 		);
@@ -316,7 +344,7 @@ void test("attribution checks current metadata and the complete commit list beyo
 				get: async ({pull_number}) => { assert.equal(pull_number, 7); return { data: { title: ${JSON.stringify(title)}, body: ${JSON.stringify(body)} } }; },
 			} } };
 			const outputs = {};
-			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; } };
+			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; }, notice() {} };
 			(async () => { ${String(script)} })().then(() => assert.deepEqual(outputs, ${JSON.stringify(valid ? {} : { violations: "true" })})).catch(error => { console.error(error); process.exitCode = 2; });
 		`,
 			],
@@ -430,6 +458,65 @@ void test("unavailable PR metadata fails without claiming a policy violation", a
 		);
 		assert.equal(result.status, 0, `${id}: ${result.stderr}`);
 		assert.equal(result.stderr, "", id);
+	}
+});
+
+void test("the verdict is posted only while the pull request still has the judged head", async () => {
+	const steps = await stepsIn(".github/workflows/pull-request-policy.yml", [
+		"jobs",
+		"validate-pr",
+		"steps",
+	]);
+	const script = steps
+		.find((step) => step.get("name") === "Report the verdict on the pull request")
+		?.getIn(["with", "script"]);
+	assert.equal(typeof script, "string");
+	for (const [state, head, identity, conclusion] of [
+		["open", "a", "success", "success"],
+		["open", "a", "failure", "failure"],
+		["open", "b", "success", null],
+		["closed", "a", "success", null],
+	] as const) {
+		const result = spawnSync(
+			process.execPath,
+			[
+				"-e",
+				`
+			const assert = require("node:assert/strict");
+			const context = {repo: {owner: "owner", repo: "repo"}};
+			const checks = [];
+			const core = {notice() {}};
+			const github = {rest: {
+				pulls: {get: async ({pull_number}) => {
+					assert.equal(pull_number, 7);
+					return {data: {state: ${JSON.stringify(state)}, head: {sha: ${JSON.stringify(head)}.repeat(40)}}};
+				}},
+				checks: {create: async (check) => {checks.push(check);}},
+			}};
+			(async () => { ${String(script)} })().then(() => {
+				assert.equal(checks.length, ${conclusion === null ? 0 : 1});
+				if (checks.length) {
+					assert.equal(checks[0].head_sha, "a".repeat(40));
+					assert.equal(checks[0].conclusion, ${JSON.stringify(conclusion)});
+				}
+			}).catch(error => {console.error(error); process.exitCode = 1;});
+		`,
+			],
+			{
+				encoding: "utf8",
+				env: {
+					...process.env,
+					PR_NUMBER: "7",
+					HEAD_SHA: "a".repeat(40),
+					TITLE: "success",
+					IDENTITY: identity,
+					ATTRIBUTION: "success",
+					RUN_URL: "https://example.invalid/run",
+				},
+			},
+		);
+		assert.equal(result.status, 0, result.stderr);
+		assert.equal(result.stderr, "");
 	}
 });
 
