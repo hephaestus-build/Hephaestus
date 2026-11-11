@@ -253,7 +253,8 @@ jobs:
               - 'scripts/check-presentational-components.test.ts'
               - 'scripts/check-story-prose.ts'
               - 'scripts/check-story-sort.ts'
-              - 'scripts/install-browser-deps.ts'
+              - 'scripts/ci-browser.ts'
+              - '.github/playwright-image.json'
               # The fixture tests compare the webapp's catalog fixtures with these server resources,
               # the practice guidance stories render the bundled guidance, the SVG sanitizer test
               # compares its allowlist with the server's, and the card copy test reads the internal
@@ -292,7 +293,8 @@ jobs:
               - 'oxlint.react.jsonc'
               - 'oxlint.app.jsonc'
               - '.oxfmtrc.json'
-              - 'scripts/install-browser-deps.ts'
+              - 'scripts/ci-browser.ts'
+              - '.github/playwright-image.json'
               - 'scripts/check-presentational-components.ts'
               - 'scripts/check-presentational-components.test.ts'
               - 'scripts/check-story-prose.ts'
@@ -432,7 +434,8 @@ jobs:
             e2e:
               - 'tsconfig.agent-runtime.json'
               - 'scripts/compile-agent-runtime.ts'
-              - 'scripts/install-browser-deps.ts'
+              - 'scripts/ci-browser.ts'
+              - '.github/playwright-image.json'
               - '.java-version'
               - 'webapp/e2e/**'
               - 'webapp/src/**'
@@ -463,7 +466,8 @@ jobs:
               - '.github/actions/setup-toolchain/**'
               - '.github/actions/setup-browsers/**'
             extension-e2e:
-              - 'scripts/install-browser-deps.ts'
+              - 'scripts/ci-browser.ts'
+              - '.github/playwright-image.json'
               - '.java-version'
               - 'extension/**'
               - 'patches/**'

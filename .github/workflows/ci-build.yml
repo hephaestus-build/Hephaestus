@@ -334,7 +334,7 @@ jobs:
             -H 'content-type: application/json' -d '{"username":"e2e","admin":true}' >/dev/null
           docker compose -f server/compose.yaml exec -T postgres \
             psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql
-          timeout --kill-after=30s 10m vp run --filter webapp test:e2e
+          timeout --kill-after=30s 10m node scripts/ci-browser.ts vp run --filter webapp test:e2e
       # A green browser suite can still hide server startup failures. Preserve the raw log too.
       - name: Upload diagnostics
         if: always()
@@ -430,7 +430,7 @@ jobs:
             psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql
           docker compose -f server/compose.yaml exec -T postgres \
             psql -v ON_ERROR_STOP=1 -U root -d hephaestus < extension/e2e/seed.sql
-          timeout --kill-after=30s 10m vp run test:extension:e2e
+          timeout --kill-after=30s 10m node scripts/ci-browser.ts vp run test:extension:e2e
       # A green browser suite can still hide server startup failures. Preserve the raw log too.
       - name: Upload diagnostics
         if: always()

@@ -27,7 +27,7 @@ jobs:
           install: "frozen"
       - uses: ./.github/actions/setup-browsers
       - name: Check the actual adapters against public GitHub and GitLab pages
-        run: node scripts/check-extension-provider-slots.ts
+        run: node scripts/ci-browser.ts node scripts/check-extension-provider-slots.ts
       - name: Keep each provider result
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -1,19 +1,8 @@
 name: Setup Playwright browsers
-description: Prepare Playwright for webapp tests
+description: Pull the pinned image with Chromium and its system libraries
 runs:
   using: composite
   steps:
-    - name: Read Playwright version
-      id: playwright
+    - name: Pull the Playwright image
       shell: bash
-      run: node -e "const v=require('./webapp/package.json').devDependencies.playwright; if(!/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/.test(v)) throw Error('Playwright must use an exact version'); console.log('version='+v)" >> "$GITHUB_OUTPUT"
-    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.cache/ms-playwright
-        key: ${{ runner.os }}-playwright-${{ steps.playwright.outputs.version }}
-    - name: Install Chromium system dependencies
-      shell: bash
-      run: node scripts/install-browser-deps.ts
-    - name: Install Chromium
-      shell: bash
-      run: vp -C webapp exec playwright install chromium
+      run: node scripts/ci-browser.ts pull

@@ -81,7 +81,12 @@ jobs:
       # test:agents compares the loop's search proof with the real rg, and fails in CI without it.
       - name: Install ripgrep
         if: inputs.leg == 'tooling'
-        run: sudo apt-get update --quiet && sudo apt-get install --yes --no-install-recommends ripgrep
+        uses: ./.github/actions/setup-ci-tool
+        with:
+          tool: ripgrep
+      - name: Install verified ripgrep on the tools server PATH
+        if: inputs.leg == 'tooling'
+        run: node scripts/setup-ripgrep.ts
 
       # The extension's story tests run in Chromium.
       - name: Setup Playwright browsers
@@ -104,7 +109,7 @@ jobs:
             server) deadline vp run ci:server ;;
             tooling) if [ -n "$HEPHAESTUS_NODE_TEST_SHARD" ]; then deadline vp run ci:tooling-tests; else deadline vp run ci:tooling; fi ;;
             webapp) deadline vp run ci:webapp ;;
-            extension) deadline vp run ci:extension ;;
+            extension) node scripts/ci-browser.ts node scripts/ci-deadline.ts 900 vp run ci:extension ;;
             windows) deadline vp run --no-cache ci:windows ;;
             *) echo "::error::Unknown quality leg: $LEG"; exit 1 ;;
           esac
