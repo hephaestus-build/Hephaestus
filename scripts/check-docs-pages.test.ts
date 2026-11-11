@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { checkPage, type Guide, screenshotProblems } from "./check-docs-pages.ts";
+import {
+	checkPage,
+	type Guide,
+	migrationNoteProblems,
+	screenshotProblems,
+} from "./check-docs-pages.ts";
 
 const page = (frontMatter: string, body: string) => `---\n${frontMatter}\n---\n\n${body}\n`;
 const feature = (body: string) =>
@@ -180,6 +185,29 @@ await describe("screenshotProblems", async () => {
 	await test("asks for a literal src", () => {
 		assert.deepEqual(screenshotProblems("page.md", '<Screenshot src={name} alt="A" />', sizeOf), [
 			'page.md:1: Give the <Screenshot> a literal src, such as src="practice-profile/overview".',
+		]);
+	});
+});
+
+const note = (heading: string) => ({ file: ".migration/a.md", source: `${heading}\n\nText.\n` });
+
+await describe("migrationNoteProblems", async () => {
+	await test("accepts a note that an upgrade page names by its heading", () => {
+		assert.deepEqual(
+			migrationNoteProblems([note("#### 🔴 Stop every role")], "See *Stop every role*."),
+			[],
+		);
+	});
+
+	await test("asks to name a note that no upgrade page names", () => {
+		assert.deepEqual(migrationNoteProblems([note("#### Rename a setting")], "Nothing here."), [
+			'.migration/a.md:1: Name "Rename a setting" on an upgrade page in docs/admin/.',
+		]);
+	});
+
+	await test("asks for the heading that names the note", () => {
+		assert.deepEqual(migrationNoteProblems([note("No heading")], ""), [
+			'.migration/a.md:1: Start the migration note with a "#### " heading.',
 		]);
 	});
 });

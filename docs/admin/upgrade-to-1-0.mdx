@@ -110,7 +110,22 @@ Three more checks need a read before the window:
 - Duplicate repository monitor names stop the migration: run the query of *Stop every role before enforcing unique repository monitor names*.
 - A practice identifier can collide with a reserved route name: run the preflight of *Check practice identifiers before upgrading*.
 
+These migration entries also apply to a host that upgrades to 1.0:
+
+- *Refresh the internal PostgreSQL certificate*: on one host, restart PostgreSQL after cert-manager issues the new certificate.
+- *Stop every role before correcting unknown issue comment counts*: the migration changes stored issue comment counts of zero to unknown.
+- *Use the stopped procedure for one-host release changes*: the one-host installer refuses a release change that does not follow it.
+- *Let the one-host installer reach the gVisor download*: allow `storage.googleapis.com` in the host's egress rules.
+- *Update custom practice script imports*: remove the imports that the release deletes from your custom scripts.
+- *Remove broker consumer settings*: remove `config.durableConsumerName` and `config.consumerInactiveThreshold` from every values file.
+- *Remove the Git checkout switch*: remove `config.gitCheckoutEnabled` from every values file.
+- *Move the GitHub webhook byte bound into the stream map*: replace `webhook.stream.maxBytesGithub` with `webhook.stream.maxBytesByStream`.
+- *GitHub synchronization is incremental*: remove `HEPHAESTUS_SYNC_INCREMENTAL_ENABLED` from your configuration.
+- *Decide whether GitHub App installations need an instance admin's approval*: by default, an instance admin adopts each new installation.
+
 ## Cut over to 1.0.0
+
+The migration entry *Stop every role to cut over to 1.0.0* points to this section.
 
 :::caution[CAUTION: Changed schema]
 Do not use automatic Helm rollback for a stopped schema upgrade.

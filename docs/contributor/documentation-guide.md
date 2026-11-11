@@ -236,6 +236,7 @@ Do not put two callouts in a row.
 - Each `Screenshot` has alt text of at most 155 characters.
 - Each `Screenshot` has a light and a dark image of at most 150 KB.
 
+The gate also checks that an upgrade page in `docs/admin/` names the heading of each `.migration` note.
 In the admin and contributor guides, the gate checks on every page that a callout is a note, a tip, or a caution.
 It checks the other rules below on a page that declares its type:
 

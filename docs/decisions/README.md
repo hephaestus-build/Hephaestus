@@ -144,7 +144,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted |
 | [0068](0068-reviews-and-heph-run-on-one-agent-runtime.md) | Reviews and Heph run on one agent runtime | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
 | [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) | Practices run when they are ready and stay current by their sources | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
-| [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Accepted |
+| [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Superseded by [0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md) |
 | [0071](0071-every-user-visible-failure-is-observable.md) | Every user-visible failure is observable, through one first-party pipeline | Accepted |
 | [0072](0072-few-dependencies-owned-slivers-kept-foundations.md) | Few dependencies — own a sliver, keep a foundation | Accepted |
 | [0073](0073-product-feedback-is-worked-on-in-github.md) | Product feedback is worked on in GitHub | Accepted |
@@ -169,5 +169,6 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) | Members see activity, a workspace can publish its public work, and private practice feedback has one reader | Accepted |
 | [0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md) | A provider mirror changes only on a definitive provider answer, and a tombstone is never an erasure | Accepted |
 | [0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) | Each provider has one adapter behind a vendor-neutral SPI, and Outline is a documentation source with a link-only identity | Accepted |
+| [0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md) | 1.0 is one stopped cutover from 1.0.0-rc.1, and it keeps nothing for 0.x | Accepted |
 
 Template: [0000-template.md](0000-template.md).

@@ -231,6 +231,7 @@
 	"docs/decisions/0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md",
 	"docs/decisions/0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md",
 	"docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md",
+	"docs/decisions/0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",
