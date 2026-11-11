@@ -139,6 +139,20 @@ Thus, the web app expires its host-only twin when it writes the shared cookie.
 One case stays: an apex with workspace subdomains off keeps its own cookie.
 The docs site writes the shared cookie, and that apex keeps its own choice.
 
+## Amendment of 2026-11-10: the API answers a non-member as it answers an unknown workspace
+
+The address, the certificate, the redirect and CORS kept the driver "Nobody can probe which workspaces exist".
+The API did not: `/api/workspaces/<slug>/…` answered 404 for an unknown slug and 403 for a signed-in account without membership.
+
+A signed-in account that is not a member now gets the same 404 and the same problem body as for an unknown workspace.
+GitHub does the same for a private repository ([GitHub REST troubleshooting](https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api)).
+It answers 404 "to avoid confirming the existence of private repositories".
+GitLab answers 404 when the user is not authorized ([GitLab REST troubleshooting](https://docs.gitlab.com/api/rest/troubleshooting/)).
+
+A signed-out request still gets 401, before the workspace is looked up, so it learns nothing either.
+A member who lacks the role for an action still gets 403, because the member already knows the workspace.
+Creating a workspace still says that a slug is taken, as GitHub does for an organization name.
+
 ## Sources
 
 1. MDN, *Set-Cookie*, cookie prefixes and the `Domain` attribute: <https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie>

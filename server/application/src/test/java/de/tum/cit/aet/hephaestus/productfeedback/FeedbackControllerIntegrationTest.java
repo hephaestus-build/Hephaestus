@@ -205,7 +205,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
-    void shouldRefuseAWorkspaceReportWhenTheSenderIsNotAMember() {
+    void shouldAnswerNotFoundWhenTheSenderOfAWorkspaceReportIsNotAMember() {
         Member owner = member("feedback-owner");
         Member outsider = user("feedback-outsider");
         webTestClient
@@ -215,7 +215,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .bodyValue(Map.of("kind", "BUG", "message", "Sent into a foreign workspace"))
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
         assertThat(feedback.findAllByAccountId(outsider.accountId())).isEmpty();
     }

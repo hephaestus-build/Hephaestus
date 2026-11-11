@@ -67,7 +67,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     @WithMentorUser
-    void nonMembersAreForbiddenFromAccessingWorkspace() {
+    void shouldAnswerNotFoundWhenSignedInAccountIsNotAMember() {
         persistUser("mentor");
         User workspaceOwner = persistUser("workspace-owner");
         Workspace workspace = createWorkspace("beta-space", "Beta", "beta", AccountType.ORG, workspaceOwner);
@@ -78,12 +78,12 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
     }
 
     @Test
-    void shouldAnswerMembershipRequiredWhenSignedInAccountWithoutLinkedIdentityIsNotAMember() {
+    void shouldAnswerNotFoundWhenSignedInAccountWithoutLinkedIdentityIsNotAMember() {
         Account account = persistAccount("unlinked-visitor");
         Workspace workspace = createWorkspace(
                 "unlinked-space", "Unlinked", "unlinked", AccountType.ORG, persistUser("unlinked-owner"));
@@ -94,13 +94,14 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account.getId()))
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(ProblemDetail.class)
                 .returnResult()
                 .getResponseBody();
 
         assertThat(problem).isNotNull();
-        assertThat(problem.getTitle()).isEqualTo("Membership required");
+        assertThat(problem.getTitle()).isEqualTo("Resource not found");
+        assertThat(problem.getDetail()).contains("We could not find the workspace");
     }
 
     @Test
@@ -131,7 +132,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
         // SECURITY (A5): with auto-seed disabled (the production default), the first authenticated
         // visitor of a zero-membership workspace must NOT be silently seeded as ADMIN. A
         // non-member,
-        // non-super-admin visitor is forbidden, and no membership row is created.
+        // non-super-admin visitor gets not found, and no membership row is created.
         User visitor = persistUser("mentor");
         User workspaceOwner = persistUser("empty-membership-owner");
         Workspace workspace = createWorkspace("empty-seed", "Empty", "emptyseed", AccountType.ORG, workspaceOwner);
@@ -147,7 +148,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
 
         assertThat(workspaceMembershipRepository.findByWorkspace_IdAndId_AccountId(

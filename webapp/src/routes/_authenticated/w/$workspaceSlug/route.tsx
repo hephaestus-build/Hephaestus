@@ -22,7 +22,7 @@ import { getUserViewSession } from "@/runtime/user-view/session";
 
 /** Workspace gate: a directory layout, so every route under `w/$workspaceSlug/` inherits it. */
 // The gate answers on navigation only. A workspace revoked while a reader sits on one of its pages
-// surfaces as the server's own 403s rather than a redirect; recovering mid-session meant carrying
+// surfaces as the server's own 404s rather than a redirect; recovering mid-session meant carrying
 // the old path into another workspace, which is the navigation this route exists to prevent.
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 	// Child guards receive membership or a verified administration target at navigation.

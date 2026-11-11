@@ -734,7 +734,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Test
     @WithMentorUser
-    void nonMembersCannotAccessMembershipEndpoints() {
+    void shouldAnswerNotFoundWhenNonMemberCallsMembershipEndpoints() {
 
         persistUser("mentor");
 
@@ -748,7 +748,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isNotFound()
                 .expectBody(Void.class);
     }
 }

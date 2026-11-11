@@ -678,14 +678,14 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         @Test
         @WithMentorUser
-        void nonMemberIsRefusedFromScopedEndpoint() {
+        void shouldAnswerNotFoundWhenNonMemberCallsScopedEndpoint() {
             webTestClient
                     .get()
                     .uri("/workspaces/{slug}/practices/results", outsiderWorkspace.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden()
+                    .isNotFound()
                     .expectBody(Void.class);
         }
 
