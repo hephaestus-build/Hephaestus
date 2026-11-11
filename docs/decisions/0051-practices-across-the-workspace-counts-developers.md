@@ -1,6 +1,6 @@
 # ADR 0051: Practices across the workspace counts developers and never names one
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md)
 **Date:** 2026-10-02
 **Amended:** 2026-10-07, accepted. The page has no smallest count. *Amendment of 2026-10-07* gives the change.
 2026-10-09: standings and practices stay out of sorting and the public page. *Update — 2026-10-09* gives the limit.

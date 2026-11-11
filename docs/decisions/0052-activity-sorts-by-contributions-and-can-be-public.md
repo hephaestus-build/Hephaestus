@@ -1,6 +1,6 @@
 # ADR 0052: Workspace activity sorts people by plain counts, and a workspace can publish it
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md)
 **Date:** 2026-10-09
 **Authors:** Felix T.J. Dietrich
 **Amends:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md). Its *Update — 2026-10-09* lists the parts.

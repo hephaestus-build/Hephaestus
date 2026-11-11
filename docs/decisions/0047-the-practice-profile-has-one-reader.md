@@ -1,6 +1,6 @@
 # ADR 0047: The Practice profile has one reader
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md)
 **Date:** 2026-09-28
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md) (channel audiences),
