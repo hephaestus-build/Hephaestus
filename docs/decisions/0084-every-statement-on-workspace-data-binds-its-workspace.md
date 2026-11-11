@@ -54,8 +54,7 @@ Provider mirror rows are shared, so they cannot carry one workspace.
 8. **SQL lives in repository methods.** Spring JDBC is allowed only in `core.database`, in configuration and at the person-data boundary.
    Enforced by: `CodeQualityTest#rawSqlLivesInRepositories`.
 9. **Every workspace endpoint is a `@WorkspaceScopedController`.** Its filter resolves the slug before the controller runs. For a signed-in account, an unknown slug and a non-member get the same 404. Thus nobody can probe which workspaces exist. An object of another workspace answers 404.
-   1.0 target: on main, a non-member gets 403. No pull request delivers the change yet.
-   Enforced by: `WorkspaceScopedControllerIntegrationTest`, `WorkspaceContextFilterIntegrationTest#nonMembersAreForbiddenFromAccessingWorkspace` and `CrossTenantIsolationIntegrationTest` for each domain. `MultiTenancyArchitectureTest#dataEndpointsReceiveWorkspaceContext` checks the annotation by name only. No test calls every endpoint across workspaces.
+   Enforced by: `WorkspaceScopedControllerIntegrationTest`, `CrossTenantIsolationIntegrationTest#shouldAnswerNotFoundWhenNonMemberCallsScopedEndpoint` and `CrossTenantIsolationIntegrationTest` for each domain. `MultiTenancyArchitectureTest#dataEndpointsReceiveWorkspaceContext` checks the annotation by name only. No test calls every endpoint across workspaces.
 10. **The inspector never fails a statement by its own error.** A failed analysis lets the statement pass and counts `tenancy.parse_failure.total`.
     Enforced by: `WorkspaceStatementInspectorTest#backslashEscapedPostgresCastDoesNotPropagate`. No test asserts the counter.
 

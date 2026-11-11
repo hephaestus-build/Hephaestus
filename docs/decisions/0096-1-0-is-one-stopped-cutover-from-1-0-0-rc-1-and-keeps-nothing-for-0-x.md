@@ -79,7 +79,7 @@ The rows below are what 1.0.0 adds. "Main" is a note in `.migration/` on `main`.
 | `turns-on-agent-runs` | Stop every role. `hephaestus.mentor.turn.*` keys move to `hephaestus.agent.capacity.*`. | 1.0 target: [#4072](https://github.com/hephaestus-build/Hephaestus/pull/4072) |
 | `review-job-runtime-removed` | Remove `AGENT_POLL_INTERVAL`, `AGENT_CLAIM_BATCH_SIZE` and the review Job metrics. | 1.0 target: [#4082](https://github.com/hephaestus-build/Hephaestus/pull/4082) |
 | `remove-script-model-purposes` | Stop every role. Decisions, Embeddings and Rerank connections go. | 1.0 target: [#4075](https://github.com/hephaestus-build/Hephaestus/pull/4075) |
-| `permit-bands` | Change queries on the `class` and `queue` labels to `band`. | 1.0 target: [#4095](https://github.com/hephaestus-build/Hephaestus/pull/4095) |
+| [`permit-bands`](../../.migration/permit-bands.md) | Change queries on the `class` and `queue` labels to `band`. | On main ([#4095](https://github.com/hephaestus-build/Hephaestus/pull/4095)) |
 | `problem-response-wire` | Read problem fields from the top level of the body. | 1.0 target: [#4089](https://github.com/hephaestus-build/Hephaestus/pull/4089) |
 | Membership auto-seeder | Remove `hephaestus.workspace.auto-seed-membership`. The chart never set it, so no note. | 1.0 target: [#4111](https://github.com/hephaestus-build/Hephaestus/pull/4111) |
 | PostgreSQL inbox, no NATS ([ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md)) | Drain the streams. Remove `nats.*`, `webhook.stream.*` and `config.consumerInactiveThreshold`. | Decided, not shipped. No pull request delivers it yet. |

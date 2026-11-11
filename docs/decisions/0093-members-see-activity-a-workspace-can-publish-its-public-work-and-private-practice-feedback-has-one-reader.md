@@ -68,7 +68,7 @@ This ADR states at 1.0 who sees what, as rules. Rule 9 records a product decisio
     Enforced by: `SecurityFilterChainRuntimeIntegrationTest#shouldRejectEveryAnonymousHandlerOutsideTheExplicitAllowlist` with `AnonymousEndpointAllowlist`, and `AdvancedArchitectureTest#shouldNameOnlyExistingClassesInTheAnonymousEndpointAllowlist`.
 16. **Each public response sends `Cache-Control: no-store`,** and `X-Robots-Tag: noindex` unless the admin allows search engines. Anonymous reads share a limit of 60 for each minute and client IP. An unknown, unpublished or inactive workspace gives the same not-found answer.
     Enforced by: `ActivityControllerIntegrationTest#shouldExposeRobotsChoiceWithoutInternalIdentifiersAndSupportHead`, `#shouldReturnTheSameErrorForUnknownOffAndInactiveWorkspaces` and `AuthRateLimitFilterTest#shouldShareThePublicActivityLimitAcrossWorkspaceSlugsButNotClientIps`.
-    1.0 target: the workspace API answers a signed-in non-member 404, as for an unknown slug. On main it answers 403. No pull request delivers it yet.
+    The workspace API answers a signed-in non-member 404, as for an unknown slug ([#4163](https://github.com/hephaestus-build/Hephaestus/pull/4163)).
 17. **Publication has no data-quality gate.** The admin guide asks the operator to check the [activity history repair](../admin/activity-history-repair.mdx) before publication. It also advises course workspaces to stay private.
     Not enforced. The operator owns both checks.
 
@@ -112,7 +112,7 @@ This ADR states at 1.0 who sees what, as rules. Rule 9 records a product decisio
 
 ## Confirmation
 
-Each rule names its test or says `Not enforced.` Rules 5, 12, 16 (non-member answer) and 20 are 1.0 targets.
+Each rule names its test or says `Not enforced.` Rules 5, 12 and 20 are 1.0 targets.
 No architecture rule covers rules 18 and 24. Code review catches a user parameter on a Practice profile handler and a practice field on an activity DTO.
 
 ## Revisit trigger

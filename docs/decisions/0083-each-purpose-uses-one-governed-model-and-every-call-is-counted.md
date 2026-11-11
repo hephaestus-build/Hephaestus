@@ -77,7 +77,8 @@ A rule that main does not satisfy yet says "1.0 target" and names the pull reque
     Enforced by: `LlmBudgetServiceTest#theInstancePurseIsBlockedOnlyWhenExhaustedOrUnverifiable` and `#theWorkspaceFundedPurseIsBlockedOnlyWhenExhaustedOrUnverifiable`.
 16. **Three gates.** Submission and claim read the ledger and decide if work may start. A review over the cap waits. It is cancelled if it still waits 7 days after submission. The proxy judges each call before it waits for capacity and again before dispatch. It adds the settled spend of the workspace's running work to the ledger, for each purse. It caches the ledger read for at most 5 seconds. No call reserves money ahead. [Workspace budgets and alerting](../admin/production-setup.mdx#workspace-budgets-and-alerting) states the overshoot bound and what it excludes.
     Enforced by: `LlmUsageLedgerIntegrationTest#submitIsBlockedForAnExhaustedWorkspace`, `ReviewJobExecutorTest#shouldCancelOldBudgetHeldWorkEvenAfterItsAvailabilityWasMoved`, `ProxyBudgetGateTest#theRunningSpendIsFreshEvenWhenTheLedgerVerdictIsCached`, and `LlmProxyIntegrationTest#shouldRefuseACallThatTheCapOvertookWhileItWaitedForCapacity` and `#shouldCountWhatRunningAttemptsSpentOncePerPurseUntilTheyEnd`.
-17. **Model calls wait in bands, with a fair share for each workspace,** as [ADR 0079](0079-one-agent-system.md) § Permits decides. 1.0 target: [#4095](https://github.com/hephaestus-build/Hephaestus/pull/4095).
+17. **Model calls wait in bands, with a fair share for each workspace,** as [ADR 0079](0079-one-agent-system.md) § Permits decides.
+    Enforced by: `LlmCallPermitsIntegrationTest`.
 18. **Where the proxy runs and which process holds keys:** [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) decision 5.
 
 ## What changed, and why

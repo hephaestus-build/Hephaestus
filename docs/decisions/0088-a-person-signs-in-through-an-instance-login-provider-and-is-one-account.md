@@ -66,7 +66,7 @@ A rule that main does not satisfy yet says "1.0 target" and names the pull reque
 13. **Admin work needs a passkey.** In production, instance administration needs one by default. A workspace owner can require one for workspace administration. Each challenge is a single-use PostgreSQL row. Recovery replaces credentials and grants no admin access. [Passkeys](../admin/passkeys.mdx) owns the procedure.
     Enforced by: `PasskeyLifecycleIntegrationTest#shouldDenyOAuthOnlyInstanceAdminWhileKeepingEnrollmentAvailable`, `#shouldConsumeEnrollmentChallengeEvenWhenCredentialIsInvalid`, `#shouldRestrictRecoveryAndConsumeCodesOnce` and `AdminPasskeyScopeArchitectureTest`.
 14. **High-risk instance-admin actions and identity links need a recent sign-in.** The window is `hephaestus.auth.step-up-max-age`. A refusal is a 403 with `step_up_required`. [The recent sign-in gate](../contributor/instance-admin.md#recent-sign-in-gate) has the threat model.
-    1.0 target: a change to or from OWNER also asks for it in [#4083](https://github.com/hephaestus-build/Hephaestus/pull/4083).
+    A change that grants or removes the workspace owner role also needs it ([#4083](https://github.com/hephaestus-build/Hephaestus/pull/4083)).
     Enforced by: `RecentSignInByDefaultArchTest` and `StepUpGateIntegrationTest#aStaleAdminIsAskedToConfirmAccessAndTheRoleIsUnchanged`.
 15. **The last active instance admin stays.** Nobody demotes the last one or themselves. A demotion revokes the sessions of that account.
     Enforced by: `AccountAdminRoleIntegrationTest#concurrentDemotionsCannotDrainTheRoleToZero`, `#cannotRevokeYourOwnAdminEvenWhenAnotherAdminExists` and `AccountServiceTest#demotingAnotherAdminSucceedsWhileMoreAdminsRemain`.
