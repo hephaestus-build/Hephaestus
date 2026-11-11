@@ -217,7 +217,7 @@ jobs:
         if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
-          name: "Test Results - ${{ env.QUALITY_LEG }}"
+          name: "Test Results - ${{ env.QUALITY_LEG == 'webapp' && 'Webapp' || 'Extension' }}"
           path: "${{ env.QUALITY_LEG }}/test-results/junit-*.xml"
           reporter: java-junit
           list-suites: failed
@@ -321,7 +321,7 @@ jobs:
     steps: *quality-steps
 
   tooling-tests-1:
-    name: Tooling and docs (tests 1 of 2)
+    name: Tooling and docs tests (1 of 2)
     if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -338,7 +338,7 @@ jobs:
     steps: *quality-steps
 
   tooling-tests-2:
-    name: Tooling and docs (tests 2 of 2)
+    name: Tooling and docs tests (2 of 2)
     if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -519,7 +519,7 @@ jobs:
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
-          name: "Test Results - Webapp Stories"
+          name: "Test Results - Webapp stories"
           path: "webapp/test-results/junit-storybook.xml"
           reporter: java-junit
           list-suites: failed

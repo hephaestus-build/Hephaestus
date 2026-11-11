@@ -16,7 +16,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-
   build:
     name: "Newest main build"
     runs-on: ubuntu-latest
@@ -54,6 +53,7 @@ jobs:
       arm64: true
       backup-drill: true
 
+  # Two reviews of a large repository run against main's agent image with a credential-free model stand-in.
   footprint:
     name: "Sandbox footprint"
     needs: build
@@ -148,7 +148,6 @@ jobs:
           retention-days: 30
 
   # A scheduled run has no pull request to fail, so each failed job reports on its own tracking issue.
-
   report:
     name: "Report a failure"
     needs: [build, Kubernetes, footprint]
@@ -165,7 +164,6 @@ jobs:
           COMMIT: ${{ needs.build.outputs.commit }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BUILD: ${{ needs.build.result }}
-          CHART: ${{ needs.Kubernetes.result }}
           KUBERNETES: ${{ needs.Kubernetes.result }}
           FOOTPRINT: ${{ needs.footprint.result }}
         run: |
@@ -180,7 +178,7 @@ jobs:
               gh issue create -R "$REPOSITORY" --title "$title" --body "$body"
             fi
           }
-          if [ "$BUILD" = failure ] || [ "$KUBERNETES" = failure ] || [ "$CHART" = failure ]; then
+          if [ "$BUILD" = failure ] || [ "$KUBERNETES" = failure ]; then
             report "The nightly Kubernetes run failed" \
               "The nightly cluster run on \`${COMMIT:-no commit}\` failed: $RUN_URL"
           fi

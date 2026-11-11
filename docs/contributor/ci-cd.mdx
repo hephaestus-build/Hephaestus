@@ -61,15 +61,21 @@ The run uses stage names and static worker names:
 ```text
 Changes
 Workflow lint
-Security / Dependencies, secrets and policy, Image advisories, Pinned upstream images
-Quality / Server, Webapp, Extension, Tooling and docs, Tooling and docs (tests 1 of 2), Tooling and docs (tests 2 of 2), Windows, Clean install, Webapp stories
-Build / Server package, Generated API, Database migrations, PostgreSQL drills
+Security / Dependencies, secrets and policy
+Image advisories
+Pinned upstream images
+Quality / Server, Webapp, Extension, Tooling and docs, Tooling and docs tests (1 of 2), Tooling and docs tests (2 of 2), Windows, Clean install, Webapp stories
+Server package
+Build / Generated API, Database migrations, PostgreSQL drills
 Server tests / Unit, Architecture, Integration (review), Integration (1 of 8) … Integration (8 of 8)
 Browser tests / Webapp, Extension
 Images / linux/amd64, linux/arm64, Manifest, Tag unchanged images
 Kubernetes / k3s 1.37 amd64, k3s 1.35 amd64, k3s 1.35 arm64, kind 1.35 Calico
 CI Status Gate
 ```
+
+Server package, Image advisories and Pinned upstream images are independent top-level jobs.
+The package supplies the artifact to its consumers before their stages can start.
 
 A path-filtered stage can be skipped.
 A selected stage shows its workers directly, including static names for skipped workers.
@@ -113,11 +119,11 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Build → PostgreSQL drills                                   | `test:postgres-restore`, then `test:postgres-pitr`, in one job beside `databaseTest`. **Re-run failed jobs** repeats both drills                                                                          | `vp run test:postgres-restore`, `test:postgres-pitr`                     |
 | Browser tests → Webapp                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
 | Browser tests → Extension                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                                           | `vp run test:extension:e2e`                                              |
-| Test → Unit, Architecture, Integration | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
+| Server tests → Unit, Architecture, Integration | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
 | Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
-| Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, changelog immutability and compatibility guards, legacy-reference guards                                                            | —                                                                        |
+| Security → Dependencies, secrets and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, changelog immutability and compatibility guards, legacy-reference guards                                                            | —                                                                        |
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze, [public contract](#public-contract-gate)                                                                                                                     | `vp run gate:changesets`, `gate:public-contract`                                                 |
-| Docker → Images, Tag unchanged images                                   | One build job per platform builds every image of the run and scans it. The Dockerfile images use `docker buildx bake`. The Server image uses `pack build` from the packaged JAR. One manifest job merges, attests and signs them. Aliases for unchanged images           | —                                                                        |
+| Images → linux/amd64, linux/arm64, Manifest, Tag unchanged images                                   | One build job per platform builds every image of the run and scans it. The Dockerfile images use `docker buildx bake`. The Server image uses `pack build` from the packaged JAR. One manifest job merges, attests and signs them. Aliases for unchanged images           | —                                                                        |
 | Workflow lint                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The title, body, and every commit message contain no `Claude-Session:` trailer, "Generated with" line, or session link (a `Co-authored-by:` trailer is allowed) | —                                                                        |
 
@@ -402,7 +408,8 @@ changesets rather than adding one. [Release management](./release-management.mdx
 The queue removes an entry only when a required check fails.
 `CI Status Gate` needs every leg, so it cannot fail before the slowest leg ends.
 Two rules end a failed merge group early and free its runners.
-Neither rule applies to a pull request, which still reports the failure of every leg.
+Pull requests keep independent legs running after failure.
+The shared Security scan is a prerequisite on every event, so its failure blocks dependent work.
 
 **A failed worker cancels the run.**
 Each build, test and quality worker has a dependent cancel job that runs if the worker fails in a merge group.
@@ -708,7 +715,7 @@ The integration job adds it for every shard except `review`.
 
 | Tier | Jobs |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Fast (pull request and queue) | Changes, the quality legs, unit and architecture tests, the `review` integration shard, packaging, generated-artifact drift, [the images it needs](#the-preview-label), Security, Changesets, Workflow lint |
+| Fast (pull request and queue) | Changes, the quality legs, unit and architecture tests, the `review` integration shard, packaging, generated-artifact drift, [the images it needs](#the-preview-label), Security, Release notes, Workflow lint |
 | Queue (merge group, push, dispatch) | the other integration shards, the database contract tests, the PostgreSQL drills, webapp and extension E2E |
 
 Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
@@ -800,12 +807,12 @@ should have caught. Then run the queue tier on pull requests again: change `queu
 
 A layer of a stack is a pull request whose base is another pull request's branch.
 It never merges on its own: it enters the queue as part of its stack, and the merge group runs everything.
-Thus, such a layer runs the **light tier**: `Detect changes`, the quality legs except Windows and Stories, Security, Changesets, Actionlint and Zizmor.
+Thus, such a layer runs the **light tier**: `Changes`, the quality legs except Windows and Webapp stories, Security, Release notes and Workflow lint.
 These are format, lint, types, prose and the quality legs' own tests.
 It packages no server, so it runs no server suite, no artifact gate, no image build and no cluster leg.
 `CI Status Gate` passes on that result.
 
-`Detect changes` reads the base from the pull request when it runs, not from the event, and publishes `light-tier`.
+`Changes` reads the base from the pull request when it runs, not from the event, and publishes `light-tier`.
 The `ci:full` label and a release candidate run the full tier on a layer too.
 An unreadable pull request also runs the full tier.
 
@@ -1163,7 +1170,7 @@ Right after a merge, that run is still building, so the pull request builds ever
   same [concurrency group](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency):
   `cancel-in-progress: false` protects running work, not every queued commit. Post-merge verification
   must use the actual completed run for the converged main head, not infer success from this setting.
-  GitHub's native `queue: max` can retain more pending runs, but the required Actionlint parser
+  GitHub's native `queue: max` can retain more pending runs, but the Workflow lint parser
   [does not yet support it](https://github.com/rhysd/actionlint/issues/657). Adopt it when a supported
   validator release is available. Do not suppress workflow syntax checks or add a custom queue.
 - `cicd.yml` gives each push to `main` a lane of its own, so no push run waits for or replaces
@@ -1253,7 +1260,7 @@ The identity check walks every GraphQL commit page. The attribution check reads 
 Use GitHub's organization-level [Actions metrics](https://docs.github.com/en/actions/concepts/metrics)
 for workflow and job run time, queue time, failure rate, and runner usage.
 `CI Status Gate` evaluates every direct prerequisite and the required release evidence preflight.
-It publishes the required commit status without checking out source.
+It publishes the separate commit status without checking out source.
 Its logs and local summary retain each prerequisite result.
 A local summary write failure does not change the verdict.
 

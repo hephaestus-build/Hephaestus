@@ -12,7 +12,8 @@ type Api = (path: string) => Promise<unknown>;
 /** A nightly run older than this is no evidence for a release. */
 export const maxAgeHours = 48;
 
-/** The nightly jobs that qualify the cluster; the sandbox footprint benchmark is not one. */
+/** The nightly jobs that qualify the cluster; the sandbox footprint benchmark is not one.
+ * Keep Chart for runs still inside the admission window from before lint joined its consumer. */
 function isClusterJob(name: string): boolean {
 	return (
 		name === "Newest main build" ||

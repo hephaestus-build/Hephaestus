@@ -140,7 +140,7 @@ container and without running one.
   reference is *derived* rather than assumed to exist.
 - **Previews cannot always derive.** A preview runs at `SOURCE_COMMIT`, the pull request's head
   commit, so deriving at all requires `agent-pi` to carry a head-SHA tag — which is why
-  `ci-docker-build.yml` now publishes one, as `application-server` already did. Even so, `agent-pi` is
+  `reusable-docker-build.yml` now publishes one, as `application-server` already did. Even so, `agent-pi` is
   not built for a pull request that touches neither `docker/agents/**` nor a workflow, so a preview
   exercising the sandbox from any other pull request must name the agent image explicitly. That
   failure is louder than the silence it replaces, but it is not a refusal: the reference is a
@@ -245,7 +245,7 @@ container and without running one.
 - `AgentImageProperties`, `AgentImageReferenceGuard`, `AgentImagePinGuard`, `AgentImageContractVerifier`
 - `SandboxLayout.RUNTIME_CONTRACT_VERSION`, `SandboxLayout.NODE_MAJOR`, `SandboxLayout.PI_SDK_MAJOR`,
   `docker/agents/pi/Dockerfile`
-- `ci-docker-build.yml` (`agent-pi-build`'s head-SHA tag, which is what a preview derives against)
+- `reusable-docker-build.yml` (`agent-pi-build`'s head-SHA tag, which is what a preview derives against)
 - `docker/compose.app.yaml` (`release-pin-fetcher`, and the `HEPHAESTUS_AGENT_IMAGE_REFERENCE`
   passthrough it shares with `docker/compose.core.yaml` and `docker/preview/compose.app.yaml`),
   [Release image lock](../admin/release-image-lock.md)

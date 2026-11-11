@@ -220,11 +220,10 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
 
 ## CI validation
 
-1. **Migration-chain replay, schema drift and ERD** — **CI / Build** workflow, job *App Server: Generated
-   artifacts*. `vp run db:check-drift` applies the full `master.xml` chain to an empty database from the repository's PostgreSQL image (`docker/postgres`).
+1. **Migration-chain replay, schema drift and ERD** — **CI / Build** workflow, job *Generated API*. `vp run db:check-drift` applies the full `master.xml` chain to an empty database from the repository's PostgreSQL image (`docker/postgres`).
    It compares the result with the JPA entities. A changelog that does not parse or apply fails here. `vp run db:generate-erd-docs`
    then has to leave `docs/contributor/erd/` unchanged.
-2. **Changelog immutability** — Security workflow, job *Dependencies, secrets, and policy*, step
+2. **Changelog immutability** — Security workflow, job *Dependencies, secrets and policy*, step
    *Changelog immutability guard*. A git diff from the event's base commit checks released history and new migration order.
    Pull requests and merge groups both run it.
    A pull request run does not repeat when its base advances.

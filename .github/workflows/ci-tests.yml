@@ -30,6 +30,7 @@ on:
 permissions: {}
 
 env:
+  INTEGRATION_COUNT: "8"
   SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
   # The suites run the package job's compiled classes. docs/contributor/ci-cd.mdx § Build once says why.
   ORG_GRADLE_PROJECT_packagedServer: "true"
@@ -69,7 +70,7 @@ jobs:
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
-          name: "Test Results - App Server ${{ env.TEST_TIER }}"
+          name: "Test Results - Server ${{ env.TEST_TIER }}"
           path: "server/application/build/test-results/*/TEST-*.xml"
           reporter: java-junit
           list-suites: failed
@@ -138,7 +139,7 @@ jobs:
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
-          name: "Test Results - App Server Integration (${{ env.INTEGRATION_SHARD }})"
+          name: "Test Results - Integration (${{ env.INTEGRATION_SHARD == 'review' && 'review' || format('{0} of {1}', env.INTEGRATION_SHARD, env.INTEGRATION_COUNT) }})"
           path: "server/application/build/test-results/integrationTest/TEST-*.xml"
           reporter: java-junit
           list-suites: failed

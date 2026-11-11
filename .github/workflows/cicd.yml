@@ -710,6 +710,7 @@ jobs:
               - 'scripts/check-gradle-verification-metadata.ts'
 
   Changesets:
+    name: "Release notes"
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/verify-changesets.yml
     permissions:
@@ -803,7 +804,7 @@ jobs:
   # Image policy has one advisory set per attempt. Failed-job reruns retain the producer's
   # artifact ID; rerunning every job creates a new snapshot. Java identification is separate.
   vulnerability-database:
-    name: Security / Image advisories
+    name: Image advisories
     needs: [detect-changes]
     if: |
       needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' &&
@@ -849,7 +850,7 @@ jobs:
   # vulnerabilities are checked before release evidence is generated. Only this scan reads the
   # advisory snapshot, so Security starts without waiting for it.
   upstream-images:
-    name: Security / Pinned upstream images
+    name: Pinned upstream images
     needs: [detect-changes, vulnerability-database]
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
@@ -932,7 +933,7 @@ jobs:
   # publishes every image packages even when its diff holds no code, such as a bot's pin bump in
   # ci-kubernetes.yml, which carries no changeset and starts the Kubernetes legs.
   server-package:
-    name: Build / Server package
+    name: Server package
     needs: [detect-changes, Security]
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.Security.result == 'success' || needs.Security.result == 'skipped') &&
@@ -1298,20 +1299,6 @@ jobs:
           MERGE_GROUP: ${{ github.event_name == 'merge_group' }}
         run: |
           set -o pipefail
-          echo "Changes: ${{ needs.detect-changes.result }}"
-          echo "Workflow lint: ${{ needs.workflow-lint.result }}"
-          echo "Quality:        ${{ needs.Quality.result }}"
-          echo "Server package:        ${{ needs.server-package.result }}"
-          echo "Browser tests: ${{ needs.Browser-tests.result }}"
-          echo "Build:          ${{ needs.Build.result }}"
-          echo "Upstream:       ${{ needs.upstream-images.result }}"
-          echo "Security:       ${{ needs.Security.result }}"
-          echo "Server tests:           ${{ needs.Test.result }}"
-          echo "Changesets:     ${{ needs.Changesets.result }}"
-          echo "Images:         ${{ needs.Docker.result }}"
-          echo "Kubernetes:     ${{ needs.Kubernetes.result }}"
-          echo "Preflight:      ${{ needs.Release-preflight.result }}"
-          echo "Upgrade:        ${{ needs.Database-upgrade.result }}"
           echo "Release candidate: ${{ needs.detect-changes.outputs.release-candidate == 'true' }}"
 
           # Reporting uses only native results. A local summary write cannot change their verdict.
@@ -1320,7 +1307,23 @@ jobs:
               echo '## Required CI results'
               echo '| Job | Result |'
               echo '| --- | --- |'
-              jq -r 'to_entries[] | "| " + .key + " | " + (.value.result // "Unavailable" | tostring) + " |"' <<< "$NEEDS"
+              jq -r '{
+                  "detect-changes": "Changes",
+                  "vulnerability-database": "Image advisories",
+                  "workflow-lint": "Workflow lint",
+                  "Quality": "Quality",
+                  "server-package": "Server package",
+                  "Build": "Build",
+                  "Browser-tests": "Browser tests",
+                  "upstream-images": "Pinned upstream images",
+                  "Security": "Security",
+                  "Test": "Server tests",
+                  "Changesets": "Release notes",
+                  "Docker": "Images",
+                  "Kubernetes": "Kubernetes",
+                  "Release-preflight": "Release evidence preflight",
+                  "Database-upgrade": "Seeded upgrade from the last release"
+                } as $names | to_entries[] | "| " + $names[.key] + " | " + (.value.result // "Unavailable" | tostring) + " |"' <<< "$NEEDS"
             } >> "$GITHUB_STEP_SUMMARY" || echo '::warning::CI summary unavailable'
           fi
 
@@ -1458,7 +1461,8 @@ jobs:
   # starts when that leg ends. `always()` is required: without a status function, GitHub adds
   # `success()`, which is false after a failed leg. `CI Status Gate` still runs after the cancel and
   # fails. These jobs are not in its `needs`: they only end the run early and are not part of the verdict.
-  # Pull requests keep every leg's failures. docs/contributor/ci-cd.mdx § Fail fast in the merge queue.
+  # Pull requests keep independent legs running after failure; the shared Security prerequisite
+  # blocks dependent work on every event. docs/contributor/ci-cd.mdx § Fail fast in the merge queue.
   fail-fast-vulnerability-database:
     name: Stop the merge group early
     needs: [vulnerability-database]

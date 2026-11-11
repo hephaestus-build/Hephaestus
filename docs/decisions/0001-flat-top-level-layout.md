@@ -62,7 +62,7 @@ Corrects § Decision and § Consequences on where the code lives and what is shi
   [ADR 0032](0032-generated-clients-build-boundary.md) decided and
   [ADR 0043](0043-gradle-java-build.md) builds, not the organisational nesting this ADR removed.
 - The repository root also carries `scripts/`, `docker/` and `load-tests/`.
-- Four images are published (`.github/workflows/cicd.yml`, `ci-docker-build.yml`):
+- Four images are published (`.github/workflows/cicd.yml`, `reusable-docker-build.yml`):
   `application-server` from `server/`, `webapp` from `webapp/Dockerfile`, `postgres` from
   `docker/postgres/Dockerfile` and `agent-pi` from `docker/agents/pi/Dockerfile`; the two under
   `docker/` are build contexts, not top-level siblings.

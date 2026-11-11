@@ -1,7 +1,10 @@
+// The old numeric layout had eight shards; historical reports retain its denominator.
+const historicalNumericShards = 8;
+
 /** Map historical run names to the current sidebar vocabulary for evidence and time-window reports. */
 export function canonicalCiJobName(name: string): string {
 	const renamed: Record<string, string> = {
-		"App Server: Package": "Build / Server package",
+		"App Server: Package": "Server package",
 		"Build / App Server: Generated artifacts": "Build / Generated API",
 		"Build / App Server: Database": "Build / Database migrations",
 		"Build / App Server: PostgreSQL drills": "Build / PostgreSQL drills",
@@ -38,7 +41,7 @@ export function canonicalCiJobName(name: string): string {
 			integration.groups.caller === integration.groups.shard)
 	) {
 		const shard = integration.groups.shard;
-		return `Server tests / Integration (${/^\d+$/u.test(shard) ? `${shard} of 8` : shard})`;
+		return `Server tests / Integration (${/^\d+$/u.test(shard) ? `${shard} of ${historicalNumericShards}` : shard})`;
 	}
 	const image =
 		/^Docker \/ Images(?: \(linux\/(?<caller>amd64|arm64)\))? \/ Build linux\/(?<arch>amd64|arm64) images$/u.exec(

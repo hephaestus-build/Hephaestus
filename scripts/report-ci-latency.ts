@@ -44,6 +44,8 @@ export function selectLatencyRuns(
 }
 
 // The sampling window still holds runs from earlier integration shard layouts.
+// The numeric legacy layout had eight shards, independently of the current partition.
+const historicalNumericShards = 8;
 const INTEGRATION_LAYOUTS = [
 	["providers-and-startup", "application"],
 	["providers", "runtime-and-startup", "application"],
@@ -72,7 +74,7 @@ export function isFullVerification(jobs: readonly { name: string }[]) {
 				shards.length === integrationJobs.length &&
 				shards.every((shard) =>
 					names.has(
-						`Server tests / Integration (${/^\d+$/u.test(shard) ? `${shard} of 8` : shard})`,
+						`Server tests / Integration (${/^\d+$/u.test(shard) ? `${shard} of ${historicalNumericShards}` : shard})`,
 					),
 				),
 		)

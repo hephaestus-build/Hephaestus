@@ -6,8 +6,9 @@ import { committedShards } from "./lib/integration-durations.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 
+const shardCount = committedShards();
 const requiredJobs = [
-	"Build / Server package",
+	"Server package",
 	"Build / Generated API",
 	"Build / Database migrations",
 	"Build / PostgreSQL drills",
@@ -18,8 +19,8 @@ const requiredJobs = [
 	"Server tests / Architecture",
 	"Server tests / Integration (review)",
 	...Array.from(
-		{ length: committedShards() },
-		(_, index) => `Server tests / Integration (${index + 1} of 8)`,
+		{ length: shardCount },
+		(_, index) => `Server tests / Integration (${index + 1} of ${shardCount})`,
 	),
 	"Security / Dependencies, secrets and policy",
 	"CI Status Gate",

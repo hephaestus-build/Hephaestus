@@ -1760,7 +1760,7 @@ void describe("CI contract", () => {
 								assert.ok(context instanceof data.Dictionary);
 								const failed =
 									status === "failure" ||
-									(name === "Test Results - Webapp Stories" && tests === "failure") ||
+									(name === "Test Results - Webapp stories" && tests === "failure") ||
 									(name === "Test Results - Chromatic" && chromatic === "failure");
 								assert.equal(
 									new Evaluator(parsed, context).evaluate().coerceString(),
@@ -1917,7 +1917,6 @@ void describe("CI contract", () => {
 	void test("runs the integration tier once, under the status gate, off an untemplated command", async () => {
 		const source = await readFile(".github/workflows/ci-tests.yml", "utf8");
 		const workflow = parseDocument(source);
-		const integration = job(source, "server-integration");
 		const caller = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		assert.equal(caller.hasIn(["jobs", "Test", "strategy"]), false);
 		assert.equal(workflow.hasIn(["jobs", "server-integration", "strategy"]), false);
@@ -1957,9 +1956,9 @@ void describe("CI contract", () => {
 			"The selector reaches Gradle through the environment, never through a run: script",
 		);
 		assert.equal((source.match(/run: vp run test:server:integration/gu) ?? []).length, 1);
-		assert.match(
-			integration,
-			/Test Results - App Server Integration \(\$\{\{ env.INTEGRATION_SHARD \}\}\)/u,
+		assert.equal(
+			namedStep(workflow, jobPath, "Upload test results").getIn(["with", "name"]),
+			"Test Results - Integration (${{ env.INTEGRATION_SHARD == 'review' && 'review' || format('{0} of {1}', env.INTEGRATION_SHARD, env.INTEGRATION_COUNT) }})",
 		);
 		const tasks = await readFile("vite.config.ts", "utf8");
 		assert.match(
@@ -1969,7 +1968,7 @@ void describe("CI contract", () => {
 		assert.match(tasks, /"test:server:integration": run\([\s\S]*?:application:integrationTest/u);
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		assert.match(job(orchestrator, "Test"), /uses: \.\/\.github\/workflows\/ci-tests.yml/u);
-		assert.match(job(orchestrator, "all-ci-passed"), /needs\.Test\.result/u);
+		assert.ok(needsOf(parseDocument(orchestrator), "all-ci-passed").includes("Test"));
 	});
 
 	void test("every Gradle build installs the trusted runtime compiler first", async () => {
@@ -5875,7 +5874,7 @@ void test("a cluster leg is named for its distribution, minor and architecture, 
 				.map((leg) => leg.minor),
 		),
 	];
-	const images: unknown = JSON.parse(String(workflow.getIn(["jobs", "k3d", "env", "K3S_IMAGES"])));
+	const images: unknown = JSON.parse(String(workflow.getIn(["env", "K3S_IMAGES"])));
 	assert.ok(typeof images === "object" && images !== null);
 	assert.deepEqual(Object.keys(images), minors);
 	for (const [minor, image] of Object.entries(images)) {
@@ -6572,10 +6571,31 @@ void test("the CI outline has static names and one reusable level, including ski
 	const root = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	const jobs = asRecord(asRecord(root.toJSON(), "CI/CD").jobs, "jobs");
 	assert.equal(asRecord(jobs["all-ci-passed"], "gate").name, "CI Status Gate");
+	assert.equal(
+		asRecord(jobs["all-ci-passed"], "gate").if,
+		"always()",
+		"the native superseded-run policy stays unchanged",
+	);
+	assert.equal(jobs["start-ci"], undefined, "the status-only admission design was rejected");
+	const gateScript = runScript(root, ["jobs", "all-ci-passed"], "Evaluate CI results");
+	const labels = /jq -r '(\{[\s\S]*?\}) as \$names/u.exec(gateScript)?.[1];
+	assert.ok(labels, "the summary names every native result with its sidebar name");
+	const names = asRecord(JSON.parse(labels), "summary names");
+	assert.deepEqual(Object.keys(names).toSorted(), needsOf(root, "all-ci-passed").toSorted());
+	for (const [key, label] of Object.entries(names))
+		assert.equal(label, asRecord(jobs[key], key).name ?? key, key);
+	const suites = parseDocument(await readFile(".github/workflows/ci-tests.yml", "utf8"));
+	assert.equal(suites.getIn(["env", "INTEGRATION_COUNT"]), String(committedShards()));
+	for (let index = 1; index <= committedShards(); index += 1) {
+		assert.equal(
+			suites.getIn(["jobs", `server-integration-${index}`, "name"]),
+			`Integration (${index} of ${committedShards()})`,
+		);
+	}
 	for (const [key, definition] of Object.entries(jobs)) {
 		const caller = asRecord(definition, key);
 		const name = asString(caller.name ?? key, "caller name");
-		assert.doesNotMatch(name, /\$\{\{/u, key);
+		assert.doesNotMatch(name, /\$\{\{| \/ /u, key);
 		if (typeof caller.uses !== "string") continue;
 		assert.equal(caller.strategy, undefined, `${key}: a caller matrix repeats its stage`);
 		const callee = asRecord(
