@@ -41,7 +41,11 @@ import { validateManifest } from "./verify-release-evidence.ts";
 
 /** Expand native YAML aliases before inspecting a worker's steps. */
 function parseDocument(source: string) {
-	return parseYamlDocument(stringify(parseYamlDocument(source).toJS({ maxAliasCount: -1 })));
+	return parseYamlDocument(
+		stringify(parseYamlDocument(source).toJS({ maxAliasCount: -1 }), {
+			aliasDuplicateObjects: false,
+		}),
+	);
 }
 
 void test("private dependency and platform reports run only on the default branch", async () => {
@@ -6631,11 +6635,14 @@ void test("chart lint runs once in its latest-k3s consumer with its parser depen
 			.filter(
 				(step) =>
 					step.if === undefined ||
-					expandExpressions(`\${{ ${String(step.if).replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "")} }}`, {
-						env: environment,
-						inputs: {},
-						github: { event_name: "pull_request" },
-					}) === "true",
+					expandExpressions(
+						`\${{ ${asString(step.if, "step condition").replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "")} }}`,
+						{
+							env: environment,
+							inputs: {},
+							github: { event_name: "pull_request" },
+						},
+					) === "true",
 			);
 		const toolchain = selected.filter((step) => step.uses === "./.github/actions/setup-toolchain");
 		assert.equal(toolchain.length, 1, key);
@@ -6696,4 +6703,22 @@ void test("merged workflow lint retains Zizmor after an Actionlint failure and i
 		namedStep(workflow, worker, "Validate workflows with GitHub's parser").get("if"),
 		"needs.detect-changes.outputs.should_skip != 'true'",
 	);
+});
+
+void test("the prepull drill stays on the latest amd64 consumer after flattening cluster jobs", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
+	for (const key of ["k3d", "k3d-1-35-amd64", "k3d-1-35-arm64"]) {
+		const step = namedStep(
+			workflow,
+			["jobs", key],
+			"Start a sandbox on a new node without an image pull",
+		);
+		const environment = workflow.getIn(["jobs", key, "env"]);
+		assert.ok(isMap(environment));
+		assert.equal(
+			expandExpressions(step.get("if"), { env: environment.toJSON() }),
+			String(key === "k3d"),
+		);
+		assert.match(String(step.get("run")), /node scripts\/sandbox-prepull-drill\.ts/u);
+	}
 });

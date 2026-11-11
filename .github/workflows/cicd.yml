@@ -1298,18 +1298,17 @@ jobs:
           MERGE_GROUP: ${{ github.event_name == 'merge_group' }}
         run: |
           set -o pipefail
-          echo "detect-changes: ${{ needs.detect-changes.result }}"
-          echo "workflow-lint: ${{ needs.workflow-lint.result }}"
+          echo "Changes: ${{ needs.detect-changes.result }}"
+          echo "Workflow lint: ${{ needs.workflow-lint.result }}"
           echo "Quality:        ${{ needs.Quality.result }}"
-          echo "Package:        ${{ needs.server-package.result }}"
+          echo "Server package:        ${{ needs.server-package.result }}"
           echo "Browser tests: ${{ needs.Browser-tests.result }}"
           echo "Build:          ${{ needs.Build.result }}"
           echo "Upstream:       ${{ needs.upstream-images.result }}"
           echo "Security:       ${{ needs.Security.result }}"
-          echo "Security: ${{ needs.Security.result }}"
-          echo "Test:           ${{ needs.Test.result }}"
+          echo "Server tests:           ${{ needs.Test.result }}"
           echo "Changesets:     ${{ needs.Changesets.result }}"
-          echo "Docker:         ${{ needs.Docker.result }}"
+          echo "Images:         ${{ needs.Docker.result }}"
           echo "Kubernetes:     ${{ needs.Kubernetes.result }}"
           echo "Preflight:      ${{ needs.Release-preflight.result }}"
           echo "Upgrade:        ${{ needs.Database-upgrade.result }}"

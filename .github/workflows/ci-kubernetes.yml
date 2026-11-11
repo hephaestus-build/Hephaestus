@@ -173,7 +173,7 @@ jobs:
         run: node scripts/kubernetes-cluster.ts backup-drill --work "$RUNNER_TEMP/kubernetes-cluster" --pod-cidr 10.42.0.0/16
       # A node that joins gets the agent image from the DaemonSet, and its first sandbox pulls nothing.
       - name: Start a sandbox on a new node without an image pull
-        if: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        if: ${{ env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' }}
         run: |
           set -euo pipefail
           if [ "$GVISOR" = true ]; then set -- --gvisor "$RUNNER_TEMP/gvisor"; fi

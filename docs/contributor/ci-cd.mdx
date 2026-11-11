@@ -75,6 +75,7 @@ A path-filtered stage can be skipped.
 A selected stage shows its workers directly, including static names for skipped workers.
 The tooling gates and the two halves of the tooling tests remain three jobs.
 Each worker keeps its isolated cancel callback, named `Stop the merge group early`.
+
 The removed placeholder entries allocated no runner. Combining workflow linters saves one runner job when lint is selected. Folding chart lint into the latest k3s worker saves one runner job when Kubernetes is selected. The checks remain the same.
 
 GitHub displays every job of a [reused workflow](https://docs.github.com/en/actions/concepts/workflows-and-actions/reusing-workflow-configurations).
@@ -117,7 +118,7 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, changelog immutability and compatibility guards, legacy-reference guards                                                            | —                                                                        |
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze, [public contract](#public-contract-gate)                                                                                                                     | `vp run gate:changesets`, `gate:public-contract`                                                 |
 | Docker → Images, Tag unchanged images                                   | One build job per platform builds every image of the run and scans it. The Dockerfile images use `docker buildx bake`. The Server image uses `pack build` from the packaged JAR. One manifest job merges, attests and signs them. Aliases for unchanged images           | —                                                                        |
-| Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
+| Workflow lint                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The title, body, and every commit message contain no `Claude-Session:` trailer, "Generated with" line, or session link (a `Co-authored-by:` trailer is allowed) | —                                                                        |
 
 `Build → Database migrations`, the PostgreSQL drills, both E2E rows and the integration shards other than `review` are
@@ -428,7 +429,7 @@ The heavy legs start only after `Security / Dependencies, secrets and policy` su
 The heavy legs are `Server package`, `Quality`, `Server tests` and `Images`.
 `Build`, `Kubernetes` and `Release evidence preflight` wait through `Server package` or `Images`.
 Thus, an advisory against the whole base ends the group before a heavy leg takes a runner.
-`Actionlint`, `Zizmor`, `Image advisories` and `Pinned upstream images` run beside `Security`.
+`Workflow lint`, `Image advisories` and `Pinned upstream images` run beside `Security`.
 
 One `Security` job calls the scan in every event.
 The image advisory snapshot and pinned upstream image scan remain independent of that prerequisite.
@@ -707,7 +708,7 @@ The integration job adds it for every shard except `review`.
 
 | Tier | Jobs |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Fast (pull request and queue) | Changes, the quality legs, unit and architecture tests, the `review` integration shard, packaging, generated-artifact drift, [the images it needs](#the-preview-label), Security, Changesets, Actionlint, Zizmor |
+| Fast (pull request and queue) | Changes, the quality legs, unit and architecture tests, the `review` integration shard, packaging, generated-artifact drift, [the images it needs](#the-preview-label), Security, Changesets, Workflow lint |
 | Queue (merge group, push, dispatch) | the other integration shards, the database contract tests, the PostgreSQL drills, webapp and extension E2E |
 
 Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
@@ -824,7 +825,7 @@ A merge group compares `merge_group.base_sha..head_sha`. A
 push to `main` and a dispatch publish `unfiltered` selection flags rather than filtering a diff.
 
 Selection does not override outer event guards.
-Ordinary main pushes omit Quality, Test, Security, Actionlint, and Zizmor.
+Ordinary main pushes omit Quality, Server tests, Security and Workflow lint.
 They skip API, schema, database, and browser jobs inside `Build`.
 
 Release-version pushes repeat those checks. Main still packages and publishes images.
@@ -883,7 +884,7 @@ Before publishing verified tags, it checks that the final index leaves equal tho
 A scan therefore costs no job and no runner queue wait of its own.
 It does not run in the manifest job, because that job holds the signing token and runs no repository code.
 
-The build matrix does not fail fast, so one platform's refusal keeps the other platform's scan and evidence.
+The platform jobs run independently, so one platform's refusal keeps the other platform's scan and evidence.
 A broken build thus lets its sibling finish, which costs a runner for that time.
 
 The scan resolves the immutable image reference through
@@ -1056,7 +1057,7 @@ Right after a merge, that run is still building, so the pull request builds ever
 - Before its vulnerability scans, each image build job removes the same unused SDKs and logs the free space.
   Trivy copies each image layer to a temporary file after the builds have filled the root volume.
   Thus, `scripts/prepare-image-scan-runner.ts` gives the scans' temporary files the volume with the most free space.
-- A pull request that matches the `kubernetes` filter runs `Chart` and the latest k3s on amd64.
+- A pull request that matches the `kubernetes` filter runs the latest k3s on amd64. Its worker first lints the chart and validates its schemas.
   The merge queue also runs the lowest supported minor on amd64 and `kind 1.35 Calico`.
   Only the nightly run adds the lowest supported minor on arm64.
   Runners limit the merge queue, so the queue does not wait for an arm64 runner.
