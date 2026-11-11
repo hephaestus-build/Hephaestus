@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { expect, it, vi } from "vitest";
+import { beforeAll, expect, it } from "vitest";
 
 import { getMemberOnboardingQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceOnboarding } from "@/api/types.gen";
@@ -9,9 +9,11 @@ import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { ConversationFake } from "@/test/conversation-server";
-import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => {
+	await loadRouteCode("/w/acme/conversation", "/w/acme/teams");
+}, ROUTE_RENDER_WAIT.timeout);
 
 it("keeps an existing conversation readable under No AI and restores its composer after opting in", async () => {
 	let preference: WorkspaceOnboarding = {

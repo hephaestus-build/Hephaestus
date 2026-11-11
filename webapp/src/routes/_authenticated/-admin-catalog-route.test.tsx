@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, HttpResponse, http, type PathParams } from "msw";
-import { assert, describe, expect, it, vi } from "vitest";
+import { beforeAll, assert, describe, expect, it } from "vitest";
 
 import type {
 	CatalogGroup,
@@ -17,9 +17,9 @@ import {
 import { mockPracticeDefinitionOptions } from "@/mocks/fixtures/practice";
 import { server } from "@/mocks/server";
 import { precedes } from "@/test/dom";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/admin/catalog"), ROUTE_RENDER_WAIT.timeout);
 
 const PRACTICE_PATH = "*/admin/practice-catalog/practices/:slug";
 

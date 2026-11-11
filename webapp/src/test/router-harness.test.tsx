@@ -1,16 +1,15 @@
 import type { AnyRouter } from "@tanstack/react-router";
 import { screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 
 import { deferred } from "./async";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "./router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "./router-harness";
 
-// A cold route mount takes seconds on a busy file pool, so these tests wait as long as the route tests do.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => loadRouteCode("/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
 
 let left: AnyRouter | undefined;
 

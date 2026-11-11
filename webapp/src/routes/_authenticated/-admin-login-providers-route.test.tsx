@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { adminListLoginProvidersQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { LoginProviderView } from "@/api/types.gen";
@@ -9,10 +9,9 @@ import type { Wire } from "@/lib/dates";
 import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules.
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/admin/login-providers"), ROUTE_RENDER_WAIT.timeout);
 
 function provider(registrationId: string, displayName: string): LoginProviderView {
 	return {

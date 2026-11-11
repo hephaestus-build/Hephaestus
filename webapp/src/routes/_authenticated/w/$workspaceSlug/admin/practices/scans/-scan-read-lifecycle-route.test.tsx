@@ -2,7 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import {
 	getScanQueryKey,
@@ -13,7 +13,7 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 import {
 	adminHandlers,
@@ -28,7 +28,14 @@ import {
 	wireScanIn,
 } from "./-scan-server";
 
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme/admin/practices/scans",
+			"/w/acme/admin/practices/scans/a0000000-0000-4000-8000-000000000001",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 const LIST = "/w/acme/admin/practices/scans";
 const REPORT = `${LIST}/${SCAN_ID}`;
 const path = { workspaceSlug: "acme", scanId: SCAN_ID };

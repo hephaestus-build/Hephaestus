@@ -1,15 +1,14 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import type { MyProductFeedback } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-// Mounting the real route pulls in the app chrome and its lazy modules.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => loadRouteCode("/product-feedback"), ROUTE_RENDER_WAIT.timeout);
 
 const publicIssue = {
 	id: "b1b1b1b1-0000-0000-0000-000000000004",

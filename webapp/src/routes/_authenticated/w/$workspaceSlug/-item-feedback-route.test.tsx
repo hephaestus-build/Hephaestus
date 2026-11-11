@@ -1,17 +1,16 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { ProfileReview } from "@/api/types.gen";
 import { server } from "@/mocks/server";
 import { detailFeedback, detailReview } from "@/stories/practice-detail-story-mock-data";
 import { daysBefore } from "@/stories/story-clock";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-// Route mounting loads the app shell and lazy modules, so the initial render needs a longer test timeout.
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/w/acme/feedback/1902"), ROUTE_RENDER_WAIT.timeout);
 
 const REVIEWS_PATH = "*/workspaces/:workspaceSlug/practices/items/:itemId/reviews";
 const RESPONSE_PATH = "*/workspaces/:workspaceSlug/practices/feedback/:feedbackId/response";

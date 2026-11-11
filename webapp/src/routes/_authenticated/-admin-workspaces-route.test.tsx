@@ -2,17 +2,16 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { adminListWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AdminWorkspaceView, InstanceSettings } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules.
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/admin/workspaces"), ROUTE_RENDER_WAIT.timeout);
 
 const aet: Wire<AdminWorkspaceView> = {
 	id: 1,

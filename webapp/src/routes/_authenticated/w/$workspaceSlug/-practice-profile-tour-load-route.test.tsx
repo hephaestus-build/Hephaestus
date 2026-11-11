@@ -1,14 +1,14 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { expect, it, vi } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
 
 import { toast } from "@/lib/toast";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { OVERVIEW_FIXTURE } from "@/stories/practice-profile-story-mock-data";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: ROUTE_RENDER_WAIT.timeout });
+beforeAll(async () => loadRouteCode("/w/acme/practice-profile"), ROUTE_RENDER_WAIT.timeout);
 
 // In a file of its own: `lazy` keeps a failed import for the life of the module.
 vi.mock("@/components/tour/PracticeProfileTour", () => {

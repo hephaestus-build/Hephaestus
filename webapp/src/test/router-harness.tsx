@@ -18,9 +18,8 @@ import { routeTree } from "@/routeTree.gen";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 
 /**
- * A backstop against a route that never resolves, not a budget for how fast one should render. A
- * cold route mount costs ~1.5s alone and several seconds more when the whole file pool is running,
- * so a value close to the observed time turns saturation into a red build.
+ * Bounds route-code setup hooks and DOM queries; each test keeps its own execution timeout.
+ * Load split modules with `loadRouteCode` before the test starts.
  */
 export const ROUTE_RENDER_WAIT = { timeout: 30_000 } as const;
 
@@ -37,8 +36,8 @@ const rendered = new Set<AnyRouter>();
 
 /**
  * How long the navigations that the test started may take, together, to settle after its last
- * assertion: the same backstop as `ROUTE_RENDER_WAIT`, because a page that a busy file pool loads can
- * take as long as a first render. The hook's own timeout stays above it.
+ * assertion. A route that does not settle fails the test that started it. The hook's own timeout
+ * leaves time for the per-router assertions and cleanup.
  */
 const ROUTE_SETTLE_WAIT = ROUTE_RENDER_WAIT;
 const SETTLE_HOOK_TIMEOUT = ROUTE_SETTLE_WAIT.timeout + 5000;
@@ -89,12 +88,14 @@ export function testQueryClient(): QueryClient {
 }
 
 /**
- * Loads the code of every route that `paths` match, as `beforeAll(() => loadRouteCode(...),
+ * Loads the code of every route that `paths` match, as `beforeAll(async () => loadRouteCode(...),
  * ROUTE_RENDER_WAIT.timeout)`. A route's first mount loads its split modules, and Vitest transforms
- * each one on that first import: seconds on a busy file pool. Inside a test, that load counts against
- * the test's own timeout, although the test checks routing or rendering, not how fast code loads.
+ * each one on that first import. Setup owns that transformation; each test owns the routing or
+ * rendering behavior once the matched code is available.
  */
 export async function loadRouteCode(...paths: string[]): Promise<void> {
+	// The root layout mounts this React.lazy module outside the router's split route chunks.
+	await import("@/routes/-GlobalConversationPanel");
 	const router = createRouter({
 		...ROUTER_SEARCH,
 		routeTree,

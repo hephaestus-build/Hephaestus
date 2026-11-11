@@ -1,13 +1,14 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
 
 /** A browser that can hold passkeys; no test here reaches its prompt. */
 class BrowserCredential {
@@ -26,6 +27,14 @@ class BrowserCredential {
 // Only this one global is replaced and put back: the test setup owns others, such as the event
 // source, that a blanket unstub would delete for every later case.
 beforeEach(() => {
+	server.use(
+		http.get("*/workspaces", () => HttpResponse.json([])),
+		http.get("*/workspaces/providers", () => HttpResponse.json({ creationPolicy: "SELF_SERVICE" })),
+		http.get("*/admin/product-feedback", () =>
+			HttpResponse.json({ content: [], page: 0, size: 1, totalElements: 0, totalPages: 0 }),
+		),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
+	);
 	const original = Object.getOwnPropertyDescriptor(globalThis, "PublicKeyCredential");
 	Object.defineProperty(globalThis, "PublicKeyCredential", {
 		configurable: true,

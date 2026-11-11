@@ -1,15 +1,14 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { assert, expect, it, vi } from "vitest";
+import { beforeAll, assert, expect, it } from "vitest";
 
 import type { ConfigAuditEntryView } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// The real route mounts the shared admin chrome and lazily imported route modules.
-vi.setConfig({ testTimeout: 40_000 });
+beforeAll(async () => loadRouteCode("/admin/audit"), ROUTE_RENDER_WAIT.timeout);
 
 function change(id: number, operator: string) {
 	return {

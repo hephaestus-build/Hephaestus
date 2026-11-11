@@ -2,16 +2,16 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { assert, describe, expect, it, vi } from "vitest";
+import { beforeAll, assert, describe, expect, it } from "vitest";
 
 import { adminGetReleaseQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { ReleaseStatus } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { renderRouteAt, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, renderRouteAt, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/admin"), ROUTE_RENDER_WAIT.timeout);
 
 const status = {
 	running: {

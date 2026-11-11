@@ -1,15 +1,16 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import type { WorkspaceProviders } from "@/api/types.gen";
 import { server } from "@/mocks/server";
-import { renderRouteAt, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, renderRouteAt, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole authenticated tree, and the last case mounts two
-// routes; the timeout is a deadlock backstop, not a budget these renders were meant to fit inside.
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(
+	async () => loadRouteCode("/workspaces/new", "/workspaces/new/github"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 function serveProviders(providers: WorkspaceProviders) {
 	server.use(http.get("*/workspaces/providers", () => HttpResponse.json(providers)));

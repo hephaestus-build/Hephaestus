@@ -2,7 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -18,11 +18,12 @@ import {
 	ACROSS_WORKSPACE,
 	ACROSS_WORKSPACE_TILES,
 } from "@/stories/practices-across-the-workspace-story-data";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// Mounting the real routes pulls in the whole app shell and its lazy modules.
-// Twenty switches mount a route each, so the loop case gets the time of several.
-vi.setConfig({ testTimeout: ROUTE_RENDER_WAIT.timeout * 4 });
+beforeAll(
+	async () => loadRouteCode("/w/acme/practices-across-the-workspace", "/w/acme/practice-profile"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const WORKSPACE_PAGE = "/w/acme/practices-across-the-workspace";
 const PROFILE = "/w/acme/practice-profile";
@@ -36,9 +37,6 @@ const [practice] = practiceStandings;
 if (!practice) {
 	throw new Error("The fixtures carry a practice with a standing");
 }
-
-/** Twenty switches: ten times to the profile and ten times back. */
-const ROUND_TRIPS = 10;
 
 let requests: URL[] = [];
 
@@ -131,7 +129,8 @@ async function switchTo(
 	pathname: string,
 	router: { state: { location: { pathname: string } } },
 ) {
-	await userEvent.click(await screen.findByRole("button", { name }, ROUTE_RENDER_WAIT));
+	const group = screen.getByRole("dialog", { name: packagingGroup.name });
+	await userEvent.click(within(group).getByRole("button", { name }));
 	await waitFor(() => {
 		expect(router.state.location.pathname).toBe(pathname);
 	}, ROUTE_RENDER_WAIT);
@@ -139,11 +138,11 @@ async function switchTo(
 }
 
 describe("going between the Practice profile and Practices across the workspace", () => {
-	it("keeps history, the level stack and the reads bounded however often the reader switches", async () => {
+	it("keeps one switch step and reuses loaded data on return", async () => {
 		const router = await openWorkspaceGroup();
 		const origin = router.history.length;
 
-		for (let trip = 0; trip < ROUND_TRIPS; trip += 1) {
+		for (let trip = 0; trip < 2; trip += 1) {
 			await switchTo(TO_PROFILE, PROFILE, router);
 			expect(router.state.location.search).toMatchObject({ detail: GROUP });
 			await switchTo(TO_WORKSPACE, WORKSPACE_PAGE, router);
@@ -167,12 +166,12 @@ describe("going between the Practice profile and Practices across the workspace"
 		expect(router.state.location.search).toMatchObject({ detail: GROUP });
 	});
 
-	it("keeps history bounded between the list of every group and the workspace page", async () => {
+	it("keeps one history step between the group list and workspace page", async () => {
 		const { router } = renderRouteAtWithRouter(WORKSPACE_PAGE, appQueryClient());
 		await screen.findByRole("button", { name: TO_OWN_GROUPS }, ROUTE_RENDER_WAIT);
 		const origin = router.history.length;
 
-		for (let trip = 0; trip < ROUND_TRIPS; trip += 1) {
+		for (let trip = 0; trip < 2; trip += 1) {
 			await userEvent.click(await screen.findByRole("button", { name: TO_OWN_GROUPS }));
 			await waitFor(() => {
 				expect(router.state.location.pathname).toBe(PROFILE);

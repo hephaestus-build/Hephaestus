@@ -1,17 +1,20 @@
 import { screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, expect, it, vi } from "vitest";
 
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { ObserverStub } from "@/test/observers";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// A case mounts the whole app chrome, whose route modules are imported lazily.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => {
+	await loadRouteCode("/w/acme/activity", "/");
+}, ROUTE_RENDER_WAIT.timeout);
 
 const NOTICE = "You cannot open the workspace “foreign”.";
 
 beforeEach(() => {
+	vi.stubGlobal("IntersectionObserver", ObserverStub);
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>

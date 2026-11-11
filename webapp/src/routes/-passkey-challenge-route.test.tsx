@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type PathParams } from "msw";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { beforeAll, expect, it, onTestFinished, vi } from "vitest";
 
 import { client } from "@/api/client.gen";
 import { getIntegrationCatalog, requestReview } from "@/api/sdk.gen";
@@ -16,10 +16,21 @@ import { authClient } from "@/runtime/auth/auth-client";
 import { installPasskeyChallenge } from "@/runtime/auth/passkey-challenge";
 import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { deferred, nextFrame } from "@/test/async";
-import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole layout and its lazy modules.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme/practice-profile",
+			"/verify-passkey",
+			"/settings",
+			"/w/acme/teams",
+			"/w/acme/admin/integrations",
+			"/w/acme/admin/integrations/scm",
+			"/w/acme/admin/integrations/slack",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 /** The member chose no AI, so the Hephaestus panel stays away and the page makes no Hephaestus reads. */
 const NO_CONVERSATION: WorkspaceOnboarding = {

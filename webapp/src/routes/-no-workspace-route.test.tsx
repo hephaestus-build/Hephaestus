@@ -1,15 +1,14 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getProvidersQueryKey } from "@/api/@tanstack/react-query.gen";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// A case mounts the whole app chrome, whose route modules are imported lazily.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => loadRouteCode("/", "/workspaces/new"), ROUTE_RENDER_WAIT.timeout);
 
 type PolicyRead = "failing" | "SELF_SERVICE" | "ADMIN_ONLY";
 

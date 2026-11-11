@@ -86,43 +86,35 @@ function stateCase(key: string): LineageStateCase {
 	return entry;
 }
 
-describe.each(VIEWS)(
-	"the trace $name",
-	({ display, expand }) => {
-		it.each(CASES.map((entry) => [entry.key, entry] as const))(
-			"%s: names each control, keeps controls separate and opens each record once",
-			(_key, entry) => {
-				const { container, rail, onOpen } = renderTrace(entry, display, expand);
-				expect(container.querySelectorAll("button button, button a, a button, a a")).toHaveLength(
-					0,
-				);
-				const controls = [...rail.querySelectorAll<HTMLElement>("button, a[href]")];
-				// Each control's name computed once, as a reader of the accessibility tree hears it. A role
-				// query per control searched the whole rail every time, so the cost grew with its square.
-				const names = controls.map((control) => computeAccessibleName(control));
-				for (const name of names) {
-					expect(name.trim()).not.toBe("");
-				}
-				const repeated = names.filter((name, index) => names.indexOf(name) !== index);
-				expect(repeated).toStrictEqual([]);
-				for (const link of container.querySelectorAll<HTMLAnchorElement>("a[href]")) {
-					expect(link.getAttribute("href")).toMatch(/^https:\/\//u);
-					expect(link.target).toBe("_blank");
-					expect(link.rel).toContain("noopener");
-				}
-				const audit = auditSteps(rail, onOpen);
-				for (const count of Object.values(audit.controls)) {
-					expect(count).toBe(1);
-				}
-				expect(audit.opensPerPress.every((count) => count === 1)).toBe(true);
-				expect(new Set(audit.opened).size).toBe(audit.opened.length);
-			},
-		);
-	},
-	// Each case renders the whole trace and presses every step; under a loaded machine a case can
-	// take seconds, which is load, not a hang.
-	20_000,
-);
+describe.each(VIEWS)("the trace $name", ({ display, expand }) => {
+	it.each(CASES.map((entry) => [entry.key, entry] as const))(
+		"%s: names each control, keeps controls separate and opens each record once",
+		(_key, entry) => {
+			const { container, rail, onOpen } = renderTrace(entry, display, expand);
+			expect(container.querySelectorAll("button button, button a, a button, a a")).toHaveLength(0);
+			const controls = [...rail.querySelectorAll<HTMLElement>("button, a[href]")];
+			// Each control's name computed once, as a reader of the accessibility tree hears it. A role
+			// query per control searched the whole rail every time, so the cost grew with its square.
+			const names = controls.map((control) => computeAccessibleName(control));
+			for (const name of names) {
+				expect(name.trim()).not.toBe("");
+			}
+			const repeated = names.filter((name, index) => names.indexOf(name) !== index);
+			expect(repeated).toStrictEqual([]);
+			for (const link of container.querySelectorAll<HTMLAnchorElement>("a[href]")) {
+				expect(link.getAttribute("href")).toMatch(/^https:\/\//u);
+				expect(link.target).toBe("_blank");
+				expect(link.rel).toContain("noopener");
+			}
+			const audit = auditSteps(rail, onOpen);
+			for (const count of Object.values(audit.controls)) {
+				expect(count).toBe(1);
+			}
+			expect(audit.opensPerPress.every((count) => count === 1)).toBe(true);
+			expect(new Set(audit.opened).size).toBe(audit.opened.length);
+		},
+	);
+});
 
 describe("links out of the trace", () => {
 	it("leads to the work on its provider from the work's facts", () => {

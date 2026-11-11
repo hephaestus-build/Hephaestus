@@ -1,16 +1,15 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { GitHubInstallationRequest, InstanceSettings } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { toast } from "@/lib/toast";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules.
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/admin/github-installations"), ROUTE_RENDER_WAIT.timeout);
 
 // The route harness renders no toaster, so the outcome a toast reports is read from its call.
 vi.mock("@/lib/toast", () => ({

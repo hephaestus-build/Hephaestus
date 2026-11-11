@@ -3,14 +3,14 @@ import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 import {
 	adminHandlers,
@@ -23,8 +23,10 @@ import {
 	wireScan,
 } from "./-scan-server";
 
-// Route mounting loads the admin layout and lazy modules; allow time for the first render.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(
+	async () => loadRouteCode("/w/acme/admin/practices/scans", "/w/acme/practice-profile"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const LIST = "/w/acme/admin/practices/scans";
 

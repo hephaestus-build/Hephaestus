@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { assert, expect, it, vi } from "vitest";
+import { beforeAll, assert, expect, it, vi } from "vitest";
 
 import type { WorkspaceOnboarding } from "@/api/types.gen";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
@@ -10,9 +10,11 @@ import { server } from "@/mocks/server";
 import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { sleep } from "@/test/async";
 import { ConversationFake } from "@/test/conversation-server";
-import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => {
+	await loadRouteCode("/w/acme/teams");
+}, ROUTE_RENDER_WAIT.timeout);
 
 // The conversation renders only while the panel is open, so this fails the panel the moment the
 // developer opens it.

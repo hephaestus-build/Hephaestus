@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	getPracticeQueryKey,
 	getPracticeGuidanceOptions,
@@ -18,6 +18,7 @@ import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import {
+	loadRouteCode,
 	ROUTE_RENDER_WAIT,
 	renderRouteAt,
 	renderRouteAtWithRouter,
@@ -31,7 +32,7 @@ import {
 	wirePractice,
 } from "./-practice-server";
 
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/w/acme/admin/practices"), ROUTE_RENDER_WAIT.timeout);
 
 const definition = definitionOf({
 	name: "Describe what changed and why",

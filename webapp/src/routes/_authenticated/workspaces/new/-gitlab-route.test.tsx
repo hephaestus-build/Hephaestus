@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type PathParams } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import type {
 	CreateWorkspaceRequest,
@@ -13,9 +13,17 @@ import type {
 import { identityProviders } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { renderRouteAt, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	renderRouteAt,
+	renderRouteAtWithRouter,
+	ROUTE_RENDER_WAIT,
+} from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(
+	async () => loadRouteCode("/workspaces/new/gitlab", "/w/hephaestus/activity"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 // The GitLab instance the shared fixtures configure a login for and link the current user on.
 const lrz = "https://gitlab.lrz.de";

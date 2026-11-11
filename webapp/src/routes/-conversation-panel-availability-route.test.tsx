@@ -1,7 +1,7 @@
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { assert, expect, it, vi } from "vitest";
+import { beforeAll, assert, expect, it, vi } from "vitest";
 
 import { getMemberOnboardingQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceOnboarding } from "@/api/types.gen";
@@ -12,9 +12,16 @@ import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { detailReview } from "@/stories/practice-detail-story-mock-data";
 import { ConversationFake } from "@/test/conversation-server";
 import { FakeEventSource } from "@/test/fake-event-source";
-import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => {
+	await loadRouteCode(
+		"/w/acme/teams",
+		"/w/acme/onboarding",
+		"/w/acme/conversation",
+		"/w/acme/feedback/433",
+	);
+}, ROUTE_RENDER_WAIT.timeout);
 
 function mockConversationPanel(preference: WorkspaceOnboarding) {
 	const conversations = {
