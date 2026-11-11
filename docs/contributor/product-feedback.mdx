@@ -257,11 +257,8 @@ The no-draft fallback text cannot be promoted.
 
 Every 30 minutes, the server polls followed issues in GraphQL batches of 100.
 Cursors and notification keys prevent repeated emails.
-Public comments from another actor, state changes, duplicate closure, and release evidence can produce reporter emails.
+Public comments from another actor, state changes, and duplicate closure can produce reporter emails.
 Private comments do not. Duplicate closure moves follow-up to the original issue.
-
-Release mail requires a merged closing PR and a published release tag that contains its merge commit.
-It reports release ancestry, not the behavior of the running instance.
 
 **Pause** keeps new and unfiled reports saved for instance admins and holds publication commands until resume.
 It leaves follow-up, withdrawal, and erasure cleanup active.
