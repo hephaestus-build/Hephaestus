@@ -127,7 +127,9 @@ Each crossed task gets a notice: `unpassed, cause unavailable`, with its reprodu
 The runner's text report does not distinguish a task failure from a task that it stopped.
 The report order does not identify the cause.
 The job summary links the raw task output and keeps the report, including cache hits and miss reasons.
-The quality step keeps its native failure verdict; the report also exits nonzero for unpassed tasks.
+
+The quality step keeps its native failure verdict.
+The report also exits nonzero for unpassed tasks.
 
 A leg runs when the change
 detection in `cicd.yml` says its scope changed. The Windows leg uses the tooling scope.
