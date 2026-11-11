@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.HiddenCharacters;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
@@ -23,6 +24,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 @Service
 public class WorkspaceContextBuilder {
@@ -51,7 +55,28 @@ public class WorkspaceContextBuilder {
                 .flatMap(Optional::stream)
                 .toList();
         if (values.size() > 1) throw new IllegalStateException("A conversation resource has multiple owners");
-        return values.stream().findFirst();
+        return values.stream().findFirst().map(WorkspaceContextBuilder::marked);
+    }
+
+    /** The resource with each hidden character in its text marked ({@link HiddenCharacters}). */
+    private static JsonNode marked(JsonNode node) {
+        if (node.isString()) {
+            String text = node.asString();
+            String marked = HiddenCharacters.mark(text);
+            return marked.equals(text) ? node : JsonNodeFactory.instance.stringNode(marked);
+        }
+        if (node instanceof ObjectNode object) {
+            var copy = object.deepCopy();
+            for (Map.Entry<String, JsonNode> property : object.properties())
+                copy.set(property.getKey(), marked(property.getValue()));
+            return copy;
+        }
+        if (node instanceof ArrayNode array) {
+            var copy = array.deepCopy();
+            for (int index = 0; index < array.size(); index++) copy.set(index, marked(array.get(index)));
+            return copy;
+        }
+        return node;
     }
 
     public Map<String, byte[]> build(ConversationContextRequest request) {
@@ -70,7 +95,10 @@ public class WorkspaceContextBuilder {
                 continue;
             }
             contributed.forEach((path, bytes) -> {
-                if (!source.ownsPath(path) || files.putIfAbsent(path, bytes.clone()) != null) {
+                if (!source.ownsPath(path)
+                        || files.putIfAbsent(
+                                        path, HiddenCharacters.markUtf8(bytes).clone())
+                                != null) {
                     throw new IllegalStateException("A conversation source wrote an undeclared or duplicate path");
                 }
             });

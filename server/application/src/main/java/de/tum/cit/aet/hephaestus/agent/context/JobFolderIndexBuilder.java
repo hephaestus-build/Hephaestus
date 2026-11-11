@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.CapturedSource;
+import de.tum.cit.aet.hephaestus.evidence.CapturedTextMarking;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -18,6 +19,8 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -47,7 +50,12 @@ public class JobFolderIndexBuilder {
         var now = clock.instant();
         contributions.forEach((source, contribution) -> {
             var capturedFiles = new ArrayList<CapturedSource>();
-            contribution.files().forEach((path, bytes) -> {
+            // Captured provider text reaches the model with each hidden character marked; a quote of it is checked
+            // against these marked bytes, so its digest is the marked one.
+            var markedDigests = new HashMap<String, String>();
+            contribution.files().forEach((path, raw) -> {
+                byte[] bytes = CapturedTextMarking.shown(path, raw);
+                if (!Arrays.equals(bytes, raw)) markedDigests.put(path, ProvenanceDigest.sha256Hex(bytes));
                 if (memory.putIfAbsent(path, bytes.clone()) != null || disk.containsKey(path)) throw duplicate(path);
                 capturedFiles.add(
                         new CapturedSource(path, mediaType(path), ProvenanceDigest.sha256Hex(bytes), bytes.length));
@@ -66,7 +74,17 @@ public class JobFolderIndexBuilder {
                     throw new IllegalArgumentException("A capture registered text under another source");
                 if (contribution.files().containsKey(text.stagedPath())
                         || contribution.filesOnDisk().containsKey(text.stagedPath())) {
-                    texts.add(text);
+                    var marked = markedDigests.get(text.stagedPath());
+                    texts.add(
+                            marked == null
+                                    ? text
+                                    : new CitableText(
+                                            text.source(),
+                                            text.path(),
+                                            text.side(),
+                                            text.commit(),
+                                            text.stagedPath(),
+                                            marked));
                 } else {
                     var roots = contribution.directories().stream()
                             .filter(directory -> Files.isRegularFile(

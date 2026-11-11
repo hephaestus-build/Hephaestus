@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class WorkspaceContextBuilderTest extends BaseUnitTest {
+
+    private static String ch(int codePoint) {
+        return new String(Character.toChars(codePoint));
+    }
+
     private final ConversationContextRequest request = new ConversationContextRequest(1, 2, UUID.randomUUID(), null);
 
     private WorkspaceContextBuilder builder(ContentSource... sources) {
@@ -62,10 +68,34 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
 
     @Test
     void stagesAnIndependentCopyOfEachSourceFile() {
-        byte[] bytes = {1, 2};
+        byte[] bytes = {'{', '}'};
         var captured = builder(source("inputs/context/one.json", bytes)).build(request);
-        bytes[0] = 9;
-        assertThat(captured.get("inputs/context/one.json")).containsExactly((byte) 1, (byte) 2);
+        bytes[0] = '[';
+        assertThat(captured.get("inputs/context/one.json")).containsExactly((byte) '{', (byte) '}');
+    }
+
+    @Test
+    void shouldMarkHiddenCharactersInConversationContext() {
+        var captured = builder(source(
+                        "inputs/context/thread.json",
+                        ("{\"text\":\"hi" + ch(0x2066) + "there\"}").getBytes(StandardCharsets.UTF_8)))
+                .build(request);
+
+        assertThat(new String(captured.get("inputs/context/thread.json"), StandardCharsets.UTF_8))
+                .isEqualTo("{\"text\":\"hi⟦U+2066⟧there\"}");
+    }
+
+    @Test
+    void shouldMarkHiddenCharactersInAResourceThatHephaestusReads() {
+        var reader = mock(ContentSource.class);
+        var path = "inputs/context/merge_readiness/17.json";
+        var detail = JsonMapper.builder().build().createObjectNode().put("title", "ok" + ch(0x202E) + "done");
+        when(reader.read(1, 2, path)).thenReturn(Optional.of(detail));
+
+        assertThat(builder(reader).read(1, 2, path))
+                .get()
+                .extracting(node -> node.path("title").asString())
+                .isEqualTo("ok⟦U+202E⟧done");
     }
 
     @Test
