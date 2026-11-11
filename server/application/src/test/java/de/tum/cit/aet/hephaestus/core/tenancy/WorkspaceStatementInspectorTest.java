@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -526,6 +527,15 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         inspector.inspect(
                 "select p.id from practice p where p.id=? union all select p.id from practice p where p.slug=?");
         verify(reporter).report(any(), eq(Set.of("practice")), eq(TenancyEnforcement.LOG));
+    }
+
+    @Test
+    void aDisjunctionIsNotHiddenByPostgresStringQuoting() {
+        when(scopedTables.isScoped("practice")).thenReturn(true);
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect("select p.id from practice p where p.slug = E'\\'' or true or p.slug = '' and p.id = ?");
+        inspector.inspect("select p.id from practice p where p.slug = $$'$$ or true or p.slug = $$'$$ and p.id = ?");
+        verify(reporter, times(2)).report(any(), eq(Set.of("practice")), eq(TenancyEnforcement.LOG));
     }
 
     @Test

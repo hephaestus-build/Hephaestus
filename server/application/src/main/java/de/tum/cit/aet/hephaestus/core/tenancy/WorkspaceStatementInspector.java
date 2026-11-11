@@ -395,9 +395,8 @@ public class WorkspaceStatementInspector implements StatementInspector {
      * set operation qualifies only when each of its branches does, so a keyed branch cannot carry an unkeyed one.
      */
     private boolean keyedSelect(String sql) {
-        if (sql.length() > FAST_PATH_SQL_LIMIT) return false;
+        if (sql.length() > FAST_PATH_SQL_LIMIT || OR_TOKEN_PATTERN.matcher(sql).find()) return false;
         String text = COMMENT_OR_LITERAL_PATTERN.matcher(sql).replaceAll(" ");
-        if (OR_TOKEN_PATTERN.matcher(text).find()) return false;
         int[] depth = depths(text);
         if (depth == null) return false;
         int start = 0;
