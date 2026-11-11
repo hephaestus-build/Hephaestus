@@ -149,8 +149,8 @@ Do not add a final slash or wildcard.
 Dynamic providers can have a different registration ID.
 
 GitHub, GitLab, Slack sign-in, and Outline use this policy.
-The separate Slack workspace connection uses its configured `hephaestus.integration.slack.redirect-uri`.
-Set that URI to the exact apex `/api/oauth/callback/slack` address.
+The separate Slack workspace connection derives its callback from the configured issuer origin and API prefix.
+Register the exact apex `/api/oauth/callback/slack` address on the Slack app.
 GitHub App installations and GitLab token connections do not use a request-derived login callback.
 
 If the registered callback already matches the configured issuer origin and API prefix, no callback update is needed.

@@ -101,8 +101,9 @@ curl -fsS -X POST -H "Authorization: Bearer $JWT" \
   "http://localhost:8080/api/dev/trigger-review?prId=<id>&workspaceId=<id>"
 ```
 
-To test webhook ingestion too, configure `hephaestus.webhook.external-url` and a secret of at least 32
-characters, then expose the webhook receiver through a trusted tunnel. GitLab group-hook registration
+To test webhook ingestion too, set the canonical API issuer origin to the trusted tunnel address.
+Configure webhook and routing secrets of at least 32 characters, then expose the receiver at that origin.
+The receiver paths do not include the API prefix. GitLab group-hook registration
 requires the appropriate group role and license.
 
 The agent runs in a Kubernetes sandbox (`ghcr.io/hephaestus-build/agent-pi`) and calls the LLM through

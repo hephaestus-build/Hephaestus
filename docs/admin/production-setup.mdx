@@ -54,8 +54,12 @@ Do not round the asset before upload.
 | `SLACK_OAUTH_DISPLAY_NAME`                            | Account-linking button label, default `Slack`. Configure it through the chart.                                                                                                                                            |
 | `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID`              | Slack app client ID used by the OAuth flow                                                                                                                                                      |
 | `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET`          | Slack app client secret used by the OAuth flow                                                                                                                                                  |
-| `HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI`           | Required whenever Slack is enabled. Use the public application-server callback URL, including any proxy path prefix — e.g. `https://<host>/api/oauth/callback/slack`.                           |
 | `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET`         | Required when Slack is enabled, on both the webhook server (Events API) and the application server (interactivity). A blank value fails the boot of either while Slack is enabled.               |
+
+Register `https://<host>/api/oauth/callback/slack` as a Redirect URL on the Slack app.
+Hephaestus derives this address from its configured issuer origin and public API prefix.
+For a different public prefix, use that prefix in the registered address.
+Authorization and code exchange send the same address, as required by [Slack's OAuth flow](https://docs.slack.dev/authentication/installing-with-oauth/).
 
 OAuth issues per-workspace bot tokens.
 The `connection` table stores them encrypted at rest.
@@ -216,7 +220,12 @@ Nothing stores it.
 
 A workspace connection's activation automatically registers the subscription.
 Its delivery URL is `https://<host>/webhooks/outline/<key>/<route>`, one route for each subscription.
-It comes from `WEBHOOK_EXTERNAL_URL`, which defaults to the application host.
+Hephaestus derives it from the configured API origin, which is the chart host.
+Receiver paths do not include the `/api` prefix.
+
+GitLab group hooks use the same origin with their connection-specific `/webhooks/gitlab/connections/` path.
+GitHub App events use `/webhooks/github`.
+Slack interactivity keeps its separately routed `/webhooks/slack/interactivity` address.
 
 `OUTLINE_OAUTH_*` is independent of the workspace connection.
 It seeds a **link-only** login provider with registration id `outline`.
@@ -284,7 +293,6 @@ For a GitLab practice-review rollout, enable this bundle together:
 | `WEBHOOK_SECRET`                  | Instance-wide secret for GitHub webhook verification. GitLab does not use it. Each GitLab group hook that Hephaestus registers posts to its own connection endpoint with a signed route credential. See `WEBHOOK_ROUTING_SECRET`. |
 | `WEBHOOK_ROUTING_SECRET`          | Signs each Hephaestus-registered GitLab group hook token. Each hook can deliver only for its registered GitLab connection. Requires at least 32 characters. Must differ from `WEBHOOK_SECRET` and every encryption key. Give the application server and webhook receiver the same value. Required for every production deployment, including GitHub-only instances. The chart and readiness checks reject absent values. |
 | `WEBHOOK_ROUTING_PREVIOUS_SECRET` | Previous value, used only during `WEBHOOK_ROUTING_SECRET` rotation. Its signed hooks keep delivering until registration replaces them with new-value hooks. After replacement, remove it.                                                                                                                                                                                                                             |
-| `WEBHOOK_EXTERNAL_URL`            | Public GitLab webhook base URL. If unset, auto-registration derives it from the application host URL. Use the chart configuration for an override.                                                                                                                                                                                                                                                                       |
 
 The login provider supports gitlab.com by default.
 For self-hosted GitLab, set `GITLAB_OAUTH_BASE_URL` to that instance.

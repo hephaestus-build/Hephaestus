@@ -20,10 +20,10 @@
             "core",
             // Runtime-role gate (@ConditionalOnServerRole) on the connection-OAuth strategy.
             "core::runtime",
-            // GitLabWebhookService uses WebhookProperties; GitLabPreflightService validates URLs.
+            // Route credentials and token rotation use WebhookProperties; GitLabPreflightService validates URLs.
             "core::webhook",
             "core::security",
-            // The project list for workspace creation is a CursorPageDTO.
+            // The project list for workspace creation is a CursorPageDTO; hooks register at PublicApiUrls.
             "core::web",
             "workspace",
             // GitLab workspace flows depend on the workspace named sub-surfaces.

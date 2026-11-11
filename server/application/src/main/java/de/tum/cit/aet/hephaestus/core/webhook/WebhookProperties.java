@@ -11,14 +11,12 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * Shared webhook configuration bound to {@code hephaestus.webhook.*}: the receiver's settings, the GitHub webhook
- * secret, and the routing key and external URL that GitLab and Outline hook registration use. See ADR 0008 and ADR 0066.
+ * secret, and the routing key that GitLab and Outline hook registration use. See ADR 0008 and ADR 0066.
  *
  * <p>Incoming request size is capped at the {@code WebhookPayloadSizeFilter} before Spring
  * buffers the body — {@code server.tomcat.max-http-post-size} only enforces on form-encoded
  * payloads, so we don't rely on it for JSON webhooks.
  *
- * @param externalUrl Set the public base URL used to register this instance's GitLab webhooks.
- *     GitLab webhook registration is skipped when it is unset.
  * @param secret Shared secret that verifies GitHub webhook signatures. The server and webhook roles require at least
  *     32 printable ASCII characters without spaces, also on an instance without GitHub. Must differ from both routing
  *     secrets.
@@ -26,7 +24,6 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.webhook")
 public record WebhookProperties(
-        @Nullable String externalUrl,
         @Nullable String secret,
         @DefaultValue TokenRotation tokenRotation,
         @DefaultValue Publish publish,
@@ -73,16 +70,10 @@ public record WebhookProperties(
         return !secret.equals(routing.secret()) && !secret.equals(routing.previousSecret());
     }
 
-    /** {@code true} iff a GitLab group hook has a URL to be registered against. Pure predicate — no side effects. */
-    public boolean isConfigured() {
-        return externalUrl != null && !externalUrl.isBlank();
-    }
-
     /** Redacts {@code secret} so accidental {@code log.info("config: {}", props)} doesn't leak it. */
     @Override
     public String toString() {
-        return ("WebhookProperties[externalUrl=" + externalUrl
-                + ", secret="
+        return ("WebhookProperties[secret="
                 + (secret == null || secret.isBlank() ? "<unset>" : "<redacted>")
                 + ", tokenRotation="
                 + tokenRotation

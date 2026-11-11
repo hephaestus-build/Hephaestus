@@ -1034,11 +1034,10 @@
 				"slack": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["enabled", "clientId", "redirectUri"],
+					"required": ["enabled", "clientId"],
 					"properties": {
 						"enabled": { "type": "boolean" },
-						"clientId": { "$ref": "#/definitions/text" },
-						"redirectUri": { "$ref": "#/definitions/text" }
+						"clientId": { "$ref": "#/definitions/text" }
 					}
 				},
 				"outline": {

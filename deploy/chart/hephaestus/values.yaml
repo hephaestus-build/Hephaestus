@@ -462,7 +462,6 @@ config:
   slack:
     enabled: false
     clientId: ""
-    redirectUri: ""
   outline:
     enabled: false
     allowedOrigins: []

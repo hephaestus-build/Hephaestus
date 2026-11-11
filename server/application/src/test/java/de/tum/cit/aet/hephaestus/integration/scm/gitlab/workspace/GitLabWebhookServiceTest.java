@@ -19,6 +19,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -35,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCrede
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -89,7 +92,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     private Map<Long, ConnectionConfig.GitLabConfig> gitLabConfigs;
     private Map<Long, BearerToken> gitLabBearerTokens;
 
-    private static final String EXTERNAL_URL = "https://app.example.com";
+    private static final String API_ORIGIN = "https://app.example.com";
     private static final String SECRET = "a]RkF9P2s#Lm7$xQ4wN!vB3yJ6tH0dCe";
     private static final String KEY = "routing-key-for-webhook-service-tests-0123";
     private static final String NEXT_KEY = "next-routing-key-for-webhook-service-tests";
@@ -104,20 +107,13 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
     private static GitLabRouteCredential credential(@Nullable String secret, @Nullable String previous) {
         return new GitLabRouteCredential(WebhookPropertiesFixture.configured(
-                EXTERNAL_URL,
-                SECRET,
-                WebhookPropertiesFixture.stream(),
-                new WebhookProperties.Routing(secret, previous)));
+                SECRET, WebhookPropertiesFixture.stream(), new WebhookProperties.Routing(secret, previous)));
     }
 
     private GitLabWebhookService service(GitLabRouteCredential credential) {
         return new GitLabWebhookService(
                 webhookClientProvider,
-                WebhookPropertiesFixture.configured(
-                        EXTERNAL_URL,
-                        SECRET,
-                        WebhookPropertiesFixture.stream(),
-                        new WebhookProperties.Routing(KEY, null)),
+                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN + "/api"), "/api")),
                 credential,
                 workspaceRepository,
                 connectionService,
@@ -127,7 +123,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     /** The hook URL {@code credential} issues for {@code route}. */
     private static String connectionUrl(GitLabRouteCredential credential, GitLabRouteCredential.Route route) {
         GitLabRouteCredential.Issued issued = credential.issue(route);
-        return EXTERNAL_URL + "/webhooks/gitlab/connections/" + CONNECTION_ID + "/" + issued.keyId() + "/"
+        return API_ORIGIN + "/webhooks/gitlab/connections/" + CONNECTION_ID + "/" + issued.keyId() + "/"
                 + issued.routeId();
     }
 
@@ -214,6 +210,14 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                 .thenAnswer(this::applyUpdateConfig);
     }
 
+    @Test
+    void shouldRegisterOnlyWithARoutingSecret() {
+        when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
+
+        assertThat(webhookService.isRegistrationEnabled()).isTrue();
+        assertThat(service(credential(null, null)).isRegistrationEnabled()).isFalse();
+    }
+
     private void bindGitLabConfig(long workspaceId, ConnectionConfig.GitLabConfig cfg) {
         gitLabConfigs.put(workspaceId, cfg);
     }
@@ -282,7 +286,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         @Test
         void shouldAdoptOnlyTheExactHookOfThisRoute() {
             hooks.add(new WebhookInfo(77L, connectionUrl(routeCredential)));
-            hooks.add(new WebhookInfo(78L, EXTERNAL_URL + "/webhooks/gitlab"));
+            hooks.add(new WebhookInfo(78L, API_ORIGIN + "/webhooks/gitlab"));
 
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
@@ -303,14 +307,14 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void shouldRegisterBesideTheSharedLegacyHookWithoutTouchingIt() {
-            storeHook(99L, EXTERNAL_URL + "/webhooks/gitlab");
+            storeHook(99L, API_ORIGIN + "/webhooks/gitlab");
 
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
             assertThat(result.webhookId()).isEqualTo(100L);
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
             assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
-            assertThat(registered).noneMatch(config -> config.url().equals(EXTERNAL_URL + "/webhooks/gitlab"));
+            assertThat(registered).noneMatch(config -> config.url().equals(API_ORIGIN + "/webhooks/gitlab"));
         }
 
         @Test
@@ -368,7 +372,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void shouldNotRecordItsHookOverOneAConcurrentRegistrationRecordedFirst() {
-            storeHook(99L, EXTERNAL_URL + "/webhooks/gitlab");
+            storeHook(99L, API_ORIGIN + "/webhooks/gitlab");
             when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
                     .thenAnswer(inv -> {
                         WebhookConfig config = inv.getArgument(2);
@@ -388,7 +392,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void shouldKeepTheHookAConcurrentRegistrationOfTheSameRouteRecordedWhenItsOwnRecordLoses() {
-            storeHook(99L, EXTERNAL_URL + "/webhooks/gitlab");
+            storeHook(99L, API_ORIGIN + "/webhooks/gitlab");
             when(connectionService.updateConfig(eq(1L), eq(IntegrationKind.GITLAB), any()))
                     .thenAnswer(inv -> {
                         // The other registration adopted the same hook and recorded it first; this write conflicts.
@@ -494,12 +498,12 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldSkipWhenNotConfigured() {
+        void shouldSkipWithoutRoutingCredentials() {
             WebhookProperties unconfigured = WebhookPropertiesFixture.configured(
-                    "", "", WebhookPropertiesFixture.stream(), new WebhookProperties.Routing(KEY, null));
+                    "", WebhookPropertiesFixture.stream(), new WebhookProperties.Routing(null, null));
             var service = new GitLabWebhookService(
                     webhookClientProvider,
-                    unconfigured,
+                    new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN), "/api")),
                     new GitLabRouteCredential(unconfigured),
                     workspaceRepository,
                     connectionService,
@@ -614,6 +618,18 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldKeepAStoredHookAtAPreviousPathOnTheSameOrigin() {
+            String canonical = connectionUrl(routeCredential);
+            String previous = API_ORIGIN + "/hooks" + URI.create(canonical).getRawPath();
+            storeHook(new WebhookInfo(99L, previous, "executable"));
+
+            webhookService.checkWebhookHealth();
+
+            assertThat(hooks).extracting(WebhookInfo::url).containsExactlyInAnyOrder(previous, canonical);
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
+        }
+
+        @Test
         void reRegistersAutoDisabledWebhook() {
             // GitLab kept the hook row but flipped it to alert_status=disabled — an existence check
             // alone would pass forever, so this is the invisible-failure the health check must heal.
@@ -630,7 +646,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void leavesADisabledSharedLegacyHookInPlace() {
-            storeHook(new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "disabled"));
+            storeHook(new WebhookInfo(99L, API_ORIGIN + "/webhooks/gitlab", "disabled"));
 
             webhookService.checkWebhookHealth();
 
@@ -643,7 +659,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         void replacesAnEnabledStoredHookOnTheRemovedSharedEndpoint() {
             // A workspace whose stored id is a hook on /webhooks/gitlab gets refusals for every delivery while GitLab
             // still reports the hook as executable. Its own connection hook is registered; the foreign one stays.
-            storeHook(new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "executable"));
+            storeHook(new WebhookInfo(99L, API_ORIGIN + "/webhooks/gitlab", "executable"));
 
             webhookService.checkWebhookHealth();
 

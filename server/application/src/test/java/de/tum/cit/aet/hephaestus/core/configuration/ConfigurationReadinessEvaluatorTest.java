@@ -42,6 +42,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.webhook.secret", "PLANTED");
         properties.put("hephaestus.auth.state-cookie-key", SECRET_MARKER);
         properties.put("hephaestus.auth.login-providers.github.client-secret", "");
+        properties.put("hephaestus.auth.issuer", "http://localhost:8080");
 
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, false);
 
@@ -54,7 +55,8 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
                         "security.value-encryption",
                         "webhook.shared-secret",
                         "auth.state-cookie-key",
-                        "auth.login-provider");
+                        "auth.login-provider",
+                        "external.api-origin");
         assertThat(facts.toString()).doesNotContain(SECRET_MARKER);
     }
 
@@ -91,6 +93,37 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRequireAnExplicitApiIssuerOnTheServer() {
+        var properties = role(false, false);
+        properties.remove("hephaestus.auth.issuer");
+
+        assertStatus(evaluateReadiness(properties, true), "external.api-origin", ConfigurationStatus.ACTION_REQUIRED);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "",
+                "http://api.example.test",
+                "https://api.example.test/api",
+                "https://user@api.example.test",
+                "https://api.example.test?api=true",
+                "https://api.example.test#api"
+            })
+    void shouldRejectAnApiIssuerThatIsNotARootHttpsOrigin(String issuer) {
+        var properties = role(false, false);
+        properties.put("hephaestus.auth.issuer", issuer);
+
+        assertStatus(evaluateReadiness(properties, true), "external.api-origin", ConfigurationStatus.ACTION_REQUIRED);
+        var environment = environment(properties);
+        environment.setActiveProfiles("prod");
+        assertThatThrownBy(() -> new ProductionConfigurationEnvironmentPostProcessor()
+                        .postProcessEnvironment(environment, new SpringApplication(Object.class)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("external.api-origin");
+    }
+
+    @Test
     void shouldApplyServerRoleChecksAndExcludeWorkerChecks() {
         Map<String, Object> properties = role(false, false);
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
@@ -103,16 +136,19 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     void shouldApplyWorkerRoleChecksAndExcludeServerChecks() {
         Map<String, Object> properties = role(true, false);
         properties.put("hephaestus.sync.nats.enabled", false);
+        properties.put("hephaestus.auth.issuer", "http://localhost:8080/api");
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
         assertStatus(facts, "llm.proxy-egress", ConfigurationStatus.SATISFIED);
         assertStatus(facts, "auth.login-provider", ConfigurationStatus.NOT_APPLICABLE);
         assertStatus(facts, "nats.server", ConfigurationStatus.NOT_APPLICABLE);
+        assertStatus(facts, "external.api-origin", ConfigurationStatus.NOT_APPLICABLE);
     }
 
     @Test
     void shouldApplyWebhookRoleChecksAndExcludeLoginAndWorkerChecks() {
         Map<String, Object> properties = role(false, true);
         properties.put("hephaestus.runtime.server.enabled", false);
+        properties.put("hephaestus.auth.issuer", "http://localhost:8080/api");
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
         assertStatus(facts, "webhook.shared-secret", ConfigurationStatus.SATISFIED);
         assertStatus(facts, "webhook.routing-secret", ConfigurationStatus.SATISFIED);
@@ -121,6 +157,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         assertStatus(facts, "database.url", ConfigurationStatus.NOT_APPLICABLE);
         assertStatus(facts, "security.credential-encryption", ConfigurationStatus.NOT_APPLICABLE);
         assertStatus(facts, "security.value-encryption", ConfigurationStatus.NOT_APPLICABLE);
+        assertStatus(facts, "external.api-origin", ConfigurationStatus.NOT_APPLICABLE);
     }
 
     @Test
@@ -331,6 +368,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.security.encryption-key", "0123456789abcdef0123456789abcdef");
         properties.put("hephaestus.security.credential-encryption-key", "0123456789abcdef0123456789abcdef");
         properties.put("hephaestus.host-url", "https://hephaestus.example.com");
+        properties.put("hephaestus.auth.issuer", "https://hephaestus.example.com");
         properties.put("hephaestus.webhook.secret", "0123456789abcdef0123456789abcdef");
         properties.put("hephaestus.webhook.routing.secret", "fedcba9876543210fedcba9876543210");
         properties.put("hephaestus.sync.nats.enabled", true);

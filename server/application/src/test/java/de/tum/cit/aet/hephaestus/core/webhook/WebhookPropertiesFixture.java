@@ -35,21 +35,17 @@ public final class WebhookPropertiesFixture {
     }
 
     public static WebhookProperties with(WebhookProperties.Stream stream) {
-        return configured(null, null, stream, new WebhookProperties.Routing(null, null));
+        return configured(null, stream, new WebhookProperties.Routing(null, null));
     }
 
     public static WebhookProperties withRouting(WebhookProperties.Routing routing) {
-        return configured(null, null, stream(), routing);
+        return configured(null, stream(), routing);
     }
 
-    /** Receiver and registration settings as a deployment that registers GitLab hooks has them. */
+    /** Receiver and routing settings as a deployment that registers provider hooks has them. */
     public static WebhookProperties configured(
-            @Nullable String externalUrl,
-            @Nullable String secret,
-            WebhookProperties.Stream stream,
-            WebhookProperties.Routing routing) {
+            @Nullable String secret, WebhookProperties.Stream stream, WebhookProperties.Routing routing) {
         return new WebhookProperties(
-                externalUrl,
                 secret,
                 new WebhookProperties.TokenRotation(7, 90),
                 new WebhookProperties.Publish(Duration.ofSeconds(8), Duration.ofMillis(200)),

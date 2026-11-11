@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.connect;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
@@ -61,14 +62,14 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
             SlackOAuthClient oauthClient,
             SlackWorkspaceContentEraser workspaceContentEraser,
             @Value("${hephaestus.integration.slack.client-id:}") String clientId,
-            @Value("${hephaestus.integration.slack.redirect-uri:}") String redirectUri) {
+            PublicApiUrls publicApiUrls) {
         this.oauthStateService = oauthStateService;
         this.connectionService = connectionService;
         this.oauthClient = oauthClient;
         this.workspaceContentEraser = workspaceContentEraser;
         this.clientId = clientId;
         this.scopes = String.join(",", DEFAULT_SCOPES);
-        this.redirectUri = redirectUri;
+        this.redirectUri = publicApiUrls.uri("/oauth/callback/slack").toASCIIString();
     }
 
     @Override
@@ -78,7 +79,7 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
 
     @Override
     public ConnectInitiation initiate(InitiateRequest request) {
-        if (redirectUri == null || redirectUri.isBlank()) {
+        if (clientId.isBlank()) {
             throw new IllegalStateException(
                     "Slack is not set up on this instance. Ask your instance operator to set it up.");
         }
@@ -101,13 +102,9 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
         if (code == null || code.isBlank()) {
             return new ConnectFinalization.Failed("Slack did not send an authorization code.");
         }
-        if (redirectUri == null || redirectUri.isBlank()) {
-            return new ConnectFinalization.Failed(
-                    "Slack is not set up on this instance. Ask your instance operator to set it up.");
-        }
         OAuthV2Access r;
         try {
-            r = oauthClient.exchangeCode(code, redirectUri());
+            r = oauthClient.exchangeCode(code, redirectUri);
         } catch (SlackOAuthException e) {
             // The admin sees Slack's reason in the finalization result; the log keeps the failure class.
             log.warn(
@@ -151,10 +148,6 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
         String token = bearer.token();
         // Token revocation does not remove the team-level Slack app installation.
         return Optional.of(() -> oauthClient.revokeStrict(token));
-    }
-
-    private String redirectUri() {
-        return redirectUri == null ? "" : redirectUri;
     }
 
     private static String enc(String value) {

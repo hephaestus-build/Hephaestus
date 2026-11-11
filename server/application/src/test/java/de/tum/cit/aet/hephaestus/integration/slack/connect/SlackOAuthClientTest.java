@@ -52,7 +52,8 @@ class SlackOAuthClientTest extends BaseUnitTest {
         assertThat(required(r.team()).id()).isEqualTo("T1");
 
         RecordedRequest req = slackMock.takeRequest();
-        assertThat(required(req.getBody()).utf8()).contains("client_id=test-client-id");
+        assertThat(required(req.getBody()).utf8())
+                .contains("client_id=test-client-id", "redirect_uri=https%3A%2F%2Fexample.test%2Fcb");
     }
 
     @Test
@@ -63,7 +64,7 @@ class SlackOAuthClientTest extends BaseUnitTest {
                 .body("{\"ok\":false,\"error\":\"invalid_code\"}")
                 .build());
 
-        assertThatThrownBy(() -> client.exchangeCode("bad", null))
+        assertThatThrownBy(() -> client.exchangeCode("bad", "https://example.test/api/oauth/callback/slack"))
                 .isInstanceOf(SlackOAuthException.class)
                 .hasMessageContaining("invalid_code");
     }
@@ -77,7 +78,7 @@ class SlackOAuthClientTest extends BaseUnitTest {
                         + "\"expires_in\":43200,\"refresh_token\":\"xoxe-1-refresh\"}")
                 .build());
 
-        OAuthV2Access r = client.exchangeCode("code", null);
+        OAuthV2Access r = client.exchangeCode("code", "https://example.test/api/oauth/callback/slack");
 
         // The client surfaces rotation fields. The strategy decides whether to reject —
         // see SlackConnectionStrategyTest.finalize_rejectsRotationFields.
@@ -90,7 +91,7 @@ class SlackOAuthClientTest extends BaseUnitTest {
     void exchangeCode_blankClientCredentials_throwsBeforeHttp() throws IOException {
         SlackOAuthClient unconfigured =
                 new SlackOAuthClient("", "", slackMock.url("/").toString().replaceAll("/$", ""), RestClient.builder());
-        assertThatThrownBy(() -> unconfigured.exchangeCode("code", null))
+        assertThatThrownBy(() -> unconfigured.exchangeCode("code", "https://example.test/api/oauth/callback/slack"))
                 .isInstanceOf(SlackOAuthException.class)
                 .hasMessageContaining("slack oauth client not configured");
         assertThat(slackMock.getRequestCount()).isEqualTo(0);
