@@ -1,4 +1,4 @@
-# The platform of a one-host install on k3s: docs/admin/kubernetes.mdx § Install on one host (k3s).
+# The platform of a one-host install on k3s: docs/admin/k3s.md.
 #
 # k3s-install.sh puts this file in /var/lib/rancher/k3s/server/manifests/. k3s applies each file
 # there, and applies it again every 15 seconds until the apply succeeds. A changed file is applied

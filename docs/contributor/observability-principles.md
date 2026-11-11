@@ -26,10 +26,10 @@ Thus, each change in Hephaestus ships the signal that shows when it fails.
    A browser report also has no person id, workspace id or user agent.
    A metric label is an enum. It is never an id, a model name or an address.
    A server log record can name a user or a repository, and its correlation ids are personal data.
-   [Observability](/admin/observability#reading-log-records) gives the access and retention rules for log records.
+   [Log records](/admin/log-records#fields) gives the access and retention rules for log records.
 3. **One id joins a browser event to its server trace.**
    A browser event that a request caused carries the trace id of that request.
-   [Correlating a request](/admin/observability#correlating-a-request) is the contract for that id.
+   [Correlating a request](/admin/monitoring#find-the-records-of-one-request) is the contract for that id.
 4. **Each change ships its signal, its alert or service level objective, and its runbook row.**
    It ships them as a component ships its stories.
    A new failure mode without a signal is not done.
@@ -63,7 +63,7 @@ The operator's tools collect all of it.
 
 ## The project's own instances
 
-The project's test instance does not yet run the chart's [monitoring stack](/admin/observability#monitoring-stack).
+The project's test instance does not yet run the chart's [monitoring stack](/admin/monitoring#run-the-monitoring-stack).
 Its vmalert loads a copy of the rule file by hand: the ConfigMap `hephaestus-alert-rules` in the namespace `observability`.
 That copy does not follow the release, so replace it from the commit that the instance runs when the rules change.
 The instance runs kube-state-metrics and node-exporter in that namespace, which allows host paths, with a ClusterRole for the kubelet scrape.

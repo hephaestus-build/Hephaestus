@@ -20,7 +20,7 @@ WARNING: the bundled PostgreSQL has no backup. postgresql.backup.enabled is fals
 not archive the WAL and takes no backup. If the PostgreSQL volume is lost, all data of every
 workspace is lost. Enable the chart's pgBackRest backup, or back up the volume yourself:
 
-  https://docs.hephaestus.build/admin/kubernetes#backup-and-restore
+  https://docs.hephaestus.build/admin/backup-restore#back-up-the-database
 
 {{ end -}}
 https://docs.hephaestus.build/admin/kubernetes describes the installation and its troubleshooting.

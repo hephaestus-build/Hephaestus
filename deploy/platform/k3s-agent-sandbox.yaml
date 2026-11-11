@@ -1,5 +1,5 @@
 # The agent-sandbox controller with its extensions (SandboxTemplate, SandboxClaim, SandboxWarmPool):
-# docs/admin/kubernetes.mdx § The platform files.
+# docs/admin/k3s.md § The platform files.
 #
 # Below this header, the file is the upstream release manifest `sandbox-with-extensions.yaml` with the
 # changes to the controller's Deployment that docs/contributor/release-management.mdx § Platform pins

@@ -5,7 +5,7 @@ description: Install the signed Helm chart on Kubernetes or on one host with k3s
 ---
 
 Hephaestus runs from its signed Helm chart on Kubernetes.
-For one Linux host, use the [k3s installation](./kubernetes#install-on-one-host-k3s).
+For one Linux host, use the [k3s installation](./k3s).
 For an existing cluster, follow [Install](./kubernetes#install).
 Both procedures install the same chart.
 
@@ -13,8 +13,8 @@ Both procedures install the same chart.
 
 ### Supported host matrix
 
-Check the [platform requirements](./kubernetes#requirements) before you prepare a one-host installation.
-For an existing cluster, check [cluster requirements](./kubernetes#supported-clusters).
+Check the [platform requirements](./k3s#before-you-start) before you prepare a one-host installation.
+For an existing cluster, check [cluster requirements](./helm-chart#supported-clusters).
 The [sizing guide](./sizing) gives the workload budget.
 
 ### Tested versions
@@ -45,4 +45,4 @@ Hephaestus assumes that Slack's clock and the server's clock differ by less than
 
 Follow [Upgrade](./upgrade) and the release's migration guide.
 The [channel reconciler](./pull-based-deployment) applies a signed release chart or the image pins of a verified commit channel.
-An irreversible schema upgrade uses the [stopped upgrade procedure](./kubernetes#stopped-schema-upgrades).
+An irreversible schema upgrade uses the [stopped upgrade procedure](./upgrade#stopped-schema-upgrades).

@@ -1,4 +1,4 @@
-# Prometheus alert rules for Hephaestus. docs/admin/observability.mdx § Alert rules gives the scrape
+# Prometheus alert rules for Hephaestus. docs/admin/alert-rules.md gives the scrape
 # labels that these rules read, the exporters of the second group, and each threshold.
 # docs/admin/production-operations-runbook.mdx § Alert response gives the response to each alert.
 # hephaestus-alerts.test.yml beside this file holds the unit tests: vp run test:alerts.

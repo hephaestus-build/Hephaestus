@@ -133,8 +133,8 @@ Two server meters show the state of Outline subscriptions:
 ## What to alert on
 
 The receiver exports these Micrometer meters on its private management listener. See
-[Scrape metrics](./observability.mdx#scrape-metrics) for the port and scrape configuration.
-[Alert rules](./observability.mdx#alert-rules) gives the shipped rules that read these meters. The meters below are tagged `stream` with one of
+[Scrape metrics](./monitoring.md#scrape-metrics) for the port and scrape configuration.
+[Alert rules](./alert-rules.md) gives the shipped rules that read these meters. The meters below are tagged `stream` with one of
 `github`, `gitlab`, `slack`, `outline`.
 
 | Metric                                           | Type        | What it means                                                                                                           |
@@ -268,7 +268,7 @@ Their `hephaestus.webhook.stream.max-age-by-stream` entries take precedence over
 PostgreSQL is the system of record. An erasure request cannot reach inside a broker stream.
 These streams are transport buffers.
 
-This holds on every chart profile. The `small` profile selects its own [byte bounds](./kubernetes#storage-and-retention).
+This holds on every chart profile. The `small` profile selects its own [byte bounds](./helm-chart#storage-and-retention).
 A site value in `webhook.stream.maxAgeByStream` overrides this, and it then keeps personal content for longer.
 
 An outage longer than the age bound loses older Slack and Outline events from the stream:

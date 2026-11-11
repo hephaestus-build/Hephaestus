@@ -1,5 +1,5 @@
 # The chart values that bind a release to the one-host k3s platform: k3s-platform.yaml and
-# k3s-certificates.yaml. docs/admin/kubernetes.mdx § Install on one host (k3s): k3s-install.sh
+# k3s-certificates.yaml. docs/admin/k3s.md: k3s-install.sh
 # installs the release `hephaestus` in the namespace `hephaestus` with these values, after the
 # chart's small profile and before site.yaml, which adds the host, the API endpoint and the login.
 

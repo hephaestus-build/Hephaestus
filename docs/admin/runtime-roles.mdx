@@ -140,7 +140,7 @@ It exits with status 0 when the schema is current, and with a non-zero status wh
 The run mode needs `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`.
 Give it the login of `hephaestus_owner`, which owns the schema.
 Give the server and worker roles the login of `hephaestus_app`, which reads and writes rows only.
-[Database roles](./kubernetes#database-roles) describes both roles.
+[Database roles](./helm-chart#database-roles) describes both roles.
 
 Under the `prod` profile, no role migrates at start.
 The server and worker roles wait until the database holds every change set of their release.
@@ -154,7 +154,7 @@ Its error names the first change set that has not run.
 
 Run the migration once for each release, before the new roles start:
 
-The [Helm chart](./kubernetes#upgrades) runs a migration Job for each revision.
+The [Helm chart](./upgrade#upgrade-a-schema-compatible-release) runs a migration Job for each revision.
 The server and worker also check that the schema is current before they become ready.
 For a major cutover, [pull-based deployment](./pull-based-deployment#stopped-major-upgrades) stops every application writer before the migration.
 
@@ -311,7 +311,7 @@ API-contract generation and CDS training do not run sandbox maintenance, server 
 
 The worker application HTTP endpoint binds to loopback. Every role has a separate private
 management listener on port **9090**, including a single-JVM topology. Management does not run on
-`SERVER_PORT`. See [Observability](./observability#scrape-metrics) for network restrictions.
+`SERVER_PORT`. See [Set up monitoring](./monitoring#scrape-metrics) for network restrictions.
 
 The runtime role decides `sync.nats.enabled`. No setting changes it.
 The server role consumes from NATS, and the webhook role publishes to it.
@@ -421,7 +421,7 @@ The wait survives worker restarts. A lease retry gets a new wait.
 Within that limit, size the capacity from the expected load.
 Concurrent turns are about the questions each second multiplied by the seconds for each answer.
 For example, 1.8 questions each second with 4.5-second answers need 8 concurrent turns.
-`mentor_turn_queue_wait_seconds` and `mentor_turn_queued` show how long and how many questions wait ([Observability](./observability.mdx#conversation-turn-metrics)).
+`mentor_turn_queue_wait_seconds` and `mentor_turn_queued` show how long and how many questions wait ([Metrics](./metrics.md#conversation-turn-metrics)).
 
 The server reads the same value, `hephaestus.mentor.turn.capacity`.
 While that many turns run, a question that a worker can start next says that Hephaestus is answering other questions.
@@ -499,7 +499,7 @@ If it succeeds, the breaker closes.
 If it fails, the breaker opens again.
 
 A rate limit, a request error, or a client that went away does not count.
-[Observability](./observability.mdx#conversation-turn-metrics) names the breaker's metrics.
+[Metrics](./metrics.md#conversation-turn-metrics) names the breaker's metrics.
 
 ### Model calls in flight for each attempt
 
@@ -720,7 +720,7 @@ A workspace-controlled connection can lower the limit and pause only a pool that
 The chart runs the conversation loop as the Deployment `<release>-conversation-loop`, in the release namespace.
 It runs only with workers, and only when `conversationLoop.turns` is above 0.
 It runs the compiled loop from the release's agent image. No worker stages it.
-[Kubernetes § Conversation loop](./kubernetes#conversation-loop) gives its values, its Pod settings and its network policy.
+[Helm chart reference § Conversation loop](./helm-chart#conversation-loop) gives its values, its Pod settings and its network policy.
 
 The loop pulls each turn from a worker and presents `HEPHAESTUS_CONVERSATION_LOOP_SECRET`.
 It gets a credential for each turn attempt, valid only for that turn.
@@ -774,13 +774,13 @@ A worker removes the tools Pod when the attempt ends.
 The installation keeps a pool of 2 empty tools Pods, so that a turn does not wait for a Pod start.
 Any worker fills the pool.
 
-[Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes) owns each tools Pod's requests and limits.
+[Sandboxes § Sandbox sizes](./sandboxes#sandbox-sizes) owns each tools Pod's requests and limits.
 The [conversation admission budget](./sizing#conversation-turn-admission) counts tools Pods separately from resident turns.
 
 A tools Pod is a Kubernetes Job with one container, `tools`, from the release's agent image.
 The container runs only the tools program, with no service account token and no credential.
 Its Pod has the label `hephaestus.build/sandbox-kind=tools`.
-Only the conversation loop can connect to it, on TCP port 7100 ([Kubernetes § Worker](./kubernetes#worker)).
+Only the conversation loop can connect to it, on TCP port 7100 ([Sandboxes § Worker](./sandboxes#worker)).
 A tools Pod has no egress.
 
 - One tools Pod for each running turn attempt that needs one, within the conversations quota.
@@ -789,7 +789,7 @@ A tools Pod has no egress.
 Each tools Pod has these fixed limits:
 
 - 1 CPU.
-- Memory and storage from the [Pod-kind table](./kubernetes#sandbox-sizes).
+- Memory and storage from the [Pod-kind table](./sandboxes#sandbox-sizes).
 - The process limit enforced by the kubelet.
 - No egress.
 
@@ -838,7 +838,7 @@ A load test that asks more questions as one account must raise the capacity.
 ### Tunables
 
 These defaults apply to the application properties without chart overrides.
-The chart passes a resolved integer for turn capacity, from `conversationLoop.turns` ([Kubernetes § Conversation loop](./kubernetes#conversation-loop)).
+The chart passes a resolved integer for turn capacity, from `conversationLoop.turns` ([Helm chart reference § Conversation loop](./helm-chart#conversation-loop)).
 Its `auto` setting uses the chart's CPU budget.
 
 | Property                                    | Default       | Effect                                                                  |
@@ -854,7 +854,7 @@ Its `auto` setting uses the chart's CPU budget.
 Give all roles the same values.
 Use the [configuration reference](./configuration-reference) for the chart-owned configuration of the other properties.
 
-[Observability](./observability.mdx#conversation-turn-metrics) lists the conversation turn metrics.
+[Metrics](./metrics.md#conversation-turn-metrics) lists the conversation turn metrics.
 
 ## Worker pod env vars
 
@@ -901,7 +901,7 @@ The key needs no configuration.
 
 Workers run sandboxes only on Kubernetes.
 The runtime reads the `HEPHAESTUS_SANDBOX_KUBERNETES_*` variables of the [configuration reference](./configuration-reference).
-The [Helm chart](./kubernetes#worker) sets each of them, including the worker Pod metadata from the Downward API.
+The [Helm chart](./sandboxes#worker) sets each of them, including the worker Pod metadata from the Downward API.
 Missing metadata prevents worker startup.
 The [host development launcher](/contributor/local-development#kubernetes) supplies these values for the shared dev cluster.
 

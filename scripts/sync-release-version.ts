@@ -29,7 +29,7 @@ if (version.endsWith("-rc.0")) {
 
 const edits = [
 	{
-		file: "docs/admin/kubernetes.mdx",
+		file: "docs/admin/k3s.md",
 		re: /^(?<indent>[ \t]*)VERSION=\S+(?<comment>\s+# the release, without the leading "v".*)$/mu,
 		line: `$<indent>VERSION=${version}$<comment>`,
 	},

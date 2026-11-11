@@ -1,7 +1,7 @@
 /**
  * Proves on a disposable CI node that a sandbox never waits for the agent image: the release's
  * agent-image DaemonSet pulls it as the node joins, and a sandbox that the node then starts finds the
- * image there (docs/admin/kubernetes.mdx § Sandbox templates).
+ * image there (docs/admin/sandboxes.md § Sandbox templates).
  *
  * It adds a node to the k3d cluster, waits for the DaemonSet's Pod on it, and claims one sandbox from a
  * copy of the review template that only waits and runs on that node. The kubelet's events must show

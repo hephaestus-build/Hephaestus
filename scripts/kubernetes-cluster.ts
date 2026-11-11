@@ -19,7 +19,7 @@
  *   gvisor   the pinned gVisor of k3s-containerd.toml.tmpl, unpacked into --work, for k3s nodes to mount
  *   render   the manifests of those values for synthetic images, with backups on and with an external
  *            PostgreSQL, for a schema check without a cluster
- *   release-smoke  the one-host install of docs/admin/kubernetes.mdx § Install on one host (k3s) on
+ *   release-smoke  the one-host install of docs/admin/k3s.md on
  *            this machine: the release's k3s-install.sh, then every role ready, reviews on, the
  *            shutdown budget, requests through the Gateway, a second run and an upgrade
  *   dev      a local k3d cluster with a registry, this checkout's images built and pushed, the three
@@ -643,7 +643,7 @@ async function chartFile(file: string): Promise<string> {
 }
 
 /**
- * The operator's step for an external PostgreSQL: the chart's roles, as docs/admin/kubernetes.mdx § Database roles
+ * The operator's step for an external PostgreSQL: the chart's roles, as docs/admin/external-database.md § Set up the database roles
  * runs them. The passwords travel on standard input, never in an argument list.
  */
 async function externalDatabaseRoles(data: Readonly<Record<string, string>>): Promise<void> {
@@ -826,7 +826,7 @@ export async function install(
 		"--values",
 		path.join(work, "values.yaml"),
 		...extra,
-		// The documented upgrade (docs/admin/kubernetes.mdx § Upgrades), without --rollback-on-failure:
+		// The documented upgrade (docs/admin/upgrade.mdx § Upgrade a schema-compatible release), without --rollback-on-failure:
 		// a failed run keeps its objects for the failure record.
 		"--wait=watcher",
 		"--wait-for-jobs",
@@ -1596,7 +1596,7 @@ async function layer(work: string, name: string, values: object): Promise<string
 }
 
 /**
- * The backup and restore drill of docs/admin/kubernetes.mdx § Backup and restore, on the bundled
+ * The backup and restore drill of docs/admin/backup-restore.mdx, on the bundled
  * PostgreSQL: a full backup, a row that only the WAL archive holds, a dropped table, and then a
  * point-in-time restore on a replacement node and volume that brings both rows back.
  */
@@ -2215,7 +2215,7 @@ export async function turnRoll(
 	let forward: { port: number; stop: () => void } | undefined;
 	try {
 		await kubectl(["-n", ROLL_PROVIDER, "rollout", "status", "deployment/replay", "--timeout=5m"]);
-		// docs/admin/kubernetes.mdx § A model endpoint on a private network, with the Pod network as that network.
+		// docs/admin/private-network.md § Admit a model endpoint on a private network, with the Pod network as that network.
 		const host = `replay.${ROLL_PROVIDER}.svc.cluster.local`;
 		await install(
 			work,
@@ -2538,7 +2538,7 @@ async function gatewayAnswer(
 }
 
 /**
- * The routes of docs/admin/kubernetes.mdx § Gateway routes, through Traefik: the redirect to HTTPS,
+ * The routes of docs/admin/helm-chart.md § Gateway routes, through Traefik: the redirect to HTTPS,
  * the webapp, the server behind the `/api` rewrite, and the webhook role, over TLS that the
  * certificate of the Gateway's listener carries.
  */
@@ -2682,7 +2682,7 @@ async function reviewsOn(): Promise<void> {
 }
 
 /**
- * The one-host install as docs/admin/kubernetes.mdx § Install on one host (k3s) runs it: the
+ * The one-host install as docs/admin/k3s.md runs it: the
  * release's k3s-install.sh from its unpacked bundle, with a local CA in place of Let's Encrypt, and without the DNS and
  * clock checks that a runner cannot pass. A runner of 16 GiB installs with the small profile. Then the checks around it, a second run that must change
  * nothing, and an upgrade that rolls every role except PostgreSQL and NATS.

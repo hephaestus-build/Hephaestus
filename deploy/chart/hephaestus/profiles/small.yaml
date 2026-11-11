@@ -1,7 +1,7 @@
 # One small cluster: a single k3s node of 4 vCPU, at least 16 GiB of memory (32 GiB gives more
 # headroom) and 150 GiB of disk. Bundled PostgreSQL and NATS, one worker that runs five reviews at a
 # time, and bounded caches; the chart derives the sandbox quotas.
-# docs/admin/kubernetes.mdx § Profiles gives the arithmetic; a chart test checks that the requests,
+# docs/admin/helm-chart.md § Profiles gives the arithmetic; a chart test checks that the requests,
 # one upgrade beside them, and the quota fit.
 #
 # The worker is on: reviews are the product. The operator states worker.sandbox.namespace and

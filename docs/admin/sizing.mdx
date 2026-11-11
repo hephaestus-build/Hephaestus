@@ -4,7 +4,7 @@ title: Sizing and scaling
 description: The memory, CPU, process, storage and database budget of the Kubernetes deployment.
 ---
 
-The [Kubernetes guide](./kubernetes#profiles) owns the deployment profiles and their resource budgets.
+The [Helm chart reference](./helm-chart#profiles) owns the deployment profiles and their resource budgets.
 Use measured requests to plan capacity, and keep room for the operating system, the cluster and a rolling update.
 A resource limit is a ceiling, not evidence that every workload fits.
 
@@ -60,7 +60,7 @@ No deploy-outage measurement or error-budget qualification is available from the
 
 ## Initial budget
 
-Select a [chart profile](./kubernetes#profiles) for the host.
+Select a [chart profile](./helm-chart#profiles) for the host.
 Check the rendered requests against the node's allocatable resources before installation.
 A sandbox quota bounds the installation's sandbox requests independently of the worker JVM.
 
@@ -128,7 +128,7 @@ Keep the larger limit and lower concurrency if the trial fails.
 
 ## Review sandbox limits
 
-The [Pod-kind table](./kubernetes#sandbox-sizes) owns each sandbox's memory, CPU request and disk sizes.
+The [Pod-kind table](./sandboxes#sandbox-sizes) owns each sandbox's memory, CPU request and disk sizes.
 The review CPU ceiling is 1 CPU. The Helm chart exposes no value to change it.
 The retired `SANDBOX_MEMORY_BYTES` and `SANDBOX_PIDS_LIMIT` settings do not configure Kubernetes.
 The kubelet enforces the per-Pod process limit, which the worker's isolation probe verifies.
@@ -136,7 +136,7 @@ The kubelet enforces the per-Pod process limit, which the worker's isolation pro
 ## CPU and processes
 
 CPU requests determine scheduling and CPU limits bound use.
-Keep the node's process limit configured as the [Kubernetes installation](./kubernetes#worker) requires.
+Keep the node's process limit configured as the [Sandboxes](./sandboxes#worker) requires.
 A worker that cannot prove isolation starts no sandbox work.
 
 ## What you can scale
@@ -201,7 +201,7 @@ For the calculation, see the [Paketo memory calculator](https://paketo.io/docs/r
 
 Budget the node's images, logs and sandbox scratch space separately from persistent database and Git-cache storage.
 The chart bounds sandbox ephemeral-storage requests, limits and volumes.
-The [Kubernetes guide](./kubernetes#sandbox-sizes) owns these bounds.
+The [Sandboxes](./sandboxes#sandbox-sizes) owns these bounds.
 Back up persistent state as [Backup and restore](./backup-restore) describes.
 
 ## Conversation turn admission

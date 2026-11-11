@@ -1,4 +1,4 @@
-{{- /* docs/admin/observability.mdx § Dashboards. The release files are the one home of the dashboard queries. */}}
+{{- /* docs/admin/monitoring.md § Open the dashboards. The release files are the one home of the dashboard queries. */}}
 {{- $target := .Values.observability.dashboards.namespace }}
 {{- $stack := .Values.observability.stack.enabled }}
 {{- if or $stack $target }}

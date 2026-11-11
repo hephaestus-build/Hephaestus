@@ -108,7 +108,7 @@ postgresql:
   # bucket, and CronJobs take a full backup each week and a differential backup on the other days.
   # Needs BACKUP_S3_KEY, BACKUP_S3_KEY_SECRET and BACKUP_CIPHER_PASS in secret.name.
   # clientTlsSecret holds ca.crt, tls.crt and tls.key for CN hephaestus-backup, signed by the
-  # same CA as PostgreSQL. docs/admin/kubernetes.mdx § Backup and restore.
+  # same CA as PostgreSQL. docs/admin/backup-restore.mdx § Back up the database.
   backup:
     enabled: false
     # A cert-manager TLS Secret for CN hephaestus-backup, signed by the PostgreSQL CA.
@@ -128,7 +128,7 @@ postgresql:
       privateCa: false
     # A restore replaces the database with the backup. While it is enabled, the server, webhook,
     # worker and PostgreSQL Pods stop, and a Job restores the PostgreSQL volume. Upgrade again with
-    # restore.enabled=false to start them. docs/admin/kubernetes.mdx § Backup and restore.
+    # restore.enabled=false to start them. docs/admin/backup-restore.mdx § Back up the database.
     restore:
       enabled: false
       # Empty restores the latest backup and every archived WAL segment. A time, such as
@@ -146,7 +146,7 @@ postgresql:
   # Optional: a postgres_exporter Deployment that reads PostgreSQL through the Service, with TLS, as the
   # role hephaestus_monitor, a member of pg_monitor only. Needs DATABASE_MONITOR_PASSWORD in secret.name.
   # With the bundled PostgreSQL, a Job of each release creates the role and sets its password.
-  # docs/admin/observability.mdx § Database metrics.
+  # docs/admin/monitoring.md § Turn on database metrics.
   metrics:
     enabled: false
     # The statements with the most total execution time that it reports, by query id only.
@@ -175,7 +175,7 @@ nats:
   persistence:
     storageClassName: ""
   # The broker requests its whole limit, and the chart sets GOMEMLIMIT to 80 % of it. A catch-up of
-  # several streams fills the limit with heap, not page cache (docs/admin/kubernetes.mdx § NATS memory).
+  # several streams fills the limit with heap, not page cache (docs/admin/helm-chart.md § NATS memory).
   resources:
     requests: { cpu: 100m, memory: 1Gi, ephemeral-storage: 64Mi }
     limits: { cpu: "1", memory: 1Gi, ephemeral-storage: 256Mi }
@@ -185,11 +185,11 @@ nats:
     port: 4222
 
 # server.replicas, webhook.replicas and worker.replicas set 0 only to stop the database roles for
-# maintenance. docs/admin/kubernetes.mdx § Upgrades and database maintenance.
+# maintenance. docs/admin/upgrade.mdx and docs/admin/maintenance.md.
 #
 # The JVM roles (server, webhook, worker) request all of their memory limit: the buildpack sizes the
 # heap from the limit, so a node that has only the request cannot hold what the JVM grows to. Each
-# size is a measured resident set plus headroom (docs/admin/kubernetes.mdx § Profiles).
+# size is a measured resident set plus headroom (docs/admin/helm-chart.md § Profiles).
 server:
   databasePool:
     maximumPoolSize: 20
@@ -253,9 +253,9 @@ webapp:
 # worker.sandbox.namespace and networkPolicy.kubernetesApi. At its start, and then every
 # runtime.probeInterval, each worker proves that the cluster enforces the sandbox boundary; it stops
 # at its start, and runs no new sandbox later, if it does not.
-# docs/admin/kubernetes.mdx § Sandbox prerequisites.
+# docs/admin/sandboxes.md § Sandbox prerequisites.
 # The PriorityClasses of the Pods, highest first: roles, conversations, reviews
-# (docs/admin/kubernetes.mdx § Priorities). The chart creates them, which needs permission to create
+# (docs/admin/sandboxes.md § Priorities). The chart creates them, which needs permission to create
 # cluster-wide objects. Where that is not allowed, set create to false and name three classes that
 # exist, with their values in that order.
 # The release's alert rules, files/hephaestus-alerts.yml, as the rule evaluator of the cluster
@@ -277,7 +277,7 @@ observability:
     namespace: ""
   # A monitoring stack in the release's namespace: VictoriaMetrics scrapes the roles, vmalert evaluates
   # the alert rules, and Alertmanager sends the alerts. Node and cluster exporters are not part of it:
-  # docs/admin/observability.mdx § Monitoring stack.
+  # docs/admin/monitoring.md § Run the monitoring stack.
   stack:
     enabled: false
     retention: 30d
@@ -342,7 +342,7 @@ worker:
     # Restricted Pod Security level. Not the release namespace, and no other release's.
     namespace: ""
     # The memory that the sandbox nodes give review Pods. The reviews that run at once are this over one
-    # review Pod's request, 384 MiB (docs/admin/kubernetes.mdx § Sandbox sizes), and its RuntimeClass
+    # review Pod's request, 384 MiB (docs/admin/sandboxes.md § Sandbox sizes), and its RuntimeClass
     # overhead. Each worker runs as many of them as its memory limit holds. The reviews tier's quota and the
     # worker's threads follow. 3840Mi holds 10 reviews.
     reviewMemory: 3840Mi
@@ -351,7 +351,7 @@ worker:
     # can never take a review's room.
     quota:
       enabled: true
-    # The Pod of each sandbox kind (docs/admin/kubernetes.mdx § Sandbox templates): the agent loop,
+    # The Pod of each sandbox kind (docs/admin/sandboxes.md § Sandbox templates): the agent loop,
     # its tools and the workspace in one container. The workspace counts as ephemeral storage, and the
     # loop starts faster with at least one CPU as its limit.
     templates:

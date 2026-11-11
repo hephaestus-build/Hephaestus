@@ -87,7 +87,7 @@ Each member chooses which models may handle their work: **In-house**, **Cloud**,
 ## Get started
 
 - **Run your own deployment:** on one Linux host, `k3s-install.sh` installs k3s and the Helm chart.
-  See [Install on one host (k3s)](https://docs.hephaestus.build/admin/kubernetes#install-on-one-host-k3s).
+  See [Install on one host (k3s)](https://docs.hephaestus.build/admin/k3s).
   On a Kubernetes cluster, install the [Helm chart](https://docs.hephaestus.build/admin/kubernetes#install).
   Then follow the [first steps](https://docs.hephaestus.build/admin/first-steps).
 - **Sign in to an existing deployment:** if your team already has a workspace, sign in at its address.

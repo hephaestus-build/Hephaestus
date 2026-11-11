@@ -26,7 +26,7 @@ The host connects to these destinations during installation, upgrades, and each 
 
 ## One host on k3s
 
-A [one-host install on k3s](./kubernetes#install-on-one-host-k3s) also needs these destinations:
+A [one-host install on k3s](./k3s) also needs these destinations:
 
 | Destination | Purpose |
 | --- | --- |
@@ -39,7 +39,7 @@ A [one-host install on k3s](./kubernetes#install-on-one-host-k3s) also needs the
 
 A worker reaches a model endpoint through `networkPolicy.externalEgress`, which leaves out private addresses.
 If this host's own Gateway serves the model endpoint, the connection ends at the Traefik Pod, a private address.
-Then set `networkPolicy.workerGatewayPorts: [8443, 8000]` in `site.yaml` ([Network policy](./kubernetes#network-policy)).
+Then set `networkPolicy.workerGatewayPorts: [8443, 8000]` in `site.yaml` ([Network policy](./helm-chart#network-policy)).
 
 ## Containers
 
@@ -55,7 +55,7 @@ Then set `networkPolicy.workerGatewayPorts: [8443, 8000]` in `site.yaml` ([Netwo
 | `api.github.com` | The [update check](./upgrade#update-checks). | `application-server` | By default, on a release. A commit channel or a local build is never checked. `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` turns it off. |
 | `www.ecb.europa.eu` | Daily currency rates for the second display currency. | `application-server` | Only when `HEPHAESTUS_LLM_DISPLAY_CURRENCY` is set. `HEPHAESTUS_LLM_FX_DAILY_URL` points it at a mirror. |
 | Your SMTP relay (`SPRING_MAIL_HOST`) | Email. | `application-server` | Only when `SPRING_MAIL_HOST` is set. |
-| Your OTLP endpoint (`TRACING_OTLP_ENDPOINT`) | Traces. | `application-server`, `application-worker`, `webhook-server` | Only when `TRACING_OTLP_ENABLED` is `true` ([Observability](./observability#exporting-opentelemetry-traces)). |
-| Your log store's OTLP endpoint | Logs. | The optional log collector on each node | Only when you run it ([Collecting logs](./observability#collecting-logs)). |
+| Your OTLP endpoint (`TRACING_OTLP_ENDPOINT`) | Traces. | `application-server`, `application-worker`, `webhook-server` | Only when `TRACING_OTLP_ENABLED` is `true` ([Set up monitoring](./monitoring#export-traces)). |
+| Your log store's OTLP endpoint | Logs. | The optional log collector on each node | Only when you run it ([Collecting logs](./monitoring#collect-logs)). |
 | The pgBackRest repository: your S3 endpoint (`postgresql.backup.s3.endpoint`) | Off-host backups, WAL archiving, and restore.                                                                                                                                                                                                                                                                                       | PostgreSQL and chart backup/restore Jobs                     | When chart backup or restore is enabled ([Backup & restore](./backup-restore#automated-off-host-backup)).                                    |
 | `config.liquibase.com` and the usage analytics of Liquibase | Liquibase product usage data during database migrations. | `application-server` | Never in the supported stack, which does not set `LIQUIBASE_ANALYTICS_ENABLED`. Only when you set it to `true` in the container environment. |

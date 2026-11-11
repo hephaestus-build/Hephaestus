@@ -1,5 +1,5 @@
 # The kubelet configuration of a one-host install: /etc/rancher/k3s/kubelet.yaml, which
-# k3s-config.yaml names. docs/admin/kubernetes.mdx § Install on one host (k3s).
+# k3s-config.yaml names. docs/admin/k3s.md.
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 # A bound on the processes of each Pod. The worker's isolation probe records it.

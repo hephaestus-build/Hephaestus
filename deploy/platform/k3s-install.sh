@@ -1,5 +1,5 @@
 #!/bin/sh
-# The one-host install of Hephaestus on k3s: docs/admin/kubernetes.mdx § Install on one host (k3s).
+# The one-host install of Hephaestus on k3s: docs/admin/k3s.md.
 #
 # Run it as a user with sudo rights, from the folder where you unpacked the verified
 # hephaestus-k3s-X.Y.Z.tar.gz bundle of one release:
@@ -622,7 +622,7 @@ sudo -v || die "this script needs sudo rights"
 # it. It keeps that install's Jobs and Pods for diagnosis instead of rolling it back.
 ROLLBACK=
 if [ "$RELEASE" = true ] && { command -v k3s >/dev/null 2>&1 || [ -f "$HERE/kubeconfig" ] || sudo test -f /etc/rancher/k3s/k3s.yaml; }; then
-	refuse="release changes and failed or pending releases require Stopped schema upgrades: https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades; keep roles stopped after a migration failure; restore the matching backup before returning to the old release"
+	refuse="release changes and failed or pending releases require Stopped schema upgrades: https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades; keep roles stopped after a migration failure; restore the matching backup before returning to the old release"
 	releases=$(sudo "$(command -v helm)" --kubeconfig /etc/rancher/k3s/k3s.yaml \
 		list --namespace "$NAMESPACE" --filter '^hephaestus$' --output json) ||
 		die "cannot read the installed release; restore cluster access before retrying; do not run an older release against a changed database"

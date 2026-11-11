@@ -377,7 +377,7 @@ On a new instance, the manifest-generated secret can become `WEBHOOK_SECRET`.
 2. Download the `.pem`.
    Alternatively, use the key from manifest registration.
 3. **Install the App** on your organization, for all repositories or only those to monitor.
-4. Set the GitHub App ID, installation URL and client ID through the [chart integration values](./kubernetes#integration-values).
+4. Set the GitHub App ID, installation URL and client ID through the [chart integration values](./helm-chart#integration-values).
 5. Store the private key and client secret in the release Secret, with the key names that the chart requires.
    Preserve the PEM file's newlines. Do not put either secret in `site.yaml`.
 6. Upgrade the verified chart with your site values.

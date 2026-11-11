@@ -202,7 +202,7 @@ name in the release namespace, so its certificate must name exactly that host.
 {{- end -}}
 
 {{/*
-Each database purpose has its own login (docs/admin/kubernetes.mdx § Database roles). When the release Secret
+Each database purpose has its own login (docs/admin/helm-chart.md § Database roles). When the release Secret
 exists, a missing key fails the render, and so do the keys of the single superuser login before 1.0, which no
 Pod reads. Without a cluster, as in `helm template`, the kubelet refuses a Pod whose key is missing.
 */}}
@@ -216,7 +216,7 @@ Pod reads. Without a cluster, as in `helm template`, the kubelet refuses a Pod w
 {{- end -}}
 {{- range $required -}}
 {{- if not (hasKey $data .) -}}
-{{- fail (printf "the Secret %s needs the key %s: see docs/admin/kubernetes.mdx § Database roles" $.Values.secret.name .) -}}
+{{- fail (printf "the Secret %s needs the key %s: see docs/admin/helm-chart.md § Database roles" $.Values.secret.name .) -}}
 {{- end -}}
 {{- end -}}
 {{- range list "DATABASE_USERNAME" "DATABASE_PASSWORD" -}}
@@ -710,7 +710,7 @@ PostgreSQL volume.
 {{/*
 The Go runtime's soft memory limit for the bundled broker: 80 % of its container limit. Without it, a catch-up of several
 streams grows the heap to the container limit and the kernel kills the broker. With it, the collector works harder and the
-catch-up only slows (docs/admin/kubernetes.mdx § NATS memory).
+catch-up only slows (docs/admin/helm-chart.md § NATS memory).
 */}}
 {{- define "hephaestus.natsGoMemLimit" -}}
 {{- $mi := include "hephaestus.memoryMi" (dict "value" .Values.nats.resources.limits.memory "name" "nats.resources.limits.memory") | int -}}

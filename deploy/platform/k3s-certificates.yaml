@@ -1,4 +1,4 @@
-# The certificates of a one-host install on k3s: docs/admin/kubernetes.mdx § Install on one host (k3s).
+# The certificates of a one-host install on k3s: docs/admin/k3s.md.
 #
 # k3s-install.sh writes this file to /var/lib/rancher/k3s/server/manifests/hephaestus-certificates.yaml
 # with two values replaced: hephaestus.example.com by the host name, and acme@example.com by the

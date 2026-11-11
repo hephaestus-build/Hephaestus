@@ -3,7 +3,7 @@ The worker role runs every sandbox as a Pod or Job that its runtime creates in t
 The operator creates that namespace with the Restricted Pod Security level, for this release alone:
 the workers remove what they do not use there. The chart writes its quota, its policies and the
 worker's API authority in it. Each worker proves at its start, and then
-on a schedule, that the cluster enforces them (the isolation probe, docs/admin/kubernetes.mdx
+on a schedule, that the cluster enforces them (the isolation probe, docs/admin/sandboxes.md
 § Sandbox prerequisites).
 */}}
 {{- if .Values.worker.enabled }}

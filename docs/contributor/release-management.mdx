@@ -151,7 +151,7 @@ Every release installs its signed, immutable Helm chart on native Ubuntu 24.04 `
 Either architecture can block publication.
 The seeded-upgrade gate separately proves the supported migration path.
 
-`release-host-smoke.yml` follows [Install on one host (k3s)](/admin/kubernetes#install-on-one-host-k3s).
+`release-host-smoke.yml` follows [Install on one host (k3s)](/admin/k3s).
 It verifies the signature of the signed k3s bundle and unpacks it, as the operator does. The installer verifies the release chart as [Verify the release chart](/admin/kubernetes#verify-the-release-chart) describes.
 Then `scripts/kubernetes-cluster.ts release-smoke` runs the `k3s-install.sh` of the unpacked bundle, the command of the docs, with a local CA and without the DNS and clock checks. A runner of 16 GiB installs with the `small.yaml` profile.
 

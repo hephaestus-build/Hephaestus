@@ -97,7 +97,7 @@ Both have procedures in
 
 All optional integrations are off by default.
 [Integration settings](./production-setup) describes the settings of each.
-On Kubernetes, [Integration values](./kubernetes#integration-values) names the chart values and the Secret keys of each.
+On Kubernetes, [Integration values](./helm-chart#integration-values) names the chart values and the Secret keys of each.
 
 1. Enable the desired integrations.
 2. Run the install command again: the `helm upgrade --install` command of [Install](./kubernetes#install) step 6 with your site values.
@@ -113,7 +113,7 @@ On Kubernetes, [Integration values](./kubernetes#integration-values) names the c
 
 AI practice review requires a running worker and a model that the workspace can run on.
 On Kubernetes, the `small.yaml` profile enables the worker.
-Enable reviews and repository checkouts through the [chart values](./kubernetes#integration-values).
+Enable reviews and repository checkouts through the [chart values](./helm-chart#integration-values).
 
 The job queue runs on PostgreSQL, so practice review needs no NATS setup.
 

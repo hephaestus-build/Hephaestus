@@ -53,7 +53,7 @@ spec:
         # files/database-roles.sh, as the administrator, before each migration: a changed password takes
         # effect with the upgrade. Only this container has the administrator's password, and PostgreSQL gets
         # only the SCRAM verifiers. An external PostgreSQL gets no such container: its operator runs the script
-        # (docs/admin/kubernetes.mdx § Database roles).
+        # (docs/admin/helm-chart.md § Database roles).
         - name: database-roles
           image: {{ include "hephaestus.image" (dict "root" . "name" "postgres") | quote }}
           imagePullPolicy: IfNotPresent
@@ -97,7 +97,7 @@ spec:
               value: prod,migrate
             - name: DATABASE_URL
               value: {{ include "hephaestus.databaseUrl" . | quote }}
-            # The owner of the schema, which only this Job uses (docs/admin/kubernetes.mdx § Database roles).
+            # The owner of the schema, which only this Job uses (docs/admin/helm-chart.md § Database roles).
             - name: DATABASE_USERNAME
               value: hephaestus_owner
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD" "key" "DATABASE_OWNER_PASSWORD") | nindent 12 }}

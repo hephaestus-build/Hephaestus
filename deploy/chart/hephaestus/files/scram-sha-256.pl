@@ -1,5 +1,5 @@
 # Prints the SCRAM-SHA-256 verifier of a password, as libpq's PQencryptPasswordConn computes it, so that no
-# plaintext password reaches the PostgreSQL server (docs/admin/kubernetes.mdx § Database roles):
+# plaintext password reaches the PostgreSQL server (docs/admin/helm-chart.md § Database roles):
 #
 #   DATABASE_OWNER_VERIFIER="$(perl scram-sha-256.pl DATABASE_OWNER_PASSWORD)"
 #

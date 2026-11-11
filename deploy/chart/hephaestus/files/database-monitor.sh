@@ -1,4 +1,4 @@
-# Sets up the login of the PostgreSQL exporter (docs/admin/observability.mdx § Database metrics). Run it as the
+# Sets up the login of the PostgreSQL exporter (docs/admin/monitoring.md § Turn on database metrics). Run it as the
 # PostgreSQL administrator, with the password in the environment, and give it the connection options of psql:
 #
 #   DATABASE_MONITOR_PASSWORD=… sh database-monitor.sh "host=… dbname=hephaestus user=…"

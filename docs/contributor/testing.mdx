@@ -19,7 +19,7 @@ names for readers.
 
 - Extend `BaseIntegrationTest` for cross-component behavior.
 - Reuse the shared PostgreSQL Testcontainer.
-  The application connects as `hephaestus_app`, and Liquibase migrates as `hephaestus_owner`, as in production ([Database roles](../admin/kubernetes#database-roles)).
+  The application connects as `hephaestus_app`, and Liquibase migrates as `hephaestus_owner`, as in production ([Database roles](../admin/helm-chart#database-roles)).
   The application role cannot change the schema. A fixture that changes it uses `PostgreSQLTestContainer.ownerJdbc()`.
 - For webhook tests, deserialize recorded fixtures into the handler's event DTO.
 

@@ -2,7 +2,7 @@
 The monitoring stack of the release, in its namespace: VictoriaMetrics scrapes the roles, vmalert evaluates
 files/hephaestus-alerts.yml, and Alertmanager notifies. Node, kubelet and kube-state-metrics exporters need
 host paths or cluster-wide access, which the restricted posture of the chart excludes.
-docs/admin/observability.mdx § Monitoring stack.
+docs/admin/monitoring.md § Run the monitoring stack.
 */}}
 {{- $stack := .Values.observability.stack }}
 {{- if $stack.enabled }}
@@ -64,7 +64,7 @@ subjects:
     name: {{ $metrics }}
     namespace: {{ .Release.Namespace }}
 ---
-# The scrape of docs/admin/observability.mdx § Scrape metrics, for this release's Pods only.
+# The scrape of docs/admin/monitoring.md § Scrape metrics, for this release's Pods only.
 apiVersion: v1
 kind: ConfigMap
 metadata:
