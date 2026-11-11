@@ -10,6 +10,8 @@ const SHIPPED_PATHS = [
 	"extension",
 	":!**/*.md",
 	":!server/application/src/test",
+	// The test durations that partition the integration shards: test data, in no image.
+	":!server/application/integration-test-durations.json",
 	":!webapp/e2e",
 	":!extension/e2e",
 	":!**/*.test.ts",

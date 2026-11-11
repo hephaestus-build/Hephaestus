@@ -402,6 +402,17 @@ void test("a push of shipped code without a changeset stops before any check run
 			cwd: f.directory,
 			encoding: "utf8",
 		}).trim();
+		await mkdir(path.join(f.directory, "server/application"), { recursive: true });
+		await writeFile(
+			path.join(f.directory, "server/application/integration-test-durations.json"),
+			"{}\n",
+		);
+		f.git("add", ".");
+		f.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "test durations");
+		// Test data that no image holds needs no release note, so the gates run.
+		assert.doesNotMatch(f.run(f.directory, base).stderr, /carries no changeset/u);
+		await rm(f.calls, { force: true });
+
 		await mkdir(path.join(f.directory, "webapp/src"), { recursive: true });
 		await writeFile(path.join(f.directory, "webapp/src/feature.ts"), "export const feature = 1;\n");
 		f.git("add", ".");
