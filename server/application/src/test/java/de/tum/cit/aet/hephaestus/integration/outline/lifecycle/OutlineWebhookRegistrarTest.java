@@ -66,7 +66,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     private static final long WORKSPACE_ID = 7L;
     private static final long CONNECTION_ID = 31L;
     private static final String SERVER_URL = "https://outline.example.test";
-    private static final String EXTERNAL_URL = "https://heph.example.com/";
+    private static final String API_ORIGIN = "https://heph.example.com/";
     private static final String ROUTING_SECRET = "outline-route-test-routing-secret-0123456789";
     private static final OutlineRouteCredential CREDENTIAL = credential(ROUTING_SECRET);
 
@@ -185,7 +185,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubToken();
         stubCreateReturning("sub-99");
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         // The delivery URL uses the canonical origin and the route endpoint, and the secret is the
         // one the receiver derives from that route.
@@ -220,7 +220,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubToken();
         stubCreateReturning("sub-99");
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         InOrder order = inOrder(routes, outlineApiClient);
         order.verify(routes).allow(anyString());
@@ -234,7 +234,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubCreateReturning("sub-99");
         when(connectionService.updateConfig(anyLong(), any(), any())).thenReturn(Optional.empty());
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-99");
         verifyNoInteractions(natsConsumer);
@@ -248,7 +248,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         when(connectionService.updateConfig(anyLong(), any(), any()))
                 .thenThrow(new IllegalStateException("optimistic lock"));
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-99");
         verifyNoInteractions(natsConsumer);
@@ -263,7 +263,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                 .when(outlineApiClient)
                 .deleteWebhookSubscription(SERVER_URL, "tok", "sub-1");
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         assertThat(meters.get("outline.webhook.subscription.deletion.failed")
                         .counter()
@@ -283,7 +283,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubToken();
         stubCreateReturning("sub-99");
 
-        registrar(EXTERNAL_URL).healRoutes();
+        registrar(API_ORIGIN).healRoutes();
 
         verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
         assertThat(meters.get("outline.webhook.subscription.unrouted").gauge().value())
@@ -296,7 +296,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                         connectionService,
                         outlineApiClient,
                         credential(""),
-                        new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(EXTERNAL_URL), "/api")),
+                        new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN), "/api")),
                         providerOf(natsConsumer),
                         providerOf(routes),
                         connectionRepository,
@@ -314,7 +314,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubToken();
         when(outlineApiClient.listWebhookSubscriptions(SERVER_URL, "tok")).thenReturn(List.of(upstream("sub-1", true)));
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient, never()).createWebhookSubscription(any(), any(), any(), any(), any(), any());
         verify(connectionService, never()).updateConfig(anyLongMatcher(), any(), any());
@@ -328,7 +328,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubToken();
         when(outlineApiClient.listWebhookSubscriptions(SERVER_URL, "tok")).thenReturn(List.of(upstream("sub-1", true)));
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         // A reactivated connection's route left the projection while the connection was not ACTIVE.
         verify(routes).allow(ROUTE);
@@ -343,7 +343,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                 .thenReturn(List.of(upstream("sub-1", false)));
         stubCreateReturning("sub-2");
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         // The new subscription is stored, then the disabled one is deleted upstream.
         @SuppressWarnings("unchecked")
@@ -367,7 +367,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         when(outlineApiClient.createWebhookSubscription(any(), any(), any(), any(), any(), any()))
                 .thenThrow(new OutlineApiException("boom"));
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
         verify(connectionService, never()).updateConfig(anyLongMatcher(), any(), any());
@@ -380,7 +380,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubToken();
         stubCreateReturning("sub-2");
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-1");
         verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
@@ -396,7 +396,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubToken();
         stubCreateReturning("sub-2");
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-1");
         verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
@@ -410,7 +410,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                 .thenReturn(List.of(upstream("sub-1", true, "https://old.example.com/webhooks/outline/" + ROUTE)));
         stubCreateReturning("sub-2");
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-1");
         verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
@@ -423,7 +423,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         when(outlineApiClient.listWebhookSubscriptions(SERVER_URL, "tok")).thenReturn(List.of());
         stubCreateReturning("sub-2");
 
-        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
         verifyScopeConsumerReconciled();
@@ -435,7 +435,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubToken();
         when(outlineApiClient.listWebhookSubscriptions(SERVER_URL, "tok")).thenThrow(new OutlineApiException("boom"));
 
-        assertThatCode(() -> registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID))
+        assertThatCode(() -> registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID))
                 .doesNotThrowAnyException();
 
         verify(outlineApiClient, never()).createWebhookSubscription(any(), any(), any(), any(), any(), any());
@@ -452,7 +452,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         when(connectionService.findBearerToken(WORKSPACE_ID, CONNECTION_ID))
                 .thenReturn(Optional.of(new BearerToken("tok", null)));
 
-        registrar(EXTERNAL_URL).deregister(WORKSPACE_ID, CONNECTION_ID);
+        registrar(API_ORIGIN).deregister(WORKSPACE_ID, CONNECTION_ID);
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-77");
         verifyScopeConsumerReconciled();
@@ -465,7 +465,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         when(connectionService.findBearerToken(WORKSPACE_ID, CONNECTION_ID))
                 .thenReturn(Optional.of(new BearerToken("tok", null)));
 
-        Runnable deletion = registrar(EXTERNAL_URL)
+        Runnable deletion = registrar(API_ORIGIN)
                 .prepareDeregistration(WORKSPACE_ID, CONNECTION_ID)
                 .orElseThrow();
         verifyNoInteractions(outlineApiClient);
@@ -481,7 +481,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         when(connectionService.findInWorkspace(WORKSPACE_ID, CONNECTION_ID)).thenReturn(Optional.of(connection));
         when(connectionService.findBearerToken(WORKSPACE_ID, CONNECTION_ID)).thenReturn(Optional.empty());
 
-        assertThatCode(() -> registrar(EXTERNAL_URL).deregister(WORKSPACE_ID, CONNECTION_ID))
+        assertThatCode(() -> registrar(API_ORIGIN).deregister(WORKSPACE_ID, CONNECTION_ID))
                 .doesNotThrowAnyException();
 
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
@@ -495,7 +495,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         when(connection.getConfig()).thenReturn(config(null, null));
         when(connectionService.findInWorkspace(WORKSPACE_ID, CONNECTION_ID)).thenReturn(Optional.of(connection));
 
-        registrar(EXTERNAL_URL).deregister(WORKSPACE_ID, CONNECTION_ID);
+        registrar(API_ORIGIN).deregister(WORKSPACE_ID, CONNECTION_ID);
 
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
         verifyNoInteractions(natsConsumer);
@@ -520,7 +520,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                 stubToken();
                 stubCreateReturning("sub-99");
 
-                assertThatCode(() -> registrar(EXTERNAL_URL, null).ensureSubscription(WORKSPACE_ID))
+                assertThatCode(() -> registrar(API_ORIGIN, null).ensureSubscription(WORKSPACE_ID))
                         .doesNotThrowAnyException();
 
                 verify(connectionService).updateConfig(eq(WORKSPACE_ID), eq(IntegrationKind.OUTLINE), any());
@@ -532,7 +532,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                         .thenReturn(List.of(upstream("sub-1", false)));
                 stubCreateReturning("sub-2");
 
-                assertThatCode(() -> registrar(EXTERNAL_URL, null).ensureSubscription(WORKSPACE_ID))
+                assertThatCode(() -> registrar(API_ORIGIN, null).ensureSubscription(WORKSPACE_ID))
                         .doesNotThrowAnyException();
 
                 verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
@@ -544,7 +544,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                 when(connectionService.findBearerToken(WORKSPACE_ID, CONNECTION_ID))
                         .thenReturn(Optional.of(new BearerToken("tok", null)));
 
-                assertThatCode(() -> registrar(EXTERNAL_URL, null).deregister(WORKSPACE_ID, CONNECTION_ID))
+                assertThatCode(() -> registrar(API_ORIGIN, null).deregister(WORKSPACE_ID, CONNECTION_ID))
                         .doesNotThrowAnyException();
 
                 verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-77");

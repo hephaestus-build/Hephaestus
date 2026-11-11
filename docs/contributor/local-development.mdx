@@ -582,6 +582,11 @@ echo "WEBHOOK_SECRET=$(openssl rand -hex 32)" >> server/.env
 The value must match the secret configured on your GitHub webhooks, which `X-Hub-Signature-256` validates.
 GitLab group hooks use `WEBHOOK_ROUTING_SECRET` instead — see [`WEBHOOK_ROUTING_SECRET`](../admin/production-setup#gitlab-rollout-bundle).
 
+Before enabling GitLab or Outline registration with a routing secret, set `HEPHAESTUS_AUTH_ISSUER` to your public HTTPS tunnel's root origin.
+Forward `/webhooks/` to the local receiver.
+Registration uses the issuer even outside production.
+The default loopback issuer cannot receive provider deliveries through that tunnel.
+
 For Slack app setup, use the scope/event checklist in
 [`docs/admin/production-setup.mdx`](../admin/production-setup#slack-app-configuration) and the manifest template in
 [`docs/admin/slack-app-manifest-template.yml`](../admin/slack-app-manifest-template.yml).
