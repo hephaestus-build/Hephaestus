@@ -215,6 +215,7 @@ paths:
             - GITHUB_INSTALLATION_ADOPTED
             - GITHUB_INSTALLATION_DECLINED
             - WORKSPACE_OWNER_CHANGE
+            - WORKSPACE_DELETION
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -315,6 +316,7 @@ paths:
             - GITHUB_INSTALLATION_ADOPTED
             - GITHUB_INSTALLATION_DECLINED
             - WORKSPACE_OWNER_CHANGE
+            - WORKSPACE_DELETION
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -415,6 +417,7 @@ paths:
             - GITHUB_INSTALLATION_ADOPTED
             - GITHUB_INSTALLATION_DECLINED
             - WORKSPACE_OWNER_CHANGE
+            - WORKSPACE_DELETION
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -3167,6 +3170,12 @@ paths:
       responses:
         "204":
           description: Account deletion requested
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller has not signed in recently (problem type step-up-required)
       summary: Delete the current account (GDPR Art. 17)
       tags:
       - Account
@@ -3894,6 +3903,13 @@ paths:
       responses:
         "204":
           description: Workspace purged
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "The caller has not signed in recently (problem type step-up-required),\
+            \ or is not an owner"
       summary: Permanently delete a workspace and purge its data
       tags:
       - workspace
