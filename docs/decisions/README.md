@@ -119,14 +119,14 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Superseded by [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) |
 | [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
 | [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Accepted |
-| [0045](0045-activity-counts-work-and-never-ranks-people.md) | Activity counts and lists work; it never scores or ranks people | Accepted |
+| [0045](0045-activity-counts-work-and-never-ranks-people.md) | Activity counts and lists work; it never scores or ranks people | Superseded by [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) |
 | [0046](0046-heph-follows-its-model-not-a-workspace-switch.md) | Heph follows its model, not a workspace switch | Accepted |
-| [0047](0047-the-practice-profile-has-one-reader.md) | The Practice profile has one reader | Accepted |
+| [0047](0047-the-practice-profile-has-one-reader.md) | The Practice profile has one reader | Superseded by [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) |
 | [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) | Installed clients sign in with a PKCE handoff to their own revocable session | Accepted |
 | [0049](0049-browser-extension-report-in-the-page.md) | The browser extension shows its report in the page and confirms changes in its own window | Accepted |
 | [0050](0050-one-practice-standard-one-outcome.md) | One practice standard, one outcome | Superseded by [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) |
-| [0051](0051-practices-across-the-workspace-counts-developers.md) | Practices across the workspace counts developers and never names one | Accepted |
-| [0052](0052-activity-sorts-by-contributions-and-can-be-public.md) | Workspace activity sorts people by plain counts, and a workspace can publish it | Accepted |
+| [0051](0051-practices-across-the-workspace-counts-developers.md) | Practices across the workspace counts developers and never names one | Superseded by [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) |
+| [0052](0052-activity-sorts-by-contributions-and-can-be-public.md) | Workspace activity sorts people by plain counts, and a workspace can publish it | Superseded by [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) |
 | [0053](0053-workspace-addresses-are-a-presentation-origin.md) | A workspace address is a presentation origin, and sign-in stays on the apex | Accepted |
 | [0054](0054-practice-visuals-and-guides.md) | Practice visuals and guides are themeable inline SVG and Markdown | Accepted |
 | [0055](0055-practice-scripts-use-one-result-contract.md) | Practice scripts use one result contract | Accepted |
@@ -166,5 +166,6 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) | A practice review cites only bytes that the server captured, admission verifies each citation once, and Hephaestus keeps the verdict, not the bytes | Accepted |
 | [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) | The signed Helm chart is the only supported deployment, and one host runs it on k3s | Accepted |
 | [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) | CI builds each image once, a release signs one lock that names it, and hosts pull that lock | Accepted |
+| [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) | Members see activity, a workspace can publish its public work, and private practice feedback has one reader | Accepted |
 
 Template: [0000-template.md](0000-template.md).

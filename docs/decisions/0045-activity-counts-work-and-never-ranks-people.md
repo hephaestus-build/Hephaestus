@@ -1,6 +1,6 @@
 # ADR 0045: Activity counts and lists work; it never scores or ranks people
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md)
 **Date:** 2026-09-27
 **Authors:** Felix T.J. Dietrich
 **Amended by:** [ADR 0052](0052-activity-sorts-by-contributions-and-can-be-public.md)
