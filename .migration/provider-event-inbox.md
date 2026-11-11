@@ -12,7 +12,7 @@ Webhook deliveries now wait in the provider event inbox in PostgreSQL. The upgra
    An event that is still in a stream when the roles stop is not handled.
 3. Stop every role, as phase 1 of [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades) describes.
    While no server runs, GitHub redelivers the failed deliveries of the past two hours after the upgrade, Slack retries, and the routine sync repairs GitLab and Outline.
-4. In your values, remove `webhook.stream` and `config.consumerInactiveThreshold`.
+4. In your values, remove `webhook` (its last setting was `webhook.stream`) and `config.consumerInactiveThreshold`.
    Outside the chart, remove the `HEPHAESTUS_WEBHOOK_STREAM_*` variables and `HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD`.
 5. In your own alert routing, remove `HephaestusStreamPollStale`, `HephaestusStreamPollMissing`, `HephaestusStreamBacklog`, `HephaestusStreamConsumerStopped`, `HephaestusWebhookStreamPastAgeBound` and `HephaestusWebhookRetentionBelowAgeBound`.
    Add `HephaestusProviderEventsWaiting` and `HephaestusProviderEventBacklogUnsampled`.
