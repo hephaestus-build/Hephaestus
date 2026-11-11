@@ -164,6 +164,10 @@ Each stream deletes its oldest messages first when it reaches its age limit or i
 
 No container writes an HTTP access log.
 
+Log lines carry account, user and provider ids, which identify a person indirectly.
+They carry no provider login and no email address.
+Thus, give your log store an age limit, for example 30 days in Loki.
+
 ## Backups
 
 | Data | Retention | Where to change it |

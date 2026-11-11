@@ -65,9 +65,9 @@ public class GitHubPullRequestReviewThreadProcessor {
                             .ifPresent(threadData -> eventPublisher.publishEvent(
                                     new ScmDomainEvent.ReviewThreadResolved(threadData, EventContext.from(context))));
                     log.info(
-                            "Resolved thread: threadId={}, resolvedByLogin={}",
+                            "Resolved thread: threadId={}, resolvedById={}",
                             threadId,
-                            resolvedBy != null ? resolvedBy.getLogin() : null);
+                            resolvedBy != null ? resolvedBy.getId() : null);
                     return true;
                 })
                 .orElseGet(() -> {

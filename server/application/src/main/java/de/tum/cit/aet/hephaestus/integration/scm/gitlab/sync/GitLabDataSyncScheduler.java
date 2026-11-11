@@ -265,11 +265,9 @@ public class GitLabDataSyncScheduler {
      */
     private void syncScope(SyncSession session, @Nullable SyncExecutionHandle handle, SyncJobType type) {
         Long scopeId = session.scopeId();
-        String safeLogin = sanitizeForLog(session.accountLogin());
-
         syncContextProvider.setContext(session.syncContext());
         try {
-            log.info("Starting GitLab workspace sync: scopeId={}, accountLogin={}", scopeId, safeLogin);
+            log.info("Starting GitLab workspace sync: scopeId={}", scopeId);
 
             GitLabSyncServiceHolder services = syncServiceHolderProvider.getIfAvailable();
             if (services == null) {
@@ -360,9 +358,9 @@ public class GitLabDataSyncScheduler {
                 handle.reportCancelled();
             }
 
-            log.info("Completed GitLab workspace sync: scopeId={}, accountLogin={}", scopeId, safeLogin);
+            log.info("Completed GitLab workspace sync: scopeId={}", scopeId);
         } catch (Exception e) {
-            log.error("Failed GitLab workspace sync: scopeId={}, accountLogin={}", scopeId, safeLogin, e);
+            log.error("Failed GitLab workspace sync: scopeId={}", scopeId, e);
             if (handle != null) {
                 throw new IllegalStateException("Failed to sync GitLab scope " + scopeId, e);
             }

@@ -205,16 +205,14 @@ public class AccountProvisioningService {
         if (result.getAppRole() != Account.AppRole.APP_ADMIN && adminBootstrapPolicy.isConfigured()) {
             // Cold-start aid: a new account on an allowlist-configured instance that did NOT
             // match.
-            // Logs the exact identity so a mis-listed first admin can self-diagnose in one line
+            // Logs the provider subject, not the username, so a mis-listed first admin can self-diagnose in one line
             // instead of silently landing as a plain USER with no Admin nav.
             log.info(
                     "auth.bootstrap: new accountId={} did NOT match bootstrap-admins"
-                            + " (provider={} subject={} username=@{}). Add 'provider:@username' or"
-                            + " 'provider:subject' to grant APP_ADMIN.",
+                            + " (provider={} subject={}). Add 'provider:subject' to grant APP_ADMIN.",
                     result.getId(),
                     registrationId,
-                    subject,
-                    login);
+                    subject);
         }
         return new ProvisionResult(result, false);
     }

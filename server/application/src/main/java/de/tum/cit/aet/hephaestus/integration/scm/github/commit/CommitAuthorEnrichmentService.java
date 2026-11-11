@@ -247,7 +247,7 @@ public class CommitAuthorEnrichmentService {
             if (userId != null) {
                 int updated = commitRepository.bulkUpdateAuthorIdFromStoredEmail(email, repositoryId, userId);
                 enriched += updated;
-                log.debug("Enriched {} commits author by email: email={}, repoId={}", updated, email, repositoryId);
+                log.debug("Enriched {} commits author by email: userId={}, repoId={}", updated, userId, repositoryId);
             }
         }
 
@@ -256,7 +256,8 @@ public class CommitAuthorEnrichmentService {
             if (userId != null) {
                 int updated = commitRepository.bulkUpdateCommitterIdFromStoredEmail(email, repositoryId, userId);
                 enriched += updated;
-                log.debug("Enriched {} commits committer by email: email={}, repoId={}", updated, email, repositoryId);
+                log.debug(
+                        "Enriched {} commits committer by email: userId={}, repoId={}", updated, userId, repositoryId);
             }
         }
 
@@ -338,11 +339,7 @@ public class CommitAuthorEnrichmentService {
                 int updated = commitRepository.bulkUpdateAuthorIdByEmail(email, repositoryId, userId);
                 enriched += updated;
                 log.debug(
-                        "Enriched {} commits author via GraphQL: email={}, login={}, repoId={}",
-                        updated,
-                        email,
-                        login,
-                        repositoryId);
+                        "Enriched {} commits author via GraphQL: userId={}, repoId={}", updated, userId, repositoryId);
             }
         }
 
@@ -357,10 +354,9 @@ public class CommitAuthorEnrichmentService {
                 int updated = commitRepository.bulkUpdateCommitterIdByEmail(email, repositoryId, userId);
                 enriched += updated;
                 log.debug(
-                        "Enriched {} commits committer via GraphQL: email={}, login={}, repoId={}",
+                        "Enriched {} commits committer via GraphQL: userId={}, repoId={}",
                         updated,
-                        email,
-                        login,
+                        userId,
                         repositoryId);
             }
         }
@@ -758,9 +754,9 @@ public class CommitAuthorEnrichmentService {
                 processed++;
             } catch (Exception e) {
                 log.debug(
-                        "Failed to upsert user from commit enrichment: repo={}, login={}, error={}",
+                        "Failed to upsert user from commit enrichment: repo={}, userNativeId={}, error={}",
                         nameWithOwner,
-                        dto.login(),
+                        dto.getDatabaseId(),
                         e.getClass().getSimpleName());
             }
         }

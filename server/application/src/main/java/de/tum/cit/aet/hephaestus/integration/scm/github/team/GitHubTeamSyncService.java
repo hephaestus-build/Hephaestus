@@ -483,8 +483,8 @@ public class GitHubTeamSyncService {
                     // Update role if changed
                     if (existingMembership.getRole() != role) {
                         log.debug(
-                                "Updated team membership role: userLogin={}, teamName={}, oldRole={}, newRole={}",
-                                sanitizeForLog(user.getLogin()),
+                                "Updated team membership role: userId={}, teamName={}, oldRole={}, newRole={}",
+                                user.getId(),
                                 sanitizeForLog(team.getName()),
                                 existingMembership.getRole(),
                                 role);
@@ -496,8 +496,8 @@ public class GitHubTeamSyncService {
                     TeamMembership membership = new TeamMembership(team, user, role);
                     teamMembershipRepository.save(membership);
                     log.debug(
-                            "Created team membership: userLogin={}, teamName={}, role={}",
-                            sanitizeForLog(user.getLogin()),
+                            "Created team membership: userId={}, teamName={}, role={}",
+                            user.getId(),
                             sanitizeForLog(team.getName()),
                             role);
                 }

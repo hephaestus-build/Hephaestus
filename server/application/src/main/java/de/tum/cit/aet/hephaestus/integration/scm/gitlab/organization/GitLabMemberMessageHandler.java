@@ -91,13 +91,11 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
     @Override
     protected void handleEvent(GitLabMemberEventDTO event) {
         String safeGroupPath = sanitizeForLog(event.groupPath());
-        String safeUsername = sanitizeForLog(event.userUsername());
-
         log.debug(
-                "Received member event: eventName={}, groupPath={}, user={}, access={}",
+                "Received member event: eventName={}, groupPath={}, userNativeId={}, access={}",
                 event.eventName(),
                 safeGroupPath,
-                safeUsername,
+                event.userId(),
                 event.groupAccess());
 
         // The event only says that a membership changed: the membership stored is the one GitLab reports now, so a

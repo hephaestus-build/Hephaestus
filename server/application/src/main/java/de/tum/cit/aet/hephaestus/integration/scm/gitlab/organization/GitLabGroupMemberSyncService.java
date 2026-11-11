@@ -337,7 +337,7 @@ public class GitLabGroupMemberSyncService {
             if (locked) {
                 userRepository.freeLoginConflicts(login, nativeId, providerId);
             } else {
-                log.debug("Could not acquire advisory lock for login={}, proceeding with upsert", login);
+                log.debug("Could not acquire advisory lock for userNativeId={}, proceeding with upsert", nativeId);
             }
             userRepository.upsertUser(
                     nativeId,

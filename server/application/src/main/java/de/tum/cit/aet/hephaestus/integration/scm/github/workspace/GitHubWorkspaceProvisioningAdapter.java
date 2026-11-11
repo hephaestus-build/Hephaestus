@@ -195,11 +195,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
     @Override
     public void onAccountRenamed(Long installationId, @Nullable String oldLogin, String newLogin) {
         if (installationId == null || newLogin == null || newLogin.isBlank()) {
-            log.warn(
-                    "Skipped account rename: reason=invalidData, installationId={}, oldLogin={}, newLogin={}",
-                    installationId,
-                    oldLogin,
-                    newLogin);
+            log.warn("Skipped account rename: reason=invalidData, installationId={}", installationId);
             return;
         }
 

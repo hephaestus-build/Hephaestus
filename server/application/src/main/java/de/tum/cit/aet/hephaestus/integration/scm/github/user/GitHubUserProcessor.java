@@ -113,7 +113,7 @@ public class GitHubUserProcessor {
         }
         Long userId = dto.getDatabaseId();
         if (userId == null) {
-            log.debug("Skipped user processing: reason=missingDatabaseId, userLogin={}", dto.login());
+            log.debug("Skipped user processing: reason=missingDatabaseId");
             return null;
         }
 
@@ -144,7 +144,7 @@ public class GitHubUserProcessor {
             entityManager().refresh(result);
         } else {
             // Should not happen after a successful upsert, but handle gracefully
-            log.warn("User not found after upsert: nativeId={}, providerId={}, login={}", userId, providerId, login);
+            log.warn("User not found after upsert: nativeId={}, providerId={}", userId, providerId);
         }
         return result;
     }
@@ -178,9 +178,9 @@ public class GitHubUserProcessor {
                         userRepository.freeLoginConflicts(login, userId, providerId);
                     } else {
                         log.debug(
-                                "Could not acquire advisory lock after {} attempts, proceeding with upsert: login={}",
+                                "Could not acquire advisory lock after {} attempts, proceeding with upsert: nativeId={}",
                                 MAX_LOCK_ATTEMPTS,
-                                login);
+                                userId);
                     }
 
                     // Step 3: Insert or update the user.
@@ -204,8 +204,8 @@ public class GitHubUserProcessor {
                     long delay =
                             DEADLOCK_RETRY_BASE_MS * (1L << attempt) + (long) (Math.random() * DEADLOCK_RETRY_BASE_MS);
                     log.warn(
-                            "Deadlock detected during user upsert, retrying: login={}, attempt={}/{}, delayMs={}",
-                            login,
+                            "Deadlock detected during user upsert, retrying: nativeId={}, attempt={}/{}, delayMs={}",
+                            userId,
                             attempt + 1,
                             MAX_DEADLOCK_RETRIES,
                             delay);
@@ -218,9 +218,8 @@ public class GitHubUserProcessor {
                     }
                 } else {
                     log.error(
-                            "Deadlock persisted after {} retries during user upsert: login={}, userId={}",
+                            "Deadlock persisted after {} retries during user upsert: nativeId={}",
                             MAX_DEADLOCK_RETRIES,
-                            login,
                             userId);
                     throw e; // Exhausted retries, propagate to caller
                 }

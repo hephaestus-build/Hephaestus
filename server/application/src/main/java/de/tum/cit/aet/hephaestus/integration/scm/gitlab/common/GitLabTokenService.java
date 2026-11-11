@@ -134,11 +134,7 @@ public class GitLabTokenService {
             if (user != null) {
                 ValidatedToken validated = new ValidatedToken(token, user.id(), user.username(), Instant.now());
                 validationCache.put(scopeId, validated);
-                log.info(
-                        "GitLab token validated: scopeId={}, username={}, userId={}",
-                        scopeId,
-                        user.username(),
-                        user.id());
+                log.info("GitLab token validated: scopeId={}, userId={}", scopeId, user.id());
                 return validated;
             }
         } catch (WebClientResponseException e) {

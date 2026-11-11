@@ -117,13 +117,11 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
                 return;
             }
 
-            String ownerLogin = appInfo.owner() != null ? appInfo.owner().login() : "unknown";
             log.info(
-                    "Authenticated as GitHub App: appName={}, appSlug={}, appId={}, ownerLogin={}",
+                    "Authenticated as GitHub App: appName={}, appSlug={}, appId={}",
                     appInfo.name(),
                     appInfo.slug(),
-                    appInfo.id(),
-                    ownerLogin);
+                    appInfo.id());
 
             List<InstallationDto> installations = webClient
                     .get()
@@ -147,12 +145,9 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
                     installations.size());
 
             for (InstallationDto installation : installations) {
-                String accountLogin =
-                        installation.account() != null ? installation.account().login() : "<unknown>";
                 log.info(
-                        "Processed GitHub App installation: installationId={}, accountLogin={}, selection={}",
+                        "Processed GitHub App installation: installationId={}, selection={}",
                         installation.id(),
-                        accountLogin,
                         installation.repositorySelection());
                 synchronizeInstallation(installation);
             }
@@ -187,10 +182,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
                 : IntegrationLifecycleListener.AccountKind.USER;
 
         if (workspaceScopeFilter.isActive() && !workspaceScopeFilter.isOrganizationAllowed(login)) {
-            log.info(
-                    "Skipped installation sync: reason=filteredByScope, installationId={}, accountLogin={}",
-                    installation.id(),
-                    login);
+            log.info("Skipped installation sync: reason=filteredByScope, installationId={}", installation.id());
             installationRequests.recordFiltered(
                     installation.id(), installation.account().id(), login, wsAccountKind);
             return;
@@ -199,11 +191,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
         long installationId = installation.id();
         RepositorySelection selection = convertRepositorySelection(installation.repositorySelection());
 
-        log.info(
-                "Ensured installation workspace: installationId={}, orgLogin={}, selection={}",
-                installationId,
-                login,
-                selection);
+        log.info("Ensured installation workspace: installationId={}, selection={}", installationId, selection);
 
         var account = installation.account();
 

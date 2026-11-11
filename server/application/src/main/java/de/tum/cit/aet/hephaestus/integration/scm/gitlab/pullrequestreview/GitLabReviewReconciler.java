@@ -257,9 +257,9 @@ public class GitLabReviewReconciler {
         }
 
         log.debug(
-                "Created COMMENTED review from discussion: prId={}, author={}, nativeId={}",
+                "Created COMMENTED review from discussion: prId={}, authorId={}, nativeId={}",
                 pr.getId(),
-                author.getLogin(),
+                author.getId(),
                 reviewNativeId);
         return saved;
     }
