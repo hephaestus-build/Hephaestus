@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineTokenClient;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
+import de.tum.cit.aet.hephaestus.practices.spi.DocumentFeedbackErasure;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -57,18 +58,21 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
     private final OutlineDocumentRepository outlineDocumentRepository;
     private final OutlineCollectionRepository outlineCollectionRepository;
     private final OutlineOriginPolicy originPolicy;
+    private final DocumentFeedbackErasure documentFeedbackErasure;
 
     public OutlineConnectionStrategy(
             OutlineTokenClient outlineApiClient,
             OutlineWebhookRegistrar webhookRegistrar,
             OutlineDocumentRepository outlineDocumentRepository,
             OutlineCollectionRepository outlineCollectionRepository,
-            OutlineOriginPolicy originPolicy) {
+            OutlineOriginPolicy originPolicy,
+            DocumentFeedbackErasure documentFeedbackErasure) {
         this.outlineApiClient = outlineApiClient;
         this.webhookRegistrar = webhookRegistrar;
         this.outlineDocumentRepository = outlineDocumentRepository;
         this.outlineCollectionRepository = outlineCollectionRepository;
         this.originPolicy = originPolicy;
+        this.documentFeedbackErasure = documentFeedbackErasure;
     }
 
     @Override
@@ -111,13 +115,17 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
     @Override
     @Transactional
     public void eraseLocalData(IntegrationRef ref) {
+        // The results and feedback derived from the documents go first, while the items they name still exist,
+        // so a disconnect erases the same rows as a workspace purge (ADR 0024).
+        int derived = documentFeedbackErasure.eraseAllDocumentsForWorkspace(ref.workspaceId());
         long erased = outlineDocumentRepository.deleteByWorkspaceId(ref.workspaceId());
         long collections = outlineCollectionRepository.deleteByWorkspaceId(ref.workspaceId());
-        if (erased > 0 || collections > 0) {
+        if (derived > 0 || erased > 0 || collections > 0) {
             log.info(
-                    "outline.audit: disconnect erase — actor={} erased {} mirrored document(s), and {} collection registration(s) for workspace={}",
+                    "outline.audit: disconnect erase — actor={} erased {} derived result and feedback row(s), {} mirrored document(s), and {} collection registration(s) for workspace={}",
                     LoggingUtils.sanitizeForLog(
                             SecurityUtils.getCurrentUserLogin().orElse("system")),
+                    derived,
                     erased,
                     collections,
                     ref.workspaceId());

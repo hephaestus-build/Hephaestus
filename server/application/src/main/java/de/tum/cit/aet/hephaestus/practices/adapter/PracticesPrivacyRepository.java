@@ -31,6 +31,12 @@ interface PracticesPrivacyRepository extends Repository<Result, UUID> {
     List<UUID> scmResultIds(long ws);
 
     @Query(
+            value = "SELECT r.id FROM result r JOIN item i ON i.id=r.item_id AND i.workspace_id=r.workspace_id"
+                    + " WHERE r.workspace_id=:ws AND i.kind LIKE 'docs.%'",
+            nativeQuery = true)
+    List<UUID> documentResultIds(long ws);
+
+    @Query(
             value = "SELECT DISTINCT f.id FROM feedback f JOIN feedback_basis b ON b.feedback_id=f.id AND"
                     + " b.workspace_id=f.workspace_id WHERE f.workspace_id=:ws AND b.result_id=ANY(CAST(:ids AS"
                     + " uuid[]))",

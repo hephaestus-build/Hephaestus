@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.connect;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiClient.Out
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
+import de.tum.cit.aet.hephaestus.practices.spi.DocumentFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import java.util.Map;
@@ -47,13 +49,17 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
     @Mock
     private OutlineCollectionRepository outlineCollectionRepository;
 
+    @Mock
+    private DocumentFeedbackErasure documentFeedbackErasure;
+
     private OutlineConnectionStrategy strategy() {
         return new OutlineConnectionStrategy(
                 outlineApiClient,
                 webhookRegistrar,
                 outlineDocumentRepository,
                 outlineCollectionRepository,
-                new OutlineOriginPolicy(Set.of("https://app.getoutline.com")));
+                new OutlineOriginPolicy(Set.of("https://app.getoutline.com")),
+                documentFeedbackErasure);
     }
 
     private InitiateRequest request(Map<String, String> userInput) {
@@ -97,7 +103,10 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
     void eraseLocalData_erasesMirroredDocumentsWithoutCallingOutline() {
         strategy().eraseLocalData(new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L));
 
-        verify(outlineDocumentRepository).deleteByWorkspaceId(5L);
+        // The derived results and feedback go before the documents they name.
+        var order = inOrder(documentFeedbackErasure, outlineDocumentRepository);
+        order.verify(documentFeedbackErasure).eraseAllDocumentsForWorkspace(5L);
+        order.verify(outlineDocumentRepository).deleteByWorkspaceId(5L);
         verify(outlineCollectionRepository).deleteByWorkspaceId(5L);
         // GDPR erase on disconnect covers the event log too — actor subjects are personal data.
         verifyNoInteractions(webhookRegistrar);

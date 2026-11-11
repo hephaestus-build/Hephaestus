@@ -34,6 +34,9 @@
             "core::exception",
             // A workspace PURGE cascades into a bulk delete of the mirrored rows.
             "workspace::spi",
+            // A disconnect erases the results and feedback derived from documents through the practices-owned
+            // DocumentFeedbackErasure port, as Slack does for its threads (ADR 0024).
+            "practices::spi",
             // Admin controllers sit behind the workspace admin guard and resolve the workspace via WorkspaceContext.
             "workspace::authorization",
             "workspace::context",
