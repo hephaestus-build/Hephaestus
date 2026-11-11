@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
@@ -696,6 +697,11 @@ function lineageOf(review: ReviewDetail, item = review.item): ReviewLineage {
 
 const unavailable = (detail: string) => HttpResponse.json({ status: 503, detail }, { status: 503 });
 
+// These cases keep retry admission and execute retries without wall-clock backoff.
+function traceQueryClient() {
+	return new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
+}
+
 describe("a review's trace while the review runs", () => {
 	const RUNNING_ID = "3f2b6c1e-8a4d-4f0b-9c7e-2d5a1b0c9e84";
 	const base = reviewDetail(LINEAGE_REVIEW_ID);
@@ -727,7 +733,7 @@ describe("a review's trace while the review runs", () => {
 				() => reply(),
 				() => HttpResponse.json(review),
 			);
-			renderRouteAtWithRouter(`${REVIEWS}?detail=trace:review:${RUNNING_ID}`);
+			renderRouteAtWithRouter(`${REVIEWS}?detail=trace:review:${RUNNING_ID}`, traceQueryClient());
 			await screen.findByRole("group", { name: "How this came about" }, ROUTE_RENDER_WAIT);
 			reply = () => unavailable("Trace temporarily unavailable");
 			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS);
@@ -775,7 +781,10 @@ describe("a review's trace while the review runs", () => {
 					),
 				),
 			);
-			const { router } = renderRouteAtWithRouter(`${REVIEWS}?detail=trace:review:${RUNNING_ID}`);
+			const { router } = renderRouteAtWithRouter(
+				`${REVIEWS}?detail=trace:review:${RUNNING_ID}`,
+				traceQueryClient(),
+			);
 			await screen.findByRole("group", { name: "How this came about" }, ROUTE_RENDER_WAIT);
 			lineages.set(RUNNING_ID, async () => {
 				await release.promise;
@@ -814,6 +823,7 @@ describe("a review's trace while the review runs", () => {
 			);
 			const { router, queryClient } = renderRouteAtWithRouter(
 				`${REVIEWS}?detail=trace:review:${RUNNING_ID}`,
+				traceQueryClient(),
 			);
 			await screen.findByRole("group", { name: "How this came about" }, ROUTE_RENDER_WAIT);
 			await vi.waitFor(() =>
@@ -866,7 +876,7 @@ describe("a review's trace while the review runs", () => {
 				() => HttpResponse.json(lineageOf(review)),
 				() => reply(),
 			);
-			renderRouteAtWithRouter(`${REVIEWS}?detail=trace:review:${RUNNING_ID}`);
+			renderRouteAtWithRouter(`${REVIEWS}?detail=trace:review:${RUNNING_ID}`, traceQueryClient());
 			await screen.findByRole("group", { name: "How this came about" }, ROUTE_RENDER_WAIT);
 			await vi.waitFor(() =>
 				expect(requestsTo(`/practices/reviews/${RUNNING_ID}`).length).toBeGreaterThan(0),

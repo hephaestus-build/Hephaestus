@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 
 import { expect, it } from "vitest";
@@ -34,7 +35,9 @@ it("enforces compressed size as well as raw size", () => {
 });
 
 it("enforces tooling gzip budgets below the ordinary raw chunk limit", () => {
-	const code = Array.from({ length: 90_000 }, (_, index) => index.toString(36)).join("-");
+	const code = Array.from({ length: 7500 }, (_, index) =>
+		createHash("sha256").update(String(index)).digest("hex"),
+	).join("");
 	expect(Buffer.byteLength(code)).toBeLessThanOrEqual(500_000);
 	expect(gzipSync(code).byteLength).toBeGreaterThan(190_000);
 	expect(() => checkChunkBudget(code, ["/repo/node_modules/axe-core/axe.js"])).toThrow(
