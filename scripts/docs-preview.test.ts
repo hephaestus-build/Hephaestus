@@ -407,7 +407,9 @@ void test("a delayed closed-event teardown performs no mutation after reopening"
 			],
 			{
 				encoding: "utf8",
-				env: { ...process.env, GITHUB_WORKSPACE: path.resolve(import.meta.dirname, "..") },
+				env: environmentForGitFixture({
+					GITHUB_WORKSPACE: path.resolve(import.meta.dirname, ".."),
+				}),
 			},
 		);
 		assert.equal(result.status, 0, result.stderr);
