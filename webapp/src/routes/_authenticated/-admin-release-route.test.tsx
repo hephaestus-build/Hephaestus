@@ -11,7 +11,7 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { loadRouteCode, renderRouteAt, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/admin"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/admin"), ROUTE_RENDER_WAIT.timeout);
 
 const status = {
 	running: {

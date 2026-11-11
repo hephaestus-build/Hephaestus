@@ -18,7 +18,7 @@ import {
 import { practiceSetupHandlers, wireGuidance, wirePractice } from "./-practice-server";
 
 beforeAll(
-	() => loadRouteCode("/w/acme/admin/practices", "/w/acme/admin/practices/releases"),
+	async () => loadRouteCode("/w/acme/admin/practices", "/w/acme/admin/practices/releases"),
 	ROUTE_RENDER_WAIT.timeout,
 );
 

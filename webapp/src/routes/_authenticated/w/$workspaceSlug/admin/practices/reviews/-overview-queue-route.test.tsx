@@ -19,7 +19,7 @@ import { ObserverStub } from "@/test/observers";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 beforeAll(
-	() =>
+	async () =>
 		loadRouteCode("/w/acme/admin/practices/reviews", "/w/acme/admin/practices/reviews/overview"),
 	ROUTE_RENDER_WAIT.timeout,
 );

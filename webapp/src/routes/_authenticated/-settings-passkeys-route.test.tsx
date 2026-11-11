@@ -7,7 +7,7 @@ import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
 
 /** A browser that can hold passkeys; no test here reaches its prompt. */
 class BrowserCredential {

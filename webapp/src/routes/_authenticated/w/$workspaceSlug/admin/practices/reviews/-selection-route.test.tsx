@@ -10,7 +10,7 @@ import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/p
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 beforeAll(
-	() =>
+	async () =>
 		loadRouteCode(
 			"/w/acme/admin/practices/reviews",
 			"/w/acme/admin/practices/reviews/results",

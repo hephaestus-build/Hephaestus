@@ -16,7 +16,10 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/product-feedback", "/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(
+	async () => loadRouteCode("/product-feedback", "/w/acme/activity"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 describe("product feedback sent from a workspace page", () => {
 	let sent: FeedbackRequest[];

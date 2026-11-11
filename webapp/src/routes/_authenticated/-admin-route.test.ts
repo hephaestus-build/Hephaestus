@@ -14,7 +14,7 @@ import { routeTree } from "@/routeTree.gen";
 import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
 beforeAll(
-	() =>
+	async () =>
 		loadRouteCode(
 			...adminUrls,
 			"/",

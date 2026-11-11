@@ -17,7 +17,7 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/admin/research"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/admin/research"), ROUTE_RENDER_WAIT.timeout);
 
 const DATASET = "6f1c2b8e-4d3a-4f6b-9a1e-2c7d8e9f0a1b";
 const KEY = "p_abcdefghijklmnopqrstuvwxyz";

@@ -8,7 +8,7 @@ import { server } from "@/mocks/server";
 import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
 
 describe("the account's public activity choice on the settings page", () => {
 	it("hides the account on every public page at once, and shows it again", async () => {

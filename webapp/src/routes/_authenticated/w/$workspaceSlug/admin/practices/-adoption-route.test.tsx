@@ -32,7 +32,7 @@ import {
 	wirePractice,
 } from "./-practice-server";
 
-beforeAll(() => loadRouteCode("/w/acme/admin/practices"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/w/acme/admin/practices"), ROUTE_RENDER_WAIT.timeout);
 
 const definition = definitionOf({
 	name: "Describe what changed and why",

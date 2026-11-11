@@ -8,7 +8,7 @@ import { server } from "@/mocks/server";
 import { ObserverStub } from "@/test/observers";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/", "/workspaces/new"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/", "/workspaces/new"), ROUTE_RENDER_WAIT.timeout);
 
 type PolicyRead = "failing" | "SELF_SERVICE" | "ADMIN_ONLY";
 

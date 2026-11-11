@@ -21,7 +21,7 @@ import {
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 beforeAll(
-	() => loadRouteCode("/w/acme/practices-across-the-workspace", "/w/acme/practice-profile"),
+	async () => loadRouteCode("/w/acme/practices-across-the-workspace", "/w/acme/practice-profile"),
 	ROUTE_RENDER_WAIT.timeout,
 );
 

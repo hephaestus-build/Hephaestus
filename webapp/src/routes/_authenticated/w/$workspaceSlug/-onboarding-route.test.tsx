@@ -15,7 +15,7 @@ import { authClient } from "@/runtime/auth/auth-client";
 import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
 beforeAll(
-	() =>
+	async () =>
 		loadRouteCode(
 			"/w/acme/practice-profile",
 			"/w/acme/onboarding",

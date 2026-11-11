@@ -24,7 +24,7 @@ import {
 } from "./-scan-server";
 
 beforeAll(
-	() => loadRouteCode("/w/acme/admin/practices/scans", "/w/acme/practice-profile"),
+	async () => loadRouteCode("/w/acme/admin/practices/scans", "/w/acme/practice-profile"),
 	ROUTE_RENDER_WAIT.timeout,
 );
 

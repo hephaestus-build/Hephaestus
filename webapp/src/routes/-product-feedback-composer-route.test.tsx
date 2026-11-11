@@ -15,7 +15,7 @@ vi.mock("./-ProductFeedbackComposer", () => {
 	throw importFailure;
 });
 
-beforeAll(() => loadRouteCode("/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
 
 beforeEach(() => {
 	server.use(

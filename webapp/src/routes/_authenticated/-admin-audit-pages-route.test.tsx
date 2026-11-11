@@ -8,7 +8,7 @@ import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/admin/audit"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/admin/audit"), ROUTE_RENDER_WAIT.timeout);
 
 function change(id: number, operator: string) {
 	return {

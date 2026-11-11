@@ -8,7 +8,7 @@ import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/product-feedback"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/product-feedback"), ROUTE_RENDER_WAIT.timeout);
 
 const publicIssue = {
 	id: "b1b1b1b1-0000-0000-0000-000000000004",

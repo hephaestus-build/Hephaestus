@@ -10,7 +10,7 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/admin/models"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/admin/models"), ROUTE_RENDER_WAIT.timeout);
 
 function mockPage(connections: LlmConnection[] = [], models: LlmModel[] = []) {
 	server.use(

@@ -8,7 +8,7 @@ import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/tes
 import { OVERVIEW, rangeOverview, serveAttention } from "./-overview-attention-server";
 
 beforeAll(
-	() => loadRouteCode("/w/acme/admin/practices/reviews/overview"),
+	async () => loadRouteCode("/w/acme/admin/practices/reviews/overview"),
 	ROUTE_RENDER_WAIT.timeout,
 );
 

@@ -11,7 +11,7 @@ import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/teams"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/w/acme/teams"), ROUTE_RENDER_WAIT.timeout);
 
 const FAILED = "We could not load teams";
 const NONE = /No teams yet/u;

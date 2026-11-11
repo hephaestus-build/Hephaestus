@@ -7,7 +7,7 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
 
 it("shows the page loading, not the previous page, while a slow navigation waits", async () => {
 	const onboarding = deferred();

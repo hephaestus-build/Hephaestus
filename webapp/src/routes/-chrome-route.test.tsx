@@ -13,7 +13,7 @@ import {
 	renderRouteAtWithRouter,
 } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/settings", "/admin"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/settings", "/admin"), ROUTE_RENDER_WAIT.timeout);
 
 /**
  * `/settings` and the instance console name no workspace in their URL, and the chrome renders on

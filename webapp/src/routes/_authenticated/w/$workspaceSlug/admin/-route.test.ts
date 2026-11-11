@@ -19,7 +19,7 @@ import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 const WORKSPACE_HOME = "/w/acme/practice-profile";
 
 beforeAll(
-	() =>
+	async () =>
 		loadRouteCode(
 			...adminUrls,
 			"/w/acme/practice-profile",

@@ -11,7 +11,7 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/admin/workspaces"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/admin/workspaces"), ROUTE_RENDER_WAIT.timeout);
 
 const aet: Wire<AdminWorkspaceView> = {
 	id: 1,

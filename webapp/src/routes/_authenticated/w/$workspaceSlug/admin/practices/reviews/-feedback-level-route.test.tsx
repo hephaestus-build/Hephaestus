@@ -35,7 +35,7 @@ import {
 } from "@/test/router-harness";
 
 beforeAll(
-	() =>
+	async () =>
 		loadRouteCode(
 			"/w/acme/admin/practices/reviews",
 			"/w/acme/admin/practices/reviews/feedback",

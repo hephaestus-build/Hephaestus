@@ -10,7 +10,7 @@ import { daysBefore } from "@/stories/story-clock";
 import { ObserverStub } from "@/test/observers";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/feedback/1902"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/w/acme/feedback/1902"), ROUTE_RENDER_WAIT.timeout);
 
 const REVIEWS_PATH = "*/workspaces/:workspaceSlug/practices/items/:itemId/reviews";
 const RESPONSE_PATH = "*/workspaces/:workspaceSlug/practices/feedback/:feedbackId/response";

@@ -7,7 +7,10 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/auth/callback", "/login", "/about"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(
+	async () => loadRouteCode("/auth/callback", "/login", "/about"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const destination = "/about?source=invite#team";
 const callback = `/auth/callback?returnTo=${encodeURIComponent(destination)}`;

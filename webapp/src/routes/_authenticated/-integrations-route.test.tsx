@@ -8,7 +8,7 @@ import { server } from "@/mocks/server";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 beforeAll(
-	() => loadRouteCode("/integrations", "/w/intro-course/admin/integrations/slack"),
+	async () => loadRouteCode("/integrations", "/w/intro-course/admin/integrations/slack"),
 	ROUTE_RENDER_WAIT.timeout,
 );
 

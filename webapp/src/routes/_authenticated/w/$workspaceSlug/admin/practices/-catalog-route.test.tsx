@@ -9,7 +9,7 @@ import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-h
 
 import { practiceSetupHandlers, wireGroup } from "./-practice-server";
 
-beforeAll(() => loadRouteCode("/w/acme/admin/practices"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/w/acme/admin/practices"), ROUTE_RENDER_WAIT.timeout);
 
 beforeEach(() => {
 	server.use(...practiceSetupHandlers());

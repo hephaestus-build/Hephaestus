@@ -8,7 +8,7 @@ import { server } from "@/mocks/server";
 import { OVERVIEW_FIXTURE } from "@/stories/practice-profile-story-mock-data";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/practice-profile"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/w/acme/practice-profile"), ROUTE_RENDER_WAIT.timeout);
 
 // In a file of its own: `lazy` keeps a failed import for the life of the module.
 vi.mock("@/components/tour/PracticeProfileTour", () => {

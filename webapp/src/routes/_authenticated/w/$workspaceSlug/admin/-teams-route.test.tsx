@@ -14,7 +14,7 @@ import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
 import { type Deferred, deferred, pending } from "@/test/async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/admin/teams"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/w/acme/admin/teams"), ROUTE_RENDER_WAIT.timeout);
 
 const SETTLE = { timeout: 5000 };
 

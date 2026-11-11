@@ -19,7 +19,7 @@ import { server } from "@/mocks/server";
 import { precedes } from "@/test/dom";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/admin/catalog"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/admin/catalog"), ROUTE_RENDER_WAIT.timeout);
 
 const PRACTICE_PATH = "*/admin/practice-catalog/practices/:slug";
 

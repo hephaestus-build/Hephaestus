@@ -9,7 +9,7 @@ import { server } from "@/mocks/server";
 import { deferred } from "./async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "./router-harness";
 
-beforeAll(() => loadRouteCode("/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/w/acme/activity"), ROUTE_RENDER_WAIT.timeout);
 
 let left: AnyRouter | undefined;
 

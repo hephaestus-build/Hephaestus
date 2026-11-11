@@ -23,7 +23,7 @@ import {
 } from "@/test/router-harness";
 
 beforeAll(
-	() => loadRouteCode("/w/acme/admin/practices/reviews/results"),
+	async () => loadRouteCode("/w/acme/admin/practices/reviews/results"),
 	ROUTE_RENDER_WAIT.timeout,
 );
 

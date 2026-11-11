@@ -21,7 +21,7 @@ import {
 } from "@/test/router-harness";
 
 beforeAll(
-	() => loadRouteCode("/workspaces/new/gitlab", "/w/hephaestus/activity"),
+	async () => loadRouteCode("/workspaces/new/gitlab", "/w/hephaestus/activity"),
 	ROUTE_RENDER_WAIT.timeout,
 );
 

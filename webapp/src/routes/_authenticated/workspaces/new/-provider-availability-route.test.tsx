@@ -8,7 +8,7 @@ import { server } from "@/mocks/server";
 import { loadRouteCode, renderRouteAt, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
 beforeAll(
-	() => loadRouteCode("/workspaces/new", "/workspaces/new/github"),
+	async () => loadRouteCode("/workspaces/new", "/workspaces/new/github"),
 	ROUTE_RENDER_WAIT.timeout,
 );
 

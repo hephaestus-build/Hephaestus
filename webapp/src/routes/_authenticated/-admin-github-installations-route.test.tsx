@@ -9,7 +9,7 @@ import { toast } from "@/lib/toast";
 import { server } from "@/mocks/server";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-beforeAll(() => loadRouteCode("/admin/github-installations"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/admin/github-installations"), ROUTE_RENDER_WAIT.timeout);
 
 // The route harness renders no toaster, so the outcome a toast reports is read from its call.
 vi.mock("@/lib/toast", () => ({
