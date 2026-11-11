@@ -1,0 +1,41 @@
+{
+	"repository": "hephaestus-build/Hephaestus",
+	"runs": [
+		{
+			"conclusion": "success",
+			"event": "pull_request",
+			"head_sha": "69b951bfb1649d1ece15231961509232b87d675d",
+			"html_url": "https://github.com/hephaestus-build/Hephaestus/actions/runs/43085739027",
+			"id": 43085739027,
+			"run_attempt": 1,
+			"jobs": [
+				{
+					"name": "Detect changes",
+					"conclusion": "success"
+				},
+				{
+					"name": "CI Status Gate",
+					"conclusion": "success"
+				}
+			]
+		},
+		{
+			"conclusion": "cancelled",
+			"event": "pull_request",
+			"head_sha": "69b951bfb1649d1ece15231961509232b87d675d",
+			"html_url": "https://github.com/hephaestus-build/Hephaestus/actions/runs/43085739886",
+			"id": 43085739886,
+			"run_attempt": 1,
+			"jobs": [
+				{
+					"name": "Detect changes",
+					"conclusion": "cancelled"
+				},
+				{
+					"name": "CI Status Gate",
+					"conclusion": "failure"
+				}
+			]
+		}
+	]
+}

@@ -125,6 +125,13 @@ jobs:
       should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.preview == 'false' && github.event.action != 'ready_for_review' }}
     timeout-minutes: 15
     steps:
+      - name: Record the triggering event
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_AFTER: ${{ github.event.after }}
+        run: printf 'Event=%s action=%s before=%s after=%s\n' "$EVENT_NAME" "$EVENT_ACTION" "$EVENT_BEFORE" "$EVENT_AFTER" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -1312,7 +1319,7 @@ jobs:
         Release-preflight,
         Database-upgrade,
       ]
-    if: always()
+    if: github.event_name == 'merge_group' && always() || !cancelled()
     steps:
       - name: Evaluate CI results
         id: evaluate
@@ -1402,30 +1409,31 @@ jobs:
 
       # This checkout-free job publishes only the required verdict. Diagnostics run separately.
       - name: Create commit status
-        if: ${{ !cancelled() && !contains(needs.*.result, 'cancelled') }}
+        if: >-
+          ${{ contains(fromJSON('["success","failure"]'), steps.evaluate.outputs.status) && (
+            (github.event_name == 'merge_group' && steps.evaluate.outputs.status == 'failure') ||
+            (!cancelled() && !contains(needs.*.result, 'cancelled'))) }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        # Evaluation or status publication failures must fail the required gate.
+        # A publication failure remains visible on this job.
         env:
-          JOB_STATUS: ${{ job.status }}
+          CI_VERDICT: ${{ steps.evaluate.outputs.status }}
+          CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
         with:
           retries: 3
           script: |
             const sha = context.payload.pull_request?.head?.sha || context.sha;
-            const outcome = process.env.JOB_STATUS || 'failure';
-            // createCommitStatus accepts error, failure, pending or success and 422s on anything
-            // else, so a cancelled run has to be reported as one of them rather than by its name.
-            const REPORTED = {
-              success: ['success', 'All CI checks passed'],
-              failure: ['failure', 'One or more CI checks failed'],
-              cancelled: ['error', 'CI was cancelled before it finished'],
-            };
-            const [state, description] = REPORTED[outcome] ?? REPORTED.failure;
+            const state = process.env.CI_VERDICT;
+            if (state !== 'success' && state !== 'failure') {
+              throw new Error('CI has no completed verdict to publish');
+            }
+            const description = state === 'success' ? 'All CI checks passed' : 'CI did not pass';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: sha,
               state: state,
               description: description,
+              target_url: process.env.CI_RUN_URL,
               context: 'All CI Passed'
             });
 

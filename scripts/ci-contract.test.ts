@@ -1250,7 +1250,10 @@ void describe("CI contract", () => {
 		const types = orchestrator.getIn(["on", "pull_request", "types"]);
 		assert.ok(isSeq(types));
 		assert.deepEqual(types.toJSON(), ["opened", "synchronize", "reopened", "ready_for_review"]);
-		assert.equal(orchestrator.getIn(["jobs", "all-ci-passed", "if"]), "always()");
+		assert.equal(
+			orchestrator.getIn(["jobs", "all-ci-passed", "if"]),
+			"github.event_name == 'merge_group' && always() || !cancelled()",
+		);
 		const optIn = namedStep(orchestrator, ["jobs", "detect-changes"], "Read the opt-in labels");
 		assert.equal(optIn.get("continue-on-error"), true);
 		assert.match(
@@ -2433,8 +2436,7 @@ void describe("CI contract", () => {
 				}
 			}
 		}
-		// After a fail-fast cancel the gate publishes no `All CI Passed` status. No ruleset requires
-		// that status: the required verdict is the `CI Status Gate` check itself.
+		// Fail-fast merge groups keep a status verdict; superseded PR runs publish nothing.
 		assert.match(
 			String(namedStep(workflow, gate, "Create commit status").get("if")),
 			/!cancelled\(\)/u,
@@ -3321,38 +3323,42 @@ void describe("CI contract", () => {
 		);
 	});
 
-	void test("the CI gate publishes its own job's status, not the evaluation's verdict", async () => {
+	void test("only completed verdicts publish a status, including a merge-group failure after cancellation", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const publisher = namedStep(workflow, ["jobs", "all-ci-passed"], "Create commit status");
-		const dependencies = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
-		assert.ok(isSeq(dependencies));
-		const complete = Object.fromEntries(
-			dependencies.items.map((item) => {
-				assert.ok(isScalar(item) && typeof item.value === "string");
-				const completion = { result: "success" };
-				return [item.value, completion] as const;
-			}),
+		assert.equal(publisher.getIn(["env", "CI_VERDICT"]), `\${{ steps.evaluate.outputs.status }}`);
+		assert.equal(
+			publisher.getIn(["env", "CI_RUN_URL"]),
+			`\${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}/attempts/\${{ github.run_attempt }}`,
 		);
-		const [failedDependency, cancelledDependency] = Object.keys(complete);
-		assert.ok(isSet(failedDependency) && isSet(cancelledDependency));
-		const condition = asString(publisher.get("if"), "commit status condition");
-		const expression = /^\$\{\{(?<body>[\s\S]+)\}\}$/u.exec(condition)?.groups?.body;
-		assert.ok(isSet(expression));
+		const dependencies = needsOf(workflow, "all-ci-passed");
+		const complete = Object.fromEntries(dependencies.map((key) => [key, { result: "success" }]));
+		const condition = asString(publisher.get("if"), "publisher condition").replaceAll(
+			/^\$\{\{\s*|\s*\}\}$/gu,
+			"",
+		);
 		const parsed = new Parser(
-			new Lexer(expression).lex().tokens,
-			["needs"],
+			new Lexer(condition).lex().tokens,
+			["needs", "steps", "github"],
 			[{ name: "cancelled", minArgs: 0, maxArgs: 0 }],
 		).parse();
-		// GitHub fills `job.status`, so this pins the wiring and runs the script against each value.
-		assert.equal(publisher.getIn(["env", "JOB_STATUS"]), `\${{ job.status }}`);
-		const script = String(stepInputs(publisher).get("script"));
+		const script = asString(stepInputs(publisher).get("script"), "publisher script");
 		const published = async (
-			jobStatus: string | undefined,
-			results = complete,
-			cancelled = false,
+			verdict: string,
+			event: string,
+			cancelled: boolean,
+			needs = complete,
+			sha = "a".repeat(40),
 		) => {
-			const context: unknown = JSON.parse(JSON.stringify({ needs: results }), data.reviver);
-			assert.ok(context instanceof data.Dictionary);
+			const dictionary: unknown = JSON.parse(
+				JSON.stringify({
+					needs,
+					steps: { evaluate: { outputs: { status: verdict } } },
+					github: { event_name: event },
+				}),
+				data.reviver,
+			);
+			assert.ok(dictionary instanceof data.Dictionary);
 			const functions = new Map([
 				[
 					"cancelled",
@@ -3366,7 +3372,17 @@ void describe("CI contract", () => {
 			]);
 			const calls: unknown[] = [];
 			const sandbox = {
-				context: { payload: {}, sha: "a".repeat(40), repo: { owner: "owner", repo: "repo" } },
+				context: {
+					payload: event === "pull_request" ? { pull_request: { head: { sha } } } : {},
+					sha: event === "pull_request" ? "b".repeat(40) : sha,
+					repo: { owner: "owner", repo: "repo" },
+				},
+				process: {
+					env: {
+						CI_VERDICT: verdict,
+						CI_RUN_URL: "https://github.com/owner/repo/actions/runs/1/attempts/2",
+					},
+				},
 				github: {
 					rest: {
 						repos: {
@@ -3376,54 +3392,81 @@ void describe("CI contract", () => {
 						},
 					},
 				},
-				process: { env: jobStatus === undefined ? {} : { JOB_STATUS: jobStatus } },
 				done: Promise.resolve(),
 			};
-			if (new Evaluator(parsed, context, functions).evaluate().coerceString() === "true") {
+			if (new Evaluator(parsed, dictionary, functions).evaluate().coerceString() === "true") {
 				runInNewContext(`done = (async () => {\n${script}\n})();`, sandbox);
 				await sandbox.done;
 			}
-			if (calls.length === 0) {
-				return null;
-			}
-			assert.equal(calls.length, 1);
-			const payload = asRecord(calls[0], "commit status");
-			assert.equal(payload.sha, "a".repeat(40));
+			assert.ok(calls.length <= 1);
+			if (!calls[0]) return null;
+			const payload = asRecord(calls[0], "status");
+			assert.equal(payload.sha, sha);
+			assert.equal(payload.context, "All CI Passed");
+			assert.equal(payload.target_url, "https://github.com/owner/repo/actions/runs/1/attempts/2");
 			return payload.state;
 		};
-		assert.equal(await published("success"), "success");
-		assert.equal(await published("failure"), "failure");
-		assert.equal(await published("cancelled"), "error");
-		for (const unknown of [undefined, "", "neutral"]) {
-			assert.equal(
-				await published(unknown),
-				"failure",
-				`job status ${String(unknown)} is no success`,
-			);
+		for (const event of ["pull_request", "merge_group", "push", "workflow_dispatch"]) {
+			for (const verdict of ["success", "failure"])
+				assert.equal(await published(verdict, event, false), verdict);
+			for (const verdict of ["", "cancelled", "neutral"])
+				assert.equal(await published(verdict, event, false), null);
+			for (const verdict of ["success", "failure", "cancelled"])
+				assert.equal(
+					await published(verdict, event, true),
+					event === "merge_group" && verdict === "failure" ? "failure" : null,
+				);
+			for (const key of dependencies) {
+				const stopped = { ...complete, [key]: { result: "cancelled" } };
+				assert.equal(await published("success", event, false, stopped), null);
+				assert.equal(
+					await published("failure", event, true, stopped),
+					event === "merge_group" ? "failure" : null,
+				);
+			}
 		}
-		assert.equal(
-			await published("success", { ...complete, [cancelledDependency]: { result: "skipped" } }),
-			"success",
+		// Recorded same-head twins from #4172: the cancelled twin's gate incorrectly failed.
+		const recorded = asRecord(
+			JSON.parse(await readFile("scripts/fixtures/ci-gate-twins.json", "utf8")),
+			"recorded runs",
 		);
-		assert.equal(
-			await published("failure", { ...complete, [failedDependency]: { result: "failure" } }),
-			"failure",
-		);
-		for (const name of Object.keys(complete)) {
+		const runs = asArray(recorded.runs, "runs").map((run) => asRecord(run, "run"));
+		assert.equal(runs.length, 2);
+		assert.equal(runs[0]?.head_sha, runs[1]?.head_sha);
+		const statuses: unknown[] = [];
+		for (const run of runs) {
+			const event = asString(run.event, "event");
+			const cancelled = run.conclusion === "cancelled";
+			const jobs = asArray(run.jobs, "jobs").map((job) => asRecord(job, "job"));
+			const observedGate = jobs.find((job) => job.name === "CI Status Gate");
+			assert.ok(observedGate);
+			assert.equal(observedGate.conclusion, cancelled ? "failure" : "success");
 			assert.equal(
-				await published("failure", { ...complete, [name]: { result: "cancelled" } }),
-				null,
+				jobRuns(
+					workflow,
+					"all-ci-passed",
+					event,
+					Object.fromEntries(
+						dependencies.map((key) => [key, { result: cancelled ? "cancelled" : "success" }]),
+					),
+					cancelled,
+				),
+				!cancelled,
 			);
+			const status = await published(
+				asString(observedGate.conclusion, "gate result"),
+				event,
+				cancelled,
+				complete,
+				asString(run.head_sha, "head SHA"),
+			);
+			if (status) statuses.push(status);
 		}
-		assert.equal(
-			await published("failure", {
-				...complete,
-				[failedDependency]: { result: "failure" },
-				[cancelledDependency]: { result: "cancelled" },
-			}),
-			null,
+		assert.deepEqual(
+			statuses,
+			["success"],
+			"the superseded twin cannot overwrite the surviving verdict",
 		);
-		assert.equal(await published("failure", complete, true), null);
 	});
 
 	void test("merge groups require release evidence when their aggregate tree changes the version", async (context) => {
@@ -6437,7 +6480,10 @@ void test(
 	async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const gate = ["jobs", "all-ci-passed"];
-		assert.equal(workflow.getIn([...gate, "if"]), "always()");
+		assert.equal(
+			workflow.getIn([...gate, "if"]),
+			"github.event_name == 'merge_group' && always() || !cancelled()",
+		);
 		assert.equal(workflow.getIn([...gate, "permissions", "actions"]), "read");
 		const needs = {
 			Build: { result: "cancelled" },

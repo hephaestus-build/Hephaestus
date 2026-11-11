@@ -247,8 +247,8 @@ List the break or restore the endpoint, then run the job again.
 
 ### Merge policy
 
-Pull requests targeting `main` merge through GitHub's merge queue after these GitHub
-Actions contexts pass: `CI Status Gate`, `Actionlint`, and `Zizmor`. Required
+Pull requests targeting `main` merge through GitHub's merge queue after the GitHub Actions
+commit status `All CI Passed` passes. Required
 workflows run again for the merge group, which includes the current base and queued changes ahead of
 the pull request. Each required context is bound to the GitHub Actions integration rather than
 accepting a same-named external status.
@@ -273,8 +273,11 @@ Checks with the same required name in different workflows or apps must all pass.
 
 The watcher waits while GitHub reports `BLOCKED` or `UNKNOWN`, even when every required check passes.
 If a required check is absent, inspect the run before you rerun its gate.
-`All CI Passed` is a separate status.
-The ruleset still requires `CI Status Gate`.
+
+`All CI Passed` is the required commit status.
+`CI Status Gate` is its checkout-free producer. Only a completed verdict publishes a status.
+A superseded pull-request run posts no status, so its cancelled check cannot replace the surviving run's verdict.
+[GitHub uses the latest status for each context](https://docs.github.com/en/rest/commits/statuses#get-the-combined-status-for-a-specific-reference).
 
 A required context may be filtered because a ruleset accepts a skipped check as satisfied. The check
 still reports `skipped`, not `success`. A workflow that never triggers reports nothing.
@@ -385,9 +388,9 @@ They require the caller and worker to identify the same shard or platform.
 
 - The condition starts with `always()`. Without a status function, GitHub adds `success()`, which is false after a failed worker.
 - The helper runs `gh run cancel` on its own run. Queued jobs do not start, and running jobs stop.
-- `CI Status Gate` has `if: always()`, so it still runs after the cancel and fails.
+- `CI Status Gate` uses `always()` in merge groups, so it still reports the failure after the cancel.
 - A cancelled reusable caller can contain a failed worker. The gate reads native job conclusions for the current run attempt to preserve the failure verdict. If this read fails, the gate fails.
-- The outer `fail-fast-<leg>` jobs in `cicd.yml` also cover failures at a caller boundary. The gate does not wait for cancel jobs. The ruleset requires `CI Status Gate`, `Actionlint` and `Zizmor`.
+- The outer `fail-fast-<leg>` jobs in `cicd.yml` also cover failures at a caller boundary. The gate does not wait for cancel jobs. The required verdict is the `All CI Passed` commit status.
 - `Security` and `Changesets` never run in a merge group, so they have no cancel job.
 
 After the cancel, `cancelled()` is true for the whole run.
@@ -397,8 +400,10 @@ A run that cancelled itself after a failed leg has the verdict `failure`, so the
 A run that a regroup cancelled has the verdict `cancelled`, and CI does not comment.
 
 The merge-queue experiment did not exercise the reporter after a cancel. The first failed merge group on `main` confirms it.
-The gate does not publish the `All CI Passed` status after a cancel.
-No ruleset requires that status.
+A cancelled merge group with a failed job publishes `failure` to `All CI Passed`.
+A queue reset with no failed job posts no status.
+Thus, the required status removes a failed entry without waiting for its check timeout.
+A cancelled pull-request gate posts nothing, even if one of its jobs failed before cancellation.
 
 **The cheap legs run first.**
 In a merge group, the heavy legs start only after `Security / Dependencies, secrets, and policy` succeeded or skipped.
@@ -743,7 +748,7 @@ A draft pull request runs the fast tier and builds no image. So it gets no clust
 scan. The `preview` label still builds its images, and a release candidate always builds its evidence.
 
 For a draft, the automatic queue tier for the tier's own inputs is off, but `ci:full` still opts in.
-`CI Status Gate` still reports, so required checks resolve on a draft.
+`CI Status Gate` still reports on a draft and publishes the completed verdict to `All CI Passed`.
 Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
 with the images that such a run builds ([The `preview` label](#the-preview-label)). That run is never skipped as a duplicate of the draft's run.
 A re-run replays the event of its run, so a re-run of a draft's run builds no image, even after
@@ -1215,10 +1220,18 @@ The identity check walks every GraphQL commit page. The attribution check reads 
 
 Use GitHub's organization-level [Actions metrics](https://docs.github.com/en/actions/concepts/metrics)
 for workflow and job run time, queue time, failure rate, and runner usage.
+
 `CI Status Gate` evaluates every direct prerequisite and the required release evidence preflight.
+Its job condition is `github.event_name == 'merge_group' && always() || !cancelled()`.
+[GitHub re-evaluates job and step conditions when it cancels a run](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation).
+This keeps a merge-group verdict after a graceful fail-fast cancel and stops a superseded pull-request gate.
+
+The status publisher reads the completed evaluation, rather than the gate job's cancellation state.
 It publishes the required commit status without checking out source.
 Its logs and local summary retain each prerequisite result.
 A local summary write failure does not change the verdict.
+
+`Detect changes` logs the event name, action, before SHA and after SHA to distinguish repeated deliveries.
 
 After CI finishes, `CI / Diagnostics` reads that run's exact attempt with read-only Actions permissions.
 It reports the completed verdict, job times, and step times in a separate workflow summary.
