@@ -42,7 +42,8 @@ public class ReviewCommandListener {
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(BotCommandReceivedEvent command) {
         String text = command.noteBody().strip().toLowerCase(Locale.ROOT);
-        if (!text.equals(REVIEW) && !text.startsWith(REVIEW + " ")) {
+        // The comment must hold only the command, on every provider, as the user guide says.
+        if (!text.equals(REVIEW)) {
             log.debug(
                     "Ignored an unknown bot command: workspaceId={}, itemId={}",
                     command.workspaceId(),

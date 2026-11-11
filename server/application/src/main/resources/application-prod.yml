@@ -73,9 +73,6 @@ hephaestus:
 
     workspace:
         init-default: false
-        # NEVER auto-seed ADMIN membership in production — a first-visitor of an empty-membership
-        # workspace must not be silently elevated (privilege-escalation). Explicit for clarity.
-        auto-seed-membership: false
 
 
     # ═══════════════════════════════════════════════════════════════════════════
