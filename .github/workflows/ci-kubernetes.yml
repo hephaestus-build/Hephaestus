@@ -208,6 +208,13 @@ jobs:
       - name: Back up, then restore to a point in time
         if: ${{ inputs.backup-drill && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
         run: node scripts/kubernetes-cluster.ts backup-drill --work "$RUNNER_TEMP/kubernetes-cluster" --pod-cidr 10.42.0.0/16
+      # A node that joins gets the agent image from the DaemonSet, and its first sandbox pulls nothing.
+      - name: Start a sandbox on a new node without an image pull
+        if: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        run: |
+          set -euo pipefail
+          if [ "$GVISOR" = true ]; then set -- --gvisor "$RUNNER_TEMP/gvisor"; fi
+          node scripts/sandbox-prepull-drill.ts "$@"
       - name: Verify kubelet memory eviction order on a disposable node
         if: ${{ env.DRILLS == 'true' }}
         run: node scripts/kubernetes-memory-drill.ts release-images.tsv

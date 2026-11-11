@@ -1850,12 +1850,31 @@ A template's Pod has one container, the agent image, and these settings:
   A `gvisor` Pod keeps host users, because gVisor does not support user namespaces yet ([google/gvisor#13303](https://github.com/google/gvisor/issues/13303)). Its own kernel separates the sandbox from the node kernel.
 - The resources of `worker.sandbox.templates.<kind>.resources`.
 
-The agent image must be on each sandbox node before a sandbox starts.
-A pull of the image takes longer than the start of a sandbox.
-The DaemonSet `<release>-agent-image` runs the image on every node that `worker.runtime.nodeSelector` and `worker.runtime.tolerations` select.
-It uses the templates' RuntimeClass, so it also runs on the nodes that the class selects.
-Thus, each node pulls a new image when the release changes.
-The kubelet does not remove the image while the DaemonSet runs.
+#### The agent image on the sandbox nodes
+
+The agent image must be on a node before a sandbox starts there.
+A pull of the image from GHCR takes about 7 seconds.
+The whole start of a sandbox takes about 1 to 2 seconds.
+
+The DaemonSet `<release>-agent-image` keeps the image on every sandbox node:
+
+- It runs the image that the templates use, by the digest that the release pins.
+- It runs on every node that `worker.runtime.nodeSelector` and `worker.runtime.tolerations` select.
+  It uses the templates' RuntimeClass, so it reaches every node that can run a sandbox.
+- A node that joins the cluster gets a Pod of the DaemonSet, which pulls the image.
+- At a release change, the DaemonSet rolls and each node pulls the new image.
+  `helm upgrade --wait=watcher` waits for the rollout, so the upgrade ends after every sandbox node has the image.
+- The kubelet does not remove the image of a running container, so image garbage collection keeps it.
+- Each Pod requests 1 millicore of CPU and 8 MiB of memory.
+
+The scheduler can put a sandbox on a node before the node's DaemonSet Pod is ready.
+That sandbox pulls the image itself and starts about 7 seconds later.
+This can happen only on a node that has just joined.
+The scheduler prefers nodes that have the image already.
+On a cluster that adds nodes on demand, add sandbox nodes before the demand, or accept a slower first sandbox on a new node.
+
+A registry mirror must serve the agent image by the same digest.
+CI starts a sandbox on a new node after the DaemonSet Pod is ready there, and checks that the kubelet pulls nothing for it.
 
 `node scripts/sandbox-isolation.ts` is the sandbox isolation gate.
 It makes a copy of a template that only waits, starts two sandboxes from the copy, and checks from inside one of them:
