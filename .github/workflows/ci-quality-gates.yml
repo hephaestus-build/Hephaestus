@@ -66,9 +66,15 @@ jobs:
       pmd_canary: ${{ inputs.pmd_canary }}
       gradle_dependencies: ${{ inputs.gradle_dependencies }}
 
+  # The gates, and the two longest native suites in two halves, run in three jobs: in one job
+  # those suites took 9 of its 12 minutes. ci-cd.mdx § Parallelism and concurrency.
   tooling:
-    name: "Tooling and Docs"
+    name: "Tooling and Docs${{ matrix.node_test_shard != '' && format(' (tests {0})', matrix.node_test_shard) || '' }}"
     if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        node_test_shard: ["", "1/2", "2/2"]
     uses: ./.github/workflows/ci-quality-leg.yml
     permissions:
       actions: write
@@ -77,6 +83,7 @@ jobs:
       packages: read
     with:
       leg: tooling
+      node_test_shard: ${{ matrix.node_test_shard }}
 
   webapp:
     name: "Webapp"

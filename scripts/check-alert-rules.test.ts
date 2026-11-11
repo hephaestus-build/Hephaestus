@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
-import { incompleteAlerts, RUNBOOK_URL } from "./check-alert-rules.ts";
+import { incompleteAlerts, RUNBOOK_URL, runPatterns } from "./check-alert-rules.ts";
 
 const read = async (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -97,4 +97,21 @@ await test("every shipped alert fires in a promtool case and has a runbook row",
 		),
 		[],
 	);
+});
+
+void test("the promtool groups split into parts that select each group exactly once, by its whole name", async () => {
+	const groups = await read("deploy/chart/hephaestus/files/hephaestus-alerts.test.yml");
+	const parts = runPatterns(groups, 4);
+	assert.equal(parts.length, 4);
+	const patterns = parts.flat().map((flag) => new RegExp(flag.replace(/^--run=/u, ""), "u"));
+	const names = [...groups.matchAll(/^ {2}- name: (?<name>.+)$/gmu)].map(
+		(match) => match.groups?.name ?? "",
+	);
+	assert.equal(patterns.length, names.length);
+	for (const name of names) {
+		assert.equal(patterns.filter((pattern) => pattern.test(name)).length, 1, name);
+	}
+	const special = runPatterns("tests:\n  - name: a (b) | c.d\n", 8);
+	assert.deepEqual(special, [[String.raw`--run=^a \(b\) \| c\.d$`]]);
+	assert.throws(() => runPatterns("tests:\n  - interval: 1m\n", 2));
 });
