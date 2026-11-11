@@ -4776,8 +4776,12 @@ void test("the Scorecard ratchet runs on every event that can move a score, outs
  * A workflow whose newest run on `main` simply replaces the one before it, so cancelling the older
  * run loses nothing a later job reads.
  */
-const REPLACEABLE_MAIN_RUNS: Record<string, string> = {
-	".github/workflows/cd-docs.yml": "The site the last deploy published is the site.",
+const REPLACEABLE_MAIN_RUNS: Record<string, { reason: string; concurrency: string[] }> = {
+	".github/workflows/cd-docs.yml": {
+		reason:
+			"A newer production build replaces the older build; publication finishes under its own lock.",
+		concurrency: ["jobs", "build-production", "concurrency"],
+	},
 };
 
 // Every other run on `main` is the only one its commit will ever get, and something downstream reads
@@ -4802,10 +4806,13 @@ void test("a workflow triggered by main does not cancel the run main is judged b
 		}
 	}
 	assert.deepEqual(offenders, [], "these cancel a run on main that nothing else will repeat");
-	for (const [file, reason] of Object.entries(REPLACEABLE_MAIN_RUNS)) {
-		assert.ok(reason.trim(), `${file} must say why its run is replaceable`);
+	for (const [file, exception] of Object.entries(REPLACEABLE_MAIN_RUNS)) {
+		assert.ok(exception.reason.trim(), `${file} must say why its run is replaceable`);
 		assert.equal(
-			parseDocument(sources.get(file) ?? "").getIn(["concurrency", "cancel-in-progress"]),
+			parseDocument(sources.get(file) ?? "").getIn([
+				...exception.concurrency,
+				"cancel-in-progress",
+			]),
 			true,
 			`${file} no longer cancels, so it no longer needs an exception`,
 		);
@@ -4853,6 +4860,20 @@ function serverShards(workflow: Document, queue: boolean): string[] {
 		needs: { "detect-changes": { outputs: { "queue-tier": String(queue) } } },
 	});
 	return asArray(JSON.parse(encoded), "server shards").map((value) => asString(value, "shard"));
+}
+
+function validationConcurrencyScopes(
+	workflow: Document,
+	cancels: (location: string[]) => boolean,
+): string[][] {
+	if (workflow.hasIn(["concurrency", "group"])) {
+		return [["concurrency"]];
+	}
+	const jobs = workflow.get("jobs");
+	assert.ok(isMap(jobs));
+	return jobs.items
+		.map((entry) => ["jobs", String(entry.key), "concurrency"])
+		.filter((location) => workflow.hasIn([...location, "group"]) && cancels(location));
 }
 
 // A push to a pull request leaves its earlier run validating a commit nobody will merge, and every
@@ -4913,38 +4934,45 @@ void test("a pull-request workflow cancels its superseded runs and nothing else"
 			}
 			continue;
 		}
-		if (!workflow.hasIn(["concurrency", "group"])) {
-			offenders.push(`${file}: no concurrency group`);
-			continue;
-		}
-		const first = lane(["concurrency"], pullRequest(event, 1, "a".repeat(40)));
-		const again = lane(["concurrency"], pullRequest(event, 1, "b".repeat(40)));
-		if (!first.cancels || again.group !== first.group) {
-			offenders.push(`${file}: a push to a pull request does not cancel its earlier run`);
-		}
-		if (lane(["concurrency"], pullRequest(event, 2, "a".repeat(40))).group === first.group) {
-			offenders.push(`${file}: one pull request cancels another's run`);
-		}
-		const fork = lane(["concurrency"], pullRequest(event, 3, "a".repeat(40), "fork/Hephaestus"));
-		if (fork.group === first.group) {
-			offenders.push(`${file}: a fork's pull request cancels a run with the same branch name`);
-		}
-		for (const [trigger, github] of otherRuns) {
-			if (!workflow.hasIn(["on", trigger])) {
-				continue;
+		const scopes = validationConcurrencyScopes(
+			workflow,
+			(location) => lane(location, pullRequest(event, 1, "a".repeat(40))).cancels,
+		);
+		assert.notEqual(
+			scopes.length,
+			0,
+			`${file}: no concurrency group cancels superseded validation`,
+		);
+		for (const concurrency of scopes) {
+			const first = lane(concurrency, pullRequest(event, 1, "a".repeat(40)));
+			const again = lane(concurrency, pullRequest(event, 1, "b".repeat(40)));
+			if (!first.cancels || again.group !== first.group) {
+				offenders.push(`${file}: a push to a pull request does not cancel its earlier run`);
 			}
-			const run = lane(["concurrency"], {
-				event_name: trigger,
-				head_ref: "",
-				sha: "d".repeat(40),
-				event: { repository: { default_branch: "main" } },
-				...github,
-			});
-			if (run.group === first.group) {
-				offenders.push(`${file}: a pull request cancels a ${trigger} run`);
+			if (lane(concurrency, pullRequest(event, 2, "a".repeat(40))).group === first.group) {
+				offenders.push(`${file}: one pull request cancels another's run`);
 			}
-			if (run.cancels && !(trigger === "push" && Object.hasOwn(REPLACEABLE_MAIN_RUNS, file))) {
-				offenders.push(`${file}: a ${trigger} run cancels its predecessor`);
+			const fork = lane(concurrency, pullRequest(event, 3, "a".repeat(40), "fork/Hephaestus"));
+			if (fork.group === first.group) {
+				offenders.push(`${file}: a fork's pull request cancels a run with the same branch name`);
+			}
+			for (const [trigger, github] of otherRuns) {
+				if (!workflow.hasIn(["on", trigger])) {
+					continue;
+				}
+				const run = lane(concurrency, {
+					event_name: trigger,
+					head_ref: "",
+					sha: "d".repeat(40),
+					event: { repository: { default_branch: "main" } },
+					...github,
+				});
+				if (run.group === first.group) {
+					offenders.push(`${file}: a pull request cancels a ${trigger} run`);
+				}
+				if (run.cancels && !(trigger === "push" && Object.hasOwn(REPLACEABLE_MAIN_RUNS, file))) {
+					offenders.push(`${file}: a ${trigger} run cancels its predecessor`);
+				}
 			}
 		}
 	}
