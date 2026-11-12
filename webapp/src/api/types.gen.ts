@@ -2856,7 +2856,7 @@ export type LlmUsageByDay = {
 	 */
 	ownProviderTotalCostUsd: number;
 	/**
-	 * Runs this day with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script call counts toward the run of its review. Those calls are excluded from both totals above.
+	 * Runs this day with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script call counts toward the run of its review. A capability test with unavailable cost counts once. Those calls are excluded from both totals above.
 	 */
 	unpricedEventCount: number;
 };
@@ -2887,7 +2887,7 @@ export type LlmUsageByJobType = {
 	 */
 	totalCalls: number;
 	/**
-	 * Runs of this job type with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script call counts toward the run of its review. Those calls are excluded from both totals above.
+	 * Runs of this job type with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script call counts toward the run of its review. A capability test with unavailable cost counts once. Those calls are excluded from both totals above.
 	 */
 	unpricedEventCount: number;
 };
@@ -8078,7 +8078,7 @@ export type WorkspaceLlmUsageReport = {
 	 */
 	ownProviderUnmeasured: LlmUnmeasuredUsage;
 	/**
-	 * Runs this month (job attempts and mentor turn attempts, either purse) with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified, and that has no upper bound, each counted once. A practice script call counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.
+	 * Runs this month (job attempts and mentor turn attempts, either purse) with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified, and that has no upper bound, each counted once. A capability test with unavailable cost counts once. A practice script call counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.
 	 */
 	unpricedEventCount: number;
 };

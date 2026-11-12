@@ -183,6 +183,27 @@ class LlmUsageRepricerTest extends BaseUnitTest {
         assertThat(price.getValue().per1mInputUsd()).isEqualByComparingTo("3.00");
     }
 
+    @Test
+    void shouldUseTheFrozenInstanceModelBeforeAnAmbiguousProviderAlias() {
+        when(usageRepository.findAppliedInstanceModelId(EVENT_ID)).thenReturn(Optional.of(55L));
+        when(priceRepository.findByModelIdAndEffectiveToIsNull(55L))
+                .thenReturn(Optional.of(price(PricingMode.PRICED, new BigDecimal("3.00"))));
+        repriceSucceeds();
+        assertThat(repricer.reprice(row("shared-alias", UsageFundingSource.INSTANCE, null, null)))
+                .isEqualTo(LlmUsageRepricer.ResultOutcome.REPRICED);
+        assertThat(appliedPrice().appliedPriceId()).isEqualTo(11L);
+        verifyNoInteractions(modelRepository);
+    }
+
+    @Test
+    void shouldKeepADeletedInstanceModelUnidentifiedInsteadOfGuessingAnotherWithItsAlias() {
+        when(usageRepository.findAppliedInstanceModelId(EVENT_ID)).thenReturn(Optional.of(55L));
+        when(priceRepository.findByModelIdAndEffectiveToIsNull(55L)).thenReturn(Optional.empty());
+        assertThat(repricer.reprice(row("shared-alias", UsageFundingSource.INSTANCE, null, null)))
+                .isEqualTo(LlmUsageRepricer.ResultOutcome.UNIDENTIFIABLE);
+        verifyNoInteractions(modelRepository);
+    }
+
     // A Cohere reranking row billed search units and no tokens. A price per token cannot charge them, so
     // pricing its zero tokens would confirm $0 for a call that the provider charged.
     @Test
@@ -276,7 +297,9 @@ class LlmUsageRepricerTest extends BaseUnitTest {
         LlmUsageRepricer.ResultOutcome outcome = repricer.reprice(row(null, UsageFundingSource.INSTANCE, null, null));
 
         assertThat(outcome).isEqualTo(LlmUsageRepricer.ResultOutcome.UNIDENTIFIABLE);
-        verifyNoInteractions(usageRepository);
+        verify(usageRepository).findAppliedInstanceModelId(EVENT_ID);
+        verify(usageRepository, never()).applyResolvedPrice(any(), any(), any(), any());
+        verifyNoInteractions(modelRepository, priceRepository, workspaceModelRepository);
     }
 
     @Test

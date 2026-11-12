@@ -192,7 +192,9 @@ class LlmProxyService {
                     .tag("gen_ai.operation.name", operation)
                     .tag("hephaestus.pi_request.sha256", ProvenanceDigest.sha256Hex(body))
                     .start();
-            if (routing.attempt().sourceType() != UsageSourceType.PRODUCT_FEEDBACK_DRAFT && routing.sourceId() != null)
+            if (routing.attempt().sourceType() != UsageSourceType.PRODUCT_FEEDBACK_DRAFT
+                    && routing.attempt().sourceType() != UsageSourceType.PROBE
+                    && routing.sourceId() != null)
                 span.tag("hephaestus.job.id", routing.sourceId().toString());
             if (routing.workspaceId() != null) span.tag("hephaestus.workspace.id", routing.workspaceId());
             long started = System.nanoTime();
@@ -275,8 +277,8 @@ class LlmProxyService {
         }
 
         /** An upstream request leaves now; the first one opens the row. */
-        void sending() {
-            if (id == null) id = accounting.calls().open(routing, bound);
+        void sending(String upstreamModel) {
+            if (id == null) id = accounting.calls().open(routing, bound, upstreamModel);
             unmeasured = null;
         }
 
@@ -408,6 +410,9 @@ class LlmProxyService {
             credential = instance != null && Objects.equals(instance.ref().connectionId(), routing.connectionId())
                     ? instance.credential()
                     : null;
+        } else if (attempt.sourceType() == UsageSourceType.PROBE) {
+            credential = resolver.resolveProbeCredential(new LlmModelResolver.ConnectionRef(
+                    routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()));
         } else {
             credential = resolver.resolveProxyCredential(new LlmModelResolver.ConnectionRef(
                     routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()));
@@ -503,7 +508,7 @@ class LlmProxyService {
                         HttpStatus.SERVICE_UNAVAILABLE, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
             try {
-                row.sending();
+                row.sending(credential.upstreamModelId());
             } catch (ProxyCallLedger.ClaimLost lost) {
                 permit.released();
                 return refusal(
@@ -555,7 +560,7 @@ class LlmProxyService {
                                 ProxyRefusal.CAPACITY,
                                 "Model capacity is unavailable for this retry.");
                     }
-                    row.sending();
+                    row.sending(credential.upstreamModelId());
                     upstream = callUpstream(
                             exchange,
                             prepared.withoutUsageRequestOrBody(),
@@ -567,7 +572,8 @@ class LlmProxyService {
                 }
             } catch (Exception e) {
                 // Only a failure before a stream's head reaches here, so nothing has been written to the client.
-                permit.failed(e);
+                if (attempt.sourceType() == UsageSourceType.PROBE) permit.released();
+                else permit.failed(e);
                 Bounds bounds = exchange.bounds();
                 poolPermit.outcome(bounds != null && ProxyStreamingUtils.readTimedOut(e) ? "stalled" : "error");
                 if (bounds != null && ProxyStreamingUtils.readTimedOut(e)) {
@@ -636,6 +642,7 @@ class LlmProxyService {
                 Duration asked =
                         callPermits.throttled(poolPermit, upstream.status(), upstream.headers(), instanceCredential);
                 if (attempt.sourceType() != UsageSourceType.PRODUCT_FEEDBACK_DRAFT
+                        && attempt.sourceType() != UsageSourceType.PROBE
                         && asked != null
                         && !call.isCancelled()
                         && absorbs(upstream, asked, absorbUntil)) {
@@ -650,8 +657,9 @@ class LlmProxyService {
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
                 errors.writeErrorFrame(response, protocol, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
-            if (call.isCancelled()) {
-                // The turn ended without this call; the provider's state is unknown.
+            if (call.isCancelled() || attempt.sourceType() == UsageSourceType.PROBE) {
+                // A cancelled call says nothing about provider health. Administrative capability tests also
+                // have their own deadline and can exercise features that a live model does not support.
                 permit.released();
             } else {
                 ProxyStallErrors.judge(upstream, permit);

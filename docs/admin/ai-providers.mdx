@@ -855,6 +855,21 @@ The provider can charge for them.
 The result is saved at once, without **Save changes**.
 No reviewed work is sent.
 
+These calls use the proxy and its background model capacity.
+Each call has a 15-second deadline and a 64-token output limit.
+The usage ledger records each call, including failed calls.
+An instance model test has no workspace or run.
+A workspace model test records the workspace that pays for it.
+A disabled model can be tested before activation.
+
+If the workspace has a spend cap, set the model's price first.
+An unpriced test is refused before it sends a request to that provider.
+An uncapped workspace or instance admin can still test an unpriced model.
+
+Test failures do not change the connection's health state.
+An open connection breaker still refuses a test.
+Without the agent runtime, the test is inconclusive and sends no request.
+
 The first request uses automatic tool choice.
 The second requests one named tool.
 A returned call to that tool confirms the `forced_tool_choice` capability.

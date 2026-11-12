@@ -153,7 +153,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         lenient().when(requestPolicy.allows(any())).thenReturn(true);
-        lenient().when(callLedger.open(any(), any())).thenReturn(CALL);
+        lenient().when(callLedger.open(any(), any(), any())).thenReturn(CALL);
         meterRegistry = new SimpleMeterRegistry();
         controller = new LlmProxyService(
                 Tracer.NOOP,
@@ -271,7 +271,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(result.getStatusCode().value()).isEqualTo(400);
             assertThat(String.valueOf(result.getBody())).contains("must be a positive whole number");
             verifyNoInteractions(resolver);
-            verify(callLedger, never()).open(any(), any());
+            verify(callLedger, never()).open(any(), any(), any());
         }
 
         @Test
@@ -823,7 +823,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         void shouldRefuseACallWhoseUpperBoundDoesNotFitUnderTheCapBeforeItReachesItsProvider() throws Exception {
             var permit = mock(LlmCallPermits.Permit.class);
             when(permit.revoked()).thenReturn(Mono.never());
-            when(callLedger.open(any(), any())).thenThrow(new ProxyCallLedger.BudgetHeld());
+            when(callLedger.open(any(), any(), any())).thenThrow(new ProxyCallLedger.BudgetHeld());
 
             var answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
 

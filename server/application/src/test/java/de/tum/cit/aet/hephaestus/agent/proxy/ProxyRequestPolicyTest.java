@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -53,7 +54,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        policy = new ProxyRequestPolicy(drafts, egress, jobs, turns, reviews, routing);
+        policy = new ProxyRequestPolicy(drafts, mock(LlmModelResolver.class), egress, jobs, turns, reviews, routing);
     }
 
     private ProxyRouting request(UsageSourceType source) {

@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.CacheLoads;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import java.math.BigDecimal;
@@ -61,12 +62,18 @@ class ProxyBudgetGate {
     /**
      * Whether a call must not open because its upper bound does not fit under its purse's cap: the spend of the month,
      * every open or unmeasured call at its bound, plus this call's own bound. Reads the ledger now, not the cached
-     * verdict, so a call that opened on another replica a moment ago counts. A call with no bound passes: the verdict
-     * ({@link #isBlocked}) already holds its purse once such a call is in the ledger.
+     * verdict, so a call that opened on another replica a moment ago counts. A diagnostic without a bound must not
+     * open against a capped purse. Other calls without a bound retain the verdict from {@link #isBlocked}.
      */
     boolean refusesHold(ProxyRouting routing, @Nullable BigDecimal boundUsd) {
         Long workspaceId = routing.workspaceId();
-        if (workspaceId == null || boundUsd == null) return false;
+        if (workspaceId == null) return false;
+        if (boundUsd == null) {
+            // A diagnostic must not leave a capped workspace with an unknown charge that nobody can repair.
+            // Read the cap now: the administrator can have set it since the request's cached budget check.
+            return routing.attempt().sourceType() == UsageSourceType.PROBE
+                    && budgetService.headroom(workspaceId).cappedFor(routing.connectionScope());
+        }
         LlmBudgetHeadroom cached = headroom(workspaceId);
         if (cached == null || !cached.cappedFor(routing.connectionScope())) return false;
         return budgetService.headroom(workspaceId).refusesHold(routing.connectionScope(), boundUsd);

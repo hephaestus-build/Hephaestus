@@ -6,10 +6,13 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
+import de.tum.cit.aet.hephaestus.agent.catalog.InstanceLlmSettingsRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
@@ -27,23 +30,33 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver.ConnectionRef;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelVisibility;
 import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.productfeedback.DraftReportAdapterFixture;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRepricingSweeper;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
@@ -115,6 +128,7 @@ import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -122,6 +136,30 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** The output limit that the fixture jobs freeze for their chat model. */
     private static final int CHAT_OUTPUT_LIMIT = 4096;
+
+    @Autowired
+    private LlmBudgetService liveBudgetService;
+
+    @Autowired
+    private LlmUsageEventRepository usageEvents;
+
+    @Autowired
+    private LlmUsageRepricingSweeper repricing;
+
+    @Autowired
+    private InstanceLlmSettingsRepository egressSettings;
+
+    @Autowired
+    private ReviewMemberAiPolicy reviewAi;
+
+    @Autowired
+    private MemberAiRoutingAdapter memberAi;
+
+    @Autowired
+    private WorkspaceLlmConnectionRepository workspaceConnections;
+
+    @Autowired
+    private WorkspaceLlmModelRepository workspaceModels;
 
     @Autowired
     private ReviewSnapshotQuery reviewSnapshots;
@@ -235,6 +273,306 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "OPENAI_COMPLETIONS,false",
+        "ANTHROPIC_MESSAGES,false",
+        "OPENAI_RESPONSES,false",
+        "OPENAI_COMPLETIONS,true",
+        "ANTHROPIC_MESSAGES,true",
+        "OPENAI_RESPONSES,true"
+    })
+    void shouldProbeDisabledModelsThroughTheProxyWithTheirRealScopeAndLedger(LlmApiProtocol protocol, boolean byo)
+            throws Exception {
+        try (var upstream = new MockWebServer()) {
+            upstream.start();
+            String answer = switch (protocol) {
+                case ANTHROPIC_MESSAGES -> "{\"content\":[],\"usage\":{\"input_tokens\":12,\"output_tokens\":3}}";
+                case OPENAI_COMPLETIONS -> "{\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}";
+                case OPENAI_RESPONSES -> "{\"output\":[],\"usage\":{\"input_tokens\":12,\"output_tokens\":3}}";
+            };
+            upstream.enqueue(new MockResponse.Builder()
+                    .addHeader("Content-Type", "application/json")
+                    .body(answer)
+                    .build());
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(422)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{}")
+                    .build());
+            ConnectionRef ref = probeModel(upstream, protocol, byo);
+            var capacity = admittingPermits();
+            var policy = probePolicy();
+            var proxy = proxyService(
+                    WebClient.builder().build(),
+                    liveBudgetService,
+                    capacity,
+                    new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
+                    policy);
+            var gateway = new LlmModelProbeGateway(proxy, objectMapper);
+            UUID probe = UUID.randomUUID();
+            var body = objectMapper.createObjectNode().put("model", "stale-probe-alias");
+            body.putArray("messages").addObject().put("role", "user").put("content", "Call probe.");
+            String outputField = switch (protocol) {
+                case ANTHROPIC_MESSAGES -> "max_tokens";
+                case OPENAI_COMPLETIONS -> "max_completion_tokens";
+                case OPENAI_RESPONSES -> "max_output_tokens";
+            };
+            body.put(outputField, Integer.MAX_VALUE);
+            assertThat(gateway.call(probe, ref, protocol, body).status()).isEqualTo(200);
+            assertThat(gateway.call(probe, ref, protocol, body).status()).isEqualTo(422);
+            var sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
+            assertThat(sent.getUrl().encodedPath()).isEqualTo(protocol.upstreamPath());
+            assertThat(sent.getHeaders().get("Authorization"))
+                    .isEqualTo(
+                            byo || protocol == LlmApiProtocol.ANTHROPIC_MESSAGES ? null : "Bearer synthetic-probe-key");
+            assertThat(sent.getHeaders().get("x-api-key"))
+                    .isEqualTo(!byo && protocol == LlmApiProtocol.ANTHROPIC_MESSAGES ? "synthetic-probe-key" : null);
+            var actualBody =
+                    objectMapper.readTree(Objects.requireNonNull(sent.getBody()).utf8());
+            assertThat(actualBody.path("model").asString()).isEqualTo("live-probe-model");
+            assertThat(actualBody.path(outputField).asInt()).isEqualTo(LlmModelProbeGateway.MAX_OUTPUT_TOKENS);
+            var rows = jdbc.queryForList(
+                    "SELECT * FROM llm_usage_event WHERE source_type='PROBE' AND source_id=? ORDER BY id", probe);
+            assertThat(rows).hasSize(2);
+            for (var row : rows) {
+                assertThat(row.get("workspace_id")).isEqualTo(byo ? workspace.getId() : null);
+                assertThat(row.get("funding_source")).isEqualTo(byo ? "WORKSPACE" : "INSTANCE");
+                assertThat(row.get("run_id")).isNull();
+                assertThat(row.get("lease_epoch")).isNull();
+                assertThat(row.get("action_id")).isNull();
+                assertThat(row.get("applied_instance_model_id")).isEqualTo(byo ? null : ref.modelId());
+                assertThat(row.get("settle_after")).isNotNull();
+                assertThat(row.get("call_state")).isEqualTo("ENDED");
+            }
+            assertThat(rows.getFirst().get("input_tokens")).isEqualTo(12L);
+            assertThat(rows.getFirst().get("output_tokens")).isEqualTo(3L);
+            assertThat(rows.getFirst().get("measurement_verification")).isEqualTo("VERIFIED");
+            assertThat(rows.getFirst().get("pricing_state")).isEqualTo("UNPRICED");
+            assertThat(rows.getFirst().get("call_failure")).isNull();
+            assertThat(rows.getFirst().get("failed_at")).isNull();
+            assertThat(rows.getLast().get("input_tokens")).isEqualTo(0L);
+            assertThat(rows.getLast().get("pricing_state")).isEqualTo("NO_CHARGE");
+            assertThat((BigDecimal) rows.getLast().get("cost_usd")).isZero();
+            var failed = objectMapper.readTree(
+                    Objects.requireNonNull(rows.getLast().get("call_failure")).toString());
+            assertThat(failed.path("kind").asString()).isEqualTo("upstream_status");
+            assertThat(failed.path("status").asInt()).isEqualTo(422);
+            assertThat(rows.getLast().get("failed_at")).isNotNull();
+            if (byo) {
+                assertThat(liveBudgetService.decide(workspace.getId()).workspaceFunded())
+                        .isEqualTo(LlmBudgetBlockReason.NONE);
+                var aggregate = usageEvents
+                        .aggregateByJobType(
+                                workspace.getId(),
+                                Instant.now().minusSeconds(60),
+                                Instant.now().plusSeconds(60))
+                        .stream()
+                        .filter(row -> row.getJobType().equals("MODEL_CAPABILITY_PROBE"))
+                        .findFirst()
+                        .orElseThrow();
+                assertThat(aggregate.getTotalCalls()).isEqualTo(2);
+                assertThat(aggregate.getInputTokens()).isEqualTo(12);
+                assertThat(aggregate.getEvents()).isZero();
+                assertThat(aggregate.getUnpricedEventCount()).isEqualTo(1);
+                jdbc.update(
+                        "UPDATE workspace_llm_model SET pricing_mode='PRICED',per_1m_input_usd=2,per_1m_output_usd=8 WHERE id=? AND workspace_id=?",
+                        ref.modelId(),
+                        workspace.getId());
+                repricing.repriceNow();
+                assertThat(liveBudgetService.decide(workspace.getId()).workspaceFunded())
+                        .isEqualTo(LlmBudgetBlockReason.NONE);
+            }
+            if (!byo) {
+                var otherConnection = connectionRepository.saveAndFlush(
+                        LlmCatalogTestFixtures.connection("same-alias-" + UUID.randomUUID()));
+                modelRepository.saveAndFlush(LlmCatalogTestFixtures.model(
+                        otherConnection, "same-alias-" + UUID.randomUUID(), "live-probe-model"));
+                var price = new LlmModelPrice();
+                price.setModel(modelRepository
+                        .findById(Objects.requireNonNull(ref.modelId()))
+                        .orElseThrow());
+                price.setPricingMode(PricingMode.PRICED);
+                price.setPer1mInputUsd(new BigDecimal("2"));
+                price.setPer1mOutputUsd(new BigDecimal("8"));
+                price.setEffectiveFrom(Instant.now());
+                modelPrices.saveAndFlush(price);
+                repricing.repriceNow();
+                assertThat(jdbc.queryForObject(
+                                "SELECT cost_usd FROM llm_usage_event WHERE id=?",
+                                BigDecimal.class,
+                                rows.getFirst().get("id")))
+                        .isEqualByComparingTo("0.000048");
+            }
+            Mockito.verify(capacity, Mockito.times(2))
+                    .acquire(anyLong(), Mockito.eq(AgentRunBand.BACKGROUND), any(), any(), any());
+        }
+    }
+
+    private ConnectionRef probeModel(MockWebServer upstream, LlmApiProtocol protocol, boolean byo) {
+        ConnectionRef ref;
+        if (byo) {
+            var connection = new WorkspaceLlmConnection();
+            connection.setWorkspace(workspace);
+            connection.setSlug("probe-" + UUID.randomUUID());
+            connection.setDisplayName("Synthetic probe");
+            connection.setBaseUrl(upstream.url("/").toString());
+            connection.setApiProtocol(protocol);
+            connection.setEnabled(false);
+            connection = workspaceConnections.saveAndFlush(connection);
+            var model = new WorkspaceLlmModel();
+            model.setWorkspace(workspace);
+            model.setConnection(connection);
+            model.setSlug("probe-" + UUID.randomUUID());
+            model.setDisplayName("Synthetic probe");
+            model.setUpstreamModelId("live-probe-model");
+            model.setEnabled(false);
+            model = workspaceModels.saveAndFlush(model);
+            ref = new ConnectionRef(UsageFundingSource.WORKSPACE, connection.getId(), model.getId(), workspace.getId());
+        } else {
+            var connection = LlmCatalogTestFixtures.connection("probe-" + UUID.randomUUID());
+            connection.setBaseUrl(upstream.url("/").toString());
+            connection.setApiProtocol(protocol);
+            connection.setApiKey("synthetic-probe-key");
+            connection.setEnabled(false);
+            connection = connectionRepository.saveAndFlush(connection);
+            var model = modelRepository.saveAndFlush(LlmCatalogTestFixtures.model(
+                    connection, "probe-" + UUID.randomUUID(), "live-probe-model", ModelVisibility.GRANTED, false));
+            ref = new ConnectionRef(UsageFundingSource.INSTANCE, connection.getId(), model.getId(), null);
+        }
+        return ref;
+    }
+
+    private ProxyRequestPolicy probePolicy() {
+        return new ProxyRequestPolicy(
+                draftCalls,
+                modelResolver,
+                new EgressPolicy(
+                        egressSettings,
+                        new LlmProperties(
+                                "",
+                                new LlmProperties.Egress(true, List.of(), false),
+                                new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL))),
+                jobRepository,
+                turnRepository,
+                reviewAi,
+                memberAi);
+    }
+
+    private LlmModelProbeGateway probeGateway(LlmConnectionHealth health) {
+        return new LlmModelProbeGateway(
+                proxyService(
+                        WebClient.builder().build(),
+                        liveBudgetService,
+                        admittingPermits(),
+                        new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
+                        probePolicy(),
+                        health),
+                objectMapper);
+    }
+
+    private ObjectNode probeBody() {
+        var body = objectMapper
+                .createObjectNode()
+                .put("model", "test-alias")
+                .put("max_completion_tokens", LlmModelProbeGateway.MAX_OUTPUT_TOKENS);
+        body.putArray("messages").addObject().put("role", "user").put("content", "Call probe.");
+        return body;
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 20})
+    void shouldRefuseAnUnpricedCappedProbeBeforeEgressWithoutAddingUnknownSpend(int cap) throws Exception {
+        try (var upstream = new MockWebServer()) {
+            upstream.start();
+            var ref = probeModel(upstream, LlmApiProtocol.OPENAI_COMPLETIONS, true);
+            jdbc.update("UPDATE workspace SET monthly_byo_llm_budget_usd=? WHERE id=?", cap, workspace.getId());
+            var gateway = probeGateway(new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()));
+            UUID probe = UUID.randomUUID();
+            assertThat(gateway.call(probe, ref, LlmApiProtocol.OPENAI_COMPLETIONS, probeBody())
+                            .status())
+                    .isEqualTo(429);
+            assertThat(upstream.getRequestCount()).isZero();
+            assertThat(jdbc.queryForList(
+                            "SELECT id FROM llm_usage_event WHERE source_type='PROBE' AND source_id=?", probe))
+                    .isEmpty();
+            assertThat(liveBudgetService.decide(workspace.getId()).workspaceFunded())
+                    .isEqualTo(cap == 0 ? LlmBudgetBlockReason.EXHAUSTED : LlmBudgetBlockReason.NONE);
+        }
+    }
+
+    @Test
+    void shouldKeepACappedWorkspaceUsableWhenAPricedProbeReportsNoUsage() throws Exception {
+        try (var upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(new MockResponse.Builder()
+                    .addHeader("Content-Type", "application/json")
+                    .body("{}")
+                    .build());
+            var ref = probeModel(upstream, LlmApiProtocol.OPENAI_COMPLETIONS, true);
+            jdbc.update("UPDATE workspace SET monthly_byo_llm_budget_usd=20 WHERE id=?", workspace.getId());
+            jdbc.update(
+                    "UPDATE workspace_llm_model SET pricing_mode='PRICED',per_1m_input_usd=2,per_1m_output_usd=8 WHERE id=? AND workspace_id=?",
+                    ref.modelId(),
+                    workspace.getId());
+            UUID probe = UUID.randomUUID();
+            var gateway = probeGateway(new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()));
+            assertThat(gateway.call(probe, ref, LlmApiProtocol.OPENAI_COMPLETIONS, probeBody())
+                            .status())
+                    .isEqualTo(200);
+            var row =
+                    jdbc.queryForMap("SELECT * FROM llm_usage_event WHERE source_type='PROBE' AND source_id=?", probe);
+            assertThat(row.get("measurement_verification")).isEqualTo("UNVERIFIABLE");
+            assertThat(row.get("pricing_state")).isEqualTo("UNPRICED");
+            assertThat((BigDecimal) row.get("cost_bound_usd")).isPositive();
+            assertThat(liveBudgetService.decide(workspace.getId()).workspaceFunded())
+                    .isEqualTo(LlmBudgetBlockReason.NONE);
+        }
+    }
+
+    @Test
+    void shouldRespectConnectionHealthWithoutSamplingDiagnosticSuccessesAndFailures() throws Exception {
+        try (var upstream = new MockWebServer()) {
+            upstream.start();
+            for (int status : List.of(200, 500, 200, 500))
+                upstream.enqueue(new MockResponse.Builder()
+                        .code(status)
+                        .addHeader("Content-Type", "application/json")
+                        .body("{}")
+                        .build());
+            var ref = probeModel(upstream, LlmApiProtocol.OPENAI_COMPLETIONS, false);
+            var registry = CircuitBreakerRegistry.ofDefaults();
+            var health = new LlmConnectionHealth(registry);
+            var gateway = probeGateway(health);
+            UUID first = UUID.randomUUID();
+            UUID second = UUID.randomUUID();
+            assertThat(gateway.call(first, ref, LlmApiProtocol.OPENAI_COMPLETIONS, probeBody())
+                            .status())
+                    .isEqualTo(200);
+            assertThat(gateway.call(first, ref, LlmApiProtocol.OPENAI_COMPLETIONS, probeBody())
+                            .status())
+                    .isEqualTo(500);
+            assertThat(gateway.call(second, ref, LlmApiProtocol.OPENAI_COMPLETIONS, probeBody())
+                            .status())
+                    .isEqualTo(200);
+            assertThat(gateway.call(second, ref, LlmApiProtocol.OPENAI_COMPLETIONS, probeBody())
+                            .status())
+                    .isEqualTo(500);
+            assertThat(health.isOpen(ref.scope(), ref.connectionId())).isFalse();
+            assertThat(registry.getAllCircuitBreakers())
+                    .allSatisfy(breaker -> assertThat(breaker.getMetrics().getNumberOfBufferedCalls())
+                            .isZero());
+            for (int failure = 0; failure < 3; failure++)
+                Objects.requireNonNull(health.acquire(ref.scope(), ref.connectionId()))
+                        .failed(new IllegalStateException("Synthetic production failure"));
+            assertThat(health.isOpen(ref.scope(), ref.connectionId())).isTrue();
+            assertThat(gateway.call(UUID.randomUUID(), ref, LlmApiProtocol.OPENAI_COMPLETIONS, probeBody())
+                            .status())
+                    .isEqualTo(503);
+            assertThat(upstream.getRequestCount()).isEqualTo(4);
+        }
     }
 
     @ParameterizedTest
@@ -978,6 +1316,31 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             WebClient client, LlmBudgetService budgetService, LlmCallPermits capacity, HephCallProperties silence) {
         ProxyRequestPolicy policy = mock(ProxyRequestPolicy.class);
         when(policy.allows(any())).thenReturn(true);
+        return proxyService(client, budgetService, capacity, silence, policy);
+    }
+
+    private LlmProxyService proxyService(
+            WebClient client,
+            LlmBudgetService budgetService,
+            LlmCallPermits capacity,
+            HephCallProperties silence,
+            ProxyRequestPolicy policy) {
+        return proxyService(
+                client,
+                budgetService,
+                capacity,
+                silence,
+                policy,
+                new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()));
+    }
+
+    private LlmProxyService proxyService(
+            WebClient client,
+            LlmBudgetService budgetService,
+            LlmCallPermits capacity,
+            HephCallProperties silence,
+            ProxyRequestPolicy policy,
+            LlmConnectionHealth health) {
         var gate = new ProxyBudgetGate(budgetService);
         var ledger = new ProxyCallLedger(
                 modelAdmission,
@@ -1006,7 +1369,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         agentRuns,
                         Mockito.mock(ProductFeedbackDraftCalls.class)),
                 new ProxyCallsInFlight(12),
-                new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
+                health,
                 capacity,
                 silence);
     }

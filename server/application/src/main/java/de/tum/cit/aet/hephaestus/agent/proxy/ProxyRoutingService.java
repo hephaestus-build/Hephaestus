@@ -55,7 +55,8 @@ class ProxyRoutingService {
      * @throws ResponseStatusException 409 when the call's review no longer exists
      */
     AgentRunBand band(ProxyRouting routing) {
-        if (routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT) return AgentRunBand.BACKGROUND;
+        if (routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
+                || routing.attempt().sourceType() == UsageSourceType.PROBE) return AgentRunBand.BACKGROUND;
         if (routing.hephTurn()) return AgentRunBand.INTERACTIVE;
         var job = agentJobRepository.findById(routing.sourceId()).orElseThrow(ProxyRoutingService::attemptEnded);
         if (ResultAdmissionService.isAdmitted(job)) return AgentRunBand.BATCH;
@@ -68,6 +69,8 @@ class ProxyRoutingService {
         var attempt = routing.attempt();
         if (attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT)
             return drafts.waits(attempt.sourceId(), attempt.number());
+        if (attempt.sourceType() == UsageSourceType.PROBE)
+            return routing.workDeadline() != null && Instant.now().isBefore(routing.workDeadline());
         UUID lease = attempt.runId();
         Long workspace = routing.workspaceId();
         if (lease == null || workspace == null) return false;

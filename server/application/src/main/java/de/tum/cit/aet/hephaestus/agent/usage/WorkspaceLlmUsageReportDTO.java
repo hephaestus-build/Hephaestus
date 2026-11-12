@@ -64,7 +64,7 @@ public record WorkspaceLlmUsageReportDTO(
         @Schema(
                 description = "Runs this month (job attempts and mentor turn attempts, either purse) with at least one "
                         + "call whose cost is unavailable because a rate is missing or the measurement is unverified, "
-                        + "and that has no upper bound, each counted once. A practice script call counts toward the "
+                        + "and that has no upper bound, each counted once. A capability test with unavailable cost counts once. A practice script call counts toward the "
                         + "run of its review. Those rows are excluded from both totals above, so a non-zero value "
                         + "means the real spend may be higher than shown.")
         Long unpricedEventCount,

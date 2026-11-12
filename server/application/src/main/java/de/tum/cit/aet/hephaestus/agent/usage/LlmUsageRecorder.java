@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
@@ -45,7 +46,7 @@ public class LlmUsageRecorder {
     /**
      * A model call that its run claim or instance action makes now.
      *
-     * @param workspaceId the workspace, or null only for instance report drafts
+     * @param workspaceId the workspace, or null for instance report drafts and instance model probes
      * @param leaseEpoch the claim of the run that makes the call, or null for instance work
      * @param sourceAttempt the job attempt or the turn attempt of the claim
      * @param practiceId the practice whose script makes the call; {@code null} for every other call
@@ -68,7 +69,43 @@ public class LlmUsageRecorder {
             LlmPriceSnapshot price,
             @Nullable BigDecimal costBoundUsd,
             @Nullable UUID actionId,
-            @Nullable Instant settleAfter) {
+            @Nullable Instant settleAfter,
+            @Nullable Long appliedInstanceModelId) {
+        public OpenCall(
+                @Nullable Long workspaceId,
+                @Nullable UUID runId,
+                @Nullable Integer leaseEpoch,
+                String jobType,
+                UsageSourceType sourceType,
+                UUID sourceId,
+                int sourceAttempt,
+                @Nullable UUID reviewId,
+                ModelKind modelKind,
+                @Nullable Long practiceId,
+                @Nullable String model,
+                LlmPriceSnapshot price,
+                @Nullable BigDecimal costBoundUsd,
+                @Nullable UUID actionId,
+                @Nullable Instant settleAfter) {
+            this(
+                    workspaceId,
+                    runId,
+                    leaseEpoch,
+                    jobType,
+                    sourceType,
+                    sourceId,
+                    sourceAttempt,
+                    reviewId,
+                    modelKind,
+                    practiceId,
+                    model,
+                    price,
+                    costBoundUsd,
+                    actionId,
+                    settleAfter,
+                    null);
+        }
+
         public OpenCall(
                 @Nullable Long workspaceId,
                 @Nullable UUID runId,
@@ -148,6 +185,12 @@ public class LlmUsageRecorder {
         return id;
     }
 
+    /** A runless call's durable deadline is measured from the same database clock that recovery compares. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Instant recoveryDeadline(Duration timeout) {
+        return usageRepository.databaseClock().plus(timeout);
+    }
+
     /**
      * Measures one call at its end, in the caller's transaction. A call without reported usage ends unverifiable and
      * unpriced, never at zero cost, and keeps its upper bound. A call whose claim ended first was settled unverifiable;
@@ -219,7 +262,11 @@ public class LlmUsageRecorder {
                 row.getAppliedPer1mCacheWriteUsd());
         // A PRICED snapshot missing a rate would silently cost the tokens it does have a rate for.
         boolean rateMissing = isPricedWithARateMissing(usage, frozen);
-        LlmPriceSnapshot price = rateMissing ? asUnpriced(frozen) : frozen;
+        LlmPriceSnapshot price = rateMissing ? withPricingState(frozen, UsagePricingState.UNPRICED) : frozen;
+        // A rejected call or a verified zero-unit answer needs no rate. Missing usage took the branch above and
+        // remains unknown; it must never acquire this zero charge.
+        if (usage.equals(CallUsage.NONE) && frozen.pricingState() == UsagePricingState.UNPRICED)
+            price = withPricingState(frozen, UsagePricingState.NO_CHARGE);
         LlmPriceSnapshot.Cost computed = price.calculateCost(
                 usage.inputTokens(), usage.outputTokens(), usage.cacheReadTokens(), usage.cacheWriteTokens());
         reportClamp(callId, computed);
@@ -276,10 +323,10 @@ public class LlmUsageRecorder {
     }
 
     /** Keeps the frozen rates: they still say what the call would have cost. */
-    private static LlmPriceSnapshot asUnpriced(LlmPriceSnapshot price) {
+    private static LlmPriceSnapshot withPricingState(LlmPriceSnapshot price, UsagePricingState state) {
         return new LlmPriceSnapshot(
                 price.fundingSource(),
-                UsagePricingState.UNPRICED,
+                state,
                 price.appliedPriceId(),
                 price.appliedWorkspaceModelId(),
                 price.per1mInputUsd(),

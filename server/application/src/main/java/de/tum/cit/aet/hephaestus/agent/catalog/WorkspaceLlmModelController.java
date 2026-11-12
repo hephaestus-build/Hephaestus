@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
@@ -111,7 +112,11 @@ public class WorkspaceLlmModelController {
         var connection = model.getConnection();
         var target = new LlmProbeTarget(
                 connection.getBaseUrl(), connection.getAuthMode(), connection.getApiKey(), connection.getApiProtocol());
-        var result = capabilityProbe.probe(target, model.getUpstreamModelId());
+        var result = capabilityProbe.probe(
+                new LlmModelResolver.ConnectionRef(
+                        UsageFundingSource.WORKSPACE, connection.getId(), id, workspaceContext.id()),
+                target,
+                model.getUpstreamModelId());
         modelService.recordCapability(workspaceContext, id, model.getUpstreamModelId(), target, result);
         return ResponseEntity.ok(result);
     }

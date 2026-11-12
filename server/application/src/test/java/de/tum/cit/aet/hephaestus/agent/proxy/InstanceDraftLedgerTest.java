@@ -68,7 +68,8 @@ class InstanceDraftLedgerTest extends BaseUnitTest {
         when(admission.admitInstance(4L))
                 .thenReturn(new LlmAdmissionService.InstanceCharge("draft-model", LlmPriceSnapshot.unpricedInstance()));
         when(recorder.open(any())).thenReturn(call);
-        assertThat(ledger.open(route, new ProxyCallLedger.Bound(80, 100L))).isEqualTo(call);
+        assertThat(ledger.open(route, new ProxyCallLedger.Bound(80, 100L), "draft-model"))
+                .isEqualTo(call);
         var opened = ArgumentCaptor.forClass(LlmUsageRecorder.OpenCall.class);
         verify(recorder).open(opened.capture());
         assertThat(opened.getValue().workspaceId()).isNull();
@@ -82,7 +83,7 @@ class InstanceDraftLedgerTest extends BaseUnitTest {
         ledger.complete(route, call, usage, failure);
         verify(drafts).count(report, 15, 5);
         when(drafts.waits(report, 2)).thenReturn(false);
-        assertThatThrownBy(() -> ledger.open(route, new ProxyCallLedger.Bound(80, 100L)))
+        assertThatThrownBy(() -> ledger.open(route, new ProxyCallLedger.Bound(80, 100L), "draft-model"))
                 .isInstanceOf(ProxyCallLedger.ClaimLost.class);
         verify(recorder, times(1)).open(any());
     }

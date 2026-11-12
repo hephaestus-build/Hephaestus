@@ -85,7 +85,9 @@ public class LlmUsageRepricer {
                     row.initialPricingState() == UsagePricingState.UNPRICED
                             ? resolved.pricingState()
                             : row.initialPricingState(),
-                    row.appliedPriceId() != null ? row.appliedPriceId() : resolved.appliedPriceId(),
+                    row.initialPricingState() == UsagePricingState.UNPRICED
+                            ? resolved.appliedPriceId()
+                            : row.appliedPriceId() != null ? row.appliedPriceId() : resolved.appliedPriceId(),
                     row.appliedWorkspaceModelId() != null
                             ? row.appliedWorkspaceModelId()
                             : resolved.appliedWorkspaceModelId(),
@@ -151,6 +153,15 @@ public class LlmUsageRepricer {
      * between them would put a number the operator cannot defend into an append-only ledger.
      */
     private @Nullable Rates resolveRates(UnpricedLedgerRow row) {
+        if (row.initialPricingState() == UsagePricingState.UNPRICED
+                && row.fundingSource() == UsageFundingSource.INSTANCE) {
+            var modelId = usageRepository.findAppliedInstanceModelId(row.id());
+            if (modelId.isPresent())
+                return priceRepository
+                        .findByModelIdAndEffectiveToIsNull(modelId.get())
+                        .map(Rates::of)
+                        .orElse(null);
+        }
         if (row.appliedPriceId() != null) {
             return priceRepository.findById(row.appliedPriceId()).map(Rates::of).orElse(null);
         }

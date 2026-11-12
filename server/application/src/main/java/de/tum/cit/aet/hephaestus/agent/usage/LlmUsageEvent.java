@@ -26,7 +26,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One model call of an agent run or an instance report draft, for spending totals and budget caps ({@link LlmUsageRecorder}). The proxy writes the
+ * One model call of a run, report draft or synthetic probe, for spending totals and budget caps ({@link LlmUsageRecorder}). The proxy writes the
  * row {@link UsageCallState#OPEN} before the call leaves, and the call's end measures it. Source identity, model,
  * funding source, rates and date stay frozen; an operator can price an unpriced row. Rows written before calls had
  * rows of their own hold one job attempt, practice script model kind or turn attempt each, have no run, and keep
@@ -208,6 +208,11 @@ public class LlmUsageEvent {
     @Nullable
     @Column(name = "applied_price_id")
     private Long appliedPriceId;
+
+    /** Soft catalog identity: accounting keeps it after model deletion and never guesses another model by alias. */
+    @Nullable
+    @Column(name = "applied_instance_model_id", updatable = false)
+    private Long appliedInstanceModelId;
 
     @Nullable
     @Column(name = "applied_workspace_model_id")

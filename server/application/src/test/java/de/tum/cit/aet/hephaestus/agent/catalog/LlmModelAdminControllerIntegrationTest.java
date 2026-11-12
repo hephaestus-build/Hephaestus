@@ -86,7 +86,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
     void shouldPersistAProbedCapabilityOnlyForAnInstanceAdmin() {
         var connection = seedConnection();
         var model = createModel(connection.getId(), "cap-model");
-        when(capabilityProbe.probe(any(), anyString())).thenReturn(new LlmModelCapabilitiesDTO(false));
+        when(capabilityProbe.probe(any(), any(), anyString())).thenReturn(new LlmModelCapabilitiesDTO(false));
         webTestClient
                 .put()
                 .uri("/admin/llm/models/{id}/capabilities", model.id())
