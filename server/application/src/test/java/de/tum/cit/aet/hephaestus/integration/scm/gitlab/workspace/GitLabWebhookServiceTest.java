@@ -1,18 +1,15 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
@@ -28,7 +25,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
@@ -52,8 +48,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
@@ -88,6 +82,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     private ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle;
 
     private GitLabWebhookService webhookService;
+
     private Workspace workspace;
     private Map<Long, ConnectionConfig.GitLabConfig> gitLabConfigs;
     private Map<Long, BearerToken> gitLabBearerTokens;
@@ -513,86 +508,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             assertThat(result.registered()).isFalse();
             assertThat(result.failureReason()).contains("not configured");
-        }
-    }
-
-    @Nested
-    class DeregisterWebhookForConnection {
-
-        @Test
-        void deletesTheSuspendedConnectionsWebhook() {
-            var connection = mock(Connection.class);
-            when(connection.getState()).thenReturn(IntegrationState.SUSPENDED);
-            when(connection.getConfig())
-                    .thenReturn(new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
-            when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
-            when(connectionService.findBearerToken(1L, 7L))
-                    .thenReturn(Optional.of(new BearerToken("glpat-token", null)));
-            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-
-            webhookService.deregisterWebhookForConnection(1L, 7L);
-
-            verify(webhookClient).deregisterGroupWebhookWithCredentials("https://gitlab.com", "glpat-token", 42L, 99L);
-        }
-
-        @Test
-        void bestEffortSwallowsAuthFailurePostPurge() {
-            var connection = mock(Connection.class);
-            when(connection.getState()).thenReturn(IntegrationState.SUSPENDED);
-            when(connection.getConfig())
-                    .thenReturn(new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
-            when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
-            when(connectionService.findBearerToken(1L, 7L))
-                    .thenReturn(Optional.of(new BearerToken("glpat-token", null)));
-            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-            doThrow(new IllegalStateException("Scope 1 is not active"))
-                    .when(webhookClient)
-                    .deregisterGroupWebhookWithCredentials("https://gitlab.com", "glpat-token", 42L, 99L);
-
-            assertThatCode(() -> webhookService.deregisterWebhookForConnection(1L, 7L))
-                    .doesNotThrowAnyException();
-
-            verify(webhookClient).deregisterGroupWebhookWithCredentials("https://gitlab.com", "glpat-token", 42L, 99L);
-        }
-
-        @Test
-        void preparedDeregistrationCallsGitLabOnlyWhenRun() {
-            var connection = mock(Connection.class);
-            when(connection.getState()).thenReturn(IntegrationState.SUSPENDED);
-            when(connection.getConfig())
-                    .thenReturn(new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
-            when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
-            when(connectionService.findBearerToken(1L, 7L))
-                    .thenReturn(Optional.of(new BearerToken("glpat-token", null)));
-            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-
-            Runnable deletion =
-                    webhookService.prepareWebhookDeregistration(1L, 7L).orElseThrow();
-            verifyNoInteractions(webhookClient);
-            deletion.run();
-
-            verify(webhookClient).deregisterGroupWebhookWithCredentials("https://gitlab.com", "glpat-token", 42L, 99L);
-        }
-
-        @Test
-        void skipsWhenConnectionMissing() {
-            when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.empty());
-
-            webhookService.deregisterWebhookForConnection(1L, 7L);
-
-            verify(webhookClientProvider, never()).getIfAvailable();
-        }
-
-        @ParameterizedTest
-        @EnumSource(value = IntegrationState.class, names = "SUSPENDED", mode = EnumSource.Mode.EXCLUDE)
-        void shouldKeepTheWebhookForConnectionsThatAreNotSuspended(IntegrationState state) {
-            var connection = mock(Connection.class);
-            when(connection.getState()).thenReturn(state);
-            when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
-
-            webhookService.deregisterWebhookForConnection(1L, 7L);
-
-            verifyNoInteractions(webhookClientProvider, webhookClient);
         }
     }
 

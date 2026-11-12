@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.Gi
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
@@ -31,8 +30,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 /**
@@ -312,38 +309,6 @@ public class GitLabWebhookService {
         });
     }
 
-    /** Best-effort teardown for a connection that may no longer be active. */
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void deregisterWebhookForConnection(long workspaceId, long connectionId) {
-        try {
-            prepareWebhookDeregistration(workspaceId, connectionId).ifPresent(Runnable::run);
-        } catch (RuntimeException e) {
-            log.info(
-                    "Webhook deregistration at deactivation was a no-op (best-effort): workspaceId={}, connectionId={}, reason={}",
-                    workspaceId,
-                    connectionId,
-                    e.getClass().getSimpleName());
-        }
-    }
-
-    /**
-     * Reads a suspended connection's webhook and PAT. An active connection has resumed; a disconnected connection's
-     * hook belongs to provider teardown, which fences its removal against reconnect.
-     */
-    public Optional<Runnable> prepareWebhookDeregistration(long workspaceId, long connectionId) {
-        Optional<Connection> connection = connectionService
-                .findInWorkspace(workspaceId, connectionId)
-                .filter(c -> c.getState() == IntegrationState.SUSPENDED);
-        if (connection.isEmpty() || !(connection.get().getConfig() instanceof GitLabConfig config)) {
-            return Optional.empty();
-        }
-        return webhookDeregistration(
-                workspaceId,
-                connectionId,
-                config,
-                connectionService.findBearerToken(workspaceId, connectionId).orElse(null));
-    }
-
     /**
      * The GitLab call that deletes the stored hook with the given PAT, which touches no database. Empty when no hook is
      * stored; throws when one is stored but cannot be deleted with what is given.
@@ -372,6 +337,25 @@ public class GitLabWebhookService {
                     connectionId,
                     webhookId);
         });
+    }
+
+    /** Removes every hook of this connection, including a registration whose ID was never committed. */
+    public void removeSuspendedWebhooks(
+            long workspaceId, long connectionId, GitLabConfig config, @Nullable BearerToken bearer) {
+        if (bearer == null) throw new IllegalStateException("GitLab webhook credentials are unavailable");
+        var client = webhookClientProvider.getIfAvailable();
+        if (client == null) throw new IllegalStateException("GitLab webhook client is unavailable");
+        String prefix = connectionWebhookUrl(connectionId);
+        client.removeGroupWebhooksWithCredentials(
+                config.serverUrl(),
+                bearer.token(),
+                config.gitlabGroupId(),
+                hook -> Objects.equals(config.gitlabWebhookId(), hook.id())
+                        || hook.url().startsWith(prefix));
+        log.info(
+                "Removed suspended GitLab connection hooks: workspaceId={}, connectionId={}",
+                workspaceId,
+                connectionId);
     }
 
     /**

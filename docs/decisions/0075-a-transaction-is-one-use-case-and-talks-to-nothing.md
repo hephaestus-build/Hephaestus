@@ -65,3 +65,31 @@ Option 1 leaves the next defect to code review.
 
 Reopen this ADR if publication rows become a measured write bottleneck.
 Reopen it also if Spring Modulith changes how it resubmits failed publications.
+
+## Bounded lifecycle calls
+
+`GitLabSuspendedWebhookCleanup` holds the connection lifecycle row lock while it deletes a suspended connection's group hook.
+Reactivation takes the same lock before it can adopt that hook.
+A state check followed by an unlocked DELETE would allow reactivation to commit between the check and the deletion.
+Checking the state after deletion cannot restore a hook that the provider has removed.
+
+The lock covers the current-state read, the provider calls and the clearing of the stored hook ID.
+The GitLab client bounds listing, deletion and confirmation together to 15 seconds.
+A failed call rolls back the clear.
+Registry redelivery and the scheduled reconcile retry it.
+
+A connection that is ACTIVE when the lock is obtained is left unchanged.
+The reconcile also lists suspended connections with no stored hook ID.
+It removes hooks whose URL belongs to that connection, including a registration that finished after suspension.
+This follows the same lifecycle fence as provider teardown.
+It adds no lock across unrelated connections.
+
+[PostgreSQL row-level locks](https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-ROWS) last until transaction end.
+[GitLab's group webhook API](https://docs.gitlab.com/api/group_webhooks/) deletes the specific hook ID.
+An already absent hook counts as removed.
+
+This fence orders confirmed provider calls against local reactivation.
+A DELETE accepted remotely can finish after the local deadline releases the lock.
+If a resumed connection adopts that same provider identity, the late DELETE can still remove it.
+The cross-provider lifecycle repair tracks this availability risk separately.
+It requires an adoption fence or provider identities that change with each lifecycle generation.

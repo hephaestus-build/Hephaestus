@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +19,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 /**
  * Scope-based client for GitLab webhook CRUD operations.
@@ -154,34 +157,78 @@ public class GitLabWebhookClient {
 
     private void deregisterGroupWebhook(
             ScopeCredentials credentials, @Nullable Long scopeId, long groupId, long webhookId) {
-        try {
-            webClient
-                    .delete()
-                    .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks/{hookId}", groupId, webhookId)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
-                    .attributes(attributes -> {
-                        if (scopeId != null) attributes.put(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId);
-                    })
-                    .retrieve()
-                    .toBodilessEntity()
-                    .block(REQUEST_TIMEOUT);
+        deleteGroupWebhook(credentials, scopeId, groupId, webhookId).block(REQUEST_TIMEOUT);
+    }
 
-            log.info(
-                    "Deregistered GitLab group webhook: scopeId={}, groupId={}, webhookId={}",
-                    scopeId,
-                    groupId,
-                    webhookId);
-        } catch (WebClientResponseException e) {
-            if (e.getStatusCode().value() == 404) {
-                log.info(
-                        "GitLab webhook already deleted: scopeId={}, groupId={}, webhookId={}",
-                        scopeId,
-                        groupId,
-                        webhookId);
-            } else {
-                throw e;
-            }
+    private Mono<Void> deleteGroupWebhook(
+            ScopeCredentials credentials, @Nullable Long scopeId, long groupId, long webhookId) {
+        return Mono.defer(() -> webClient
+                        .delete()
+                        .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks/{hookId}", groupId, webhookId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
+                        .attributes(attributes -> {
+                            if (scopeId != null)
+                                attributes.put(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId);
+                        })
+                        .retrieve()
+                        .toBodilessEntity()
+                        .then())
+                .onErrorResume(
+                        WebClientResponseException.class,
+                        failure -> failure.getStatusCode().value() == 404 ? Mono.empty() : Mono.error(failure));
+    }
+
+    /** Lists, removes and verifies this connection's hooks under one bounded request deadline. */
+    public void removeGroupWebhooksWithCredentials(
+            String serverUrl, String token, long groupId, Predicate<WebhookInfo> owned) {
+        var credentials = new ScopeCredentials(serverUrl, token);
+        groupHooks(credentials, groupId)
+                .flatMapMany(Flux::fromIterable)
+                .filter(owned)
+                .concatMap(hook -> deleteGroupWebhook(credentials, null, groupId, hook.id()))
+                .then(Mono.defer(() -> groupHooks(credentials, groupId)))
+                .flatMap(remaining -> remaining.stream().anyMatch(owned)
+                        ? Mono.error(new IllegalStateException("GitLab still lists a connection webhook"))
+                        : Mono.empty())
+                .block(REQUEST_TIMEOUT);
+    }
+
+    private record HookPage(List<WebhookInfo> hooks, int next) {}
+
+    private Mono<List<WebhookInfo>> groupHooks(ScopeCredentials credentials, long groupId) {
+        return groupHookPage(credentials, groupId, 1)
+                .expand(page -> page.next() == 0 ? Mono.empty() : groupHookPage(credentials, groupId, page.next()))
+                .concatMapIterable(HookPage::hooks)
+                .collectList();
+    }
+
+    private Mono<HookPage> groupHookPage(ScopeCredentials credentials, long groupId, int page) {
+        return webClient
+                .get()
+                .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks?per_page=100&page={page}", groupId, page)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
+                .retrieve()
+                .toEntity(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
+                .map(response -> {
+                    List<Map<String, Object>> body = response.getBody();
+                    if (body == null) throw new IllegalStateException("GitLab did not return its group hooks");
+                    List<WebhookInfo> hooks =
+                            body.stream().map(GitLabWebhookClient::listedHook).toList();
+                    String next = response.getHeaders().getFirst("X-Next-Page");
+                    int following = next == null || next.isBlank() ? 0 : Integer.parseInt(next);
+                    if (following != 0 && following <= page)
+                        throw new IllegalStateException("Invalid GitLab hook page");
+                    return new HookPage(hooks, following);
+                });
+    }
+
+    private static WebhookInfo listedHook(Map<String, Object> hook) {
+        Object id = hook.get("id");
+        Object url = hook.get("url");
+        if (!(id instanceof Number number) || !(url instanceof String address)) {
+            throw new IllegalStateException("GitLab returned an incomplete group hook");
         }
+        return new WebhookInfo(number.longValue(), address);
     }
 
     /**
