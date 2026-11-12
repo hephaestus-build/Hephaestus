@@ -94,13 +94,14 @@ The migration guide owns each change. This table gives the names.
 | Site file | `config.monitoring` | `config.sync`, with the same four child settings | *Rename scheduled sync settings* |
 | Site file | `config.auth.bootstrapAdmins`, `config.auth.browserExtensionIds`, `config.auth.passkeys.allowedOrigins`, `config.outline.allowedOrigins` as strings | The same keys as YAML arrays | *Convert chart list values to arrays* |
 | Site file | `server.conversationTurns` | `conversationLoop.turns`, a count for the whole installation | *Stop every role for the conversation loop* |
-| Site file | `sandbox.enabled`, `sandbox.*`, `sandbox.runtime.*`, `sandbox.gateway.maxConnections`, `networkPolicy.workerGatewayPorts`, and the server's rollout, drain, pool, git cache and resources | `sandbox.*`, and the same settings under `server` | *Move the worker values to the server and the sandboxes* |
+| Site file | `worker.enabled`, `worker.sandbox.*`, `worker.runtime`, `worker.sandboxGateway.maxConnections`, `networkPolicy.workerGatewayPorts`, and the worker's drain, pool, git cache and resources | `sandbox.enabled`, `sandbox.*`, `sandbox.runtime`, `sandbox.gateway.maxConnections`, `networkPolicy.modelGatewayPorts`, and the same settings under `server` | *Move the worker values to the server and the sandboxes* |
+| Site file | `worker.replicas`, `worker.rolloutStrategy` | No key. `server.replicas` counts the servers. | *Move the worker values to the server and the sandboxes* |
 | Profile | `small-16gib` in `HEPHAESTUS_CHART_PROFILE` and `profiles/small-16gib.yaml` | `small` and `profiles/small.yaml` | *Use the small profile on every single-node install* |
 | Server settings | `hephaestus.agent.max-retries` | `hephaestus.agent.capacity.review-retries`. `AGENT_MAX_RETRIES` still works. | *Stop every role before moving review leases to agent runs* |
 | Secret | `DATABASE_USERNAME`, `DATABASE_PASSWORD` | `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD` for the bundled PostgreSQL, and the new `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` | *Give each database purpose its own login* |
 | Secret | No key | `HEPHAESTUS_CONVERSATION_LOOP_SECRET`, added by the release's `hephaestus-keys.sh` | *Stop every role for the conversation loop* |
 | Image outside the chart | `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` | `HEPHAESTUS_CONVERSATION_LOOP_SECRET` and `HEPHAESTUS_MENTOR_TURN_CAPACITY` on the server | *Stop every role for the conversation loop* |
-| Image outside the chart | `HEPHAESTUS_RUNTIME_WORKER_ENABLED` and the `server` profile | `AGENT_ENABLED=true` and the sandbox settings on the server | *Move the worker values to the server and the sandboxes* |
+| Image outside the chart | `HEPHAESTUS_RUNTIME_WORKER_ENABLED`, the `worker` Spring profile and `HEPHAESTUS_WORKER_DRAIN_TIMEOUT` | `AGENT_ENABLED=true`, `HEPHAESTUS_CONVERSATION_LOOP_SECRET`, `HEPHAESTUS_AGENT_DRAIN_TIMEOUT` and the sandbox settings on the server | *Move the worker values to the server and the sandboxes* |
 | Custom agent image | An image from an earlier release | An image that you rebuilt from this release | *Rebuild custom agent images* and *Rebuild a custom agent image* |
 
 The table covers the changes after the release candidate `1.0.0-rc.5`.
