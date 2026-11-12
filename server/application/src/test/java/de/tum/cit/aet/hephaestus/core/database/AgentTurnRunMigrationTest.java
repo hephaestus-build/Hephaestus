@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 @Tag("database")
 class AgentTurnRunMigrationTest {
-    private static final String CHANGELOG = "20261111235331-feat-turns-on-agent-runs.xml";
+    private static final String CHANGELOG = "20261112015942-feat-turns-on-agent-runs.xml";
     private static final long WORKSPACE = 997201;
     private static final long ACCOUNT = 997202;
 

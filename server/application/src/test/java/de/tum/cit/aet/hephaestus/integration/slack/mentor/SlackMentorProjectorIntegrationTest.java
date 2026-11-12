@@ -2375,6 +2375,34 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
+    @Test
+    void shouldQueueTheStoppedReplyOnlyAfterItsRunHolderIsGone() {
+        MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
+        MentorTurn running = claims.claim(asked.turn());
+
+        turns.stop(workspace.getId(), running.getId());
+
+        assertThat(delivery(asked)).isNull();
+        claims.takeBack(running);
+        assertThat(turns.require(workspace.getId(), running.getId()).getStatus())
+                .isEqualTo(MentorTurn.Status.STOPPED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.PENDING);
+    }
+
+    @Test
+    void shouldQueueTheFailedReplyWhenTheRunReaperExhaustsItsRetry() {
+        MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
+        MentorTurn first = claims.claim(asked.turn());
+        claims.takeBack(first);
+        assertThat(delivery(asked)).isNull();
+        MentorTurn last = claims.claim(turns.require(workspace.getId(), first.getId()));
+
+        claims.takeBack(last);
+
+        assertThat(turns.require(workspace.getId(), last.getId()).getStatus()).isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.PENDING);
+    }
+
     /** The owner's attempt started to post and then its server died: Slack may hold the post. */
     private void ownerDiedWhilePosting(MentorTurnService.Submission asked) {
         String key = MentorSlackReplies.replyKey(asked.question().getId());

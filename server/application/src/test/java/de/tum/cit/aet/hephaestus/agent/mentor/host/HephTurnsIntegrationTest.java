@@ -527,11 +527,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         });
         var calls = spy(new ProxyCallsInFlight(12));
         HephTurns resumed = worker(
-                MentorTurnStarts.admitting(beans, metrics, Integer.MAX_VALUE),
-                issuer,
-                PULL_WAIT,
-                notifications,
-                calls);
+                MentorTurnStarts.admitting(beans, metrics, Integer.MAX_VALUE), issuer, PULL_WAIT, notifications, calls);
         try {
             listening.get(10, TimeUnit.SECONDS);
             assertResumes(resumed, () -> {

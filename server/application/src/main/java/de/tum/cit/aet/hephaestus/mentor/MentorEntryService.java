@@ -357,8 +357,11 @@ public class MentorEntryService {
      */
     void turnChanged(MentorTurn turn, boolean slotsChanged) {
         events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
-        // A stopped turn whose attempt still runs ends again when its host lets go of the lease.
-        if (turn.getSurface() == MentorTurn.Surface.SLACK && turn.getStatus().isTerminal() && !turn.isLeased())
+        // A stop keeps its holder. A terminal slot change commits with the run's end, which the reaper writes after
+        // this callback in the same transaction.
+        if (turn.getSurface() == MentorTurn.Surface.SLACK
+                && turn.getStatus().isTerminal()
+                && (slotsChanged || !turns.isHeld(turn.getId())))
             conversations
                     .findAccountIdByIdAndWorkspaceId(turn.getConversationId(), turn.getWorkspaceId())
                     .ifPresent(accountId -> slackReplies.ended(
