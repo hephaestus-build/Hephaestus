@@ -1,56 +1,45 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
-import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
-import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompletion;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewModelBindings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
-import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @DisplayName("Closing a review closes what it never measured")
-class ReviewClosureIntegrationTest extends BaseIntegrationTest {
+class ReviewClosureIntegrationTest extends AbstractResultAdmissionIntegrationTest {
     @Autowired
     ReviewIntegrationData data;
 
@@ -75,24 +64,6 @@ class ReviewClosureIntegrationTest extends BaseIntegrationTest {
     @Autowired
     MeterRegistry meters;
 
-    @MockitoSpyBean
-    ProductItemQuery itemQueries;
-
-    @MockitoSpyBean
-    ReviewFreshness freshness;
-
-    @MockitoSpyBean
-    ItemEventService occasions;
-
-    @MockitoSpyBean
-    ReviewGate gate;
-
-    @MockitoSpyBean
-    ReviewBudget budget;
-
-    @MockitoSpyBean
-    ReviewModelBindings bindings;
-
     @Test
     void shouldCountAReplacedReviewAndCloseItsMembersAndAssignments() {
         var scenario = data.scenario();
@@ -107,18 +78,21 @@ class ReviewClosureIntegrationTest extends BaseIntegrationTest {
                 scenario.item().getSourceId(),
                 null,
                 null);
-        doReturn(Optional.of(ref)).when(itemQueries).find(workspace, review.getItemId());
-        doReturn(Currentness.STALE).when(freshness).capturedCurrentness(workspace, review.getId());
-        doReturn(List.of(new ItemEventService.Open(
-                        UUID.randomUUID(),
-                        new ItemEventName("scm.pull_request.synchronized"),
-                        "new-head",
-                        ItemEventState.RECORDED,
-                        null,
-                        ordered.plusSeconds(30),
-                        ordered.plusSeconds(30))))
-                .when(occasions)
-                .open(workspace, review.getItemId());
+        var source = new SourceKind("scm.pull-request.core");
+        jdbc.update(
+                "UPDATE review_practice SET capture_decision=CAST(? AS jsonb) WHERE workspace_id=? AND review_id=?",
+                "{\"sourceFingerprints\":{\"scm.pull-request.core\":\"" + "a".repeat(64) + "\"}}",
+                workspace,
+                review.getId());
+        doReturn(Map.of(source, "b".repeat(64))).when(productItems).fingerprints(ref, Set.of(source), null);
+        jdbc.update(
+                "INSERT INTO item_event (id,workspace_id,item_id,name,item_version,occurred_at,found_by,state,decided_at)"
+                        + " VALUES (?,?,?,'scm.pull_request.synchronized','new-head',?,'WEBHOOK','RECORDED',?)",
+                UUID.randomUUID(),
+                workspace,
+                review.getItemId(),
+                Timestamp.from(ordered.plusSeconds(30)),
+                Timestamp.from(ordered.plusSeconds(30)));
         double before = ended("cancelled", "replaced");
 
         var replaced = transactions.execute(ignored -> starts.replaceByNewerOccasion(workspace, review.getId()));
@@ -225,11 +199,7 @@ class ReviewClosureIntegrationTest extends BaseIntegrationTest {
                 Map.of(),
                 List.of(),
                 new ItemLabel(ref.itemId(), "Work", "Work", "pull request", 1, null, null, IntegrationKind.GITHUB));
-        doReturn(pinned).when(itemQueries).pin(ref, version);
-        doReturn(Optional.empty()).when(gate).refusal(any(), eq(ReviewOrigin.REQUEST));
-        doReturn(new GateDecision.Run(scenario.workspace(), List.of(scenario.practice()), 0, ReviewOrigin.REQUEST))
-                .when(gate)
-                .evaluate(any(), eq(pinned), eq(ReviewOrigin.REQUEST), anySet(), anySet(), anyList());
+        doReturn(pinned).when(productItems).pin(ref, version);
         doReturn(true).when(budget).canRequest(workspace, ReviewKind.ITEM, null);
         doReturn(List.of(
                         new BoundModelSlot("chat", ModelKind.CHAT, null),
@@ -237,7 +207,7 @@ class ReviewClosureIntegrationTest extends BaseIntegrationTest {
                         new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
                         new BoundModelSlot("reranking", ModelKind.RERANKING, null),
                         new BoundModelSlot("review", ModelKind.CHAT, null)))
-                .when(bindings)
+                .when(models)
                 .models(workspace, List.of());
         double before = ended("partial", "readiness_refused");
 
@@ -280,11 +250,28 @@ class ReviewClosureIntegrationTest extends BaseIntegrationTest {
                 jdbc,
                 "UPDATE review_job SET status='QUEUED',completed_at=NULL,cancellation_reason=NULL,processing_status='NONE',started_at=NULL WHERE id=?",
                 pending.jobId());
+        transactions.executeWithoutResult(ignored -> starts.requeue(
+                pending.review().getWorkspaceId(), pending.review().getId()));
+        doReturn(Set.of(pending.jobId()))
+                .when(runtime)
+                .activeJobIds(
+                        pending.review().getWorkspaceId(), pending.review().getId());
 
         double before = ended("cancelled", "cancelled");
         assertThat(reviews.cancel(
                         pending.review().getWorkspaceId(), pending.review().getId()))
                 .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT status FROM review WHERE workspace_id=? AND id=?",
+                        String.class,
+                        pending.review().getWorkspaceId(),
+                        pending.review().getId()))
+                .isEqualTo("QUEUED");
+        assertThat(ended("cancelled", "cancelled")).isEqualTo(before);
+        doReturn(Set.of())
+                .when(runtime)
+                .activeJobIds(
+                        pending.review().getWorkspaceId(), pending.review().getId());
         completion.tick();
 
         assertClosedWithheld(pending, "CANCELLED");

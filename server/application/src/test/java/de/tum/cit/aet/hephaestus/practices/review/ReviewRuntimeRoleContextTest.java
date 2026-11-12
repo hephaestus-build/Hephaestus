@@ -32,6 +32,8 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -43,6 +45,8 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                     .withUserConfiguration(
                             ReviewSnapshotQueryService.class,
                             ReviewStartService.class,
+                            ReviewClosure.class,
+                            ReviewOutcomeMeters.class,
                             PracticeReviewCoverageService.class,
                             ResultAdmissionPolicy.class,
                             ResultViewQuery.class,
@@ -50,6 +54,7 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                             ResultVisibilityPolicy.class,
                             ProductReferenceQuery.class)
                     .withBean(Clock.class, Clock::systemUTC)
+                    .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
                     .withBean(JsonMapper.class, () -> JsonMapper.builder().build()),
             WorkspaceRepository.class,
             RepositoryToMonitorRepository.class,
@@ -102,6 +107,8 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                 .run(app -> {
                     assertThat(app).hasSingleBean(ReviewSnapshotQuery.class);
                     assertThat(app).hasSingleBean(ReviewStart.class);
+                    assertThat(app).hasSingleBean(ReviewClosure.class);
+                    assertThat(app).hasSingleBean(ReviewOutcomeMeters.class);
                     assertThat(app).hasSingleBean(ResultViewQuery.class);
                     assertThat(app).hasSingleBean(ResultPresentation.class);
                     assertThat(app).hasSingleBean(ResultVisibilityPolicy.class);
@@ -121,6 +128,8 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                 .run(app -> {
                     assertThat(app).hasSingleBean(ReviewSnapshotQuery.class);
                     assertThat(app).hasSingleBean(ReviewStart.class);
+                    assertThat(app).hasSingleBean(ReviewClosure.class);
+                    assertThat(app).hasSingleBean(ReviewOutcomeMeters.class);
                     assertThat(app).hasSingleBean(PracticeReviewCoverageService.class);
                     assertThat(app).hasSingleBean(ResultAdmissionPolicy.class);
                 });
@@ -137,6 +146,8 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                     assertThat(app).doesNotHaveBean(ResultAdmissionPolicy.class);
                     assertThat(app).doesNotHaveBean(ReviewSnapshotQuery.class);
                     assertThat(app).doesNotHaveBean(ReviewStart.class);
+                    assertThat(app).doesNotHaveBean(ReviewClosure.class);
+                    assertThat(app).doesNotHaveBean(ReviewOutcomeMeters.class);
                     assertThat(app).doesNotHaveBean(ResultViewQuery.class);
                     assertThat(app).doesNotHaveBean(ResultPresentation.class);
                     assertThat(app).doesNotHaveBean(ResultVisibilityPolicy.class);
