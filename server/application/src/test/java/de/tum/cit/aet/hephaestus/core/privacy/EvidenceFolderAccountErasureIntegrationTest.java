@@ -54,7 +54,6 @@ import de.tum.cit.aet.hephaestus.workspace.PracticeModelTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -74,6 +73,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -996,8 +996,10 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("READY");
     }
 
-    @Test
-    void shouldReconcileOnlyAfterTheSandboxAndItsGatewayArchiveAreRemoved() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldReconcileOnlyAfterTheSandboxAndItsGatewayArchiveAreRemoved(boolean folderAlreadyRemoved)
+            throws Exception {
         databaseTestUtils.cleanDatabase();
         var recorder = new ExactPersonDataCopyRecorder();
         var sandboxOwner = mock(AgentSandboxes.class);
@@ -1049,8 +1051,25 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 .when(sandboxOwner)
                 .release(job.getWorkspaceId(), sandboxId);
 
-        // PostgreSQL erasure commits first; a replica without the sandbox owner retains the physical copy.
-        assertThat(catalog(root, recorder).removeErasedFolders()).isEqualTo(new ErasedFolders(0, 1));
+        var contributor = owner.contributors().getFirst();
+        var provider =
+                providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "https://runtime.example"));
+        var person = new PersonScope(
+                null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)), List.of());
+        contributor.erase(contributor.select(person), person);
+        assertThat(payload(job).path("sandboxId").asString()).isEqualTo(sandboxId.toString());
+        assertThat(payload(job).has("identities")).isFalse();
+
+        // A replica without sandbox ownership removes its local files while the sandbox owner finishes deletion.
+        Path replica = root.resolve("non-owner");
+        Path replicaFolder = replica.resolve("jobs")
+                .resolve(Long.toString(job.getWorkspaceId()))
+                .resolve(job.getId().toString());
+        FileUtils.copyDirectory(folder.toFile(), replicaFolder.toFile());
+        var nonOwner = catalog(replica, recorder);
+        assertThat(nonOwner.removeErasedFolders()).isEqualTo(new ErasedFolders(1, 0));
+        assertThat(nonOwner.removeErasedFolders()).isEqualTo(new ErasedFolders(0, 0));
+        assertThat(replicaFolder).doesNotExist();
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
                         String.class,
@@ -1067,16 +1086,16 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(sandboxCopy).exists();
         assertThat(archive).exists();
 
-        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(0, 1));
+        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(1, 1));
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
                         String.class,
                         job.getId(),
                         job.getWorkspaceId()))
                 .isEqualTo("ERASED");
-        assertThat(copiedPerson).exists();
+        assertThat(copiedPerson).doesNotExist();
         assertThat(sandboxCopy).exists();
-        assertThat(archive).exists();
+        assertThat(archive).doesNotExist();
 
         UUID newerSandbox = UUID.randomUUID();
         jdbc.update(
@@ -1093,10 +1112,14 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 })
                 .when(sandboxOwner)
                 .release(job.getWorkspaceId(), sandboxId);
-        Files.delete(archive);
+        if (!folderAlreadyRemoved) {
+            Files.createDirectories(copiedPerson.getParent());
+            Files.writeString(copiedPerson, "personal evidence restored before the cleanup retry");
+        }
         Files.createDirectory(archive);
         Path obstruction = Files.writeString(archive.resolve("retained"), "personal evidence");
-        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(0, 1));
+        gateway.register(job.getId(), "credential", archive, "out");
+        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(folderAlreadyRemoved ? 0 : 1, 1));
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
                         String.class,
@@ -1104,11 +1127,11 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                         job.getWorkspaceId()))
                 .isEqualTo("ERASED");
         assertThat(sandboxCopy).doesNotExist();
-        assertThat(copiedPerson).exists();
+        assertThat(copiedPerson).doesNotExist();
         assertThat(obstruction).exists();
 
         Files.delete(obstruction);
-        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(1, 0));
+        assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(0, 0));
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
                         String.class,
@@ -1130,6 +1153,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(folder).doesNotExist();
         assertThat(archive).doesNotExist();
         assertThat(sandboxCopy).doesNotExist();
+        assertThat(nonOwner.removeErasedFolders()).isEqualTo(new ErasedFolders(0, 0));
         assertThatThrownBy(() -> gateway.require(job.getId(), "Bearer credential"))
                 .isInstanceOf(ResponseStatusException.class);
     }

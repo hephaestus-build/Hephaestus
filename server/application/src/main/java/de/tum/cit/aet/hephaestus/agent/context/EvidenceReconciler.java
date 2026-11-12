@@ -56,7 +56,7 @@ public class EvidenceReconciler {
                 .baseUnit("seconds")
                 .register(meters);
         failures = Counter.builder(AgentMetrics.EVIDENCE_RECONCILE_FAILURES)
-                .description("Evidence folders that a reconcile pass could not remove, and passes that failed")
+                .description("Evidence copies that a reconcile pass could not remove, and passes that failed")
                 .register(meters);
     }
 
@@ -71,7 +71,7 @@ public class EvidenceReconciler {
             inputs.removeEnded();
             if (remaining > 0) {
                 failures.increment(remaining);
-                log.warn("Evidence reconcile left folders for the next pass: count={}", remaining);
+                log.warn("Evidence reconcile left copies for the next pass: count={}", remaining);
                 return;
             }
             lastSuccess.set(clock.instant().getEpochSecond());

@@ -52,6 +52,8 @@ class JobEvidenceRebuildTest {
     @Test
     void shouldRebuildTheFolderFromTheRecordedFiles() {
         var job = runningJob();
+        when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                .thenReturn(true);
         recorded(job);
 
         assertThat(files().readText(job, "context/item.json", SHA)).contains(RECORD);
@@ -60,6 +62,8 @@ class JobEvidenceRebuildTest {
     @Test
     void shouldRebuildOnceWhenTwoThreadsOfThisServerNeedTheFolder() throws Exception {
         var job = runningJob();
+        when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                .thenReturn(true);
         var listed = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         when(inputs.list(job)).thenAnswer(invocation -> {
@@ -85,6 +89,8 @@ class JobEvidenceRebuildTest {
     @Test
     void shouldWaitForAFolderLeaseThatAnotherHolderReleasesInsteadOfRefusing() throws Exception {
         var job = runningJob();
+        when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                .thenReturn(true);
         recorded(job);
         var held = EvidenceFolderLease.tryAcquire(root, job.getWorkspaceId(), job.getId())
                 .orElseThrow();
@@ -107,6 +113,8 @@ class JobEvidenceRebuildTest {
     @Test
     void shouldReportARecordedFileThatDiffersAsACaptureFailure() {
         var job = runningJob();
+        when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                .thenReturn(true);
         when(inputs.list(job))
                 .thenReturn(List.of(new AttemptInputs.RecordedFile("context/item.json", SHA, "r--------")));
         when(inputs.content(job, "context/item.json")).thenReturn("changed".getBytes(StandardCharsets.UTF_8));
@@ -134,13 +142,13 @@ class JobEvidenceRebuildTest {
     @Test
     void shouldBuildNothingForAnErasedCopyOrAnEndedAttempt() {
         var erased = runningJob();
-        when(inputs.list(erased)).thenReturn(List.of());
+        recorded(erased);
         when(copies.vouchesForLiveAttempt(any(), anyLong(), anyInt())).thenReturn(false);
         assertThat(files().readText(erased, "context/item.json", SHA)).isEmpty();
 
         var ended = runningJob();
         ended.setStatus(ReviewJobStatus.FAILED);
-        when(inputs.list(ended)).thenReturn(List.of());
+        recorded(ended);
         assertThat(files().readText(ended, "context/item.json", SHA)).isEmpty();
     }
 

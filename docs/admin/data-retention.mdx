@@ -56,7 +56,7 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Capture and output of a review job | 14 days after the job ends. A job that waits for delivery keeps them. | `hephaestus.agent.payload-retention` | A server job every 6 hours |
 | Review job rows, with their script runs | 90 days after the job ends | `hephaestus.agent.row-retention` | The same job |
 | Original review inputs and composition tool trace | Until their one-day expiry. An ended job deletes inputs with no pending delivery or tool trace. | None | The same job |
-| Evidence-copy receipts | As long as their review job row | `hephaestus.agent.row-retention` | The same job. Person erasure and workspace purge clear the identities earlier, and each running server removes its copies within 2 minutes. |
+| Evidence-copy receipts | As long as their review job row. A pending sandbox cleanup identity stays until sandbox deletion succeeds. | `hephaestus.agent.row-retention` | The same job. Person erasure and workspace purge clear the identities earlier, and each running server removes its copies within 2 minutes. |
 | Recorded files of a running attempt, for a server that rebuilds its folder | While the attempt runs | None | A server reconcile pass every 30 seconds. Person erasure and workspace purge delete them at once. |
 | Evidence of an item event | Replaced by a marker 30 days after it is recorded | `hephaestus.item-event-ledger.retain-for` | A server job every 15 minutes |
 | Item events that nothing references | 30 days after their decision | `hephaestus.item-event-ledger.retain-for` | The same job |

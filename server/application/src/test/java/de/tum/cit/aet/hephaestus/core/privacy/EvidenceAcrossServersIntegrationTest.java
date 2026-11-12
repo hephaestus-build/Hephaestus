@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.Mockito.mock;
 
@@ -11,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptInputRepository;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailuresFixture;
@@ -19,9 +21,14 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
@@ -287,6 +294,27 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
     }
 
+    @Test
+    void shouldDeleteRecordedInputsWhenTheCaptureContainsAnErasedPerson() {
+        var provider = context.getBean(IdentityProviderRepository.class)
+                .saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "https://suppressed-evidence.example"));
+        databaseTestUtils.erase(Objects.requireNonNull(provider.getId()), "42", "");
+        var job = runningJob("suppressed-capture-inputs");
+        var a = new Server(temporary.resolve("suppressed"), job);
+        a.files.beginPersonCapture(job);
+        a.recorder.recordIdentity(new PersonCopyIdentity("GITLAB", "https://suppressed-evidence.example", "42", null));
+
+        assertThatThrownBy(() -> a.files.prepare(
+                        job,
+                        new PreparedEvidence(
+                                Map.of("context/person.json", RECORD.getBytes(StandardCharsets.UTF_8)), null),
+                        null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasRootCauseMessage("Copied evidence contains an erased native identity");
+        assertThat(rows(job)).isZero();
+        assertThat(a.folder(job)).doesNotExist();
+    }
+
     /** What the executor records with the attempt's capture: its directories, checkout digests and checkout keys. */
     private ReviewJob record(ReviewJob job, PreparedJobInputs captured, @Nullable String digestOverride) {
         var capture = mapper.createObjectNode();
@@ -326,6 +354,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         final EvidenceFolderPersonDataCatalog catalog;
         final JobEvidenceFiles files;
         final RepositoryKey key;
+        final ExactPersonDataCopyRecorder recorder = new ExactPersonDataCopyRecorder();
         private final Path root;
 
         Server(Path root, ReviewJob job) {
@@ -344,9 +373,11 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                     jdbc,
                     namedJdbc,
                     mapper,
-                    new ExactPersonDataCopyRecorder(),
+                    recorder,
                     fence,
                     new DefaultListableBeanFactory().getBeanProvider(ReviewAttemptCustody.class),
+                    new DefaultListableBeanFactory().getBeanProvider(AgentSandboxes.class),
+                    new DefaultListableBeanFactory().getBeanProvider(SandboxGatewaySessions.class),
                     lifecycles);
             files = new JobEvidenceFiles(
                     new FabricLayout(root.toString()),

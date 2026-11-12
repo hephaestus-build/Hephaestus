@@ -28,11 +28,15 @@ CREATE INDEX idx_review_attempt_input_job ON review_attempt_input (workspace_id,
         <comment>Erasure no longer waits for the server that wrote a copy: copies are erased in PostgreSQL, and each server removes its own folders.</comment>
         <sql>
 UPDATE person_evidence_copy SET state = 'ERASED' WHERE state = 'ERASE_REQUESTED';
-UPDATE person_evidence_copy SET state = 'ERASED', payload = '{}'::jsonb WHERE state = 'PURGE_REQUESTED';
+UPDATE person_evidence_copy SET state = 'ERASED', payload = jsonb_strip_nulls(jsonb_build_object('sandboxId', payload->'sandboxId')) WHERE state = 'PURGE_REQUESTED';
+ALTER TABLE person_evidence_copy DROP CONSTRAINT ck_person_evidence_copy_state;
+ALTER TABLE person_evidence_copy ADD CONSTRAINT ck_person_evidence_copy_state CHECK (state IN ('CAPTURING', 'READY', 'ERASED'));
 DROP INDEX idx_person_evidence_copy_store;
 ALTER TABLE person_evidence_copy DROP COLUMN store_id;
         </sql>
         <rollback>
+ALTER TABLE person_evidence_copy DROP CONSTRAINT ck_person_evidence_copy_state;
+ALTER TABLE person_evidence_copy ADD CONSTRAINT ck_person_evidence_copy_state CHECK (state IN ('CAPTURING', 'READY', 'ERASE_REQUESTED', 'PURGE_REQUESTED', 'ERASED'));
 ALTER TABLE person_evidence_copy ADD COLUMN store_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
 ALTER TABLE person_evidence_copy ALTER COLUMN store_id DROP DEFAULT;
 CREATE INDEX idx_person_evidence_copy_store ON person_evidence_copy (store_id, state);

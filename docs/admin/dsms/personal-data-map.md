@@ -64,7 +64,7 @@ The self-service account export is a separate, narrower operation. Self-service 
 | PostgreSQL operation history — `connection_audit`, `consumer_dead_letter`, `sync_job`, `item_event`, `review_batch`, `review_schedule` | Source events, actor/requester attribution and operation history | Workspace-owned records follow their owner purge | Audit and webhook replay actors become null without changing recorded actions. Provider restrictions survive erasure | [Data retention](../data-retention.mdx) gives the period of unreferenced terminal item events |
 | PostgreSQL retained occasion evidence — `item_event.evidence` | A pull request or submitted review occasion's title, description, review words, branch and state, as stored when the occasion was recorded. The provider identities and logins of its author, assignees, merger and reviewer, as stored then. At most 1 MiB for each occasion. The personal export lists the occasion without these words | Workspace purge, SCM mirror erasure and removal of the item from the workspace's source remove it. The occasion row stays | Erasure of any person the evidence copied removes the whole evidence, also when that person was not the actor | Expires at the item event retention horizon after it was recorded ([Data retention](../data-retention.mdx)), also while a review references the occasion. No later decision or retry extends it. The same deadline bounds writer inputs and raw session copies. Physical removal follows the existing sweep and runtime leases |
 | PostgreSQL instance-administration records — `instance_settings`, `instance_llm_settings` | The stable account reference of the administrator who changed silent mode or instance LLM policy | Instance-scoped. Workspace purge does not reach them | Account purge detaches settings actor references. | The upgrade drops old settings display-login attribution without backfill. Settings and change times remain. `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/settings/SettingsAccountErasureAdapter.java`, `server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/catalog/LlmSettingsAccountErasureAdapter.java`. |
-| PostgreSQL runtime — `review_job`, script execution, capture receipts and diagnostics | Temporary inputs, output and provenance | Workspace purge queues mounted evidence removal before parent deletion | Erasure removes all source-person dependencies, including another developer’s review | [Data retention](../data-retention.mdx) gives the payload and job periods. Product reviews and results do not depend on retained jobs |
+| PostgreSQL runtime — `review_job`, script execution, capture receipts and diagnostics | Temporary inputs, output and provenance | Workspace purge erases the recorded attempt inputs and starts evidence cleanup on each server before parent deletion | Erasure removes all source-person dependencies, including another developer’s review | [Data retention](../data-retention.mdx) gives the payload and job periods. Product reviews and results do not depend on retained jobs |
 | PostgreSQL transient composition — `review_composition_basis`, `review_attempt_input` and `person_evidence_copy` | Original bounded inputs, the recorded files of a running attempt's folder, and the receipt of each attempt's copy | Purge erases the receipts and deletes the recorded files in its transaction | Erasure follows every copied person, not only the result developer. It erases the receipts and deletes the jobs' recorded files at once | [Data retention](../data-retention.mdx) gives what removes receipts. Recorded files live only while their attempt runs |
 | PostgreSQL product reviews — `review`, `review_practice`, `review_item` | Pinned versions, method, per-item proof membership and aggregate report | Workspace purge uses the report owner | Person erasure removes personal proof and affected membership, including developerless file proof | [Data retention](../data-retention.mdx) gives the period of raw scan proof. Aggregate reports remain without quotes or personal identity and identify expired proof |
 | PostgreSQL `llm_usage_event` | Token/cost accounting of each model call, with workspace, opaque source identifier, run and practice. Monthly workspace/admin reports | Retained for accounting until its retention sweep. A deleted run leaves the row without its run | Person contributors detach the selected job/conversation source identifiers while retaining accounting facts | [Data retention](../data-retention.mdx) gives the window and its operator control. `server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/usage/LlmUsageRetentionIntegrationTest.java` proves the cutoff across workspaces. `server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/usage/LlmUsageRetentionSweeperTest.java` verifies job outcomes. |
@@ -414,18 +414,19 @@ a one-hour cleanup grace, and restart cleanup removes abandoned folders. One own
 folders, and cleanup retries a job that another owner holds on its next pass. Repository history is not
 exported as an unfiltered Git object archive.
 
-Workspace purge queues removal of all mounted attempt copies before deleting job rows. The request
-commits with the workspace purge. It does not wait for a server inside that database transaction.
-An offline mounted store keeps its receipt and exact identity keys until it returns and confirms
-folder deletion. After that confirmation, the next review job retention run deletes the receipts of the
-purged workspace. Person erasure still waits for every selected store to acknowledge deletion.
+Person erasure and workspace purge mark the selected evidence-copy receipts `ERASED`, clear their copied
+identities and delete the recorded attempt inputs in their transaction. They wait for no server acknowledgement.
+Each running server removes its local erased copies within 2 minutes, through its periodic reconcile and a
+PostgreSQL notification. A server that returns later removes its erased copies in its next reconcile.
+An erased receipt cannot authorize a restored folder.
 
-For a review, acknowledgement follows sandbox teardown and deletion of the local gateway archive and attempt folder.
-A failed deletion leaves the receipt pending and the erasure request reports a failure.
-Correct the deletion failure and retry the request.
-Preparation that is waiting for capture admission does not block release.
-Each receipt names its physical sandbox.
-Cleanup also releases the inputs of every local attempt of the affected job, closes that job’s gateway session, and deletes its evidence folder.
+A receipt keeps its sandbox ID until sandbox deletion succeeds. Servers with agent jobs on delete those
+sandboxes. Every server removes its own affected attempt folders and gateway archives, also with agent jobs off.
+
+A failed sandbox or archive deletion does not prevent removal of the other local copies.
+Cleanup retries automatically, and `HephaestusEvidenceReconcileStalled` reports failed cleanup on the server that
+owns it. See [Alert response](../production-operations-runbook.mdx#alert-response).
+Preparation that waits for capture admission does not block release.
 
 ### Copied evidence and secondary subjects
 
@@ -435,9 +436,10 @@ evidence snapshot and diagnostics, its evidence folder and the Hephaestus tool r
 are erased through those IDs. The practice results and feedback it recorded about another developer stay
 and are not exported.
 
-A receipt's native provenance stays after folder deletion is acknowledged until
-the person-erasure step clears it. For a deleted job, review job retention can delete the receipt first. Unrelated review jobs and
-other people's profiles and replies are not selected through repository history alone.
+The person-erasure transaction clears a selected receipt's native provenance. Review job retention removes
+receipts whose job is gone, except a receipt that still names a sandbox to delete. That cleanup identity stays until
+sandbox deletion succeeds. Unrelated review jobs and other people's profiles and replies are not selected through
+repository history alone.
 
 Provider-feedback inspection also covers unconfirmed summary and inline writes.
 `ExternalFeedbackPersonDataStore` includes the exact reviewed-work locator when the provider has

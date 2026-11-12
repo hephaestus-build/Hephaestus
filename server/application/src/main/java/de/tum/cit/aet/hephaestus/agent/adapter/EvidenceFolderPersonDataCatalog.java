@@ -1,14 +1,14 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
-import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopy;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
@@ -197,6 +197,12 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     } catch (IOException exception) {
                         throw new UncheckedIOException(exception);
                     }
+                    capture.admission()
+                            .jdbc()
+                            .update(
+                                    "DELETE FROM review_attempt_input WHERE job_id=? AND workspace_id=?",
+                                    capture.jobId(),
+                                    capture.workspaceId());
                     int discarded = capture.admission()
                             .jdbc()
                             .update("""
@@ -832,15 +838,16 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                 });
     }
 
+    // The sandbox ID contains no copied personal data and lets every reconcile retry physical removal.
     private long clearErasedCopies(PersonDataSelection selection) {
         if (!allRemoved(selection)) throw new IllegalStateException("A selected evidence copy is not erased");
         long count = 0;
         for (var key : selection.rows())
             count += jdbc.update(
                     """
-                    UPDATE person_evidence_copy SET payload='{}'::jsonb
+                    UPDATE person_evidence_copy SET payload=jsonb_strip_nulls(jsonb_build_object('sandboxId',payload->'sandboxId'))
                     WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND state='ERASED'
-                      AND payload<>'{}'::jsonb
+                      AND payload-'sandboxId'<>'{}'::jsonb
                     """,
                     key.columns().get("copy_id"),
                     UUID.fromString(key.columns().get("job_id")),
@@ -891,24 +898,34 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     /**
      * Removes the receipts of review jobs that retention deleted. Once the job row is gone, no result reaches its
      * receipt (the review item's job reference is cleared), so the receipt vouches for nothing and keeps identities
-     * without a purpose. Each server removes the folders of a job without its row in its next reconcile pass.
+     * without a purpose. A receipt that still names a sandbox stays until physical deletion succeeds.
+     * Each server removes the folders of a job without its row in its next reconcile pass.
      *
-     * @return the receipts deleted, so a full batch asks for another
+     * @return the larger number of receipts retired or deleted, so a full batch asks for another
      */
     public int retireReceiptsOfDeletedJobs(int batchSize) {
-        return jdbc.update("""
+        int retired = jdbc.update("""
+            UPDATE person_evidence_copy SET state='ERASED',
+              payload=jsonb_strip_nulls(jsonb_build_object('sandboxId',payload->'sandboxId'))
+            WHERE id IN (SELECT c.id FROM person_evidence_copy c
+              WHERE NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
+                AND c.payload->>'sandboxId' IS NOT NULL AND c.state<>'ERASED' LIMIT ?)
+            """, batchSize);
+        int deleted = jdbc.update("""
             DELETE FROM person_evidence_copy WHERE id IN (
               SELECT c.id FROM person_evidence_copy c
               WHERE NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
+                AND c.payload->>'sandboxId' IS NULL
               LIMIT ?)
             """, batchSize);
+        return Math.max(retired, deleted);
     }
 
     /** Erases the workspace's copies in its purge transaction; each server removes its folders after the commit. */
     @Override
     public void deleteWorkspaceData(Long workspaceId) {
         jdbc.update(
-                "UPDATE person_evidence_copy SET state='ERASED', payload='{}'::jsonb WHERE workspace_id=?",
+                "UPDATE person_evidence_copy SET state='ERASED', payload=jsonb_strip_nulls(jsonb_build_object('sandboxId',payload->'sandboxId')) WHERE workspace_id=?",
                 workspaceId);
         jdbc.update("DELETE FROM review_attempt_input WHERE workspace_id=?", workspaceId);
         notifyErased();
@@ -1012,7 +1029,18 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
      * @return the job folders it removed erased attempts from, and those it could not remove them from now
      */
     public ErasedFolders removeErasedFolders() {
-        var local = localJobFolders();
+        var local = new HashMap<>(localJobFolders());
+        // A startup sweep can remove the attempt folder before its sandbox and gateway archive are removed.
+        AgentSandboxes sandboxOwner = sandboxes.getIfAvailable();
+        SandboxGatewaySessions gateway = sessions.getIfAvailable();
+        var archives = gateway == null ? Set.<UUID>of() : gateway.jobIds();
+        jdbc.query(
+                "SELECT job_id,workspace_id FROM person_evidence_copy WHERE state='ERASED'"
+                        + " AND ((? AND payload->>'sandboxId' IS NOT NULL) OR job_id=ANY(?))",
+                (RowCallbackHandler)
+                        rs -> local.put(Objects.requireNonNull(rs.getObject(1, UUID.class)), rs.getLong(2)),
+                sandboxOwner != null,
+                new SqlArrayValue("uuid", archives.toArray()));
         if (local.isEmpty()) return new ErasedFolders(0, 0);
         var erased = new HashMap<UUID, Set<String>>();
         var erasedSandboxes = new HashMap<UUID, List<UUID>>();
@@ -1049,14 +1077,22 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
             UUID jobId = entry.getKey();
             long workspaceId = Objects.requireNonNull(local.get(jobId));
             try {
-                AgentSandboxes sandboxOwner = sandboxes.getIfAvailable();
                 var sandboxIds = Objects.requireNonNull(erasedSandboxes.get(jobId));
-                if (!sandboxIds.isEmpty()) {
-                    if (sandboxOwner == null) {
-                        remaining++;
-                        continue;
+                if (sandboxOwner != null) {
+                    for (UUID sandboxId : sandboxIds) {
+                        try {
+                            sandboxOwner.release(workspaceId, sandboxId);
+                            jdbc.update(
+                                    "UPDATE person_evidence_copy SET payload=payload-'sandboxId'"
+                                            + " WHERE job_id=? AND workspace_id=? AND state='ERASED' AND payload->>'sandboxId'=?",
+                                    jobId,
+                                    workspaceId,
+                                    sandboxId.toString());
+                        } catch (RuntimeException failure) {
+                            log.warn("Could not remove an erased evidence sandbox: sandboxId={}", sandboxId, failure);
+                            remaining++;
+                        }
                     }
-                    for (UUID sandboxId : sandboxIds) sandboxOwner.release(workspaceId, sandboxId);
                 }
                 // An attempt that this server holds keeps the folder's lease until its inputs are released.
                 ReviewAttemptCustody held = custody.getIfAvailable();
@@ -1068,8 +1104,14 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                 }
                 var lease = acquired.get();
                 try (lease) {
-                    SandboxGatewaySessions gateway = sessions.getIfAvailable();
-                    if (gateway != null && entry.getValue().isEmpty()) gateway.closeJob(jobId);
+                    if (gateway != null && entry.getValue().isEmpty()) {
+                        try {
+                            gateway.closeJob(jobId);
+                        } catch (RuntimeException failure) {
+                            log.warn("Could not remove an erased evidence archive: jobId={}", jobId, failure);
+                            remaining++;
+                        }
+                    }
                     if (removeErasedAttempts(workspaceId, jobId, entry.getValue())) removed++;
                 }
             } catch (IOException | RuntimeException failure) {
@@ -1083,7 +1125,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     /**
      * One pass of {@link #removeErasedFolders}.
      *
-     * @param remaining folders that still hold erased attempts: the erasure bound holds only once this is 0
+     * @param remaining erased copies that this server could not remove: cleanup succeeds only once this is 0
      */
     public record ErasedFolders(int removed, int remaining) {}
 
@@ -1102,11 +1144,14 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                             folders.put(
                                     UUID.fromString(String.valueOf(job.getFileName())), Long.parseLong(workspaceName));
                         } catch (IllegalArgumentException notAJob) {
-                            // Not a job folder.
+                            log.debug("Skipping an entry outside the job folder format: path={}", job, notAJob);
                         }
                     }
                 } catch (NoSuchFileException removedUnderTheWalk) {
-                    // A purge removed the workspace's folder meanwhile.
+                    log.debug(
+                            "An evidence workspace folder was removed during the sweep: path={}",
+                            workspace,
+                            removedUnderTheWalk);
                 }
             }
         } catch (IOException exception) {

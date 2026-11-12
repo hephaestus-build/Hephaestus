@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 public class EvidenceErasureNotifications implements DisposableBean {
 
     static final String CHANNEL = "evidence_erasure";
+    static final String APPLICATION_NAME = "hephaestus-evidence-erasure";
     private static final Logger log = LoggerFactory.getLogger(EvidenceErasureNotifications.class);
     private static final int WAIT_MILLIS = 10_000;
 
@@ -45,6 +46,7 @@ public class EvidenceErasureNotifications implements DisposableBean {
             try (var connection = DriverManager.getConnection(
                             dataSource.determineUrl(), dataSource.determineUsername(), dataSource.determinePassword());
                     var statement = connection.createStatement()) {
+                connection.setClientInfo("ApplicationName", APPLICATION_NAME);
                 statement.execute("LISTEN " + CHANNEL);
                 PGConnection notifications = connection.unwrap(PGConnection.class);
                 backoffMillis = 1000;

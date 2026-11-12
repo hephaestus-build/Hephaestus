@@ -213,8 +213,20 @@ erDiagram
         UUID job_id "NOT NULL"
         VARCHAR(24) state "NOT NULL"
         JSONB payload "NOT NULL"
-        UUID store_id "NOT NULL"
         BIGINT workspace_id UK "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    ReviewAttemptInput {
+        UUID id PK
+        BIGINT workspace_id FK "NOT NULL"
+        UUID job_id FK,UK "NOT NULL"
+        INTEGER attempt UK "NOT NULL"
+        UUID run_id UK "NOT NULL"
+        VARCHAR(1024) path UK "NOT NULL"
+        VARCHAR(64) sha256 "NOT NULL"
+        VARCHAR(9) permissions "NOT NULL"
+        BYTEA content "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
     }
 
@@ -349,6 +361,8 @@ erDiagram
     Review ||--o{ LlmUsageEvent : has
     AgentRun ||--o{ LlmUsageEvent : has
     Workspace ||--o{ LlmUsageEvent : has
+    ReviewJob ||--o{ ReviewAttemptInput : reviewed
+    Workspace ||--o{ ReviewAttemptInput : reviewed
     Workspace ||--o{ ReviewCompositionBasi : reviewed
     Review ||--o{ ReviewJob : reviewed
     Workspace ||--o{ ReviewJob : reviewed

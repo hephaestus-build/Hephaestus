@@ -357,17 +357,15 @@ public class JobEvidenceFiles implements SandboxResultListener {
         rebuild.lock();
         try {
             if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
+            if (job.getStatus() != ReviewJobStatus.RUNNING
+                    || !personCopies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt())) return;
             var files = attemptInputs.list(job);
             if (files.isEmpty()) {
-                // Only an erased copy or an ended attempt has no recorded files: the capture records them first.
-                if (job.getStatus() == ReviewJobStatus.RUNNING
-                        && personCopies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
-                    throw unverified(
-                            job,
-                            new CheckoutUnverifiedException(
-                                    CheckoutUnverifiedException.Reason.UNAVAILABLE,
-                                    "The running attempt has no recorded files"));
-                return;
+                throw unverified(
+                        job,
+                        new CheckoutUnverifiedException(
+                                CheckoutUnverifiedException.Reason.UNAVAILABLE,
+                                "The running attempt has no recorded files"));
             }
             var lease = acquireForRebuild(job);
             try (lease) {

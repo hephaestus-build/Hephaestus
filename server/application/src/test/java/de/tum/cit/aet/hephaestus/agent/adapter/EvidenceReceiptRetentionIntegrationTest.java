@@ -64,6 +64,33 @@ class EvidenceReceiptRetentionIntegrationTest extends AbstractWorkspaceIntegrati
     }
 
     @Test
+    void shouldRetainPhysicalCleanupUntilADeletedJobsSandboxIsRemoved() {
+        Workspace workspace = createWorkspace(
+                "pending-sandbox-receipt",
+                "Pending sandbox receipt",
+                "pending-sandbox-org",
+                AccountType.ORG,
+                persistUser("pending-sandbox-owner"));
+        UUID job = job(workspace).getId();
+        UUID sandbox = UUID.randomUUID();
+        UUID pending = receipt(
+                workspace, job, "READY", "{\"sandboxId\":\"" + sandbox + "\",\"identities\":[{\"subject\":\"42\"}]}");
+        jdbc.update("DELETE FROM review_job WHERE id=?", job);
+
+        receipts.retireReceiptsOfDeletedJobs(500);
+        assertThat(jdbc.queryForMap(
+                        "SELECT state,payload::text AS payload FROM person_evidence_copy WHERE id=?", pending))
+                .containsEntry("state", "ERASED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT payload::text FROM person_evidence_copy WHERE id=?", String.class, pending))
+                .contains(sandbox.toString())
+                .doesNotContain("identities");
+        jdbc.update("UPDATE person_evidence_copy SET payload=payload-'sandboxId' WHERE id=?", pending);
+        receipts.retireReceiptsOfDeletedJobs(500);
+        assertThat(states(pending)).isEmpty();
+    }
+
+    @Test
     void shouldFinishAnErasureWhoseReceiptRetentionAlreadyDeleted() {
         var frozen = new PersonDataSelection(List.of(new PersonDataSelection.RowKey(Map.of(
                 "job_id", UUID.randomUUID().toString(),
