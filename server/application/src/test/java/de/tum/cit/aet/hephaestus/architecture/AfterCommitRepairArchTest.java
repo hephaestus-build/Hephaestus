@@ -39,11 +39,7 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
 
     private record Unrepaired(String owner, String reason) {}
 
-    private static final Map<String, Unrepaired> UNREPAIRED = Map.of(
-            "integration.scm.gitlab.workspace.GitLabConnectionStateListener.onDeactivated",
-            new Unrepaired(
-                    "INBOX",
-                    "A lost suspension callback leaves the upstream hook delivering to a valid signed route; teardown and hook reconciliation do not cover SUSPENDED connections."));
+    private static final Map<String, Unrepaired> UNREPAIRED = Map.of();
 
     private static final Map<String, Repair> REPAIRS = Map.ofEntries(
             Map.entry(

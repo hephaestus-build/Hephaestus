@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -25,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightService;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -41,6 +43,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,8 +68,17 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @BeforeEach
     void confirmFixtureGroup() {
+        reset(webhookProvider);
         doReturn(42L).when(fixtureGitLabGroups).resolveAccountId(anyString(), any(), anyString());
     }
+
+    @AfterEach
+    void resetWebhookProvider() {
+        reset(webhookProvider);
+    }
+
+    @Autowired
+    private GitLabWebhookClient webhookProvider;
 
     @BeforeAll
     static void declarePublicHosts() {
@@ -318,6 +330,10 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         previous.setState(IntegrationState.ACTIVE);
         long previousId =
                 persistedId(connectionRepository.saveAndFlush(previous).getId());
+        // The pending-cleanup scenario needs an unconfirmed deletion, rather than the double's default success.
+        doThrow(new IllegalStateException("GitLab webhook removal is unconfirmed"))
+                .when(webhookProvider)
+                .deregisterGroupWebhookWithCredentials(DEFAULT_INSTANCE, "previous-test-token", 42L, 99L);
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setWorkspace(workspace);
         monitor.setNativeId(12L);

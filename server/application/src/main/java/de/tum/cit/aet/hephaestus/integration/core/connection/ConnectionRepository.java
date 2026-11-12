@@ -113,6 +113,17 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     @WorkspaceAgnostic("The expiry of retained credentials runs across workspaces")
     List<Connection> findByStateAndProviderTeardownRequestedAtBefore(IntegrationState state, Instant cutoff);
 
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WebhookCleanupCandidate(
+            c.id, c.workspace.id)
+        FROM Connection c
+        WHERE c.kind = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITLAB
+          AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.SUSPENDED
+        """)
+    List<WebhookCleanupCandidate> findSuspendedGitLabWebhookCandidates();
+
+    record WebhookCleanupCandidate(long connectionId, long workspaceId) {}
+
     /**
      * The Connection by primary key, scoped to its workspace (the predicate the tenancy inspector
      * requires) and deliberately state-agnostic: deactivation cleanup runs after the row left ACTIVE.
