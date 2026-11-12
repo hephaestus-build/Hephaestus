@@ -23,6 +23,15 @@ names for readers.
   The application role cannot change the schema. A fixture that changes it uses `PostgreSQLTestContainer.ownerJdbc()`.
 - For webhook tests, deserialize recorded fixtures into the handler's event DTO.
 
+The integration tier fails when a virtual thread is pinned to its carrier for 20 ms or more.
+On Java 21, a virtual thread that blocks under a monitor keeps its carrier.
+A few such threads can stall every virtual thread, the waiters of a connection pool among them.
+The JDK records each such park, and the failure prints its call path.
+
+A common cause is a Caffeine `get(key, loader)` whose loader blocks, since Caffeine runs the loader under a lock.
+Load such an entry with `CacheLoads.get`.
+`PinnedParks.during` asserts in a unit test that a call pins no virtual thread.
+
 ## Controller integration tests
 
 Test controllers at the HTTP boundary so access-control configuration is exercised. Reuse the
