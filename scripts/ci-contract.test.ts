@@ -3372,6 +3372,11 @@ void describe("CI contract", () => {
 			job(await readFile(".github/workflows/cicd.yml", "utf8"), "upstream-images"),
 			/run: node scripts\/scan-upstream-images\.ts reports\n/u,
 		);
+		// The one-host installer ships the platform images, so the same job judges them.
+		assert.match(
+			job(await readFile(".github/workflows/cicd.yml", "utf8"), "upstream-images"),
+			/run: node scripts\/scan-platform-images\.ts --policy\n/u,
+		);
 		assert.match(
 			job(await readFile(".github/workflows/rescan-images.yml", "utf8"), "main"),
 			/run: node scripts\/scan-upstream-images\.ts reports --report-only\n/u,
@@ -3390,11 +3395,13 @@ void describe("CI contract", () => {
 		// The trigger is derived, not trusted: a filter that lists the entry point but not the module
 		// it parses JSON with skips the gate on the pull request that breaks the parser. Re-walk the
 		// imports and require every file the gate actually loads to appear.
-		for (const file of await importClosure("scripts/scan-upstream-images.ts")) {
-			assert.ok(
-				filter.includes(`- '${file}'`),
-				`release-images must trigger on ${file}, which the upstream scan loads`,
-			);
+		for (const entry of ["scripts/scan-upstream-images.ts", "scripts/scan-platform-images.ts"]) {
+			for (const file of await importClosure(entry)) {
+				assert.ok(
+					filter.includes(`- '${file}'`),
+					`release-images must trigger on ${file}, which ${entry} loads`,
+				);
+			}
 		}
 	});
 

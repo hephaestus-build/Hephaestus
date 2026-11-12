@@ -11,7 +11,9 @@ import {
 	isImageIndex,
 	manifestDigest,
 	resolvePlatformDigest,
+	scanAll,
 	type Subject,
+	type ScanOutcome,
 } from "./lib/image-scan.ts";
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
@@ -49,7 +51,12 @@ export function platformPins(source: string) {
 			if (name === undefined || name === "") {
 				throw new Error("The platform image has no name");
 			}
-			subjects.push({ image: name, repository, reference: `${repository}@${digest}` });
+			// The old Compose release also has a Traefik subject, with its own reviewed exceptions.
+			subjects.push({
+				image: name === "traefik" ? "platform-traefik" : name,
+				repository,
+				reference: `${repository}@${digest}`,
+			});
 		}
 	}
 	for (const document of parseAllDocuments(source)) {
@@ -376,18 +383,12 @@ export async function checkPlatformPins(
 	}
 }
 
-if (import.meta.main) {
-	const mode = process.argv[2];
-	if (mode !== undefined && mode !== "--check-pins") {
-		throw new Error("Usage: scan-platform-images.ts [--check-pins]");
-	}
+/** The images that a host runs from the platform pins on disk, after checking the pins against their releases. */
+export async function verifiedPlatformSubjects(): Promise<Subject[]> {
 	const source = await readFile("deploy/platform/k3s-platform.yaml", "utf8");
 	const agentSandbox = await readFile("deploy/platform/k3s-agent-sandbox.yaml", "utf8");
 	const containerd = await readFile("deploy/platform/k3s-containerd.toml.tmpl", "utf8");
 	await checkPlatformPins(source, agentSandbox, containerd);
-	if (mode === "--check-pins") {
-		process.exit(0);
-	}
 	const pins = platformPins(source);
 	// The complete upstream list less the add-ons that the host disables. A config change that turns one on scans it again.
 	const bundled = runningBundledSubjects(
@@ -398,7 +399,64 @@ if (import.meta.main) {
 		),
 		await readFile("deploy/platform/k3s-config.yaml", "utf8"),
 	);
-	const subjects = [...pins.subjects, agentSandboxPin(agentSandbox).subject, ...bundled];
+	return [...pins.subjects, agentSandboxPin(agentSandbox).subject, ...bundled];
+}
+
+/** The directory of the policy reports of one platform. */
+export const policyDirectory = (platform: string) =>
+	path.join("tmp/platform-policy", platform.replace("/", "-"));
+
+/**
+ * The release vulnerability policy on both platforms of every platform image. The one-host installer
+ * ships these images, so a fixable HIGH or CRITICAL passes only through a named exception
+ * (scripts/write-platform-exceptions.ts).
+ */
+async function enforcePlatformPolicy(subjects: readonly Subject[]): Promise<void> {
+	const outcomes: ScanOutcome[] = [];
+	for (const platform of PLATFORMS) {
+		outcomes.push(
+			...(await scanAll(subjects, policyDirectory(platform), {
+				platform,
+				annotate: true,
+				continueOnError: true,
+			})),
+		);
+	}
+	const failed = outcomes
+		.filter((outcome) => outcome.error !== undefined)
+		.map((outcome) => `${outcome.image} (${outcome.platform})`);
+	if (failed.length > 0) {
+		throw new Error(`Platform scans unavailable: ${failed.join(", ")}`);
+	}
+	const refused = outcomes
+		.filter((outcome) => !outcome.passed)
+		.map((outcome) => `${outcome.image} (${outcome.platform})`);
+	if (refused.length > 0) {
+		throw new Error(
+			`Platform images do not satisfy the vulnerability policy: ${refused.join(", ")}`,
+		);
+	}
+}
+
+if (import.meta.main) {
+	const mode = process.argv[2];
+	if (mode !== undefined && mode !== "--check-pins" && mode !== "--policy") {
+		throw new Error("Usage: scan-platform-images.ts [--check-pins | --policy]");
+	}
+	if (mode === "--policy") {
+		// Clear both platforms before any acquisition can fail and leave an old scan behind.
+		for (const platform of PLATFORMS) {
+			await rm(policyDirectory(platform), { recursive: true, force: true });
+		}
+	}
+	const subjects = await verifiedPlatformSubjects();
+	if (mode === "--check-pins") {
+		process.exit(0);
+	}
+	if (mode === "--policy") {
+		await enforcePlatformPolicy(subjects);
+		process.exit(0);
+	}
 	// One SARIF upload has at most 20 runs. Each architecture has its own upload, plus dependencies on amd64.
 	if (subjects.length >= 20) {
 		throw new Error("The platform inventory exceeds one SARIF upload per architecture");
@@ -444,4 +502,5 @@ if (import.meta.main) {
 	if (failures.length > 0) {
 		throw new Error(`Scans unavailable: ${failures.join(", ")}`);
 	}
+	await enforcePlatformPolicy(subjects);
 }

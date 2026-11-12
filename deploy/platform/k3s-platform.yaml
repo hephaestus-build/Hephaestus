@@ -79,7 +79,7 @@ metadata:
 spec:
   repo: https://traefik.github.io/charts
   chart: traefik
-  version: 42.3.1
+  version: 42.4.0
   targetNamespace: traefik
   createNamespace: true
   # Until k3s has installed the Gateway API definitions, the install fails, and the Helm controller's

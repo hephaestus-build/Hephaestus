@@ -778,6 +778,20 @@ export async function fetchGoAdvisory(id: string): Promise<Uint8Array> {
 	return Buffer.concat(chunks);
 }
 
+/** Reject incomplete reports, while retaining Trivy's complete no-package image reports. */
+export function validatedTrivyReport(reportValue: unknown): Record<string, unknown> {
+	const nothingToAnalyze =
+		record(reportValue) &&
+		reportValue.SchemaVersion === 2 &&
+		typeof reportValue.ArtifactName === "string" &&
+		reportValue.Results === undefined &&
+		!(record(reportValue.Metadata) && reportValue.Metadata.OS !== undefined);
+	if (!record(reportValue) || (!Array.isArray(reportValue.Results) && !nothingToAnalyze)) {
+		throw new Error("malformed Trivy report");
+	}
+	return reportValue;
+}
+
 export function evaluate(
 	image: string,
 	reportValue: unknown,
@@ -793,18 +807,19 @@ export function evaluate(
 		historical?: boolean;
 	} = {},
 ) {
-	if (!record(reportValue) || !Array.isArray(reportValue.Results)) {
-		throw new Error("malformed Trivy report");
-	}
+	// Trivy omits `Results` when an image holds no package it can analyze, as a static busybox or the
+	// pause image. That is a complete schema 2 report with nothing found, but only when Trivy also
+	// found no operating system: an OS without results is a scan that missed its packages.
+	const report = validatedTrivyReport(reportValue);
 	const policy = readPolicy(policyValue, options.historical === true);
 	const errors: string[] = [];
-	if (subject && reportValue.ArtifactName !== subject.reference) {
-		errors.push(
-			`Trivy report is for ${String(reportValue.ArtifactName)}, not ${subject.reference}`,
-		);
+	if (subject && report.ArtifactName !== subject.reference) {
+		errors.push(`Trivy report is for ${String(report.ArtifactName)}, not ${subject.reference}`);
 	}
 	errors.push(...policyErrors(policy, now));
-	const { findings, goTargets } = parseFindings(reportValue.Results);
+	const { findings, goTargets } = parseFindings(
+		Array.isArray(report.Results) ? report.Results : [],
+	);
 	const highCritical = findings.filter(
 		(finding) => finding.Severity === "HIGH" || finding.Severity === "CRITICAL",
 	);

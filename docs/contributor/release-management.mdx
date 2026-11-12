@@ -204,6 +204,10 @@ Submission to the Chrome Web Store is a manual step: [Releasing to the Chrome We
 
 ### Platform pins
 
+After a k3s, cert-manager, Traefik or agent-sandbox pin change, run `node scripts/scan-platform-images.ts --policy`.
+Regenerate its exceptions with `node scripts/write-platform-exceptions.ts` and review the summary.
+See [Platform image exceptions](./vulnerability-remediation#platform-image-exceptions).
+
 `deploy/platform/k3s-platform.yaml` holds the pins of k3s, Traefik, and cert-manager.
 k3s brings the Gateway API definitions with its bundled `gateway-api-crd` chart.
 The clusters of `ci-kubernetes.yml` run no cert-manager: only the k3s smoke tests that pin.

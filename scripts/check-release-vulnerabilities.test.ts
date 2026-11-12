@@ -194,6 +194,24 @@ await test("rejects expired and malformed exceptions", () => {
 	);
 	assert.throws(() => evaluate("server", {}, policy), /malformed Trivy report/u);
 	assert.throws(
+		() => evaluate("server", { SchemaVersion: 2, ArtifactName: "x", Results: {} }, policy),
+		/malformed Trivy report/u,
+	);
+	assert.throws(
+		() =>
+			evaluate(
+				"server",
+				{ SchemaVersion: 2, ArtifactName: "x", Metadata: { OS: { Family: "debian" } } },
+				policy,
+			),
+		/malformed Trivy report/u,
+	);
+	// Trivy writes no Results for an image without a package it can analyze.
+	assert.deepEqual(
+		evaluate("server", { SchemaVersion: 2, ArtifactName: "x" }, policy).rejected,
+		[],
+	);
+	assert.throws(
 		() => evaluate("server", { Results: [{ Vulnerabilities: [{ Severity: "HIGH" }] }] }, policy),
 		/InstalledVersion must be a string/u,
 	);
