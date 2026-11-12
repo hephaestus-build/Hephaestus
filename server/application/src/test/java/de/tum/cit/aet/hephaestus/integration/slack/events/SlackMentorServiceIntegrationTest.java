@@ -210,11 +210,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(pi), null, null));
         UUID answerId = Objects.requireNonNull(
                 turns.answer(workspace.getId(), running.getId()).answerEntryId());
-        delivery.delivered(
-                workspace.getId(),
-                entryRepository.findQuestion(workspace.getId(), running.getId()).getId(),
-                answerId,
-                ts);
+        delivery.delivered(workspace.getId(), answerId, ts);
         return entryRepository.findById(answerId).orElseThrow();
     }
 

@@ -243,12 +243,12 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 `failed` includes a reply that Silent Mode kept from Slack.
 A turn with nothing to post, such as a turn that the developer stopped before Hephaestus wrote, is not counted.
 
-The Slack reconciler takes each unsettled reply once and counts it again in its new state.
-It reads the Slack history once for a reply that a server tried to post.
+A reply whose server is gone is finished by another server, through the outbox, and is counted again in its new state.
+That server reads the Slack history for a reply that the first server may have posted.
 A reply that it finds is `delivered`.
 A reply that it does not find is `failed`, and Hephaestus never posts it again.
 A reply whose history it cannot read stays `uncertain`.
-[Conversation runtime](/contributor/unified-pi-runtime#reconciler) gives its limits.
+[Conversation runtime](/contributor/unified-pi-runtime#a-reply-without-its-server) gives its limits.
 
 Web and Slack turns both count.
 An attempt that ends before any part of an answer records no first-token time.

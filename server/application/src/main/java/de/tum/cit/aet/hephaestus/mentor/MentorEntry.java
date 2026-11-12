@@ -17,7 +17,6 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -85,15 +84,15 @@ public class MentorEntry implements Persistable<UUID> {
         SYSTEM,
     }
 
-    /** Intent, effect and outcome of a Slack post; see {@link MentorSlackDelivery}. */
+    /** How a Slack post stands, as its outbox action shows it ({@link MentorSlackReplies}). */
     public enum SlackDelivery {
         PENDING,
         DELIVERED,
-        /** The post may have reached Slack; the reconciler decides. */
+        /** The post may have reached Slack; a read of the Slack history decides. */
         UNCERTAIN,
         /**
          * Settled as not fully delivered: Slack or Silent Mode refused the post or the end of its stream, there was
-         * nothing to post, or the reconciler found that Slack does not hold an uncertain post. A stream can have shown
+         * nothing to post, or the Slack history did not show an uncertain post. A stream can have shown
          * part of the reply before, so Slack may show part of it; the app shows "Not fully delivered to Slack".
          */
         FAILED,
@@ -153,6 +152,7 @@ public class MentorEntry implements Persistable<UUID> {
     @Column(name = "slack_ts", length = 32)
     private String slackTs;
 
+    /** How this entry's Slack post ended, once its outbox action ended ({@link MentorSlackReplies}). */
     @Nullable
     @Enumerated(EnumType.STRING)
     @Column(name = "slack_delivery", length = 16)
@@ -162,11 +162,6 @@ public class MentorEntry implements Persistable<UUID> {
     @Nullable
     @Column(name = "slack_stream_ts", length = 32)
     private String slackStreamTs;
-
-    /** How often the reconciler took this entry's unsettled Slack post. */
-    @Column(name = "slack_attempts", nullable = false)
-    @ColumnDefault("0")
-    private int slackAttempts;
 
     @Nullable
     @Enumerated(EnumType.STRING)

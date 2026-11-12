@@ -4,6 +4,12 @@ import com.slack.api.model.Message;
 import com.slack.api.model.block.LayoutBlock;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.action.ActionAdapter;
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
@@ -11,11 +17,11 @@ import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.HistoryPage;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery.SlackTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorSlackReplies;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
@@ -52,7 +58,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Projects the conversation turns asked in Slack into the developer's Slack DM, on the server that claims the question
- * ({@link MentorSlackDelivery#claim}). {@code docs/contributor/unified-pi-runtime.mdx} § Slack replies tells what each
+ * ({@link MentorSlackReplies#own}). {@code docs/contributor/unified-pi-runtime.mdx} § Slack replies tells what each
  * reply shows and how each case ends.
  */
 @Component
@@ -154,10 +160,28 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     private final SlackMessageService slack;
     private final SlackMentorPoster poster;
     private final ModelLinkHosts linkHosts;
+    private final MentorSlackReplies replies;
+    private final ActionExecutor executor;
     private final Clock clock;
     private final MeterRegistry meters;
 
     private final Map<UUID, Projection> projections = new ConcurrentHashMap<>();
+
+    /** How long an attempt waits for this server's projection of the turn before it lets the action wait. */
+    private static final Duration OWNER_WAIT = Duration.ofSeconds(10);
+
+    /** Carries out the replies this server owns, with its streams ({@link #attempt}). */
+    private final ActionAdapter ownReplies = new ActionAdapter() {
+        @Override
+        public ActionKind kind() {
+            return ActionKind.SLACK_POST;
+        }
+
+        @Override
+        public ActionResult execute(ActionAttempt attempt) {
+            return attempt(attempt, replies.payload(attempt));
+        }
+    };
 
     /** When each workspace may take its next append ({@link #WORKSPACE_APPEND_SPACING}). Guarded by {@code this}. */
     private final Map<Long, Instant> appendSlots = new HashMap<>();
@@ -178,6 +202,8 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             SlackMessageService slack,
             SlackMentorPoster poster,
             ModelLinkHosts linkHosts,
+            MentorSlackReplies replies,
+            ActionExecutor executor,
             Clock clock,
             MeterRegistry meters) {
         this(
@@ -189,6 +215,8 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                 slack,
                 poster,
                 linkHosts,
+                replies,
+                executor,
                 clock,
                 meters,
                 Executors.newVirtualThreadPerTaskExecutor(),
@@ -211,6 +239,8 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             SlackMessageService slack,
             SlackMentorPoster poster,
             ModelLinkHosts linkHosts,
+            MentorSlackReplies replies,
+            ActionExecutor executor,
             Clock clock,
             MeterRegistry meters,
             ExecutorService workers,
@@ -223,6 +253,8 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         this.slack = slack;
         this.poster = poster;
         this.linkHosts = linkHosts;
+        this.replies = replies;
+        this.executor = executor;
         this.clock = clock;
         this.meters = meters;
         this.workers = workers;
@@ -260,28 +292,58 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     }
 
     /**
-     * Finishes the reply of an ended turn that the reconciler took: its server is gone, or left it uncertain.
-     *
-     * @param taken whether a server took the reply's intent: then Slack may hold it, and it is looked for, never sent
-     *     again; an untaken reply is sent now
+     * Carries out one attempt of a turn's reply ({@link MentorSlackReplies}). The server that streamed the reply ends
+     * its stream with what only it knows. Any other server, and any attempt after one whose post may have reached
+     * Slack, finishes the reply from the ledger: a reply that a server owned is looked for in the Slack history and
+     * never sent again, and a reply that nobody owned is sent now.
      */
-    void reconcile(long workspaceId, UUID turnId, boolean taken) {
+    ActionResult attempt(ActionAttempt attempt, MentorSlackReplies.Payload payload) {
+        long workspaceId = Objects.requireNonNull(attempt.workspaceId());
+        UUID turnId = Objects.requireNonNull(payload.turnId());
         Optional<SlackTurn> found = delivery.slackTurn(workspaceId, turnId);
         if (found.isEmpty() || !slack.isConnected(workspaceId)) {
             giveUp(workspaceId, turnId);
-            return;
+            return new ActionResult.Cancelled(ActionStopReason.RECIPIENT_UNAVAILABLE);
         }
-        Projection projection = projections.computeIfAbsent(turnId, id -> new Projection(workspaceId, id));
-        projection.lock.lock();
+        SlackTurn turn = found.get();
+        Projection local = projections.get(turnId);
+        if (local == null || local.owner != Owner.HERE) {
+            if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+            // Before its end, the owner of a top-level reply only reacts: its post goes out in this action.
+            Replied replied = finish(turn, null, attempt.writeStarted() || (payload.taken() && turn.inThread()));
+            removeLostProgress(new Projection(workspaceId, turnId), turn);
+            return result(replied);
+        }
+        // The fence comes after the wait, so a long wait for the projection cannot eat the write margin.
         try {
-            if (!projection.finished) {
-                finish(found.get(), null, taken);
-                removeLostProgress(projection, found.get());
-                finished(projection);
-            }
-        } finally {
-            projection.lock.unlock();
+            if (!local.lock.tryLock(OWNER_WAIT.toMillis(), TimeUnit.MILLISECONDS)) return later(attempt);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return later(attempt);
         }
+        try {
+            if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+            Replied replied = attempt.writeStarted() ? finish(turn, null, true) : finish(turn, local.stream, false);
+            removeLostProgress(local, turn);
+            finished(local);
+            return result(replied);
+        } finally {
+            local.lock.unlock();
+        }
+    }
+
+    /** Lets the action wait; a deferral would clear the fence of an earlier attempt that may have posted. */
+    private static ActionResult later(ActionAttempt attempt) {
+        return attempt.writeStarted() ? new ActionResult.Reread(OWNER_WAIT) : new ActionResult.Defer(OWNER_WAIT);
+    }
+
+    private static ActionResult result(Replied replied) {
+        return switch (replied) {
+            case DELIVERED -> new ActionResult.Done(null);
+            case FAILED -> new ActionResult.Failed(ActionStopReason.REJECTED);
+            case UNCERTAIN -> new ActionResult.Reread(MentorSlackReplies.REREAD);
+            case NOTHING -> new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
+        };
     }
 
     private void signal(Projection projection) {
@@ -354,13 +416,9 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             }
             return;
         }
-        Optional<SlackTurn> ended = delivery.slackTurn(projection.workspaceId, projection.turnId);
-        if (ended.isPresent()) {
-            finish(ended.get(), stream, false);
-            removeLostProgress(projection, ended.get());
-        } else {
-            giveUp(projection.workspaceId, projection.turnId);
-        }
+        // The reply's action carries it out on this thread, with this server's stream ({@link #attempt}).
+        UUID action = projection.action;
+        if (action != null) executor.runNow(action, ownReplies);
         finished(projection);
     }
 
@@ -569,6 +627,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
     /** The turn's reply is settled: no wake-up still pending looks at it again. Runs under the lock. */
     private void finished(Projection projection) {
+        if (projection.finished) return;
         clearNotice(projection);
         projection.finished = true;
         ScheduledFuture<?> pending = projection.wakeUp;
@@ -582,16 +641,25 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     private boolean take(Projection projection, MentorTurn.Status status) {
         long workspaceId = projection.workspaceId;
         Optional<SlackTurn> found = delivery.slackTurn(workspaceId, projection.turnId);
-        if (found.isEmpty()
-                || !slack.isConnected(workspaceId)
-                || !delivery.claim(workspaceId, found.get().question().getId())) {
+        Optional<UUID> action = Optional.empty();
+        if (found.isPresent() && slack.isConnected(workspaceId)) {
+            UUID questionId = found.get().question().getId();
+            action = replies.own(workspaceId, found.get().accountId(), questionId, projection.turnId);
+            // The end of the turn created the reply's action. A reply that no server owns goes out now, not after
+            // the grace that waits for an owner.
+            if (action.isEmpty() && status.isTerminal()) action = replies.unowned(workspaceId, questionId);
+        }
+        if (action.isEmpty()) {
             projection.owner = Owner.ELSEWHERE; // Another server, or a reply that cannot reach Slack.
             if (status.isTerminal()) {
+                // The reply goes out without this server, but the notice that the question waited is its own.
+                clearNotice(projection);
                 projections.remove(projection.turnId);
             }
             return false;
         }
         projection.owner = Owner.HERE;
+        projection.action = action.get();
         if (status == MentorTurn.Status.RUNNING) {
             show(projection, found.get());
         }
@@ -872,7 +940,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
      * @param reconciling whether an earlier try may have posted already, so a post is looked for first, and a stream
      *     that a server opened is ended or replaced as {@link #endStream} tells
      */
-    private void finish(SlackTurn turn, @Nullable ReplyStream stream, boolean reconciling) {
+    private Replied finish(SlackTurn turn, @Nullable ReplyStream stream, boolean reconciling) {
         MentorTurn.Status status = turn.turn().getStatus();
         SlackMentorPosts.Reply reply = SlackMentorPosts.reply(
                 turn.messages(), linkHosts.forWorkspace(turn.turn().getWorkspaceId()));
@@ -901,7 +969,6 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         } else if (answerId != null || failure != null) {
             replied = post(turn, stream, answerId, reply, failure != null ? failure : reply.text(), reconciling);
         } else {
-            delivery.settle(turn.turn().getWorkspaceId(), turn.question().getId(), MentorEntry.SlackDelivery.FAILED);
             replied = Replied.NOTHING;
         }
         if (reconciling && replied == Replied.UNCERTAIN && answerId != null && status == MentorTurn.Status.DONE) {
@@ -913,6 +980,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             meters.counter(SlackMetrics.MENTOR_SLACK_REPLY, "state", replied.state)
                     .increment();
         }
+        return replied;
     }
 
     /**
@@ -1092,7 +1160,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         if (replace && whole != null) {
             return replaceStream(turn, stream, ts, answerId, reply, whole);
         }
-        delivery.delivered(workspaceId, questionId, answerId, ts, () -> {
+        delivery.delivered(workspaceId, answerId, ts, () -> {
             if (answerId != null && status == MentorTurn.Status.DONE) {
                 if (stream != null) {
                     deliver(turn, reply.shownIn(stream.sent));
@@ -1129,7 +1197,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         } catch (SlackSendException e) {
             return notEnded(turn, stream, answerId, reply, e);
         }
-        delivery.delivered(workspaceId, questionId, answerId, ts, () -> {
+        delivery.delivered(workspaceId, answerId, ts, () -> {
             if (answerId != null) {
                 deliver(turn, reply.shownIn(text.substring(0, SlackMentorPosts.shownLength(text))));
             }
@@ -1145,17 +1213,15 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             SlackMentorPosts.Reply reply,
             SlackSendException e) {
         long workspaceId = turn.turn().getWorkspaceId();
-        UUID questionId = turn.question().getId();
         log.warn(
                 "Slack did not end or replace the stream of Hephaestus's reply: workspaceId={}, turnId={}, error={}",
                 workspaceId,
                 turn.turn().getId(),
                 e.slackError());
         if (SlackMentorPoster.leavesEffectUnknown(e)) {
-            delivery.markUncertain(workspaceId, questionId);
             return Replied.UNCERTAIN;
         }
-        delivery.settle(workspaceId, questionId, MentorEntry.SlackDelivery.FAILED, () -> {
+        delivery.settle(() -> {
             if (answerId == null) {
                 return;
             }
@@ -1316,6 +1382,10 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         Instant wakeUpAt;
 
         volatile Owner owner = Owner.UNKNOWN;
+
+        /** The reply's outbox action, once this server owns the reply. */
+        volatile @Nullable UUID action;
+
         volatile MentorTurn.@Nullable Status status;
         volatile @Nullable ReplyStream stream;
 

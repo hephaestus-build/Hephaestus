@@ -28,6 +28,8 @@ import com.slack.api.model.block.LayoutBlock;
 import com.slack.api.model.block.MarkdownBlock;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.ConversationReceiptsDue;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
@@ -46,6 +48,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorPartialUpdates;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
+import de.tum.cit.aet.hephaestus.mentor.MentorSlackReplies;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
@@ -59,7 +62,6 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -91,12 +93,14 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.AopTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
@@ -134,6 +138,15 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private MentorSlackDelivery delivery;
+
+    @Autowired
+    private MentorSlackReplies replies;
+
+    @Autowired
+    private ObjectMapper mapper;
+
+    @Autowired
+    private ActionExecutor executor;
 
     @Autowired
     private MentorEntryRepository entryRepository;
@@ -206,6 +219,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 slack,
                 new SlackMentorPoster(slack, delivery),
                 linkHosts,
+                replies,
+                executor,
                 clock,
                 meters,
                 new OnTheCallersThread(),
@@ -364,6 +379,33 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     private MentorEntry question(MentorTurnService.Submission asked) {
         return entry(asked.question().getId());
+    }
+
+    /** How the reply to a question stands, as its outbox action shows it. */
+    private MentorEntry.@Nullable SlackDelivery delivery(MentorTurnService.Submission asked) {
+        return replies.delivery(
+                workspace.getId(), MentorSlackReplies.replyKey(asked.question().getId()));
+    }
+
+    /**
+     * Runs the due attempt of a turn's reply on another server, as any server's executor does once the server that
+     * streamed it is gone: that server has no stream of its own.
+     */
+    private void reconcile(UUID turnId) {
+        SlackMentorProjector by = projector(new MentorTurnWaits(turnRepository, events, null));
+        String key = MentorSlackReplies.replyKey(
+                turns.question(workspace.getId(), turnId).getId());
+        ActionTestSupport.due(jdbc, key);
+        var beans = new StaticListableBeanFactory(Map.of("projector", by));
+        ActionTestSupport.runLane(
+                executor,
+                jdbc,
+                key,
+                new SlackPostAdapter(
+                        beans.getBeanProvider(SlackMentorProjector.class),
+                        beans.getBeanProvider(SlackWeeklyDigestPointer.class),
+                        replies,
+                        delivery));
     }
 
     private double replies(String state) {
@@ -653,6 +695,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 slack,
                 new SlackMentorPoster(slack, delivery),
                 linkHosts,
+                replies,
+                executor,
                 clock,
                 meters,
                 new OnTheCallersThread(),
@@ -875,7 +919,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         changed(running);
 
         verify(slack).setReaction(workspace.getId(), CHANNEL, "100.1", "eyes", true);
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.PENDING);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.PENDING);
 
         postsAt("200.1");
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you make of the gap?"), "");
@@ -890,7 +934,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                         .endsWith("What do you make of the gap?"));
         verify(slack).setReaction(workspace.getId(), CHANNEL, "100.1", "eyes", false);
         assertThat(answerOf(running).getSlackTs()).isEqualTo("200.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(question(asked).getSlackTs()).isEqualTo("100.1");
         assertThat(feedbackState()).isEqualTo(FeedbackState.DELIVERED);
         assertThat(replies("delivered")).isOne();
@@ -922,13 +966,10 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         end(running, MentorTurn.Status.DONE, "First answer", "");
         if (outcome == MentorEntry.SlackDelivery.DELIVERED) {
             delivery.delivered(
-                    workspace.getId(),
-                    first.question().getId(),
-                    showsAnswer ? answerOf(running).getId() : null,
-                    "200.1");
-        } else {
-            delivery.settle(workspace.getId(), first.question().getId(), outcome);
+                    workspace.getId(), showsAnswer ? answerOf(running).getId() : null, "200.1");
         }
+        transactions.executeWithoutResult(
+                status -> delivery.ended(workspace.getId(), first.question().getId(), outcome));
         assertThat(delivery.slackTurn(workspace.getId(), second.turn().getId())
                         .orElseThrow()
                         .firstAnswer())
@@ -962,7 +1003,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(postedTopLevel())
                 .singleElement()
                 .satisfies(text -> assertThat(text).doesNotContain(FEEDBACK).endsWith(SlackMentorPosts.CUT_NOTE));
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState()).isEqualTo(FeedbackState.FAILED);
     }
 
@@ -992,7 +1033,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(postedTopLevel())
                 .singleElement()
                 .satisfies(text -> assertThat(text).contains("> " + FEEDBACK).endsWith(SlackMentorPosts.CUT_NOTE));
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState())
                 .as("Slack showed the start of its only quote")
                 .isEqualTo(FeedbackState.UNCONFIRMED);
@@ -1037,7 +1078,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(postedTopLevel())
                 .singleElement()
                 .satisfies(text -> assertThat(text).contains("> " + FEEDBACK).endsWith(SlackMentorPosts.CUT_NOTE));
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState())
                 .as("Slack showed one of its quotes whole and cut the other")
                 .isEqualTo(FeedbackState.UNCONFIRMED);
@@ -1075,7 +1116,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                                 false));
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(answer.getSlackTs()).isEqualTo("300.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1100,7 +1141,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         verify(slack).appendStream(workspace.getId(), CHANNEL, "300.1", " are quick.");
         verify(slack, times(1)).stopStream(anyLong(), anyString(), anyString(), any());
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(replies("delivered")).isOne();
     }
 
@@ -1116,8 +1157,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         stopStreamFails("message_not_in_streaming_state");
 
-        assertThat(delivery.retry(workspace.getId(), asked.question().getId())).isTrue();
-        projector.reconcile(workspace.getId(), running.getId(), true);
+        reconcile(running.getId());
 
         MentorEntry answer = answerOf(running);
         List<LayoutBlock> replacement = replacement(asked);
@@ -1128,7 +1168,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(replacement)
                 .endsWith(SlackMentorPosts.feedbackButtons(answer.getId()).toArray(LayoutBlock[]::new));
         assertThat(answer.getSlackTs()).isEqualTo("300.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState())
                 .as("the replaced message shows the feedback")
                 .isEqualTo(FeedbackState.DELIVERED);
@@ -1162,7 +1202,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .endsWith(SlackMentorPosts.feedbackButtons(answer.getId()).toArray(LayoutBlock[]::new));
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(answer.getSlackTs()).isEqualTo("300.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState())
                 .as("the replaced message shows the feedback")
                 .isEqualTo(FeedbackState.DELIVERED);
@@ -1192,7 +1232,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(replacement)
                 .endsWith(SlackMentorPosts.feedbackButtons(answer.getId()).toArray(LayoutBlock[]::new));
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState()).isEqualTo(FeedbackState.DELIVERED);
         assertThat(replies("delivered")).isOne();
     }
@@ -1219,7 +1259,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(markdownOf(replacement(asked))).isEqualTo("Your reviews are quick.");
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(answer.getSlackTs()).isEqualTo("300.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1250,7 +1290,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         verify(slack).updateMessage(eq(workspace.getId()), eq(CHANNEL), eq(opened), anyList(), anyString(), any());
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(question(asked).getSlackStreamTs()).isEqualTo(opened);
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1274,7 +1314,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         verify(slack, never()).stopStream(anyLong(), anyString(), anyString(), any());
         verify(slack).postMessage(eq(workspace.getId()), eq(CHANNEL), eq("100.1"), anyList(), anyString(), any());
         assertThat(answerOf(running).getSlackTs()).isEqualTo("400.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1304,7 +1344,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                                 SlackMentorPosts.metadata(asked.question().getId()),
                                 false));
         assertThat(markdownOf(replacement(asked))).isEqualTo("Let me look again. Your reviews are quick.");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1326,7 +1366,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         verify(slack, never()).appendStream(anyLong(), anyString(), anyString(), anyString());
         assertThat(markdownOf(replacement(asked))).isEqualTo("Let me look again.");
         assertThat(answerOf(running).getSlackTs()).isEqualTo("300.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1386,7 +1426,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .endsWith(SlackMentorPosts.feedbackButtons(answer.getId()).toArray(LayoutBlock[]::new));
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(answer.getSlackTs()).isEqualTo("300.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1406,16 +1446,15 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
         changed(running);
 
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
         assertThat(question(asked).getSlackStreamTs()).isNull();
         when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(CHANNEL), eq("100.1"), anyString(), any()))
                 .thenReturn(new SlackMessageService.Matches(List.of("400.1"), false));
-        assertThat(delivery.retry(workspace.getId(), asked.question().getId())).isTrue();
-        projector.reconcile(workspace.getId(), running.getId(), true);
+        reconcile(running.getId());
 
         verify(slack, never()).stopStream(anyLong(), anyString(), anyString(), any());
         assertThat(answerOf(running).getSlackTs()).isEqualTo("400.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1478,7 +1517,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         ArgumentCaptor<String> appended = ArgumentCaptor.forClass(String.class);
         verify(slack).appendStream(eq(workspace.getId()), eq(CHANNEL), eq("300.1"), appended.capture());
         assertThat(appended.getValue()).contains(FEEDBACK).endsWith("What do you make of the gap?");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState()).isEqualTo(FeedbackState.DELIVERED);
     }
 
@@ -1540,9 +1579,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         end(running, outcome, answer, outcome == MentorTurn.Status.FAILED ? "Hephaestus could not finish." : "");
         if (path.equals("DISCONNECTED")) {
             when(slack.isConnected(workspace.getId())).thenReturn(false);
-            assertThat(delivery.retry(workspace.getId(), asked.question().getId()))
-                    .isTrue();
-            projector.reconcile(workspace.getId(), running.getId(), true);
+            reconcile(running.getId());
         } else {
             if (path.equals("SILENCED")) {
                 stopStreamFails("silent_mode_engaged");
@@ -1589,7 +1626,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .isEqualTo(MentorTurn.Status.STOPPED);
         assertThat(turns.require(workspace.getId(), followUp.turn().getId()).getStatus())
                 .isEqualTo(MentorTurn.Status.QUEUED);
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.PENDING);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.PENDING);
         end(running, MentorTurn.Status.STOPPED, answer, "");
         changed(running);
         changed(running);
@@ -1619,7 +1656,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         assertThat(sessionCalls).containsExactly("status:processing", "stop:300.1:active", "status:active");
         verify(slack).setSessionStatus(workspace.getId(), CHANNEL, "100.1", true);
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1665,7 +1702,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(sessionCalls)
                 .containsExactly(
                         "status:processing", "status:processing", "stop:300.1:processing", "status:processing");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     /**
@@ -1720,7 +1757,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         assertThat(sessionCalls.subList(0, 2)).containsExactly("status:processing", "stop:300.1:active");
         assertThat(sessionCalls.subList(2, sessionCalls.size())).isNotEmpty().containsOnly("status:processing");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     /** The developer's identity as the person-data write fence and an erasure name it. */
@@ -1878,7 +1915,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         verify(slack, never()).setSessionStatus(anyLong(), anyString(), anyString(), anyBoolean());
         verify(slack, never()).stopStream(anyLong(), anyString(), anyString(), any());
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1910,7 +1947,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                                 SlackMentorPosts.metadata(asked.question().getId()),
                                 false));
         assertThat(answer.getSlackTs()).isEqualTo("300.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1934,7 +1971,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(answerOf(running).getSlackTs()).isEqualTo("300.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState()).isEqualTo(FeedbackState.FAILED);
     }
 
@@ -1958,7 +1995,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         verify(slack).setReaction(workspace.getId(), CHANNEL, "100.5", SlackMentorPosts.WORKING_EMOJI, false);
         assertThat(answerOf(running).getSlackTs()).isEqualTo("300.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
     }
 
     @Test
@@ -1974,13 +2011,12 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         changed(running);
 
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
         assertThat(feedbackState()).isEqualTo(FeedbackState.UNCONFIRMED);
         assertThat(replies("uncertain")).isOne();
 
         doNothing().when(slack).stopStream(anyLong(), anyString(), anyString(), any());
-        assertThat(delivery.retry(workspace.getId(), asked.question().getId())).isTrue();
-        projector.reconcile(workspace.getId(), running.getId(), true);
+        reconcile(running.getId());
 
         MentorEntry answer = answerOf(running);
         verify(slack)
@@ -1996,7 +2032,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         verify(slack, never()).updateMessage(anyLong(), anyString(), anyString(), anyList(), anyString(), any());
         assertThat(answer.getSlackTs()).isEqualTo("300.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState())
                 .as("what the stream showed is unknown to the reconciler")
                 .isEqualTo(FeedbackState.UNCONFIRMED);
@@ -2019,7 +2055,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         changed(running);
 
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.FAILED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.FAILED);
         assertThat(feedbackState())
                 .as("the stream showed the feedback before Silent Mode refused its end")
                 .isEqualTo(FeedbackState.DELIVERED);
@@ -2109,7 +2145,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                         anyList(),
                         eq("Hephaestus took too long to reply and stopped. Try again."),
                         eq(SlackMentorPosts.metadata(asked.question().getId())));
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(question(asked).getSlackTs()).isEqualTo("100.1");
         assertThat(feedbackState()).isEqualTo(FeedbackState.UNCONFIRMED);
     }
@@ -2126,7 +2162,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         verify(slack).setReaction(workspace.getId(), CHANNEL, "100.1", "eyes", false);
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.FAILED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.FAILED);
         assertThat(meters.find("mentor.slack.reply").counters()).isEmpty();
     }
 
@@ -2140,12 +2176,12 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         changed(running);
 
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.FAILED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.FAILED);
         assertThat(feedbackState()).isEqualTo(FeedbackState.FAILED);
     }
 
     @Test
-    void shouldLeaveThePostUncertainForTheReconcilerWhenSlackDoesNotAnswer() {
+    void shouldLeaveThePostToReadBackWhenSlackDoesNotAnswer() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
         MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         changed(running);
@@ -2154,64 +2190,12 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         changed(running);
 
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
         assertThat(feedbackState()).isEqualTo(FeedbackState.UNCONFIRMED);
-        Instant later = Instant.now().plus(SlackMentorReconciler.GRACE).plusSeconds(60);
-        assertThat(delivery.due(
-                        later.minus(Duration.ofHours(1)),
-                        later,
-                        SlackMentorReconciler.GRACE,
-                        SlackMentorReconciler.MAX_ATTEMPTS,
-                        5,
-                        1_000))
-                .contains(new MentorSlackDelivery.Unsettled(
-                        workspace.getId(), asked.question().getId(), running.getId(), true));
     }
 
     @Test
-    void shouldTakeAnUnsettledReplyOnceAndLeaveItUncertainWhenTheReconcilerCouldNotDecide() {
-        MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
-        changed(running); // claimed and reacted, then the server died
-        end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
-        UUID questionId = asked.question().getId();
-        MentorSlackDelivery.Unsettled unsettled =
-                new MentorSlackDelivery.Unsettled(workspace.getId(), questionId, running.getId(), true);
-        Duration delay = Duration.ofMinutes(2);
-        Instant ended = Objects.requireNonNull(running(asked).getFinishedAt());
-
-        assertThat(delivery.due(ended.minusSeconds(1), ended.plus(delay).plusSeconds(1), delay, 1, 5, 1_000))
-                .contains(unsettled);
-        assertThat(delivery.retry(workspace.getId(), questionId)).isTrue();
-        assertThat(delivery.due(ended.minusSeconds(1), ended.plus(Duration.ofDays(1)), delay, 1, 5, 1_000))
-                .as("one history read decides, or nothing does")
-                .doesNotContain(unsettled);
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
-    }
-
-    @Test
-    void shouldTakeAtMostItsShareFromOneWorkspaceWhenManyRepliesAreUnsettled() {
-        List<UUID> questions = new ArrayList<>();
-        for (String ts : List.of("100.1", "100.2", "100.3")) {
-            MentorTurnService.Submission asked = ask(main, "Question " + ts, ts);
-            MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
-            end(running, MentorTurn.Status.DONE, "Answer " + ts, "");
-            questions.add(asked.question().getId());
-        }
-        Instant later = Instant.now().plus(Duration.ofMinutes(10));
-
-        List<MentorSlackDelivery.Unsettled> due =
-                delivery.due(later.minus(Duration.ofHours(1)), later, Duration.ofMinutes(2), 8, 2, 1_000);
-
-        assertThat(due)
-                .filteredOn(unsettled -> questions.contains(unsettled.entryId()))
-                .extracting(MentorSlackDelivery.Unsettled::entryId)
-                .hasSize(2)
-                .containsExactly(questions.get(0), questions.get(1));
-    }
-
-    @Test
-    void shouldSettleAnUncertainPostFromTheSlackHistoryWhenTheReconcilerFindsIt() {
+    void shouldSettleAnUncertainPostFromTheSlackHistoryWhenAnotherServerFindsIt() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
         MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         changed(running); // claimed and reacted, then the server died
@@ -2219,12 +2203,12 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(CHANNEL), isNull(), eq("100.1"), any()))
                 .thenReturn(new SlackMessageService.Matches(List.of("200.9"), false));
 
-        assertThat(delivery.retry(workspace.getId(), asked.question().getId())).isTrue();
-        projector.reconcile(workspace.getId(), running.getId(), true);
+        ownerDiedWhilePosting(asked);
+        reconcile(running.getId());
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(answerOf(running).getSlackTs()).isEqualTo("200.9");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState()).isEqualTo(FeedbackState.DELIVERED);
     }
 
@@ -2237,11 +2221,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any()))
                 .thenReturn(new SlackMessageService.Matches(List.of(), false));
 
-        delivery.retry(workspace.getId(), asked.question().getId());
-        projector.reconcile(workspace.getId(), running.getId(), true);
+        ownerDiedWhilePosting(asked);
+        reconcile(running.getId());
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(question(asked).getSlackDelivery())
+        assertThat(delivery(asked))
                 .as("the app shows the answer as not delivered to Slack")
                 .isEqualTo(MentorEntry.SlackDelivery.FAILED);
         assertThat(feedbackState()).isEqualTo(FeedbackState.FAILED);
@@ -2255,11 +2239,10 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         when(slack.isConnected(workspace.getId())).thenReturn(false);
 
-        delivery.retry(workspace.getId(), asked.question().getId());
-        projector.reconcile(workspace.getId(), running.getId(), true);
+        reconcile(running.getId());
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(question(asked).getSlackDelivery())
+        assertThat(delivery(asked))
                 .as("the app shows the answer as not delivered to Slack")
                 .isEqualTo(MentorEntry.SlackDelivery.FAILED);
         assertThat(feedbackState())
@@ -2279,11 +2262,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any()))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "ratelimited"));
 
-        delivery.retry(workspace.getId(), asked.question().getId());
-        projector.reconcile(workspace.getId(), running.getId(), true);
+        ownerDiedWhilePosting(asked);
+        reconcile(running.getId());
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
         assertThat(feedbackState()).isEqualTo(FeedbackState.UNCONFIRMED);
         assertThat(copySettled())
                 .as("the receipt records the unconfirmed answer")
@@ -2298,13 +2281,12 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         postsAt("201.1");
 
-        assertThat(delivery.claim(workspace.getId(), asked.question().getId())).isTrue();
-        projector.reconcile(workspace.getId(), running.getId(), false);
+        reconcile(running.getId());
 
         verify(slack, never()).readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any());
         verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(answerOf(running).getSlackTs()).isEqualTo("201.1");
-        assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(feedbackState()).isEqualTo(FeedbackState.DELIVERED);
     }
 
@@ -2337,11 +2319,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any()))
                 .thenReturn(new SlackMessageService.Matches(List.of(), true));
 
-        delivery.retry(workspace.getId(), asked.question().getId());
-        projector.reconcile(workspace.getId(), running.getId(), true);
+        ownerDiedWhilePosting(asked);
+        reconcile(running.getId());
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(question(asked).getSlackDelivery())
+        assertThat(delivery(asked))
                 .as("a page without the answer does not prove that Slack does not hold it")
                 .isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
         assertThat(feedbackState()).isEqualTo(FeedbackState.UNCONFIRMED);
@@ -2351,46 +2333,80 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    void shouldNeverSendAReplyAgainWhenAServerClaimsItBetweenTheReconcilerSelectionAndItsTake() {
+    void shouldSendAReplyThatNoServerOwnedAtOnceWhenAServerSeesItsTurnEnd() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
         MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
-        // No server projected the turn yet: the question is not taken.
-        end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
-        UUID questionId = asked.question().getId();
-        Instant now = Instant.now().plus(Duration.ofMinutes(5));
-        MentorSlackDelivery.Unsettled untaken =
-                new MentorSlackDelivery.Unsettled(workspace.getId(), questionId, running.getId(), false);
-        List<MentorSlackDelivery.Unsettled> selected = delivery
-                .due(
-                        now.minus(SlackMentorReconciler.HORIZON),
-                        now,
-                        SlackMentorReconciler.GRACE,
-                        SlackMentorReconciler.MAX_ATTEMPTS,
-                        5,
-                        1_000)
-                .stream()
-                .filter(untaken::equals)
-                .toList();
-        assertThat(selected).containsExactly(untaken);
-        MentorSlackDelivery interleaved = mock(MentorSlackDelivery.class);
-        when(interleaved.due(any(), any(), any(), anyInt(), anyInt(), anyInt())).thenAnswer(call -> {
-            // A delayed projector claims the reply after the reconciler selected it as untaken.
-            assertThat(delivery.claim(workspace.getId(), questionId)).isTrue();
-            return selected;
-        });
-        when(interleaved.claim(workspace.getId(), questionId))
-                .thenAnswer(call -> delivery.claim(workspace.getId(), questionId));
-        when(interleaved.retry(workspace.getId(), questionId))
-                .thenAnswer(call -> delivery.retry(workspace.getId(), questionId));
+        // No server saw the turn run.
+        end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         postsAt("201.1");
 
-        new SlackMentorReconciler(
-                        interleaved, projector, mock(SlackWeeklyDigestPointer.class), Clock.fixed(now, ZoneOffset.UTC))
-                .reconcile();
+        changed(running);
+
+        verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(question(asked).getSlackDelivery())
+                .as("the question keeps how its reply ended")
+                .isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+    }
+
+    @Test
+    void shouldPostATopLevelReplyWhoseServerDiedBeforeItsTurnEnded() {
+        MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        changed(running); // took the reply, then the server died: a top-level reply was not posted yet
+        end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
+        postsAt("201.1");
+
+        reconcile(running.getId());
+
+        verify(slack, never()).readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any());
+        verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+    }
+
+    @Test
+    void shouldNotPostWhenAnotherServerTookTheReplyBeforeItsOwner() {
+        MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        changed(running);
+        end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
+        String key = MentorSlackReplies.replyKey(asked.question().getId());
+        ActionTestSupport.due(jdbc, key);
+        assertThat(ActionTestSupport.claimLane(jdbc, mapper, key))
+                .as("another server's executor")
+                .isPresent();
+        postsAt("201.1");
+
+        changed(running);
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(question(asked).getSlackDelivery())
-                .as("the server that claimed the reply still owns it")
-                .isEqualTo(MentorEntry.SlackDelivery.PENDING);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.PENDING);
+    }
+
+    @Test
+    void shouldLeaveNothingForAnotherServerOnceTheOwnerPostedTheReply() {
+        MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        changed(running);
+        end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
+        postsAt("201.1");
+        changed(running);
+
+        reconcile(running.getId());
+
+        verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+    }
+
+    /** The owner's attempt started to post and then its server died: Slack may hold the post. */
+    private void ownerDiedWhilePosting(MentorTurnService.Submission asked) {
+        String key = MentorSlackReplies.replyKey(asked.question().getId());
+        ActionTestSupport.due(jdbc, key);
+        assertThat(ActionTestSupport.claimLane(jdbc, mapper, key)
+                        .orElseThrow()
+                        .fence()
+                        .beginWrite())
+                .isTrue();
+        ActionTestSupport.expireLease(jdbc, key);
     }
 }

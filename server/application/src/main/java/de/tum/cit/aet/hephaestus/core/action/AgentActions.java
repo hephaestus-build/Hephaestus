@@ -1,12 +1,15 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import java.time.Duration;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
 
 /** Enqueues effects on the outside world. The executor carries them out after the caller's transaction commits. */
 @Service
@@ -22,6 +25,33 @@ public class AgentActions {
     @Transactional
     public UUID enqueue(ActionRequest request) {
         return store.enqueue(request);
+    }
+
+    /**
+     * Enqueues an action that is due only after {@code delay}, so that the caller that creates it can carry it out
+     * first ({@link ActionExecutor#runNow(UUID, ActionAdapter)}). Empty when the key was already enqueued: then another caller owns it.
+     */
+    @Transactional
+    public Optional<UUID> enqueueNew(ActionRequest request, Duration delay) {
+        return store.insert(request, delay);
+    }
+
+    /** Makes a waiting action due within {@code delay}, in the caller's transaction. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void advance(long workspaceId, String idempotencyKey, Duration delay) {
+        store.advance(workspaceId, idempotencyKey, delay);
+    }
+
+    /** The payload of an action that waits under {@code idempotencyKey}, before any attempt takes it. */
+    @Transactional(readOnly = true)
+    public Optional<JsonNode> admittedPayload(long workspaceId, String idempotencyKey) {
+        return store.admittedPayload(workspaceId, idempotencyKey);
+    }
+
+    /** The actions of a workspace under these keys, by key. */
+    @Transactional(readOnly = true)
+    public Map<String, LaneAction> byKeys(long workspaceId, Collection<String> idempotencyKeys) {
+        return store.byKeys(workspaceId, idempotencyKeys);
     }
 
     /**

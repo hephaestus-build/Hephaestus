@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794285447786-1" author="hephaestus"><sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_action
+  DROP CONSTRAINT ck_agent_action_kind,
+  ADD CONSTRAINT ck_agent_action_kind
+    CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK','RETRACT_FEEDBACK','SLACK_POST'));
+-- The reply to a Slack turn of the last day that no server settled. A server took one that has a state: Slack may show
+-- it, so it is looked for in the history and never sent again. One that no server took is sent. The reply that a
+-- server took for a turn that still runs waits for the turn's end, which makes it due; the end of a running turn that
+-- nobody took creates its reply then.
+-- A taken reply of an ended turn may already be in Slack, also at the top level: it becomes an attempt whose write
+-- started and whose lease ended, so the next attempt reads the history and never posts it again.
+INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload, subject_account_id,
+  attempts, max_attempts, lease_epoch, leased_until, write_started_at, next_attempt_at, created_at, updated_at)
+SELECT uuidv7(), e.workspace_id, 'SLACK_POST', 'slack_reply:' || e.id, 'slack_reply:' || e.id,
+       CASE WHEN r.fenced THEN 'EXECUTING' ELSE 'ADMITTED' END,
+       jsonb_build_object('entryId', e.id, 'turnId', e.turn_id, 'taken', e.slack_delivery IS NOT NULL),
+       c.account_id, CASE WHEN r.fenced THEN 1 ELSE 0 END, 3, CASE WHEN r.fenced THEN 1 ELSE 0 END,
+       CASE WHEN r.fenced THEN clock_timestamp() END, CASE WHEN r.fenced THEN clock_timestamp() END,
+       CASE WHEN r.ended THEN clock_timestamp() ELSE clock_timestamp() + interval '1 day' END,
+       clock_timestamp(), clock_timestamp()
+  FROM mentor_entry e
+  JOIN mentor_turn t ON t.id = e.turn_id AND t.workspace_id = e.workspace_id
+  JOIN mentor_conversation c ON c.id = e.conversation_id AND c.workspace_id = e.workspace_id
+  CROSS JOIN LATERAL (SELECT t.status IN ('DONE', 'FAILED', 'STOPPED') AND t.leased_until IS NULL AS ended) d
+  CROSS JOIN LATERAL (SELECT d.ended, d.ended AND e.slack_delivery IS NOT NULL AS fenced) r
+ WHERE e.kind = 'USER' AND e.surface = 'SLACK'
+   AND (e.slack_delivery IS NULL OR e.slack_delivery IN ('PENDING', 'UNCERTAIN'))
+   AND ((t.status IN ('DONE', 'FAILED', 'STOPPED') AND t.finished_at >= clock_timestamp() - interval '1 day')
+     OR (t.status NOT IN ('DONE', 'FAILED', 'STOPPED') AND e.slack_delivery IS NOT NULL));
+-- A weekly digest's note that a server took and did not settle: looked for in the history, never sent again.
+INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload, subject_account_id,
+  attempts, max_attempts, lease_epoch, leased_until, write_started_at, next_attempt_at, created_at, updated_at)
+SELECT uuidv7(), e.workspace_id, 'SLACK_POST', 'slack_digest:' || e.id, 'slack_digest:' || e.id, 'EXECUTING',
+       jsonb_build_object('entryId', e.id, 'turnId', NULL, 'taken', TRUE), c.account_id, 1, 3, 1,
+       clock_timestamp(), clock_timestamp(), clock_timestamp(), clock_timestamp(), clock_timestamp()
+  FROM mentor_entry e
+  JOIN mentor_conversation c ON c.id = e.conversation_id AND c.workspace_id = e.workspace_id
+ WHERE e.kind = 'DIGEST' AND e.redacted_at IS NULL AND e.slack_delivery IN ('PENDING', 'UNCERTAIN')
+   AND e.created_at >= clock_timestamp() - interval '1 day';
+-- The entry keeps only how its post ended: a post that the outbox now carries has no outcome yet. An older
+-- unsettled post keeps its last state.
+UPDATE mentor_entry e SET slack_delivery = NULL
+ WHERE e.slack_delivery IN ('PENDING', 'UNCERTAIN')
+   AND EXISTS (SELECT 1 FROM agent_action a WHERE a.workspace_id = e.workspace_id
+                 AND a.idempotency_key IN ('slack_reply:' || e.id, 'slack_digest:' || e.id));
+DROP INDEX ix_mentor_entry_digest_unsettled;
+DROP INDEX ix_mentor_entry_slack_question_unsettled;
+ALTER TABLE mentor_entry DROP COLUMN slack_attempts;
+]]></sql></changeSet>
+</databaseChangeLog>

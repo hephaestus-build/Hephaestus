@@ -19,6 +19,8 @@ import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestPointer;
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestWritten;
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -33,26 +35,28 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntryDraft;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
+import de.tum.cit.aet.hephaestus.mentor.MentorSlackReplies;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestWindow;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
-import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /** The Slack note that a weekly digest is ready: one top-level DM message, sent once, with no contents. */
@@ -75,6 +79,15 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
 
     @Autowired
     private MentorSlackDelivery delivery;
+
+    @Autowired
+    private MentorSlackReplies replies;
+
+    @Autowired
+    private ActionExecutor executor;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Autowired
     private WeeklyDigestNotes notes;
@@ -119,7 +132,46 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 notes,
                 subscriptions,
                 workspaces,
-                new SlackHephaestusUiLinks("https://hephaestus.example", new WorkspaceSubdomainProperties(false, "")));
+                new SlackHephaestusUiLinks("https://hephaestus.example", new WorkspaceSubdomainProperties(false, "")),
+                replies,
+                executor);
+    }
+
+    /** How a digest's note stands, as its outbox action shows it. */
+    private MentorEntry.@Nullable SlackDelivery noteDelivery(MentorEntry digest) {
+        return replies.delivery(workspace.getId(), MentorSlackReplies.digestKey(digest.getId()));
+    }
+
+    /** A note that a server took and did not settle: Slack may show it already. */
+    private void taken(MentorEntry digest) {
+        jdbc.update(
+                """
+                INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload,
+                  subject_account_id, max_attempts, next_attempt_at, created_at, updated_at)
+                VALUES (uuidv7(), ?, 'SLACK_POST', ?, ?, 'ADMITTED',
+                  jsonb_build_object('entryId', ?::text, 'turnId', NULL, 'taken', TRUE), ?, 3, now(), now(), now())
+                """,
+                workspace.getId(),
+                MentorSlackReplies.digestKey(digest.getId()),
+                MentorSlackReplies.digestKey(digest.getId()),
+                digest.getId().toString(),
+                accountId);
+    }
+
+    /** Runs the note's due attempt on a server that did not write it, as any server's executor does. */
+    private void settle(MentorEntry digest) {
+        String key = MentorSlackReplies.digestKey(digest.getId());
+        ActionTestSupport.due(jdbc, key);
+        var beans = new StaticListableBeanFactory(Map.of("pointer", pointer));
+        ActionTestSupport.runLane(
+                executor,
+                jdbc,
+                key,
+                new SlackPostAdapter(
+                        beans.getBeanProvider(SlackMentorProjector.class),
+                        beans.getBeanProvider(SlackWeeklyDigestPointer.class),
+                        replies,
+                        delivery));
     }
 
     @Test
@@ -148,7 +200,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 .doesNotContainPattern("\\d+ (pieces|piece) of feedback");
 
         MentorEntry posted = entryRepository.findById(digest.getId()).orElseThrow();
-        assertThat(posted.getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(noteDelivery(digest)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(posted.getSlackTs()).isEqualTo("300.1");
         MentorConversation bound = conversations.require(workspace.getId(), main.getId());
         assertThat(bound.getSlackChannelId()).isEqualTo(DM);
@@ -168,8 +220,9 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
         pointer.on(written(digest, WeeklyDigestPointer.SLACK));
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(entryRepository.findById(digest.getId()).orElseThrow().getSlackDelivery())
-                .isNull();
+        assertThat(noteDelivery(digest))
+                .as("the note was withdrawn before it was posted")
+                .isEqualTo(MentorEntry.SlackDelivery.FAILED);
     }
 
     @Test
@@ -180,38 +233,26 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
     }
 
     @Test
-    void shouldFindTheNoteInTheDmInsteadOfPostingItAgainWhenTheReconcilerSettlesIt() {
+    void shouldFindTheNoteInTheDmInsteadOfPostingItAgainWhenAnotherServerSettlesIt() {
         conversations.bindSlackIdentity(workspace.getId(), main.getId(), TEAM, SLACK_USER, DM);
         MentorEntry digest = digest();
-        delivery.claim(workspace.getId(), digest.getId());
+        taken(digest);
         when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(DM), isNull(), anyString(), any()))
                 .thenReturn(new SlackMessageService.Matches(List.of("300.5"), false));
-        SlackMentorReconciler reconciler = new SlackMentorReconciler(
-                delivery,
-                mock(SlackMentorProjector.class),
-                pointer,
-                Clock.fixed(Instant.now().plus(Duration.ofMinutes(5)), ZoneOffset.UTC));
-
-        reconciler.reconcile();
+        settle(digest);
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         MentorEntry settled = entryRepository.findById(digest.getId()).orElseThrow();
-        assertThat(settled.getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(noteDelivery(digest)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(settled.getSlackTs()).isEqualTo("300.5");
     }
 
     @Test
-    void shouldPostNothingWhenTheReconcilerSettlesANoteTheAccountTurnedOffSince() {
+    void shouldPostNothingWhenAnotherServerSettlesANoteTheAccountTurnedOffSince() {
         MentorEntry digest = digest();
-        delivery.claim(workspace.getId(), digest.getId());
+        taken(digest);
         when(subscriptions.enabledSince(accountId)).thenReturn(Optional.empty());
-        SlackMentorReconciler reconciler = new SlackMentorReconciler(
-                delivery,
-                mock(SlackMentorProjector.class),
-                pointer,
-                Clock.fixed(Instant.now().plus(Duration.ofMinutes(5)), ZoneOffset.UTC));
-
-        reconciler.reconcile();
+        settle(digest);
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(entryRepository.findById(digest.getId()).orElseThrow().getSlackTs())
@@ -219,48 +260,44 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
     }
 
     @Test
-    void shouldNeverPostTheNoteAgainWhenTheReconcilerCannotReadAnUnknownDm() {
+    void shouldNeverPostTheNoteAgainWhenNoServerCanReadAnUnknownDm() {
         MentorEntry digest = digest();
-        delivery.claim(workspace.getId(), digest.getId());
-        delivery.retry(workspace.getId(), digest.getId());
+        taken(digest);
 
-        pointer.reconcile(workspace.getId(), digest.getId());
+        settle(digest);
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         verify(slack, never()).readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any());
-        assertThat(entryRepository.findById(digest.getId()).orElseThrow().getSlackDelivery())
-                .isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
+        assertThat(noteDelivery(digest)).isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
     }
 
     @Test
     void shouldFailTheNoteAndNeverPostItAgainWhenTheDmHistoryDoesNotHoldIt() {
         conversations.bindSlackIdentity(workspace.getId(), main.getId(), TEAM, SLACK_USER, DM);
         MentorEntry digest = digest();
-        delivery.claim(workspace.getId(), digest.getId());
+        taken(digest);
         when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(DM), isNull(), anyString(), any()))
                 .thenReturn(new SlackMessageService.Matches(List.of(), false));
 
-        pointer.reconcile(workspace.getId(), digest.getId());
+        settle(digest);
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(entryRepository.findById(digest.getId()).orElseThrow().getSlackDelivery())
-                .isEqualTo(MentorEntry.SlackDelivery.FAILED);
+        assertThat(noteDelivery(digest)).isEqualTo(MentorEntry.SlackDelivery.FAILED);
     }
 
     @Test
     void shouldLeaveTheNoteUncertainWhenTheDmHistoryHoldsMoreThanThePageWithoutIt() {
         conversations.bindSlackIdentity(workspace.getId(), main.getId(), TEAM, SLACK_USER, DM);
         MentorEntry digest = digest();
-        delivery.claim(workspace.getId(), digest.getId());
-        delivery.retry(workspace.getId(), digest.getId());
+        taken(digest);
         // The developer wrote more messages after the note than one page holds.
         when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(DM), isNull(), anyString(), any()))
                 .thenReturn(new SlackMessageService.Matches(List.of(), true));
 
-        pointer.reconcile(workspace.getId(), digest.getId());
+        settle(digest);
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(entryRepository.findById(digest.getId()).orElseThrow().getSlackDelivery())
+        assertThat(noteDelivery(digest))
                 .as("a page without the note does not prove that Slack does not hold it")
                 .isEqualTo(MentorEntry.SlackDelivery.UNCERTAIN);
     }

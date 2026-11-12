@@ -1,13 +1,14 @@
 package de.tum.cit.aet.hephaestus.integration.slack.mentor;
 
 import com.slack.api.model.block.LayoutBlock;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
+import de.tum.cit.aet.hephaestus.mentor.MentorSlackReplies;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -17,9 +18,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Posts one Slack message for a ledger entry as intent, effect and outcome ({@link MentorSlackDelivery}), tagged with
- * {@link SlackMentorPosts#metadata}. A rate limit past the retry budget means that Slack stored nothing, because every
- * try got a 429, but it still leaves the entry {@code UNCERTAIN}: the conservative choice.
+ * Posts one Slack message for a ledger entry, tagged with {@link SlackMentorPosts#metadata}, inside the outbox attempt
+ * that carries it out ({@link MentorSlackReplies}). A rate limit past the retry budget means that Slack stored nothing, because every
+ * try got a 429, but it still leaves the post unknown: the conservative choice.
  */
 @Component
 @ConditionalOnServerRole
@@ -87,15 +88,17 @@ public class SlackMentorPoster {
         }
     }
 
-    /** Takes the intent and posts; empty when another caller took it first. */
-    public Optional<Result> post(long workspaceId, UUID entryId, Post post) {
-        if (!delivery.claim(workspaceId, entryId)) {
-            return Optional.empty();
-        }
-        return Optional.of(send(workspaceId, entryId, post));
+    /** What an outbox attempt ({@link MentorSlackReplies}) makes of an outcome. */
+    static ActionResult result(Outcome outcome) {
+        return switch (outcome) {
+            case DELIVERED -> new ActionResult.Done(null);
+            case SILENCED -> new ActionResult.Cancelled(ActionStopReason.SILENCED);
+            case FAILED -> new ActionResult.Failed(ActionStopReason.REJECTED);
+            case UNKNOWN -> new ActionResult.Reread(MentorSlackReplies.REREAD);
+        };
     }
 
-    /** Posts for an entry whose intent the caller already holds. */
+    /** Posts for an entry whose outbox attempt the caller carries out. */
     public Result send(long workspaceId, UUID entryId, Post post) {
         return send(workspaceId, entryId, post, Receipts.NONE);
     }
@@ -110,8 +113,7 @@ public class SlackMentorPoster {
                     post.blocks(),
                     post.text(),
                     SlackMentorPosts.metadata(entryId));
-            delivery.delivered(
-                    workspaceId, entryId, post.shows(), posted.ts(), () -> receipts.record(Outcome.DELIVERED));
+            delivery.delivered(workspaceId, post.shows(), posted.ts(), () -> receipts.record(Outcome.DELIVERED));
             return new Result(Outcome.DELIVERED, posted.channelId());
         } catch (SlackSendException e) {
             return failed(workspaceId, entryId, e, receipts);
@@ -148,11 +150,7 @@ public class SlackMentorPoster {
         }
         if (!matches.ts().isEmpty()) {
             delivery.delivered(
-                    workspaceId,
-                    entryId,
-                    post.shows(),
-                    matches.ts().getFirst(),
-                    () -> receipts.record(Outcome.DELIVERED));
+                    workspaceId, post.shows(), matches.ts().getFirst(), () -> receipts.record(Outcome.DELIVERED));
             return new Result(Outcome.DELIVERED, post.channelId());
         }
         if (matches.more()) {
@@ -162,7 +160,7 @@ public class SlackMentorPoster {
                     entryId);
             return Result.of(Outcome.UNKNOWN);
         }
-        delivery.settle(workspaceId, entryId, MentorEntry.SlackDelivery.FAILED, () -> receipts.record(Outcome.FAILED));
+        delivery.settle(() -> receipts.record(Outcome.FAILED));
         log.warn("Hephaestus Slack post is not in the Slack history: workspaceId={}, entryId={}", workspaceId, entryId);
         return Result.of(Outcome.FAILED);
     }
@@ -174,12 +172,10 @@ public class SlackMentorPoster {
 
     private Result failed(long workspaceId, UUID entryId, SlackSendException e, Receipts receipts) {
         if (SILENT_MODE.equals(e.slackError())) {
-            delivery.settle(
-                    workspaceId, entryId, MentorEntry.SlackDelivery.FAILED, () -> receipts.record(Outcome.SILENCED));
+            delivery.settle(() -> receipts.record(Outcome.SILENCED));
             return Result.of(Outcome.SILENCED);
         }
         if (leavesEffectUnknown(e)) {
-            delivery.markUncertain(workspaceId, entryId);
             log.warn(
                     "Hephaestus Slack post outcome unknown: workspaceId={}, entryId={}, error={}",
                     workspaceId,
@@ -187,7 +183,7 @@ public class SlackMentorPoster {
                     e.slackError());
             return Result.of(Outcome.UNKNOWN);
         }
-        delivery.settle(workspaceId, entryId, MentorEntry.SlackDelivery.FAILED, () -> receipts.record(Outcome.FAILED));
+        delivery.settle(() -> receipts.record(Outcome.FAILED));
         log.warn(
                 "Hephaestus Slack post failed: workspaceId={}, entryId={}, error={}",
                 workspaceId,

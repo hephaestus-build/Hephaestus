@@ -278,12 +278,12 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
         int messages = 150;
         jdbcTemplate.update("""
                 INSERT INTO mentor_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
-                                          slack_attempts, created_at)
+                                          created_at)
                 SELECT gen_random_uuid(), ?, ?, s, CASE WHEN s < ? THEN 'HEPH' ELSE 'TOOL_RESULT' END, 'APP', 'secret',
                        jsonb_build_object('type', 'message', 'id', 'pi-' || s, 'message',
                            jsonb_build_object('role', 'toolResult', 'toolName', 'fetch_context', 'toolCallId', 'c' || s,
                                'content', jsonb_build_array(jsonb_build_object('type', 'text', 'text', 'secret')))),
-                       0, now()
+                       now()
                 FROM generate_series(?, ?) s
                 """, workspace.getId(), main.getId(), first + messages, first, first + 70_000);
         MentorEntry inThread = entries.append(workspace.getId(), thread.getId(), MentorLedgerFixtures.heph("Secret"));

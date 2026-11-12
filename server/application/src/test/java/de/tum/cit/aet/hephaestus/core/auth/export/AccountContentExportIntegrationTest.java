@@ -152,13 +152,13 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
             INSERT INTO mentor_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
-                                      slack_attempts, created_at, redacted_at)
+                                      created_at, redacted_at)
             VALUES (:id, :ws, :conversation, :seq, :kind, 'APP', :text,
                     jsonb_build_object('type', 'message', 'id', 'pi-' || :id, 'message',
                         jsonb_build_object('role', CASE :kind WHEN 'USER' THEN 'user' WHEN 'HEPH' THEN 'assistant'
                             ELSE 'toolResult' END, 'toolName', 'read', 'toolCallId', 'call-' || :id,
                             'content', jsonb_build_array(jsonb_build_object('type', 'text', 'text', :text)))),
-                    0, :at, :redacted)
+                    :at, :redacted)
             """)
                 .param("id", id)
                 .param("ws", workspaceOf(conversation))

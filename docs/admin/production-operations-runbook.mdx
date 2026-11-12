@@ -599,13 +599,14 @@ Deleting in-app data does not delete a provider comment. If external copies must
    The main conversation's `slack_team_id`, `slack_user_id`, and `slack_channel_id` identify the Slack DM.
 
    One Slack message shows all Hephaestus messages of a turn.
-   The question of the turn records the state of that Slack reply: it is the `mentor_entry` row with the same `turn_id` and the kind `USER`.
+   The question of the turn is the `mentor_entry` row with the same `turn_id` and the kind `USER`.
    Read its `slack_delivery` and `slack_stream_ts`.
+   A reply that has not ended has no `slack_delivery`: read its action in `agent_action`, where `idempotency_key` is `slack_reply:<question id>`.
    Then read `slack_ts` of the last `HEPH` row of the turn.
 
    If `slack_delivery` is `DELIVERED`, that `slack_ts` is the `ts` of the Slack reply.
    A reply in a Slack thread is a stream, and its `ts` is also in `slack_stream_ts`.
-   An `UNCERTAIN` or `PENDING` reply can have a Slack copy without a recorded `slack_ts`.
+   A reply that has not ended, or ended `UNCERTAIN`, can have a Slack copy without a recorded `slack_ts`.
    A `FAILED` reply in a Slack thread can show part of a stream.
    Thus, the ledger query alone cannot establish complete Slack removal.
 

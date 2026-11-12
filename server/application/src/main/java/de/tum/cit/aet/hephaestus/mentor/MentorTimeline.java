@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import de.tum.cit.aet.hephaestus.core.action.LaneAction;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
@@ -62,6 +64,7 @@ public class MentorTimeline {
     private final ResultHistoryQuery results;
     private final FeedbackHistoryQuery feedback;
     private final ObjectMapper objectMapper;
+    private final AgentActions actions;
 
     /** The partial answers of running turns reach this process only while it listens to the ledger. */
     @EventListener(ApplicationReadyEvent.class)
@@ -298,6 +301,13 @@ public class MentorTimeline {
                         .filter(turn -> turn.getWorkspaceId() == workspaceId)
                         .collect(Collectors.toMap(MentorTurn::getId, Function.identity()));
         Map<UUID, WeeklyDigestDTO> digests = digests(conversation, rows);
+        Map<String, LaneAction> replies = actions.byKeys(
+                workspaceId,
+                rows.stream()
+                        .filter(row ->
+                                row.getKind() == MentorEntry.Kind.USER && row.getSurface() == MentorEntry.Surface.SLACK)
+                        .map(row -> MentorSlackReplies.replyKey(row.getId()))
+                        .toList());
         List<MentorEntryDTO> mapped = new ArrayList<>(rows.size());
         for (MentorEntry row : rows) {
             UUID turnId = row.getTurnId();
@@ -307,7 +317,8 @@ public class MentorTimeline {
                     threads.get(row.getId()),
                     links.getOrDefault(row.getId(), List.of()),
                     row.getKind() == MentorEntry.Kind.USER && turnId != null ? questionTurnById.get(turnId) : null,
-                    digests.get(row.getId())));
+                    digests.get(row.getId()),
+                    slackDelivery(row, replies)));
         }
         return mapped;
     }
@@ -412,7 +423,8 @@ public class MentorTimeline {
             @Nullable MentorThreadSummaryDTO thread,
             List<MentorLinkDTO> links,
             @Nullable MentorTurn questionTurn,
-            @Nullable WeeklyDigestDTO digest) {
+            @Nullable WeeklyDigestDTO digest,
+            MentorEntry.@Nullable SlackDelivery slackDelivery) {
         return new MentorEntryDTO(
                 entry.getId(),
                 entry.getConversationId(),
@@ -433,14 +445,21 @@ public class MentorTimeline {
                 questionTurn == null ? null : questionTurn.getError(),
                 entry.getCreatedAt(),
                 entry.getEditedAt(),
-                entry.getKind() == MentorEntry.Kind.USER && entry.getSurface() == MentorEntry.Surface.SLACK
-                        ? entry.getSlackDelivery()
-                        : null,
+                slackDelivery,
                 entry.isRedacted(),
                 entry.getVote(),
                 links,
                 thread,
                 digest);
+    }
+
+    /** How a Slack question's reply stands: its recorded outcome, else its action while it runs. */
+    private static MentorEntry.@Nullable SlackDelivery slackDelivery(MentorEntry row, Map<String, LaneAction> replies) {
+        if (row.getKind() != MentorEntry.Kind.USER || row.getSurface() != MentorEntry.Surface.SLACK) return null;
+        MentorEntry.SlackDelivery ended = row.getSlackDelivery();
+        return ended != null
+                ? ended
+                : MentorSlackReplies.delivery(replies.get(MentorSlackReplies.replyKey(row.getId())));
     }
 
     /** The link tool calls in a Heph message, in order. */

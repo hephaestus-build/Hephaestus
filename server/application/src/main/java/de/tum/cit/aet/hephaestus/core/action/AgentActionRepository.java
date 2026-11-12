@@ -25,6 +25,14 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             a.write_started_at IS NOT NULL AS "writeStarted", a.readback_ref AS "readbackRef"
             """;
 
+    /** An action as its owner reads it ({@link LaneRow}). A reread waits with its next attempt after its last update. */
+    String LANE = """
+            SELECT id AS "id", kind AS "kind", idempotency_key AS "idempotencyKey", state AS "state",
+              attempts AS "attempts",
+              state = 'EXECUTING' AND next_attempt_at > updated_at AS "rereading", next_attempt_at AS "nextAttemptAt",
+              stop_reason AS "stopReason", created_at AS "createdAt", updated_at AS "updatedAt"
+            """;
+
     String ENDED = """
             SELECT id AS "id", workspace_id AS "workspaceId", kind AS "kind", idempotency_key AS "idempotencyKey",
               state AS "state", stop_reason AS "stopReason", readback_ref AS "readbackRef" FROM ended
@@ -77,8 +85,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
               INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload,
                 subject_account_id, max_attempts, next_attempt_at, expires_at, created_at, updated_at)
               VALUES (:id, CAST(:workspaceId AS bigint), :kind, :laneKey, :key, 'ADMITTED', CAST(:payload AS jsonb),
-                CAST(:subject AS bigint), :maxAttempts, clock_timestamp(), CAST(:expiresAt AS timestamptz),
-                clock_timestamp(), clock_timestamp())
+                CAST(:subject AS bigint), :maxAttempts, clock_timestamp() + make_interval(secs => :delay),
+                CAST(:expiresAt AS timestamptz), clock_timestamp(), clock_timestamp())
               ON CONFLICT (idempotency_key) DO NOTHING
               RETURNING id)
             SELECT id FROM inserted
@@ -92,7 +100,38 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             @Param("payload") String payload,
             @Param("subject") @Nullable Long subjectAccountId,
             @Param("maxAttempts") int maxAttempts,
-            @Param("expiresAt") @Nullable Instant expiresAt);
+            @Param("expiresAt") @Nullable Instant expiresAt,
+            @Param("delay") long delaySeconds);
+
+    /** Makes an admitted action due within {@code delay}; an action that is due sooner keeps its time. */
+    @Modifying
+    @Query(value = """
+            UPDATE agent_action
+               SET next_attempt_at = LEAST(next_attempt_at, clock_timestamp() + make_interval(secs => :delay)),
+                   updated_at = clock_timestamp()
+             WHERE workspace_id = :workspaceId AND idempotency_key = :key AND state = 'ADMITTED'
+            """, nativeQuery = true)
+    int advance(@Param("workspaceId") long workspaceId, @Param("key") String key, @Param("delay") long delaySeconds);
+
+    /**
+     * Takes one admitted action under a new lease now, whatever its due time, when it heads its lane: the caller that
+     * owns the effect carries it out at once ({@link ActionExecutor#runNow(UUID, ActionAdapter)}).
+     */
+    @WorkspaceAgnostic("Claims one action by its id")
+    @Query(value = """
+            WITH a AS (
+              UPDATE agent_action c
+                 SET state = 'EXECUTING', lease_epoch = c.lease_epoch + 1, attempts = c.attempts + 1,
+                     leased_until = clock_timestamp() + make_interval(secs => :lease), updated_at = clock_timestamp()
+               WHERE c.id = :id AND c.state = 'ADMITTED'
+                 AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())
+                 AND NOT EXISTS (
+                   SELECT 1 FROM agent_action b
+                    WHERE b.lane_key = c.lane_key AND b.id <> c.id
+                      AND (b.state = 'EXECUTING' OR (b.id < c.id AND b.state IN ('PROPOSED', 'ADMITTED'))))
+              RETURNING c.*)
+            """ + CLAIMED + " FROM a", nativeQuery = true)
+    Optional<ClaimRow> claimById(@Param("id") UUID id, @Param("lease") long leaseSeconds);
 
     @WorkspaceAgnostic("The idempotency key is unique across the instance and names one action")
     @Query(value = "SELECT id FROM agent_action WHERE idempotency_key = :key", nativeQuery = true)
@@ -133,16 +172,24 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
      * The newest action of a lane; its owner reads it under the lock of the lane's domain row. An action that waits for
      * its next readback has its next attempt after its last update ({@link #reread}); a running claim does not.
      */
-    @Query(value = """
-            SELECT id AS "id", kind AS "kind", idempotency_key AS "idempotencyKey", state AS "state",
-              attempts AS "attempts",
-              state = 'EXECUTING' AND next_attempt_at > updated_at AS "rereading", next_attempt_at AS "nextAttemptAt",
-              stop_reason AS "stopReason", created_at AS "createdAt",
-              updated_at AS "updatedAt"
+    @Query(value = LANE + """
               FROM agent_action WHERE workspace_id = :workspaceId AND lane_key = :lane
              ORDER BY created_at DESC, id DESC LIMIT 1
             """, nativeQuery = true)
     Optional<LaneRow> newestInLane(@Param("workspaceId") long workspaceId, @Param("lane") String laneKey);
+
+    /** An admitted action's payload, under its key. */
+    @Query(value = """
+            SELECT payload::text FROM agent_action
+             WHERE workspace_id = :workspaceId AND idempotency_key = :key AND state = 'ADMITTED'
+            """, nativeQuery = true)
+    Optional<String> findAdmittedPayload(@Param("workspaceId") long workspaceId, @Param("key") String key);
+
+    /** The actions of a workspace under these keys. */
+    @Query(value = LANE + """
+              FROM agent_action WHERE workspace_id = :workspaceId AND idempotency_key IN (:keys)
+            """, nativeQuery = true)
+    List<LaneRow> findByKeys(@Param("workspaceId") long workspaceId, @Param("keys") Collection<String> keys);
 
     /** Cancels the lane's actions that have not started; their owner withdrew them. */
     @Modifying

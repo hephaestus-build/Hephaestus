@@ -27,7 +27,13 @@ public enum ActionKind {
     EDIT_FEEDBACK(false, false),
 
     /** Removes or restores the posted copies of one feedback. */
-    RETRACT_FEEDBACK(false, false);
+    RETRACT_FEEDBACK(false, false),
+
+    /**
+     * One Slack message of Hephaestus: the reply to a Slack turn, or a weekly digest's note. Each carries its entry in
+     * its metadata, so an attempt whose post may have reached Slack reads the history first.
+     */
+    SLACK_POST(false, false);
 
     private final boolean atMostOnce;
     private final boolean instanceLevel;
