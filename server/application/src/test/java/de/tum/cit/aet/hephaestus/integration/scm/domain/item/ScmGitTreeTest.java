@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.PinnedParks;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -71,5 +72,22 @@ class ScmGitTreeTest extends BaseUnitTest {
             }
             verify(manager, times(1)).read(eq(key), any());
         }
+    }
+
+    /** Captures run on virtual threads; a Git read under the cache's lock would pin each one that waits for it. */
+    @Test
+    void shouldReadAPinnedTreeWithoutPinningTheVirtualThreadThatAsks() throws Exception {
+        String commit = "a".repeat(40);
+        var key = new RepositoryKey(1, 2);
+        var manager = mock(GitRepositoryManager.class);
+        when(manager.read(eq(key), any())).thenAnswer(read -> {
+            Thread.sleep(50);
+            return List.of();
+        });
+        var tree = new ScmGitTree(manager);
+
+        assertThat(PinnedParks.during(() -> tree.index(key, commit)))
+                .as("pinned parks while the tree was read")
+                .isEmpty();
     }
 }
