@@ -4961,9 +4961,12 @@ await test("the parallel pressure drill waits for the chart's priorities and exc
 		assert.equal(
 			tolerations.some(
 				(toleration) =>
-					(get(toleration, "effect") === undefined || get(toleration, "effect") === "NoSchedule") &&
+					(get(toleration, "effect") === undefined ||
+						get(toleration, "effect") === "" ||
+						get(toleration, "effect") === "NoSchedule") &&
 					(get(toleration, "key") === pressureNodeTaint ||
-						(get(toleration, "key") === undefined && get(toleration, "operator") === "Exists")),
+						((get(toleration, "key") === undefined || get(toleration, "key") === "") &&
+							get(toleration, "operator") === "Exists")),
 			),
 			false,
 			"the pressure node must not admit production role or sandbox Pods",
