@@ -4934,13 +4934,24 @@ await test("the parallel pressure drill waits for the chart's priorities and exc
 	const resources = rendered([
 		...layersFor("dev"),
 		{
-			worker: {
+			sandbox: {
 				enabled: true,
-				sandbox: { namespace: sandboxNamespace, templates: { runtimeClassName: "gvisor" } },
+				namespace: sandboxNamespace,
+				templates: { runtimeClassName: "gvisor" },
 			},
 			networkPolicy: { kubernetesApi },
 		},
 	]);
+	assert.ok(
+		resources.some(
+			(resource) => kindOf(resource) === "Deployment" && nameOf(resource) === "heph-server",
+		),
+	);
+	assert.ok(
+		!resources.some(
+			(resource) => kindOf(resource) === "Deployment" && nameOf(resource) === "heph-worker",
+		),
+	);
 	const priorities = resources.filter((resource) => kindOf(resource) === "PriorityClass");
 	assert.deepEqual(
 		priorities.map((resource) => `priorityclass/${nameOf(resource)}`).toSorted(),
