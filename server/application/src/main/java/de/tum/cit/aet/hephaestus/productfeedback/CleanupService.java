@@ -1,6 +1,11 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionState;
+import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ProductFeedbackAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
@@ -24,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Scrubs the issues of erased reports. A public issue first moves to the private repository when one can take it; then
+ * Scrubs the issues of erased reports, as outbox actions ({@link CleanupIssueAdapter}). A public issue first moves to the private repository when one can take it; then
  * its title and body are replaced and it is closed. The app cannot delete an issue or its edit history, so each scrubbed
  * issue, and each record that has not finished after {@link #MANUAL_AFTER}, becomes a manual step: the admins get an
  * email, Needs action shows the locator, and the record stays until an admin confirms the step.
@@ -36,8 +41,6 @@ class CleanupService {
     private static final Logger log = LoggerFactory.getLogger(CleanupService.class);
     static final String ERASED = "Erased at the reporter's request";
     static final Duration MANUAL_AFTER = Duration.ofDays(30);
-    /** Bounds one sweep; an erasure has one record per filed report, and a later sweep takes the rest. */
-    static final int SWEEP_LIMIT = 50;
 
     private final ProductFeedbackCleanupRepository cleanups;
     private final DestinationSettings destinations;
@@ -77,25 +80,16 @@ class CleanupService {
             @Nullable Long number,
             @Nullable String nodeId,
             boolean publicIssue,
-            Instant since) {}
-
-    /** A claimed record: work on its job, or nothing left to do when it went to a maintainer at the claim. */
-    private record Claimed(@Nullable Job job) {}
+            Instant since,
+            Instant createdAt) {}
 
     /**
-     * Works through every due record, up to {@link #SWEEP_LIMIT}, then announces every step that now waits for a
-     * maintainer in one email. One erasure's records fall due together, so they arrive in one list. A step handed over
-     * by a sweep that stopped early is announced by the next sweep.
+     * Announces every step that now waits for a maintainer in one email. One erasure's records end together, so they
+     * arrive in one list. The scrubs themselves are outbox actions ({@link CleanupIssueAdapter}).
      */
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT2M")
-    @SchedulerLock(name = "product-feedback-cleanup", lockAtMostFor = "PT15M", lockAtLeastFor = "PT30S")
-    void cleanDue() {
-        int worked = 0;
-        while (worked < SWEEP_LIMIT && cleanOne()) worked++;
-        announce();
-    }
-
-    private void announce() {
+    @SchedulerLock(name = "product-feedback-cleanup", lockAtMostFor = "PT2M", lockAtLeastFor = "PT30S")
+    void announceDue() {
         transactions.executeWithoutResult(status -> {
             List<UUID> waiting = cleanups.unannounced();
             if (waiting.isEmpty()) return;
@@ -105,37 +99,31 @@ class CleanupService {
         });
     }
 
-    /** @return false when no record is due */
-    private boolean cleanOne() {
-        Claimed claimed = transactions.execute(status -> {
-            Instant now = clock.instant();
-            ProductFeedbackCleanup row =
-                    cleanups.claimable(now).flatMap(cleanups::findById).orElse(null);
-            if (row == null) return null;
-            if (!row.getCreatedAt().plus(MANUAL_AFTER).isAfter(now)) {
-                needsMaintainer(row, ProductFeedbackCleanup.ManualStep.UNFINISHED, now);
-                return new Claimed(null);
-            }
-            // Pushes the next attempt out first, so a crash mid-way retries later instead of at once.
-            row.setAttempts(row.getAttempts() + 1);
-            row.setNextAttemptAt(now.plus(Duration.ofMinutes(Math.min(60, 5L * row.getAttempts()))));
-            return new Claimed(new Job(
-                    row.getId(),
-                    new ProductFeedbackIssues.Repository(
-                            row.getRepositoryId(),
-                            "",
-                            row.getRepository(),
-                            row.getInstallationId(),
-                            !row.isPublicIssue()),
-                    row.getMarker(),
-                    row.getIssueNumber(),
-                    row.getIssueNodeId(),
-                    row.isPublicIssue(),
-                    row.getSince()));
-        });
-        if (claimed == null) return false;
-        Job job = claimed.job();
-        if (job == null) return true;
+    /** One attempt of a record's scrub. A record that is gone, or already waits for a maintainer, needs nothing. */
+    ActionResult clean(ActionAttempt attempt, UUID recordId) {
+        Job job = transactions.execute(status -> cleanups.findById(recordId)
+                .filter(row -> row.getManualSince() == null)
+                .map(row -> new Job(
+                        row.getId(),
+                        new ProductFeedbackIssues.Repository(
+                                row.getRepositoryId(),
+                                "",
+                                row.getRepository(),
+                                row.getInstallationId(),
+                                !row.isPublicIssue()),
+                        row.getMarker(),
+                        row.getIssueNumber(),
+                        row.getIssueNodeId(),
+                        row.isPublicIssue(),
+                        row.getSince(),
+                        row.getCreatedAt()))
+                .orElse(null));
+        if (job == null) return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
+        // An attempt after a failed write keeps rereading, and expiry ends only an action that waits: the deadline
+        // holds here too, so the record goes to a maintainer in time.
+        if (!job.createdAt().plus(MANUAL_AFTER).isAfter(clock.instant()))
+            return new ActionResult.Cancelled(ActionStopReason.EXPIRED);
+        boolean fenced = false;
         try {
             Long number = job.number();
             String nodeId = job.nodeId();
@@ -144,10 +132,10 @@ class CleanupService {
                 if (found == null && number == null) {
                     // A complete read found no issue: the create never reached GitHub, so nothing is left to scrub.
                     done(job.id());
-                    return true;
+                    return new ActionResult.Done(null);
                 }
                 if (found != null) {
-                    // Kept before the scrub removes the marker, so a later pass can still move the issue.
+                    // Kept before the scrub removes the marker, so a later attempt can still move the issue.
                     number = found.number();
                     nodeId = found.nodeId();
                     remember(job.id(), job.repository(), number, nodeId, job.publicIssue());
@@ -156,22 +144,37 @@ class CleanupService {
             long issueNumber = Objects.requireNonNull(number);
             var repository = job.repository();
             boolean moved = !job.publicIssue();
+            ProductFeedbackIssues.Repository target = null;
             if (job.publicIssue() && nodeId != null) {
                 String privateName = destinations.current().getPrivateRepository();
-                var target = privateName == null
+                target = privateName == null
                         ? null
                         : issues.repository(privateName)
                                 .filter(ProductFeedbackIssues.Repository::isPrivate)
                                 .orElse(null);
-                if (target != null) {
-                    var transferred =
-                            updates.transfer(new ProductFeedbackIssues.Issue(issueNumber, nodeId, ""), target);
+            }
+            if (target != null && attempt.writeStarted()) {
+                // An earlier attempt may have moved the issue: its marker is still in it, since no edit ran yet.
+                var transferred = findIssue(target, null, job);
+                if (transferred != null) {
                     remember(job.id(), target, transferred.number(), transferred.nodeId(), false);
                     repository = target;
                     issueNumber = transferred.number();
+                    target = null;
                     moved = true;
                 }
             }
+            if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+            fenced = true;
+            if (target != null) {
+                var transferred = updates.transfer(
+                        new ProductFeedbackIssues.Issue(issueNumber, Objects.requireNonNull(nodeId), ""), target);
+                remember(job.id(), target, transferred.number(), transferred.nodeId(), false);
+                repository = target;
+                issueNumber = transferred.number();
+                moved = true;
+            }
+            // Both are safe to repeat: an attempt after an unclear answer writes the same text and closes again.
             updates.edit(repository, issueNumber, ERASED, ERASED + ".");
             updates.close(repository, issueNumber, "not_planned");
             if (!moved) {
@@ -181,14 +184,29 @@ class CleanupService {
             // The text is gone, but the edit history still shows it; only a maintainer can delete that.
             handOver(job.id());
             meters.step("cleanup", "ok");
+            return new ActionResult.Done(null);
+        } catch (ProductFeedbackIssues.Refused refused) {
+            // GitHub refuses the step for good: retrying cannot finish it, so a maintainer takes over now.
+            meters.step("cleanup", "refused");
+            return new ActionResult.Failed(ActionStopReason.REJECTED);
         } catch (RuntimeException failed) {
             meters.step("cleanup", "retried");
             log.warn(
                     "Product feedback cleanup failed: cleanupId={}, error={}",
                     job.id(),
                     failed.getClass().getSimpleName());
+            return fenced || attempt.writeStarted()
+                    ? new ActionResult.Reread(ActionExecutor.backoff(attempt.attempt()))
+                    : new ActionResult.Retry(ActionExecutor.backoff(attempt.attempt()));
         }
-        return true;
+    }
+
+    /** A scrub that ends unfinished, after {@link #MANUAL_AFTER} or its attempts, goes to a maintainer. */
+    void ended(UUID recordId, ActionState state) {
+        if (state == ActionState.DONE) return;
+        transactions.executeWithoutResult(status -> cleanups.findById(recordId)
+                .filter(row -> row.getManualSince() == null)
+                .ifPresent(row -> needsMaintainer(row, ProductFeedbackCleanup.ManualStep.UNFINISHED, clock.instant())));
     }
 
     private ProductFeedbackIssues.@Nullable Issue findIssue(

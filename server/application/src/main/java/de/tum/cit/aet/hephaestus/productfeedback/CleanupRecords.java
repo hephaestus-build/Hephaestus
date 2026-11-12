@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -15,8 +16,12 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class CleanupRecords {
+    /** A write that an action may still make reaches GitHub within its lease. */
+    private static final Duration AFTER_A_WRITE = ActionExecutor.LEASE.plusSeconds(60);
+
     private final ProductFeedbackFilingRepository filings;
     private final ProductFeedbackCleanupRepository cleanups;
+    private final FileIssueQueue queue;
     private final Clock clock;
 
     void keepFor(List<ProductFeedbackFiling> erased) {
@@ -40,9 +45,7 @@ public class CleanupRecords {
                     now);
             record.setIssueNodeId(filing.getIssueNodeId());
             // The report's file_issue action may still be writing; reconcile only after its lease has passed.
-            if (filing.getState() == FilingState.FILING)
-                record.setNextAttemptAt(now.plus(ActionExecutor.LEASE).plusSeconds(60));
-            cleanups.save(record);
+            keep(record, filing.getState() == FilingState.FILING ? AFTER_A_WRITE : Duration.ZERO);
         }
     }
 
@@ -63,8 +66,7 @@ public class CleanupRecords {
                 requested.minusSeconds(60),
                 now);
         // The /publish action may still be writing; reconcile only after its lease has passed.
-        record.setNextAttemptAt(now.plus(ActionExecutor.LEASE).plusSeconds(60));
-        cleanups.save(record);
+        keep(record, AFTER_A_WRITE);
     }
 
     /** The private issue that a promotion closed still holds the report's text. */
@@ -85,7 +87,13 @@ public class CleanupRecords {
                 first == null ? now.minusSeconds(3600) : first,
                 now);
         record.setIssueNodeId(filing.getPredecessorIssueNodeId());
+        keep(record, Duration.ZERO);
+    }
+
+    /** Keeps a record and queues its scrub, which a maintainer takes over after {@link CleanupService#MANUAL_AFTER}. */
+    private void keep(ProductFeedbackCleanup record, Duration delay) {
         cleanups.save(record);
+        queue.cleanup(record.getId(), delay, record.getCreatedAt().plus(CleanupService.MANUAL_AFTER));
     }
 
     /** Keeps the cleanup records of an account's reports; call it in the transaction that deletes them. */

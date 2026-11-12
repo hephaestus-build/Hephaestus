@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794307018140-1" author="hephaestus"><sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_action
+  DROP CONSTRAINT ck_agent_action_kind,
+  ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK',
+    'RETRACT_FEEDBACK','SLACK_POST','PUBLISH_REPORT','CLEANUP_ISSUE')),
+  DROP CONSTRAINT ck_agent_action_workspace,
+  ADD CONSTRAINT ck_agent_action_workspace CHECK (workspace_id IS NOT NULL
+    OR kind IN ('EMAIL','FILE_ISSUE','PUBLISH_REPORT','CLEANUP_ISSUE'));
+-- Each cleanup that a maintainer does not hold yet becomes its scrub action. It keeps its next attempt, and gives up
+-- 30 days after the erasure, as the cleanup did.
+INSERT INTO agent_action (id, kind, lane_key, idempotency_key, state, payload, max_attempts, next_attempt_at,
+  expires_at, created_at, updated_at)
+SELECT uuidv7(), 'CLEANUP_ISSUE', 'cleanup:' || c.id, 'cleanup:' || c.id, 'ADMITTED',
+       jsonb_build_object('recordId', c.id), 1000, c.next_attempt_at, c.created_at + interval '30 days',
+       clock_timestamp(), clock_timestamp()
+  FROM product_feedback_cleanup c
+ WHERE c.manual_since IS NULL;
+ALTER TABLE product_feedback_cleanup DROP COLUMN next_attempt_at, DROP COLUMN attempts;
+]]></sql></changeSet>
+</databaseChangeLog>
