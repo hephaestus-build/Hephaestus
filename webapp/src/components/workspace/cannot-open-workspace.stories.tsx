@@ -51,7 +51,9 @@ export const NoWorkspaceToOpen: Story = {
 		const message = await screen.findByText(MESSAGE);
 		const notice = message.closest<HTMLElement>("[data-sonner-toast]");
 		await expect(notice).not.toBeNull();
-		await expect(within(notice ?? message).queryByText(/^This is /u)).toBeNull();
+		await waitFor(async () =>
+			expect(within(notice ?? message).queryByText(/^This is /u)).toBeNull(),
+		);
 	},
 };
 

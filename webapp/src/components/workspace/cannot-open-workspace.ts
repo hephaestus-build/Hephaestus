@@ -16,6 +16,6 @@ export function noticeCannotOpenWorkspace(requested: string, opened: string | un
 	toast.warning(`You cannot open ${named}.`, {
 		// One notice, however often the gate runs for the same arrival.
 		id: "cannot-open-workspace",
-		...(opened === undefined ? {} : { description: `This is ${opened}.` }),
+		description: opened === undefined ? null : `This is ${opened}.`,
 	});
 }
