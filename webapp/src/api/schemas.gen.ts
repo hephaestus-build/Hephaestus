@@ -4593,6 +4593,9 @@ export const InapplicabilityWarrantSchema = {
 				type: "string",
 			},
 		},
+		hits: {
+			type: "string",
+		},
 		prerequisite: {
 			type: "string",
 		},

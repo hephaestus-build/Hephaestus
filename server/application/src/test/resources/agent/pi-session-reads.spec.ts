@@ -1325,6 +1325,7 @@ const absenceVectors = z
 			texts: z.array(z.string()),
 			consulted: z.boolean(),
 			tied: z.boolean(),
+			claimed: z.boolean().optional(),
 			patternsWithMatches: z.array(z.string()).optional(),
 			owesHits: z.boolean().optional(),
 		}),
@@ -1333,6 +1334,9 @@ const absenceVectors = z
 for (const vector of absenceVectors) {
 	const { name, patterns, subject, texts, consulted, tied } = vector;
 	void test(`an absence and its search: ${name}`, () => {
+		if (vector.claimed !== undefined) {
+			assert.equal(texts.some(claimsAbsence), vector.claimed);
+		}
 		assert.equal(unsearchedClaim(subject, texts, patterns, consulted) === undefined, tied);
 		if (vector.patternsWithMatches !== undefined) {
 			assert.equal(
@@ -1342,3 +1346,42 @@ for (const vector of absenceVectors) {
 		}
 	});
 }
+
+void test("inapplicability matches need an explicit account", () => {
+	const candidate = {
+		outcome: "DOES_NOT_APPLY",
+		summary: "No handler",
+		explanation: "No ControllerAdvice exists in the checkout.",
+		evidence: {
+			inapplicability: {
+				consulted: ["scm.repository.tree"],
+				prerequisite: "ControllerAdvice",
+				ruledOutBy: "No ControllerAdvice exists in the checkout.",
+			},
+		},
+	};
+	const found = hostCoverage([
+		{ status: "SEARCHED", path: ".", pattern: "(?i)ControllerAdvice", matches: 2 },
+	]);
+	assert.equal(unreadCheckoutClaim(candidate, found, ASK)?.kind, "hits");
+	const accounted = {
+		...candidate,
+		evidence: {
+			inapplicability: {
+				...candidate.evidence.inapplicability,
+				hits: "Both matches are commented-out registrations.",
+			},
+		},
+	};
+	assert.equal(unreadCheckoutClaim(accounted, found, ASK), undefined);
+	const blank = {
+		...candidate,
+		evidence: {
+			inapplicability: {
+				...candidate.evidence.inapplicability,
+				hits: "   ",
+			},
+		},
+	};
+	assert.equal(unreadCheckoutClaim(blank, found, ASK)?.kind, "hits");
+});

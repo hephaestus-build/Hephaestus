@@ -2,7 +2,7 @@
 	{
 		"name": "a search for the word the claim names",
 		"patterns": [
-			"(?i)retry"
+			"(?i)retry|retries"
 		],
 		"subject": "a retry of a failed call",
 		"texts": [
@@ -11,7 +11,7 @@
 		"consulted": true,
 		"tied": true,
 		"patternsWithMatches": [
-			"(?i)retry"
+			"(?i)retry|retries"
 		],
 		"owesHits": true
 	},
@@ -271,7 +271,7 @@
 		"tied": true
 	},
 	{
-		"name": "a plural in the claim shares the word's stem",
+		"name": "singular retry cannot find claimed retries",
 		"patterns": [
 			"(?i)retry"
 		],
@@ -280,7 +280,12 @@
 			"The repository has no retries."
 		],
 		"consulted": true,
-		"tied": true
+		"tied": false,
+		"claimed": true,
+		"patternsWithMatches": [
+			"(?i)retry"
+		],
+		"owesHits": false
 	},
 	{
 		"name": "a joined identifier finds the claim's words",
@@ -731,5 +736,159 @@
 		],
 		"consulted": true,
 		"tied": true
+	},
+	{
+		"name": "no tests cover a named subject",
+		"patterns": [
+			"(?i)Foo"
+		],
+		"subject": "Foo tests",
+		"texts": [
+			"No tests cover Foo."
+		],
+		"consulted": false,
+		"tied": true,
+		"claimed": true
+	},
+	{
+		"name": "unsearched no tests cover a named subject",
+		"patterns": [],
+		"subject": "Foo tests",
+		"texts": [
+			"No tests cover Foo."
+		],
+		"consulted": false,
+		"tied": false,
+		"claimed": true
+	},
+	{
+		"name": "no other unit tests cover a named subject",
+		"patterns": [
+			"(?i)Foo"
+		],
+		"subject": "Foo tests",
+		"texts": [
+			"No other unit tests cover Foo."
+		],
+		"consulted": false,
+		"tied": true,
+		"claimed": true
+	},
+	{
+		"name": "unrelated search cannot support no other unit tests",
+		"patterns": [
+			"(?i)unrelated"
+		],
+		"subject": "Foo tests",
+		"texts": [
+			"No other unit tests cover Foo."
+		],
+		"consulted": false,
+		"tied": false,
+		"claimed": true
+	},
+	{
+		"name": "generic test search does not name AuthService",
+		"patterns": [
+			"(?i)test"
+		],
+		"subject": "AuthService tests",
+		"texts": [
+			"No other tests cover AuthService."
+		],
+		"consulted": false,
+		"tied": false,
+		"claimed": true,
+		"patternsWithMatches": [
+			"(?i)test"
+		],
+		"owesHits": false
+	},
+	{
+		"name": "AuthService search supports test absence",
+		"patterns": [
+			"(?i)AuthService"
+		],
+		"subject": "AuthService tests",
+		"texts": [
+			"No other tests cover AuthService."
+		],
+		"consulted": false,
+		"tied": true,
+		"claimed": true
+	},
+	{
+		"name": "explicit alternatives cover singular and plural retries",
+		"patterns": [
+			"(?i)retry|retries"
+		],
+		"subject": "retries",
+		"texts": [
+			"The repository has no retries."
+		],
+		"consulted": true,
+		"tied": true,
+		"claimed": true
+	},
+	{
+		"name": "generic unit search does not name AuthService",
+		"patterns": [
+			"(?i)unit"
+		],
+		"subject": "AuthService tests",
+		"texts": [
+			"No other unit tests cover AuthService."
+		],
+		"consulted": false,
+		"tied": false,
+		"claimed": true
+	},
+	{
+		"name": "generic coverage verb does not name AuthService",
+		"patterns": [
+			"(?i)cover"
+		],
+		"subject": "AuthService tests",
+		"texts": [
+			"No other tests cover AuthService."
+		],
+		"consulted": false,
+		"tied": false,
+		"claimed": true
+	},
+	{
+		"name": "no tests claim stays bounded to the change",
+		"patterns": [],
+		"subject": "Foo tests",
+		"texts": [
+			"No tests cover Foo in this change."
+		],
+		"consulted": false,
+		"tied": true,
+		"claimed": false
+	},
+	{
+		"name": "unit test claim stays bounded to the diff",
+		"patterns": [],
+		"subject": "Foo tests",
+		"texts": [
+			"No other unit tests in this diff cover Foo."
+		],
+		"consulted": false,
+		"tied": true,
+		"claimed": false
+	},
+	{
+		"name": "singular retry cannot find the verb retries",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "a retry of a failed call",
+		"texts": [
+			"Nothing in the repository retries a failed call."
+		],
+		"consulted": true,
+		"tied": false,
+		"claimed": true
 	}
 ]

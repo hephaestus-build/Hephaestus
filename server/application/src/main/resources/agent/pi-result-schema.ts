@@ -69,6 +69,12 @@ export function resultToolSchemas(availableSourceKindValues: readonly string[]) 
 				minLength: 1,
 				description: "The fact about THIS work that rules out that subject.",
 			},
+			hits: {
+				type: "string",
+				minLength: 1,
+				description:
+					"What the matches of your search are, and why they do not establish the prerequisite. Required when a search that names your claim found any match.",
+			},
 		},
 	} as const;
 	const citationSchema = {

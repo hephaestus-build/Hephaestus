@@ -301,7 +301,8 @@ public class ReviewAdmissionData {
                                 ? new InapplicabilityWarrant(
                                         List.of(source),
                                         "This practice requires a matching change.",
-                                        "The captured work has no matching change.")
+                                        "The captured work has no matching change.",
+                                        null)
                                 : null,
                         outcome == ResultOutcome.COULD_NOT_DETERMINE
                                 ? List.of(new OpenQuestion(

@@ -152,7 +152,11 @@ Otherwise the reason is `absence_not_searched`.
 The runner asks the session before each of these reasons, once for each.
 
 A match does not refute "no other file references X", so a search with matches can back a claim.
-But when any search that names a claim found matches, `evidence.search.hits` must say what they are and why they do not show the thing.
+When a search that names a claim finds matches, the result must account for them.
+A Met or Not met result uses `evidence.search.hits`.
+A Does not apply result uses `evidence.inapplicability.hits`.
+
+The account says what the matches are and why they do not show the thing.
 Otherwise the reason is `absence_hits_unexplained`.
 Admission reads that this text exists, not that it is true: a reader sees it on the result.
 

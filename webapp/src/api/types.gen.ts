@@ -2211,6 +2211,7 @@ export type IdentityView = {
 
 export type InapplicabilityWarrant = {
 	consulted?: Array<string>;
+	hits?: string;
 	prerequisite?: string;
 	ruledOutBy?: string;
 };

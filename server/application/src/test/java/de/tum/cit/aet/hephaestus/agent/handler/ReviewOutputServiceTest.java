@@ -700,6 +700,82 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
     }
 
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"   "})
+    void shouldWithholdInapplicabilityMatchesWithoutAnExplicitAccount(@Nullable String hits) {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        prepare(
+                        job,
+                        pr50ErrorHandling(
+                                List.of(searched(PR50_HEAD, "ControllerAdvice|ExceptionHandler", 2)), candidate -> {
+                                    candidate = absenceOutcome(candidate, ResultOutcome.DOES_NOT_APPLY);
+                                    if (hits != null)
+                                        ((ObjectNode) candidate.path("evidence").path("inapplicability"))
+                                                .put("hits", hits);
+                                    return candidate;
+                                }))
+                .record(job);
+        assertWithheld(
+                CandidateRefusal.ABSENCE_HITS_UNEXPLAINED,
+                NAMED + ", but a search that names it found matches, and the result does not say what they are");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"No tests cover Foo.", "No other unit tests cover Foo."})
+    void shouldWithholdTestAbsenceWithoutANamedCheckoutSearch(String claim) {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+                    candidate = testAbsence(candidate, claim);
+                    ((ObjectNode) candidate.path("evidence").path("search"))
+                            .set("consulted", mapper.valueToTree(List.of(DIFF.value())));
+                    return candidate;
+                }))
+                .record(job);
+        assertThat(staged).isEmpty();
+        verify(membership).withhold(eq(1L), any(), eq(CandidateRefusal.CONSULTED_SOURCE_UNREAD), any());
+    }
+
+    @Test
+    void shouldWithholdAnAuthServiceClaimAfterAGenericTestSearch() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        prepare(
+                        job,
+                        pr50ErrorHandling(
+                                List.of(searched(PR50_HEAD, "(?i)test")),
+                                candidate -> testAbsence(candidate, "No other tests cover AuthService.")))
+                .record(job);
+        assertWithheld(
+                CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                NAMED + ", but no search of the whole checkout names what it says is absent");
+    }
+
+    @Test
+    void shouldWithholdAnAbsenceWhoseClaimedInflectionWasNotSearched() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        prepare(
+                        job,
+                        pr50ErrorHandling(
+                                List.of(searched(PR50_HEAD, "(?i)retry")),
+                                candidate -> testAbsence(candidate, "The repository has no retries.")))
+                .record(job);
+        assertWithheld(
+                CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                NAMED + ", but no search of the whole checkout names what it says is absent");
+    }
+
+    private ObjectNode testAbsence(ObjectNode candidate, String claim) {
+        candidate.put("summary", "Test coverage").put("explanation", claim);
+        ((ObjectNode) candidate.path("problems").get(0))
+                .put("summary", "Test coverage")
+                .put("explanation", claim)
+                .put("nextStep", "Add coverage.");
+        ((ObjectNode) candidate.path("evidence").path("search"))
+                .put("lookedFor", "test coverage")
+                .put("boundary", "The complete checkout.");
+        return candidate;
+    }
+
     @Test
     void shouldAdmitAnInapplicabilityClaimThatAccountsForItsSearchMatches() {
         pr50Capture(SourceCompleteness.COMPLETE);
@@ -709,7 +785,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                     candidate = absenceOutcome(candidate, ResultOutcome.DOES_NOT_APPLY);
                     ((ObjectNode) candidate.path("evidence").path("inapplicability"))
                             .put(
-                                    "ruledOutBy",
+                                    "hits",
                                     "Both matches are comments. No active @ControllerAdvice exists in the checkout.");
                     return candidate;
                 }))

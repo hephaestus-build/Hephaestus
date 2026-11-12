@@ -1573,6 +1573,7 @@ export const zIdentityView = z.object({
 
 export const zInapplicabilityWarrant = z.object({
 	consulted: z.array(z.string()).optional(),
+	hits: z.string().optional(),
 	prerequisite: z.string().optional(),
 	ruledOutBy: z.string().optional(),
 });

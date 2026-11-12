@@ -231,7 +231,8 @@ public class ReviewOutputService {
                                             .distinct()
                                             .toList(),
                                     "At least one Applies when condition must match",
-                                    check.otherwise()),
+                                    check.otherwise(),
+                                    null),
                             List.of()),
                     null,
                     new HostCoverage(true, List.of(), 0, 0, 0, List.of()),
@@ -326,7 +327,9 @@ public class ReviewOutputService {
                     claim + ", but no search of the whole checkout names what it says is absent",
                     null);
         var search = candidate.search();
-        if (candidate.inapplicability() != null || (search != null && search.hits() != null)) return;
+        var inapplicability = candidate.inapplicability();
+        var hits = search != null ? search.hits() : inapplicability != null ? inapplicability.hits() : null;
+        if (hits != null && !hits.isBlank()) return;
         var withMatches = searches.stream()
                 .filter(receipt -> !Objects.equals(receipt.matches(), 0))
                 .map(ReadReceipt::pattern)

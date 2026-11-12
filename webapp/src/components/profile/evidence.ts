@@ -139,6 +139,7 @@ export function toEvidenceCheck(evidence: ResultEvidence | null): EvidenceCheck[
 			...writtenCheck("Applies when", inapplicability.prerequisite),
 			...consultedCheck(inapplicability.consulted),
 			...writtenCheck("Nothing to judge because", inapplicability.ruledOutBy),
+			...writtenCheck("What it found", inapplicability.hits),
 		];
 	}
 	return [];

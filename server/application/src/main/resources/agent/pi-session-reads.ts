@@ -559,7 +559,7 @@ export const ABSENCE_MARKERS = [
 	String.raw`\bno other files?\b(?! (?:in|of) (?:the|this) (?:change|diff|commit|pull request)\b)[^.;]{0,30}\b(?:references?|imports?|calls?|uses?|instantiates?|consumes?|wires?|depends? on|handles?|catches?|validates?)\b|\b(?:referenced|imported|called|used|instantiated|consumed|handled) (?:by|from|in) no other files?\b|\breferences from other files\b`,
 	String.raw`(?<!from )\b(?:the|this) (?:whole |entire |reviewed |pinned )?(?:repository|repo|codebase|code base|checkout)\b(?! (?:method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|policy|settings?)s?\b)[^.]{0,40}\b(?:contains no|has no|holds no|defines no|declares no|registers no|lacks?|never|does not|doesn't)\b|\b(?:the|this) (?:project|application)\b(?![ -](?:code|manifest|inventory|policy|board|tracker)\b)[^.]{0,40}\b(?:defines no|declares no|registers no|never)\b`,
 	String.raw`\b(?:nothing else|nothing in the (?:project|application|code ?base|repository|repo|checkout)|no (?:other )?(?:code|callers?)(?! path| (?:in|of)\b)|none of (?:the|its) callers)\b[^.]{0,60}\b(?:catch(?:es)?|handles?)\b(?!\()`,
-	String.raw`\b(?:the|its) only (?:unit |integration |end-to-end )?tests? (?:of|for|that (?:covers?|exercises?|checks?))\b(?![^.;]{0,60}\b(?:in|of) (?:the|this) (?:change|diff|commit|pull request)\b)|\bno other tests?\b(?! (?:in|of) (?:the|this) (?:change|diff|commit|pull request)\b)[^.;]{0,30}\b(?:covers?|exercises?|tests?|checks?|asserts?|verif(?:y|ies)|reach(?:es)?)\b|\b(?:covered|tested|exercised) by no other tests?\b`,
+	String.raw`\b(?:the|its) only (?:unit |integration |end-to-end )?tests? (?:of|for|that (?:covers?|exercises?|checks?))\b(?![^.;]{0,60}\b(?:in|of) (?:the|this) (?:change|diff|commit|pull request)\b)|\bno (?:other )?(?:unit |integration |end-to-end )?tests?\b(?![^.;]{0,60}\b(?:in|of) (?:the|this) (?:change|diff|commit|pull request)\b)[^.;]{0,30}\b(?:covers?|exercises?|tests?|checks?|asserts?|verif(?:y|ies)|reach(?:es)?)\b|\b(?:covered|tested|exercised) by no other tests?\b`,
 ];
 export const ABSENCE_DISCLAIMER = String.raw`\b(?:did|does|do|could|can|would)(?: not|n't) (?:\w+ ){0,1}?(?:establish|inspect|examine|search|judge)\w*\b|\bnot (?:established|inspected|examined|searched|judged)\b|\bwithout (?:establishing|inspecting|examining|searching|judging)\b|\bnot that\b|\b(?:was|were) not (?:examined|inspected|judged)\b|\bno (?:[\w-]+ ){0,8}?(?:was|were) (?:examined|inspected|judged)\b`;
 export const ABSENCE_CLAUSE_END = String.raw`(?<=[.;:])[ \t\r\n\u00A0]+|,[ \t\r\n\u00A0]+(?=(?:but|and|so|yet|while|though|although)[ \t\r\n\u00A0])|[ \t\r\n\u00A0]+[—–-][ \t\r\n\u00A0]+|[ \t\r\n\u00A0]*[()][ \t\r\n\u00A0]*`;
@@ -676,6 +676,15 @@ export const ABSENCE_GENERIC_WORDS = [
 	"whole",
 	"wire",
 	"with",
+	"assert",
+	"cover",
+	"end",
+	"exercise",
+	"integration",
+	"reach",
+	"test",
+	"unit",
+	"verify",
 	"without",
 ];
 const ABSENCE_PATTERNS = ABSENCE_MARKERS.map((marker) => new RegExp(marker, "iu"));
@@ -687,7 +696,7 @@ const WORD_BREAK = /(?<=\p{Ll})(?=\p{Lu})|[^\p{L}\p{N}]+/u;
 const TOKEN_BREAK = /[^\p{L}\p{N}_-]+/u;
 const WORD_CHARACTER = /[\p{Alphabetic}\p{M}\p{Nd}\p{Pc}\p{Join_Control}]/u;
 
-/** The same crude stem as `AbsenceClaims.java`: a miss costs one more search. */
+/** Normalizes generic vocabulary forms, as in `AbsenceClaims.java`; search matching keeps the spelling. */
 function stem(word: string): string {
 	let stemmed = word.toLowerCase();
 	if (stemmed.length > 4 && stemmed.endsWith("ies")) {
@@ -752,8 +761,7 @@ function finds(term: SearchTerm, words: readonly string[]): boolean {
 				return false;
 			}
 			const rest = search.slice(at);
-			const sameWord = rest.length <= word.length && stem(rest) === stem(word);
-			const ends = sameWord || (term.bounded ? rest === word : word.startsWith(rest));
+			const ends = term.bounded ? rest === word : word.startsWith(rest);
 			if (rest.length >= 3 && ends && !GENERIC.has(stem(word))) {
 				return true;
 			}
@@ -841,6 +849,7 @@ function textsOf(submission: AbsenceCheckInput): string[] {
 		search?.hits ?? "",
 		inapplicability?.prerequisite ?? "",
 		inapplicability?.ruledOutBy ?? "",
+		inapplicability?.hits ?? "",
 		...openQuestions.flatMap((question) => [question.openQuestion, question.wouldSettleIt]),
 	];
 }
@@ -894,7 +903,12 @@ export interface AbsenceCheckInput {
 	example?: { note: string };
 	evidence: {
 		search?: { consulted: readonly string[]; lookedFor: string; boundary: string; hits?: string };
-		inapplicability?: { consulted: readonly string[]; prerequisite: string; ruledOutBy: string };
+		inapplicability?: {
+			consulted: readonly string[];
+			prerequisite: string;
+			ruledOutBy: string;
+			hits?: string;
+		};
 		openQuestions?: readonly { openQuestion: string; wouldSettleIt: string }[];
 	};
 }
@@ -965,13 +979,14 @@ export function unreadCheckoutClaim(
 				: undefined;
 		}
 		const unexplained = claimWithHits(subject, textsOf(submission), withMatches, consulted);
-		if (unexplained === undefined || search?.hits !== undefined || inapplicability !== undefined) {
+		const account = search?.hits ?? inapplicability?.hits;
+		if (unexplained === undefined || (account?.trim().length ?? 0) > 0) {
 			return undefined;
 		}
 		return askHits
 			? {
 					kind: "hits",
-					text: `a search that names this claim found matches: "${unexplained}". A match can show that the thing exists. Read the matches, then add evidence.search with consulted, lookedFor, boundary and hits, where hits says what the matches are and why they do not show the thing. Or remove the claim and keep only what the cited lines show.`,
+					text: `a search that names this claim found matches: "${unexplained}". A match can show that the thing exists. Read the matches, then ${inapplicability === undefined ? "add evidence.search with consulted, lookedFor, boundary and hits" : "add evidence.inapplicability.hits"}, where hits says what the matches are and why they do not show the thing. Or remove the claim and keep only what the cited lines show.`,
 				}
 			: undefined;
 	}

@@ -8,8 +8,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -182,29 +186,36 @@ class AbsenceClaimsTest extends BaseUnitTest {
                 .noneMatch(AbsenceClaims::claimed);
     }
 
-    @Test
-    void shouldTieASearchToAClaimAsTheRunnerDoes() throws IOException {
-        var vectors = new JsonMapper().readTree(Path.of("src/test/resources/agent/absence-search-vectors.json"));
-
-        assertThat(vectors).isNotEmpty();
-        for (var vector : vectors) {
-            assertThat(AbsenceClaims.searchedFor(
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("absenceVectors")
+    void shouldTieASearchToAClaimAsTheRunnerDoes(String name, JsonNode vector) {
+        var texts = strings(vector.path("texts"));
+        if (vector.has("claimed"))
+            assertThat(texts.stream().anyMatch(AbsenceClaims::claimed))
+                    .as(name)
+                    .isEqualTo(vector.path("claimed").asBoolean());
+        assertThat(AbsenceClaims.searchedFor(
+                        vector.path("subject").asString(),
+                        texts,
+                        strings(vector.path("patterns")),
+                        vector.path("consulted").asBoolean()))
+                .as(name)
+                .isEqualTo(vector.path("tied").asBoolean());
+        if (vector.has("patternsWithMatches"))
+            assertThat(AbsenceClaims.hitsOwed(
                             vector.path("subject").asString(),
-                            strings(vector.path("texts")),
-                            strings(vector.path("patterns")),
+                            texts,
+                            strings(vector.path("patternsWithMatches")),
                             vector.path("consulted").asBoolean()))
-                    .as(vector.path("name").asString())
-                    .isEqualTo(vector.path("tied").asBoolean());
-            if (vector.has("patternsWithMatches")) {
-                assertThat(AbsenceClaims.hitsOwed(
-                                vector.path("subject").asString(),
-                                strings(vector.path("texts")),
-                                strings(vector.path("patternsWithMatches")),
-                                vector.path("consulted").asBoolean()))
-                        .as(vector.path("name").asString())
-                        .isEqualTo(vector.path("owesHits").asBoolean());
-            }
-        }
+                    .as(name)
+                    .isEqualTo(vector.path("owesHits").asBoolean());
+    }
+
+    private static Stream<Arguments> absenceVectors() throws IOException {
+        var vectors = new JsonMapper().readTree(Path.of("src/test/resources/agent/absence-search-vectors.json"));
+        assertThat(vectors).isNotEmpty();
+        return StreamSupport.stream(vectors.spliterator(), false)
+                .map(vector -> Arguments.of(vector.path("name").asString(), vector));
     }
 
     private static List<String> strings(JsonNode list) {

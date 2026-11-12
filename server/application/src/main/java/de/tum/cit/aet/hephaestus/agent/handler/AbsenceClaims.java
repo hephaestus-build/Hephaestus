@@ -57,7 +57,7 @@ final class AbsenceClaims {
                     + "its) callers)\\b[^.]{0,60}\\b(?:catch(?:es)?|handles?)\\b(?!\\()",
             "\\b(?:the|its) only (?:unit |integration |end-to-end )?tests? (?:of|for|that "
                     + "(?:covers?|exercises?|checks?))\\b(?![^.;]{0,60}\\b(?:in|of) (?:the|this) "
-                    + "(?:change|diff|commit|pull request)\\b)|\\bno other tests?\\b(?! (?:in|of) "
+                    + "(?:change|diff|commit|pull request)\\b)|\\bno (?:other )?(?:unit |integration |end-to-end )?tests?\\b(?![^.;]{0,60}\\b(?:in|of) "
                     + "(?:the|this) (?:change|diff|commit|pull request)\\b)[^.;]{0,30}\\b(?:covers?|"
                     + "exercises?|tests?|checks?|asserts?|verif(?:y|ies)|reach(?:es)?)\\b|"
                     + "\\b(?:covered|tested|exercised) by no other tests?\\b");
@@ -188,6 +188,15 @@ final class AbsenceClaims {
             "whole",
             "wire",
             "with",
+            "assert",
+            "cover",
+            "end",
+            "exercise",
+            "integration",
+            "reach",
+            "test",
+            "unit",
+            "verify",
             "without");
 
     private static final Pattern PLAIN = Pattern.compile(PLAIN_SEARCH);
@@ -324,8 +333,7 @@ final class AbsenceClaims {
             for (int next = first; next < words.size() && at < search.length(); next++) {
                 String word = words.get(next);
                 String rest = search.substring(at);
-                boolean sameWord = rest.length() <= word.length() && stem(rest).equals(stem(word));
-                boolean ends = sameWord || (term.bounded() ? rest.equals(word) : word.startsWith(rest));
+                boolean ends = term.bounded() ? rest.equals(word) : word.startsWith(rest);
                 if (rest.length() >= 3 && ends && !GENERIC.contains(stem(word))) return true;
                 if (!rest.startsWith(word)) break;
                 at += word.length();
@@ -350,7 +358,7 @@ final class AbsenceClaims {
                 .toList();
     }
 
-    /** A crude stem: it needs only to bring the forms of a word together, and a miss costs one more search. */
+    /** Normalizes generic vocabulary forms; a search must still match the claimed spelling. */
     private static String stem(String word) {
         String stem = word.toLowerCase(Locale.ROOT);
         if (stem.length() > 4 && stem.endsWith("ies")) {
@@ -387,6 +395,7 @@ final class AbsenceClaims {
         if (inapplicability != null) {
             texts.add(inapplicability.prerequisite());
             texts.add(inapplicability.ruledOutBy());
+            if (inapplicability.hits() != null) texts.add(inapplicability.hits());
         }
         for (var question : candidate.openQuestions()) {
             texts.add(question.openQuestion());

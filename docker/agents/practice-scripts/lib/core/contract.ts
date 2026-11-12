@@ -328,6 +328,7 @@ const inapplicabilityShape = z.strictObject({
 	consulted,
 	prerequisite: warrantField,
 	ruledOutBy: warrantField,
+	hits: warrantField.optional(),
 });
 const openQuestionShape = z.strictObject({
 	openQuestion: bounded(CANDIDATE_LIMITS.openQuestionChars),

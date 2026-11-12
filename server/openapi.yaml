@@ -16105,6 +16105,8 @@ components:
           type: array
           items:
             type: string
+        hits:
+          type: string
         prerequisite:
           type: string
         ruledOutBy:
