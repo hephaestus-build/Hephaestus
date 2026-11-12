@@ -1,0 +1,2 @@
+# Remove surveys at the 1.0 cutover; export results before upgrading.
+in API GET /user/notification-preferences removed the required property `surveySummaries` from the response with the `200` status

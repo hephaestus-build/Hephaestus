@@ -1,0 +1,2 @@
+# #3716: one offset page shape and one cursor page shape replace Spring's page fields, the bare lists and the other cursors.
+in API GET /workspaces/{workspaceSlug}/practices/items removed the required property `pageable` from the response with the `200` status

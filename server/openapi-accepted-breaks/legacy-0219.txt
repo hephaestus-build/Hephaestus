@@ -1,0 +1,2 @@
+# #3716: one offset page shape and one cursor page shape replace Spring's page fields, the bare lists and the other cursors.
+in API GET /workspaces/{workspaceSlug}/practices/reviews removed the required property `number` from the response with the `200` status

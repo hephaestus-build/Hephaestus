@@ -1,0 +1,2 @@
+# Remove surveys at the 1.0 cutover; export results before upgrading.
+in API PUT /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline api path removed without deprecation

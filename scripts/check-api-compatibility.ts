@@ -9,7 +9,7 @@
  * Usage: vp run gate:api-compatibility [--base vX.Y.Z]
  */
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -25,7 +25,7 @@ import { compareVersions, parseVersion } from "./plan-release.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 export const SPEC = "server/openapi.yaml";
-export const ACCEPTED_BREAKS = "server/openapi-accepted-breaks.txt";
+export const ACCEPTED_BREAKS = "server/openapi-accepted-breaks";
 
 /**
  * oasdiff rule levels that differ from its defaults. Response enums are open, so a new value is no
@@ -74,12 +74,37 @@ export function breakLines(json: string): string[] {
 	});
 }
 
-/** The entries of the accepted-breaks file: every line that is not blank or a `#` comment. */
+/** Each distinct entry is a line that is not blank or a `#` comment. */
 function acceptedEntries(file: string): string[] {
-	return file
-		.split(/\r?\n/u)
-		.map((line) => line.trim())
-		.filter((line) => line !== "" && !line.startsWith("#"));
+	return [
+		...new Set(
+			file
+				.split(/\r?\n/u)
+				.map((line) => line.trim())
+				.filter((line) => line !== "" && !line.startsWith("#")),
+		),
+	];
+}
+
+/** Keep entries independent in Git; oasdiff receives their union as one temporary ignore file. */
+export async function readAcceptedBreaks(directory: string): Promise<string> {
+	const entries = await readdir(directory, { withFileTypes: true });
+	const files = entries
+		.filter((file) => file.name.endsWith(".txt"))
+		.toSorted((left, right) => left.name.localeCompare(right.name, "en"));
+	const contents: string[] = [];
+	for (const file of files) {
+		const filename = path.join(directory, file.name);
+		if (!file.isFile()) {
+			throw new Error(`Accepted break must be a regular file: ${filename}`);
+		}
+		const content = await readFile(filename, "utf8");
+		if (acceptedEntries(content).length > 1) {
+			throw new Error(`Keep each accepted break in its own file: ${filename}`);
+		}
+		contents.push(content);
+	}
+	return contents.join("\n");
 }
 
 /** The newest stable `vX.Y.Z` tag in `git ls-remote --tags --refs` output. */
@@ -110,7 +135,7 @@ export interface Compatibility {
 	readonly report: string;
 	/** Entries that are not the line of a break of this comparison. */
 	readonly obsolete: string[];
-	/** Faults of the accepted-breaks file itself, each of which fails the gate. */
+	/** Faults of the accepted-break files, each of which fails the gate. */
 	readonly problems: string[];
 }
 
@@ -234,6 +259,7 @@ export async function compareSpecs(options: {
 	/** Whether the change heads for a major release after `baseTag`, which may break it. */
 	majorRelease: boolean;
 	revision: string;
+	/** The directory of independent accepted-break files. */
 	acceptedBreaks: string;
 	format: "githubactions" | "text";
 	cwd: string;
@@ -253,7 +279,9 @@ export async function compareSpecs(options: {
 			throw new Error(`oasdiff exited with ${exitStatus(all.status, all.signal)}:\n${all.stderr}`);
 		}
 		const breaks = new Set(breakLines(all.stdout));
-		const file = await readFile(path.resolve(cwd, acceptedBreaks), "utf8");
+		const file = await readAcceptedBreaks(path.resolve(cwd, acceptedBreaks));
+		const ignored = path.join(directory, "accepted-breaks.txt");
+		await writeFile(ignored, file);
 		const gate = oasdiffBreaking(
 			oasdiff,
 			[
@@ -261,7 +289,7 @@ export async function compareSpecs(options: {
 				revision,
 				...severity,
 				"--err-ignore",
-				acceptedBreaks,
+				ignored,
 				"--fail-on",
 				"ERR",
 				"--format",

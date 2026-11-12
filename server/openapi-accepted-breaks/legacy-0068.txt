@@ -1,0 +1,2 @@
+# 1.0: the 21 operations that 0.95.0 deprecated for removal. The UI uses the retained list, review-detail and trace operations.
+in API GET /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters api path removed without deprecation

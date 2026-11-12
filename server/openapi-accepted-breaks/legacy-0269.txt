@@ -1,0 +1,2 @@
+# #3678: a call pool learns its limit, and the limit sets the conversation reserve, so it is no longer a field.
+in API PUT /admin/llm/call-pools/{id} removed the required property `interactiveReserve` from the response with the `200` status

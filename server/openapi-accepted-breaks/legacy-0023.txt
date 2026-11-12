@@ -1,0 +1,2 @@
+# #3230: feedback that the worker could not compose is withheld with the new NOT_COMPOSED stop reason.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback added the new `NOT_COMPOSED` enum value to the `content/items/stopReason` response property for the response status `200`

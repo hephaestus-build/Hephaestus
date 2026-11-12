@@ -1,0 +1,2 @@
+# #3238: the review sandbox composes nothing, so its two internal composition routes are removed. Only the sandbox called them.
+in API POST /internal/llm/public-feedback-history api path removed without deprecation

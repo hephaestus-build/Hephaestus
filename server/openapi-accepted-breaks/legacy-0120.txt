@@ -1,0 +1,2 @@
+# FrozenModel.options values are any JSON value, not Jackson's JsonNode bean properties.
+in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId}/report the `practices/items/method/models/items/model/anyOf[#/components/schemas/FrozenModel]/options/additionalProperties/` response's property `type` was widened from `object` to `string, number, boolean, object, array, null` for status `200`

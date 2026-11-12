@@ -1,0 +1,2 @@
+# #3716: one offset page shape and one cursor page shape replace Spring's page fields, the bare lists and the other cursors.
+in API GET /admin/users the response's body `type` changed from `array<object>` to `object` for status `200`

@@ -1,0 +1,2 @@
+# #3046: the workspace standing comparison returns its tiles for a time window.
+in API GET /workspaces/{workspaceSlug}/practices/tiles added the new required `query` request parameter `window`

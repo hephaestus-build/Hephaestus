@@ -1,0 +1,2 @@
+# #4110: an admin reads the developer's answer to feedback, never their rating or other notes.
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck removed the required property `response` from the response with the `202` status

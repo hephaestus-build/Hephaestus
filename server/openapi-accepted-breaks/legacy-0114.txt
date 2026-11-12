@@ -1,0 +1,3 @@
+# Wire leftovers: the sandbox gateway leaves the public description, so its admission schemas no
+# longer collide with CitationProofDTO, which now publishes as CitationProof with the same shape.
+in API POST /internal/llm/admit-results api path removed without deprecation

@@ -1,0 +1,2 @@
+# #3046: the workspace standing comparison returns its tiles for a time window.
+in API GET /workspaces/{workspaceSlug}/practices/tiles the response's body `type` changed from `array<object>` to `object` for status `200`

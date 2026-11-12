@@ -1,0 +1,2 @@
+# #4089: problem `type` and `instance` are URI references (RFC 9457 §3.1); the server writes a relative `instance`.
+in API POST /auth/client/refresh the `type` response's property `format` changed from `uri` to `uri-reference` for status `400`

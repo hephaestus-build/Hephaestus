@@ -1,0 +1,2 @@
+# #3084: a delayed review records that the original evidence is unavailable.
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `OCCASION_EVIDENCE_UNAVAILABLE` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `202`

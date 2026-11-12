@@ -1,0 +1,2 @@
+# Correct success documentation to the status codes the server already returns.
+in API POST /workspaces/{workspaceSlug}/repositories removed the success response with the status `200`

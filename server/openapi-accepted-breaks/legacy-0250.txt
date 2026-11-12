@@ -1,0 +1,2 @@
+# #3716: one offset page shape and one cursor page shape replace Spring's page fields, the bare lists and the other cursors.
+in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId}/report/items removed the required property `hasNext` from the response with the `200` status

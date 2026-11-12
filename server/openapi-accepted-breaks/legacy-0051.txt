@@ -1,0 +1,2 @@
+# #3437: native Anthropic connections report their protocol to instance and workspace API clients.
+in API POST /workspaces/{workspaceSlug}/llm/connections added the new `anthropic-messages` enum value to the `apiProtocol` response property for the response status `201`

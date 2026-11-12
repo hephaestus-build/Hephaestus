@@ -1,0 +1,2 @@
+# #3046: the workspace standing comparison returns its tiles for a time window.
+in API GET /workspaces/{workspaceSlug}/practices/workspace-overview removed the required property `practices` from the response with the `200` status

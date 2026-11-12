@@ -1,0 +1,2 @@
+# Remove surveys at the 1.0 cutover; export results before upgrading.
+in API POST /admin/product-feedback/surveys/{surveyId}/email-invitations api path removed without deprecation

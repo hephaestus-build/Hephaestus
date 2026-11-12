@@ -1,0 +1,2 @@
+# #3355: a review or scan that no sandbox room could hold ends with the new NO_SANDBOX_ROOM stop reason.
+in API GET /workspaces/{workspaceSlug}/practices/reviews added the new `NO_SANDBOX_ROOM` enum value to the `content/items/stopReason` response property for the response status `200`
