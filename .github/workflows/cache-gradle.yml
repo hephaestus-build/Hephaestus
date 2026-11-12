@@ -1,4 +1,4 @@
-name: Cache / Gradle
+name: Cache / Gradle (R offline probe)
 
 # Main pushes reuse the merge group's packaged server and run no Gradle build, so this job is the
 # only producer of the Gradle state that server jobs restore. docs/contributor/ci-cd.mdx § Caches.
@@ -31,6 +31,7 @@ concurrency:
 
 jobs:
   gradle:
+    if: github.ref == 'refs/heads/main'
     name: Gradle build and dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -51,3 +52,251 @@ jobs:
       - name: Build what the server jobs restore
         working-directory: server
         run: ./gradlew resolveDependencies :application:bootJar :application:testClasses :application:testInventory :spotlessCheck :application:spotlessCheck :application:pmdMain
+
+  replay:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci3/probe-r-offline-18b'
+    name: Locked root classpath offline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    env:
+      GRADLE_USER_HOME: /home/runner/.gradle
+      CI: "true"
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: hephaestus
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: offline-cache-probe
+      SPRING_PROFILES_ACTIVE: local
+    services:
+      postgres:
+        image: ghcr.io/hephaestus-build/postgres@sha256:e8cda2ab4231bd54cdda6074d239e2772bd899dd3e148f7513cc317a671e4df2
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          POSTGRES_DB: hephaestus
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: offline-cache-probe
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U root -d hephaestus"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 02ae140b9070cfa6d9640e23868750d7672859a1
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: "21.0.13+9"
+          cache-jdk: false
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
+        with:
+          cache-provider: external
+          cache-read-only: true
+          dependency-graph: disabled
+      - name: Bootstrap only the checksum-pinned wrapper before the cache restore
+        working-directory: server
+        run: |
+          ./gradlew --version
+          test ! -d "$GRADLE_USER_HOME/caches/modules-2/files-2.1"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: "13931930778"
+          run-id: "43191621296"
+          repository: hephaestus-build/Hephaestus
+          github-token: ${{ github.token }}
+          path: server
+          merge-multiple: true
+      - name: Install the typed diagnostic helper
+        run: |
+          mkdir -p "$RUNNER_TEMP/r-proof"
+          cat > "$RUNNER_TEMP/r-proof/snapshot.mts" <<'TYPESCRIPT'
+          import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
+          import { createReadStream } from 'node:fs';
+          import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+          import path from 'node:path';
+
+          const mode = process.argv[2];
+          assert.ok(mode === 'snapshot' || mode === 'verify', 'use snapshot or verify');
+          const gradleHome = process.env.GRADLE_USER_HOME;
+          const runnerTemp = process.env.RUNNER_TEMP;
+          assert.ok(gradleHome && runnerTemp, 'GRADLE_USER_HOME and RUNNER_TEMP are required');
+          const proof = path.join(runnerTemp, 'r-proof');
+          await mkdir(proof, { recursive: true });
+
+          async function digest(file: string): Promise<string> {
+            const hash = createHash('sha256');
+            for await (const data of createReadStream(file)) hash.update(data);
+            return hash.digest('hex');
+          }
+
+          async function files(directory: string): Promise<string[]> {
+            const entries = await readdir(directory, { withFileTypes: true }).catch((error: unknown) => {
+              if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return [];
+              throw error;
+            });
+            const result: string[] = [];
+            for (const entry of entries) {
+              const file = path.join(directory, entry.name);
+              if (entry.isDirectory()) result.push(...await files(file));
+              else if (entry.isFile()) result.push(file);
+            }
+            return result.sort();
+          }
+
+          const jars: string[] = [];
+          for (const [directory, prefix] of [
+            ['server/application/build/libs', 'hephaestus-application-'],
+            ['server/generated-clients/build/libs', 'hephaestus-generated-clients-'],
+          ] as const) {
+            const matches = (await readdir(directory)).filter((name) => name.startsWith(prefix) && name.endsWith('.jar'));
+            assert.equal(matches.length, 1, `one packaged JAR in ${directory}`);
+            const name = matches[0];
+            assert.ok(name);
+            jars.push(path.join(directory, name));
+          }
+          const jarDigests = (await Promise.all(jars.map(async (file) => `${file}\t${await digest(file)}`))).sort().join('\n') + '\n';
+          if (mode === 'verify') {
+            const expected = await readFile(path.join(proof, 'jars-before.tsv'), 'utf8');
+            assert.equal(jarDigests, expected, 'the offline probe changed a packaged JAR');
+            await writeFile(path.join(proof, 'jars-after.tsv'), jarDigests);
+            console.log('Both packaged JARs retain their original SHA-256.');
+          } else {
+            await writeFile(path.join(proof, 'jars-before.tsv'), jarDigests);
+            const lock = await readFile('server/buildscript-gradle.lockfile', 'utf8');
+            const coordinates = lock.split(/\r?\n/u).filter((line) => line && !line.startsWith('#') && !line.startsWith('empty='))
+              .map((line) => {
+                const name = line.split('=')[0];
+                assert.ok(name);
+                const [group, artifact, version, extra] = name.split(':');
+                assert.ok(group && artifact && version && extra === undefined, `invalid locked coordinate: ${name}`);
+                for (const part of [group, artifact, version]) assert.match(part, /^[A-Za-z0-9][A-Za-z0-9_.+\-]*$/u);
+                return { coordinate: name, group, artifact, version };
+              });
+            const moduleRoots = (await readdir(path.join(gradleHome, 'caches'), { withFileTypes: true }))
+              .filter((entry) => entry.isDirectory() && /^modules-\d+$/u.test(entry.name)).map((entry) => entry.name);
+            const inventory = await Promise.all(coordinates.map(async (entry) => {
+              const artifacts = (await Promise.all(moduleRoots.map((root) => files(path.join(gradleHome, 'caches', root, 'files-2.1', entry.group, entry.artifact, entry.version))))).flat();
+              return { coordinate: entry.coordinate, artifacts: await Promise.all(artifacts.map(async (file) => ({
+                file: path.relative(gradleHome, file), bytes: (await stat(file)).size, sha256: await digest(file),
+              }))) };
+            }));
+            const metadata: { file: string; bytes: number; sha256: string }[] = [];
+            for (const root of moduleRoots) {
+              const directory = path.join(gradleHome, 'caches', root);
+              for (const entry of await readdir(directory, { withFileTypes: true })) {
+                if (!entry.isDirectory() || !entry.name.startsWith('metadata-')) continue;
+                for (const file of await files(path.join(directory, entry.name))) {
+                  metadata.push({ file: path.relative(gradleHome, file), bytes: (await stat(file)).size, sha256: await digest(file) });
+                }
+              }
+            }
+            await writeFile(path.join(proof, 'cache-inventory.json'), JSON.stringify({ gradleHome, coordinates: inventory, metadata }, null, 2) + '\n');
+            console.log(`Recorded ${inventory.length} locked root coordinates and ${metadata.length} metadata files; absence alone is diagnostic, not the resolver verdict.`);
+          }
+          TYPESCRIPT
+      - name: Restore exact component 0
+        id: restore-0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: "gradle-home-v2|Linux-X64|gradle[e105edf49fd01f4befaf1fab3c2af2b2]-b29fb05f410d7aced1f1093975809f27db3c072d"
+          fail-on-cache-miss: true
+          path: |
+            /home/runner/.gradle/caches
+            /home/runner/.gradle/notifications
+            /home/runner/.gradle/.setup-gradle
+      - name: Restore exact component 1
+        id: restore-1
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: "gradle-build-cache-v2-ee486cacb26e4cd06a253074bda8239b"
+          fail-on-cache-miss: true
+          path: |
+            /home/runner/.gradle/caches/build-cache-*/*
+      - name: Restore exact component 2
+        id: restore-2
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: "gradle-groovy-dsl-v2-5a468e5a28d1827db26794a489b8ccb5"
+          fail-on-cache-miss: true
+          path: |
+            /home/runner/.gradle/caches/*/groovy-dsl/*/
+      - name: Restore exact component 3
+        id: restore-3
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: "gradle-kotlin-dsl-v2-1c4be615ad51aa5337d728b219034220"
+          fail-on-cache-miss: true
+          path: |
+            /home/runner/.gradle/caches/*/kotlin-dsl/accessors/*/
+            /home/runner/.gradle/caches/*/kotlin-dsl/scripts/*/
+      - name: Restore exact component 4
+        id: restore-4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: "gradle-dependencies-v2-18b3019ae4430915e37b40f65cba3340"
+          fail-on-cache-miss: true
+          path: |
+            /home/runner/.gradle/caches/modules-*/files-*/*/*/*/*/
+      - name: Restore exact component 5
+        id: restore-5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: "gradle-transforms-v2-76683d0d6cb094a47debf1740d4fab16"
+          fail-on-cache-miss: true
+          path: |
+            /home/runner/.gradle/caches/transforms-4/*/
+            /home/runner/.gradle/caches/*/transforms/*/
+      - name: Restore exact component 6
+        id: restore-6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: "gradle-instrumented-jars-v2-45029a4f7db764cd5e32ea10e45d6822"
+          fail-on-cache-miss: true
+          path: |
+            /home/runner/.gradle/caches/jars-*/*/
+      - name: Require seven exact cache hits before treating the replay as evidence
+        env:
+          R_CACHE_HIT_0: ${{ steps.restore-0.outputs.cache-hit }}
+          R_CACHE_HIT_1: ${{ steps.restore-1.outputs.cache-hit }}
+          R_CACHE_HIT_2: ${{ steps.restore-2.outputs.cache-hit }}
+          R_CACHE_HIT_3: ${{ steps.restore-3.outputs.cache-hit }}
+          R_CACHE_HIT_4: ${{ steps.restore-4.outputs.cache-hit }}
+          R_CACHE_HIT_5: ${{ steps.restore-5.outputs.cache-hit }}
+          R_CACHE_HIT_6: ${{ steps.restore-6.outputs.cache-hit }}
+        run: |
+          node --input-type=module-typescript <<'TYPESCRIPT'
+          import assert from 'node:assert/strict';
+          const hits = Object.entries(process.env).filter(([name]) => name.startsWith('R_CACHE_HIT_'));
+          assert.equal(hits.length, 7);
+          for (const [name, value] of hits) assert.equal(value, 'true', `${name}: no exact archive; replay is inconclusive`);
+          TYPESCRIPT
+      - name: Record the restored root artifacts and binary metadata
+        run: node "$RUNNER_TEMP/r-proof/snapshot.mts" snapshot
+      - name: Run the failed schema invocation offline
+        working-directory: server
+        run: |
+          set -euo pipefail
+          ./gradlew :application:liquibaseUpdate :application:liquibaseDiff -PpostgresPort=5432 -PpackagedServer=true --offline --stacktrace --info 2>&1 | tee "$RUNNER_TEMP/r-proof/offline-gradle.log"
+      - name: Prove that neither packaged JAR changed
+        if: always()
+        run: node "$RUNNER_TEMP/r-proof/snapshot.mts" verify
+      - name: Retain probe evidence even when the resolver refuses
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: r-offline-cache-proof-${{ github.run_id }}
+          path: ${{ runner.temp }}/r-proof
+          retention-days: 7
+          if-no-files-found: warn
