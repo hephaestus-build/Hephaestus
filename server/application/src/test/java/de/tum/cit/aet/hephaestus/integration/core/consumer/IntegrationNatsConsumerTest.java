@@ -34,8 +34,11 @@ import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -679,6 +682,26 @@ class IntegrationNatsConsumerTest {
         }
 
         @Test
+        void shouldStartNoConsumerFromARetryThatWasPendingWhenTheScopeStopped() throws IOException {
+            FakeFleet consumer = fleetFailingOn(OUTLINE_STREAM);
+            consumer.heldRetries = new ConcurrentLinkedQueue<>();
+            assertThatThrownBy(() -> consumer.reconcileScope(SCOPE_ID)).isInstanceOf(IOException.class);
+            Runnable pending = Objects.requireNonNull(consumer.heldRetries.poll());
+
+            consumer.stopConsumingScope(SCOPE_ID);
+            consumer.failingStreams.clear();
+            pending.run();
+            // A stop waits until no setup task holds the scope, so a reconcile that the retry began has ended here.
+            consumer.stopConsumingScope(SCOPE_ID);
+
+            assertThat(consumer.started)
+                    .as("only the consumer of the first pass, which the stop ended")
+                    .hasSize(1)
+                    .noneMatch(ScopeConsumer::isRunning);
+            assertThat(consumer.heldRetries).isEmpty();
+        }
+
+        @Test
         void shouldKeepConsumerTrackedWhenItFailsToStopForDroppedStream() throws IOException {
             FakeFleet consumer = fleetFailingOn();
             consumer.stopFailingStreams.add(OUTLINE_STREAM);
@@ -749,6 +772,9 @@ class IntegrationNatsConsumerTest {
             private final AtomicReference<@Nullable Runnable> beforeNextCreation = new AtomicReference<>();
             private final List<ScopeConsumer> started = new CopyOnWriteArrayList<>();
 
+            /** When set, holds each reconcile retry instead of timing it, so the test decides when it fires. */
+            private volatile @Nullable Queue<Runnable> heldRetries;
+
             FakeFleet(Set<String> failingStreams) {
                 this(failingStreams, new CopyOnWriteArraySet<>(List.of(SCM_STREAM, OUTLINE_STREAM)));
             }
@@ -789,6 +815,13 @@ class IntegrationNatsConsumerTest {
             @Override
             void ensureNatsConnectionEstablished() {
                 // no broker in a unit test
+            }
+
+            @Override
+            void submitDelayed(Runnable task, long delayMs) {
+                Queue<Runnable> held = heldRetries;
+                if (held == null) super.submitDelayed(task, delayMs);
+                else held.add(task);
             }
 
             @Override
