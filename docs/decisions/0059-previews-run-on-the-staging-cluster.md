@@ -1,6 +1,6 @@
 # ADR 0059: Previews run on the staging cluster
 
-**Status:** Accepted
+**Status:** Deprecated
 **Date:** 2026-10-25
 **Authors:** Felix T.J. Dietrich
 
@@ -172,3 +172,13 @@ Fetched 2026-10-25.
 - **L1** [Liquibase contexts](https://docs.liquibase.com/concepts/changelogs/attributes/contexts.html).
 - **G2** [GitHub OAuth redirect URLs](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps): wildcard matching of subdomains.
 - **GH1** [GitHub Security Lab, preventing pwn requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/).
+
+## Update — 2026-11-11: deprecated, because no deployed preview exists
+
+No pull request preview is deployed, and nothing deploys one.
+The `preview` label still builds every image at the pull request's head tag, but no workflow deploys those images ([CI/CD § The `preview` label](../contributor/ci-cd.mdx#the-preview-label)).
+The chart profile `profiles/preview.yaml` has no caller, and it still sizes NATS and the webhook role.
+
+The maintainers decided to delete promises that nothing keeps. Thus this decision no longer applies, and no ADR replaces it.
+The label path, the profile and their docs are handed to removal.
+The static Storybook and documentation previews of a pull request are not part of this decision. [CI/CD § Static preview comments](../contributor/ci-cd.mdx#static-preview-comments) describes them.

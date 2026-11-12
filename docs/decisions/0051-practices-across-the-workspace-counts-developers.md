@@ -1,12 +1,13 @@
 # ADR 0051: Practices across the workspace counts developers and never names one
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md)
 **Date:** 2026-10-02
 **Amended:** 2026-10-07, accepted. The page has no smallest count. *Amendment of 2026-10-07* gives the change.
 2026-10-09: standings and practices stay out of sorting and the public page. *Update — 2026-10-09* gives the limit.
 **Authors:** Valentin Grüner
 **Builds on:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md) (no score, no rank),
 [ADR 0047](0047-the-practice-profile-has-one-reader.md) (the Practice profile has one reader)
+**Amended by:** [ADR 0065](0065-standing-counts-the-newest-observation-of-each-item.md)
 
 ## Context
 

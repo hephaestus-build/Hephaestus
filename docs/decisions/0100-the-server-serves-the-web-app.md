@@ -1,6 +1,6 @@
 # ADR 0100: The server serves the web app
 
-**Status:** Accepted (2026-11-11)
+**Status:** Accepted
 **Date:** 2026-11-11
 **Authors:** Felix T.J. Dietrich
 
@@ -104,7 +104,7 @@ The work lands in four stages. Each stage is one pull request that `git revert` 
 - **Local development** keeps Vite with hot reload. The browser calls `/api` on the Vite origin, and Vite sends it to the server. A local OAuth app needs the callback `http://localhost:<SERVER_PORT>/api/login/oauth2/code/<id>`.
 - **The frontend cannot scale or deploy alone.** Releases already ship in lockstep with one chart version, so this costs nothing today.
 
-## Enforcement
+## Confirmation
 
 Each stage adds the check that keeps its part true:
 

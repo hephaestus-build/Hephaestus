@@ -1,12 +1,10 @@
 # ADR 0042: Hosts pull their own releases
 
-Date: 2026-09-03
-
-## Status
-
-Accepted. Replaces the CI-driven SSH push deployment, which no ADR had recorded; the release
-evidence and image-lock decisions it builds on ([0034](0034-signed-release-image-lock.md)) are
-unchanged. Amended 2026-10-25 — the apply step becomes `helm upgrade`, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md). Amended 2026-10-26 — the project's own host operations live outside the product repository.
+**Status:** Superseded by [ADR 0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md)
+**Date:** 2026-09-03
+**Supersedes:** the CI-driven SSH push deployment, which no ADR recorded.
+**Builds on:** [ADR 0034](0034-signed-release-image-lock.md). Its release evidence and image lock stay unchanged.
+**Amended by:** [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md)
 
 ## Context
 

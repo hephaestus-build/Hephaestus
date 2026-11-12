@@ -101,6 +101,12 @@ The webapp sanitizes the markup again with DOMPurify [9] and draws it inline.
 - Heph explains a practice in the same words as the panel.
 - The introduction always shows. It is short, and the detail is in the **Guide** tab.
 
+## Confirmation
+
+`PracticeGuidanceRulesTest` fails if the server allowlist accepts a script, a link, an id, a style, an outside reference or a DOCTYPE.
+`practice-svg.test.ts` checks the second layer in the webapp.
+The panel layout is not enforced. Review of `PracticeDetailLevel.tsx` catches it.
+
 ## Revisit trigger
 
 - A theme change that the `pv-*` classes cannot express.
@@ -125,3 +131,11 @@ The titles below are quotations.
 9. DOMPurify: <https://github.com/cure53/DOMPurify>
 
 <!-- vale STE.Words = YES -->
+
+## Update — 2026-11-11: the panel layout follows main
+
+The practice panel differs from § Decision, and main is decided.
+The tabs are Feedback, Observations and Guide, in that order.
+The introduction (lead, visual and caption) is inside the Guide tab.
+The Guide tab shows when the practice has words, a visual or a guide.
+[Practice profile](../user/practice-profile.mdx) describes the panel.

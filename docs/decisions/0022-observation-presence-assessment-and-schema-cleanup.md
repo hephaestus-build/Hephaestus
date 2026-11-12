@@ -1,6 +1,6 @@
 # ADR 0022: Observation = presence × assessment (drop `Practice.kind`); reaction anchors on feedback; ruthless column cleanup
 
-**Status:** Accepted (observation semantics amended before 1.0; 2026-09-17 — channel value corrected); superseded 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md)
+**Status:** Superseded by [ADR 0056](0056-one-practice-model-for-items-and-scans.md)
 **Date:** 2026-06-24
 **Authors:** Felix T.J. Dietrich
 **Supersedes (in part):** [ADR 0021](0021-observations-feedback-synthesis-seam.md) F-6 (the sign-neutral `Observation` × `Practice.kind` split) and F-13/F-24 (the `FeedbackReaction` reshape with a nullable `finding_id` and an open `verb` event log)

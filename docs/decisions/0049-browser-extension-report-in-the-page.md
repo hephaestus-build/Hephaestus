@@ -1,6 +1,6 @@
 # ADR 0049: The browser extension shows its report in the page and confirms changes in its own window
 
-**Status:** Accepted (amended 2026-10-12 — a not met result names its problems)
+**Status:** Accepted
 **Date:** 2026-09-27
 **Authors:** Felix T.J. Dietrich
 
@@ -65,8 +65,8 @@ Within the chosen section, and on lists:
   The collapsed line says what a review is doing now, how many such comments there are, and when a
   review last recorded a result.
 - Opened, the report is flat, as a merge request report's second level: the reader's comments, each
-  one link to that comment on the provider; then the reader's own observations on that exact work (a
-  paired `artifactKind`/`artifactId` filter), loaded when the report opens, each its practice, outcome
+  one link to that comment on the provider; then the reader's own observations on that exact work
+  (`listOwnResults` with the work's `itemId`), loaded when the report opens, each its practice, outcome
   and one sentence; then the precise review time and commit, and links into the web app. Nothing
   inside opens further. The worker checks each returned record is about that work.
 - The page shows every reader only their own records, admins included, and no feedback text at all.
@@ -84,7 +84,7 @@ Within the chosen section, and on lists:
   line and the reader's comments.
 - The frame never sends a review change. It asks the worker to open `action.html`, a top-level page
   that is not web-accessible. The worker binds one pending intent to the session generation, the
-  source tab and work, the run, and the confirmation tab it creates; the window re-reads it, and
+  source tab and work, and the confirmation tab it creates; the window re-reads it, and
   confirming consumes it atomically before the single request. An unanswered request is reported as
   unknown and never retried. Approving or rejecting feedback stays in the web app.
 - The reader's choices in a report — opened or not, which workspace — are kept by the worker per tab,
@@ -95,7 +95,7 @@ Within the chosen section, and on lists:
 - The report adds bounded height to the page when opened; that is the reader's choice.
 - Each provider slot is a dependency on provider markup. Slots are recorded from real pages and
   mirrored in fixtures; a redesign removes the report from that page rather than misplacing it.
-- The automatic lookup is a disclosed data flow: onboarding, settings, the privacy page, the record of
+- The automatic lookup is a disclosed data flow: onboarding, settings, the Chrome extension privacy page, the record of
   processing and the store listing describe it. A list row's lookup is disclosed the same way.
 - The first thing a reader sees depends on the server recording each posted comment's provider
   handle and, where it can, its address. A comment without a recorded address is listed without a
@@ -103,6 +103,12 @@ Within the chosen section, and on lists:
   provider's timeline.
 - List rows are another dependency on provider markup, handled the same way: an unknown list shape
   gets no controls.
+
+## Confirmation
+
+`wxt-config.test.ts` fails if any page other than `inline.html` becomes web-accessible, so `action.html` stays out of reach of the page.
+`actions.test.ts` checks the intent binding, the single atomic send, and that a lost answer is never sent again.
+`inline-controller.test.ts` checks the known slots and that the host in the page says nothing about the work.
 
 ## Revisit trigger
 
@@ -116,3 +122,11 @@ Under a `NOT_MET` result, it shows the one-line summary of each problem, in the 
 The list endpoint carries these summaries only where the result detail would show its evidence.
 The report still shows no feedback text, no explanation, and no place in the work.
 Nothing inside opens further.
+
+## Update — 2026-11-11: a listed comment shows its location
+
+A listed comment in the report shows its file and its lines.
+The update of 2026-10-12 said that the report shows no place in the work.
+Main shows the location, and the [browser extension privacy page](../user/browser-extension-privacy.mdx) says that the records carry their locations.
+The location is the reader's own work on the page that the reader has open, so it shows nothing new to the reader.
+This update records main as decided.

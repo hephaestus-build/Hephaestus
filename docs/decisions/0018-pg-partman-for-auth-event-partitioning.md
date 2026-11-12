@@ -1,10 +1,10 @@
 # ADR 0018: pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions)
 
-**Status:** Accepted (PostgreSQL version superseded by [ADR 0038](0038-postgresql-18-release-baseline.md); amended 2026-09-17 — image name and changeset location; 2026-10-25 — `pg_stat_statements` preloaded)
+**Status:** Accepted
 **Date:** 2026-06-09
 **Authors:** Felix T.J. Dietrich
 **Supersedes (partition sub-decision only):** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
-**PostgreSQL version superseded by:** [ADR 0038](0038-postgresql-18-release-baseline.md)
+**Amended by:** [ADR 0038](0038-postgresql-18-release-baseline.md)
 
 ## Context
 
@@ -55,6 +55,11 @@ Built the image locally; applied the full changelog via `liquibase:update`; conf
 loads, `create_parent` builds current+2 ahead with a default, an insert lands in a real monthly child
 (not the default), and `run_maintenance_proc()` runs — all with no `shared_preload_libraries`.
 
+## Confirmation
+
+`ProductionSchemaContractIntegrationTest#shouldRecreateTheNewestAuthEventPartitionWhenMaintenanceRuns` fails when the in-app maintenance no longer creates partitions.
+Nothing checks that the image does not preload `pg_partman_bgw`. Review of `docker/postgres/` catches that.
+
 ## Update — 2026-09-17
 
 Corrects § Decision "Image" and "Definition"; scheduling is as decided
@@ -66,8 +71,8 @@ server role, and `docker/postgres/Dockerfile` sets no `shared_preload_libraries`
   [ADR 0038](0038-postgresql-18-release-baseline.md)).
 - The [v0.95.0 source](https://github.com/hephaestus-build/Hephaestus/tree/v0.95.0/docs/db/archive/v0.77.4/changelog) retains changeset `1780825201546-18-auth-event-partman` (`1780825201546_changelog.xml`); a fresh
   database registers `auth_event` with `partman.create_parent` (monthly, `p_premake := 2`,
-  retention 12 months) in changeset `baseline_v0_77_4-seed` of
-  `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.xml`.
+  retention 12 months) in changeset `1.0.0-seed` of
+  `server/application/src/main/resources/db/changelog/1.0.0/baseline.xml`.
 
 ## Update — 2026-10-25
 

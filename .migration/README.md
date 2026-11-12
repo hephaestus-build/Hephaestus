@@ -6,6 +6,8 @@ changeset whose summary contains `**Operators:**`. Never edit `MIGRATION.md`'s `
 section. `vp run release:version` sorts fragments by filename, inserts them under a new version
 heading below the unchanged `### Next release` anchor, and then removes them.
 
+Name the fragment's heading on an upgrade page in `docs/admin/`, such as *Upgrade to 1.0*. `gate:docs-pages` checks it.
+
 For changes to current instructions outside version history, see
 [Current migration-guide instructions](https://docs.hephaestus.build/contributor/release-management#current-migration-guide-instructions).
 

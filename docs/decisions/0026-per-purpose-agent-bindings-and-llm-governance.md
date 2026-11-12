@@ -1,6 +1,6 @@
 # ADR 0026: Per-purpose agent bindings and governed OpenAI-compatible LLM catalog
 
-**Status:** Accepted, amended 2026-07-26 (named-agent-config model deleted), 2026-09-22 (member AI choice is per account, and the tiers collapse to in-house and cloud from one declared fact), 2026-10-09 (purposes for practice scripts and model protocols), 2026-10-09 (Heph turn accounting, [ADR 0057](0057-one-heph-conversation-per-developer.md)) and 2026-10-14 (job names). Superseded in part on 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
+**Status:** Superseded by [ADR 0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md)
 **Date:** 2026-07-24
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md) (in-app LLM proxy as the sole credential path), [ADR 0025](0025-agent-job-queue-on-postgresql.md) (PostgreSQL agent job queue)
@@ -40,6 +40,7 @@
 > already is. A developer's choice is now `NO_AI`, `IN_HOUSE_ONLY` or `CLOUD`, still a ceiling, so
 > Cloud also admits in-house models. Both amendments land in the same unreleased changelog, so no
 > saved choice predates the two-tier meaning.
+**Amended by:** [ADR 0057](0057-one-heph-conversation-per-developer.md), [ADR 0079](0079-one-agent-system.md)
 
 ## Current runtime boundary
 

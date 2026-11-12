@@ -1,7 +1,8 @@
 # ADR 0009: Worker runtime substrate + WSS-over-443 control channel
 
-**Status:** Accepted (amended 2026-07-21 #1368 — drain requeues in-flight jobs; 2026-09-03 #1719 — remote-worker premise superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — frame type names corrected; 2026-10-09 — mentor frames removed, correction of the 2026-09-05 note, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-28 — WSS control channel superseded, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+**Status:** Superseded by [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md)
 **Date:** 2026-05-21
+**Amended by:** [ADR 0041](0041-compose-1x-kubernetes-2.md), [ADR 0057](0057-one-heph-conversation-per-developer.md), [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)
 
 ## Context
 

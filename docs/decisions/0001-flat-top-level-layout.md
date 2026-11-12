@@ -1,6 +1,6 @@
 # ADR 0001: Flat top-level layout
 
-**Status:** Accepted (amended 2026-09-17 — `server/` is a two-module Gradle root per [0032](0032-generated-clients-build-boundary.md))
+**Status:** Accepted
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -44,9 +44,14 @@ Adopt option 1 (flat top-level). `server/application-server/` → `server/`.
 - Docker image names, Compose service names, Traefik labels, and the
   `generate:api:application-server` package script are intentionally NOT renamed in this epic —
   they're deploy-side concerns with a rollback story and live in a follow-up issue.
-- The current top-level layout is: `server/`, `webapp/`, `docs/`. The webhook receiver runs from
-  the `server/` artifact under the `webhook` Spring profile and ships as a separate
-  `webhook-server` container from the same image — see **ADR 0008**.
+- `AGENTS.md` § Where code lives lists the current top-level layout.
+  The webhook receiver runs from the `server/` artifact under the `webhook` Spring profile.
+  It runs as the `webhook` workload of the Helm chart from the same image. See **ADR 0008**.
+
+## Confirmation
+
+Not enforced.
+Review catches a new top-level directory or a new nesting level under `server/`.
 
 ## Revisit trigger
 
@@ -68,6 +73,6 @@ Corrects § Decision and § Consequences on where the code lives and what is shi
   `docker/` are build contexts, not top-level siblings.
 - The `generate:api:application-server` script is `generate:api:specs` and `generate:api:client`
   (`vite.config.ts`).
-- The image name is corrected in [ADR 0008](0008-webhook-runtime-role.md) § Update 2026-09-17; the
-  Compose service names `application-server` and `webhook-server` stand (`docker/compose.app.yaml`,
-  `docker/compose.core.yaml`).
+- The image name is corrected in [ADR 0008](0008-webhook-runtime-role.md) § Update 2026-09-17.
+  The runtime roles are workloads of the Helm chart (`deploy/chart/hephaestus/templates/`).
+  No Compose file ships. `server/compose.yaml` starts only local development services.

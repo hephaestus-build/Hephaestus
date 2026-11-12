@@ -1,6 +1,6 @@
 # ADR 0017: Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs)
 
-**Status:** Accepted (amended — Stage B-2 login model; read-only user views; data model corrected against the schema; installed clients by [ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md)); superseded in part 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md)
+**Status:** Superseded by [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md)
 **Date:** 2026-05-28
 **Authors:** Felix T.J. Dietrich
 **Supersedes (Stage A):** [ADR 0016](0016-unified-identity-keycloak-as-truth.md)
@@ -16,6 +16,7 @@
 > token/PAT) — mirroring how tools like CodeRabbit wire self-hosted GitLab. Workspace creation is
 > additionally gated by `hephaestus.workspace.creation-policy` (`ADMIN_ONLY` default | `SELF_SERVICE`).
 > Read the `kind=OIDC_LOGIN_*` / `OidcLoginConfig` references below as historical.
+**Amended by:** [ADR 0018](0018-pg-partman-for-auth-event-partitioning.md), [ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md), [ADR 0056](0056-one-practice-model-for-items-and-scans.md)
 
 ## Context
 

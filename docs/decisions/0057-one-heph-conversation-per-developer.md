@@ -1,6 +1,6 @@
 # ADR 0057: One Heph conversation per developer, on a stateless shared Heph host
 
-**Status:** Accepted (amended 2026-10-28 — Heph's host and turn sandbox superseded, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)). Superseded in part on 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
+**Status:** Superseded by [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md)
 **Date:** 2026-10-09
 **Authors:** Felix T.J. Dietrich
 
@@ -13,6 +13,7 @@
 
 - [ADR 0046](0046-heph-follows-its-model-not-a-workspace-switch.md): the precedent for a drop in the same release.
 - [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md): no score, rank, or streak.
+**Amended by:** [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md), [ADR 0079](0079-one-agent-system.md)
 
 ## Context
 

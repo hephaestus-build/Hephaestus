@@ -1,8 +1,9 @@
 # ADR 0004: SQL-layer tenancy enforcement via WorkspaceStatementInspector
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md)
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
+**Amended by:** [ADR 0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md)
 
 ## Context
 

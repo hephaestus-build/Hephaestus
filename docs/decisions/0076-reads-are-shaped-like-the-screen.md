@@ -87,11 +87,18 @@ A statement budget alone does not find that.
 
 ## Consequences
 
-- On 2026-11-03, three associations are eager: `Connection.workspace`, `ConnectionAudit.connection` and `Workspace.repositoriesToMonitor`. They become lazy in the change that adds the architecture rule.
+- On 2026-11-03, three associations are eager: `Connection.workspace`, `ConnectionAudit.connection` and `Workspace.repositoriesToMonitor`. All three are lazy now, and the architecture rule keeps them lazy.
 - About 440 entity reads and 125 interface projections do not follow the pattern. A read converts when a change touches it or when it is measured hot. The main screens convert first.
 - A native read can break at run time when a column moves. Its integration test is the only check.
 - A record per screen adds types. Each one sits next to its query and replaces a DTO factory and its lazy reads.
 - The guard runs only on the endpoints that have a measured test. The plan check sees the plans of an almost empty test database with sequential scans off. It proves that an index can serve a statement, not that PostgreSQL chooses it on real data. Decision 4 covers that.
+
+## Confirmation
+
+`LazyAssociationArchitectureTest#associationsAreLazy` fails for an eager association (decision 3).
+The screen tests that use `SqlRequestTrace` and `QueryPlans` fail on a statement budget or a filtered sequential scan (decision 5).
+Each JPQL `select new` read fails at startup when it does not match its record.
+Decisions 2 and 4 are not enforced. Review catches a native read without its integration test and a changed read without a plan.
 
 ## Revisit trigger
 

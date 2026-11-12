@@ -1,10 +1,11 @@
 # ADR 0062: The item is the review scope
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md)
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** [ADR 0056](0056-one-practice-model-for-items-and-scans.md). Its item, version and current-claim model stays.
+**Amended by:** [ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md)
 
 ## Context
 

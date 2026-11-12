@@ -1,6 +1,6 @@
 # ADR 0068: Reviews and Heph run on one agent runtime
 
-**Status:** Accepted (2026-10-28). Superseded in part on 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
+**Status:** Superseded by [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md)
 **Date:** 2026-10-27
 **Authors:** Felix T.J. Dietrich
 
@@ -26,6 +26,7 @@
 - [ADR 0061](0061-review-seals-then-feedback-composes.md): composition is a worker step, not a sandbox.
 
 Each ADR above has a dated update block that points here.
+**Amended by:** [ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md), [ADR 0079](0079-one-agent-system.md)
 
 ## Context
 

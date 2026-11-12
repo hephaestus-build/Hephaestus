@@ -1,6 +1,6 @@
 # ADR 0029: Separate measurement from intervention and derive level from channel
 
-**Status:** Accepted (amended 2026-09-17 — `basedOn` names this run's observations only); superseded 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md)
+**Status:** Superseded by [ADR 0056](0056-one-practice-model-for-items-and-scans.md)
 **Date:** 2026-08-16
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0021](0021-observations-feedback-synthesis-seam.md), [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md), [ADR 0007](0007-sandbox-spi-shape.md)

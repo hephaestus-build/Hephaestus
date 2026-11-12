@@ -1,6 +1,6 @@
 # ADR 0069: Practices run when they are ready and stay current by their sources
 
-**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md))
+**Status:** Superseded by [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md)
 **Date:** 2026-10-28
 **Authors:** Felix T.J. Dietrich
 
@@ -28,6 +28,7 @@ For Pod admission, see [decision G](0068-reviews-and-heph-run-on-one-agent-runti
 Driver 7 of ADR 0068 says that a review sends its results once, at the end. With [ADR 0063](0063-each-practice-is-staged-when-it-ends.md), each practice stages when it ends.
 
 Each amended ADR has a dated update block that points here.
+**Amended by:** [ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md), [ADR 0079](0079-one-agent-system.md)
 
 ## Context
 

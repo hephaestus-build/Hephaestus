@@ -1,6 +1,6 @@
 # ADR 0058: The Helm chart is the only supported deployment from 1.0
 
-**Status:** Accepted (amended 2026-10-25 — previews, [ADR 0059](0059-previews-run-on-the-staging-cluster.md)) (amended 2026-10-28 — the Docker driver, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)). Amended on 2026-11-08 for 1.0 backup qualification, as specified below.
+**Status:** Superseded by [ADR 0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md)
 **Date:** 2026-10-25
 **Authors:** Felix T.J. Dietrich
 
@@ -11,6 +11,7 @@
 - [ADR 0042](0042-hosts-pull-their-own-releases.md): the apply step becomes `helm upgrade`. The trust model stays.
 - [ADR 0035](0035-pull-request-previews-are-label-gated.md): the Coolify preview path goes. The preview policy stays.
 - [ADR 0034](0034-signed-release-image-lock.md): the chart lock applies from 1.0, not from 2.0.
+**Amended by:** [ADR 0059](0059-previews-run-on-the-staging-cluster.md), [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md), [ADR 0070](0070-1-0-is-a-cutover-release.md)
 
 ## Context
 

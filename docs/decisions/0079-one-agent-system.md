@@ -1,6 +1,6 @@
 # ADR 0079: One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain
 
-**Status:** Accepted (2026-11-09). Amended 2026-11-09: [outbox erasure](#update--2026-11-09-erasure-deletes-the-actions-of-an-account), [sandbox token](#update--2026-11-09-a-tool-may-hold-the-sandbox-token), [run kinds](#update--2026-11-09-the-review-run-kinds-are-review-and-review_compose), [no NATS or webhook role](#update--2026-11-10-provider-events-go-to-a-postgresql-inbox).
+**Status:** Accepted
 **Date:** 2026-11-09
 **Authors:** Felix T.J. Dietrich
 
@@ -25,6 +25,7 @@
 
 Each ADR above has an update block, dated 2026-11-09, that names the sections that change and the sections that stay.
 
+**Amended by:** [ADR 0097](0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md)
 **Builds on:** [ADR 0070](0070-1-0-is-a-cutover-release.md) (1.0 is a cutover) and [ADR 0078](0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md) (explicit lifecycles).
 
 ## Context

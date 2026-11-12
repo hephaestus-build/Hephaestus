@@ -73,7 +73,7 @@ That single condition is what makes "never silent" and "never said twice" hold a
 
 **Success copy states a bound the system keeps, not a hedge.** Where a write's effect is not
 immediate, the confirmation says how long — "New calls resume within a minute", because
-`ProxyBudgetGate` caches its verdict for 30s (ADR 0026). "Resumes now" would be a small lie, and
+`ProxyBudgetGate` caches its verdict for 5 seconds (ADR 0026). "Resumes now" would be a small lie, and
 "about a minute" would be a hedge rather than a promise.
 
 ## Consequences
@@ -85,6 +85,13 @@ immediate, the confirmation says how long — "New calls resume within a minute"
   dialog's rejection is silent — the exact failure this ADR exists to prevent.
 - Call sites carry a one-line reference here instead of the argument. The argument had reached four
   copies across two routes and two tests, in two wordings, before it was extracted.
+
+## Confirmation
+
+`ConfirmDialog.test.tsx` fails if a confirm stays open after confirm or blocks Escape while its request is out.
+`use-pending-mutation-ids.test.tsx` checks that the row stays busy until its own request settles.
+`-admin-usage-route.test.tsx` checks the settle-time rule for the budget dialog: a toast after dismissal, and only the field error while it is open.
+Review catches a new dismissible write dialog without the settle-time check.
 
 ## Revisit trigger
 

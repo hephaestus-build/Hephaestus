@@ -1,6 +1,6 @@
 # ADR 0003: Spring Modulith 2.0 adoption with two empirical shared kernels
 
-**Status:** Accepted (amended 2026-09-17 — kernel and named-interface names corrected). Superseded 2026-11-12 by [ADR 0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md).
+**Status:** Superseded by [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md)
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -87,6 +87,12 @@ The Gradle `architectureTest` tier runs the module-boundary verification. The
   SecurityUtils.java moved into `core/security/`) are accepted today. Further root
   cleanup tracked separately.
 
+## Confirmation
+
+`ModulithVerificationTest#modulesAreCycleFreeAndRespectNamedInterfaces` calls `ApplicationModules.verify()`.
+It fails on a module cycle or on an access to a type outside a named interface.
+It runs in the Gradle `architectureTest` tier.
+
 ## Revisit trigger
 
 A new cycle that lands in CI surfaces a coupling pattern not covered by the current
@@ -100,18 +106,11 @@ pattern in ADR 0005.
 Corrects the names in § Decision and § Consequences; the shape decided there is unchanged.
 
 - The `gitprovider` kernel is `integration/scm` ([ADR 0015](0015-unified-integration-framework.md)).
-  `Type.OPEN` is declared on `config`, `integration`, `integration/core`, `integration/scm`,
+  `Type.OPEN` is declared on `config`, `integration/core`, `integration/scm`,
   `integration/scm/github`, `integration/scm/gitlab` and `integration/slack` (`package-info.java`
   under `server/application/src/main/java/de/tum/cit/aet/hephaestus/`).
-- `practices::finding` is `practices::observation`
-  ([ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md) renamed the entity);
-  `practices` also exposes `feedback`, `feedback-approval`, `reaction` and `autonomy`.
-- `core` exposes `exception`, `security`, `proxy`, `runtime` and `event` as decided, plus `web`,
-  `webhook`, `release`, `settings-spi`, `config-audit-spi`, `auth-spi`, `auth-ratelimit`,
-  `current-account`, `worker-hub`, `worker-auth` and `worker-protocol`.
-- `workspace` exposes `context`, `authorization`, `spi` and `settings` as decided, plus `dto` and
-  `events`.
-- `activity` exposes `scoring` as decided, plus `spi`.
+- The `@NamedInterface` declarations in the code of each module are the list of its named
+  interfaces. This ADR does not repeat that list.
 - The verification entry point is `ApplicationModules.of(Application.class, …)` in
   `server/application/src/test/java/de/tum/cit/aet/hephaestus/architecture/ModulithVerificationTest.java`;
   there is no `HephaestusApplication` class. `Application.java`, `SecurityConfig.java`,

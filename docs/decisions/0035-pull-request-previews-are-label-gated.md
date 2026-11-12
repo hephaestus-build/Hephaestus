@@ -1,9 +1,10 @@
 # ADR 0035: Pull request previews are label-gated and driven from the default branch
 
-**Status:** Accepted (amended 2026-09-03 #1719 — agent execution host superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — previews only for pull requests targeting `main`, and the concurrency groups; 2026-10-16 — stacked previews restored; 2026-10-18 — pushes deploy on CI completion; 2026-10-25 — the Coolify preview path goes, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md), and the mechanism is superseded by [ADR 0059](0059-previews-run-on-the-staging-cluster.md))
+**Status:** Deprecated
 **Date:** 2026-08-28
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) (the runtime the controller is written for)
+**Amended by:** [ADR 0041](0041-compose-1x-kubernetes-2.md), [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md), [ADR 0059](0059-previews-run-on-the-staging-cluster.md)
 
 ## Context
 
@@ -290,3 +291,13 @@ The mechanism parts of the updates of 2026-09-17, 2026-10-16, and 2026-10-18 als
 ADR 0059 § What changes from ADR 0035 lists the policy changes: drafts lose their preview, and a push can make a preview unavailable while CI publishes.
 
 This decision keeps its label policy. ADR 0059 § What stays from ADR 0035 owns the kept policy.
+
+## Update — 2026-11-11: deprecated, because no deployed preview exists
+
+No pull request preview is deployed, and nothing deploys one.
+The `preview` label still builds every image at the pull request's head tag, but no workflow deploys those images ([CI/CD § The `preview` label](../contributor/ci-cd.mdx#the-preview-label)).
+The chart profile `profiles/preview.yaml` has no caller, and it still sizes NATS and the webhook role.
+
+The maintainers decided to delete promises that nothing keeps. Thus this decision no longer applies, and no ADR replaces it.
+The label path, the profile and their docs are handed to removal.
+The static Storybook and documentation previews of a pull request are not part of this decision. [CI/CD § Static preview comments](../contributor/ci-cd.mdx#static-preview-comments) describes them.

@@ -30,7 +30,7 @@ The following content is not prose that we can rewrite:
 - Executable code, identifiers, API keys, URLs, commands, paths, schema values, and configuration keys.
 - Provider payloads, exact error output, test data that must reproduce external input, and quotations from external sources.
 - Generated or third-party content, license notices, and historical release records.
-- Accepted ADRs are historical decision records and remain unchanged during a prose-only rewrite.
+- Accepted ADRs are decision records. A prose correction never changes what was decided. The [ADR rules](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/README.md#correct-update-or-supersede) say when to correct, update or supersede an ADR.
 - User content received or stored by the application.
 
 Keep exact external text unchanged.

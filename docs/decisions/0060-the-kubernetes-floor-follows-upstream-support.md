@@ -1,10 +1,11 @@
 # ADR 0060: The Kubernetes floor follows upstream support
 
-**Status:** Accepted (amended 2026-10-28 — sandbox nodes need user namespaces, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md); amended 2026-11-10 — the floor follows the AET cluster)
+**Status:** Superseded by [ADR 0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md)
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
 **Amends:** [ADR 0041](0041-compose-1x-kubernetes-2.md) § Deployment. This decision replaces its floor of 1.34.
+**Amended by:** [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)
 
 ## Context
 

@@ -242,6 +242,7 @@ In the user guide, it also checks these rules:
 - Each `Screenshot` has alt text of at most 155 characters.
 - Each `Screenshot` has a light and a dark image of at most 150 KB.
 
+The gate also checks that an upgrade page in `docs/admin/` names the heading of each `.migration` note.
 In the contributor guide, the gate checks on every page that a callout is a note, a tip, or a caution.
 On a page that declares its type, it also checks that the guide allows the type, and the rules for numbered steps and closing sections.
 

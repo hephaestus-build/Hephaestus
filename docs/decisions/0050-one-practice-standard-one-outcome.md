@@ -1,8 +1,9 @@
 # ADR 0050: One practice standard, one outcome
 
-**Status:** Accepted; superseded in part 2026-10-14 by [ADR 0056](0056-one-practice-model-for-items-and-scans.md)
+**Status:** Superseded by [ADR 0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md)
 **Date:** 2026-10-02
 **Supersedes:** The observation axes in [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md).
+**Amended by:** [ADR 0056](0056-one-practice-model-for-items-and-scans.md)
 
 ## Context
 

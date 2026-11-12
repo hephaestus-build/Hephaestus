@@ -1,10 +1,11 @@
 # ADR 0061: A practice review seals its results, then feedback is composed
 
-**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md))
+**Status:** Superseded by [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md)
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
 **Amends:** [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md) § where composition runs. The seam between measurement and intervention stays.
+**Amended by:** [ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md), [ADR 0079](0079-one-agent-system.md)
 
 ## Context
 

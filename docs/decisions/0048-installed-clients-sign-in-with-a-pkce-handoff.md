@@ -134,6 +134,12 @@ Option 6.
   issuer if third-party clients appear — is still the path for *third-party* clients. Installed
   clients published by this project are not third-party.
 
+## Confirmation
+
+`ClientSessionIntegrationTest` fails when a wrong verifier does not burn the code, or a reused refresh secret does not end the session.
+`ClientSessionConcurrencyIntegrationTest` fails when a refresh or exchange survives a concurrent revocation.
+`InstalledClientRegistryTest` fails when an extension id yields other than one exact callback and one origin.
+
 ## Revisit trigger
 
 - A third-party client needs to sign in, which needs consent screens and dynamic registration: mount
