@@ -11,8 +11,14 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import jdk.jfr.consumer.RecordingStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -216,4 +222,54 @@ class ProxyBudgetGateTest extends BaseUnitTest {
 
     @Nested
     class DirectModelCap {}
+
+    /** The proxy serves model calls on virtual threads, which a ledger read under a monitor would pin on Java 21. */
+    @Nested
+    class VirtualThreads {
+
+        @Test
+        void shouldReadTheLedgerWithoutPinningTheVirtualThreadThatAsks() throws Exception {
+            when(budgetService.headroom(WORKSPACE_ID)).thenAnswer(read -> {
+                Thread.sleep(50);
+                return instanceCapOfOneDollar("0.10");
+            });
+            List<String> pinned = new CopyOnWriteArrayList<>();
+            try (var events = new RecordingStream()) {
+                events.enable("jdk.VirtualThreadPinned")
+                        .withThreshold(Duration.ZERO)
+                        .withStackTrace();
+                events.onEvent("jdk.VirtualThreadPinned", event -> pinned.add(String.valueOf(event.getStackTrace())));
+                events.startAsync();
+                Thread.ofVirtual()
+                        .start(() -> gate.isBlocked(routing(UsageFundingSource.INSTANCE)))
+                        .join();
+                events.stop();
+            }
+            assertThat(pinned).as("pinned parks while the ledger was read").isEmpty();
+        }
+
+        @Test
+        void shouldReadTheLedgerAgainWhenACallSpentWhileTheVerdictWasRead() throws Exception {
+            var reading = new CountDownLatch(1);
+            var release = new CountDownLatch(1);
+            when(budgetService.headroom(WORKSPACE_ID))
+                    .thenAnswer(read -> {
+                        reading.countDown();
+                        release.await();
+                        return instanceCapOfOneDollar("0.60");
+                    })
+                    .thenReturn(instanceCapOfOneDollar("1.20"));
+            Thread first = Thread.ofVirtual().start(() -> gate.isBlocked(routing(UsageFundingSource.INSTANCE)));
+            assertThat(reading.await(10, TimeUnit.SECONDS)).isTrue();
+
+            gate.spent(WORKSPACE_ID);
+            release.countDown();
+            first.join();
+
+            assertThat(gate.isBlocked(routing(UsageFundingSource.INSTANCE)))
+                    .as("the verdict read before the spend is not kept")
+                    .isTrue();
+            verify(budgetService, times(2)).headroom(WORKSPACE_ID);
+        }
+    }
 }
