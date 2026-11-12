@@ -18,8 +18,8 @@ END $$;
 INSERT INTO identity_provider (type, server_url)
 VALUES ('GITLAB', 'http://127.0.0.1:18080')
 ON CONFLICT (type, server_url) DO NOTHING;
-INSERT INTO membership (workspace_id, account_id, role, hidden, review_selected, onboarding_seen_revision, public_activity_seen, joined_at)
-SELECT 986600, id, CASE WHEN app_role = 'APP_ADMIN' THEN 'OWNER' ELSE 'MEMBER' END, false, true, 0, false, now()
+INSERT INTO membership (workspace_id, account_id, role, role_source, hidden, review_selected, onboarding_seen_revision, public_activity_seen, joined_at)
+SELECT 986600, id, CASE WHEN app_role = 'APP_ADMIN' THEN 'OWNER' ELSE 'MEMBER' END, 'PERSON', false, true, 0, false, now()
 FROM account WHERE display_name ~ '^capacity-bench-[0-9]{3}$'
 ON CONFLICT DO NOTHING;
 UPDATE account SET ai_choice = 'CLOUD', ai_choice_at = now()

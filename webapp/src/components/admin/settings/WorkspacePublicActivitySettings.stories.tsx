@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 
 import { withStandardPage } from "@/stories/decorators";
-import { expectSettledVisible } from "@/stories/overlay";
+import { expectDismissed, expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { WorkspacePublicActivitySettings } from "./WorkspacePublicActivitySettings";
@@ -115,7 +115,7 @@ export const On: Story = {
 		// Turning the page off is a change of mind, not a decision to confirm.
 		await userEvent.click(canvas.getByRole("switch", { name: PAGE }));
 		await expect(args.onEnabledChange).toHaveBeenCalledWith(false);
-		await expect(screen.queryByRole("alertdialog")).toBeNull();
+		await expectDismissed("alertdialog");
 	},
 };
 
