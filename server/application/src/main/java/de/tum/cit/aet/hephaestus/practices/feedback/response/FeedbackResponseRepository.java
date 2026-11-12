@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.response;
 
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -19,23 +18,6 @@ public interface FeedbackResponseRepository extends JpaRepository<FeedbackRespon
         """, nativeQuery = true)
     Optional<FeedbackResponse> findCurrent(
             @Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
-
-    @Query(value = """
-        SELECT latest.resolution AS resolution, count(*) AS count FROM (
-          SELECT DISTINCT ON (r.feedback_id) r.feedback_id, r.resolution
-           FROM feedback_response r JOIN feedback f ON f.id = r.feedback_id AND f.workspace_id = r.workspace_id
-          WHERE r.workspace_id = :workspaceId AND f.developer_id = :developerId AND f.delivered_at IS NOT NULL
-          ORDER BY r.feedback_id, r.created_at DESC, r.id::text DESC
-        ) latest WHERE latest.resolution IS NOT NULL GROUP BY latest.resolution
-        """, nativeQuery = true)
-    List<ResolutionCount> countCurrentResolutions(
-            @Param("workspaceId") long workspaceId, @Param("developerId") long developerId);
-
-    interface ResolutionCount {
-        FeedbackResolution getResolution();
-
-        long getCount();
-    }
 
     /**
      * When each developer gave the answer that an admin reads: the resolution and, for a disagreement, its explanation.

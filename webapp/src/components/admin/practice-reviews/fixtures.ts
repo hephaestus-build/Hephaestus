@@ -2546,15 +2546,6 @@ function detailOf(summary: ReviewSummary, jobs: ReviewJob[] | null): ReviewDetai
 		...summary,
 		runtime: jobs === null ? null : { jobs },
 		usage: usageOf(jobs ?? []),
-		stageTiming: (jobs ?? []).map((job) => ({
-			stage: "RUN",
-			startedAt: job.startedAt,
-			completedAt: job.completedAt,
-			durationMs:
-				job.startedAt === null || job.completedAt === null
-					? null
-					: job.completedAt.getTime() - job.startedAt.getTime(),
-		})),
 		generatedPaths: null,
 	};
 }

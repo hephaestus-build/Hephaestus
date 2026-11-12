@@ -1,13 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -37,7 +33,7 @@ class ConnectionDetailDTOTest {
         Connection connection = outlineConnection(
                 new ConnectionConfig.OutlineConfig("https://o.test", "sub-1", "key/route", Set.of("documents")));
 
-        ConnectionDetailDTO dto = ConnectionDetailDTO.from(connection, manifests(), mapper);
+        ConnectionDetailDTO dto = ConnectionDetailDTO.from(connection, mapper);
 
         assertThat(dto.config()).containsEntry("serverUrl", "https://o.test");
         assertThat(dto.config()).containsEntry("webhookSubscriptionId", "sub-1");
@@ -56,7 +52,7 @@ class ConnectionDetailDTOTest {
                 new ConnectionConfig.GitHubAppConfig(100L, "acme", null, Set.of("issues")));
         stampPersistenceFields(connection);
 
-        ConnectionDetailDTO dto = ConnectionDetailDTO.from(connection, manifests(), mapper);
+        ConnectionDetailDTO dto = ConnectionDetailDTO.from(connection, mapper);
 
         assertThat(dto.config()).containsEntry("orgLogin", "acme").containsKey("installationId");
         assertThat(dto.config()).containsKey("serverUrl"); // null-valued keys survive redaction
@@ -79,7 +75,7 @@ class ConnectionDetailDTOTest {
                         Set.of(),
                         new ConnectionConfig.GitLabTokenMetadata(expiry, checked)));
         stampPersistenceFields(connection);
-        ConnectionDetailDTO dto = ConnectionDetailDTO.from(connection, manifests(), mapper);
+        ConnectionDetailDTO dto = ConnectionDetailDTO.from(connection, mapper);
         assertThat(dto.tokenExpiresAt()).isEqualTo(expiry);
         assertThat(dto.tokenExpiryCheckedAt()).isEqualTo(checked);
         assertThat(dto.config()).doesNotContainKey("tokenMetadata");
@@ -124,12 +120,6 @@ class ConnectionDetailDTOTest {
         connection.setState(IntegrationState.ACTIVE);
         stampPersistenceFields(connection);
         return connection;
-    }
-
-    private IntegrationManifestRegistry manifests() {
-        IntegrationManifestRegistry registry = mock(IntegrationManifestRegistry.class);
-        when(registry.capabilitiesFor(any())).thenReturn(Set.of());
-        return registry;
     }
 
     /** id/createdAt/updatedAt normally come from JPA; the DTO would NPE on null Instants. */

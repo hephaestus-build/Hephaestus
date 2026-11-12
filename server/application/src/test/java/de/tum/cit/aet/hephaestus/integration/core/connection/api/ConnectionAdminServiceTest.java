@@ -8,8 +8,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAudit;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -46,9 +44,6 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
     private ConnectionRepository connectionRepository;
 
     @Mock
-    private ConnectionAuditRepository auditRepository;
-
-    @Mock
     private ConnectionService connectionService;
 
     @Mock
@@ -66,12 +61,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
         // Real converter so the encrypt/round-trip behaviour is exercised end-to-end.
         credentialConverter = new CredentialBundleConverter("a".repeat(32), false);
         service = new ConnectionAdminService(
-                connectionRepository,
-                auditRepository,
-                connectionService,
-                workspaceRepository,
-                manifests,
-                credentialConverter);
+                connectionRepository, connectionService, workspaceRepository, manifests, credentialConverter);
     }
 
     @Test
@@ -109,24 +99,6 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
 
         // requested workspace 999 != actual 1
         assertThatThrownBy(() -> service.findInWorkspaceOrThrow(999L, 42L)).isInstanceOf(NoSuchElementException.class);
-    }
-
-    @Test
-    void auditForConnection_appliesLimit() {
-        Workspace ws = new Workspace();
-        ws.setId(1L);
-        Connection c = new Connection(
-                ws, IntegrationKind.GITHUB, "100", new ConnectionConfig.GitHubAppConfig(100L, null, null, Set.of()));
-        List<ConnectionAudit> entries = List.of(
-                new ConnectionAudit(c, "A", null, IntegrationState.ACTIVE, "ADMIN", "x", "1", null),
-                new ConnectionAudit(
-                        c, "B", IntegrationState.ACTIVE, IntegrationState.SUSPENDED, "ADMIN", "x", "2", null),
-                new ConnectionAudit(
-                        c, "C", IntegrationState.SUSPENDED, IntegrationState.ACTIVE, "ADMIN", "x", "3", null));
-        when(auditRepository.findByConnectionIdOrderByOccurredAtDesc(7L)).thenReturn(entries);
-
-        assertThat(service.auditForConnection(7L, 2)).hasSize(2);
-        assertThat(service.auditForConnection(7L, 100)).hasSize(3);
     }
 
     @Test

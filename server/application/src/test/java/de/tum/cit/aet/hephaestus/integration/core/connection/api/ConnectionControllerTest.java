@@ -4,28 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAudit;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionBusyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
-import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.OAuthBrowserBinding;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.InstallationCredential;
-import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectInitiation;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -72,9 +67,6 @@ class ConnectionControllerTest extends BaseUnitTest {
     @Mock
     private ConnectionService connectionService;
 
-    @Mock
-    private IntegrationManifestRegistry manifests;
-
     private ObjectMapper objectMapper;
     private FakeStrategy githubStrategy;
     private FakeStrategy gitlabStrategy;
@@ -98,24 +90,17 @@ class ConnectionControllerTest extends BaseUnitTest {
         objectMapper = new ObjectMapper();
         githubStrategy = new FakeStrategy(IntegrationKind.GITHUB);
         gitlabStrategy = new FakeStrategy(IntegrationKind.GITLAB);
-        // admin.manifests() is the single source of truth for capability lookups in the controller;
-        // wire it lazily-lenient so list/read/suspend/reactivate tests don't all need to restate
-        // it.
-        lenient().when(admin.manifests()).thenReturn(manifests);
         controller = new ConnectionController(
                 admin, connectionService, objectMapper, List.of(githubStrategy, gitlabStrategy), BROWSER_BINDING);
     }
 
     @Test
-    void list_returnsRowsWithCapabilitiesFromManifests() {
+    void list_returnsTheWorkspacesConnections() {
         long workspaceId = 42L;
         Connection a = newConnection(11L, workspaceId, IntegrationKind.GITHUB, "100", IntegrationState.ACTIVE);
         Connection b =
                 newConnection(12L, workspaceId, IntegrationKind.GITLAB, "gitlab.com:200", IntegrationState.SUSPENDED);
         when(admin.listForWorkspace(workspaceId)).thenReturn(List.of(a, b));
-        when(manifests.capabilitiesFor(IntegrationKind.GITHUB))
-                .thenReturn(Set.of(Capability.WEBHOOK_INGEST, Capability.TOKEN_REFRESH));
-        when(manifests.capabilitiesFor(IntegrationKind.GITLAB)).thenReturn(Set.of(Capability.WEBHOOK_INGEST));
 
         ResponseEntity<List<ConnectionSummaryDTO>> response = controller.list(ctx(workspaceId));
 
@@ -124,10 +109,8 @@ class ConnectionControllerTest extends BaseUnitTest {
         assertThat(body).hasSize(2);
         assertThat(body.get(0).id()).isEqualTo(11L);
         assertThat(body.get(0).kind()).isEqualTo(IntegrationKind.GITHUB);
-        assertThat(body.get(0).capabilities())
-                .containsExactlyInAnyOrder(Capability.WEBHOOK_INGEST, Capability.TOKEN_REFRESH);
         assertThat(body.get(1).kind()).isEqualTo(IntegrationKind.GITLAB);
-        assertThat(body.get(1).capabilities()).containsExactly(Capability.WEBHOOK_INGEST);
+        assertThat(body.get(1).state()).isEqualTo(IntegrationState.SUSPENDED);
     }
 
     @Test
@@ -227,7 +210,6 @@ class ConnectionControllerTest extends BaseUnitTest {
                     conn.setStateReason(((TransitionRequest) inv.getArgument(1)).detail());
                     return conn;
                 });
-        when(manifests.capabilitiesFor(IntegrationKind.GITHUB)).thenReturn(Set.of());
 
         ResponseEntity<ConnectionSummaryDTO> response = controller.updateStatus(
                 ctx(workspaceId),
@@ -238,7 +220,6 @@ class ConnectionControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertNotNull(response.getBody());
         assertThat(response.getBody().state()).isEqualTo(IntegrationState.SUSPENDED);
-        assertThat(response.getBody().stateReason()).isEqualTo("scheduled maintenance");
 
         ArgumentCaptor<TransitionRequest> req = ArgumentCaptor.forClass(TransitionRequest.class);
         verify(connectionService).transition(any(Connection.class), req.capture());
@@ -259,7 +240,6 @@ class ConnectionControllerTest extends BaseUnitTest {
                     conn.setState(IntegrationState.ACTIVE);
                     return conn;
                 });
-        when(manifests.capabilitiesFor(IntegrationKind.GITHUB)).thenReturn(Set.of());
 
         ResponseEntity<ConnectionSummaryDTO> response = controller.updateStatus(
                 ctx(workspaceId), 7L, new UpdateConnectionStatusRequestDTO(IntegrationState.ACTIVE, null), null);
@@ -285,7 +265,6 @@ class ConnectionControllerTest extends BaseUnitTest {
                     conn.setState(IntegrationState.UNINSTALLED);
                     return conn;
                 });
-        when(manifests.capabilitiesFor(IntegrationKind.GITHUB)).thenReturn(Set.of());
 
         ResponseEntity<ConnectionSummaryDTO> response = controller.updateStatus(
                 ctx(workspaceId), 7L, new UpdateConnectionStatusRequestDTO(IntegrationState.UNINSTALLED, null), null);
@@ -340,49 +319,6 @@ class ConnectionControllerTest extends BaseUnitTest {
                         null))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(connectionService, never()).transition(any(Connection.class), any(TransitionRequest.class));
-    }
-
-    @Test
-    void audit_returnsEntriesCappedAt200() {
-        long workspaceId = 42L;
-        Connection c = newConnection(7L, workspaceId, IntegrationKind.GITHUB, "100", IntegrationState.ACTIVE);
-        when(admin.findInWorkspaceOrThrow(workspaceId, 7L)).thenReturn(c);
-
-        ConnectionAudit a1 = new ConnectionAudit(
-                c, "INITIATE", null, IntegrationState.ACTIVE, "ADMIN", "alice", "corr-1", "started");
-        ConnectionAudit a2 = new ConnectionAudit(
-                c,
-                "SUSPEND",
-                IntegrationState.ACTIVE,
-                IntegrationState.SUSPENDED,
-                "ADMIN",
-                "bob",
-                "corr-2",
-                "vacation");
-        ReflectionTestUtils.setField(a1, "occurredAt", Instant.parse("2026-01-01T00:00:00Z"));
-        ReflectionTestUtils.setField(a2, "occurredAt", Instant.parse("2026-01-02T00:00:00Z"));
-        when(admin.auditForConnection(eq(7L), anyInt())).thenReturn(List.of(a2, a1));
-
-        ResponseEntity<List<ConnectionAuditEntryDTO>> response = controller.audit(ctx(workspaceId), 7L);
-
-        assertThat(response.getStatusCode().value()).isEqualTo(200);
-        List<ConnectionAuditEntryDTO> body = response.getBody();
-        assertNotNull(body);
-        assertThat(body).hasSize(2);
-        assertThat(body.get(0).eventType()).isEqualTo("SUSPEND");
-        assertThat(body.get(0).fromState()).isEqualTo(IntegrationState.ACTIVE);
-        assertThat(body.get(0).toState()).isEqualTo(IntegrationState.SUSPENDED);
-        assertThat(body.get(1).eventType()).isEqualTo("INITIATE");
-        verify(admin).auditForConnection(7L, 200);
-    }
-
-    @Test
-    @DisplayName("audit 404s if the connection isn't in the path workspace")
-    void audit_wrongWorkspace_throwsNotFound() {
-        when(admin.findInWorkspaceOrThrow(999L, 7L))
-                .thenThrow(new NoSuchElementException("Connection not found in workspace 999: id=7"));
-        assertThatThrownBy(() -> controller.audit(ctx(999L), 7L)).isInstanceOf(NoSuchElementException.class);
-        verify(admin, never()).auditForConnection(anyLong(), anyInt());
     }
 
     @Test

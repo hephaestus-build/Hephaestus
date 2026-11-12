@@ -8,7 +8,5 @@ public record SlackUserWorkspacePreferencesDTO(
         @NonNull String workspaceName,
         @NonNull String slackTeamId,
         @Nullable String slackTeamName,
-        @NonNull String slackUserId,
-        @Nullable String slackDisplayName,
         boolean channelMessagesAllowed,
         long activeMonitoredChannelCount) {}

@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
-import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResolutionCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponse;
@@ -97,26 +96,6 @@ public class FeedbackResponseService {
                 .findCurrent(workspace.id(), feedbackId)
                 .map(FeedbackResponseDTO::from)
                 .orElseGet(FeedbackResponseDTO::empty);
-    }
-
-    @Transactional(readOnly = true)
-    public FeedbackResolutionCountsDTO getResolutionCounts(WorkspaceContext workspace) {
-        var developer = currentDeveloperLookup.currentDeveloperId();
-        if (developer.isEmpty()) {
-            return new FeedbackResolutionCountsDTO(0L, 0L, 0L);
-        }
-        var counts = responses.countCurrentResolutions(workspace.id(), developer.get());
-        long addressed = 0;
-        long disagree = 0;
-        long notApplicable = 0;
-        for (var row : counts) {
-            switch (row.getResolution()) {
-                case ADDRESSED -> addressed = row.getCount();
-                case DISAGREE -> disagree = row.getCount();
-                case NOT_APPLICABLE -> notApplicable = row.getCount();
-            }
-        }
-        return new FeedbackResolutionCountsDTO(addressed, disagree, notApplicable);
     }
 
     private FeedbackResponseDTO append(

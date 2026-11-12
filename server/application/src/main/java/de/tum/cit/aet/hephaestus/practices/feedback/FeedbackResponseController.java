@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResolutionCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -83,11 +82,5 @@ public class FeedbackResponseController {
     public ResponseEntity<FeedbackResponseDTO> delete(
             WorkspaceContext workspaceContext, @PathVariable UUID feedbackId) {
         return ResponseEntity.ok(responseService.deleteResponse(workspaceContext, feedbackId));
-    }
-
-    @GetMapping("/resolution-counts")
-    @Operation(operationId = "getOwnFeedbackResolutionCounts", summary = "Get feedback resolution counts")
-    public ResponseEntity<FeedbackResolutionCountsDTO> resolutionCounts(WorkspaceContext workspaceContext) {
-        return ResponseEntity.ok(responseService.getResolutionCounts(workspaceContext));
     }
 }

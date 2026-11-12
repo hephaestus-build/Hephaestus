@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.framework;
 
 import de.tum.cit.aet.hephaestus.core.UnknownVocabulary;
-import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import java.util.List;
@@ -37,10 +36,6 @@ public class IntegrationManifestRegistry {
 
     public Optional<IntegrationManifest> manifestFor(IntegrationKind kind) {
         return Optional.ofNullable(byKind.get(kind));
-    }
-
-    public Set<Capability> capabilitiesFor(IntegrationKind kind) {
-        return manifestFor(kind).map(IntegrationManifest::declaredCapabilities).orElse(Set.of());
     }
 
     public String displayName(IntegrationKind kind) {

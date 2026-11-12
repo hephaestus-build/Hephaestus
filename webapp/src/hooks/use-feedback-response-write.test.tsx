@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import {
-	getOwnFeedbackResolutionCountsQueryKey,
 	getOwnPracticePageFeedbackQueryKey,
 	getOwnResultQueryKey,
 	getReviewFeedbackQueryKey,
@@ -160,7 +159,6 @@ describe("useFeedbackResponseWrite", () => {
 		const elsewhere = { workspaceSlug: "other" };
 		const carriers: QueryKey[] = [
 			getOwnPracticePageFeedbackQueryKey({ path }),
-			getOwnFeedbackResolutionCountsQueryKey({ path }),
 			getOwnPracticeProfileOverviewQueryKey({ path }),
 			listOwnGroupReviewsInfiniteQueryKey({ path: { ...path, groupSlug: "packaging" } }),
 			listOwnReviewsInfiniteQueryKey({ path, query: { size: 25 } }),

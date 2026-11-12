@@ -38,7 +38,6 @@ const ALPHA: SlackUserWorkspacePreferences = {
 	workspaceName: "Alpha Lab",
 	slackTeamId: "T0ALPHA",
 	slackTeamName: "Alpha Slack",
-	slackUserId: "U0OCTO",
 	channelMessagesAllowed: true,
 	activeMonitoredChannelCount: 2,
 };
@@ -48,7 +47,6 @@ const BETA: SlackUserWorkspacePreferences = {
 	workspaceName: "Beta Lab",
 	slackTeamId: "T0BETA",
 	slackTeamName: "Beta Slack",
-	slackUserId: "U0OCTO",
 	channelMessagesAllowed: false,
 	activeMonitoredChannelCount: 1,
 };

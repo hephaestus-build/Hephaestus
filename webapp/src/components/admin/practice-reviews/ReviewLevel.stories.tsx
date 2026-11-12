@@ -445,17 +445,6 @@ function continuedReview(status: ReviewDetail["status"], job: Partial<ReviewJob>
 		completedAt: done ? afterRequest(1117) : null,
 		activeJobCount: done ? 0 : 1,
 		runtime: { jobs: [latest] },
-		stageTiming: [
-			{
-				stage: "RUN",
-				startedAt: latest.startedAt,
-				completedAt: latest.completedAt,
-				durationMs:
-					latest.startedAt === null || latest.completedAt === null
-						? null
-						: latest.completedAt.getTime() - latest.startedAt.getTime(),
-			},
-		],
 	};
 }
 
@@ -1008,7 +997,6 @@ export const BotAuthoredWorkRefused: Story = {
 			runtime: null,
 			generatedPaths: null,
 			progress: null,
-			stageTiming: [],
 			results: { met: 0, notMet: 0, doesNotApply: 0, couldNotDetermine: 0 },
 			practices: reviewDetailCompleted.practices.slice(0, 1).map((practice) => ({
 				...practice,

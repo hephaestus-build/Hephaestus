@@ -57,7 +57,6 @@ public record ReviewDetailDTO(
         ReviewRuntimeDTO runtime,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ReviewUsageDTO usage,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<ReviewStageTimingDTO> stageTiming,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         GeneratedPathReviewDTO generatedPaths,
@@ -66,6 +65,5 @@ public record ReviewDetailDTO(
         ReviewProgressDTO progress) {
     public ReviewDetailDTO {
         practices = List.copyOf(practices);
-        stageTiming = List.copyOf(stageTiming);
     }
 }

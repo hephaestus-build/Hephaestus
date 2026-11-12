@@ -483,3 +483,9 @@ in API GET /workspaces/{workspaceSlug}/activity/people removed the required prop
 in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId} removed the required property `response` from the response with the `200` status
 in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck removed the required property `response` from the response with the `202` status
 in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry removed the required property `response` from the response with the `202` status
+# Neither client reads these: the resolution counts and connection audit reads, a review's stage timing and the Slack member id.
+in API GET /workspaces/{workspaceSlug}/connections/{id}/audit api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/practices/feedback/resolution-counts api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId} removed the required property `stageTiming` from the response with the `200` status
+in API GET /user/slack/preferences removed the required property `workspaces/items/slackUserId` from the response with the `200` status
+in API PATCH /workspaces/{workspaceSlug}/slack/me/preferences removed the required property `slackUserId` from the response with the `200` status

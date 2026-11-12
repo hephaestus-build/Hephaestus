@@ -2294,51 +2294,6 @@ export const ConfigurationFactSchema = {
     ]
 } as const;
 
-export const ConnectionAuditEntrySchema = {
-    type: 'object',
-    description: 'Audit-log entry returned by <code>GET /workspaces/{workspaceSlug</code>/connections/{id}/audit}.\n\n <p>Lean projection of {@link ConnectionAudit ConnectionAudit} — the entity carries a back-reference to\n <code>Connection</code> that this DTO omits.',
-    properties: {
-        actorAccountId: {
-            type: 'integer',
-            format: 'int64'
-        },
-        actorKind: {
-            type: 'string'
-        },
-        actorRef: {
-            type: 'string'
-        },
-        correlationId: {
-            type: 'string'
-        },
-        eventType: {
-            type: 'string'
-        },
-        fromState: {
-            type: 'string',
-            enum: [
-                'PENDING',
-                'ACTIVE',
-                'SUSPENDED',
-                'UNINSTALLED'
-            ]
-        },
-        occurredAt: {
-            type: 'string',
-            format: 'date-time'
-        },
-        toState: {
-            type: 'string',
-            enum: [
-                'PENDING',
-                'ACTIVE',
-                'SUSPENDED',
-                'UNINSTALLED'
-            ]
-        }
-    }
-} as const;
-
 export const ConnectionDetailSchema = {
     type: 'object',
     description: 'Detailed view of a single Connection — extends {@link ConnectionSummaryDTO ConnectionSummaryDTO} with the\n sealed config serialized to a free-form JSON object (<code>Map&lt;String, Object&gt;</code> →\n <code>type: object, additionalProperties: true</code> in the spec, so it round-trips through\n client codegen). NEVER carries credentials: the encrypted credential blob stays inside the\n entity, and every secret-bearing key of the config itself is stripped by\n <code>redactSensitive</code> before serialization.\n\n <p><b>Why redact here and not with <code>@JsonIgnore</code> on the record component?</b> The very\n same <code>ObjectMapper</code> bean serializes <code>ConnectionConfig</code> into the JSONB\n <code>connection.config</code> column (Hibernate\'s <code>json_format_mapper</code> is wired to it in\n <code>HibernateJacksonFormatMapperConfig</code>). Annotating the component would therefore drop the\n secret on write and destroy the stored value — the API-boundary filter below is the only place\n the two concerns can be separated.\n\n <p>Mirroring the summary fields (rather than embedding the summary record) keeps\n the JSON shape flat — the API consumer sees one record, not a nested <code>summary</code>\n object.',
@@ -2351,21 +2306,6 @@ export const ConnectionDetailSchema = {
                 'PROVIDER_SUSPENDED',
                 'PROVIDER_CLEANUP_UNCONFIRMED'
             ]
-        },
-        capabilities: {
-            type: 'array',
-            items: {
-                type: 'string',
-                enum: [
-                    'WEBHOOK_INGEST',
-                    'TOKEN_REFRESH',
-                    'FEEDBACK_DELIVERY',
-                    'INLINE_FEEDBACK',
-                    'APPROVAL_WORKFLOW',
-                    'SCOPE_CHANGES'
-                ]
-            },
-            uniqueItems: true
         },
         config: {
             type: 'object',
@@ -2394,9 +2334,6 @@ export const ConnectionDetailSchema = {
             type: 'integer',
             format: 'int64'
         },
-        instanceKey: {
-            type: 'string'
-        },
         kind: {
             type: 'string',
             enum: [
@@ -2415,9 +2352,6 @@ export const ConnectionDetailSchema = {
                 'UNINSTALLED'
             ]
         },
-        stateReason: {
-            type: 'string'
-        },
         tokenExpiresAt: {
             type: 'string',
             format: 'date'
@@ -2435,7 +2369,7 @@ export const ConnectionDetailSchema = {
 
 export const ConnectionSummarySchema = {
     type: 'object',
-    description: 'Wire shape returned by the <code>GET /workspaces/{workspaceSlug</code>/connections}\n list + by lifecycle endpoints (suspend, reactivate). Lightweight — no config, no\n credentials, no audit. Capabilities are looked up from the per-kind manifest at\n response build time so adding/removing a capability needs no DB migration.',
+    description: 'Wire shape returned by the <code>GET /workspaces/{workspaceSlug</code>/connections}\n list + by lifecycle endpoints (suspend, reactivate). Lightweight — no config, no\n credentials, no audit.',
     properties: {
         attentionProblem: {
             type: 'string',
@@ -2445,21 +2379,6 @@ export const ConnectionSummarySchema = {
                 'PROVIDER_SUSPENDED',
                 'PROVIDER_CLEANUP_UNCONFIRMED'
             ]
-        },
-        capabilities: {
-            type: 'array',
-            items: {
-                type: 'string',
-                enum: [
-                    'WEBHOOK_INGEST',
-                    'TOKEN_REFRESH',
-                    'FEEDBACK_DELIVERY',
-                    'INLINE_FEEDBACK',
-                    'APPROVAL_WORKFLOW',
-                    'SCOPE_CHANGES'
-                ]
-            },
-            uniqueItems: true
         },
         createdAt: {
             type: 'string',
@@ -2484,9 +2403,6 @@ export const ConnectionSummarySchema = {
             type: 'integer',
             format: 'int64'
         },
-        instanceKey: {
-            type: 'string'
-        },
         kind: {
             type: 'string',
             enum: [
@@ -2504,9 +2420,6 @@ export const ConnectionSummarySchema = {
                 'SUSPENDED',
                 'UNINSTALLED'
             ]
-        },
-        stateReason: {
-            type: 'string'
         },
         updatedAt: {
             type: 'string',
@@ -4903,29 +4816,6 @@ export const FeedbackRequestSchema = {
     required: [
         'kind',
         'message'
-    ]
-} as const;
-
-export const FeedbackResolutionCountsSchema = {
-    type: 'object',
-    properties: {
-        addressed: {
-            type: 'integer',
-            format: 'int64'
-        },
-        disagree: {
-            type: 'integer',
-            format: 'int64'
-        },
-        notApplicable: {
-            type: 'integer',
-            format: 'int64'
-        }
-    },
-    required: [
-        'addressed',
-        'disagree',
-        'notApplicable'
     ]
 } as const;
 
@@ -14222,12 +14112,6 @@ export const ReviewDetailSchema = {
                 }
             ]
         },
-        stageTiming: {
-            type: 'array',
-            items: {
-                $ref: '#/components/schemas/ReviewStageTiming'
-            }
-        },
         startedBy: {
             anyOf: [
                 {
@@ -14310,7 +14194,6 @@ export const ReviewDetailSchema = {
         'requestedBy',
         'results',
         'runtime',
-        'stageTiming',
         'startedBy',
         'status',
         'stopReason',
@@ -16469,42 +16352,6 @@ export const ReviewScopeRepositorySchema = {
     ]
 } as const;
 
-export const ReviewStageTimingSchema = {
-    type: 'object',
-    properties: {
-        completedAt: {
-            type: [
-                'string',
-                'null'
-            ],
-            format: 'date-time'
-        },
-        durationMs: {
-            type: [
-                'null',
-                'integer'
-            ],
-            format: 'int32'
-        },
-        stage: {
-            type: 'string'
-        },
-        startedAt: {
-            type: [
-                'string',
-                'null'
-            ],
-            format: 'date-time'
-        }
-    },
-    required: [
-        'completedAt',
-        'durationMs',
-        'stage',
-        'startedAt'
-    ]
-} as const;
-
 export const ReviewStatusCountsSchema = {
     type: 'object',
     properties: {
@@ -18386,16 +18233,10 @@ export const SlackUserWorkspacePreferencesSchema = {
         channelMessagesAllowed: {
             type: 'boolean'
         },
-        slackDisplayName: {
-            type: 'string'
-        },
         slackTeamId: {
             type: 'string'
         },
         slackTeamName: {
-            type: 'string'
-        },
-        slackUserId: {
             type: 'string'
         },
         workspaceName: {
@@ -18407,7 +18248,6 @@ export const SlackUserWorkspacePreferencesSchema = {
     },
     required: [
         'slackTeamId',
-        'slackUserId',
         'workspaceName',
         'workspaceSlug'
     ]

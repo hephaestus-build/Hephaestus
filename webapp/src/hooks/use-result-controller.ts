@@ -27,7 +27,6 @@ const READS_OF_RESULT_MARKS: ReadonlySet<string> = new Set([
 	"listOwnItemReviews",
 	"getOwnItemTrace",
 	"getOwnPracticePageFeedback",
-	"getOwnFeedbackResolutionCounts",
 ]);
 
 export interface ResultController {

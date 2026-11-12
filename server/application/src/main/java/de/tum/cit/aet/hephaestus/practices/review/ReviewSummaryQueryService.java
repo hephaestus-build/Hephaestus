@@ -20,7 +20,6 @@ import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewProgressDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewRefDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewResultCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewRuntimeDTO;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewStageTimingDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewUsageAttemptDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewUsageDTO;
@@ -34,7 +33,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewScriptQuery;
 import de.tum.cit.aet.hephaestus.practices.trace.ItemTraceRepository;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -312,18 +310,6 @@ public class ReviewSummaryQueryService {
                                 j.errorMessage(),
                                 j.traceId()))
                         .toList());
-        var times = snapshot == null
-                ? List.<ReviewStageTimingDTO>of()
-                : snapshot.jobs().stream()
-                        .map(j -> new ReviewStageTimingDTO(
-                                "RUN",
-                                j.startedAt(),
-                                j.completedAt(),
-                                j.startedAt() == null || j.completedAt() == null
-                                        ? null
-                                        : Math.toIntExact(Duration.between(j.startedAt(), j.completedAt())
-                                                .toMillis())))
-                        .toList();
         return new ReviewDetailDTO(
                 s.id(),
                 s.kind(),
@@ -346,7 +332,6 @@ public class ReviewSummaryQueryService {
                 s.model(),
                 runtimeDTO,
                 usage(ws, id),
-                times,
                 null,
                 s.progress());
     }
