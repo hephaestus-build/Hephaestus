@@ -15,6 +15,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -54,6 +57,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.availability.ApplicationAvailabilityBean;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
 import org.springframework.boot.availability.LivenessState;
@@ -699,6 +703,63 @@ class IntegrationNatsConsumerTest {
                     .hasSize(1)
                     .noneMatch(ScopeConsumer::isRunning);
             assertThat(consumer.heldRetries).isEmpty();
+        }
+
+        /**
+         * A reconcile that failed registers its retry while a stop begins. The appender holds the reconcile on its retry
+         * log line until the stop runs, so the stop either finds the retry registered and removes it, or fences the
+         * scope first and the reconcile registers none.
+         */
+        @Test
+        void shouldStartNoConsumerFromARetryThatAReconcileRegisteredWhileTheScopeStopped() throws Exception {
+            FakeFleet consumer = fleetFailingOn(OUTLINE_STREAM);
+            consumer.heldRetries = new ConcurrentLinkedQueue<>();
+            CountDownLatch retrying = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            var logger = (Logger) LoggerFactory.getLogger(IntegrationNatsConsumer.class);
+            var holdRetryLog = new AppenderBase<ILoggingEvent>() {
+                @Override
+                protected void append(ILoggingEvent event) {
+                    if (!event.getMessage().startsWith("Retrying scope consumer reconcile")) return;
+                    retrying.countDown();
+                    try {
+                        release.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            };
+            holdRetryLog.start();
+            logger.addAppender(holdRetryLog);
+            try {
+                consumer.startConsumingScope(SCOPE_ID);
+                assertThat(retrying.await(10, TimeUnit.SECONDS)).isTrue();
+
+                FutureTask<@Nullable Void> stop = new FutureTask<>(() -> consumer.stopConsumingScope(SCOPE_ID), null);
+                Thread stopper = new Thread(stop);
+                stopper.start();
+                // Waiting for the scope's lock, or fenced and waiting for the reconcile's setup to end.
+                await().atMost(Duration.ofSeconds(10))
+                        .until(() -> stopper.getState() == Thread.State.BLOCKED
+                                || stopper.getState() == Thread.State.TIMED_WAITING);
+                release.countDown();
+                stop.get(10, TimeUnit.SECONDS);
+            } finally {
+                release.countDown();
+                logger.detachAppender(holdRetryLog);
+                holdRetryLog.stop();
+            }
+
+            consumer.failingStreams.clear();
+            Queue<Runnable> held = Objects.requireNonNull(consumer.heldRetries);
+            held.forEach(Runnable::run);
+            // A stop waits until no setup task holds the scope, so a reconcile that a retry began has ended here.
+            consumer.stopConsumingScope(SCOPE_ID);
+
+            assertThat(consumer.started)
+                    .as("only the consumer of the first pass, which the stop ended")
+                    .hasSize(1)
+                    .noneMatch(ScopeConsumer::isRunning);
         }
 
         @Test

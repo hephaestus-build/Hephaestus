@@ -622,23 +622,32 @@ public class IntegrationNatsConsumer {
      * just be a log firehose; the successfully-created consumers from the partial pass keep working either way.
      */
     private void scheduleScopeReconcileRetry(Long scopeId) {
-        if (shuttingDown.get() || !connectionProperties.enabled() || stoppingScopes.contains(scopeId)) {
+        if (shuttingDown.get() || !connectionProperties.enabled()) {
             return;
         }
-        int attempt = scopeReconcileAttempts.merge(scopeId, 1, Integer::sum);
-        if (attempt >= MAX_SCOPE_RECONCILE_ATTEMPTS) {
-            log.error(
-                    "Giving up on scope consumer reconcile after {} attempts: scopeId={}; "
-                            + "the scope is consuming only the streams that could be bound",
-                    attempt,
-                    scopeId);
-            scopeReconcileAttempts.remove(scopeId);
-            return;
-        }
-        long delayMs = reconnectBackoffMs(attempt - 1);
-        log.warn("Retrying scope consumer reconcile: scopeId={}, attempt={}, delayMs={}", scopeId, attempt, delayMs);
         Object retry = new Object();
-        scopeReconcileRetries.put(scopeId, retry);
+        long delayMs;
+        // Under the lock that a stop fences and removes the token under: a stop comes wholly before this retry is
+        // registered, and refuses it, or wholly after, and removes it.
+        synchronized (scopeLifecycleMonitor) {
+            if (stoppingScopes.contains(scopeId)) {
+                return;
+            }
+            int attempt = scopeReconcileAttempts.merge(scopeId, 1, Integer::sum);
+            if (attempt >= MAX_SCOPE_RECONCILE_ATTEMPTS) {
+                log.error(
+                        "Giving up on scope consumer reconcile after {} attempts: scopeId={}; "
+                                + "the scope is consuming only the streams that could be bound",
+                        attempt,
+                        scopeId);
+                scopeReconcileAttempts.remove(scopeId);
+                return;
+            }
+            delayMs = reconnectBackoffMs(attempt - 1);
+            log.warn(
+                    "Retrying scope consumer reconcile: scopeId={}, attempt={}, delayMs={}", scopeId, attempt, delayMs);
+            scopeReconcileRetries.put(scopeId, retry);
+        }
         submitDelayed(() -> retryReconcileScope(scopeId, retry), delayMs);
     }
 
