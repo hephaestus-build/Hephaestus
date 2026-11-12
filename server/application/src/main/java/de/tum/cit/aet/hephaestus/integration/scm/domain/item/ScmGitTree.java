@@ -1,7 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
-import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import de.tum.cit.aet.hephaestus.core.CacheLoads;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
@@ -31,12 +32,12 @@ public class ScmGitTree {
     static final int MAX_FILE_BYTES = 2 * 1024 * 1024;
     private final GitRepositoryManager git;
     // Git objects are immutable. Callers still authorize repository access before each lookup.
-    private final Cache<PinnedTree, Inventory> inventories = Caffeine.newBuilder()
+    private final AsyncCache<PinnedTree, Inventory> inventories = Caffeine.newBuilder()
             .maximumWeight(200_000)
             .weigher((PinnedTree key, Inventory value) ->
                     Math.max(1, value.entries().size()))
             .expireAfterAccess(Duration.ofHours(2))
-            .build();
+            .buildAsync();
 
     private record PinnedTree(RepositoryKey repository, String commit) {}
 
@@ -117,7 +118,8 @@ public class ScmGitTree {
 
     public Inventory index(RepositoryKey key, String commit) {
         if (!ObjectId.isId(commit)) throw unavailable("Repository version is not a full Git identity");
-        return inventories.get(new PinnedTree(key, commit), pinned -> new Inventory(readInventory(key, commit)));
+        return CacheLoads.get(
+                inventories, new PinnedTree(key, commit), pinned -> new Inventory(readInventory(key, commit)));
     }
 
     private List<ScmFileVersions.Entry> readInventory(RepositoryKey key, String commit) {

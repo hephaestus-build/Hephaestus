@@ -6,8 +6,10 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import de.tum.cit.aet.hephaestus.core.CacheLoads;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExempt;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExemption;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
@@ -62,11 +64,13 @@ public class GitHubAppTokenService {
     private final boolean credentialsConfigured;
     private final WebClient webClient;
 
-    // Cache installation tokens to avoid re-minting on every call.
-    private final Cache<Long, CachedToken> installTokenCache = Caffeine.newBuilder()
+    // Cache installation tokens to avoid re-minting on every call. A mint calls GitHub, so it runs outside the cache's
+    // lock (CacheLoads).
+    private final AsyncCache<Long, CachedToken> installTokens = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofMinutes(55))
             .maximumSize(10000)
-            .build();
+            .buildAsync();
+    private final Cache<Long, CachedToken> installTokenCache = installTokens.synchronous();
 
     // Track suspended installations to fail fast without calling GitHub.
     // This is an in-memory set that all threads see immediately, bypassing DB transaction isolation.
@@ -162,11 +166,8 @@ public class GitHubAppTokenService {
 
             return new CachedToken(response.token(), response.expiresAt());
         } catch (WebClientResponseException.NotFound e) {
-            // Installation was deleted or is inaccessible.
-            // NOTE: Do NOT call invalidate() here - this method is used as a cache loader
-            // and Caffeine does not allow recursive cache modifications during compute operations.
-            // The cache will not store the result when an exception is thrown.
-            // Invalidation happens in resolveToken() after the exception propagates out.
+            // Installation was deleted or is inaccessible. A failed mint is not cached, and resolveToken() evicts the
+            // installation's token once this exception reaches it.
             throw new InstallationNotFoundException(installationId, e);
         } catch (WebClientResponseException.Forbidden e) {
             // 403 means suspended - mark it and fail fast
@@ -221,9 +222,9 @@ public class GitHubAppTokenService {
 
         CachedToken fresh;
         try {
-            fresh = installTokenCache.get(installationId, this::fetchTokenWithExpiry);
+            fresh = CacheLoads.get(installTokens, installationId, this::fetchTokenWithExpiry);
         } catch (InstallationNotFoundException e) {
-            // Invalidate cache OUTSIDE the compute operation (safe here)
+            // The installation is gone: no token of it stays cached.
             installTokenCache.invalidate(installationId);
             throw e;
         }
