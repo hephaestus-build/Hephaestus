@@ -214,7 +214,7 @@ jobs:
 
       - name: Upload application test results
         if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: "Test Results - ${{ env.QUALITY_LEG == 'webapp' && 'Webapp' || 'Extension' }}"
           path: "${{ env.QUALITY_LEG }}/test-results/junit-*.xml"
@@ -439,7 +439,7 @@ jobs:
         continue-on-error: true
         if: >-
           success() && env.CHROMATIC_POLICY_SKIP != 'true'
-        uses: chromaui/action@f305ef908327aee3b80b0e6b3bbb60a742eaa049 # v18.13.6
+        uses: chromaui/action@6ac4c49524e1b1358b8c593c5eea877604228268 # v18.14.2
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
           workingDir: webapp
@@ -516,7 +516,7 @@ jobs:
             });
       - name: Upload Storybook test results
         if: always()
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: "Test Results - Webapp stories"
           path: "webapp/test-results/junit-storybook.xml"
@@ -528,7 +528,7 @@ jobs:
           fail-on-error: false
       - name: Upload Chromatic test results
         if: always() && startsWith(steps.chromatic.outputs.storybookUrl, 'http')
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: "Test Results - Chromatic"
           path: "webapp/chromatic-report.xml"

@@ -2,18 +2,18 @@
 	"githubRelease": "anchore/syft",
 	"assets": {
 		"linux-x64": {
-			"version": "v1.55.0",
-			"sha256": "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d",
+			"version": "v1.57.1",
+			"sha256": "bf52519eb57f675d47c07d43213cb6dff6449f3d6d1147ff6701ed91f44eef0c",
 			"name": "syft_{version}_linux_amd64.tar.gz"
 		},
 		"linux-arm64": {
-			"version": "v1.55.0",
-			"sha256": "929bd163db2d7cd2255d3bcb8967208079813d7b46b0c952f7b794d8e2c7d304",
+			"version": "v1.57.1",
+			"sha256": "aa3d3e07344f590bcce8d31043b752daa76c8a56c2aa34ceeee63c6168152582",
 			"name": "syft_{version}_linux_arm64.tar.gz"
 		},
 		"checksums": {
-			"version": "v1.55.0",
-			"sha256": "aba5ac8ee870bb93fd3b2058471ffe7e57492ba673b5e0bcbfca92006c2f4dc7",
+			"version": "v1.57.1",
+			"sha256": "92466b2b1a4695ee908f8a1567f4ff074e0fbb4f34da28463927a2630901fe2c",
 			"name": "syft_{version}_checksums.txt"
 		}
 	}

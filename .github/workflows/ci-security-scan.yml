@@ -61,7 +61,7 @@ jobs:
       - name: Upload Trivy results
         if: always()
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -88,7 +88,7 @@ jobs:
       - name: Secret detection
         id: secrets
         continue-on-error: true
-        uses: trufflesecurity/trufflehog@31ce31ee1abbcc7dc8eee5764c17121c3044c8b2 # v3.99.7
+        uses: trufflesecurity/trufflehog@ea68ca03c865c5f324e86e849ced20ed3cf9dbbb # v3.99.8
         with:
           # The action pins the wrapper, not its scanner: the version input otherwise uses latest.
           image: ghcr.io/trufflesecurity/trufflehog
