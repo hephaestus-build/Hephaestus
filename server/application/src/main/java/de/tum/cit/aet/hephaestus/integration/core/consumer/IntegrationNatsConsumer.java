@@ -175,6 +175,12 @@ public class IntegrationNatsConsumer {
      */
     private final Map<Long, Integer> scopeReconcileAttempts = new ConcurrentHashMap<>();
 
+    /**
+     * The one pending reconcile retry of each scope. A later retry replaces it, and a stop removes it, so a timer that
+     * fires after either finds another token and does nothing.
+     */
+    private final Map<Long, Object> scopeReconcileRetries = new ConcurrentHashMap<>();
+
     /** Installation consumer — single-instance, mutable across restarts. */
     private volatile @Nullable ScopeConsumer installationConsumer;
 
@@ -455,6 +461,7 @@ public class IntegrationNatsConsumer {
         }
         synchronized (scopeLifecycleMonitor) {
             stoppingScopes.add(scopeId);
+            scopeReconcileRetries.remove(scopeId);
             long deadline = System.nanoTime() + SCOPE_SETUP_WAIT.toNanos();
             while (pendingScopeSetup.contains(scopeId)) {
                 long remaining = deadline - System.nanoTime();
@@ -615,22 +622,33 @@ public class IntegrationNatsConsumer {
      * just be a log firehose; the successfully-created consumers from the partial pass keep working either way.
      */
     private void scheduleScopeReconcileRetry(Long scopeId) {
-        if (shuttingDown.get() || !connectionProperties.enabled() || stoppingScopes.contains(scopeId)) {
+        if (shuttingDown.get() || !connectionProperties.enabled()) {
             return;
         }
-        int attempt = scopeReconcileAttempts.merge(scopeId, 1, Integer::sum);
-        if (attempt >= MAX_SCOPE_RECONCILE_ATTEMPTS) {
-            log.error(
-                    "Giving up on scope consumer reconcile after {} attempts: scopeId={}; "
-                            + "the scope is consuming only the streams that could be bound",
-                    attempt,
-                    scopeId);
-            scopeReconcileAttempts.remove(scopeId);
-            return;
+        Object retry = new Object();
+        long delayMs;
+        // Under the lock that a stop fences and removes the token under: a stop comes wholly before this retry is
+        // registered, and refuses it, or wholly after, and removes it.
+        synchronized (scopeLifecycleMonitor) {
+            if (stoppingScopes.contains(scopeId)) {
+                return;
+            }
+            int attempt = scopeReconcileAttempts.merge(scopeId, 1, Integer::sum);
+            if (attempt >= MAX_SCOPE_RECONCILE_ATTEMPTS) {
+                log.error(
+                        "Giving up on scope consumer reconcile after {} attempts: scopeId={}; "
+                                + "the scope is consuming only the streams that could be bound",
+                        attempt,
+                        scopeId);
+                scopeReconcileAttempts.remove(scopeId);
+                return;
+            }
+            delayMs = reconnectBackoffMs(attempt - 1);
+            log.warn(
+                    "Retrying scope consumer reconcile: scopeId={}, attempt={}, delayMs={}", scopeId, attempt, delayMs);
+            scopeReconcileRetries.put(scopeId, retry);
         }
-        long delayMs = reconnectBackoffMs(attempt - 1);
-        log.warn("Retrying scope consumer reconcile: scopeId={}, attempt={}, delayMs={}", scopeId, attempt, delayMs);
-        submitDelayed(() -> retryReconcileScope(scopeId), delayMs);
+        submitDelayed(() -> retryReconcileScope(scopeId, retry), delayMs);
     }
 
     /**
@@ -639,13 +657,19 @@ public class IntegrationNatsConsumer {
      * NOT require the scope to already be in {@link #scopeConsumers}: a reconcile that failed on its very
      * first stream has no entry there and would otherwise never come back.
      */
-    private void retryReconcileScope(Long scopeId) {
+    private void retryReconcileScope(Long scopeId, Object retry) {
         if (shuttingDown.get() || !connectionProperties.enabled()) {
             return;
         }
-        if (!beginScopeSetup(scopeId)) {
-            log.debug("Scope reconcile retry handed to the reconcile in progress: scopeId={}", scopeId);
-            return;
+        synchronized (scopeLifecycleMonitor) {
+            if (!scopeReconcileRetries.remove(scopeId, retry)) {
+                log.debug("Skipped a scope reconcile retry that a stop or a later retry replaced: scopeId={}", scopeId);
+                return;
+            }
+            if (!beginScopeSetup(scopeId)) {
+                log.debug("Scope reconcile retry handed to the reconcile in progress: scopeId={}", scopeId);
+                return;
+            }
         }
         submitScopeSetup(scopeId);
     }
@@ -723,8 +747,11 @@ public class IntegrationNatsConsumer {
         }
     }
 
-    /** A retry due after shutdown is rejected by the stopped executor, and would return early anyway. */
-    private void submitDelayed(Runnable task, long delayMs) {
+    /**
+     * A retry due after shutdown is rejected by the stopped executor, and would return early anyway. Package-private and
+     * overridable, so that a test decides when a timer fires.
+     */
+    void submitDelayed(Runnable task, long delayMs) {
         CompletableFuture.delayedExecutor(delayMs, TimeUnit.MILLISECONDS, virtualThreadExecutor)
                 .execute(task);
     }
