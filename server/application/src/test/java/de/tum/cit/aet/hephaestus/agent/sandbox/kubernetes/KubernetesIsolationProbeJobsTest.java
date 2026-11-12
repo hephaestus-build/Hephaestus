@@ -34,7 +34,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * each test plays it: it creates a Pod whose runtime refuses user namespaces, or records the quota's refusal.
  */
 @Tag("unit")
-@EnableKubernetesMockClient(crud = true)
+@EnableKubernetesMockClient(crud = true, kubernetesClientBuilderCustomizer = NoRequestRetries.class)
 class KubernetesIsolationProbeJobsTest {
 
     private static final String SANDBOXES = "hephaestus-sandboxes";

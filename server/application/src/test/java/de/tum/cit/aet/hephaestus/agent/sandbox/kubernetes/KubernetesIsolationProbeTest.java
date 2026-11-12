@@ -32,7 +32,7 @@ import tools.jackson.databind.JsonNode;
  * prints and the answers an API server gives to the dry run; the live qualification runs the Pods.
  */
 @Tag("unit")
-@EnableKubernetesMockClient
+@EnableKubernetesMockClient(kubernetesClientBuilderCustomizer = NoRequestRetries.class)
 class KubernetesIsolationProbeTest {
 
     private static final String SANDBOXES = "hephaestus-sandboxes";

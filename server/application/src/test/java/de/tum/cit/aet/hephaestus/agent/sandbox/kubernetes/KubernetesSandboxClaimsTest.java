@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("unit")
-@EnableKubernetesMockClient(crud = true)
+@EnableKubernetesMockClient(crud = true, kubernetesClientBuilderCustomizer = NoRequestRetries.class)
 class KubernetesSandboxClaimsTest {
 
     private static final String NAMESPACE = "hephaestus-sandboxes";

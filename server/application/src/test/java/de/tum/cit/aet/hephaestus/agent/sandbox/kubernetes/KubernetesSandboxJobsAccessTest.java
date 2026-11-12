@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 /** A worker without the permission to read the sandbox namespace's events, against the client's mock API server. */
 @Tag("unit")
-@EnableKubernetesMockClient
+@EnableKubernetesMockClient(kubernetesClientBuilderCustomizer = NoRequestRetries.class)
 class KubernetesSandboxJobsAccessTest {
 
     private static final String SANDBOXES = "hephaestus-sandboxes";

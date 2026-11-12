@@ -135,7 +135,7 @@ class KubernetesSandboxRuntimeTest {
                 new KubernetesMockServer(new Context(), new MockWebServer(), responses, dispatcher, true);
         server = started;
         started.init();
-        client = started.createClient();
+        client = started.createClient(new NoRequestRetries());
 
         workerName = "worker-" + UUID.randomUUID().toString().substring(0, 8);
         properties = new KubernetesSandboxProperties(
