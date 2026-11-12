@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceErasureNotifications;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -16,15 +16,16 @@ class JobEvidenceMaintenanceConfigurationTest extends BaseUnitTest {
             .withPropertyValues("spring.profiles.active=default")
             .withUserConfiguration(JobEvidenceMaintenanceConfiguration.class)
             .withBean(JobEvidenceFiles.class, () -> mock(JobEvidenceFiles.class))
-            .withBean(EvidenceFolderPersonDataCatalog.class, () -> mock(EvidenceFolderPersonDataCatalog.class));
+            .withBean(EvidenceReconciler.class, () -> mock(EvidenceReconciler.class))
+            .withBean(EvidenceErasureNotifications.class, () -> mock(EvidenceErasureNotifications.class));
 
     @Test
-    void shouldScheduleBothEvidenceMaintenanceTasksOnTheServerWithoutAgentJobs() {
+    void shouldScheduleEvidenceReconciliationOnTheServerWithoutAgentJobs() {
         context.withPropertyValues("hephaestus.agent.enabled=false").run(app -> {
             assertThat(app).hasNotFailed();
             assertThat(app.getBeansOfType(ScheduledTaskHolder.class).values().stream()
                             .flatMap(holder -> holder.getScheduledTasks().stream()))
-                    .hasSize(2);
+                    .hasSize(1);
         });
     }
 

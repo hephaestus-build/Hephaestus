@@ -2,15 +2,19 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
@@ -29,7 +33,8 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
 
     @Test
     void shouldRejectCredentialsThatDoNotIdentifyAReviewWorker() {
-        var controller = new ResultAdmissionController(mock(ResultAdmissionService.class));
+        var controller =
+                new ResultAdmissionController(mock(ResultAdmissionService.class), mock(AttemptCaptureFailures.class));
         var request = new SealResultsRequestDTO(3, UUID.randomUUID(), UUID.randomUUID(), 0);
         assertThatThrownBy(
                         () -> controller.admitResults(request, new TestingAuthenticationToken("mentor", "credential")))
@@ -60,10 +65,41 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
         var authentication = new JobTokenAuthentication(identity, jwt.scopes(), null);
         when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
                 .thenThrow(conflict);
-        assertThatThrownBy(() -> new ResultAdmissionController(admission).admitResults(request, authentication))
+        assertThatThrownBy(() -> new ResultAdmissionController(admission, mock(AttemptCaptureFailures.class))
+                        .admitResults(request, authentication))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    @Test
+    void shouldKeepARebuildIoFailureRetryableWithoutEndingTheAttempt() {
+        var admission = mock(ResultAdmissionService.class);
+        var failures = mock(AttemptCaptureFailures.class);
+        var id = UUID.randomUUID();
+        var request = new SealResultsRequestDTO(3, UUID.randomUUID(), id, 0);
+        var now = Instant.now();
+        var jwt = new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
+                id,
+                1L,
+                1,
+                LEASE,
+                Set.of("llm_proxy"),
+                "test",
+                now,
+                now.plusSeconds(60),
+                now.plusSeconds(30));
+        when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
+                .thenThrow(new UncheckedIOException(new IOException("disk temporarily unavailable")));
+        var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes(), null);
+        assertThatThrownBy(
+                        () -> new ResultAdmissionController(admission, failures).admitResults(request, authentication))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        error ->
+                                Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+        verifyNoInteractions(failures);
     }
 
     @Test

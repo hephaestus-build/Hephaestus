@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
+import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
@@ -594,7 +595,10 @@ public class ScmItemService implements ItemSource {
                 Map.of(),
                 snapshot,
                 snapshot.limitations().isEmpty() ? Map.of() : Map.of(source, List.copyOf(snapshot.limitations())),
-                List.of(new EvidenceDirectory("repos/reviewed/", snapshot.stagingDir())),
+                List.of(new EvidenceDirectory(
+                        "repos/reviewed/",
+                        snapshot.stagingDir(),
+                        new CheckoutKey(repository.getId(), sha, snapshot.treeSha(), null, List.copyOf(paths)))),
                 List.of(),
                 citable);
     }

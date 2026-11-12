@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
-import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceErasureNotifications;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Duration;
@@ -13,8 +13,8 @@ import org.springframework.scheduling.config.FixedDelayTask;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
 /**
- * Maintenance of the server's evidence store, without enabling server-wide {@code @Scheduled} methods. Every server
- * holds the store, also with agent jobs off: person erasure waits for its acknowledgement.
+ * Maintenance of the server's evidence folders, without enabling server-wide {@code @Scheduled} methods. Every server
+ * runs it, also with agent jobs off: a server holds evidence folders whenever it captured or rebuilt one.
  * Test and build profiles invoke maintenance explicitly.
  */
 @Configuration(proxyBeanMethods = false)
@@ -22,11 +22,11 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 @ConditionalOnServerRole
 class JobEvidenceMaintenanceConfiguration {
     private final JobEvidenceFiles evidenceFiles;
-    private final EvidenceFolderPersonDataCatalog personCopies;
+    private final EvidenceReconciler reconciler;
 
-    JobEvidenceMaintenanceConfiguration(JobEvidenceFiles evidenceFiles, EvidenceFolderPersonDataCatalog personCopies) {
+    JobEvidenceMaintenanceConfiguration(JobEvidenceFiles evidenceFiles, EvidenceReconciler reconciler) {
         this.evidenceFiles = evidenceFiles;
-        this.personCopies = personCopies;
+        this.reconciler = reconciler;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -36,20 +36,10 @@ class JobEvidenceMaintenanceConfiguration {
 
     @Bean
     @Profile("!test & !specs & !cds-training")
-    ScheduledTaskRegistrar evidenceErasureTasks() {
+    ScheduledTaskRegistrar evidenceReconcileTasks(EvidenceErasureNotifications erasures) {
+        erasures.subscribe(reconciler::reconcile);
         var tasks = new ScheduledTaskRegistrar();
-        // Person erasure waits for this acknowledgement; a long folder sweep must not hold its thread.
-        tasks.addFixedDelayTask(
-                new FixedDelayTask(personCopies::removeLocalRequests, Duration.ofSeconds(1), Duration.ZERO));
-        return tasks;
-    }
-
-    @Bean
-    @Profile("!test & !specs & !cds-training")
-    ScheduledTaskRegistrar endedAttemptCleanupTasks() {
-        var tasks = new ScheduledTaskRegistrar();
-        tasks.addFixedDelayTask(
-                new FixedDelayTask(evidenceFiles::cleanEndedAttempts, Duration.ofMinutes(1), Duration.ZERO));
+        tasks.addFixedDelayTask(new FixedDelayTask(reconciler::reconcile, EvidenceReconciler.INTERVAL, Duration.ZERO));
         return tasks;
     }
 }

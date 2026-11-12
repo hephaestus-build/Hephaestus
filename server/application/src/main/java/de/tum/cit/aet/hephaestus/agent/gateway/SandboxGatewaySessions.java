@@ -105,6 +105,11 @@ public class SandboxGatewaySessions {
         return session;
     }
 
+    /** Jobs whose archives this server still holds, also when their attempt folders have already gone. */
+    public Set<UUID> jobIds() {
+        return Set.copyOf(sessions.keySet());
+    }
+
     /** Removes the local archive and its selections before a job's evidence removal is acknowledged. */
     public void closeJob(UUID jobId) {
         Session session = sessions.get(jobId);

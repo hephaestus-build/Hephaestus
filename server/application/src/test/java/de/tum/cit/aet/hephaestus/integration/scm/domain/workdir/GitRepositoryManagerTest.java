@@ -43,6 +43,7 @@ import org.eclipse.jgit.lib.FileMode;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.PersonIdent;
+import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.TreeFormatter;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.util.SystemReader;
@@ -84,6 +85,69 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 new FabricLayout(fabric.toString()),
                 GitTransportFixtures.guarded(),
                 mock(RepositoryRefState.class));
+    }
+
+    @Test
+    void shouldBuildACapturedCheckoutOnceFromTheCommitAloneAndKeepItWithTheMirror() throws Exception {
+        try (Git git = repository()) {
+            String head = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
+                    .name();
+            git.branchCreate().setName("other-work").setStartPoint(head).call();
+            prepare();
+            String tree;
+            try (var captured = manager.readTreeSnapshot(KEY, head)) {
+                tree = captured.treeSha();
+            }
+
+            Path first = temporary.resolve("first-copy");
+            assertThat(manager.copyCheckout(KEY, head, tree, null, first)).isTrue();
+            Path second = temporary.resolve("second-copy");
+            assertThat(manager.copyCheckout(KEY, head, tree, null, second))
+                    .as("the second copy comes from the cache")
+                    .isFalse();
+
+            assertThat(Files.readString(second.resolve("README.md"))).isEqualTo("Repository\n");
+            assertThat(Files.readString(second.resolve(".git/HEAD")).trim()).isEqualTo(head);
+            assertThat(second.resolve(".git/" + GitRepositoryManager.CAPTURED_REFS))
+                    .as("the recorded refs are restored from the capture, never invented")
+                    .doesNotExist();
+            try (var copy = Git.open(second.toFile())) {
+                assertThat(copy.getRepository().getRefDatabase().getRefs())
+                        .as("the commit's history only: no branch or tag of the mirror")
+                        .extracting(Ref::getName)
+                        .containsExactly(Constants.HEAD);
+            }
+            assertThat(manager.mirrorBytes(KEY)).isGreaterThan(Files.size(second.resolve("README.md")));
+
+            assertThat(manager.deleteUnretainedRepository(KEY, Duration.ofSeconds(1), () -> false))
+                    .isTrue();
+            prepare();
+            assertThat(manager.copyCheckout(KEY, head, tree, null, temporary.resolve("third-copy")))
+                    .as("the cache went with the mirror")
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void shouldNameAMissingMirrorSoThatTheCallerCanFetchItAgain() {
+        assertThatThrownBy(
+                        () -> manager.copyCheckout(KEY, "a".repeat(40), "b".repeat(40), null, temporary.resolve("c")))
+                .isInstanceOf(GitRepositoryManager.MirrorUnavailableException.class);
+    }
+
+    @Test
+    void shouldRefuseACapturedCheckoutWhoseCommitHasAnotherTree() throws Exception {
+        try (Git git = repository()) {
+            String head = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
+                    .name();
+            prepare();
+            Path target = temporary.resolve("copy");
+
+            assertThatThrownBy(() -> manager.copyCheckout(KEY, head, "b".repeat(40), null, target))
+                    .isInstanceOf(GitRepositoryManager.TreeMismatchException.class);
+            assertThat(target).doesNotExist();
+            assertThat(stagingDirectories()).isEmpty();
+        }
     }
 
     @Test
@@ -479,6 +543,29 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 assertThat(snapshot.limitations()).containsExactly(GitRepositoryManager.TREE_LIMITATION_SUBMODULE);
                 assertThat(snapshot.stagingDir().resolve("README.md")).isRegularFile();
             }
+        }
+    }
+
+    @Test
+    void shouldKeepASingleNewlinePathDistinctFromTwoSeparateScanPaths() throws Exception {
+        try (Git git = repository()) {
+            Files.writeString(source.resolve("a\nb"), "single path");
+            Files.writeString(source.resolve("a"), "first path");
+            Files.writeString(source.resolve("b"), "second path");
+            String commit = commit(git, "Paths with a newline");
+            prepare();
+            String tree;
+            try (var snapshot = manager.readTreeSnapshot(KEY, commit)) {
+                tree = snapshot.treeSha();
+            }
+            Path single = temporary.resolve("single");
+            Path separate = temporary.resolve("separate");
+            manager.copyCheckout(KEY, commit, tree, List.of("a\nb"), single);
+            manager.copyCheckout(KEY, commit, tree, List.of("a", "b"), separate);
+            assertThat(single.resolve("a\nb")).hasContent("single path");
+            assertThat(separate.resolve("a")).hasContent("first path");
+            assertThat(separate.resolve("b")).hasContent("second path");
+            assertThat(separate.resolve("a\nb")).doesNotExist();
         }
     }
 

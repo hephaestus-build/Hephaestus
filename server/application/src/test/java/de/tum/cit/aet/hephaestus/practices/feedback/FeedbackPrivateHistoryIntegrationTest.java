@@ -375,7 +375,7 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
             assertThat(Objects.requireNonNull(response.privateHistory()).delivered())
                     .hasSize(1);
             jdbc.update(
-                    "UPDATE person_evidence_copy SET state='ERASE_REQUESTED' WHERE workspace_id=? AND job_id=?",
+                    "UPDATE person_evidence_copy SET state='ERASED' WHERE workspace_id=? AND job_id=?",
                     current.getWorkspaceId(),
                     current.getId());
             String before = receipt(current).toString();
@@ -385,7 +385,7 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                             String.class,
                             current.getWorkspaceId(),
                             current.getId()))
-                    .isEqualTo("ERASE_REQUESTED");
+                    .isEqualTo("ERASED");
             assertThat(receipt(current).toString()).isEqualTo(before);
         }
     }

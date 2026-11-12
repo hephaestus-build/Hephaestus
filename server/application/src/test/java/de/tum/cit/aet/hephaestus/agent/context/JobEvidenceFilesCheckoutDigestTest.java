@@ -77,7 +77,8 @@ class JobEvidenceFilesCheckoutDigestTest extends BaseUnitTest {
                 new FabricLayout(root.toString()),
                 mock(ReviewJobRepository.class),
                 Clock.systemUTC(),
-                mock(EvidenceFolderPersonDataCatalog.class));
+                mock(EvidenceFolderPersonDataCatalog.class),
+                mock(AttemptInputs.class));
     }
 
     private static ReadReceipt search(String path) {

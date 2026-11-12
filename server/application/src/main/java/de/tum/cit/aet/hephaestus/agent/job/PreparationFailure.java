@@ -74,11 +74,13 @@ record PreparationFailure(
 
     /** The bounded facts that the job row keeps for operators: never the exception's message. */
     String diagnosis(ObjectMapper mapper, int attempt) {
-        return mapper.writeValueAsString(mapper.createObjectNode()
+        var diagnosis = mapper.createObjectNode()
                 .put("attempt", attempt)
                 .put("stage", stage().name())
                 .put("kind", kind().name())
-                .put("reason", reason().name()));
+                .put("reason", reason().name());
+        if (captureCode != null) diagnosis.put("captureCode", captureCode.name());
+        return mapper.writeValueAsString(diagnosis);
     }
 
     static PreparationFailure of(Stage stage, Throwable failure) {
@@ -97,7 +99,7 @@ record PreparationFailure(
                         case ITEM_NOT_VISIBLE, CONSENT_WITHHELD ->
                             JobPreparationException.Reason.SOURCE_AUTHORITY_UNAVAILABLE;
                         case VERSION_UNAVAILABLE -> JobPreparationException.Reason.REVIEW_RANGE_UNAVAILABLE;
-                        case SOURCE_NOT_READY, CAPTURE_FAILED, OCCASION_EVIDENCE_UNAVAILABLE ->
+                        case SOURCE_NOT_READY, CAPTURE_FAILED, CHECKOUT_UNVERIFIED, OCCASION_EVIDENCE_UNAVAILABLE ->
                             JobPreparationException.Reason.REQUIRED_SOURCE_COLLECTION_FAILED;
                     };
             }

@@ -412,7 +412,8 @@ public class ReviewAttemptResults {
                     preparation.capturedAt(),
                     preparation.exceptionTypes());
         }
-        if (isRetryable(failure)
+        boolean retryable = preparation != null ? isRetryablePreparation(failure) : isRetryable(failure);
+        if (retryable
                 && requeueForAnotherAttempt(
                         job, fence, preparation != null ? RequeueCause.PREPARATION : RequeueCause.SANDBOX)) {
             if (preparation != null) jobTelemetry.preparationFailed(job, preparation, "REQUEUED");
@@ -446,6 +447,15 @@ public class ReviewAttemptResults {
                 || transientCapture(PreparationFailure.captureOf(failure));
     }
 
+    /** Database failures before execution may requeue the preparation, without replaying terminal accounting. */
+    static boolean isRetryablePreparation(Throwable failure) {
+        return isRetryable(failure)
+                || failure instanceof TransientDataAccessException
+                || failure instanceof RecoverableDataAccessException
+                || failure instanceof DataAccessResourceFailureException
+                || failure instanceof CannotCreateTransactionException;
+    }
+
     /**
      * A capture that failed, or whose source was not ready, can succeed on another attempt; the same item captured on
      * earlier attempts. Removed or hidden work, withheld consent, a lost version and an occasion that kept no record do
@@ -454,7 +464,8 @@ public class ReviewAttemptResults {
     private static boolean transientCapture(@Nullable ItemCaptureException capture) {
         return capture != null
                 && switch (capture.code()) {
-                    case CAPTURE_FAILED, SOURCE_NOT_READY -> true;
+                    // A new attempt captures again on the server that runs it.
+                    case CAPTURE_FAILED, SOURCE_NOT_READY, CHECKOUT_UNVERIFIED -> true;
                     case ITEM_REMOVED,
                             ITEM_NOT_VISIBLE,
                             CONSENT_WITHHELD,

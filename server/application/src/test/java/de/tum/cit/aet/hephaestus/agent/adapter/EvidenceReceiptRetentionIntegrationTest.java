@@ -39,7 +39,7 @@ class EvidenceReceiptRetentionIntegrationTest extends AbstractWorkspaceIntegrati
     private JdbcTemplate jdbc;
 
     @Test
-    void shouldRetireOnlyTheReceiptsWhoseJobRetentionDeleted() {
+    void shouldDeleteOnlyTheReceiptsWhoseJobRetentionDeleted() {
         Workspace workspace = createWorkspace(
                 "receipt-retention",
                 "Receipt retention",
@@ -54,18 +54,40 @@ class EvidenceReceiptRetentionIntegrationTest extends AbstractWorkspaceIntegrati
         UUID capturing = receipt(workspace, deleted, "CAPTURING", PEOPLE);
         UUID erased = receipt(workspace, deleted, "ERASED", "{}");
         UUID erasing = receipt(workspace, deleted, "ERASED", PEOPLE);
-        UUID requested = receipt(workspace, deleted, "ERASE_REQUESTED", PEOPLE);
         jdbc.update("DELETE FROM review_job WHERE id = ?", deleted);
 
+        // No server needs to confirm: each removes the folders of a job without its row in its next pass.
         receipts.retireReceiptsOfDeletedJobs(500);
 
-        assertThat(states(liveReady, liveErased, ready, capturing, erased, erasing, requested))
-                .containsExactlyInAnyOrderEntriesOf(Map.of(
-                        liveReady, "READY:people",
-                        liveErased, "ERASED:cleared",
-                        ready, "PURGE_REQUESTED:people",
-                        capturing, "PURGE_REQUESTED:people",
-                        requested, "ERASE_REQUESTED:people"));
+        assertThat(states(liveReady, liveErased, ready, capturing, erased, erasing))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(liveReady, "READY:people", liveErased, "ERASED:cleared"));
+    }
+
+    @Test
+    void shouldRetainPhysicalCleanupUntilADeletedJobsSandboxIsRemoved() {
+        Workspace workspace = createWorkspace(
+                "pending-sandbox-receipt",
+                "Pending sandbox receipt",
+                "pending-sandbox-org",
+                AccountType.ORG,
+                persistUser("pending-sandbox-owner"));
+        UUID job = job(workspace).getId();
+        UUID sandbox = UUID.randomUUID();
+        UUID pending = receipt(
+                workspace, job, "READY", "{\"sandboxId\":\"" + sandbox + "\",\"identities\":[{\"subject\":\"42\"}]}");
+        jdbc.update("DELETE FROM review_job WHERE id=?", job);
+
+        receipts.retireReceiptsOfDeletedJobs(500);
+        assertThat(jdbc.queryForMap(
+                        "SELECT state,payload::text AS payload FROM person_evidence_copy WHERE id=?", pending))
+                .containsEntry("state", "ERASED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT payload::text FROM person_evidence_copy WHERE id=?", String.class, pending))
+                .contains(sandbox.toString())
+                .doesNotContain("identities");
+        jdbc.update("UPDATE person_evidence_copy SET payload=payload-'sandboxId' WHERE id=?", pending);
+        receipts.retireReceiptsOfDeletedJobs(500);
+        assertThat(states(pending)).isEmpty();
     }
 
     @Test
@@ -92,12 +114,11 @@ class EvidenceReceiptRetentionIntegrationTest extends AbstractWorkspaceIntegrati
     private UUID receipt(Workspace workspace, UUID jobId, String state, String payload) {
         UUID id = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO person_evidence_copy(id,workspace_id,job_id,store_id,state,payload)"
-                        + " VALUES (?,?,?,?,?,CAST(? AS jsonb))",
+                "INSERT INTO person_evidence_copy(id,workspace_id,job_id,state,payload)"
+                        + " VALUES (?,?,?,?,CAST(? AS jsonb))",
                 id,
                 workspace.getId(),
                 jobId,
-                UUID.randomUUID(),
                 state,
                 payload);
         return id;

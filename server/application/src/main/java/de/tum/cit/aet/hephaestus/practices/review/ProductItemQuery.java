@@ -111,7 +111,7 @@ public class ProductItemQuery {
             return switch (unavailable.code()) {
                 case SOURCE_NOT_READY, VERSION_UNAVAILABLE, ITEM_NOT_VISIBLE, ITEM_REMOVED, CONSENT_WITHHELD ->
                     CurrentWorkVersion.Unknown.INSTANCE;
-                case CAPTURE_FAILED -> throw unavailable;
+                case CAPTURE_FAILED, CHECKOUT_UNVERIFIED -> throw unavailable;
                 // Only an event review reads an occasion; the current work never does.
                 case OCCASION_EVIDENCE_UNAVAILABLE ->
                     throw new IllegalStateException("The current work does not read an occasion", unavailable);

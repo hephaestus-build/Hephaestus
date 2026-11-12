@@ -12,18 +12,25 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.
 import java.io.IOException;
 import java.io.Serial;
 import java.io.Writer;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryNotEmptyException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -91,6 +98,10 @@ public class GitRepositoryManager {
     public static final String CAPTURED_REFS = "hephaestus-captured-refs";
 
     private static final String MIRRORS = "mirrors";
+
+    /** Checkouts built again for captures of other servers, inside their mirror ({@link #copyCheckout}). */
+    private static final String CHECKOUTS = "hephaestus-checkouts";
+
     private static final Pattern MIRROR_ID = Pattern.compile("[1-9][0-9]{0,17}");
     private static final Logger log = LoggerFactory.getLogger(GitRepositoryManager.class);
     private static final int PAGE_SIZE = 256;
@@ -857,6 +868,70 @@ public class GitRepositoryManager {
         });
     }
 
+    /**
+     * Copies this server's checkout of {@code commit} to {@code target}, which must not exist. The checkout is the one
+     * {@link #readOriginalSnapshot} makes of the commit alone, or {@link #readScanSnapshot} of {@code paths}. It is
+     * built from the mirror on the first copy and kept inside the mirror, so it goes with the mirror's removal or
+     * eviction; a copy counts as a use of the mirror. The build and the copy run under one hold of the mirror's read
+     * lock, so no removal or eviction takes the mirror or the checkout between them.
+     *
+     * @return whether the checkout was built for this copy rather than found in the cache
+     * @throws TreeMismatchException when the commit's tree is not {@code tree}
+     * @throws MirrorUnavailableException when the mirror is gone, as after an eviction: the caller may fetch it again
+     */
+    public boolean copyCheckout(
+            RepositoryKey repository, String commit, String tree, @Nullable List<String> paths, Path target) {
+        requireEnabled();
+        if (!ObjectId.isId(commit) || !ObjectId.isId(tree))
+            throw new GitOperationException("Invalid checkout identity", new IOException(commit));
+        Path entry = mirror(repository).resolve(CHECKOUTS).resolve(checkoutName(commit, tree, paths));
+        return locks.withReadLock(repository, () -> {
+            if (!isRepositoryCloned(repository)) throw new MirrorUnavailableException();
+            boolean built = false;
+            if (!Files.isDirectory(entry, NOFOLLOW_LINKS)) {
+                // The snapshot takes the read lock again; a reader that holds it may always take it once more.
+                try (var snapshot = paths == null
+                        ? snapshot(repository, commit, List.of(commit), "Cannot build the captured checkout")
+                        : readScanSnapshot(repository, commit, Set.copyOf(paths))) {
+                    if (!snapshot.treeSha().equals(tree)) throw new TreeMismatchException();
+                    Files.createDirectories(entry.getParent());
+                    Files.move(snapshot.stagingDir(), entry, StandardCopyOption.ATOMIC_MOVE);
+                    built = true;
+                } catch (FileAlreadyExistsException | DirectoryNotEmptyException concurrent) {
+                    // Another copy built the same checkout first.
+                } catch (IOException e) {
+                    throw new GitOperationException("Cannot keep the built checkout", e);
+                }
+            }
+            try {
+                FileSystemUtils.copyRecursively(entry, target);
+                FileTime now = FileTime.from(Instant.now());
+                Files.setLastModifiedTime(entry, now);
+                Files.setLastModifiedTime(mirror(repository), now);
+            } catch (IOException e) {
+                throw new GitOperationException("Cannot copy the built checkout", e);
+            }
+            return built;
+        });
+    }
+
+    /** The commit and tree name a whole checkout; a scan's partial checkout also names a digest of its paths. */
+    private static String checkoutName(String commit, String tree, @Nullable List<String> paths) {
+        if (paths == null) return commit + "-" + tree;
+        try {
+            var digest = MessageDigest.getInstance("SHA-256");
+            for (String path : paths) {
+                byte[] bytes = path.getBytes(StandardCharsets.UTF_8);
+                digest.update(
+                        ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
+                digest.update(bytes);
+            }
+            return commit + "-" + tree + "-" + HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
     /** The identity of the captured checkout includes all its readable refs, including annotated tag objects. */
     public static String treeIdentity(GitTreeSnapshot snapshot) {
         try (Git git = Git.open(snapshot.stagingDir().toFile())) {
@@ -1008,6 +1083,26 @@ public class GitRepositoryManager {
 
         public RepositoryFetchException(GitAPIException cause) {
             super("Repository Git transport is unavailable", cause);
+        }
+    }
+
+    /** A built checkout whose commit has another tree than the capture recorded. */
+    public static final class TreeMismatchException extends GitOperationException {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        public TreeMismatchException() {
+            super("The built checkout has another tree than the capture recorded", new IOException());
+        }
+    }
+
+    /** The mirror is not on this server, as after an eviction: fetching it again makes it available. */
+    public static final class MirrorUnavailableException extends GitOperationException {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        public MirrorUnavailableException() {
+            super("The repository mirror is not on this server", new IOException());
         }
     }
 

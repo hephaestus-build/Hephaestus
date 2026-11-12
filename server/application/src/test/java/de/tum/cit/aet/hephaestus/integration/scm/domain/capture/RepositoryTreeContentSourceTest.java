@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
@@ -80,7 +81,16 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
         assertThat(contribution.files()).isEmpty();
         assertThat(contribution.filesOnDisk())
                 .containsOnlyKeys("repos/reviewed/.git/HEAD", "repos/reviewed/.git/hephaestus-captured-refs");
-        assertThat(contribution.directories()).containsExactly(new EvidenceDirectory("repos/reviewed/", stagingDir));
+        assertThat(contribution.directories())
+                .containsExactly(new EvidenceDirectory(
+                        "repos/reviewed/",
+                        stagingDir,
+                        new CheckoutKey(
+                                17L,
+                                "0123456789012345678901234567890123456789",
+                                "1123456789012345678901234567890123456789",
+                                1,
+                                null)));
         verify(gitRepositoryManager)
                 .readTreeSnapshot(new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789");
     }

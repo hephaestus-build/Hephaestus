@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -108,8 +109,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -244,6 +243,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private AttemptInputs attemptInputs;
 
     private static final Set<String> RETAINED_AFTER_ERASURE = Set.of(
             "account",
@@ -1169,16 +1171,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             assertThat(suppression.isSourceSuppressed(-1L, "chat.thread", threadId))
                     .isFalse();
         }
-        try (var executor = Executors.newSingleThreadExecutor()) {
-            var erasure = executor.submit(() -> personData.run(requestId));
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
-            while (!erasure.isDone()) {
-                worker.removeLocalRequests();
-                if (System.nanoTime() > deadline) throw new AssertionError("Mounted worker did not complete erasure");
-                Thread.sleep(20);
-            }
-            erasure.get(10, TimeUnit.SECONDS);
-        }
+        // The erasure waits for no server; the server that holds the folders removes them in its next pass.
+        personData.run(requestId);
+        worker.removeErasedFolders();
         targetFolders.forEach(path -> assertThat(path).doesNotExist());
         otherFolders.forEach(path -> assertThat(path).exists());
         for (var derived : targetDerived) {
@@ -1204,13 +1199,15 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(receipt.getSelectionsJson()).isNull();
         Map<String, Long> completed = PersonDataStoreReceipt.counts(mapper, receipt.getCompletedJson());
         Map<String, Long> expectedReceipts = new TreeMap<>(counts);
-        // Retained controls report no removal. Earlier owner steps already cleared the decision and resolver.
+        // Retained controls report no removal. Earlier owner steps already cleared the decision and resolver, and
+        // the copies' erasure already deleted the recorded attempt inputs.
         for (String store : List.of(
                 "identity_restriction",
                 "git_repository_history",
                 "installation_account",
                 "feedback_decision_actor",
-                "product_feedback_resolver")) {
+                "product_feedback_resolver",
+                "review_attempt_input")) {
             expectedReceipts.put(store, 0L);
         }
         assertThat(completed)
@@ -1445,13 +1442,12 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             // A removed folder must not hide the job that copied this person's data.
             jdbc.update(
                     """
-                    INSERT INTO person_evidence_copy(id,workspace_id,job_id,store_id,state,payload)
-                    VALUES (?,?,?,?,'ERASED',CAST(? AS jsonb))
+                    INSERT INTO person_evidence_copy(id,workspace_id,job_id,state,payload)
+                    VALUES (?,?,?,'ERASED',CAST(? AS jsonb))
                     """,
                     UUID.randomUUID(),
                     workspace.getId(),
                     derived.jobId(),
-                    UUID.randomUUID(),
                     mapper.writeValueAsString(Map.of(
                             "identities",
                             List.of(new PersonCopyIdentity("GITLAB", provider.getServerUrl(), "42", null)),
@@ -1743,7 +1739,11 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 derived.jobId());
         var job = agentJobRepository.findById(derived.jobId()).orElseThrow();
         var files = new JobEvidenceFiles(
-                new FabricLayout(evidenceRoot.toString()), agentJobRepository, Clock.systemUTC(), worker);
+                new FabricLayout(evidenceRoot.toString()),
+                agentJobRepository,
+                Clock.systemUTC(),
+                worker,
+                attemptInputs);
         files.beginPersonCapture(job);
         recorder.recordIdentity(new PersonCopyIdentity(
                 owner.getProvider().getType().name(),

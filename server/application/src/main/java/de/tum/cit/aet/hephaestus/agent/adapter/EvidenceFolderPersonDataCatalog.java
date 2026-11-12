@@ -24,15 +24,15 @@ import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
-import java.nio.file.StandardOpenOption;
-import java.time.Duration;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -40,9 +40,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
@@ -60,9 +60,14 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Durable requests are acknowledged by the mounted store, never by the server's local filesystem. */
+/**
+ * The receipts of people's data that review attempts copy into their folders. Erasure and purge mark a receipt
+ * {@code ERASED} in PostgreSQL and notify {@link EvidenceErasureNotifications#CHANNEL}; every server then removes its own
+ * folders of the receipt's job once its leases are released and removal succeeds ({@link #removeErasedFolders}).
+ * No erasure waits for a server.
+ */
 @Component
-@PersonDataStores({"person_evidence_copy"})
+@PersonDataStores({"person_evidence_copy", "review_attempt_input"})
 @WorkspaceAgnostic("Exact-person receipts span workspaces; every job mutation also pins its workspace key")
 public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, WorkspacePurgeContributor {
     private static final ThreadLocal<JdbcOperations> LATE_READ_CONTROLS = new ThreadLocal<>();
@@ -70,6 +75,11 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     public static final String COPY_AUTHORITY_UNAVAILABLE = "COPY_AUTHORITY_UNAVAILABLE";
 
     private static final Logger log = LoggerFactory.getLogger(EvidenceFolderPersonDataCatalog.class);
+
+    private static final Pattern WORKSPACE_FOLDER = Pattern.compile("[1-9][0-9]{0,18}");
+
+    /** The attempt that a job folder's entry belongs to: {@code <attempt>-…}, or {@code .<attempt>-…} while staged. */
+    private static final Pattern ENTRY_ATTEMPT = Pattern.compile("\\.?([0-9]+)-");
 
     private final FabricLayout layout;
     private final JdbcTemplate jdbc;
@@ -92,7 +102,6 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     private static final String INHERITED_REPOSITORIES = "inheritedRepositories";
     private static final String UNKNOWN = "UNKNOWN";
     private static final String INCOMPLETE_ASSESSMENT = "Copied evidence dependency assessment is incomplete";
-    private @Nullable UUID localStoreId;
 
     public EvidenceFolderPersonDataCatalog(
             FabricLayout layout,
@@ -123,7 +132,6 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         EvidenceFolderLease lease = null;
         PersonDataCopyRecorder.Capture provenance = null;
         try {
-            UUID storeId = storeId();
             UUID copyId = UUID.randomUUID();
             long workspace = job.getWorkspaceId();
             lease = EvidenceFolderLease.tryAcquire(layout.root(), workspace, job.getId())
@@ -143,17 +151,12 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     .ifPresent(id -> receipt.put("sandboxId", id.toString()));
             receipt.putArray("identities");
             receipt.putArray("repositories");
-            int changed = jdbc.update(
-                    """
-                    INSERT INTO person_evidence_copy(id,workspace_id,job_id,store_id,state,payload)
-                    SELECT CAST(? AS uuid),workspace_id,id,CAST(? AS uuid),'CAPTURING',CAST(? AS jsonb) FROM review_job
+            int changed =
+                    jdbc.update("""
+                    INSERT INTO person_evidence_copy(id,workspace_id,job_id,state,payload)
+                    SELECT CAST(? AS uuid),workspace_id,id,'CAPTURING',CAST(? AS jsonb) FROM review_job
                     WHERE id=? AND workspace_id=? AND status='RUNNING'
-                    """,
-                    copyId.toString(),
-                    storeId.toString(),
-                    mapper.writeValueAsString(receipt),
-                    job.getId(),
-                    workspace);
+                    """, copyId.toString(), mapper.writeValueAsString(receipt), job.getId(), workspace);
             if (changed != 1) throw new IllegalStateException("This review attempt is no longer admitted");
             var capture = new ActiveCapture(job.getId(), workspace, copyId, receipt, provenance, lease, admission);
             ACTIVE.set(capture);
@@ -195,6 +198,12 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     } catch (IOException exception) {
                         throw new UncheckedIOException(exception);
                     }
+                    capture.admission()
+                            .jdbc()
+                            .update(
+                                    "DELETE FROM review_attempt_input WHERE job_id=? AND workspace_id=?",
+                                    capture.jobId(),
+                                    capture.workspaceId());
                     int discarded = capture.admission()
                             .jdbc()
                             .update("""
@@ -490,7 +499,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                                 COALESCE(payload->'copiedJobs','[]'::jsonb) || CAST(? AS jsonb)) e)),
                             '{dependencies}',CASE WHEN ? AND payload->>'dependencies'='COMPLETE'
                                 THEN '"COMPLETE"'::jsonb ELSE '"UNKNOWN"'::jsonb END)
-                        WHERE job_id=? AND workspace_id=? AND store_id=CAST(? AS uuid) AND state='READY'
+                        WHERE job_id=? AND workspace_id=? AND state='READY'
                           AND payload->>'attempt'=?
                         """,
                         mapper.writeValueAsString(identities),
@@ -499,7 +508,6 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                         true,
                         jobId,
                         workspaceId,
-                        storeId().toString(),
                         Integer.toString(attempt));
                 return result;
             } finally {
@@ -522,23 +530,21 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         }
     }
 
-    /** Whether this store may keep the attempt's debug transcript. */
+    /** Whether a server may keep the attempt's debug transcript. */
     public enum TraceCustody {
         /** The attempt's READY receipt indexes every person its copied rows may name. */
         INDEXED,
         /** The receipt is READY, but a copied row depends on a receipt that cannot vouch for its own copies. */
         UNINDEXED_DEPENDENCY,
-        /** This store holds no READY receipt for the attempt: it was erased, purged, or belongs elsewhere. */
+        /** No READY receipt exists for the attempt: it was erased or purged. */
         NOT_HELD
     }
 
     public TraceCustody traceCustody(UUID jobId, long workspaceId, int attempt) {
-        if (!Files.exists(layout.root().resolve(".person-evidence-store-id"))) return TraceCustody.NOT_HELD;
-        var dependencies = jdbc.queryForList(
-                """
+        var dependencies = jdbc.queryForList("""
                 SELECT COALESCE(payload->>'dependencies','') FROM person_evidence_copy
-                WHERE job_id=? AND workspace_id=? AND store_id=CAST(? AS uuid) AND state='READY' AND payload->>'attempt'=?
-                """, String.class, jobId, workspaceId, storeId().toString(), Integer.toString(attempt));
+                WHERE job_id=? AND workspace_id=? AND state='READY' AND payload->>'attempt'=?
+                """, String.class, jobId, workspaceId, Integer.toString(attempt));
         if (dependencies.size() != 1) return TraceCustody.NOT_HELD;
         return COMPLETE.equals(dependencies.getFirst()) ? TraceCustody.INDEXED : TraceCustody.UNINDEXED_DEPENDENCY;
     }
@@ -548,18 +554,16 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
      * one receipt that can vouch for inputs retained from that attempt.
      */
     public Optional<UUID> completeReceipt(UUID jobId, long workspaceId, int attempt) {
-        if (!Files.exists(layout.root().resolve(".person-evidence-store-id"))) return Optional.empty();
         return jdbc
                 .query(
                         """
                         SELECT id FROM person_evidence_copy
-                        WHERE job_id=? AND workspace_id=? AND store_id=CAST(? AS uuid) AND state='READY'
+                        WHERE job_id=? AND workspace_id=? AND state='READY'
                           AND payload->>'attempt'=? AND payload->>'dependencies'=?
                         """,
                         (rs, row) -> Objects.requireNonNull(rs.getObject(1, UUID.class)),
                         jobId,
                         workspaceId,
-                        storeId().toString(),
                         Integer.toString(attempt),
                         COMPLETE)
                 .stream()
@@ -575,7 +579,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
      */
     public boolean holdVouchingReceipt(UUID copyId, UUID jobId, long workspaceId, int attempt) {
         holdCopyAdmission();
-        return vouchingReceipt(jdbc, copyId, jobId, workspaceId, attempt, true) != null;
+        return vouchingReceipt(jdbc, copyId, jobId, workspaceId, attempt) != null;
     }
 
     /** Holds the existing copy/erasure fence before a recovery transaction takes any job lock. */
@@ -585,21 +589,18 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
 
     /**
      * The still-owning admitting attempt may finish from the capture it received. Incomplete copied-job lineage
-     * prevents retaining or recovering its inputs, not this live writer. Its local READY receipt must still be unique
+     * prevents retaining or recovering its inputs, not this live writer. Its READY receipt must still be unique
      * and name no suppressed identity. The caller holds copy admission before its job lock.
      */
     public boolean vouchesForLiveAttempt(UUID jobId, long workspaceId, int attempt) {
-        if (!Files.exists(layout.root().resolve(".person-evidence-store-id"))) return false;
         var payloads = jdbc.query(
                 """
                 SELECT payload::text FROM person_evidence_copy
-                WHERE job_id=? AND workspace_id=? AND store_id=CAST(? AS uuid) AND state='READY'
-                  AND payload->>'attempt'=?
+                WHERE job_id=? AND workspace_id=? AND state='READY' AND payload->>'attempt'=?
                 """,
                 (rs, row) -> mapper.readTree(Objects.requireNonNull(rs.getString(1))),
                 jobId,
                 workspaceId,
-                storeId().toString(),
                 Integer.toString(attempt));
         if (payloads.size() != 1 || !payloads.getFirst().path("identities").isArray()) return false;
         List<PersonCopyIdentity> identities;
@@ -612,27 +613,24 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         return !isSuppressed(identities, jdbc);
     }
 
-    /** A durable original receipt can vouch for retained inputs independently of the mounted server store. */
+    /** A durable original receipt can vouch for retained inputs, whichever server wrote them. */
     public boolean vouchesForOriginalCopy(UUID copyId, UUID jobId, long workspaceId, int attempt) {
-        return vouchingReceipt(jdbc, copyId, jobId, workspaceId, attempt, false) != null;
+        return vouchingReceipt(jdbc, copyId, jobId, workspaceId, attempt) != null;
     }
 
     /** The original receipt's payload, only while it still vouches for its attempt's retained inputs. */
     private @Nullable JsonNode vouchingReceipt(
-            JdbcOperations controls, UUID copyId, UUID jobId, long workspaceId, int attempt, boolean local) {
-        if (local && !Files.exists(layout.root().resolve(".person-evidence-store-id"))) return null;
+            JdbcOperations controls, UUID copyId, UUID jobId, long workspaceId, int attempt) {
         var payloads = controls.query(
                 """
                 SELECT payload::text FROM person_evidence_copy
-                WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND (CAST(? AS uuid) IS NULL OR store_id=CAST(? AS uuid)) AND state='READY'
+                WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND state='READY'
                   AND payload->>'attempt'=? AND payload->>'dependencies'=?
                 """,
                 (rs, row) -> mapper.readTree(Objects.requireNonNull(rs.getString(1))),
                 copyId.toString(),
                 jobId,
                 workspaceId,
-                local ? storeId().toString() : null,
-                local ? storeId().toString() : null,
                 Integer.toString(attempt),
                 COMPLETE);
         if (payloads.size() != 1) return null;
@@ -649,12 +647,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     public void inheritReceipt(ReviewJob job, UUID originalCopyId, int originalAttempt) {
         ActiveCapture capture = requireCapture(job);
         JsonNode original = vouchingReceipt(
-                capture.admission().jdbc(),
-                originalCopyId,
-                capture.jobId(),
-                capture.workspaceId(),
-                originalAttempt,
-                false);
+                capture.admission().jdbc(), originalCopyId, capture.jobId(), capture.workspaceId(), originalAttempt);
         if (original == null) throw new IllegalStateException("The retained inputs' receipt no longer vouches");
         var identities = new LinkedHashSet<JsonNode>();
         capture.receipt().path(INHERITED_IDENTITIES).forEach(identities::add);
@@ -747,58 +740,115 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
 
     @Override
     public List<PersonDataContributor> contributors() {
-        return List.of(new PersonDataContributor() {
-            @Override
-            public String store() {
-                return "person_evidence_copy";
-            }
+        return List.of(
+                new PersonDataContributor() {
+                    @Override
+                    public String store() {
+                        return "person_evidence_copy";
+                    }
 
-            @Override
-            public int getOrder() {
-                return -300;
-            }
+                    @Override
+                    public int getOrder() {
+                        return -300;
+                    }
 
-            @Override
-            public PersonDataSelection select(PersonScope person) {
-                return selectCopies(person);
-            }
+                    @Override
+                    public PersonDataSelection select(PersonScope person) {
+                        return selectCopies(person);
+                    }
 
-            @Override
-            public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
-                return selection.rows().stream()
-                        .map(key -> {
-                            ObjectNode row = mapper.createObjectNode();
-                            row.put("jobId", key.columns().get("job_id"));
-                            row.put("copyId", key.columns().get("copy_id"));
-                            row.put("workspaceId", key.columns().get("workspace_id"));
-                            row.put("kind", "short-lived-review-evidence");
-                            return (JsonNode) row;
-                        })
-                        .toList();
-            }
+                    @Override
+                    public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
+                        return selection.rows().stream()
+                                .map(key -> {
+                                    ObjectNode row = mapper.createObjectNode();
+                                    row.put("jobId", key.columns().get("job_id"));
+                                    row.put("copyId", key.columns().get("copy_id"));
+                                    row.put("workspaceId", key.columns().get("workspace_id"));
+                                    row.put("kind", "short-lived-review-evidence");
+                                    return (JsonNode) row;
+                                })
+                                .toList();
+                    }
 
-            @Override
-            public void prepareErasure(PersonDataSelection selection) {
-                requestRemoval(selection);
-                awaitRemoval(selection);
-            }
+                    @Override
+                    public void prepareErasure(PersonDataSelection selection) {
+                        requestRemoval(selection);
+                    }
 
-            @Override
-            public long erase(PersonDataSelection selection, PersonScope frozenScope) {
-                return eraseAcknowledgedCopies(selection);
-            }
-        });
+                    @Override
+                    public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+                        return clearErasedCopies(selection);
+                    }
+                },
+                new PersonDataContributor() {
+                    @Override
+                    public String store() {
+                        return "review_attempt_input";
+                    }
+
+                    @Override
+                    public int getOrder() {
+                        return -299;
+                    }
+
+                    // The recorded inputs of the jobs whose copies name the person: the same copies, as rows of a job.
+                    @Override
+                    public PersonDataSelection select(PersonScope person) {
+                        var copies = selectCopies(person).rows().stream()
+                                .map(key -> key.columns().get("copy_id"))
+                                .toArray();
+                        return new PersonDataSelection(jdbc.query(
+                                """
+                        SELECT DISTINCT i.job_id,i.workspace_id FROM review_attempt_input i
+                        JOIN person_evidence_copy c ON c.job_id=i.job_id AND c.workspace_id=i.workspace_id
+                        WHERE c.id=ANY(CAST(? AS uuid[])) ORDER BY i.job_id
+                        """,
+                                (rs, row) -> new PersonDataSelection.RowKey(
+                                        Map.of("job_id", rs.getString(1), "workspace_id", rs.getString(2))),
+                                new SqlArrayValue("text", copies)));
+                    }
+
+                    @Override
+                    public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
+                        return selection.rows().stream()
+                                .map(key -> {
+                                    ObjectNode row = mapper.createObjectNode();
+                                    row.put("jobId", key.columns().get("job_id"));
+                                    row.put("workspaceId", key.columns().get("workspace_id"));
+                                    row.put("kind", "running-review-attempt-input");
+                                    return (JsonNode) row;
+                                })
+                                .toList();
+                    }
+
+                    // The copies' erasure cancels the jobs and deletes these rows first; this deletes what remains.
+                    @Override
+                    public void prepareErasure(PersonDataSelection selection) {}
+
+                    @Override
+                    public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+                        long count = 0;
+                        for (var key : selection.rows())
+                            count += jdbc.update(
+                                    "DELETE FROM review_attempt_input WHERE job_id=? AND workspace_id=?",
+                                    UUID.fromString(key.columns().get("job_id")),
+                                    Long.parseLong(key.columns().get("workspace_id")));
+                        return count;
+                    }
+                });
     }
 
-    private long eraseAcknowledgedCopies(PersonDataSelection selection) {
-        if (!allRemoved(selection)) throw new IllegalStateException("Evidence removal is not acknowledged");
+    // The sandbox ID contains no copied personal data and lets every reconcile retry physical removal.
+    private long clearErasedCopies(PersonDataSelection selection) {
+        if (!allRemoved(selection)) throw new IllegalStateException("A selected evidence copy is not erased");
         long count = 0;
         for (var key : selection.rows())
             count += jdbc.update(
                     """
-                    UPDATE person_evidence_copy SET payload='{}'::jsonb
+                    UPDATE person_evidence_copy SET payload=jsonb_strip_nulls(jsonb_build_object('sandboxId',payload->'sandboxId'))
                     WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND state='ERASED'
-                      AND payload<>'{}'::jsonb
+                      AND payload-'sandboxId'<>'{}'::jsonb
                     """,
                     key.columns().get("copy_id"),
                     UUID.fromString(key.columns().get("job_id")),
@@ -847,41 +897,39 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     }
 
     /**
-     * Retires the receipts of review jobs that retention deleted. Once the job row is gone, no result reaches its
+     * Removes the receipts of review jobs that retention deleted. Once the job row is gone, no result reaches its
      * receipt (the review item's job reference is cleared), so the receipt vouches for nothing and keeps identities
-     * without a purpose. A receipt that still names people asks its store to remove the copy, as a workspace purge
-     * does, so a store that is offline keeps them until it returns and confirms. A receipt whose removal is confirmed
-     * is deleted, with any identities an erasure has not cleared yet; the erasure counts a deleted receipt as removed.
+     * without a purpose. A receipt that still names a sandbox stays until physical deletion succeeds.
+     * Each server removes the folders of a job without its row in its next reconcile pass.
      *
-     * @return the larger of the receipts requested and deleted, so a full batch of either asks for another
+     * @return the larger number of receipts retired or deleted, so a full batch asks for another
      */
     public int retireReceiptsOfDeletedJobs(int batchSize) {
-        int requested = jdbc.update("""
-            UPDATE person_evidence_copy SET state='PURGE_REQUESTED' WHERE id IN (
-              SELECT c.id FROM person_evidence_copy c
-              WHERE c.state IN ('CAPTURING','READY')
-                AND NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
-              LIMIT ?)
+        int retired = jdbc.update("""
+            UPDATE person_evidence_copy SET state='ERASED',
+              payload=jsonb_strip_nulls(jsonb_build_object('sandboxId',payload->'sandboxId'))
+            WHERE id IN (SELECT c.id FROM person_evidence_copy c
+              WHERE NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
+                AND c.payload->>'sandboxId' IS NOT NULL AND c.state<>'ERASED' LIMIT ?)
             """, batchSize);
         int deleted = jdbc.update("""
             DELETE FROM person_evidence_copy WHERE id IN (
               SELECT c.id FROM person_evidence_copy c
-              WHERE c.state='ERASED'
-                AND NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
+              WHERE NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
+                AND c.payload->>'sandboxId' IS NULL
               LIMIT ?)
             """, batchSize);
-        return Math.max(requested, deleted);
+        return Math.max(retired, deleted);
     }
 
-    /** Queue removal in the workspace transaction; servers can acknowledge only after it commits. */
+    /** Erases the workspace's copies in its purge transaction; each server removes its folders after the commit. */
     @Override
     public void deleteWorkspaceData(Long workspaceId) {
-        jdbc.update("""
-            UPDATE person_evidence_copy
-            SET state=CASE WHEN state='ERASED' THEN state ELSE 'PURGE_REQUESTED' END,
-                payload=CASE WHEN state='ERASED' THEN '{}'::jsonb ELSE payload END
-            WHERE workspace_id=?
-            """, workspaceId);
+        jdbc.update(
+                "UPDATE person_evidence_copy SET state='ERASED', payload=jsonb_strip_nulls(jsonb_build_object('sandboxId',payload->'sandboxId')) WHERE workspace_id=?",
+                workspaceId);
+        jdbc.update("DELETE FROM review_attempt_input WHERE workspace_id=?", workspaceId);
+        notifyErased();
     }
 
     @Override
@@ -907,46 +955,56 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                         Map.of("job_id", rs.getString(1), "copy_id", rs.getString(2), "workspace_id", rs.getString(3))),
                 new SqlArrayValue("uuid", jobIds.toArray())));
         requestRemoval(selection);
-        awaitRemoval(selection);
     }
 
+    /**
+     * Cancels the selected copies' running jobs, marks the copies erased and deletes their jobs' attempt inputs. From
+     * the commit on, no attempt can admit or retain the copies, and each server removes its folders of their jobs
+     * in a later reconcile pass once leases are released and cleanup succeeds.
+     */
     private void requestRemoval(PersonDataSelection selection) {
-        var cancelled = new HashSet<UUID>();
-        for (var key : selection.rows()) {
-            UUID jobId = UUID.fromString(key.columns().get("job_id"));
-            long workspaceId = Long.parseLong(key.columns().get("workspace_id"));
-            if (!cancelled.add(jobId)) continue;
-            Boolean running = jdbc.queryForObject(
-                    "SELECT EXISTS(SELECT 1 FROM review_job WHERE id=? AND workspace_id=? AND status IN"
-                            + " ('QUEUED','RUNNING'))",
-                    Boolean.class,
-                    jobId,
-                    workspaceId);
-            if (Boolean.TRUE.equals(running)) {
+        var jobs = new LinkedHashMap<UUID, Long>();
+        for (var key : selection.rows())
+            jobs.putIfAbsent(
+                    UUID.fromString(key.columns().get("job_id")),
+                    Long.parseLong(key.columns().get("workspace_id")));
+        jobs.forEach((jobId, workspaceId) -> {
+            if (running(jobId, workspaceId)) {
                 try {
                     lifecycles.getObject().cancel(workspaceId, jobId);
                 } catch (ReviewJobStateConflictException raced) {
-                    if (Boolean.TRUE.equals(jdbc.queryForObject(
-                            "SELECT EXISTS(SELECT 1 FROM review_job WHERE id=? AND workspace_id=? AND status IN"
-                                    + " ('QUEUED','RUNNING'))",
-                            Boolean.class,
-                            jobId,
-                            workspaceId))) throw raced;
+                    if (running(jobId, workspaceId)) throw raced;
                 }
             }
-        }
+            jdbc.update("DELETE FROM review_attempt_input WHERE job_id=? AND workspace_id=?", jobId, workspaceId);
+        });
         for (var key : selection.rows())
             jdbc.update(
                     """
-                    UPDATE person_evidence_copy SET state=CASE WHEN state='PURGE_REQUESTED' THEN state ELSE 'ERASE_REQUESTED' END
+                    UPDATE person_evidence_copy SET state='ERASED'
                     WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND state<>'ERASED'
                     """,
                     key.columns().get("copy_id"),
                     UUID.fromString(key.columns().get("job_id")),
                     Long.parseLong(key.columns().get("workspace_id")));
+        if (!jobs.isEmpty()) notifyErased();
     }
 
-    /** A receipt that retention deleted is removed too: retention deletes only acknowledged receipts. */
+    /** Sends the wake-up in the caller's transaction, so PostgreSQL delivers it only if the erasure commits. */
+    private void notifyErased() {
+        jdbc.queryForObject(
+                "SELECT 1 FROM (SELECT pg_notify(?, '')) sent", Integer.class, EvidenceErasureNotifications.CHANNEL);
+    }
+
+    private boolean running(UUID jobId, long workspaceId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM review_job WHERE id=? AND workspace_id=? AND status IN ('QUEUED','RUNNING'))",
+                Boolean.class,
+                jobId,
+                workspaceId));
+    }
+
+    /** A receipt that retention deleted is removed too. */
     private boolean allRemoved(PersonDataSelection selection) {
         for (var key : selection.rows()) {
             Boolean remains = jdbc.queryForObject(
@@ -963,89 +1021,174 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         return true;
     }
 
-    private void awaitRemoval(PersonDataSelection selection) {
-        long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
-        do {
-            removeLocalRequests();
-            if (allRemoved(selection)) return;
-            try {
-                TimeUnit.MILLISECONDS.sleep(100);
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Evidence removal was interrupted", exception);
-            }
-        } while (System.nanoTime() < deadline);
-        throw new IllegalStateException("A mounted evidence store has not acknowledged removal");
-    }
-
-    /** Server polling also serves a resumed request after the owning volume returns. */
-    public void removeLocalRequests() {
-        if (!Files.exists(layout.root().resolve(".person-evidence-store-id"))) return;
-        String owner = storeId().toString();
+    /**
+     * Removes this server's folders of every job with an erased copy, except the folders of its attempts whose copy is
+     * still live, and stops a sandbox that this server runs for such a job. The reconcile pass runs it every 30 seconds
+     * and on each {@link EvidenceErasureNotifications} wake-up. Held leases and failed removal defer cleanup to a later
+     * pass; an erasure commit has no physical-deletion deadline.
+     *
+     * @return the job folders it removed erased attempts from, and those it could not remove them from now
+     */
+    public ErasedFolders removeErasedFolders() {
+        var local = new HashMap<>(localJobFolders());
+        // A startup sweep can remove the attempt folder before its sandbox and gateway archive are removed.
+        AgentSandboxes sandboxOwner = sandboxes.getIfAvailable();
+        SandboxGatewaySessions gateway = sessions.getIfAvailable();
+        var archives = gateway == null ? Set.<UUID>of() : gateway.jobIds();
+        jdbc.query(
+                "SELECT job_id,workspace_id FROM person_evidence_copy WHERE state='ERASED'"
+                        + " AND ((? AND payload->>'sandboxId' IS NOT NULL) OR job_id=ANY(?))",
+                (RowCallbackHandler)
+                        rs -> local.put(Objects.requireNonNull(rs.getObject(1, UUID.class)), rs.getLong(2)),
+                sandboxOwner != null,
+                new SqlArrayValue("uuid", archives.toArray()));
+        if (local.isEmpty()) return new ErasedFolders(0, 0);
+        var erased = new HashMap<UUID, Set<String>>();
+        var erasedSandboxes = new HashMap<UUID, List<UUID>>();
+        var jobIds = new ArrayList<UUID>(local.keySet());
         jdbc.query(
                 """
-                SELECT c.job_id,c.workspace_id,c.id,CAST(c.payload->>'sandboxId' AS uuid) FROM person_evidence_copy c
-                WHERE c.store_id=CAST(? AS uuid) AND c.state IN ('ERASE_REQUESTED','PURGE_REQUESTED') ORDER BY c.job_id,c.id
+                SELECT c.job_id,
+                  ARRAY(SELECT DISTINCT e.payload->>'sandboxId' FROM person_evidence_copy e WHERE e.job_id=c.job_id
+                    AND e.workspace_id=c.workspace_id AND e.state='ERASED'
+                    AND e.payload->>'sandboxId' IS NOT NULL) AS sandboxes,
+                  ARRAY(SELECT l.payload->>'attempt' FROM person_evidence_copy l WHERE l.job_id=c.job_id
+                    AND l.workspace_id=c.workspace_id AND l.state IN ('CAPTURING','READY')) AS live
+                FROM person_evidence_copy c
+                JOIN unnest(CAST(? AS uuid[]), CAST(? AS bigint[])) AS f(job_id, workspace_id)
+                  ON f.job_id=c.job_id AND f.workspace_id=c.workspace_id
+                WHERE c.state='ERASED'
+                GROUP BY c.job_id, c.workspace_id
                 """,
                 (RowCallbackHandler) rs -> {
-                    UUID jobId = Objects.requireNonNull(rs.getObject(1, UUID.class));
-                    long workspaceId = rs.getLong(2);
-                    String copyId = Objects.requireNonNull(rs.getString(3));
-                    UUID sandboxId = rs.getObject(4, UUID.class);
-                    AgentSandboxes sandboxOwner = sandboxes.getIfAvailable();
-                    if (sandboxId != null) {
-                        if (sandboxOwner == null) return;
-                        sandboxOwner.release(workspaceId, sandboxId);
-                    }
-                    SandboxGatewaySessions gateway = sessions.getIfAvailable();
-                    // An attempt that this replica holds keeps the folder's lease until its inputs are released.
-                    ReviewAttemptCustody held = custody.getIfAvailable();
-                    if (held != null) held.releaseJob(jobId);
-                    var acquired = EvidenceFolderLease.tryAcquire(layout.root(), workspaceId, jobId);
-                    if (acquired.isEmpty()) return;
-                    var lease = acquired.get();
-                    try (lease) {
-                        if (gateway != null) gateway.closeJob(jobId);
-                        deleteFolder(workspaceId, jobId);
-                        jdbc.update("""
-                            UPDATE person_evidence_copy SET state='ERASED',
-                                payload=CASE WHEN state='PURGE_REQUESTED'
-                                    THEN '{}'::jsonb ELSE payload END
-                            WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND store_id=CAST(? AS uuid) AND state IN ('ERASE_REQUESTED','PURGE_REQUESTED')
-                            """, copyId, jobId, workspaceId, owner);
-                    } catch (IOException exception) {
-                        throw new UncheckedIOException(exception);
-                    }
+                    var live = new HashSet<String>();
+                    var sandboxIds = new ArrayList<UUID>();
+                    for (Object sandbox : (Object[]) rs.getArray(2).getArray())
+                        sandboxIds.add(UUID.fromString(sandbox.toString()));
+                    erasedSandboxes.put(Objects.requireNonNull(rs.getObject(1, UUID.class)), sandboxIds);
+                    for (Object attempt : (Object[]) rs.getArray(3).getArray())
+                        if (attempt != null) live.add(attempt.toString());
+                    erased.put(Objects.requireNonNull(rs.getObject(1, UUID.class)), live);
                 },
-                owner);
+                new SqlArrayValue("uuid", jobIds.toArray()),
+                new SqlArrayValue("bigint", jobIds.stream().map(local::get).toArray()));
+        int removed = 0;
+        int remaining = 0;
+        for (var entry : erased.entrySet()) {
+            UUID jobId = entry.getKey();
+            long workspaceId = Objects.requireNonNull(local.get(jobId));
+            try {
+                var sandboxIds = Objects.requireNonNull(erasedSandboxes.get(jobId));
+                if (sandboxOwner != null) {
+                    for (UUID sandboxId : sandboxIds) {
+                        try {
+                            sandboxOwner.release(workspaceId, sandboxId);
+                            jdbc.update(
+                                    "UPDATE person_evidence_copy SET payload=payload-'sandboxId'"
+                                            + " WHERE job_id=? AND workspace_id=? AND state='ERASED' AND payload->>'sandboxId'=?",
+                                    jobId,
+                                    workspaceId,
+                                    sandboxId.toString());
+                        } catch (RuntimeException failure) {
+                            log.warn("Could not remove an erased evidence sandbox: sandboxId={}", sandboxId, failure);
+                            remaining++;
+                        }
+                    }
+                }
+                // An attempt that this server holds keeps the folder's lease until its inputs are released.
+                ReviewAttemptCustody held = custody.getIfAvailable();
+                if (held != null && entry.getValue().isEmpty()) held.releaseJob(jobId);
+                var acquired = EvidenceFolderLease.tryAcquire(layout.root(), workspaceId, jobId);
+                if (acquired.isEmpty()) {
+                    remaining++;
+                    continue;
+                }
+                var lease = acquired.get();
+                try (lease) {
+                    if (gateway != null && entry.getValue().isEmpty()) {
+                        try {
+                            gateway.closeJob(jobId);
+                        } catch (RuntimeException failure) {
+                            log.warn("Could not remove an erased evidence archive: jobId={}", jobId, failure);
+                            remaining++;
+                        }
+                    }
+                    if (removeErasedAttempts(workspaceId, jobId, entry.getValue())) removed++;
+                }
+            } catch (IOException | RuntimeException failure) {
+                log.warn("Could not remove an erased evidence folder: jobId={}", jobId, failure);
+                remaining++;
+            }
+        }
+        return new ErasedFolders(removed, remaining);
+    }
+
+    /**
+     * One pass of {@link #removeErasedFolders}.
+     *
+     * @param remaining erased copies that this server could not remove: cleanup succeeds only once this is 0
+     */
+    public record ErasedFolders(int removed, int remaining) {}
+
+    /** The job folders under this server's jobs root, by job id, with their workspace. */
+    private Map<UUID, Long> localJobFolders() {
+        Path jobs = layout.jobsRoot();
+        if (!Files.isDirectory(jobs, LinkOption.NOFOLLOW_LINKS)) return Map.of();
+        var folders = new HashMap<UUID, Long>();
+        try (var workspaces = Files.list(jobs)) {
+            for (Path workspace : workspaces.toList()) {
+                String workspaceName = String.valueOf(workspace.getFileName());
+                if (!WORKSPACE_FOLDER.matcher(workspaceName).matches()) continue;
+                try (var entries = Files.list(workspace)) {
+                    for (Path job : entries.toList()) {
+                        try {
+                            folders.put(
+                                    UUID.fromString(String.valueOf(job.getFileName())), Long.parseLong(workspaceName));
+                        } catch (IllegalArgumentException notAJob) {
+                            log.debug("Skipping an entry outside the job folder format: path={}", job, notAJob);
+                        }
+                    }
+                } catch (NoSuchFileException removedUnderTheWalk) {
+                    log.debug(
+                            "An evidence workspace folder was removed during the sweep: path={}",
+                            workspace,
+                            removedUnderTheWalk);
+                }
+            }
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+        return folders;
+    }
+
+    /**
+     * Deletes each entry of the job's folder whose attempt has no live copy: attempt folders, their staging folders,
+     * end markers and transcripts. An entry that names no attempt goes too. The emptied job folder goes last.
+     *
+     * @return whether anything was deleted
+     */
+    private boolean removeErasedAttempts(long workspaceId, UUID jobId, Set<String> liveAttempts) throws IOException {
+        Path folder = layout.jobsRoot().resolve(Long.toString(workspaceId)).resolve(jobId.toString());
+        if (!Files.isDirectory(folder, LinkOption.NOFOLLOW_LINKS)) return false;
+        boolean removed = false;
+        try (var entries = Files.list(folder)) {
+            for (Path entry : entries.toList()) {
+                var attempt = ENTRY_ATTEMPT.matcher(String.valueOf(entry.getFileName()));
+                if (attempt.lookingAt() && liveAttempts.contains(attempt.group(1))) continue;
+                FileUtils.forceDelete(entry.toFile());
+                removed = true;
+            }
+        }
+        try (var remaining = Files.list(folder)) {
+            if (remaining.findAny().isEmpty()) Files.deleteIfExists(folder);
+        }
+        return removed;
     }
 
     private void deleteFolder(long workspaceId, UUID jobId) throws IOException {
         var folder = layout.jobsRoot().resolve(Long.toString(workspaceId)).resolve(jobId.toString());
         FileUtils.deleteDirectory(folder.toFile());
         if (Files.exists(folder, LinkOption.NOFOLLOW_LINKS)) throw new IllegalStateException("Evidence folder remains");
-    }
-
-    private synchronized UUID storeId() {
-        if (localStoreId != null) return localStoreId;
-        var identity = layout.root().resolve(".person-evidence-store-id");
-        try {
-            Files.createDirectories(layout.root());
-            try {
-                Files.writeString(
-                        identity,
-                        UUID.randomUUID().toString(),
-                        StandardOpenOption.CREATE_NEW,
-                        StandardOpenOption.WRITE);
-            } catch (FileAlreadyExistsException existing) {
-                // The mounted store, not a transient connection, owns this receipt.
-            }
-            UUID result = UUID.fromString(Files.readString(identity).strip());
-            localStoreId = result;
-            return result;
-        } catch (IOException exception) {
-            throw new UncheckedIOException(exception);
-        }
     }
 
     private record ActiveCapture(

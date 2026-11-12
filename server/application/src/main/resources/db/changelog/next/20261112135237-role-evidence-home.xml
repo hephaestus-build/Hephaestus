@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794283093097-1" author="hephaestus">
+        <comment>The files of a running attempt's folder except its checkouts, so any server can rebuild the folder.</comment>
+        <sql>
+CREATE TABLE review_attempt_input (
+    id uuid NOT NULL,
+    workspace_id bigint NOT NULL,
+    job_id uuid NOT NULL,
+    attempt integer NOT NULL,
+    run_id uuid NOT NULL,
+    path varchar(1024) NOT NULL,
+    sha256 varchar(64) NOT NULL,
+    permissions varchar(9) NOT NULL,
+    content bytea NOT NULL,
+    created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT review_attempt_input_pkey PRIMARY KEY (id),
+    CONSTRAINT uk_review_attempt_input_path UNIQUE (job_id, attempt, run_id, path),
+    CONSTRAINT sfk_review_attempt_input_job FOREIGN KEY (job_id, workspace_id) REFERENCES review_job(id, workspace_id) ON DELETE CASCADE,
+    CONSTRAINT sfk_review_attempt_input_workspace FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE RESTRICT,
+    CONSTRAINT ck_review_attempt_input_shape CHECK (attempt &gt;= 0 AND length(path) &gt; 0 AND sha256 ~ '^[0-9a-f]{64}$')
+);
+CREATE INDEX idx_review_attempt_input_job ON review_attempt_input (workspace_id, job_id, attempt);
+        </sql>
+        <rollback>DROP TABLE review_attempt_input;</rollback>
+    </changeSet>
+    <changeSet id="1794283093097-2" author="hephaestus">
+        <comment>Erasure no longer waits for the server that wrote a copy: copies are erased in PostgreSQL, and each server removes its own folders.</comment>
+        <sql>
+UPDATE person_evidence_copy SET state = 'ERASED',
+    payload = jsonb_strip_nulls(jsonb_build_object('sandboxId', payload->'sandboxId'))
+WHERE state IN ('ERASE_REQUESTED', 'PURGE_REQUESTED');
+ALTER TABLE person_evidence_copy DROP CONSTRAINT ck_person_evidence_copy_state;
+ALTER TABLE person_evidence_copy ADD CONSTRAINT ck_person_evidence_copy_state CHECK (state IN ('CAPTURING', 'READY', 'ERASED'));
+DROP INDEX idx_person_evidence_copy_store;
+ALTER TABLE person_evidence_copy DROP COLUMN store_id;
+        </sql>
+        <rollback>
+ALTER TABLE person_evidence_copy DROP CONSTRAINT ck_person_evidence_copy_state;
+ALTER TABLE person_evidence_copy ADD CONSTRAINT ck_person_evidence_copy_state CHECK (state IN ('CAPTURING', 'READY', 'ERASE_REQUESTED', 'PURGE_REQUESTED', 'ERASED'));
+ALTER TABLE person_evidence_copy ADD COLUMN store_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
+ALTER TABLE person_evidence_copy ALTER COLUMN store_id DROP DEFAULT;
+CREATE INDEX idx_person_evidence_copy_store ON person_evidence_copy (store_id, state);
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

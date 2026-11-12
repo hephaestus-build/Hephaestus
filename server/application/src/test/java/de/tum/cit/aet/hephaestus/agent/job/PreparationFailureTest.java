@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.List;
 import java.util.stream.Stream;
 import org.eclipse.jgit.api.errors.JGitInternalException;
 import org.eclipse.jgit.api.errors.TransportException;
@@ -17,7 +18,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.RecoverableDataAccessException;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.transaction.CannotCreateTransactionException;
 
 @Tag("unit")
@@ -126,6 +130,23 @@ class PreparationFailureTest {
         assertThat(databaseFailure.message()).doesNotContain(privateText);
         assertThat(ReviewAttemptResults.isRetryable(io)).isFalse();
         assertThat(ReviewAttemptResults.isRetryable(database)).isFalse();
+    }
+
+    @Test
+    void shouldRetryOnlyDatabaseFailuresThatAnotherPreparationCanOutlast() {
+        for (RuntimeException failure : List.of(
+                new TransientDataAccessResourceException("connection unavailable"),
+                new RecoverableDataAccessException("connection lost"),
+                new DataAccessResourceFailureException("database down"),
+                new CannotCreateTransactionException("cannot start transaction"))) {
+            assertThat(ReviewAttemptResults.isRetryablePreparation(failure)).isTrue();
+            assertThat(ReviewAttemptResults.isRetryable(failure)).isFalse();
+        }
+        assertThat(ReviewAttemptResults.isRetryablePreparation(new DataIntegrityViolationException("invalid data")))
+                .isFalse();
+        assertThat(ReviewAttemptResults.isRetryablePreparation(
+                        new IllegalStateException("The attempt no longer runs its job")))
+                .isFalse();
     }
 
     @Test
