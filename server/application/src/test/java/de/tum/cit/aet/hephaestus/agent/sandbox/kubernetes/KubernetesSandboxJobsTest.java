@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
  * the client asks of the API server, and the live Kubernetes test proves what the controllers do.
  */
 @Tag("unit")
-@EnableKubernetesMockClient(crud = true)
+@EnableKubernetesMockClient(crud = true, kubernetesClientBuilderCustomizer = NoRequestRetries.class)
 class KubernetesSandboxJobsTest {
 
     private static final String SANDBOXES = "hephaestus-sandboxes";
