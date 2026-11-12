@@ -286,6 +286,32 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         eraseArrivals(kind, true);
     }
 
+    @Test
+    void shouldKeepTheErasurePreviewValidAfterReplayRetentionDeletesTheRow() {
+        Account administrator = new Account("Replay erasure administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        long person = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Person with a replay")).getId());
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("replayed-retention"));
+        String delivery = inboxArrival(workspace.getId(), IntegrationKind.GITHUB, "https://github.com", "owner", "{}");
+        jdbc.update(
+                "UPDATE provider_event SET replayed_by=?,state='DONE',ended_at=clock_timestamp()-interval '4 days' WHERE delivery_key=?",
+                person,
+                delivery);
+        var preview = personData.preview(administratorId, person, List.of());
+        providerEvents.deleteEnded(
+                Instant.now().minus(3, ChronoUnit.DAYS), Instant.now().minus(30, ChronoUnit.DAYS));
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM provider_event WHERE delivery_key=?", Long.class, delivery))
+                .isZero();
+        personData.requestErasure(preview.request().getId(), administratorId, true);
+        personData.run(preview.request().getId());
+        assertThat(personData.get(preview.request().getId()).request().getState())
+                .isEqualTo(PersonDataRequest.State.COMPLETE);
+    }
+
     private void eraseArrivals(IntegrationKind kind, boolean resume) {
         var administrator = new Account("Inbox erasure administrator");
         administrator.setAppRole(Account.AppRole.APP_ADMIN);

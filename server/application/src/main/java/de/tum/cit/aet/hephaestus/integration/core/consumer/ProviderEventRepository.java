@@ -190,7 +190,7 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
     @Query(value = """
             WITH expired AS (
               SELECT id FROM provider_event WHERE state = 'LEASED' AND leased_until < clock_timestamp()
-              FOR NO KEY UPDATE SKIP LOCKED)
+              FOR UPDATE SKIP LOCKED)
             UPDATE provider_event e SET leased_until = NULL, failures = failures + 1,
                    state = CASE WHEN failures + 1 >= :maxAttempts THEN 'DEAD' ELSE 'QUEUED' END,
                    ended_at = CASE WHEN failures + 1 >= :maxAttempts THEN clock_timestamp() END,
@@ -206,7 +206,26 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
         int getLeaseEpoch();
     }
 
-    String LEASE_LOCK = "SELECT state, lease_epoch AS \"leaseEpoch\" FROM provider_event WHERE id = :id FOR SHARE";
+    String LEASE_READ = """
+            SELECT state, lease_epoch AS "leaseEpoch" FROM provider_event WHERE id = :id
+            """;
+    String LEASE_LOCK = LEASE_READ + " FOR SHARE";
+
+    @WorkspaceAgnostic("The workspace is read only through the trusted event id; no caller supplies another tenant")
+    @Query(value = """
+            SELECT w.id FROM workspace w
+            WHERE w.id = (SELECT workspace_id FROM provider_event WHERE id = :id)
+            FOR KEY SHARE NOWAIT
+            """, nativeQuery = true)
+    Optional<Long> lockWorkspace(@Param("id") long id);
+
+    @WorkspaceAgnostic("The event id and epoch come from the trusted claim, never from a request")
+    @Query(value = LEASE_READ + " FOR KEY SHARE NOWAIT", nativeQuery = true)
+    Optional<LeaseRow> readLease(@Param("id") long id);
+
+    interface ErasedRow extends LeaseRow {
+        long getId();
+    }
 
     /** SHARE permits independent nested writers, but blocks erasure and lease replacement until commit. */
     @WorkspaceAgnostic("The event id and epoch come from the trusted claim, never from a request")
@@ -241,15 +260,18 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
             """, nativeQuery = true)
     int deleteEnded(@Param("doneBefore") Instant doneBefore, @Param("deadBefore") Instant deadBefore);
 
-    @Query(value = "DELETE FROM provider_event WHERE workspace_id = :workspaceId RETURNING id", nativeQuery = true)
-    List<Long> deleteWorkspace(@Param("workspaceId") long workspaceId);
+    @Query(value = """
+            DELETE FROM provider_event WHERE workspace_id = :workspaceId
+            RETURNING id, state, lease_epoch AS "leaseEpoch"
+            """, nativeQuery = true)
+    List<ErasedRow> deleteWorkspace(@Param("workspaceId") long workspaceId);
 
     @Query(value = """
             DELETE FROM provider_event
             WHERE workspace_id = :workspaceId AND provider = :provider
-              AND split_part(subject, '.', 3) = :resource RETURNING id
+              AND split_part(subject, '.', 3) = :resource RETURNING id, state, lease_epoch AS "leaseEpoch"
             """, nativeQuery = true)
-    List<Long> deleteResource(
+    List<ErasedRow> deleteResource(
             @Param("workspaceId") long workspaceId,
             @Param("provider") String provider,
             @Param("resource") String resource);

@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
@@ -43,6 +44,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -153,9 +156,41 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                 threadRepository,
                 identityResolver,
                 conversationFeedbackErasure,
-                mock(ProviderEventStore.class),
+                eventStore,
                 /* conversationIngestEnabled */ true,
                 new TransactionTemplate(transactionManager));
+    }
+
+    @Test
+    void shouldLockTheInboxBeforeChannelRowsDuringAdminErasure() throws Exception {
+        ingestService.ingestChannelMessage(TEAM, CHANNEL, "100.1", null, ALLOWED_USER, "message before erasure");
+        long event = StoredEventHandling.leased(eventStore, jdbcTemplate, workspaceId, "slack.T1.C1.message");
+        var tx = new TransactionTemplate(transactionManager);
+        var handler = HeldTransaction.holdIn(tx, jdbcTemplate, () -> eventStore.claimStep(event, 1, "persist"));
+        var erasure = CompletableFuture.runAsync(
+                () -> tx.executeWithoutResult(status -> ingestService.eraseChannel(workspaceId, CHANNEL)));
+        handler.commitAfter(
+                erasure,
+                () -> tx.executeWithoutResult(status -> {
+                    // The eraser waits for the event without already holding the rows the handler can still write.
+                    assertThat(jdbcTemplate.queryForList(
+                                    "SELECT id FROM slack_message WHERE workspace_id=? AND slack_channel_id=? AND slack_ts=? FOR UPDATE NOWAIT",
+                                    Long.class,
+                                    workspaceId,
+                                    CHANNEL,
+                                    "100.1"))
+                            .hasSize(1);
+                }));
+        erasure.get(10, TimeUnit.SECONDS);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM provider_event WHERE id=?", Long.class, event))
+                .isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM slack_message WHERE workspace_id=? AND slack_channel_id=? AND slack_ts=?",
+                        Long.class,
+                        workspaceId,
+                        CHANNEL,
+                        "100.1"))
+                .isZero();
     }
 
     @Test

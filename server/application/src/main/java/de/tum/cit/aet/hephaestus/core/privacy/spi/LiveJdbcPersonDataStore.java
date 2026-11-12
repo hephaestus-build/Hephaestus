@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.privacy.spi;
 
+import java.util.List;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** Volatile inbox rows: keep preview keys for export, but erase current matches of the same frozen identity scope too. */
@@ -21,6 +23,11 @@ public class LiveJdbcPersonDataStore extends JdbcPersonDataStore {
     @Override
     public boolean selectionMustStayUnchanged() {
         return false;
+    }
+
+    @Override
+    public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
+        return exportMatchingScope(selection, frozenScope);
     }
 
     @Override

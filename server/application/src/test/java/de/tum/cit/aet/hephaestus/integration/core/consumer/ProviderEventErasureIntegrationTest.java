@@ -9,6 +9,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
@@ -58,6 +60,9 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class ProviderEventErasureIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private AccountRepository accounts;
+
     @Autowired
     private ProviderEventStore store;
 
@@ -314,9 +319,9 @@ class ProviderEventErasureIntegrationTest extends BaseIntegrationTest {
         try {
             transactions.executeWithoutResult(status -> {
                 store.boundStatements(Duration.ofSeconds(1));
-                assertThat(store.renew(held.id(), 1, Duration.ofMinutes(2))).isFalse();
                 assertThat(store.renew(other.id(), 1, Duration.ofMinutes(2))).isTrue();
                 store.reapExpired(1);
+                assertThat(store.renew(held.id(), 1, Duration.ofMinutes(2))).isTrue();
             });
             assertThat(jdbc.queryForObject("SELECT state FROM provider_event WHERE id=?", String.class, held.id()))
                     .isEqualTo("LEASED");
@@ -325,28 +330,30 @@ class ProviderEventErasureIntegrationTest extends BaseIntegrationTest {
         } finally {
             write.commitAfter(CompletableFuture.completedFuture(null));
         }
-        assertThat(store.renew(held.id(), 1, Duration.ofMinutes(2))).isTrue();
+        store.reapExpired(1);
+        assertThat(jdbc.queryForObject("SELECT state FROM provider_event WHERE id=?", String.class, held.id())).isEqualTo("LEASED");
+        assertThat(jdbc.queryForObject("SELECT failures FROM provider_event WHERE id=?", Integer.class, held.id())).isZero();
         assertThat(store.complete(held.id(), 1)).isTrue();
     }
 
     @Test
-    @SuppressWarnings("try") // Admission must fail promptly while erasure owns the global copy fence.
-    void shouldRefuseNewPayloadStorageDuringTheErasureSteps() {
+    @SuppressWarnings("try") // A long erasure must not stop unrelated webhook arrivals.
+    void shouldKeepAdmittingPayloadsWhileErasureOwnsTheCopyFence() {
         Workspace workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("admission-" + UUID.randomUUID()));
         String delivery = UUID.randomUUID().toString();
         try (var erasure = copyFence.erase()) {
-            assertThatThrownBy(() -> store.store(List.of(new ProviderEventStore.Arrival(
+            assertThat(store.store(List.of(new ProviderEventStore.Arrival(
                             workspace.getId(),
                             "slack",
                             "slack.T1.C1.message",
                             delivery,
                             Map.of(),
-                            "private".getBytes(StandardCharsets.UTF_8)))))
-                    .isInstanceOf(TransientDataAccessResourceException.class);
+                            "{}".getBytes(StandardCharsets.UTF_8)))))
+                    .isEqualTo(1);
         }
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM provider_event WHERE delivery_key=?", Long.class, delivery))
-                .isZero();
+                .isEqualTo(1);
     }
 
     @Test
@@ -447,6 +454,89 @@ class ProviderEventErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(exists(event.id())).isTrue();
         assertThat(store.hasStep(event.id(), "slack.channel.erase")).isFalse();
         assertThat(inbox.dispatch(event.id(), 1, Instant.now(), () -> {})).isFalse();
+    }
+
+    @Test
+    void shouldRecheckTheEpochAtCommitAfterAnEarlierStepClaim() throws Exception {
+        Workspace workspace =
+                workspaces.save(WorkspaceTestFixtures.activeWorkspace("commit-epoch-" + UUID.randomUUID()));
+        var event = leased(workspace, "github.acme.epoch.issues", Map.of(), "{}");
+        var writing = new CountDownLatch(1);
+        var finish = new CountDownLatch(1);
+        try (var workers = Executors.newSingleThreadExecutor()) {
+            var handler = workers.submit(() -> inbox.dispatch(
+                    event.id(),
+                    1,
+                    Instant.now(),
+                    () -> transactions.executeWithoutResult(status -> {
+                        DeliveryInbox.claim("persist");
+                        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, "must/not-exist", 42));
+                        writing.countDown();
+                        try {
+                            await(finish);
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(interrupted);
+                        }
+                    })));
+            try {
+                assertThat(writing.await(10, TimeUnit.SECONDS)).isTrue();
+                transactions.executeWithoutResult(status -> {
+                    store.boundStatements(Duration.ofSeconds(1));
+                    jdbc.update("UPDATE provider_event SET lease_epoch=2 WHERE id=?", event.id());
+                });
+            } finally {
+                finish.countDown();
+            }
+            assertThatThrownBy(() -> handler.get(10, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(ProviderEventFenceException.class);
+        }
+        assertThat(store.hasStep(event.id(), "persist")).isFalse();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM repository_to_monitor WHERE workspace_id=?",
+                        Long.class,
+                        workspace.getId()))
+                .isZero();
+    }
+
+    @Test
+    void shouldRecognizeSelfErasureWithoutANamedStep() {
+        Workspace workspace =
+                workspaces.save(WorkspaceTestFixtures.activeWorkspace("natural-erase-" + UUID.randomUUID()));
+        var event = leased(workspace, "slack.T1.C1.channel_deleted", Map.of(), "{}");
+        assertThat(inbox.dispatch(
+                        event.id(),
+                        1,
+                        Instant.now(),
+                        () -> transactions.executeWithoutResult(
+                                status -> store.deleteResource(workspace.getId(), "slack", "C1"))))
+                .isTrue();
+        assertThat(exists(event.id())).isFalse();
+    }
+
+    @Test
+    void shouldKeepAnotherActorsReplayAttributionAfterThePreviewChanges() {
+        long person =
+                Objects.requireNonNull(accounts.save(new Account("Person")).getId());
+        long other = Objects.requireNonNull(
+                accounts.save(new Account("Other person")).getId());
+        Workspace workspace =
+                workspaces.save(WorkspaceTestFixtures.activeWorkspace("replay-actor-" + UUID.randomUUID()));
+        var event = leased(workspace, "github.acme.replay.issues", Map.of(), "{}");
+        jdbc.update("UPDATE provider_event SET replayed_by=? WHERE id=?", person, event.id());
+        var scope = new PersonScope(person, List.of(), List.of());
+        var contributor = catalog.contributors().stream()
+                .filter(store -> store.store().equals("provider_event_replay"))
+                .findFirst()
+                .orElseThrow();
+        var selection = contributor.select(scope);
+        assertThat(selection.rows()).hasSize(1);
+        jdbc.update("UPDATE provider_event SET replayed_by=? WHERE id=?", other, event.id());
+        assertThat(contributor.export(selection, scope)).isEmpty();
+        Long erased = transactions.execute(status -> contributor.erase(selection, scope));
+        assertThat(erased).isZero();
+        assertThat(jdbc.queryForObject("SELECT replayed_by FROM provider_event WHERE id=?", Long.class, event.id()))
+                .isEqualTo(other);
     }
 
     private ProviderEventConsumer consumer(

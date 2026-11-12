@@ -55,14 +55,11 @@ public class DeliveryInbox {
             context.status().rejectedWrite = failure;
             throw failure;
         }
-        for (var synchronization : TransactionSynchronizationManager.getSynchronizations()) {
-            if (synchronization instanceof WriteFence fence) fence.fenced = true;
-        }
         return claimed;
     }
 
     // Installed for every write transaction on the dispatch thread, including REQUIRES_NEW natural-key upserts.
-    // A named step fences early. Its row lock lasts until commit, even if that step erases its own event.
+    // A named step prevents deletion early while allowing renewal. Every writer checks the epoch again at commit.
     static void fenceTransaction() {
         Context context = CURRENT.get();
         if (context != null) TransactionSynchronizationManager.registerSynchronization(new WriteFence(context));
@@ -89,11 +86,22 @@ public class DeliveryInbox {
         }
     }
 
-    static void erasedByHandler(List<Long> erased) {
+    static void erasedByHandler(List<ProviderEventRepository.ErasedRow> erased) {
         Context context = CURRENT.get();
-        if (context == null || !erased.contains(context.eventId())) return;
-        if (TransactionSynchronizationManager.getSynchronizations().stream()
-                .noneMatch(synchronization -> synchronization instanceof WriteFence fence && fence.fenced)) return;
+        if (context == null) return;
+        var current =
+                erased.stream().filter(row -> row.getId() == context.eventId()).findFirst();
+        if (current.isEmpty()) return;
+        var row = current.get();
+        if (!"LEASED".equals(row.getState()) || row.getLeaseEpoch() != context.leaseEpoch()) {
+            var failure = new ProviderEventFenceException(ProviderEventFenceException.Reason.LEASE_LOST);
+            context.status().rejectedWrite = failure;
+            throw failure;
+        }
+        // DELETE locked and returned the same lease in this transaction. It remains fenced through commit.
+        for (var synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+            if (synchronization instanceof WriteFence fence) fence.fenced = true;
+        }
         TransactionCallbacks.afterCommit(() -> context.status().erasedByHandler = true);
     }
 

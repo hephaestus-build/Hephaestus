@@ -118,10 +118,11 @@ The inbox guarantees database steps; it does not make a remote service part of a
 Person erasure deletes matching events in every state, including LEASED, and cascades their step records.
 The inbox is a live-predicate erasure store: its preview counts can change without invalidating the frozen identity scope.
 Each erasure pass deletes current matches as well as the frozen keys, and resume repeats the pass even after an earlier receipt.
-Inbox admission takes shared copy admission until commit and fails without storing a payload while erasure owns that fence.
-Each named write step holds the copy fence and a shared event-row lock until its business transaction commits.
-The lock checks LEASED and the claim's lease epoch; it blocks erasure and lease replacement during that write.
-Spring also installs the same check before commit in every write transaction on the dispatch thread.
+Each pass covers deliveries stored before its inbox step. Webhook admission stays available during erasure.
+A named write step holds copy admission and a key-share row lock until commit. Renewal remains possible.
+The reaper uses FOR UPDATE SKIP LOCKED, which skips that key-share lock.
+Spring rechecks LEASED and the epoch with a shared row lock at commit in every write transaction.
+A changed epoch rolls the whole transaction back, including its step record.
 This covers independent natural-key upserts that have no named step.
 A write that finds erasure in progress rolls back before waiting on its outcome, so domain locks cannot deadlock erasure.
 After erasure, a missing event stops further writes and completion.

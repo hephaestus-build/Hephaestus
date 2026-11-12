@@ -119,14 +119,24 @@ public class JdbcPersonDataStore implements PersonDataContributor {
 
     @Override
     public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
+        return exportWhere(selectionParameters(selection), selected());
+    }
+
+    protected List<JsonNode> exportMatchingScope(PersonDataSelection selection, PersonScope frozenScope) {
+        var bindings = new LinkedHashMap<>(parameters(frozenScope, mapper));
+        bindings.putAll(selectionParameters(selection));
+        return exportWhere(bindings, "(" + selected() + ") AND (" + predicate + ")");
+    }
+
+    private List<JsonNode> exportWhere(Map<String, Object> bindings, String where) {
         String projection = "jsonb_build_object("
                 + String.join(
                         ",",
                         columns.stream().map(c -> "'" + c + "',t.\"" + c + "\"").toList()) + ")";
         return jdbc.query(
-                "SELECT " + projection + "::text FROM " + quotedTable() + " t WHERE " + selected() + " ORDER BY "
+                "SELECT " + projection + "::text FROM " + quotedTable() + " t WHERE " + where + " ORDER BY "
                         + keyExpression() + "::text",
-                selectionParameters(selection),
+                bindings,
                 (rs, row) -> mapper.readTree(Objects.requireNonNull(rs.getString(1))));
     }
 
@@ -137,7 +147,8 @@ public class JdbcPersonDataStore implements PersonDataContributor {
     }
 
     protected long eraseIncludingCurrentMatches(PersonDataSelection selection, PersonScope frozenScope) {
-        return eraseWhere(selection, frozenScope, "(" + selected() + ") OR (" + predicate + ")");
+        String where = redaction.isEmpty() ? "(" + selected() + ") OR (" + predicate + ")" : predicate;
+        return eraseWhere(selection, frozenScope, where);
     }
 
     private long eraseWhere(PersonDataSelection selection, PersonScope frozenScope, String where) {

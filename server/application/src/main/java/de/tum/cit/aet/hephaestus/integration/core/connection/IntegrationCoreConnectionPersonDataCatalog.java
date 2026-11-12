@@ -92,9 +92,9 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         "id,workspace_id,provider,state,error_class,received_at,ended_at",
                         "id",
                         "",
-                        400),
+                        Integer.MAX_VALUE),
                 // The account that replayed a dead letter. The event stays; only the attribution goes.
-                new JdbcPersonDataStore(
+                new LiveJdbcPersonDataStore(
                         jdbc,
                         mapper,
                         "provider_event_replay",
@@ -103,7 +103,7 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         "id,workspace_id,provider,state,replayed_at,replayed_by",
                         "id",
                         "replayed_by=NULL",
-                        400),
+                        Integer.MAX_VALUE),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

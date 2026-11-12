@@ -310,11 +310,11 @@ public class SlackIngestService {
     @Transactional
     public void eraseChannel(long workspaceId, String channelId) {
         if (!DeliveryInbox.claim("slack.channel.erase")) return;
+        providerEvents.deleteResource(workspaceId, "slack", channelId);
         List<Long> threadIds = threadRepository.findIdsByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
         monitoredChannelRepository.revokeConsent(workspaceId, channelId);
         conversationFeedbackErasure.eraseForThreads(workspaceId, threadIds);
         messageRepository.deleteByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
         threadRepository.deleteByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
-        providerEvents.deleteResource(workspaceId, "slack", channelId);
     }
 }

@@ -82,9 +82,6 @@ public class ProviderEventStore {
     @WorkspaceAgnostic(
             "The receiver stores one row for each workspace that the delivery reaches, and installation rows")
     public int store(List<Arrival> arrivals) {
-        if (!arrivals.isEmpty() && !copyFence.tryHoldForCapture()) {
-            throw new TransientDataAccessResourceException("Person erasure is in progress");
-        }
         int stored = 0;
         for (Arrival arrival : arrivals) {
             stored += events.store(new ProviderEventRepository.NewEvent(
@@ -182,7 +179,9 @@ public class ProviderEventStore {
     @Transactional
     @WorkspaceAgnostic("The event id identifies the claimed row")
     public boolean claimStep(long eventId, int leaseEpoch, String step) {
-        holdWriteFence(eventId, leaseEpoch);
+        holdCopyFence();
+        events.lockWorkspace(eventId);
+        checkLease(events.readLease(eventId), leaseEpoch);
         return events.claimStep(eventId, step) == 1;
     }
 
@@ -190,16 +189,16 @@ public class ProviderEventStore {
     @Transactional
     @WorkspaceAgnostic("The event id and its lease epoch identify the claimed row")
     public void fenceStep(long eventId, int leaseEpoch) {
-        holdWriteFence(eventId, leaseEpoch);
+        holdCopyFence();
+        checkLease(events.lockLease(eventId), leaseEpoch);
     }
 
-    private void holdWriteFence(long eventId, int leaseEpoch) {
+    private void holdCopyFence() {
         // A caller can already hold a domain lock. Never wait on erasure while holding that lock: roll back,
         // then the consumer checks the lease in a fresh transaction after erasure releases its copy fence.
         if (!copyFence.tryHoldForCapture()) {
             throw new TransientDataAccessResourceException("Person erasure is in progress");
         }
-        checkLease(events.lockLease(eventId), leaseEpoch);
     }
 
     /** Checks an outcome after the handler transaction ended, before retrying or recording a drop. */
@@ -233,7 +232,8 @@ public class ProviderEventStore {
     /** Deletes the events of one workspace, in the caller's transaction; their steps go with them. */
     @Transactional
     public int deleteWorkspace(long workspaceId) {
-        List<Long> erased = events.deleteWorkspace(workspaceId);
+        if (DeliveryInbox.isDispatching()) holdCopyFence();
+        List<ProviderEventRepository.ErasedRow> erased = events.deleteWorkspace(workspaceId);
         DeliveryInbox.erasedByHandler(erased);
         return erased.size();
     }
@@ -244,7 +244,8 @@ public class ProviderEventStore {
      */
     @Transactional
     public int deleteResource(long workspaceId, String provider, String resource) {
-        List<Long> erased = events.deleteResource(workspaceId, provider, resource);
+        if (DeliveryInbox.isDispatching()) holdCopyFence();
+        List<ProviderEventRepository.ErasedRow> erased = events.deleteResource(workspaceId, provider, resource);
         DeliveryInbox.erasedByHandler(erased);
         return erased.size();
     }

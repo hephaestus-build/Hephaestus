@@ -12,6 +12,12 @@ public class ConsumerInboxPurge implements WorkspacePurgeContributor {
     private final ProviderEventStore store;
 
     @Override
+    public int getOrder() {
+        // Handlers lock an event before its domain rows. Purge must take the same order.
+        return Integer.MIN_VALUE;
+    }
+
+    @Override
     @Transactional
     public void deleteWorkspaceData(Long workspaceId) {
         store.deleteWorkspace(workspaceId);
