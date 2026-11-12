@@ -80,11 +80,6 @@ hephaestus:
     # Each item event reaches its readiness edge at once; the quiet window's own tests open one.
     item-event-ledger:
         quiet-window: 0s
-        # Slack is on suite-wide; the Heph Slack projector would take Slack turns before the tests that build their
-        # own projector.
-        slack:
-            projector:
-                enabled: false
     # Loud enforcement under test: any unguarded scoped-table query throws.
     # Production runs in 'log' mode for the staging canary period; this override
     # ensures tenancy bugs surface in CI rather than being masked.

@@ -53,7 +53,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -261,9 +264,23 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         this.timer = timer;
     }
 
-    @EventListener(ApplicationReadyEvent.class)
     void listen() {
         notifications.subscribe(this);
+    }
+
+    /**
+     * Subscribes the projector to the ledger once the application is ready. The test profile drives a projector of its
+     * own and subscribes none, since a subscribed projector reads every later test's Slack turns on its own threads.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnServerRole
+    @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
+    @Profile("!test")
+    static class SubscriptionConfiguration {
+        @Bean
+        ApplicationListener<ApplicationReadyEvent> slackMentorProjectorSubscription(SlackMentorProjector projector) {
+            return event -> projector.listen();
+        }
     }
 
     @Override
