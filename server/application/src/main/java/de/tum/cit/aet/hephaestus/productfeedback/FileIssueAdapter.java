@@ -60,12 +60,17 @@ class FileIssueAdapter implements ActionAdapter {
         this.mapper = mapper;
     }
 
+    /** The lane of every GitHub write about one report. */
+    static String lane(UUID feedbackId) {
+        return KEY_PREFIX + feedbackId;
+    }
+
     /** The action of one hand-over. Hand-overs of one report run in order, in one lane. */
     static ActionRequest request(ObjectMapper mapper, Payload payload, @Nullable Long accountId) {
         return new ActionRequest(
                 ActionKind.FILE_ISSUE,
                 null,
-                KEY_PREFIX + payload.feedbackId(),
+                lane(payload.feedbackId()),
                 KEY_PREFIX + payload.feedbackId() + ":" + payload.generation(),
                 mapper.valueToTree(payload),
                 accountId,

@@ -62,8 +62,8 @@ public class CleanupRecords {
                 true,
                 requested.minusSeconds(60),
                 now);
-        Instant lease = filing.getLeaseUntil();
-        if (lease != null && lease.isAfter(now)) record.setNextAttemptAt(lease.plusSeconds(60));
+        // The /publish action may still be writing; reconcile only after its lease has passed.
+        record.setNextAttemptAt(now.plus(ActionExecutor.LEASE).plusSeconds(60));
         cleanups.save(record);
     }
 

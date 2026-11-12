@@ -148,6 +148,7 @@ It cannot override the reporter’s choice, security, the risk latch, or abuse.
 
 GitHub cannot transfer a private issue to a public repository.
 The app creates a public issue from the redacted draft, then closes the private issue with the public link.
+If GitHub's answer to the new issue is lost, the app looks for that issue in the public repository before it creates one again.
 The public issue contains no link back to the private one.
 The server checks commands every five minutes.
 During **Pause**, commands wait until you resume.

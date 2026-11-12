@@ -1,6 +1,11 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionState;
+import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
@@ -36,7 +41,8 @@ class FollowService {
     static final Duration PRIVATE_INTERVAL = Duration.ofMinutes(5);
     static final Duration PUBLIC_INTERVAL = Duration.ofMinutes(30);
     private static final Set<String> MAY_PUBLISH = Set.of("write", "admin");
-    private static final Duration PROMOTION_LEASE = Duration.ofMinutes(5);
+    /** How long a {@code /publish} waits while filing is paused. */
+    private static final Duration PAUSED_WAIT = Duration.ofMinutes(1);
 
     private final ProductFeedbackFilingRepository filings;
     private final ProductFeedbackRepository feedback;
@@ -48,6 +54,7 @@ class FollowService {
     private final ApplicationEventPublisher events;
     private final TransactionTemplate transactions;
     private final ProductFeedbackMeters meters;
+    private final FileIssueQueue queue;
     private final Clock clock;
 
     FollowService(
@@ -61,6 +68,7 @@ class FollowService {
             ApplicationEventPublisher events,
             TransactionTemplate transactions,
             ProductFeedbackMeters meters,
+            FileIssueQueue queue,
             Clock clock) {
         this.filings = filings;
         this.feedback = feedback;
@@ -72,6 +80,7 @@ class FollowService {
         this.events = events;
         this.transactions = transactions;
         this.meters = meters;
+        this.queue = queue;
         this.clock = clock;
     }
 
@@ -103,13 +112,6 @@ class FollowService {
         meters.step("follow", "ok");
     }
 
-    /** Carries out persisted {@code /publish} commands. Pause holds them; a failure leaves them for the next tick. */
-    @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT100S")
-    void promoteDue() {
-        if (destinations.current().isPaused()) return;
-        for (UUID id : filings.withPublishRequest(clock.instant())) promote(id);
-    }
-
     private void apply(ProductFeedbackFiling filing, ProductFeedbackIssues.@Nullable IssueState state) {
         Instant now = clock.instant();
         filing.setFollowedAt(now);
@@ -127,7 +129,9 @@ class FollowService {
                 // Recorded before anything acts on it, so the cursor and the command commit together.
                 if (filing.getPublishRequestedBy() == null) {
                     filing.setPublishRequestedBy(comment.authorLogin());
-                    filing.setPublishRequestedAt(now);
+                    // An earlier command whose issue may exist keeps its date: it bounds the search for that issue.
+                    if (filing.getPublishRequestedAt() == null) filing.setPublishRequestedAt(now);
+                    queue.publish(filing.getFeedbackId(), now, report.getAccountId());
                 }
             } else if (filing.publicRoute()) {
                 commented = true;
@@ -175,15 +179,18 @@ class FollowService {
     }
 
     /**
-     * Publishes a private report as a new public issue. The commenter needs write access on both repositories, read
-     * live; the reporter must have allowed public; and the report needs a model draft. The command never overrides
-     * consent, security, the risk latch or abuse. A lease on the row keeps it to one replica, and the recipient is
-     * frozen before the first write, so a retry after an unclear result looks for the issue there before it writes.
+     * Publishes a private report as a new public issue, as one attempt of its outbox action ({@link
+     * PublishReportAdapter}). The commenter needs write access on both repositories, read live; the reporter must have
+     * allowed public; and the report needs a model draft. The command never overrides consent, security, the risk latch
+     * or abuse. The recipient is frozen before the first write, so an attempt after one whose write may have reached
+     * GitHub looks for the issue there before it writes again.
      */
-    private void promote(UUID feedbackId) {
+    ActionResult publish(ActionAttempt attempt, UUID feedbackId) {
+        if (destinations.current().isPaused()) return new ActionResult.Defer(PAUSED_WAIT);
+        boolean fenced = false;
         try {
             var plan = transactions.execute(status -> plan(feedbackId));
-            if (plan == null) return;
+            if (plan == null) return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
             String marker = IssueRenderer.promotionMarker(feedbackId).toString();
             var publicRepository = plan.publicRepository();
             ProductFeedbackIssues.Issue issue = plan.frozen() && publicRepository != null
@@ -199,26 +206,25 @@ class FollowService {
                     refusal = "Only someone with write access to both repositories can publish this report.";
                 }
                 if (refusal != null || publicRepository == null) {
-                    updates.comment(plan.privateRepository(), plan.privateNumber(), Objects.requireNonNull(refusal));
+                    if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+                    fenced = true;
+                    comment(attempt, plan, Objects.requireNonNull(refusal));
                     meters.promotion("refused");
                     clearRequest(feedbackId);
-                    return;
+                    return new ActionResult.Done(null);
                 }
                 if (!plan.frozen()
                         && !Boolean.TRUE.equals(transactions.execute(status -> freeze(feedbackId, publicRepository))))
-                    return;
-                issue = issues.create(
-                        publicRepository,
-                        plan.title(),
-                        plan.body(),
-                        issues.issueTypes(publicRepository).contains(plan.type()) ? plan.type() : null);
-            }
+                    return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
+                String type = issues.issueTypes(publicRepository).contains(plan.type()) ? plan.type() : null;
+                if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+                fenced = true;
+                issue = issues.create(publicRepository, plan.title(), plan.body(), type);
+            } else if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+            fenced = true;
             var published = issue;
             var recipient = Objects.requireNonNull(publicRepository);
-            updates.comment(
-                    plan.privateRepository(),
-                    plan.privateNumber(),
-                    "Published as " + recipient.fullName() + "#" + published.number() + ".");
+            comment(attempt, plan, "Published as " + recipient.fullName() + "#" + published.number() + ".");
             updates.close(plan.privateRepository(), plan.privateNumber(), "completed");
             transactions.executeWithoutResult(status -> filings.lock(feedbackId).ifPresent(filing -> {
                 Instant now = clock.instant();
@@ -244,15 +250,42 @@ class FollowService {
                 notify(filing, report, ProductFeedbackUpdatedEvent.Kind.PUBLISHED, published.url(), null, now);
             }));
             meters.promotion("published");
+            return new ActionResult.Done(published.url());
         } catch (RuntimeException failed) {
-            // The lease expires and the next tick reconciles in the frozen recipient before it writes again.
             meters.failed(failed);
             meters.promotion("failed");
             log.warn(
                     "Product feedback promotion failed: feedbackId={}, error={}",
                     feedbackId,
                     failed.getClass().getSimpleName());
+            // GitHub may hold what this attempt wrote: the next one looks in the frozen recipient before it writes.
+            return fenced || attempt.writeStarted()
+                    ? new ActionResult.Reread(ActionExecutor.backoff(attempt.attempt()))
+                    : new ActionResult.Retry(ActionExecutor.backoff(attempt.attempt()));
         }
+    }
+
+    /**
+     * Comments on the private issue once. The comment carries the command's marker, so an attempt after one whose write
+     * may have reached GitHub looks for it before it comments again.
+     */
+    private void comment(ActionAttempt attempt, Plan plan, String text) {
+        String marker = "<!-- hephaestus-publish:" + attempt.idempotencyKey() + " -->";
+        if (updates.states(List.of(plan.privateNodeId())).stream()
+                .flatMap(state -> state.comments().stream())
+                .anyMatch(comment -> comment.byApp() && comment.body().contains(marker))) return;
+        updates.comment(plan.privateRepository(), plan.privateNumber(), text + "\n\n" + marker);
+    }
+
+    /**
+     * Ends the command with its action. A command that did not complete is released, so a later {@code /publish} can
+     * ask again. The frozen recipient and the first command's date stay: an earlier attempt may have created the issue,
+     * so a later command looks for it there first, and an erasure finds it.
+     */
+    void publishEnded(UUID feedbackId, ActionState state) {
+        if (state == ActionState.DONE) return;
+        transactions.executeWithoutResult(
+                status -> filings.lock(feedbackId).ifPresent(filing -> filing.setPublishRequestedBy(null)));
     }
 
     /** False when the report is gone, so nothing is written for an erased report. */
@@ -279,13 +312,13 @@ class FollowService {
         filing.setPromotionRepositoryId(null);
         filing.setPromotionInstallationId(null);
         filing.setPromotionRepositoryNodeId(null);
-        filing.setLeaseUntil(null);
     }
 
     private record Plan(
             String login,
             ProductFeedbackIssues.Repository privateRepository,
             long privateNumber,
+            String privateNodeId,
             ProductFeedbackIssues.@Nullable Repository publicRepository,
             boolean frozen,
             @Nullable String refusal,
@@ -294,20 +327,16 @@ class FollowService {
             @Nullable String type,
             Instant since) {}
 
-    /** Claims the command under a lease and decides what to publish where, with no GitHub write. */
+    /** Decides what the command publishes where, with no GitHub write. Its action keeps it to one attempt at a time. */
     private @Nullable Plan plan(UUID feedbackId) {
         ProductFeedbackFiling filing = filings.lock(feedbackId).orElse(null);
         String login = filing == null ? null : filing.getPublishRequestedBy();
         Instant requested = filing == null ? null : filing.getPublishRequestedAt();
         if (filing == null || login == null || requested == null) return null;
-        Instant now = clock.instant();
-        Instant lease = filing.getLeaseUntil();
-        if (lease != null && lease.isAfter(now)) return null;
         if (filing.getState() != FilingState.FILED || filing.publicRoute()) {
             clear(filing);
             return null;
         }
-        filing.setLeaseUntil(now.plus(PROMOTION_LEASE));
         var privateRepository = new ProductFeedbackIssues.Repository(
                 Objects.requireNonNull(filing.getRepositoryId()),
                 Objects.requireNonNull(filing.getRepositoryNodeId()),
@@ -341,6 +370,7 @@ class FollowService {
                     login,
                     privateRepository,
                     number,
+                    Objects.requireNonNull(filing.getIssueNodeId()),
                     publicRepository,
                     frozen,
                     refusalText(refused),
@@ -363,6 +393,7 @@ class FollowService {
                 login,
                 privateRepository,
                 number,
+                Objects.requireNonNull(filing.getIssueNodeId()),
                 publicRepository,
                 frozen,
                 null,
