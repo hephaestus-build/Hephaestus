@@ -22,7 +22,7 @@ The opt-in `e2e` profile enables these local-only capabilities:
 | Self-service GitLab/GitHub workspace creation | `hephaestus.workspace.creation-policy=SELF_SERVICE` |
 | Persistable Connection credentials (PATs) | `hephaestus.security.encryption-key` (a fixed local dev key) |
 | Dev review trigger | `hephaestus.dev.trigger-enabled=true` |
-| PostgreSQL job executor | `hephaestus.agent.enabled=true` |
+| Agent runtime | `hephaestus.agent.enabled=true`, unless `AGENT_ENABLED=false` |
 
 `vp run dev:server:e2e` starts Postgres and NATS before activating the profile.
 

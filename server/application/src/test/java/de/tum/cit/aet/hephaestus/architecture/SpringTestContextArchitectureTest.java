@@ -45,6 +45,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("workspace.GitLabWorkspaceCreationIntegrationTest", "gitlab-workspace-creation"),
             assignment("workspace.WorkspacePurgeIntegrationTest", "gitlab-workspace-creation"),
             assignment("StartupBudgetIntegrationTest", "startup"),
+            assignment("AgentRuntimeOffIntegrationTest", "agent-off-e2e"),
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
             assignment("agent.mentor.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence-freshness"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
@@ -272,10 +273,12 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                             + " to replay both publication orders"),
             Map.entry("slack-signed", "enabled signed Slack HTTP wiring"),
             Map.entry("startup", "production main-method startup instrumentation"),
+            Map.entry("agent-off-e2e", "E2E profile precedence with agent jobs off and no Kubernetes Pod metadata"),
             Map.entry("sync-controller-focused", "controlled sync provider and runner behavior"));
 
     private static final Set<String> SPRING_BOOT_TESTS = names(
             "StartupBudgetIntegrationTest",
+            "AgentRuntimeOffIntegrationTest",
             "integration.core.webhook.WebhookRoleContextIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
@@ -291,6 +294,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
             "StartupBudgetIntegrationTest",
+            "AgentRuntimeOffIntegrationTest",
             "practices.review.ReviewEndToEndIntegrationTest",
             "core.privacy.PersonDataRecoveryStartupIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
