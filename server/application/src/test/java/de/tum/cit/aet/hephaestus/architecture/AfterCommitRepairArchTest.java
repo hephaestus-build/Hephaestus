@@ -4,9 +4,6 @@ import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.B
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaMethod;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -20,7 +17,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The 20 plain after-commit listeners reviewed for ADR 0099, including the two repaired here.
@@ -240,13 +236,11 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
     }
 
     @Test
-    void shouldHaveNoUnrepairedAfterCommitListenersForOnePointZero(TestReporter reporter) throws IOException {
-        String version = new JsonMapper()
-                .readTree(Files.readString(Path.of("../..", "package.json")))
-                .required("version")
-                .asString();
-        AfterCommitRepairRatchet.check(
-                version, UNREPAIRED, summary -> reporter.publishEntry("after-commit-repair-ratchet", summary));
+    void shouldHaveNoUnrepairedAfterCommitListenersForOnePointZero(TestReporter reporter) {
+        ReleaseRatchet.assertEmptyForRelease(
+                "After-commit repair ratchet",
+                UNREPAIRED.entrySet(),
+                summary -> reporter.publishEntry("after-commit-repair-ratchet", summary));
     }
 
     private static boolean isPlainAfterCommitListener(JavaMethod method) {

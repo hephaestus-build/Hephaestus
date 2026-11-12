@@ -7,6 +7,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -28,8 +29,12 @@ final class ReleaseRatchet {
     private ReleaseRatchet() {}
 
     static void assertEmptyForRelease(String name, Collection<?> entries) {
+        assertEmptyForRelease(name, entries, log::info);
+    }
+
+    static void assertEmptyForRelease(String name, Collection<?> entries, Consumer<String> report) {
         var version = targetVersion(Path.of("../../package.json"), System.getProperty("hephaestus.releaseVersion"));
-        assertEmptyForRelease(version, name, entries);
+        assertEmptyForRelease(version, name, entries, report);
     }
 
     static String targetVersion(Path manifest, @Nullable String explicitTarget) {
@@ -46,16 +51,19 @@ final class ReleaseRatchet {
     }
 
     static void assertEmptyForRelease(String version, String name, Collection<?> entries) {
+        assertEmptyForRelease(version, name, entries, log::info);
+    }
+
+    static void assertEmptyForRelease(String version, String name, Collection<?> entries, Consumer<String> report) {
         var parsed = VERSION.matcher(version);
         assertThat(parsed.matches())
                 .as("Release target must be a semantic version: %s", version)
                 .isTrue();
+        report.accept(name + " for " + version + ": " + entries);
         if (parsed.group("prerelease") == null) {
             assertThat(entries)
                     .as("%s must be empty for release %s; remaining owners and reasons: %s", name, version, entries)
                     .isEmpty();
-        } else {
-            log.info("Release ratchet: name={}, version={}, remaining={}", name, version, entries);
         }
     }
 }

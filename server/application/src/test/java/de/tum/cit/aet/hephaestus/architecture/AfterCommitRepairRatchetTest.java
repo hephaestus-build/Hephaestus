@@ -19,7 +19,8 @@ class AfterCommitRepairRatchetTest extends BaseUnitTest {
     void shouldAllowPreReleaseAndReportTheUnrepairedEntries(String version) {
         var reports = new ArrayList<String>();
 
-        AfterCommitRepairRatchet.check(version, UNREPAIRED, reports::add);
+        ReleaseRatchet.assertEmptyForRelease(
+                version, "After-commit repair ratchet", UNREPAIRED.entrySet(), reports::add);
 
         assertThat(reports)
                 .singleElement()
@@ -36,7 +37,8 @@ class AfterCommitRepairRatchetTest extends BaseUnitTest {
     void shouldRefuseReleaseWithTheOwnerAndReason(String version) {
         var reports = new ArrayList<String>();
 
-        assertThatThrownBy(() -> AfterCommitRepairRatchet.check(version, UNREPAIRED, reports::add))
+        assertThatThrownBy(() -> ReleaseRatchet.assertEmptyForRelease(
+                        version, "After-commit repair ratchet", UNREPAIRED.entrySet(), reports::add))
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("INBOX")
                 .hasMessageContaining("no repair for suspended connections");
@@ -47,8 +49,9 @@ class AfterCommitRepairRatchetTest extends BaseUnitTest {
     void shouldAllowReleaseWhenThereAreNoUnrepairedEntries() {
         var reports = new ArrayList<String>();
 
-        AfterCommitRepairRatchet.check("1.0.0", Map.of(), reports::add);
+        ReleaseRatchet.assertEmptyForRelease(
+                "1.0.0", "After-commit repair ratchet", Map.of().entrySet(), reports::add);
 
-        assertThat(reports).singleElement().asString().contains("1.0.0", "{}");
+        assertThat(reports).singleElement().asString().contains("1.0.0", "[]");
     }
 }

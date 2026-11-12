@@ -83,7 +83,6 @@ It permits metadata updates that keep that status, such as freezing the report.
 A requeue keeps the first start time in `checks.startedAt`.
 Terminal reviews do not reopen, including when feedback repair resumes a composition run.
 
-
 ## Scheduled review batches
 
 `ReviewBatchStatus` owns the terminal states.
