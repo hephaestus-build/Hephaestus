@@ -112,8 +112,17 @@ export async function memoryDrill(imagesFile: string, cluster = "hephaestus"): P
 	// A high soft threshold exercises the real eviction manager while the host still has spare memory.
 	// Its grace period lets all three fixtures start before eviction; production soft eviction stays off.
 	try {
-		// The roll job may still be installing. Wait before starting the pressure node's grace clock.
-		await kubectl(["wait", "--for=create", ...priorityClassResources, "--timeout=5m"]);
+		// The roll job may still be installing. A multi-name wait aggregates NotFound errors,
+		// which kubectl cannot treat as a resource that is still being created.
+		const prioritiesDeadline = Date.now() + 300_000;
+		for (const resource of priorityClassResources) {
+			await kubectl([
+				"wait",
+				"--for=create",
+				resource,
+				`--timeout=${Math.max(0, prioritiesDeadline - Date.now())}ms`,
+			]);
+		}
 		await run("k3d", [
 			"node",
 			"create",

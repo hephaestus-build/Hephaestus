@@ -468,7 +468,14 @@ function run(entry: Case) {
 	if (dockerRuns) {
 		dockerResult = fails ? "failure" : "success";
 	}
-	needs.Docker = { result: dockerResult };
+	needs.Docker = {
+		result: dockerResult,
+		outputs: Object.fromEntries(
+			Object.entries(published)
+				.filter(([, produced]) => produced && !fails)
+				.map(([image]) => [`${image}-digest`, `sha256:${"a".repeat(64)}`]),
+		),
+	};
 	needs.Kubernetes = { result: job("Kubernetes") ? "success" : "skipped" };
 	return {
 		present,
