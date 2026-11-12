@@ -55,9 +55,16 @@ jobs:
 
   replay:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci3/probe-r-offline-18b'
-    name: Locked root classpath offline
+    name: Producer metadata retention
+    strategy:
+      fail-fast: false
+      matrix:
+        resolution: [cached, refreshed]
+    defaults:
+      run:
+        working-directory: candidate
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
       actions: read
@@ -65,6 +72,8 @@ jobs:
     env:
       GRADLE_USER_HOME: /home/runner/.gradle
       CI: "true"
+      R_RESOLUTION: ${{ matrix.resolution }}
+      R_WARM_FLAGS: ${{ matrix.resolution == 'refreshed' && '--refresh-dependencies' || '' }}
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
       POSTGRES_DB: hephaestus
@@ -89,11 +98,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 02ae140b9070cfa6d9640e23868750d7672859a1
           persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: b29fb05f410d7aced1f1093975809f27db3c072d
+          path: candidate
+          persist-credentials: false
+      - uses: ./.github/actions/r-cache-observer
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
+      - name: Share the identical frozen dependency installation with the nested producer source
+        run: |
+          cmp package.json ../package.json
+          cmp pnpm-lock.yaml ../pnpm-lock.yaml
+          ln -s "$GITHUB_WORKSPACE/node_modules" node_modules
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
         with:
           distribution: temurin
@@ -101,22 +120,16 @@ jobs:
           cache-jdk: false
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
         with:
-          cache-provider: external
-          cache-read-only: true
+          cache-provider: enhanced
+          cache-write-only: true
+          cache-read-only: false
+          cache-overwrite-existing: true
           dependency-graph: disabled
       - name: Bootstrap only the checksum-pinned wrapper before the cache restore
-        working-directory: server
+        working-directory: candidate/server
         run: |
           ./gradlew --version
           test ! -d "$GRADLE_USER_HOME/caches/modules-2/files-2.1"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
-        with:
-          artifact-ids: "13931930778"
-          run-id: "43191621296"
-          repository: hephaestus-build/Hephaestus
-          github-token: ${{ github.token }}
-          path: server
-          merge-multiple: true
       - name: Install the typed diagnostic helper
         run: |
           mkdir -p "$RUNNER_TEMP/r-proof"
@@ -282,21 +295,28 @@ jobs:
           assert.equal(hits.length, 7);
           for (const [name, value] of hits) assert.equal(value, 'true', `${name}: no exact archive; replay is inconclusive`);
           TYPESCRIPT
-      - name: Record the restored root artifacts and binary metadata
-        run: node "$RUNNER_TEMP/r-proof/snapshot.mts" snapshot
-      - name: Run the failed schema invocation offline
-        working-directory: server
+      - name: Repair the stripped metadata, then model a fresh cache restore
+        working-directory: candidate/server
         run: |
           set -euo pipefail
-          ./gradlew :application:liquibaseUpdate :application:liquibaseDiff -PpostgresPort=5432 -PpackagedServer=true --offline --stacktrace --info 2>&1 | tee "$RUNNER_TEMP/r-proof/offline-gradle.log"
-      - name: Prove that neither packaged JAR changed
-        if: always()
-        run: node "$RUNNER_TEMP/r-proof/snapshot.mts" verify
+          ./gradlew help --refresh-dependencies --no-configuration-cache
+          # This disposable runner owns its only Gradle daemon. Cache archives exclude this journal.
+          ./gradlew --stop
+          rm -rf "$GRADLE_USER_HOME/caches/journal-1"
+      - name: Replay the producer with cached or refreshed metadata
+        working-directory: candidate/server
+        run: |
+          set -euo pipefail
+          # R_WARM_FLAGS is empty or one fixed workflow flag, not event text.
+          # shellcheck disable=SC2086
+          ./gradlew resolveDependencies :application:bootJar :application:testClasses :application:testInventory :spotlessCheck :application:spotlessCheck :application:pmdMain $R_WARM_FLAGS
+      - name: Snapshot metadata and the producer's unshipped JARs before cleanup
+        run: node "$RUNNER_TEMP/r-proof/snapshot.mts" snapshot
       - name: Retain probe evidence even when the resolver refuses
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: r-offline-cache-proof-${{ github.run_id }}
+          name: r-producer-pre-cleanup-${{ matrix.resolution }}-${{ github.run_id }}
           path: ${{ runner.temp }}/r-proof
           retention-days: 7
           if-no-files-found: warn

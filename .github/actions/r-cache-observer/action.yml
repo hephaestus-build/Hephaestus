@@ -1,0 +1,7 @@
+name: R cache post-save observer
+description: Observe native producer cleanup and run the original offline schema check on a disposable diagnostic branch
+runs:
+  using: node24
+  main: main.mjs
+  post: ../../../scripts/r-cache-observer.ts
+  post-if: always()
