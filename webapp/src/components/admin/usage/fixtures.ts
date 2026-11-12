@@ -1,10 +1,4 @@
-import type {
-	FxRateInfo,
-	LlmUsageByJobType,
-	LlmUsageByPractice,
-	LlmUsagePracticeScriptTotal,
-	WorkspaceLlmUsageReport,
-} from "@/api/types.gen";
+import type { FxRateInfo, LlmUsageByJobType, WorkspaceLlmUsageReport } from "@/api/types.gen";
 
 import { daysBefore, STORY_NOW } from "@/stories/story-clock";
 
@@ -16,21 +10,6 @@ export function dayOfMonth(month: string, day: number): Date {
 	const [yearStr, monthStr] = month.split("-");
 	return new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, day, 12));
 }
-
-type PracticeScriptUsage = Pick<WorkspaceLlmUsageReport, "byPractice" | "practiceScriptTotal">;
-
-export const NO_PRACTICE_SCRIPT_USAGE: PracticeScriptUsage = {
-	byPractice: [],
-	practiceScriptTotal: {
-		reviews: 0,
-		calls: 0,
-		inputTokens: 0,
-		outputTokens: 0,
-		instanceTotalCostUsd: 0,
-		ownProviderTotalCostUsd: 0,
-		unpricedEventCount: 0,
-	},
-};
 
 /**
  * A workspace that has only run on shared models. The rows divide cleanly by their run counts —
@@ -51,7 +30,6 @@ export function usageReport(month: string = STORY_MONTH): WorkspaceLlmUsageRepor
 		instancePaused: false,
 		ownProviderPaused: false,
 		unpricedEventCount: 0,
-		...NO_PRACTICE_SCRIPT_USAGE,
 		byJobType: [
 			{
 				jobType: "PULL_REQUEST_REVIEW",
@@ -203,84 +181,3 @@ export const eurRate: FxRateInfo = {
 	rateDate: daysBefore(1),
 	source: "ECB",
 };
-
-export const commentQualityUsage: LlmUsageByPractice = {
-	practiceSlug: "comment-quality",
-	practiceName: "Comments explain why",
-	purposes: ["PRACTICE_DECISION"],
-	reviews: 18,
-	calls: 412,
-	inputTokens: 96_400,
-	outputTokens: 1240,
-	instanceTotalCostUsd: 0.36,
-	ownProviderTotalCostUsd: 0,
-	unpricedEventCount: 0,
-};
-
-export const expectedBehaviourUsage: LlmUsageByPractice = {
-	practiceSlug: "issues-state-expected-behaviour",
-	practiceName: "Issues state the expected behaviour",
-	purposes: ["PRACTICE_EMBEDDING", "PRACTICE_RERANKING"],
-	reviews: 12,
-	calls: 96,
-	inputTokens: 210_000,
-	outputTokens: 0,
-	instanceTotalCostUsd: 0.12,
-	ownProviderTotalCostUsd: 0.24,
-	unpricedEventCount: 0,
-};
-
-export const noChargeUsage: LlmUsageByPractice = {
-	practiceSlug: "names-say-what-they-hold",
-	practiceName: "Names say what they hold",
-	purposes: ["PRACTICE_EMBEDDING"],
-	reviews: 9,
-	calls: 140,
-	inputTokens: 52_000,
-	outputTokens: 0,
-	instanceTotalCostUsd: 0,
-	ownProviderTotalCostUsd: 0,
-	unpricedEventCount: 0,
-};
-
-export const notAttributedUsage: LlmUsageByPractice = {
-	purposes: ["PRACTICE_DECISION"],
-	reviews: 2,
-	calls: 14,
-	inputTokens: 3100,
-	outputTokens: 40,
-	instanceTotalCostUsd: 0.01,
-	ownProviderTotalCostUsd: 0,
-	unpricedEventCount: 0,
-};
-
-export const deletedPracticeUsage: LlmUsageByPractice = {
-	practiceSlug: "small-pull-requests",
-	purposes: ["PRACTICE_RERANKING"],
-	reviews: 3,
-	calls: 21,
-	inputTokens: 0,
-	outputTokens: 0,
-	instanceTotalCostUsd: 0,
-	ownProviderTotalCostUsd: 0,
-	unpricedEventCount: 2,
-};
-
-// Server review totals count each review once, even when it ran several practices.
-const pricedPracticeScriptTotal: LlmUsagePracticeScriptTotal = {
-	reviews: 31,
-	calls: 662,
-	inputTokens: 361_500,
-	outputTokens: 1280,
-	instanceTotalCostUsd: 0.49,
-	ownProviderTotalCostUsd: 0.24,
-	unpricedEventCount: 0,
-};
-
-export function withPracticeScriptUsage(report: WorkspaceLlmUsageReport): WorkspaceLlmUsageReport {
-	return {
-		...report,
-		byPractice: [commentQualityUsage, expectedBehaviourUsage, notAttributedUsage, noChargeUsage],
-		practiceScriptTotal: pricedPracticeScriptTotal,
-	};
-}

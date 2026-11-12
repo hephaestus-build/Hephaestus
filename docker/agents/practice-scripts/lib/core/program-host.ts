@@ -11,7 +11,6 @@ import {
 	parseCandidate,
 	sessionCandidateSchema,
 	CANDIDATE_LIMITS,
-	parseMeta,
 	parseReviewOptions,
 	type Candidate,
 	type Citation,
@@ -33,13 +32,11 @@ import { definePracticeScript, reasonOf, UnratedError } from "./practice-script.
 import { programContext } from "./program-context.ts";
 import {
 	stopReasonOf,
-	acceptModels,
 	noCalls,
 	ProgramSettlementError,
 	runCustomProgram,
 	type ProgramExecution,
 	type ProgramServices,
-	type SlotReport,
 } from "./script-run.ts";
 
 export const BUILTIN_SCRIPT = definePracticeScript({ meta: {}, run: async (ctx) => ctx.review() });
@@ -54,7 +51,6 @@ export interface ProgramOutcome {
 	candidate?: Candidate;
 	readReceipts?: readonly ReadReceipt[];
 	program: { kind: ProgramKind; digest: string | null };
-	models: SlotReport[];
 	status: RunStatus;
 	stopReason: StopReason | null;
 	/** Why the program failed; only on `failed`. */
@@ -97,7 +93,6 @@ export function notReached(
 ): ProgramOutcome {
 	return {
 		program: identity(program),
-		models: [],
 		status: "not-reached",
 		stopReason,
 		calls: noCalls(),
@@ -114,8 +109,6 @@ function identity(program: PracticeProgram): ProgramOutcome["program"] {
 
 async function runBuiltin(job: ProgramJob, services: ProgramServices): Promise<ProgramExecution> {
 	const calls = noCalls();
-	const parsed = parseMeta(BUILTIN_SCRIPT.meta);
-	const report = "meta" in parsed ? acceptModels(parsed.meta, services.models).report : [];
 	const signal = AbortSignal.any([
 		services.signal,
 		AbortSignal.timeout(Math.max(0, job.deadline - Date.now())),
@@ -130,8 +123,6 @@ async function runBuiltin(job: ProgramJob, services: ProgramServices): Promise<P
 			calls.review += 1;
 			return services.review(checked.options, signal);
 		},
-		models: {},
-		tokensLeft: () => services.budget.left,
 		log: (text) => {
 			services.log(`  [${job.slug}] ${text}`);
 		},
@@ -147,12 +138,11 @@ async function runBuiltin(job: ProgramJob, services: ProgramServices): Promise<P
 		if (Date.now() >= job.deadline) {
 			throw new UnratedError("deadline", "the program reached its deadline");
 		}
-		return { value, models: report, calls };
+		return { value, calls };
 	} catch (error) {
 		const stopReason = signal.aborted ? stopReasonOf(signal) : reasonOf(error);
 		return {
 			failure: { stopReason, error: error instanceof Error ? error.message : String(error) },
-			models: report,
 			calls,
 		};
 	}
@@ -196,7 +186,6 @@ export async function runPracticeProgram(
 				stopReason: "error",
 				error: error instanceof Error ? error.message : String(error),
 			},
-			models: [],
 			calls: noCalls(),
 		};
 	}
@@ -207,7 +196,6 @@ export async function runPracticeProgram(
 	): ProgramOutcome => ({
 		...parts,
 		program: identity(program),
-		models: execution.models,
 		status,
 		stopReason,
 		calls: execution.calls,
@@ -216,9 +204,7 @@ export async function runPracticeProgram(
 	});
 	const { failure } = execution;
 	if (failure !== undefined) {
-		return failure.skipped === true
-			? finished("withheld", failure.stopReason)
-			: finished("failed", failure.stopReason, { error: failure.error });
+		return finished("failed", failure.stopReason, { error: failure.error });
 	}
 	const kitFailures = execution.captureFailures ?? [];
 	services.receipts.failedReads += kitFailures.length;

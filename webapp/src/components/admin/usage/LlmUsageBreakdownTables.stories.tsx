@@ -3,7 +3,6 @@ import { expect, within } from "storybook/test";
 
 import type { LlmUsageByDay, LlmUsageByJobType, WorkspaceLlmUsageReport } from "@/api/types.gen";
 
-import { NO_PRACTICE_SCRIPT_USAGE } from "./fixtures";
 import { LlmUsageByDayTable, LlmUsageByJobTypeTable } from "./LlmUsageBreakdownTables";
 
 const pullRequestReviewRow: LlmUsageByJobType = {
@@ -77,7 +76,6 @@ function report(overrides: Partial<WorkspaceLlmUsageReport> = {}): WorkspaceLlmU
 		ownProviderBudgetVerdict: "WITHIN",
 		ownProviderPaused: false,
 		ownProviderInUse: true,
-		...NO_PRACTICE_SCRIPT_USAGE,
 		...overrides,
 	};
 }

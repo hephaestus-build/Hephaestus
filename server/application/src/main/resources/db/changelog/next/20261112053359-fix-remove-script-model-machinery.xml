@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794291562335-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="workspace_agent_binding" columnName="purpose"/>
+            <columnExists tableName="workspace_agent_binding" columnName="instance_model_id"/>
+            <columnExists tableName="llm_model" columnName="connection_id"/>
+            <columnExists tableName="llm_connection" columnName="api_protocol"/>
+        </preConditions>
+        <comment>Practice scripts no longer call decision, embedding or reranking models. Deletes the bindings of those purposes, the shared connections of those protocols with their models; prices and workspace grants go with their models. Past ledger rows stay.</comment>
+        <sql splitStatements="true"><![CDATA[
+DELETE FROM workspace_agent_binding WHERE purpose IN ('PRACTICE_DECISION','PRACTICE_EMBEDDING','PRACTICE_RERANKING');
+DELETE FROM llm_model WHERE connection_id IN (
+    SELECT id FROM llm_connection WHERE api_protocol IN ('openai-decisions','openai-embeddings','cohere-rerank'));
+DELETE FROM llm_connection WHERE api_protocol IN ('openai-decisions','openai-embeddings','cohere-rerank');
+        ]]></sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup and start the previous release. The deleted bindings, connections and models held no person data.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794291562335-2" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="review_practice" columnName="method"/>
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_proc WHERE proname = 'review_model_digest'</sqlCheck>
+        </preConditions>
+        <comment>A frozen review method now holds one slot, review. Every stored method keeps only that slot, without the direct-model limits in its options, and gets the digest of what remains, so earlier and later reviews compare alike.</comment>
+        <sql splitStatements="true"><![CDATA[
+UPDATE review_practice rp
+SET method = jsonb_build_object('epoch', rp.method -> 'epoch', 'modelDigest', review_model_digest(n.models), 'models', n.models)
+FROM (
+    SELECT r.review_id, r.practice_id, COALESCE((
+        SELECT jsonb_agg(CASE WHEN jsonb_typeof(s.value -> 'model') = 'object'
+            THEN jsonb_set(s.value, '{model,options}',
+                COALESCE(s.value #> '{model,options}', '{}'::jsonb)
+                    - 'directModelTokensPerAttempt' - 'directModelSearchUnitsPerAttempt')
+            ELSE s.value END)
+        FROM jsonb_array_elements(r.method -> 'models') s
+        WHERE s.value ->> 'slot' = 'review'), '[]'::jsonb) AS models
+    FROM review_practice r
+    WHERE r.method IS NOT NULL
+) n
+WHERE rp.review_id = n.review_id AND rp.practice_id = n.practice_id;
+        ]]></sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup and start the previous release. The removed slots and options cannot be rebuilt.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794291562335-3" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="review_job" columnName="config_snapshot"/>
+        </preConditions>
+        <comment>A frozen job configuration no longer holds models for practice scripts. Each configuration of schema version 9 drops them and becomes version 10, the version the server reads.</comment>
+        <sql><![CDATA[
+UPDATE review_job
+SET config_snapshot = jsonb_set(config_snapshot - 'practiceScript', '{schemaVersion}', '10'::jsonb)
+WHERE config_snapshot ->> 'schemaVersion' = '9';
+        ]]></sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup and start the previous release.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794291562335-4" author="hephaestus">
+        <comment>Shared connections serve chat models only, as workspace connections already do.</comment>
+        <sql>ALTER TABLE llm_connection DROP CONSTRAINT ck_llm_connection_api_protocol</sql>
+        <sql>ALTER TABLE llm_connection ADD CONSTRAINT ck_llm_connection_api_protocol CHECK (api_protocol IN ('openai-completions','openai-responses','anthropic-messages'))</sql>
+        <rollback>
+            <sql>ALTER TABLE llm_connection DROP CONSTRAINT ck_llm_connection_api_protocol</sql>
+            <sql>ALTER TABLE llm_connection ADD CONSTRAINT ck_llm_connection_api_protocol CHECK (api_protocol IN ('openai-completions','openai-responses','openai-decisions','openai-embeddings','cohere-rerank','anthropic-messages'))</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794291562335-6" author="hephaestus">
+        <preConditions onFail="MARK_RAN"><columnExists tableName="review_job_script_run" columnName="models"/></preConditions>
+        <comment>A script run no longer reports models. Dropping the column also drops its check.</comment>
+        <dropColumn tableName="review_job_script_run" columnName="models"/>
+        <rollback><stop>Restore the verified pre-upgrade database backup and start the previous release.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

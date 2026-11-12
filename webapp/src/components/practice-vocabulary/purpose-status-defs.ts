@@ -28,8 +28,7 @@ export const PURPOSE_STATUS_DEFS = {
 		label: "Needs attention",
 		icon: TriangleAlertIcon,
 		badgeVariant: "destructive",
-		description:
-			"An assigned model cannot run, or a practice needs a model that some members do not get.",
+		description: "An assigned model cannot run.",
 	},
 	OFF: {
 		label: "Off",
@@ -49,26 +48,13 @@ export interface PurposeStatusInput {
 	served: readonly boolean[];
 	/** The purpose runs inside practice reviews, and they are off. */
 	off: boolean;
-	/** A practice's script requires this model and some members do not get one. */
-	requiredNeedUnmet: boolean;
-	/** False for a purpose for practice scripts that no practice declares; true for every other purpose. */
-	used: boolean;
 }
 
-export function purposeStatus({
-	bindings,
-	served,
-	off,
-	requiredNeedUnmet,
-	used,
-}: PurposeStatusInput): PurposeStatus | null {
+export function purposeStatus({ bindings, served, off }: PurposeStatusInput): PurposeStatus | null {
 	if (off) {
 		return "OFF";
 	}
-	if (!used) {
-		return null;
-	}
-	if (requiredNeedUnmet || bindings.some((binding) => binding.enabled && !binding.ready)) {
+	if (bindings.some((binding) => binding.enabled && !binding.ready)) {
 		return "NEEDS_ATTENTION";
 	}
 	if (served.every(Boolean)) {

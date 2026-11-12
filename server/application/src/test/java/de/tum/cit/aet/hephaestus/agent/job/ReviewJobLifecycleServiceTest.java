@@ -99,8 +99,7 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
                                 false),
                         null,
                         null,
-                        600,
-                        null)
+                        600)
                 .withPriceSnapshot(new LlmPriceSnapshot(
                         UsageFundingSource.INSTANCE,
                         UsagePricingState.PRICED,

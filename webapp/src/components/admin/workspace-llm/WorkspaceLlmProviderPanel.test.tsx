@@ -29,20 +29,18 @@ const gpu: WorkspaceLlmConnection = {
 	displayName: "Local GPU",
 	authMode: "BEARER",
 	apiProtocol: "openai-completions",
-	purposes: ["PRACTICE_REVIEW", "MENTOR", "PRACTICE_DECISION"],
+	purposes: ["PRACTICE_REVIEW", "MENTOR"],
 	baseUrl: "https://llm.example.test/v1",
 	enabled: false,
 	hasApiKey: false,
 	createdAt: new Date("2026-07-01T00:00:00Z"),
 };
 
-const embeddings: WorkspaceLlmConnection = {
+const local: WorkspaceLlmConnection = {
 	...gpu,
 	id: 3,
-	slug: "embeddings",
-	displayName: "Embeddings",
-	apiProtocol: "openai-embeddings",
-	purposes: ["PRACTICE_EMBEDDING"],
+	slug: "local",
+	displayName: "Local endpoint",
 	enabled: true,
 };
 
@@ -106,30 +104,22 @@ describe("WorkspaceLlmProviderPanel", () => {
 		expect(gpuCard.queryByText("GPT shared endpoint")).toBeNull();
 	});
 
-	it("reads a missing model list on an API for practice scripts as no fault, and on a chat API as a failure", () => {
+	it("reads a missing model list as a failure", () => {
 		renderPanel({
-			state: { status: "ready", connections: [openAi, embeddings], models: [] },
-			testResults: new Map([
-				[openAi.id, notFound("HTTP 404")],
-				[embeddings.id, notFound("HTTP 404")],
-			]),
+			state: { status: "ready", connections: [openAi], models: [] },
+			testResults: new Map([[openAi.id, notFound("HTTP 404")]]),
 		});
 
-		const embeddingsCard = within(screen.getByRole("region", { name: "Embeddings" }));
-		expect(embeddingsCard.getByRole("status").textContent).toBe(
-			"No model list at this address. Add the model by its ID. If its calls fail too, check the base URL.",
-		);
-		expect(embeddingsCard.queryByRole("alert")).toBeNull();
 		const chatCard = within(screen.getByRole("region", { name: "OpenAI production" }));
 		expect(chatCard.getByRole("alert").textContent).toBe("HTTP 404");
 	});
 
 	it("keeps a failed request in the words it came with, and announces a success politely", () => {
 		renderPanel({
-			state: { status: "ready", connections: [openAi, embeddings], models: [] },
+			state: { status: "ready", connections: [openAi, local], models: [] },
 			testResults: new Map([
 				[openAi.id, { status: "answered", result: { reachable: true, modelCount: 3 } }],
-				[embeddings.id, { status: "failed", message: "The provider answered with HTTP 401." }],
+				[local.id, { status: "failed", message: "The provider answered with HTTP 401." }],
 			]),
 		});
 
@@ -137,11 +127,9 @@ describe("WorkspaceLlmProviderPanel", () => {
 			within(screen.getByRole("region", { name: "OpenAI production" })).getByRole("status")
 				.textContent,
 		).toBe("Connected. 3 models available.");
-		const embeddingsCard = within(screen.getByRole("region", { name: "Embeddings" }));
-		expect(embeddingsCard.getByRole("alert").textContent).toBe(
-			"The provider answered with HTTP 401.",
-		);
-		expect(embeddingsCard.getByRole("status").textContent).toBe("");
+		const localCard = within(screen.getByRole("region", { name: "Local endpoint" }));
+		expect(localCard.getByRole("alert").textContent).toBe("The provider answered with HTTP 401.");
+		expect(localCard.getByRole("status").textContent).toBe("");
 	});
 
 	it("confirms before irreversibly disconnecting a provider", () => {

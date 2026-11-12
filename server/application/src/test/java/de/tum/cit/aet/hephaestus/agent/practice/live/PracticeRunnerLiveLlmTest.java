@@ -275,8 +275,7 @@ class PracticeRunnerLiveLlmTest {
     private Map<String, String> stageWorkspace(LiveLlmCredentials creds, @Nullable JsonNode scenario) throws Exception {
         System.out.printf("[practice-live] model settings: %s%n", modelSettings);
         PracticeSandboxSpec spec = LiveRunnerWorkspace.adapter()
-                .buildSandboxSpec(
-                        LiveRunnerWorkspace.request(creds.model(), "live-test-job-token", Map.of(), modelSettings));
+                .buildSandboxSpec(LiveRunnerWorkspace.request(creds.model(), "live-test-job-token", modelSettings));
         LiveRunnerWorkspace.stageSpec(WORKSPACE, spec.inputFiles());
         String kind = "scm.pull_request";
         Map<String, JsonNode> definitions;

@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.practices.spi;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -26,15 +25,10 @@ public record PracticeScriptRunDTO(
         Instant finishedAt,
         @Nullable Long durationMs,
         @Nullable String error,
-        List<PracticeScriptModelDTO> models,
 
         @Schema(
                 description = "Model calls of the practice's review sessions, as the runner counted them. Not the calls"
                         + " the proxy billed: those are counted for the whole review. Absent when the runner did not"
                         + " record them.")
         @Nullable
-        Integer reviewModelCalls) {
-    public PracticeScriptRunDTO {
-        models = List.copyOf(models);
-    }
-}
+        Integer reviewModelCalls) {}

@@ -173,15 +173,10 @@ public abstract class AbstractFeedbackIntegrationTest extends AbstractWorkspaceI
                         eq(new ItemRef(workspace.getId(), itemId, new ItemKind("scm.pull_request"), 42L, null, null)),
                         any(),
                         any());
-        var slots = List.of(
-                new BoundModelSlot("chat", ModelKind.CHAT, null),
-                new BoundModelSlot("decision", ModelKind.DECISION, null),
-                new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                new BoundModelSlot("reranking", ModelKind.RERANKING, null),
-                new BoundModelSlot(
-                        "review",
-                        ModelKind.CHAT,
-                        new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of())));
+        var slots = List.of(new BoundModelSlot(
+                "review",
+                ModelKind.CHAT,
+                new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of())));
         String digest = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT review_model_digest(?::jsonb)", String.class, mapper.writeValueAsString(slots)));
         String method = mapper.writeValueAsString(new ReviewMethod(1, digest, slots));

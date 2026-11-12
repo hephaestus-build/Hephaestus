@@ -238,7 +238,7 @@ Otherwise, it uses the base default.
 | `hephaestus.agent.enabled`                       | false   | false     | false     | env default                                     |
 | `hephaestus.integration.outline.allowed-origins` | empty   | empty     | empty     | env default                                     |
 | `hephaestus.sandbox.gateway.port`                | 8081    | 8081      | —         | env default (`SANDBOX_API_PORT`)                |
-| `hephaestus.sandbox.gateway.requests-per-minute` | 696     | 696       | —         | env default (`SANDBOX_API_REQUESTS_PER_MINUTE`) |
+| `hephaestus.sandbox.gateway.requests-per-minute` | 680     | 680       | —         | env default (`SANDBOX_API_REQUESTS_PER_MINUTE`) |
 | `hephaestus.sandbox.gateway.max-request-bytes`   | 4194304 | 4194304   | —         | env default (`SANDBOX_API_MAX_REQUEST_BYTES`)   |
 | `hephaestus.sandbox.gateway.source-requests-per-minute` | 12000 | 12000 | — | env default (`SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE`) |
 | `hephaestus.sandbox.gateway.max-connections`     | 4096    | 4096      | —         | env default (`SANDBOX_API_MAX_CONNECTIONS`)     |
@@ -506,7 +506,7 @@ A rate limit, a request error, or a client that went away does not count.
 The worker limits the model calls that one attempt has in flight at the same time, on every model:
 
 - A conversation turn has at most 2: one call, and one that a stop left open.
-- A practice review has at most 174.
+- A practice review has at most 170.
 
 The review limit protects the worker's memory, because a call that waits for a grant keeps its body in the worker.
 The limit does not share the provider. A [call pool](#call-pools) does that with its fair grants.
@@ -514,7 +514,6 @@ The limit does not share the provider. A [call pool](#call-pools) does that with
 A review's runner does not reach this limit. It starts a session only while its 256 MiB heap has room for that session.
 A session holds about 3 MiB, so the heap holds at most 85 sessions.
 Each session has one call open and one that an abort left closing.
-The 4 direct calls of the practice scripts come on top.
 Only a sandbox that the runner no longer controls can reach the limit.
 
 The proxy notices that a client went away only at its next write to that client.
@@ -528,7 +527,6 @@ It refuses the call before the call reaches the provider.
 A refused call is not lost:
 
 - The review's sessions and Hephaestus ask again with their own retries.
-- A practice script's direct call waits as the refusal asks, and then asks again. It stops at the review's work deadline. Thus, a full limit delays a script's call but does not leave it unrated.
 - The feedback composition of a review counts against the same limit, because it is a call of the same attempt. It starts after the review's sandbox ends. Then, only calls that a stalled session left open can fill the limit. The composition treats a refusal as a provider pause and tries again.
 
 ### Call pools
@@ -545,7 +543,7 @@ A conversation call is interactive.
 A composition call and the calls of a requested or event review are batch.
 The calls of a scheduled or backfill review and product feedback are background.
 
-Review calls, composition, and direct script calls share the capacity outside the interactive reserve.
+Review calls and composition share the capacity outside the interactive reserve.
 Interactive calls can also use the interactive reserve.
 The reserve is never lent to batch or background calls.
 Both the total limit and the limit outside the reserve apply independently.
@@ -639,7 +637,7 @@ A pool grants the waiting calls in this order:
 Thus, a wide review cannot hold more than its share while another review waits. It uses free capacity while none waits.
 A review's composition does not wait behind the measurements of a wider review.
 If two workspaces have the same number of granted calls, the workspace whose last grant in that band is older goes first.
-Every physical call joins this queue, including composition and direct script calls.
+Every physical call joins this queue, including composition.
 
 A batch or background call that waits rises one band for each `hephaestus.agent.capacity.permit-aging`, 30 seconds by default.
 It never rises into the interactive band.

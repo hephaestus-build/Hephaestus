@@ -53,8 +53,8 @@ class ReviewFootprintStagingLiveTest {
         }
 
         PracticeSandboxSpec spec = LiveRunnerWorkspace.adapter()
-                .buildSandboxSpec(LiveRunnerWorkspace.request(
-                        "footprint-model", "footprint-token", Map.of(), LiveModelSettings.DEFAULTS));
+                .buildSandboxSpec(
+                        LiveRunnerWorkspace.request("footprint-model", "footprint-token", LiveModelSettings.DEFAULTS));
         for (var file : spec.inputFiles().entrySet()) {
             Path path = workspace.resolve(file.getKey());
             Files.createDirectories(path.getParent());

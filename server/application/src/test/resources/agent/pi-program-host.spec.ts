@@ -76,7 +76,7 @@ function admittedSlugs(cwd: string): unknown[] {
 	return results.map((result: unknown) => field(result, "practiceSlug"));
 }
 
-const noCalls = { review: 0, chat: 0, decision: 0, embedding: 0, reranking: 0 };
+const noCalls = { review: 0 };
 const digestOf = (cwd: string, slug: string) =>
 	createHash("sha256")
 		.update(readFileSync(nodePath.join(cwd, PRACTICES_DIR, `${slug}.ts`)))
@@ -136,7 +136,6 @@ void test("a custom program that returns a result directly opens no session, and
 		{
 			practiceSlug: "a-direct",
 			program: { kind: "custom", digest: digestOf(main.cwd, "a-direct") },
-			models: [],
 			status: "ok",
 			stopReason: null,
 			calls: noCalls,
@@ -162,10 +161,9 @@ void test("the built-in program opens one review session and reports the reads t
 		{
 			practiceSlug: "b-builtin",
 			program: { kind: "builtin", digest: null },
-			models: [],
 			status: "ok",
 			stopReason: null,
-			calls: { ...noCalls, review: 1 },
+			calls: { review: 1 },
 			reviewSessions: { modelCalls: 1, evidenceRefusals: 0, formatRefusals: 0 },
 			coverageReached: { reads: 1, truncatedReads: 0, failedReads: 0 },
 			durationMs: "number",
@@ -181,7 +179,10 @@ void test("a program whose meta the contract refuses fails as an invalid program
 		stopReason: "invalid-program",
 		calls: noCalls,
 	});
-	assert.match(String(field(entry, "error")), /^meta: /u);
+	assert.equal(
+		field(entry, "error"),
+		"A practice script must declare empty meta. Rewrite the script for this API.",
+	);
 	assert.deepEqual(admittedSlugs(main.cwd), ["a-direct", "b-builtin"]);
 });
 
@@ -197,7 +198,7 @@ void test("a review session that ends without a result fails its program with an
 		status: "failed",
 		stopReason: "off-format",
 		error: "the review session of d-silent ended without a result",
-		calls: { ...noCalls, review: 1 },
+		calls: { review: 1 },
 	});
 	assert.ok(REASONS.some((reason) => reason === entry.stopReason));
 	assert.equal(admittedSlugs(main.cwd).includes("d-silent"), false);
@@ -267,12 +268,11 @@ void test("a practice that the run's safety line stops before it starts is repor
 	assert.partialDeepStrictEqual(entryOf(report.practices, "b-hangs"), {
 		status: "failed",
 		stopReason: "deadline",
-		calls: { ...noCalls, review: 1 },
+		calls: { review: 1 },
 	});
 	assert.deepEqual(entryOf(report.practices, "c-never"), {
 		practiceSlug: "c-never",
 		program: { kind: "builtin", digest: null },
-		models: [],
 		status: "not-reached",
 		stopReason: "deadline",
 		calls: noCalls,

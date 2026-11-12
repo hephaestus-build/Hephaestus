@@ -106,13 +106,11 @@ class LlmProxySecurityConfig {
             ObjectMapper objectMapper)
             throws Exception {
         var paths = PathPatternRequestMatcher.withDefaults();
-        RequestMatcher practiceScriptCalls = paths.matcher(HttpMethod.POST, "/internal/llm/practice-script/{slot}/**");
         RequestMatcher models = new OrRequestMatcher(
                 paths.matcher(HttpMethod.POST, "/internal/llm/chat/completions"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/responses"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/v1/messages"));
         RequestMatcher reviewCalls = new OrRequestMatcher(
-                practiceScriptCalls,
                 paths.matcher(HttpMethod.POST, "/internal/llm/admit-results"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/stage-result"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/start-practice"));
@@ -299,7 +297,7 @@ class LlmProxySecurityConfig {
                     throws ServletException, IOException {
                 if (!budget.tryHold(contentLength)) {
                     accounting.gatewayRefused(SandboxGatewayRefusal.BODY_BUDGET);
-                    // The refusal that a direct model call waits out; a limit of the gateway is no provider's answer.
+                    // The refusal that a model client waits out; a limit of the gateway is no provider's answer.
                     response.setHeader(LlmProxyService.REFUSAL_HEADER, ProxyRefusal.CALLS_IN_FLIGHT.name());
                     RateLimitResponse.writeTooManyRequests(request, response, BODY_BUDGET_RETRY_SECONDS, objectMapper);
                     return;

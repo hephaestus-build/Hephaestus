@@ -20,8 +20,6 @@ import de.tum.cit.aet.hephaestus.practices.dto.SetFeedbackModeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.review.feedbackmode.FeedbackModeRollupService;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
-import de.tum.cit.aet.hephaestus.practices.spi.PracticeScriptSummaries;
-import de.tum.cit.aet.hephaestus.practices.spi.PracticeScriptSummaryDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -58,7 +56,6 @@ public class PracticeCatalogController {
     private final CatalogOriginPresenter presenter;
     private final PracticeDefinitionOptionsService options;
     private final FeedbackModeRollupService modes;
-    private final PracticeScriptSummaries scripts;
     private final PublicApiUrls publicApiUrls;
 
     @GetMapping
@@ -123,13 +120,6 @@ public class PracticeCatalogController {
     @Operation(operationId = "getPracticeDefinitionOptions")
     public PracticeDefinitionOptionsDTO options(WorkspaceContext ctx) {
         return options.options(ctx.id());
-    }
-
-    @GetMapping("/practice-script-needs")
-    @RequireAtLeastWorkspaceAdmin
-    @Operation(operationId = "listPracticeScriptNeeds")
-    public List<PracticeScriptSummaryDTO> scriptNeeds(WorkspaceContext ctx) {
-        return scripts.latestCurrent(ctx.id());
     }
 
     @GetMapping("/feedback-modes")

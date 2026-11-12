@@ -264,7 +264,6 @@ const script = (
 	finishedAt: new Date("2026-08-06T10:20:00Z"),
 	durationMs: 4200,
 	error: null,
-	models: [],
 	reviewModelCalls: null,
 	...fields,
 });
@@ -272,22 +271,6 @@ const script = (
 export const practiceScriptRuns = {
 	returned: script({ scriptKind: "CUSTOM", status: "OK" }),
 	builtin: script({ scriptKind: "BUILTIN", status: "OK" }),
-	withModels: script({
-		scriptKind: "CUSTOM",
-		status: "OK",
-		models: [
-			{
-				kind: "DECISION",
-				modelId: "gpt-5-mini",
-				dataHandlingTier: "CLOUD",
-				calls: 6,
-				inputTokens: 18_400,
-				outputTokens: 920,
-				cacheReadTokens: 0,
-				cacheWriteTokens: 0,
-			},
-		],
-	}),
 	withheld: script({ scriptKind: "CUSTOM", status: "WITHHELD", stopReason: "UNAVAILABLE" }),
 	outOfTime: script({ scriptKind: "CUSTOM", status: "FAILED", stopReason: "DEADLINE" }),
 	evidenceNotRead: script({

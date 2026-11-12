@@ -369,7 +369,7 @@ final class ComposerReplay {
                 Duration.ofMinutes(1),
                 Duration.ofMinutes(15));
         final PracticeReviewProperties properties =
-                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000, 1000, Duration.ofMinutes(10));
+                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, Duration.ofMinutes(10));
         final ReviewJob job = RuntimeReviewTestData.job();
         final List<FeedbackPackage> accepted = new ArrayList<>();
         final List<String> reviewStops = new ArrayList<>();
@@ -398,8 +398,7 @@ final class ComposerReplay {
                                     false),
                             200_000,
                             basis.maxOutputTokens(),
-                            600,
-                            null)
+                            600)
                     .toJson(MAPPER));
             when(assignments.review(job))
                     .thenReturn(

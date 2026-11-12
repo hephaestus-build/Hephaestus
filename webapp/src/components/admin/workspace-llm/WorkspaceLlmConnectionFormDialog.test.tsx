@@ -66,22 +66,19 @@ describe("WorkspaceLlmConnectionFormDialog", () => {
 				onUpdate={vi.fn()}
 			/>,
 		);
-		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Reranker" } });
+		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Claude" } });
 		await userEvent.click(screen.getByRole("combobox", { name: "API" }));
-		await userEvent.click(
-			await screen.findByRole("option", { name: "Rerank API (Cohere-compatible)" }),
+		await userEvent.click(await screen.findByRole("option", { name: "Messages API (Anthropic)" }));
+		screen.getByText(/^Anthropic’s native API\./u);
+		expect(screen.getByLabelText<HTMLInputElement>("Base URL").value).toBe(
+			"https://api.anthropic.com",
 		);
-		screen.getByText("Choose a provider that reports token usage, or set No metered API cost.");
-		expect(screen.getByLabelText<HTMLInputElement>("Base URL").value).toBe("");
-		fireEvent.change(screen.getByLabelText("Base URL"), {
-			target: { value: "https://rerank.example.test/v1" },
-		});
 		await userEvent.click(screen.getByRole("button", { name: "Add provider" }));
 		expect(onCreate).toHaveBeenCalledWith(
 			expect.objectContaining({
-				displayName: "Reranker",
-				apiProtocol: "cohere-rerank",
-				baseUrl: "https://rerank.example.test/v1",
+				displayName: "Claude",
+				apiProtocol: "anthropic-messages",
+				baseUrl: "https://api.anthropic.com",
 			}),
 		);
 	});

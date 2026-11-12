@@ -8,7 +8,7 @@ const meta = {
 	component: ModelKindMark,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
-	args: { purpose: "PRACTICE_DECISION", size: "sm", label: "visible" },
+	args: { purpose: "PRACTICE_REVIEW", size: "sm", label: "visible" },
 } satisfies Meta<typeof ModelKindMark>;
 
 export default meta;
@@ -16,10 +16,10 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Decision model")).toBeVisible();
-		await expect(canvas.getByText("Decision model").getBoundingClientRect().width).toBeGreaterThan(
-			1,
-		);
+		await expect(canvas.getByText("Practice reviews")).toBeVisible();
+		await expect(
+			canvas.getByText("Practice reviews").getBoundingClientRect().width,
+		).toBeGreaterThan(1);
 	},
 };
 
@@ -40,19 +40,17 @@ export const EveryKind: Story = {
 	play: async ({ canvas }) => {
 		for (const size of ["sm", "md"]) {
 			const list = canvas.getByRole("list", { name: `Size ${size}` });
-			await expect(list).toHaveTextContent(
-				"Practice reviewsConversationsDecision modelEmbedding modelReranking model",
-			);
+			await expect(list).toHaveTextContent("Practice reviewsConversations");
 		}
 	},
 };
 
 export const NameForScreenReaders: Story = {
-	args: { purpose: "PRACTICE_EMBEDDING", label: "sr-only" },
+	args: { purpose: "MENTOR", label: "sr-only" },
 	play: async ({ canvas }) => {
-		const name = canvas.getByText("Embedding model");
+		const name = canvas.getByText("Conversations");
 		await expect(name.getBoundingClientRect().width).toBeLessThanOrEqual(1);
-		await expect(canvas.getByText("Embedding model").closest("[aria-hidden]")).toBeNull();
+		await expect(canvas.getByText("Conversations").closest("[aria-hidden]")).toBeNull();
 	},
 };
 

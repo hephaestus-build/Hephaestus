@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -32,7 +31,6 @@ public class LlmModelCapabilityProbe {
 
     public LlmModelCapabilitiesDTO probe(LlmProbeTarget target, String model) {
         egress.validate(target.baseUrl());
-        if (target.apiProtocol().kind() != ModelKind.CHAT) return new LlmModelCapabilitiesDTO(null);
         try {
             // A bad key, wrong endpoint or failed model is not evidence that forced choice is unsupported.
             Answer baseline = call(target, body(target.apiProtocol(), model, false));

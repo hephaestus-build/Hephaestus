@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -57,8 +56,8 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
     private static final String SELECTED_JOBS = SUBJECT_JOBS + " UNION " + COPYING_JOBS;
 
     /** The ledger source kinds of a review job's calls: its own model and each model kind of its practice scripts. */
-    private static final Object[] REVIEW_SOURCE_TYPES = Arrays.stream(ModelKind.values())
-            .map(UsageSourceType::ofReviewCall)
+    private static final Object[] REVIEW_SOURCE_TYPES = Arrays.stream(UsageSourceType.values())
+            .filter(type -> type != UsageSourceType.MENTOR_TURN)
             .map(Enum::name)
             .distinct()
             .toArray();

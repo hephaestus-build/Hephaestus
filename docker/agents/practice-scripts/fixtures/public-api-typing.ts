@@ -16,7 +16,7 @@ export default definePracticeScript({
 		void ctx.budget;
 		// @ts-expect-error An earlier result is not part of the public API.
 		void ctx.previous;
-		// @ts-expect-error Evidence tools expose AI SDK types.
+		// @ts-expect-error Evidence tools are not part of the public API.
 		void ctx.evidence.tools;
 		const reviewed = await ctx.review();
 		// @ts-expect-error A review ends the script, so its result can never be read.

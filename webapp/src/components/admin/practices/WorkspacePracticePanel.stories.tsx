@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 
-import type { PracticeScriptSummary } from "@/api/types.gen";
 import { mockDefinitionOptions } from "@/components/admin/practice-editor/fixtures";
 import {
 	catalogOrigin,
@@ -10,20 +9,14 @@ import {
 	mockPractices,
 	practiceScript,
 } from "@/components/admin/practices/fixtures";
-import { PURPOSE_STATUS_DEFS } from "@/components/practice-vocabulary/purpose-status-defs";
 import { withPageBehind } from "@/stories/decorators";
 import { InLevelStack } from "@/stories/level-stack";
 import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
 import { expectNoPanelOverflow } from "@/stories/reflow";
-import { daysBefore } from "@/stories/story-clock";
 import { levelsOpenedBy } from "@/test/detail-stack";
 import { precedes } from "@/test/dom";
 
-import {
-	type PracticeScriptNeedsState,
-	WorkspacePracticePanel,
-	type WorkspacePracticeState,
-} from "./WorkspacePracticePanel";
+import { WorkspacePracticePanel, type WorkspacePracticeState } from "./WorkspacePracticePanel";
 
 const [practice] = mockPractices;
 if (!practice) {
@@ -42,41 +35,15 @@ const ready = (over: Partial<ReadyState> = {}): ReadyState => ({
 	...over,
 });
 
-const scriptedWith = (models: Parameters<typeof practiceScript>[0]) =>
-	ready({
-		practice: {
-			...practice,
-			currentVersion: {
-				...practice.currentVersion,
-				definition: { ...currentDefinition(practice), script: practiceScript(models) },
-			},
+const scripted = ready({
+	practice: {
+		...practice,
+		currentVersion: {
+			...practice.currentVersion,
+			definition: { ...currentDefinition(practice), script: practiceScript() },
 		},
-	});
-
-const scripted = scriptedWith({ decision: "required" });
-
-const REVIEW_ID = "6f1c2b7a-0d3e-4c55-9a51-2f7a3e8b9c10";
-
-const needs = (over: Partial<PracticeScriptSummary> = {}): PracticeScriptNeedsState => ({
-	status: "ready",
-	summary: {
-		practiceSlug: practice.slug,
-		practiceName: name,
-		asOf: { jobId: "41", reviewId: REVIEW_ID, finishedAt: daysBefore(7) },
-		scriptChanged: false,
-		needs: [],
-		...over,
 	},
 });
-
-function toneColour(tone: string): string {
-	const probe = document.createElement("span");
-	probe.className = `text-${tone}`;
-	document.body.append(probe);
-	const { color } = getComputedStyle(probe);
-	probe.remove();
-	return color;
-}
 
 const meta = {
 	component: WorkspacePracticePanel,
@@ -85,13 +52,11 @@ const meta = {
 	args: {
 		workspaceSlug: "demo",
 		state: ready(),
-		practiceScript: { status: "ready", summary: undefined },
 		path: { behind: [{ label: "Practice setup", depth: 0 }], onClose: fn() },
 		onResetToCatalog: fn(),
 	},
 	argTypes: {
 		state: { control: false },
-		practiceScript: { control: false },
 		path: { control: false },
 	},
 	render: (args) => (
@@ -231,167 +196,30 @@ async function openScript() {
 	return trigger;
 }
 
-export const PracticeScriptNoScript: Story = {
-	args: { practiceScript: needs() },
+export const NoScript: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByRole("link", { name: "Edit practice" }));
 		await expect(screen.queryByText(/practice script/iu)).not.toBeInTheDocument();
-		await expect(screen.queryByRole("note")).not.toBeInTheDocument();
 	},
 };
 
-export const PracticeScriptUsesNoModel: Story = {
-	args: { state: scriptedWith({}), practiceScript: needs() },
+export const PracticeScriptSource: Story = {
+	args: { state: scripted },
 	play: async () => {
 		await openScript();
-		await expectSettledVisible(await screen.findByText("It uses no model."));
-		const asOf = screen.getByRole("link", { name: /^As of the review on \d{1,2} \w{3}$/u });
-		await expect(asOf.getAttribute("href")).toMatch(/^\/w\/demo\/admin\/practices\/reviews\?/u);
-		await expect(levelsOpenedBy(asOf)).toStrictEqual([`review:${REVIEW_ID}`]);
-	},
-};
-
-export const PracticeScriptOptionalMet: Story = {
-	args: {
-		state: scriptedWith({ embedding: "optional" }),
-		practiceScript: needs({
-			needs: [{ slot: "embedding", need: "optional", unmetTiers: [] }],
-		}),
-	},
-	play: async () => {
-		await openScript();
-		const models = screen.getByRole("list", { name: "Models the script uses" });
-		await expectSettledVisible(within(models).getByText("Embedding model"));
-		await expect(within(models).queryByText("Required")).not.toBeInTheDocument();
-		await expect(screen.queryByText(/^Not set for/u)).not.toBeInTheDocument();
-		await expect(screen.queryByRole("link", { name: /^Assign /u })).not.toBeInTheDocument();
-		await expect(screen.queryByRole("note")).not.toBeInTheDocument();
-	},
-};
-
-export const PracticeScriptRequiredUnmet: Story = {
-	args: {
-		state: scriptedWith({ chat: "required", decision: "required", reranking: "optional" }),
-		practiceScript: needs({
-			needs: [
-				{ slot: "decision", need: "required", unmetTiers: ["IN_HOUSE"] },
-				{ slot: "chat", need: "required", unmetTiers: [] },
-				{ slot: "reranking", need: "optional", unmetTiers: ["CLOUD", "UNDECLARED"] },
-			],
-		}),
-	},
-	play: async () => {
-		const alert = await screen.findByRole("note");
-		await expectSettledVisible(alert);
-		await expect(alert).toHaveTextContent(
-			"The practice script does not run for In-house members’ work: no decision model is assigned for them. Assign a decision model",
-		);
-		await expect(
-			within(alert).getByRole("link", { name: "Assign a decision model" }),
-		).toHaveAttribute("href", "/w/demo/admin/models?purpose=PRACTICE_DECISION");
-		await expect(getComputedStyle(alert).color).toBe(
-			toneColour(PURPOSE_STATUS_DEFS.NEEDS_ATTENTION.badgeVariant),
-		);
-		await expect(precedes(alert, screen.getByText(/^A clear description lets reviewers/u))).toBe(
-			true,
-		);
-
-		await openScript();
-		const rows = within(screen.getByRole("list", { name: "Models the script uses" })).getAllByRole(
-			"listitem",
-		);
-		await expect(rows.map((row) => row.textContent)).toEqual([
-			"Decision modelRequiredNot set for In-house membersAssign a decision model",
-			"Reranking modelNot set for Cloud members and members who have not chosenAssign a reranking model",
-		]);
-		await expect(screen.getByRole("link", { name: "Assign a reranking model" })).toHaveAttribute(
-			"href",
-			"/w/demo/admin/models?purpose=PRACTICE_RERANKING",
-		);
-	},
-};
-
-export const PracticeScriptUsesOnlyTheReviewModel: Story = {
-	args: {
-		state: scriptedWith({ chat: "required" }),
-		practiceScript: needs({
-			needs: [{ slot: "chat", need: "required", unmetTiers: [] }],
-		}),
-	},
-	play: async () => {
-		await openScript();
-		await expectSettledVisible(await screen.findByText("It uses only the review model."));
-		await expect(
-			screen.queryByRole("list", { name: "Models the script uses" }),
-		).not.toBeInTheDocument();
-		await expect(screen.queryByRole("note")).not.toBeInTheDocument();
+		const source = await screen.findByText(/definePracticeScript/u);
+		await expectSettledVisible(source);
+		await expect(source.closest("pre")).toHaveAttribute("tabindex", "0");
 	},
 };
 
 export const DisclosureOrder: Story = {
-	args: { state: scriptedWith({}), practiceScript: needs() },
+	args: { state: scripted },
 	play: async () => {
 		const decides = await screen.findByRole("button", { name: "How it decides" });
 		await expectSettledVisible(decides);
 		const settings = screen.getByRole("region", { name: "Review settings" });
 		const script = screen.getByRole("button", { name: "Practice script" });
 		await expect(precedes(settings, decides) && precedes(decides, script)).toBe(true);
-	},
-};
-
-export const PracticeScriptShownAfterNextReview: Story = {
-	args: { state: scripted, practiceScript: { status: "ready", summary: undefined } },
-	play: async () => {
-		await openScript();
-		await expectSettledVisible(await screen.findByText("Its models show after its next review."));
-		await expect(
-			screen.queryByRole("link", { name: /^As of the review/u }),
-		).not.toBeInTheDocument();
-	},
-};
-
-export const PracticeScriptChanged: Story = {
-	args: {
-		state: scripted,
-		practiceScript: needs({
-			asOf: null,
-			scriptChanged: true,
-			needs: [{ slot: "decision", need: "required", unmetTiers: ["IN_HOUSE"] }],
-		}),
-	},
-	play: async () => {
-		await openScript();
-		await expectSettledVisible(
-			await screen.findByText("The script changed. Its models show after its next review."),
-		);
-		await expect(screen.queryByText("Decision model")).not.toBeInTheDocument();
-		await expect(screen.queryByRole("note")).not.toBeInTheDocument();
-	},
-};
-
-export const PracticeScriptNeedsLoading: Story = {
-	args: { state: scripted, practiceScript: { status: "loading" } },
-	play: async () => {
-		await openScript();
-		const panel = await settledDrawerPanel();
-		await expect(panel.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
-		await expect(
-			screen.queryByText("Its models show after its next review."),
-		).not.toBeInTheDocument();
-	},
-};
-
-export const PracticeScriptNeedsFailed: Story = {
-	args: {
-		state: scripted,
-		practiceScript: { status: "error", error: new Error("offline"), onRetry: fn() },
-	},
-	play: async ({ args }) => {
-		await openScript();
-		const retry = await screen.findByRole("button", { name: "Retry" });
-		await expectSettledVisible(retry);
-		await userEvent.click(retry);
-		const { practiceScript: needsState } = args;
-		await expect(needsState.status === "error" && needsState.onRetry).toHaveBeenCalledOnce();
 	},
 };

@@ -34,11 +34,9 @@ import {
 	spendOfCapConversion,
 } from "./fx";
 import { LlmUsageByDayTable, LlmUsageByJobTypeTable } from "./LlmUsageBreakdownTables";
-import { LlmUsageByPracticeTable } from "./LlmUsageByPracticeTable";
 import {
 	budgetUsedPercent,
 	formatMonthLabel,
-	practiceScriptByPracticeDescription,
 	projectBudget,
 	purseCap,
 	pursesOf,
@@ -217,19 +215,6 @@ export function WorkspaceUsageReport({
 					<Section title="By use">
 						<LlmUsageByJobTypeTable report={report} purses={purses} />
 					</Section>
-
-					{report.byPractice.length > 0 && (
-						<Section
-							title="Models for practice scripts, by practice"
-							description={practiceScriptByPracticeDescription(isCurrentMonth)}
-						>
-							<LlmUsageByPracticeTable
-								report={report}
-								purses={purses}
-								workspaceSlug={workspaceSlug}
-							/>
-						</Section>
-					)}
 
 					<Section title="By day">
 						{report.byDay.length === 0 ? (

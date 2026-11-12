@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
@@ -58,7 +57,6 @@ public final class SandboxModelProxy {
                         context.getBean(ReviewJobRepository.class),
                         context.getBean(MentorTurnRepository.class),
                         mapper,
-                        context.getBean(LlmUsageEventRepository.class),
                         context.getBean(ReviewSnapshotQuery.class),
                         context.getBean(AgentRuns.class)),
                 new ProxyCallsInFlight(12),

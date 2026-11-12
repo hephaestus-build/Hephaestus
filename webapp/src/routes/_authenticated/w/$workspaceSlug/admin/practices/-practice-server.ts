@@ -101,9 +101,6 @@ export function practiceSetupHandlers() {
 			HttpResponse.json(mockDefinitionOptions),
 		),
 		http.get("*/workspaces/:workspaceSlug/practices/releases", () => HttpResponse.json([])),
-		http.get("*/workspaces/:workspaceSlug/practices/practice-script-needs", () =>
-			HttpResponse.json([]),
-		),
 	];
 }
 
@@ -115,9 +112,6 @@ export function practicesHandlers(practices: Wire<Practice>[]) {
 			HttpResponse.json(mockDefinitionOptions),
 		),
 		http.get("*/workspaces/:workspaceSlug/practices/releases", () => HttpResponse.json([])),
-		http.get("*/workspaces/:workspaceSlug/practices/practice-script-needs", () =>
-			HttpResponse.json([]),
-		),
 		http.get("*/workspaces/:workspaceSlug/practices/:practiceSlug", ({ params }) => {
 			const practice = practices.find(({ slug }) => slug === params.practiceSlug);
 			return practice

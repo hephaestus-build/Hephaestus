@@ -298,3 +298,13 @@ The claim of a `turn` run admits the turn.
 Each model call has one `llm_usage_event` row with its run and epoch. The proxy writes it before the call and completes it when the call ends.
 A turn whose lease expired thus needs no billing step. A call that a lost replica left open stays unverifiable under the ledger's rules.
 The budgets and the governed catalog stay.
+
+## Update — 2026-11-10: the purposes for practice scripts are gone
+
+This update supersedes § "Update — 2026-10-09: purposes for practice scripts and model protocols" above, which stays as the record of that decision.
+A stored practice script keeps `meta` empty and makes no direct model call (ADR 0055, update of 2026-11-10).
+Thus, `PRACTICE_DECISION`, `PRACTICE_EMBEDDING` and `PRACTICE_RERANKING` had no consumer, and 1.0 deletes them (ADR 0070).
+The connection protocols `openai-decisions`, `openai-embeddings` and `cohere-rerank` go with them.
+A migration deletes the bindings of these purposes and the instance connections and models of these protocols.
+The direct-model limits of a review attempt and the proxy routes for script calls also go.
+The ledger keeps its past rows of these kinds.

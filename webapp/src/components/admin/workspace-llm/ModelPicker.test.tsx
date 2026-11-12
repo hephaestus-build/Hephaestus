@@ -31,15 +31,13 @@ const models: AvailableLlmModel[] = [
 ];
 
 /** Wires a real label, because the picker names its popup listbox from it. */
-function renderPicker(
-	props: Omit<ModelPickerProps, "id" | "aria-labelledby" | "ownProviderAllowed">,
-) {
+function renderPicker(props: Omit<ModelPickerProps, "id" | "aria-labelledby">) {
 	return render(
 		<>
 			<Label id="model-label" htmlFor="model">
 				Model
 			</Label>
-			<ModelPicker id="model" aria-labelledby="model-label" ownProviderAllowed {...props} />
+			<ModelPicker id="model" aria-labelledby="model-label" {...props} />
 		</>,
 	);
 }
@@ -120,45 +118,5 @@ describe("ModelPicker", () => {
 		const trigger = screen.getByRole("combobox");
 		expect(trigger.getAttribute("aria-invalid")).toBe("true");
 		expect(trigger.getAttribute("aria-describedby")).toContain("picker-hint");
-	});
-
-	it("warns about a reasoning decision model, and not about one asked for no reasoning", () => {
-		const decision: AvailableLlmModel = {
-			dataHandlingTier: "CLOUD",
-			id: 9,
-			scope: "SHARED",
-			displayName: "Decider",
-			connectionDisplayName: "Decisions endpoint",
-			purposes: ["PRACTICE_DECISION"],
-			pricingMode: "NO_CHARGE",
-			reasoningEffort: "NONE",
-		};
-		const { rerender } = renderPicker({
-			availableModels: [decision],
-			value: { scope: "SHARED", id: 9 },
-			onChange: vi.fn(),
-			purpose: "PRACTICE_DECISION",
-		});
-		expect(screen.getByRole("combobox").getAttribute("aria-describedby")).toBeNull();
-		expect(screen.queryByText(/reasons before it answers/u)).toBeNull();
-
-		rerender(
-			<>
-				<Label id="model-label" htmlFor="model">
-					Model
-				</Label>
-				<ModelPicker
-					id="model"
-					aria-labelledby="model-label"
-					availableModels={[{ ...decision, reasoningEffort: "LOW" }]}
-					value={{ scope: "SHARED", id: 9 }}
-					onChange={vi.fn()}
-					purpose="PRACTICE_DECISION"
-					ownProviderAllowed
-				/>
-			</>,
-		);
-		const hint = screen.getByText(/reasons before it answers/u);
-		expect(screen.getByRole("combobox").getAttribute("aria-describedby")).toBe(hint.id);
 	});
 });

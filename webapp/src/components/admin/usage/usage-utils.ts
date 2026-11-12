@@ -116,10 +116,6 @@ export function averageSpend(
 	return totalUsd / count;
 }
 
-export function practiceScriptByPracticeDescription(isCurrentMonth: boolean): string {
-	return `Decision, embedding and reranking calls from finished reviews${isCurrentMonth ? ", to date" : ""}. Chat calls from scripts are in each review’s cost. A review that ran several scripts counts once in the total.`;
-}
-
 /** Current calendar month in UTC as ISO `yyyy-MM`. */
 export function currentMonthUtc(): string {
 	return new Date().toISOString().slice(0, 7);

@@ -10,22 +10,9 @@ import tools.jackson.databind.JsonNode;
  * @param billableInputTokens uncached input tokens; OpenAI includes cache reads and writes in its prompt
  *     total, while Anthropic reports these buckets separately
  * @param reasoningTokens already counted inside {@link #outputTokens}; reported, never priced twice
- * @param searchUnits the search units that a Cohere reranking call billed instead of tokens; 0 for every other
- *     response
  */
 public record ProxyTokenUsage(
-        int billableInputTokens,
-        int outputTokens,
-        int reasoningTokens,
-        int cacheReadTokens,
-        int cacheWriteTokens,
-        int searchUnits) {
-
-    /** A response that bills tokens only, which is every response except a Cohere reranking one. */
-    public ProxyTokenUsage(
-            int billableInputTokens, int outputTokens, int reasoningTokens, int cacheReadTokens, int cacheWriteTokens) {
-        this(billableInputTokens, outputTokens, reasoningTokens, cacheReadTokens, cacheWriteTokens, 0);
-    }
+        int billableInputTokens, int outputTokens, int reasoningTokens, int cacheReadTokens, int cacheWriteTokens) {
 
     /** The prompt total: the billable input and the cache reads and writes that it excludes. */
     public long promptTokens() {
@@ -62,44 +49,7 @@ public record ProxyTokenUsage(
                                 count(usage, "cache_creation_input_tokens"));
             case OPENAI_COMPLETIONS -> from(body, false);
             case OPENAI_RESPONSES -> from(body, true);
-            // The Decisions API documents no usage object; the AI SDK reads it in the Responses shape with every
-            // count optional. A missing output count is 0, since a decision writes no text. Its cache details are
-            // not split off: no cache rate is documented for decisions, so the whole input is priced as input.
-            case OPENAI_DECISIONS ->
-                usage == null
-                        ? null
-                        : new ProxyTokenUsage(
-                                requiredCount(usage, "input_tokens"), count(usage, "output_tokens"), 0, 0, 0);
-            case OPENAI_EMBEDDINGS ->
-                usage == null ? null : new ProxyTokenUsage(requiredCount(usage, "prompt_tokens"), 0, 0, 0, 0);
-            case COHERE_RERANK -> rerankUsage(usage, body.path("meta").path("billed_units"));
         };
-    }
-
-    // Cohere reports rerank search units; Jina and vLLM can report token usage. Neither is guaranteed.
-    private static @Nullable ProxyTokenUsage rerankUsage(@Nullable JsonNode usage, JsonNode billedUnits) {
-        Integer total = usage == null ? null : optionalCount(usage, "total_tokens");
-        Integer counted = total != null || usage == null ? total : optionalCount(usage, "prompt_tokens");
-        Integer searchUnits = searchUnits(billedUnits);
-        if (counted == null && searchUnits == null) {
-            return null;
-        }
-        return new ProxyTokenUsage(counted == null ? 0 : counted, 0, 0, 0, 0, searchUnits == null ? 0 : searchUnits);
-    }
-
-    // Cohere number fields permit integer values written as 1.0.
-    private static @Nullable Integer searchUnits(JsonNode billedUnits) {
-        JsonNode value = billedUnits.get("search_units");
-        if (value == null || value.isNull()) {
-            return null;
-        }
-        if (!value.isNumber()
-                || !value.canConvertToExactIntegral()
-                || !value.canConvertToInt()
-                || value.intValue() < 0) {
-            throw new IllegalArgumentException("Invalid search units");
-        }
-        return value.intValue();
     }
 
     /** @return {@code null} when no usage block is present */

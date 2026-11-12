@@ -3,7 +3,6 @@ import { HttpResponse, http, type PathParams } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AdminWorkspaceLlmUsage, WorkspaceLlmUsageReport } from "@/api/types.gen";
-import { NO_PRACTICE_SCRIPT_USAGE } from "@/components/admin/usage/fixtures";
 import { currentMonthUtc, formatMonthLabel } from "@/components/admin/usage/usage-utils";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
@@ -50,7 +49,6 @@ function detail(budgetUsd: number | undefined): WorkspaceLlmUsageReport {
 		ownProviderPaused: false,
 		ownProviderInUse: false,
 		unpricedEventCount: 0,
-		...NO_PRACTICE_SCRIPT_USAGE,
 		byJobType: [],
 		byDay: [],
 	};

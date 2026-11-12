@@ -2740,8 +2740,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                                 false),
                         snapshot.contextWindow(),
                         snapshot.maxOutputTokens(),
-                        snapshot.timeoutSeconds(),
-                        snapshot.practiceScript())
+                        snapshot.timeoutSeconds())
                 .toJson(mapper));
         jobs.saveAndFlush(job);
     }
@@ -3031,8 +3030,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                                 false),
                         200_000,
                         4_000,
-                        600,
-                        null)
+                        600)
                 .toJson(mapper));
         jobs.saveAndFlush(job);
         return new ClaimedReview(

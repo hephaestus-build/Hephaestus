@@ -304,7 +304,7 @@ worker:
   # drains. 0 stops every worker and keeps its objects.
   replicas: 2
   sandboxGateway:
-    # Connections that the sandbox gateway holds open. A review holds about 54, and 174 at most.
+    # Connections that the sandbox gateway holds open. A review holds about 54, and 170 at most.
     maxConnections: 4096
   # How long a stopping worker serves its running attempts and claims nothing new. A practice
   # review's median run is 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review

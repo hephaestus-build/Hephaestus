@@ -9,7 +9,6 @@ import {
 	listPracticeReleasesOptions,
 	listPracticeReleasesQueryKey,
 	listPracticesQueryKey,
-	listPracticeScriptNeedsQueryKey,
 	listPracticeVersionsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import { CatalogUpdatesPage } from "@/components/admin/practices/CatalogUpdatesPage";
@@ -37,9 +36,6 @@ function CatalogUpdatesRoute() {
 			}),
 			queryClient.invalidateQueries({
 				queryKey: listPracticesQueryKey({ path: { workspaceSlug } }),
-			}),
-			queryClient.invalidateQueries({
-				queryKey: listPracticeScriptNeedsQueryKey({ path: { workspaceSlug } }),
 			}),
 		]);
 	};

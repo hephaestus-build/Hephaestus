@@ -13,7 +13,6 @@ import {
 	listAdoptablePracticesQueryKey,
 	listPracticeGroupsQueryKey,
 	listPracticeReleasesQueryKey,
-	listPracticeScriptNeedsQueryKey,
 	listPracticesOptions,
 	listPracticesQueryKey,
 	listPracticeVersionsQueryKey,
@@ -266,9 +265,6 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 				}),
 				queryClient.invalidateQueries({
 					queryKey: listPracticeReleasesQueryKey({ path: { workspaceSlug } }),
-				}),
-				queryClient.invalidateQueries({
-					queryKey: listPracticeScriptNeedsQueryKey({ path: { workspaceSlug } }),
 				}),
 				refreshPracticeGuidance(queryClient, workspaceSlug, reset.slug),
 			]);

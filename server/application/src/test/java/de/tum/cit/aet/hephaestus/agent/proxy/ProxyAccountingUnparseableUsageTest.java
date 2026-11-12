@@ -135,19 +135,4 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
                         .count())
                 .isEqualTo(1.0);
     }
-
-    @Test
-    void shouldCountAPracticeScriptCallWhoseBodyIsUnreadableBySourceType() {
-        ProxyRouting.BilledAttempt attempt =
-                new ProxyRouting.BilledAttempt(UsageSourceType.PRACTICE_SCRIPT_EMBEDDING, UUID.randomUUID(), 0, LEASE);
-        byte[] notJson = "<html>502 upstream</html>".getBytes(StandardCharsets.UTF_8);
-
-        assertThat(accounting.readUsage(attempt, LlmApiProtocol.OPENAI_EMBEDDINGS, notJson))
-                .isNull();
-
-        assertThat(meterRegistry
-                        .counter("llm.proxy.usage.unparseable", "sourceType", "PRACTICE_SCRIPT_EMBEDDING")
-                        .count())
-                .isEqualTo(1.0);
-    }
 }

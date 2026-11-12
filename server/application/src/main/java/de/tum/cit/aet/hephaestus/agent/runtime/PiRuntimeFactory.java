@@ -74,7 +74,6 @@ public class PiRuntimeFactory {
         }
         String promptDigest = ProvenanceDigest.rootDigestHex(promptScaffolding);
         inputFiles.putAll(promptScaffolding);
-        inputFiles.putAll(spec.extraInputs());
 
         long agentTimeoutMs = (spec.timeoutSeconds() - TIMEOUT_BUFFER_SECONDS) * 1000L;
         env.put("AGENT_BUDGET_MS", Long.toString(agentTimeoutMs));

@@ -23,8 +23,6 @@ import {
 	listPracticesOptions,
 	listPracticesQueryKey,
 	listPracticeReleasesOptions,
-	listPracticeScriptNeedsOptions,
-	listPracticeScriptNeedsQueryKey,
 	previewGroupAdoptionOptions,
 	previewPracticeAdoptionOptions,
 } from "@/api/@tanstack/react-query.gen";
@@ -73,11 +71,9 @@ import {
 } from "@/components/admin/practices/PracticeSkeletons";
 import { ResetToCatalogDialog } from "@/components/admin/practices/ResetToCatalogDialog";
 import {
-	type PracticeScriptNeedsState,
 	WorkspacePracticePanel,
 	type WorkspacePracticeState,
 } from "@/components/admin/practices/WorkspacePracticePanel";
-import { panelState } from "@/components/common/panel-state";
 import { QueryErrorAlert, queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import {
 	type DetailStackEntry,
@@ -283,10 +279,6 @@ function PracticeCatalogRoute() {
 		select: parseAdoptablePractices,
 		enabled: library === true,
 	});
-	const practiceScriptNeedsQuery = useQuery({
-		...listPracticeScriptNeedsOptions({ path: { workspaceSlug } }),
-		enabled: detailStack.some((entry) => entry.kind === "practice"),
-	});
 	// Tag query payloads because useQueries cannot correlate a union result with its source entry.
 	const levelQueries = useQueries({
 		queries: detailStack.map((entry) => levelQueryOptions(workspaceSlug, entry)),
@@ -312,12 +304,6 @@ function PracticeCatalogRoute() {
 		},
 		onClose: stackControls.close,
 	});
-
-	const practiceScriptNeedsOf = (practiceSlug: string): PracticeScriptNeedsState =>
-		panelState(practiceScriptNeedsQuery, (summaries) => ({
-			status: "ready" as const,
-			summary: summaries.find((summary) => summary.practiceSlug === practiceSlug),
-		}));
 
 	let libraryState: LibraryState = { status: "loading" };
 	if (catalogQuery.isError) {
@@ -639,7 +625,6 @@ function PracticeCatalogRoute() {
 					nested={level.nested}
 					path={pathAt(level.depth)}
 					state={state}
-					practiceScript={practiceScriptNeedsOf(entry.id)}
 					onResetToCatalog={() => catalogReset.open({ kind: "practice", slug: entry.id })}
 				/>
 			);
@@ -690,9 +675,6 @@ function PracticeCatalogRoute() {
 					}
 					throw error;
 				}
-				void queryClient.invalidateQueries({
-					queryKey: listPracticeScriptNeedsQueryKey({ path: { workspaceSlug } }),
-				});
 			};
 			// A refusal hides the form even over cached data. Any other failure leaves a loaded draft
 			// open beside the retry.

@@ -3156,46 +3156,20 @@ const scriptRun = (
 		finishedAt: new Date("2026-07-28T13:39:30Z"),
 		durationMs: 4200,
 		error: null,
-		models: [],
 		reviewModelCalls: null,
 		...fields,
 	};
 };
 
-const decisionModel = (calls: number, tier: "IN_HOUSE" | "CLOUD") => ({
-	kind: "DECISION" as const,
-	modelId: tier === "CLOUD" ? "gpt-5-mini" : "acme/house-model",
-	dataHandlingTier: tier,
-	calls,
-	inputTokens: calls * 3000,
-	outputTokens: calls * 150,
-	cacheReadTokens: 0,
-	cacheWriteTokens: 0,
-});
-
 export const reviewPracticeScripts = {
 	fromCode: scriptRun("thin-controllers", {
 		scriptKind: "CUSTOM",
 		status: "OK",
-		models: [decisionModel(12, "CLOUD")],
 	}),
-	withModels: scriptRun("errors-carry-context", {
+	tookLonger: scriptRun("errors-carry-context", {
 		scriptKind: "CUSTOM",
 		status: "OK",
 		durationMs: 12_840,
-		models: [
-			decisionModel(9, "IN_HOUSE"),
-			{
-				kind: "EMBEDDING",
-				modelId: "acme/embed",
-				dataHandlingTier: "IN_HOUSE",
-				calls: 2,
-				inputTokens: 4000,
-				outputTokens: 0,
-				cacheReadTokens: 0,
-				cacheWriteTokens: 0,
-			},
-		],
 	}),
 	builtIn: scriptRun("the-change-explains-itself", {
 		scriptKind: "BUILTIN",

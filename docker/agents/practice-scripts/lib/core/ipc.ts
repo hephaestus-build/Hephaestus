@@ -7,15 +7,7 @@ import { z } from "zod";
 
 import type { GrepMatch } from "../../kits/scm/grep.ts";
 import type { DiffFile } from "../../kits/scm/types.ts";
-import {
-	modelSlotSchema,
-	REASONS,
-	CANDIDATE_LIMITS,
-	type Citation,
-	type ModelSlot,
-	type PracticeInputs,
-	type SlotAnswer,
-} from "./contract.ts";
+import { REASONS, CANDIDATE_LIMITS, type Citation, type PracticeInputs } from "./contract.ts";
 import type { UnratedReason } from "./practice-script.ts";
 
 /** The trees and the change of the reviewed work, as the host pinned them. Null without a captured tree. */
@@ -55,22 +47,14 @@ export type AbortReason = "deadline" | "budget" | "cancelled";
 
 export type HostMessage =
 	| { kind: "job"; job: ChildJob }
-	| {
-			kind: "meta-accepted";
-			models: Partial<Record<ModelSlot, string>>;
-			forcedToolChoice: boolean;
-			tokens: number;
-	  }
-	| { kind: "model"; id: number; answer: SlotAnswer; tokensLeft: number }
-	| { kind: "model-failed"; id: number; reason: UnratedReason; message: string; tokensLeft: number }
+	| { kind: "meta-accepted" }
 	| { kind: "read-result"; id: number; value: ReadValue }
 	| { kind: "read-failed"; id: number; reason: UnratedReason; message: string }
 	| { kind: "review-failed"; id: number; reason: UnratedReason; message: string }
 	| { kind: "abort"; reason: AbortReason };
 
-/** The longest log line and call label a child may send. */
+/** The longest log line a child may send. */
 export const MAX_LOG_CHARS = 2000;
-export const MAX_LABEL_CHARS = 200;
 export const MAX_IPC_MESSAGE_BYTES = 524_288;
 
 const callId = z.int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -122,13 +106,6 @@ export type ReadRequest = z.infer<typeof readRequestSchema>;
 
 export const childMessageSchema = z.discriminatedUnion("kind", [
 	z.strictObject({ kind: z.literal("meta"), meta: z.unknown() }),
-	z.strictObject({
-		kind: z.literal("model"),
-		id: callId,
-		slot: modelSlotSchema,
-		label: z.string().max(MAX_LABEL_CHARS),
-		options: z.unknown(),
-	}),
 	z.strictObject({ kind: z.literal("read"), id: callId, request: readRequestSchema }),
 	/** The options are parsed with the review input's own schema when the host answers the request. */
 	z.strictObject({
@@ -137,7 +114,6 @@ export const childMessageSchema = z.discriminatedUnion("kind", [
 		options: z.unknown(),
 		captureFailures: z.array(z.string()).optional(),
 	}),
-	z.strictObject({ kind: z.literal("cancel"), id: callId }),
 	z.strictObject({ kind: z.literal("log"), text: z.string().max(MAX_LOG_CHARS) }),
 	z.strictObject({
 		kind: z.literal("result"),

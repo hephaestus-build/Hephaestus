@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentBindingRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingService;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
-import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -50,6 +49,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxCache
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEvent;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
@@ -70,7 +70,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -108,7 +107,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -118,6 +116,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -335,8 +335,6 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         LiveRunnerWorkspace.stageCartChange(workDir);
         ReviewJob job = capture(runningJob(workspace, practice, accountId(developer)), workDir, developer, workspace);
         ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-        Map<ModelKind, FrozenModel> frozen = snapshot.practiceScriptModels();
-        assertThat(frozen.keySet()).containsExactly(ModelKind.CHAT);
         Instant workDeadline = Instant.now().plus(Duration.ofSeconds(LiveRunnerWorkspace.TIMEOUT_SECONDS + 300L));
         String jobToken = jwtIssuer.issueForReview(
                 job.getId(),
@@ -353,7 +351,6 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 snapshot.model().reasoningEffort(),
                 jobToken,
                 LiveRunnerWorkspace.TIMEOUT_SECONDS,
-                frozen,
                 false));
         assertThat(spec.environment())
                 .as("one job token, no second credential")
@@ -422,7 +419,6 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 reviewAssignments,
                 ended,
                 readBytes(reportFile),
-                frozen,
                 Instant.now()));
         ScriptRun run = runs.findByWorkspaceIdAndJobIdIn(context.id(), List.of(job.getId())).stream()
                 .filter(row -> row.getId().getPracticeId() == practice.getId())
@@ -435,21 +431,15 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         assertThat(calls.path("review").asInt())
                 .as("one review session: %s", report)
                 .isEqualTo(1);
-        for (ModelKind kind : ModelKind.values()) {
-            assertThat(calls.path(kind.name().toLowerCase(Locale.ROOT)).asInt())
-                    .as("no direct %s model call: %s", kind, report)
-                    .isZero();
-        }
-        assertThat(Objects.requireNonNull(run.getModels()).isEmpty()).isTrue();
+        assertThat(calls.propertyNames()).as(report).containsOnly("review", ScriptRun.REVIEW_SESSIONS);
 
         lifecycle.cancel(context.id(), job.getId());
 
-        // One ended, measured row for each call of a practice script, at its frozen model and price.
-        List<LlmUsageEvent> rows = usageEvents.findAll().stream()
+        Map<UsageSourceType, LlmUsageEvent> ledger = usageEvents.findAll().stream()
                 .filter(event -> event.getSourceId().equals(job.getId()))
-                .filter(event -> event.getPracticeId() != null)
-                .toList();
-        assertThat(rows).as("a practice script calls no direct model").isEmpty();
+                .filter(event -> event.getSourceType() != UsageSourceType.REVIEW_JOB)
+                .collect(Collectors.toMap(LlmUsageEvent::getSourceType, Function.identity()));
+        assertThat(ledger).isEmpty();
     }
 
     private Workspace workspace(User developer) {
@@ -540,24 +530,11 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         var binding = runtimeModelRouting
                 .binding(workspace.getId(), AgentPurpose.PRACTICE_REVIEW, actor)
                 .orElseThrow();
-        Map<ModelKind, FrozenModel> slots = new EnumMap<>(ModelKind.class);
-        slots.put(
-                ModelKind.CHAT,
-                FrozenModel.from(binding, resolver)
-                        .withPriceSnapshot(admission.admit(binding).price()));
-        for (AgentPurpose purpose : AgentPurpose.practiceScript())
-            runtimeModelRouting
-                    .practiceScriptBinding(workspace.getId(), purpose, actor)
-                    .ifPresent(selected -> slots.put(
-                            purpose.kind(),
-                            FrozenModel.from(selected, resolver)
-                                    .withPriceSnapshot(admission.admit(selected).price())));
         var job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
         job.setInput(new ReviewJobInput(1, List.of(new ReviewAssignmentId(job.getReviewId(), practice.getId(), 1))));
         job.setConfigSnapshot(ConfigSnapshot.from(binding, resolver)
                 .withPriceSnapshot(admission.admit(binding).price())
-                .withPracticeScript(slots)
                 .toJson(objectMapper));
         job.setCapture(EvidenceSnapshotFixtures.snapshot(objectMapper));
         return job;

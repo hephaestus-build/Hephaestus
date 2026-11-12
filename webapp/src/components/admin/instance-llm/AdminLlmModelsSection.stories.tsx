@@ -154,24 +154,6 @@ export const Reflow: Story = {
 	play: expectNoPageOverflow,
 };
 
-export const PracticeScriptConnection: Story = {
-	args: {
-		connection: {
-			displayName: "Embeddings",
-			apiProtocol: "openai-embeddings",
-			purposes: ["PRACTICE_EMBEDDING"],
-			enabled: true,
-		},
-		models: [],
-	},
-	play: async ({ canvas }) => {
-		const heading = canvas.getByRole("heading", { name: "Models on Embeddings" });
-		await expect(heading).toBeVisible();
-		await expect(heading.nextElementSibling).toHaveTextContent("Embeddings API");
-		await expect(canvas.getByText(", for Embedding model")).toHaveClass("sr-only");
-	},
-};
-
 export const DeleteConfirm: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /^delete gpt-5$/iu }));

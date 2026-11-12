@@ -52,7 +52,7 @@ const factValue = (panel: HTMLElement, label: string) =>
 
 const SCRIPTS: Record<string, PracticeScriptRun> = {
 	"thin-controllers": reviewPracticeScripts.fromCode,
-	"errors-carry-context": reviewPracticeScripts.withModels,
+	"errors-carry-context": reviewPracticeScripts.tookLonger,
 	"product-language": reviewPracticeScripts.withheld,
 };
 

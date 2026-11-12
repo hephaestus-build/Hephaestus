@@ -80,8 +80,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                         false),
                 null,
                 null,
-                600,
-                null);
+                600);
         job.setConfigSnapshot(snapshot.toJson(mapper));
         when(jobs.findByRunIdAndWorkspaceId(fence.runId(), 7)).thenReturn(Optional.of(job));
         Path archive = Files.writeString(root.resolve("input.tar"), "personal evidence archive");

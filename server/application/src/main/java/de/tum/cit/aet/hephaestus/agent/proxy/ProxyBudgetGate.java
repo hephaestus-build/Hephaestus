@@ -5,7 +5,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import java.math.BigDecimal;
 import java.time.Duration;
 import org.jspecify.annotations.Nullable;
@@ -32,14 +31,10 @@ class ProxyBudgetGate {
     private static final long MAX_CACHED_WORKSPACES = 10_000;
 
     private final LlmBudgetService budgetService;
-    private final long directModelTokensPerAttempt;
-    private final long directModelSearchUnitsPerAttempt;
     private final Cache<Long, LlmBudgetHeadroom> headroomByWorkspace;
 
-    ProxyBudgetGate(LlmBudgetService budgetService, PracticeReviewProperties properties) {
+    ProxyBudgetGate(LlmBudgetService budgetService) {
         this.budgetService = budgetService;
-        this.directModelTokensPerAttempt = properties.directModelTokensPerAttempt();
-        this.directModelSearchUnitsPerAttempt = properties.directModelSearchUnitsPerAttempt();
         this.headroomByWorkspace = Caffeine.newBuilder()
                 .expireAfterWrite(TTL)
                 .maximumSize(MAX_CACHED_WORKSPACES)
@@ -78,17 +73,5 @@ class ProxyBudgetGate {
     /** A call of the workspace opened or ended, and its bound or cost is in the ledger: the next call reads it again. */
     void spent(long workspaceId) {
         headroomByWorkspace.invalidate(workspaceId);
-    }
-
-    /**
-     * Whether one attempt's direct model calls have used the tokens or the search units that they may spend, on every
-     * slot and for every practice together: a sublimit of the attempt, which the review session's own calls do not
-     * count against. It also bounds the direct calls on a connection with no monthly cap. Search units are a limit of their own, never converted to tokens: a Cohere
-     * search unit covers from one to a hundred documents of any length up to its chunk size, so no token count is
-     * true for it. Only ended calls count, so calls in flight together can each pass and end above the cap.
-     */
-    boolean isDirectModelCapReached(ProxyRouting.BilledAttempt attempt) {
-        return attempt.directModelTokens() >= directModelTokensPerAttempt
-                || attempt.directModelSearchUnits() >= directModelSearchUnitsPerAttempt;
     }
 }

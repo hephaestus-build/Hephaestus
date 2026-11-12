@@ -33,7 +33,6 @@ public class ProxyAccounting {
     private final Counter gatewayRequests;
     private final DistributionSummary gatewayRequestSize;
     private final Counter gatewayLimiterErrors;
-    private final Counter practiceScriptUnattributed;
 
     ProxyAccounting(
             ProxyBudgetGate budgetGate,
@@ -59,9 +58,6 @@ public class ProxyAccounting {
         this.gatewayLimiterErrors = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_LIMITER_ERRORS)
                 .description("Sandbox gateway requests served without a rate-limit decision")
                 .register(meterRegistry);
-        this.practiceScriptUnattributed = Counter.builder(AgentMetrics.LLM_PROXY_PRACTICE_SCRIPT_UNATTRIBUTED)
-                .description("Practice script calls refused because they named no valid practice")
-                .register(meterRegistry);
     }
 
     /**
@@ -75,10 +71,6 @@ public class ProxyAccounting {
     /** A call whose upper bound did not fit under its payer's monthly cap ({@link ProxyBudgetGate#refusesHold}). */
     public void budgetHeld(ProxyRouting routing) {
         budgetBlocked(true, UsageFundingSource.capTag(routing.connectionScope()));
-    }
-
-    public boolean refuseForDirectModelCap(ProxyRouting routing, ProxyRouting.BilledAttempt attempt) {
-        return budgetBlocked(budgetGate.isDirectModelCapReached(attempt), "practice_script_attempt");
     }
 
     // The admission points count their refusals at a cap in the same counter, under their own surface.
@@ -104,11 +96,6 @@ public class ProxyAccounting {
                 .description("Model calls that the proxy refused before they reached their provider")
                 .tag("refusal", refusal.name().toLowerCase(Locale.ROOT))
                 .register(meterRegistry);
-    }
-
-    // Every direct call must name a valid practice so its spend can be attributed.
-    public void recordUnattributedPracticeScript() {
-        practiceScriptUnattributed.increment();
     }
 
     /**

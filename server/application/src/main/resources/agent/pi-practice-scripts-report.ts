@@ -43,12 +43,6 @@ function entryOf(slug: string, outcome: ProgramOutcome): ExecutionEntry {
 	return {
 		practiceSlug: slug,
 		program: outcome.program,
-		models: outcome.models.map(({ slot, need, bound, failures }) => ({
-			slot,
-			need,
-			bound,
-			failures,
-		})),
 		status: outcome.status,
 		stopReason: outcome.stopReason,
 		...(error === undefined ? {} : { error }),

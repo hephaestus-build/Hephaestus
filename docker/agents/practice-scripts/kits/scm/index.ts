@@ -4,7 +4,6 @@ import type { Citation } from "../../lib/core/contract.ts";
 import { domainAccess } from "../../lib/core/domain-access.ts";
 import { captureFailure, type ScriptContext } from "../../lib/core/practice-script.ts";
 import { readCapturedCommits } from "./change.ts";
-import { evidenceTools } from "./evidence-tools.ts";
 import type { GrepMatch, GrepOptions } from "./grep.ts";
 import {
 	repositoryRecordSchema,
@@ -179,7 +178,6 @@ export function scm<K extends ScmKind>(
 										}),
 								},
 				};
-	Object.assign(ctx.evidence, { tools: evidenceTools(tree?.head ?? null) });
 	const { evidence } = ctx;
 	// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- TypeScript does not narrow a conditional type over a generic kind; the kind and its record are built together here.
 	return {

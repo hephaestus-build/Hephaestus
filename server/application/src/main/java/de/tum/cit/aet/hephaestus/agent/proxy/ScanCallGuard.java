@@ -12,13 +12,11 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -83,24 +81,19 @@ public class ScanCallGuard {
                     || !runs.isCurrent(new AgentRunRef(runId, workspace), ReviewRunKind.epoch(attempt.number())))
                 throw refused();
             var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), mapper);
-            var model = route.practiceScriptSlot() == null || route.practiceScriptSlot() == ModelKind.CHAT
-                    ? snapshot.model()
-                    : snapshot.practiceScriptSlot(route.practiceScriptSlot());
+            var model = snapshot.model();
             if (model == null || model.priceSnapshot() == null) throw refused();
             var cap = reviews.budgetUsd(workspace, job.getReviewId()).orElseThrow(ScanCallGuard::refused);
             // Every call of the review is in its rows, those of this attempt included; an open or unmeasured one
             // counts at its upper bound.
             var spent = budget.spent(workspace, job.getReviewId());
-            String slot = route.practiceScriptSlot() == null
-                    ? "review"
-                    : route.practiceScriptSlot().name().toLowerCase(Locale.ROOT);
             var assigned = job.getInput().assignments();
             var pinned = review.practices().stream()
                     .filter(practice -> assigned.stream().anyMatch(id -> id.practiceId() == practice.practiceId()))
                     .findFirst()
                     .orElseThrow(ScanCallGuard::refused);
             var options = pinned.method().models().stream()
-                    .filter(bound -> bound.slot().equals(slot))
+                    .filter(bound -> bound.slot().equals("review"))
                     .map(bound -> bound.model())
                     .filter(Objects::nonNull)
                     .findFirst()
@@ -118,14 +111,11 @@ public class ScanCallGuard {
                 throw refused(unbounded);
             }
             // The bound that the call's ledger row holds while the call is open or unmeasured.
-            ModelKind scriptSlot = route.practiceScriptSlot();
-            ModelKind kind = scriptSlot == null ? ModelKind.CHAT : scriptSlot;
-            BigDecimal next = ProxyCallLedger.costBound(
-                    kind, model.priceSnapshot(), new ProxyCallLedger.Bound(body.length, output));
+            BigDecimal next =
+                    ProxyCallLedger.costBound(model.priceSnapshot(), new ProxyCallLedger.Bound(body.length, output));
             if (next == null || !spent.priced() || spent.cost().add(next).compareTo(cap) > 0) throw refused();
-            if (route.practiceScriptSlot() == null
-                    && reviewCalls(job, attempt.number()).getCalls()
-                            >= budget.callCap(job.getInput().assignments().size())) throw refused();
+            if (reviewCalls(job, attempt.number()).getCalls()
+                    >= budget.callCap(job.getInput().assignments().size())) throw refused();
             return Optional.of(new Lease(leases, job.getId(), workspace, lease));
         } catch (RuntimeException | Error failure) {
             leases.release(job.getId(), workspace, lease);
@@ -137,12 +127,11 @@ public class ScanCallGuard {
      * An ordinary review's own calls take at most {@link #WORK_MARGIN} times the work that its loop may spend: the model
      * calls and output tokens of each assigned practice. The loop holds itself to its budget; this bound holds a caller
      * that does not, so an attempt's cost never rests on its runner alone. Each call already in flight may pass it
-     * once. A practice script's direct calls have their own bound on tokens.
+     * once.
      */
     private void requireWithinAttemptWork(ReviewJob job, ProxyRouting route) {
         // A row that moved to another attempt counts that attempt's calls; the lease refuses this one's.
-        if (route.practiceScriptSlot() != null
-                || job.getAttempt() != route.attempt().number()) return;
+        if (job.getAttempt() != route.attempt().number()) return;
         long practices = job.getInput().assignments().size();
         var used = reviewCalls(job, route.attempt().number());
         if (used.getCalls() >= WORK_MARGIN * practices * practiceReview.practiceModelCalls()

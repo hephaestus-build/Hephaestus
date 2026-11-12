@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRequestBody.PreparedBody;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
@@ -51,7 +50,6 @@ import reactor.core.publisher.Mono;
 import reactor.netty.Connection;
 import reactor.netty.http.client.HttpClientRequest;
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 // The authenticated token chooses the model and upstream; callers cannot supply hosts, paths, or credentials.
@@ -153,99 +151,24 @@ class LlmProxyService {
             HttpServletResponse response,
             HttpHeaders incomingHeaders,
             byte @Nullable [] body) {
-        ProxyRouting routing = authenticatedRouting(request);
+        ProxyRouting routing = authenticatedRouting();
         ResponseEntity<String> rejected = validateSafeSurface(request);
         if (rejected != null) return rejected;
         LlmApiProtocol protocol = LlmApiProtocol.parse(routing.apiProtocol())
                 .filter(parsed -> parsed.serves(ModelKind.CHAT))
                 .orElse(null);
-        if (routing.practiceScriptSlot() != null
-                || protocol == null
-                || !(PROXY_PATH_PREFIX + protocol.upstreamPath()).equals(request.getRequestURI())) {
+        if (protocol == null || !(PROXY_PATH_PREFIX + protocol.upstreamPath()).equals(request.getRequestURI())) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ProblemDetail.forStatus(HttpStatus.NOT_FOUND));
         }
         if (body == null || body.length == 0) return ResponseEntity.badRequest().body("Request body is required");
         rejected = validateJsonObject(body);
         if (rejected != null) return rejected;
-        return serve(routing, protocol, null, response, incomingHeaders, body);
+        return serve(routing, protocol, response, incomingHeaders, body);
     }
 
     /**
-     * Serves one call of a practice script on {@code /internal/llm/practice-script/{slot}/{op}}. The op must
-     * be the path of the slot's frozen protocol. The call must name its practice in
-     * {@link JobTokenAuthenticationFilter#PRACTICE_SCRIPT_PRACTICE_HEADER}. The call is never streamed, so its
-     * usage is always read from the response body.
-     */
-    public @Nullable ResponseEntity<?> proxyPracticeScript(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            HttpHeaders incomingHeaders,
-            byte @Nullable [] body) {
-        ProxyRouting routing = authenticatedRouting(request);
-        ResponseEntity<String> rejected = validateSafeSurface(request);
-        if (rejected != null) return rejected;
-        ModelKind slot = routing.practiceScriptSlot();
-        LlmApiProtocol protocol = LlmApiProtocol.parse(routing.apiProtocol())
-                .filter(parsed -> slot != null && parsed.serves(slot))
-                .orElse(null);
-        if (slot == null || protocol == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ProblemDetail.forStatus(HttpStatus.NOT_FOUND));
-        }
-        String slotPath =
-                JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PATH + slot.name().toLowerCase(Locale.ROOT);
-        if (!(slotPath + protocol.upstreamPath()).equals(request.getRequestURI())) {
-            return ResponseEntity.badRequest().body("This model takes calls on " + slotPath + protocol.upstreamPath());
-        }
-        String practice = incomingHeaders.getFirst(JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PRACTICE_HEADER);
-        if (practice == null || !SandboxLayout.PRACTICE_SLUG.matcher(practice).matches()) {
-            accounting.recordUnattributedPracticeScript();
-            return ResponseEntity.badRequest()
-                    .body("A practice script call must name its practice in "
-                            + JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PRACTICE_HEADER);
-        }
-        if (body == null || body.length == 0) return ResponseEntity.badRequest().body("Request body is required");
-        rejected = validateJsonObject(body);
-        if (rejected != null) return rejected;
-        JsonNode call = objectMapper.readTree(body);
-        if (call.path("stream").asBoolean(false)) {
-            return ResponseEntity.badRequest().body("Practice script calls cannot stream");
-        }
-        String tooManyEntries = tooManyEntries(call, protocol);
-        if (tooManyEntries != null)
-            return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).body(tooManyEntries);
-        return serve(
-                routing,
-                protocol,
-                new PracticeScriptCall(slot, routing.practiceScriptTier(), practice),
-                response,
-                incomingHeaders,
-                body);
-    }
-
-    // MODEL_SLOT_CAPS in docker/agents/practice-scripts/lib/core/contract.ts holds the same caps, so the runner refuses
-    // first.
-    static final int MAX_DECISION_QUESTIONS = 64;
-    static final int MAX_EMBEDDING_INPUTS = 64;
-    static final int MAX_RERANK_DOCUMENTS = 256;
-
-    private static @Nullable String tooManyEntries(JsonNode call, LlmApiProtocol protocol) {
-        return switch (protocol) {
-            case OPENAI_DECISIONS -> tooManyEntries(call, "questions", MAX_DECISION_QUESTIONS);
-            case OPENAI_EMBEDDINGS -> tooManyEntries(call, "input", MAX_EMBEDDING_INPUTS);
-            case COHERE_RERANK -> tooManyEntries(call, "documents", MAX_RERANK_DOCUMENTS);
-            case OPENAI_COMPLETIONS, OPENAI_RESPONSES, ANTHROPIC_MESSAGES -> null;
-        };
-    }
-
-    private static @Nullable String tooManyEntries(JsonNode call, String field, int max) {
-        JsonNode entries = call.get(field);
-        if (entries == null || !entries.isArray() || entries.size() <= max) return null;
-        return "'" + field + "' must hold at most " + max + " entries";
-    }
-
-    /**
-     * Serves one call on a routing: the AI-choice, budget, connection, deadline and usage rules. A null practiceScript
-     * denotes a review or Hephaestus call. A null response serves a worker step in-process: the call must not stream, and a
+     * Serves one call on a routing: the AI-choice, budget, connection, deadline and usage rules.
+     * A null response serves a worker step in-process: the call must not stream, and a
      * provider that answers with a stream anyway is refused.
      */
     @SuppressWarnings("try") // The scope installs the current span and restores it on close.
@@ -253,7 +176,6 @@ class LlmProxyService {
     ResponseEntity<?> serve(
             ProxyRouting routing,
             LlmApiProtocol protocol,
-            @Nullable PracticeScriptCall practiceScript,
             @Nullable HttpServletResponse response,
             HttpHeaders incomingHeaders,
             byte[] body) {
@@ -262,7 +184,7 @@ class LlmProxyService {
         try (ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt())) {
             MDC.put("proxy.principal", routing.principalDescription());
             MDC.put("proxy.apiProtocol", routing.apiProtocol());
-            String operation = operationName(protocol);
+            String operation = "chat";
             Span span = tracer.spanBuilder()
                     .name("gen_ai." + operation)
                     .kind(Span.Kind.CLIENT)
@@ -275,8 +197,7 @@ class LlmProxyService {
             long started = System.nanoTime();
             String ended = "error";
             try (var ignored = tracer.withSpan(span)) {
-                var result =
-                        forward(routing, protocol, practiceScript, response, incomingHeaders, body, span, inFlight);
+                var result = forward(routing, protocol, response, incomingHeaders, body, span, inFlight);
                 int status = result == null
                         ? Objects.requireNonNull(response).getStatus()
                         : result.getStatusCode().value();
@@ -330,7 +251,6 @@ class LlmProxyService {
      */
     private final class CallRow {
         private final ProxyRouting routing;
-        private final @Nullable PracticeScriptCall script;
         private final ProxyCallLedger.Bound bound;
         private @Nullable UUID id;
         private LlmUsageRecorder.@Nullable CallUsage unmeasured;
@@ -340,19 +260,14 @@ class LlmProxyService {
          * @param inputBytes the bytes of the call's request, which bound its input tokens
          * @param outputTokens the output tokens that bound the call; {@code null} when nothing bounds them
          */
-        CallRow(
-                ProxyRouting routing,
-                @Nullable PracticeScriptCall script,
-                long inputBytes,
-                @Nullable Long outputTokens) {
+        CallRow(ProxyRouting routing, long inputBytes, @Nullable Long outputTokens) {
             this.routing = routing;
-            this.script = script;
             this.bound = new ProxyCallLedger.Bound(inputBytes, outputTokens);
         }
 
         /** An upstream request leaves now; the first one opens the row. */
         void sending() {
-            if (id == null) id = accounting.calls().open(routing, script, bound);
+            if (id == null) id = accounting.calls().open(routing, bound);
             unmeasured = null;
         }
 
@@ -396,19 +311,9 @@ class LlmProxyService {
         return !Instant.now().plus(asked).isAfter(absorbUntil);
     }
 
-    private static String operationName(LlmApiProtocol protocol) {
-        return switch (protocol.kind()) {
-            case CHAT -> "chat";
-            case DECISION -> "decision";
-            case EMBEDDING -> "embeddings";
-            case RERANKING -> "rerank";
-        };
-    }
-
     private @Nullable ResponseEntity<?> forward(
             ProxyRouting routing,
             LlmApiProtocol protocol,
-            @Nullable PracticeScriptCall practiceScript,
             @Nullable HttpServletResponse response,
             HttpHeaders incomingHeaders,
             byte[] body,
@@ -440,7 +345,7 @@ class LlmProxyService {
             } catch (JacksonException unreadable) {
                 return ResponseEntity.badRequest().body("Request body must be valid JSON");
             }
-            row = new CallRow(routing, practiceScript, body.length, outputBound);
+            row = new CallRow(routing, body.length, outputBound);
             if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
             // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
             // provider
@@ -449,16 +354,7 @@ class LlmProxyService {
             ResponseEntity<?> answer;
             do {
                 answer = forwardWithinScanBudget(
-                        routing,
-                        protocol,
-                        practiceScript,
-                        response,
-                        incomingHeaders,
-                        body,
-                        span,
-                        call,
-                        row,
-                        absorbUntil);
+                        routing, protocol, response, incomingHeaders, body, span, call, row, absorbUntil);
             } while (answer instanceof AskAgain);
             return answer;
         } finally {
@@ -471,7 +367,6 @@ class LlmProxyService {
     private @Nullable ResponseEntity<?> forwardWithinScanBudget(
             ProxyRouting routing,
             LlmApiProtocol protocol,
-            @Nullable PracticeScriptCall practiceScript,
             @Nullable HttpServletResponse response,
             HttpHeaders incomingHeaders,
             byte[] body,
@@ -488,16 +383,10 @@ class LlmProxyService {
             return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
         }
 
-        // A practice script call is refused with 402, which no rate limit answers, so its runner can tell a
-        // spent budget from the gateway's or the provider's 429. The AI SDK also never retries a 402.
-        HttpStatus spendingRefusal =
-                practiceScript == null ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.PAYMENT_REQUIRED;
+        HttpStatus spendingRefusal = HttpStatus.TOO_MANY_REQUESTS;
         // Before any credential is resolved or the network touched. Never interrupts a live stream.
         if (accounting.refuseForBudget(routing)) {
             return refusal(spendingRefusal, ProxyRefusal.BUDGET, budgetReachedMessage(routing.connectionScope()));
-        }
-        if (practiceScript != null && accounting.refuseForDirectModelCap(routing, attempt)) {
-            return refusal(spendingRefusal, ProxyRefusal.BUDGET, "Practice script budget spent");
         }
 
         LlmModelResolver.ProxyCredential credential =
@@ -568,7 +457,7 @@ class LlmProxyService {
                                 + LlmConnectionHealth.OPEN_FOR.toSeconds() + " seconds before it calls it again");
             }
             span.tag("gen_ai.request.model", credential.upstreamModelId());
-            boolean reviewStream = practiceScript == null && requestsStream(prepared.body());
+            boolean reviewStream = requestsStream(prepared.body());
             boolean instanceCredential = routing.connectionScope() == UsageFundingSource.INSTANCE;
             // A review's stream runs until the attempt's deadline; these bounds free a silent provider's call sooner.
             Exchange exchange = new Exchange(
@@ -601,10 +490,6 @@ class LlmProxyService {
                 permit.released();
                 accounting.budgetHeld(routing);
                 return refusal(spendingRefusal, ProxyRefusal.BUDGET, budgetReachedMessage(routing.connectionScope()));
-            } catch (ProxyCallLedger.UnknownPractice unknown) {
-                permit.released();
-                accounting.recordUnattributedPracticeScript();
-                return ResponseEntity.badRequest().body("A practice script call must name a practice of its workspace");
             } catch (RuntimeException failure) {
                 // The call never reached its provider, so the provider's health takes no failure from it.
                 permit.released();
@@ -1039,10 +924,10 @@ class LlmProxyService {
         return URI.create(baseUrl.strip().replaceAll("/+$", "") + protocol.upstreamPath());
     }
 
-    private ProxyRouting authenticatedRouting(HttpServletRequest request) {
+    private ProxyRouting authenticatedRouting() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication instanceof JobTokenAuthentication tokenAuthentication) {
-            return routingService.resolve(tokenAuthentication.getPrincipal(), request);
+            return routingService.resolve(tokenAuthentication.getPrincipal());
         }
         throw new IllegalStateException("Expected JobTokenAuthentication on security context");
     }
@@ -1057,10 +942,6 @@ class LlmProxyService {
     // OTel GenAI input includes cache tokens; search units have no standard token attribute.
     private static void tagUsage(Span span, @Nullable ProxyTokenUsage usage) {
         if (usage == null) return;
-        if (usage.searchUnits() > 0) {
-            span.tag("hephaestus.usage.search_units", usage.searchUnits());
-            if (usage.promptTokens() == 0) return;
-        }
         span.tag("gen_ai.usage.input_tokens", usage.promptTokens());
         span.tag("gen_ai.usage.output_tokens", usage.outputTokens());
     }

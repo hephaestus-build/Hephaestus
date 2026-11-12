@@ -32,14 +32,4 @@ class LlmProxyController {
             @RequestBody(required = false) byte @Nullable [] body) {
         return proxyService.proxy(request, response, incomingHeaders, body);
     }
-
-    @PostMapping("/practice-script/{slot}/**")
-    @WorkspaceAgnostic("Authenticated practice script token carries and constrains the workspace route")
-    public @Nullable ResponseEntity<?> proxyPracticeScript(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            @RequestHeader HttpHeaders incomingHeaders,
-            @RequestBody(required = false) byte @Nullable [] body) {
-        return proxyService.proxyPracticeScript(request, response, incomingHeaders, body);
-    }
 }

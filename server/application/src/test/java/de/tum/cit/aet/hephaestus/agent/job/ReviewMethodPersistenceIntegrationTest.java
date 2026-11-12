@@ -39,7 +39,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -195,14 +194,14 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> assignmentStore.bind(workspaceId, job.getReviewId(), UUID.randomUUID(), List.of(id)))
                 .isInstanceOf(IllegalStateException.class);
         byte[] report = """
-            {"schemaVersion":2,"truncated":false,"practices":[
-             {"practiceSlug":"native-practice","program":{"kind":"builtin","digest":null},"models":[],"status":"withheld","stopReason":"refused",
-              "calls":{"review":1,"chat":0,"decision":0,"embedding":0,"reranking":0},"coverageReached":{"reads":1,"truncatedReads":0,"failedReads":0},"durationMs":1}]}
+            {"schemaVersion":3,"truncated":false,"practices":[
+             {"practiceSlug":"native-practice","program":{"kind":"builtin","digest":null},"status":"withheld","stopReason":"refused",
+              "calls":{"review":1},"coverageReached":{"reads":1,"truncatedReads":0,"failedReads":0},"durationMs":1}]}
             """.getBytes(StandardCharsets.UTF_8);
         var recorder = new PracticeScriptRunRecorder(
                 new PiResultParser(mapper, meters), scriptRuns, meters, mapper, assignments);
         transactions.executeWithoutResult(status -> {
-            recorder.record(job, report, Map.of(), Instant.now());
+            recorder.record(job, report, Instant.now());
         });
         assertThat(assignments.load(job)).containsExactly(pinned);
         assertThat(snapshots.find(workspaceId, job.getReviewId()).orElseThrow().practices())

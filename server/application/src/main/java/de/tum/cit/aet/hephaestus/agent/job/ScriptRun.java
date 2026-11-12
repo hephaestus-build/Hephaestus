@@ -64,10 +64,6 @@ public class ScriptRun {
     @Column(name = "calls", columnDefinition = "jsonb")
     private @Nullable JsonNode calls;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "models", columnDefinition = "jsonb")
-    private @Nullable JsonNode models;
-
     @Column(name = "finished_at", nullable = false)
     private Instant finishedAt;
 
@@ -87,7 +83,6 @@ public class ScriptRun {
             ScriptKind scriptKind,
             @Nullable ScriptStopReason stopReason,
             @Nullable JsonNode calls,
-            @Nullable JsonNode models,
             Instant finishedAt,
             @Nullable String error,
             @Nullable Integer durationMs) {
@@ -98,7 +93,6 @@ public class ScriptRun {
         this.scriptKind = scriptKind;
         this.stopReason = stopReason;
         this.calls = calls == null ? null : calls.deepCopy();
-        this.models = models == null ? null : models.deepCopy();
         this.finishedAt = finishedAt;
         this.error = error;
         this.durationMs = durationMs;

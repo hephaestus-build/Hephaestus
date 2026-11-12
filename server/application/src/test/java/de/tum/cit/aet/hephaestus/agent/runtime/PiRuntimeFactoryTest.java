@@ -50,13 +50,12 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
     }
 
     private PiPlanSpec spec(String apiProtocol, String modelId) {
-        return new PiPlanSpec(
-                apiProtocol, modelId, 200000, 8192, null, "job-token-123", 600, PRACTICE, Map.of(), false);
+        return new PiPlanSpec(apiProtocol, modelId, 200000, 8192, null, "job-token-123", 600, PRACTICE, false);
     }
 
     private PiPlanSpec spec(PiRunnerProfile profile) {
         return new PiPlanSpec(
-                "openai-completions", "gpt-5.4-mini", null, null, null, "job-token-123", 600, profile, Map.of(), false);
+                "openai-completions", "gpt-5.4-mini", null, null, null, "job-token-123", 600, profile, false);
     }
 
     @Nested
@@ -123,23 +122,6 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
 
             assertThat(plan.promptDigest()).isEqualTo(ProvenanceDigest.rootDigestHex(scaffolding));
         }
-
-        @Test
-        void extraInputsMerge() {
-            byte[] payload = "deadbeef".getBytes(StandardCharsets.UTF_8);
-            PiPlanSpec spec = new PiPlanSpec(
-                    "openai-completions",
-                    "gpt-x",
-                    null,
-                    null,
-                    null,
-                    "job-token-123",
-                    600,
-                    PRACTICE,
-                    Map.of(SandboxLayout.PRACTICE_SCRIPT_MODELS_FILE, payload),
-                    false);
-            assertThat(factory.build(spec).inputFiles()).containsKey(SandboxLayout.PRACTICE_SCRIPT_MODELS_FILE);
-        }
     }
 
     @Nested
@@ -195,7 +177,6 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
                     "job-token-123",
                     600,
                     PRACTICE,
-                    Map.of(),
                     false);
             byte[] json = factory.buildProviderConfigJson(spec);
             JsonNode root = objectMapper.readTree(new String(json, StandardCharsets.UTF_8));
@@ -240,16 +221,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
         @CsvSource({"61, 1000", "90, 30000", "119, 59000", "600, 540000", "2147483647, 2147483587000"})
         void shouldReserveShutdownTimeBeforeTheSandboxDeadline(int timeoutSeconds, long expectedBudgetMs) {
             PiPlanSpec spec = new PiPlanSpec(
-                    "openai-completions",
-                    "gpt-x",
-                    null,
-                    null,
-                    null,
-                    "job-token-123",
-                    timeoutSeconds,
-                    PRACTICE,
-                    Map.of(),
-                    false);
+                    "openai-completions", "gpt-x", null, null, null, "job-token-123", timeoutSeconds, PRACTICE, false);
 
             long budgetMs = Long.parseLong(factory.build(spec).environment().get("AGENT_BUDGET_MS"));
 

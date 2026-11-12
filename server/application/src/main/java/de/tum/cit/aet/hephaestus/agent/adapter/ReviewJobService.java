@@ -1,9 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
-import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
@@ -19,8 +17,6 @@ import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
-import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -28,9 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueue;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -93,23 +87,7 @@ public class ReviewJobService implements ReviewQueue {
         ConfigSnapshot snapshot = ConfigSnapshot.from(binding, models)
                 .withPriceSnapshot(admission.admit(binding).price());
         methods.require(method, "review", binding);
-        EnumMap<ModelKind, FrozenModel> direct = new EnumMap<>(ModelKind.class);
-        if (slot(method, "chat").model() != null) {
-            methods.require(method, "chat", binding);
-            direct.put(ModelKind.CHAT, snapshot.model());
-        }
-        for (AgentPurpose purpose : AgentPurpose.practiceScript()) {
-            BoundModelSlot slot = slot(method, purpose.kind().name().toLowerCase(Locale.ROOT));
-            if (slot.model() == null) continue;
-            var scriptBinding = policy.practiceScriptBinding(job, purpose)
-                    .orElseThrow(
-                            () -> new ReviewJobStateConflictException("A frozen practice script model is unavailable"));
-            FrozenModel model = FrozenModel.from(scriptBinding, models)
-                    .withPriceSnapshot(admission.admit(scriptBinding).price());
-            methods.require(method, slot.slot(), scriptBinding);
-            direct.put(purpose.kind(), model);
-        }
-        job.setConfigSnapshot(mapper.valueToTree(snapshot.withPracticeScript(direct)));
+        job.setConfigSnapshot(mapper.valueToTree(snapshot));
         jobs.saveAndFlush(job);
         assignmentStore.bind(review.workspaceId(), review.id(), job.getId(), selected);
         UUID jobId = job.getId();
@@ -123,13 +101,6 @@ public class ReviewJobService implements ReviewQueue {
                 .addKeyValue("duration.ms", 0)
                 .log("Agent job lifecycle transition"));
         return jobId;
-    }
-
-    private static BoundModelSlot slot(ReviewMethod method, String name) {
-        return method.models().stream()
-                .filter(slot -> slot.slot().equals(name))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Frozen review method is missing slot: " + name));
     }
 
     @Transactional(readOnly = true)

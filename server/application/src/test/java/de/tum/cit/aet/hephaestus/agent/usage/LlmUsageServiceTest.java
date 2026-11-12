@@ -57,11 +57,6 @@ class LlmUsageServiceTest extends BaseUnitTest {
         lenient()
                 .when(usageRepository.sumCost(eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(new BigDecimal("1.20"));
-        var total = mock(LlmUsageEventRepository.PracticeScriptTotalAggregate.class);
-        when(total.getInstanceTotalCostUsd()).thenReturn(BigDecimal.ZERO);
-        when(total.getOwnProviderTotalCostUsd()).thenReturn(BigDecimal.ZERO);
-        when(usageRepository.aggregatePracticeScriptTotal(eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
-                .thenReturn(total);
         when(budgetService.decide(WORKSPACE_ID)).thenReturn(LlmBudgetDecision.ALLOWED);
         var service = new LlmUsageService(
                 usageRepository,

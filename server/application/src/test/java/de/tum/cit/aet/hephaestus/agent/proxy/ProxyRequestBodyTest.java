@@ -210,16 +210,4 @@ class ProxyRequestBodyTest extends BaseUnitTest {
         assertThat(prepared).isNotNull();
         assertThat(OBJECT_MAPPER.readTree(prepared.body()).path(field).asLong()).isEqualTo(4096);
     }
-
-    @Test
-    void shouldForwardAnEmbeddingCallWithoutAnOutputLimit() {
-        byte[] input = "{\"input\":[\"a\"]}".getBytes(StandardCharsets.UTF_8);
-
-        var prepared = ProxyRequestBody.prepare(
-                OBJECT_MAPPER, input, "catalog-model", LlmApiProtocol.OPENAI_EMBEDDINGS, 4096L);
-
-        assertThat(prepared).isNotNull();
-        assertThat(OBJECT_MAPPER.readTree(prepared.body()).toString())
-                .isEqualTo("{\"input\":[\"a\"],\"model\":\"catalog-model\"}");
-    }
 }

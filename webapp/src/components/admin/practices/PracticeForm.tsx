@@ -68,8 +68,7 @@ export function PracticeForm(props: PracticeFormProps) {
 	if (props.mode === "edit") {
 		return <EditPracticeForm {...props} />;
 	}
-	const { workspaceSlug, groups, isPending, definitionOptions, cancel, refreshAlert, onSubmit } =
-		props;
+	const { groups, isPending, definitionOptions, cancel, refreshAlert, onSubmit } = props;
 	return (
 		<PracticeDefinitionForm
 			beforeFields={refreshAlert}
@@ -78,17 +77,12 @@ export function PracticeForm(props: PracticeFormProps) {
 			isPending={isPending}
 			definitionOptions={definitionOptions}
 			cancelAction={cancel}
-			practiceScriptModelsLink={modelsLink(workspaceSlug)}
 			// Preserve a void return; the unsaved-changes guard tracks only an actual save promise.
 			onSubmit={({ slug, kind, groupSlug, definition }): void | Promise<void> =>
 				onSubmit({ slug, kind, groupSlug, definition, position: null })
 			}
 		/>
 	);
-}
-
-function modelsLink(workspaceSlug: string) {
-	return <Link to="/w/$workspaceSlug/admin/models" params={{ workspaceSlug }} />;
 }
 
 function EditPracticeForm({
@@ -141,7 +135,6 @@ function EditPracticeForm({
 					</section>
 				</>
 			}
-			practiceScriptModelsLink={modelsLink(workspaceSlug)}
 			onSubmit={({ groupSlug, definition }): void | Promise<void> =>
 				onSubmit({ definition, expectedVersionId: seeded.id }, groupSlug)
 			}

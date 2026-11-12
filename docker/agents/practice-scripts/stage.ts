@@ -52,29 +52,14 @@ export const REQUESTED_PULL_REQUEST: Required<StagedInputs> = {
 	previous: null,
 };
 
+/** Stage scripts as the server stages stored scripts, in the guarded `practices` folder. */
 export async function stagePracticeScripts(
 	scripts: Record<string, string | null>,
 	inputs: StagedInputs = REQUESTED_PULL_REQUEST,
 ): Promise<StagedPracticeScripts> {
-	return stagePrograms(scripts, inputs, "practices");
-}
-
-/** Private toolkit fixtures exercise model transport without entering the author import boundary. */
-export async function stageToolkitPrograms(
-	scripts: Record<string, string | null>,
-	inputs: StagedInputs = REQUESTED_PULL_REQUEST,
-): Promise<StagedPracticeScripts> {
-	return stagePrograms(scripts, inputs, "toolkit-fixtures");
-}
-
-async function stagePrograms(
-	scripts: Record<string, string | null>,
-	inputs: StagedInputs,
-	directory: string,
-): Promise<StagedPracticeScripts> {
 	const root = await realpath(await mkdtemp(path.join(tmpdir(), "practice-script-")));
 	const stage = path.join(root, "stage");
-	const practices = path.join(stage, directory);
+	const practices = path.join(stage, "practices");
 	await mkdir(practices, { recursive: true });
 	await writeFile(path.join(root, "package.json"), '{"type":"module"}\n');
 	for (const kitDirectory of ["lib", "kits"]) {

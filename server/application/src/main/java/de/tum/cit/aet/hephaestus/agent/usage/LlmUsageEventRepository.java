@@ -53,10 +53,6 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
      */
     String UNPRICED_RUNS = "COUNT(DISTINCT (e.source_id, e.source_attempt)) FILTER (WHERE " + UNKNOWN + ")";
 
-    /** The calls of practice scripts on a model other than the review's own: decision, embedding and reranking. */
-    String PRACTICE_SCRIPT_ROWS =
-            "e.source_type IN ('PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING')";
-
     /**
      * Whether workspace {@code w} has an enabled own-provider model on an enabled own-provider
      * connection. No binding to that model is needed. The instance policy on own providers is not
@@ -134,20 +130,6 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             @Param("measurement") LlmUsageRecorder.Measurement measurement);
 
     /**
-     * What the practice script calls of one claim have used, on every model kind and for every practice: the whole
-     * prompt and the output, and the search units of reranking calls. A call counts once it has ended.
-     */
-    @Query(value = """
-        SELECT COALESCE(SUM(e.input_tokens + e.cache_read_tokens + e.cache_write_tokens + e.output_tokens), 0) AS tokens,
-            COALESCE(SUM(e.search_units), 0) AS searchUnits
-        FROM llm_usage_event e
-        WHERE e.workspace_id = :workspaceId AND e.run_id = :runId AND e.lease_epoch = :epoch
-          AND e.practice_id IS NOT NULL
-        """, nativeQuery = true)
-    DirectModelUsage sumDirectModelUsage(
-            @Param("workspaceId") long workspaceId, @Param("runId") UUID runId, @Param("epoch") int epoch);
-
-    /**
      * The calls of one review attempt on the review's own model, those without reported usage and those still open
      * included, and the output tokens of the ended ones.
      */
@@ -176,12 +158,6 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             @Param("sourceType") String sourceType,
             @Param("sourceId") UUID sourceId,
             @Param("attempt") int attempt);
-
-    interface DirectModelUsage {
-        long getTokens();
-
-        long getSearchUnits();
-    }
 
     interface ReviewCalls {
         long getCalls();
@@ -451,105 +427,6 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
                     + " pricedTotalCostUsd DESC",
             nativeQuery = true)
     List<WorkspaceAggregate> aggregateByWorkspace(@Param("from") Instant from, @Param("to") Instant to);
-
-    /**
-     * The decision, embedding and reranking calls of a month, by the practice whose script made them. The practice is
-     * {@code null} for rows that name none: rows from before calls had rows, which hold every practice of an attempt
-     * together, and rows of a practice that no longer exists.
-     *
-     * <p>An UNPRICED call adds no cost. A call with neither a price nor an upper bound ({@link #UNKNOWN}) counts its
-     * review once in the {@code unpricedEventCount} of its practice,
-     * however many unpriced calls and attempts the review has: the unit is the same as that of {@code reviews}. A
-     * NO_CHARGE call adds a confirmed zero. Chat calls of practice scripts are not here: they bill on the review's own
-     * model. {@code inputTokens} is the whole prompt, cache reads and writes included, here and in {@link
-     * #aggregatePracticeScriptTotal}.
-     */
-    @Query(value = """
-        SELECT p.slug AS practiceSlug, pv.definition->>'name' AS practiceName,
-            STRING_AGG(DISTINCT e.model_kind, ',') AS modelKinds,
-            COUNT(DISTINCT e.review_id) AS reviews,
-            COALESCE(SUM(e.total_calls), 0) AS calls,
-            COALESCE(SUM(e.input_tokens + e.cache_read_tokens + e.cache_write_tokens), 0) AS inputTokens,
-            COALESCE(SUM(e.output_tokens), 0) AS outputTokens,
-            COALESCE(SUM(e.cost_usd) FILTER (WHERE e.pricing_state <> 'UNPRICED' AND e.funding_source = 'INSTANCE'), 0)
-                AS instanceTotalCostUsd,
-            COALESCE(SUM(e.cost_usd) FILTER (WHERE e.pricing_state <> 'UNPRICED' AND e.funding_source = 'WORKSPACE'), 0)
-                AS ownProviderTotalCostUsd,
-            COUNT(DISTINCT e.review_id) FILTER (WHERE
-        """ + UNKNOWN + """
-            ) AS unpricedEventCount
-        FROM llm_usage_event e
-        LEFT JOIN practice p ON p.workspace_id = e.workspace_id AND p.id = e.practice_id
-        LEFT JOIN practice_version pv ON pv.id = p.current_version_id AND pv.workspace_id = p.workspace_id
-        WHERE e.workspace_id = :workspaceId AND e.occurred_at >= :from AND e.occurred_at < :to
-          AND e.source_type IN ('PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING')
-        GROUP BY p.slug, pv.definition->>'name'
-        ORDER BY COALESCE(SUM(e.cost_usd) FILTER (WHERE e.pricing_state <> 'UNPRICED'), 0) DESC, p.slug NULLS LAST
-        """, nativeQuery = true)
-    List<PracticeAggregate> aggregatePracticeScriptByPractice(
-            @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
-
-    /**
-     * The decision, embedding, and reranking ledger rows of a month, read from the ledger alone.
-     * Their cost is what {@link #aggregatePracticeScriptByPractice} splits. {@link
-     * LlmUsagePracticeScriptTotalDTO} states which of these sums equal the practices' sums.
-     */
-    @Query(
-            value = "SELECT COUNT(DISTINCT e.review_id) AS reviews, COALESCE(SUM(e.total_calls), 0)"
-                    + " AS calls, COALESCE(SUM(e.input_tokens + e.cache_read_tokens +"
-                    + " e.cache_write_tokens), 0) AS inputTokens,"
-                    + " COALESCE(SUM(e.output_tokens), 0) AS outputTokens,"
-                    + " COALESCE(SUM(e.cost_usd) FILTER (WHERE e.pricing_state <> 'UNPRICED'"
-                    + " AND e.funding_source = 'INSTANCE'), 0) AS instanceTotalCostUsd,"
-                    + " COALESCE(SUM(e.cost_usd) FILTER (WHERE e.pricing_state <> 'UNPRICED'"
-                    + " AND e.funding_source = 'WORKSPACE'), 0) AS ownProviderTotalCostUsd,"
-                    + " COUNT(DISTINCT e.review_id) FILTER (WHERE " + UNKNOWN + ")"
-                    + " AS unpricedEventCount FROM llm_usage_event e WHERE e.workspace_id ="
-                    + " :workspaceId AND e.occurred_at >= :from AND e.occurred_at < :to AND "
-                    + PRACTICE_SCRIPT_ROWS,
-            nativeQuery = true)
-    PracticeScriptTotalAggregate aggregatePracticeScriptTotal(
-            @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
-
-    interface PracticeAggregate {
-        @Nullable
-        String getPracticeSlug();
-
-        @Nullable
-        String getPracticeName();
-
-        String getModelKinds();
-
-        long getReviews();
-
-        long getCalls();
-
-        long getInputTokens();
-
-        long getOutputTokens();
-
-        BigDecimal getInstanceTotalCostUsd();
-
-        BigDecimal getOwnProviderTotalCostUsd();
-
-        long getUnpricedEventCount();
-    }
-
-    interface PracticeScriptTotalAggregate {
-        long getReviews();
-
-        long getCalls();
-
-        long getInputTokens();
-
-        long getOutputTokens();
-
-        BigDecimal getInstanceTotalCostUsd();
-
-        BigDecimal getOwnProviderTotalCostUsd();
-
-        long getUnpricedEventCount();
-    }
 
     interface JobTypeAggregate {
         String getJobType();

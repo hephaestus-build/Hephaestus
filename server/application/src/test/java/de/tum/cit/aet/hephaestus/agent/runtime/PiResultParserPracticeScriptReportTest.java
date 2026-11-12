@@ -4,10 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser.PracticeScriptRunReport;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelSlot;
-import de.tum.cit.aet.hephaestus.practices.spi.Need;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptStopReason;
@@ -15,7 +12,6 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -72,7 +68,7 @@ class PiResultParserPracticeScriptReportTest extends BaseUnitTest {
     }
 
     private static String report(boolean truncated, String... entries) {
-        return "{\"schemaVersion\":2,\"truncated\":" + truncated + ",\"practices\":[" + String.join(",", entries)
+        return "{\"schemaVersion\":3,\"truncated\":" + truncated + ",\"practices\":[" + String.join(",", entries)
                 + "]}";
     }
 
@@ -87,7 +83,6 @@ class PiResultParserPracticeScriptReportTest extends BaseUnitTest {
             program.put("kind", "builtin");
             program.putNull("digest");
         }
-        entry.putArray("models");
         entry.put("status", status);
         if (stopReason == null) {
             entry.putNull("stopReason");
@@ -184,8 +179,7 @@ class PiResultParserPracticeScriptReportTest extends BaseUnitTest {
         PracticeScriptRunReport custom = run(runs, "handles-errors-instead-of-swallowing-them");
         assertThat(custom.programDigest())
                 .isEqualTo("b71c3e9a5d2f8046c1e7a9b3d5f2e8c6a4b1d7f3e9c2a5b8d0f6e1c4a7b3d9e2");
-        assertThat(custom.calls())
-                .isEqualTo(Map.of("review", 1, "chat", 0, "decision", 0, "embedding", 0, "reranking", 0));
+        assertThat(custom.calls()).isEqualTo(Map.of("review", 1));
         assertThat(custom.coverageReached()).isEqualTo(Map.of("reads", 9, "truncatedReads", 1, "failedReads", 0));
         assertThat(custom.durationMs()).isEqualTo(61234);
         assertThat(run(runs, "leaves-the-code-clean-with-intent-revealing-comments")
@@ -193,44 +187,8 @@ class PiResultParserPracticeScriptReportTest extends BaseUnitTest {
                 .isNull();
         assertThat(run(runs, "commit-subjects-explain-each-change").durationMs())
                 .isNull();
-        assertThat(run(runs, "avoids-insecure-defaults-and-over-broad-permissions")
-                        .models())
-                .containsExactly(new ScriptModelUse(ModelSlot.DECISION, Need.REQUIRED, false, List.of()));
         assertThat(run(runs, "ships-tests-with-the-change").error())
                 .startsWith("This practice script uses the retired leads contract (meta.version).");
-    }
-
-    @Test
-    void shouldReadEachModelWithItsPurposeNeedAndReasonsNotRatedWhenTheProgramDeclaredThem() {
-        ObjectNode decision = entry("comment-quality", "ok", null);
-        decision.set("models", MAPPER.readTree("""
-            [{"slot":"decision","need":"required","bound":true,"failures":{"too-large":2,"deadline":5,"budget":0}},
-             {"slot":"chat","need":"optional","bound":true,"failures":{}}]\
-            """));
-
-        List<PracticeScriptRunReport> runs = parse(report(decision.toString(), ok("error-handling")));
-
-        assertThat(runs)
-                .extracting(PracticeScriptRunReport::models)
-                .containsExactly(
-                        List.of(
-                                new ScriptModelUse(
-                                        ModelSlot.DECISION,
-                                        Need.REQUIRED,
-                                        true,
-                                        // In the declared order of the reasons; a zero count is left out.
-                                        List.of(
-                                                new ScriptModelUse.Failure("too-large", 2),
-                                                new ScriptModelUse.Failure("deadline", 5))),
-                                new ScriptModelUse(ModelSlot.CHAT, Need.OPTIONAL, true, List.of())),
-                        List.of());
-        assertThat(runs)
-                .extracting(
-                        PracticeScriptRunReport::programKind,
-                        PracticeScriptRunReport::programDigest,
-                        PracticeScriptRunReport::durationMs)
-                .containsExactly(tuple(ScriptKind.BUILTIN, null, 10), tuple(ScriptKind.CUSTOM, DIGEST, 10));
-        assertThat(failures()).isZero();
     }
 
     @Test
@@ -391,29 +349,6 @@ class PiResultParserPracticeScriptReportTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldMapEachModelSlotToThePurposeThatServesItWhenTheProgramDeclaredIt() {
-        ObjectNode entry = entry("comment-quality", "withheld", "unavailable");
-        entry.set("models", MAPPER.readTree("""
-            [{"slot":"embedding","need":"optional","bound":false,"failures":{"unavailable":4}},
-             {"slot":"reranking","need":"required","bound":false,"failures":{}}]\
-            """));
-
-        assertThat(Objects.requireNonNull(
-                        parse(report(entry.toString())).getFirst().models()))
-                .extracting(ScriptModelUse::slot, ScriptModelUse::bound)
-                .containsExactly(tuple(ModelSlot.EMBEDDING, false), tuple(ModelSlot.RERANKING, false));
-    }
-
-    @Test
-    void shouldMirrorEveryAgentPurposeOfAPracticeScriptSlotWhenAPurposeIsAdded() {
-        assertThat(Arrays.stream(ModelSlot.values()).map(Enum::name))
-                .containsExactlyInAnyOrderElementsOf(
-                        Stream.concat(Stream.of(AgentPurpose.PRACTICE_REVIEW), AgentPurpose.practiceScript().stream())
-                                .map(purpose -> purpose.kind().name())
-                                .toList());
-    }
-
-    @Test
     void shouldRecordAnAdmittedPracticeAsNotFinishedWhenAWholeReportDoesNotNameIt() {
         List<PracticeScriptRunReport> runs = parse(report(ok("comment-quality")));
 
@@ -422,7 +357,6 @@ class PiResultParserPracticeScriptReportTest extends BaseUnitTest {
                         "error-handling",
                         ScriptRunStatus.NOT_FINISHED,
                         ScriptKind.CUSTOM,
-                        null,
                         null,
                         null,
                         null,
@@ -464,44 +398,16 @@ class PiResultParserPracticeScriptReportTest extends BaseUnitTest {
                 // A program that did not start made no call.
                 entry -> entry.put("status", "not-reached")
                         .put("stopReason", "deadline")
-                        .set(
-                                "calls",
-                                MAPPER.readTree(
-                                        "{\"review\":1,\"chat\":0,\"decision\":0,\"embedding\":0,\"reranking\":0}")),
+                        .set("calls", MAPPER.readTree("{\"review\":1}")),
                 entry -> entry.remove("calls"),
-                entry -> entry.set(
-                        "calls",
-                        MAPPER.readTree("{\"review\":-1,\"chat\":0,\"decision\":0,\"embedding\":0,\"reranking\":0}")),
-                entry -> entry.set(
-                        "calls",
-                        MAPPER.readTree(
-                                "{\"review\":0,\"chat\":0,\"decision\":0,\"embedding\":0,\"reranking\":0,\"vision\":0}")),
+                entry -> entry.set("calls", MAPPER.readTree("{\"review\":-1}")),
+                // The direct model calls of an earlier report version are no longer part of the contract.
+                entry -> entry.set("calls", MAPPER.readTree("{\"review\":0,\"decision\":0}")),
                 entry -> entry.remove("coverageReached"),
                 entry -> entry.set(
                         "coverageReached", MAPPER.readTree("{\"reads\":\"2\",\"truncatedReads\":0,\"failedReads\":0}")),
-                entry -> entry.remove("models"),
-                entry -> entry.set("models", MAPPER.readTree("{}")),
-                entry -> entry.putNull("models"),
-                entry -> entry.set(
-                        "models",
-                        MAPPER.readTree(
-                                "[{\"slot\":\"vision\",\"need\":\"required\",\"bound\":true,\"failures\":{}}]")),
-                entry -> entry.set(
-                        "models",
-                        MAPPER.readTree(
-                                "[{\"slot\":\"decision\",\"need\":\"nice-to-have\",\"bound\":true,\"failures\":{}}]")),
-                entry -> entry.set(
-                        "models",
-                        MAPPER.readTree(
-                                "[{\"slot\":\"decision\",\"need\":\"required\",\"bound\":\"yes\",\"failures\":{}}]")),
-                entry -> entry.set(
-                        "models",
-                        MAPPER.readTree(
-                                "[{\"slot\":\"decision\",\"need\":\"required\",\"bound\":true,\"failures\":{\"bored\":1}}]")),
-                entry -> entry.set(
-                        "models",
-                        MAPPER.readTree("[{\"slot\":\"decision\",\"need\":\"required\",\"bound\":true,\"failures\":{}},"
-                                + "{\"slot\":\"decision\",\"need\":\"optional\",\"bound\":true,\"failures\":{}}]")),
+                // The model slots of an earlier report version are no longer part of the contract.
+                entry -> entry.putArray("models"),
                 entry -> entry.set("reviewSessions", MAPPER.readTree("{\"modelCalls\":3,\"evidenceRefusals\":0}")),
                 entry -> entry.set(
                         "reviewSessions",
@@ -550,13 +456,13 @@ class PiResultParserPracticeScriptReportTest extends BaseUnitTest {
     @ValueSource(
             strings = {
                 "not json",
-                "{\"schemaVersion\":2,\"practices\":[],\"truncated\":false} trailing",
-                "{\"schemaVersion\":2,\"practices\":{},\"truncated\":false}",
-                "{\"schemaVersion\":2,\"practices\":[]}",
-                "{\"schemaVersion\":2,\"practices\":[],\"truncated\":\"no\"}",
+                "{\"schemaVersion\":3,\"practices\":[],\"truncated\":false} trailing",
+                "{\"schemaVersion\":3,\"practices\":{},\"truncated\":false}",
+                "{\"schemaVersion\":3,\"practices\":[]}",
+                "{\"schemaVersion\":3,\"practices\":[],\"truncated\":\"no\"}",
                 "{\"practices\":[],\"truncated\":false}",
-                "{\"schemaVersion\":1,\"practices\":[],\"truncated\":false}",
-                "{\"schemaVersion\":\"2\",\"practices\":[],\"truncated\":false}",
+                "{\"schemaVersion\":2,\"practices\":[],\"truncated\":false}",
+                "{\"schemaVersion\":\"3\",\"practices\":[],\"truncated\":false}",
                 "[]",
                 "{}"
             })
@@ -589,8 +495,8 @@ class PiResultParserPracticeScriptReportTest extends BaseUnitTest {
                 .collect(Collectors.toMap(slug -> slug, slug -> ScriptKind.BUILTIN));
         // Short entries, so that the entry limit and not the size limit refuses the larger report.
         Function<String, String> shortEntry = slug -> """
-            {"practiceSlug":"%s","program":{"kind":"builtin","digest":null},"models":[],"status":"ok",\
-            "stopReason":null,"calls":{"review":0,"chat":0,"decision":0,"embedding":0,"reranking":0},\
+            {"practiceSlug":"%s","program":{"kind":"builtin","digest":null},"status":"ok",\
+            "stopReason":null,"calls":{"review":0},\
             "coverageReached":{"reads":0,"truncatedReads":0,"failedReads":0}}\
             """.formatted(slug);
         String atLimit = report(admitted.keySet().stream()

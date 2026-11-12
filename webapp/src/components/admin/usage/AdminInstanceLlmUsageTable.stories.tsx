@@ -6,7 +6,6 @@ import { expectTargetSize, horizontalScrollParentOf } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 
 import { AdminInstanceLlmUsageTable } from "./AdminInstanceLlmUsageTable";
-import { commentQualityUsage, NO_PRACTICE_SCRIPT_USAGE, notAttributedUsage } from "./fixtures";
 
 const FX_DISCLOSURE = /reference rate published on/u;
 
@@ -137,7 +136,6 @@ function detailReportFor(row: AdminWorkspaceLlmUsage): WorkspaceLlmUsageReport {
 		...limits,
 		month: "2026-07",
 		unpricedEventCount: 0,
-		...NO_PRACTICE_SCRIPT_USAGE,
 		byJobType: [
 			{
 				jobType: "PULL_REQUEST_REVIEW",
@@ -375,48 +373,6 @@ export const Expanded: Story = {
 		await expect(
 			panel.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent),
 		).toStrictEqual(["By use", "By day"]);
-		await expect(
-			panel.queryByRole("heading", { name: "Models for practice scripts, by practice" }),
-		).toBeNull();
-	},
-};
-
-export const ExpandedWithPracticeScriptModels: Story = {
-	args: {
-		expandedWorkspaceSlug: pausedOnSharedBudget.workspaceSlug,
-		detailReport: {
-			...detailReport,
-			byPractice: [commentQualityUsage, notAttributedUsage],
-			practiceScriptTotal: {
-				reviews: 19,
-				calls: 426,
-				inputTokens: 99_500,
-				outputTokens: 1280,
-				instanceTotalCostUsd: 0.37,
-				ownProviderTotalCostUsd: 0,
-				unpricedEventCount: 0,
-			},
-		},
-	},
-	parameters: { viewport: { defaultViewport: "desktop" } },
-	play: async ({ canvas }) => {
-		const panel = within(await expandedPanelFor(canvas, pausedOnSharedBudget.displayName));
-		const table = panel.getByRole("table", {
-			name: "Spend on models for practice scripts, by practice",
-		});
-		await expect(within(table).getByText("Comments explain why")).toBeVisible();
-		await expect(within(table).queryByRole("link")).toBeNull();
-		await expect(within(table).getByRole("row", { name: /^Total/u }).textContent).toContain(
-			"$0.37",
-		);
-		for (const name of [
-			"AI spend by use",
-			"AI spend by day",
-			"Spend on models for practice scripts, by practice",
-		]) {
-			const scroller = horizontalScrollParentOf(panel.getByRole("table", { name }));
-			await expect(scroller.scrollWidth, name).toBeLessThanOrEqual(scroller.clientWidth + 1);
-		}
 	},
 };
 

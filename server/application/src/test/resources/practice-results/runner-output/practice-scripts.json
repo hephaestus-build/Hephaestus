@@ -1,5 +1,5 @@
 {
-	"schemaVersion": 2,
+	"schemaVersion": 3,
 	"truncated": false,
 	"practices": [
 		{
@@ -8,15 +8,10 @@
 				"kind": "builtin",
 				"digest": null
 			},
-			"models": [],
 			"status": "ok",
 			"stopReason": null,
 			"calls": {
-				"review": 1,
-				"chat": 0,
-				"decision": 0,
-				"embedding": 0,
-				"reranking": 0
+				"review": 1
 			},
 			"reviewSessions": {
 				"modelCalls": 1,
@@ -36,15 +31,10 @@
 				"kind": "custom",
 				"digest": "639ba97d22e254439a69de7acaf2a4079bf878f40259687d6d4562784a1921bf"
 			},
-			"models": [],
 			"status": "ok",
 			"stopReason": null,
 			"calls": {
-				"review": 0,
-				"chat": 0,
-				"decision": 0,
-				"embedding": 0,
-				"reranking": 0
+				"review": 0
 			},
 			"reviewSessions": {
 				"modelCalls": 0,
@@ -64,16 +54,11 @@
 				"kind": "custom",
 				"digest": "eb30c1bdfe5cfe8f11396886095b9e3673b3df9a7b87fba73d7fb3836681dbfb"
 			},
-			"models": [],
 			"status": "failed",
 			"stopReason": "invalid-program",
-			"error": "meta: Unrecognized key: \"limits\"",
+			"error": "A practice script must declare empty meta. Rewrite the script for this API.",
 			"calls": {
-				"review": 0,
-				"chat": 0,
-				"decision": 0,
-				"embedding": 0,
-				"reranking": 0
+				"review": 0
 			},
 			"reviewSessions": {
 				"modelCalls": 0,

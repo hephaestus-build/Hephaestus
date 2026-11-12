@@ -31,14 +31,11 @@ import { Input } from "@/components/ui/input";
 import {
 	Select,
 	SelectContent,
-	SelectGroup,
 	SelectItem,
-	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
 import {
-	LLM_API_PROTOCOL_GROUPS,
 	LLM_API_PROTOCOL_LABELS,
 	LLM_API_PROTOCOL_SELECT_ITEMS,
 	llmApiProtocolDescription,
@@ -182,12 +179,10 @@ export function LlmConnectionFields({
 	};
 
 	const applyApiProtocol = (next: LlmApiProtocol) => {
-		// Neither OpenAI nor Azure OpenAI serves a rerank API, so their address would be wrong here.
+		// Anthropic serves only its Messages API, and OpenAI and Azure OpenAI do not serve it.
 		const presetServesIt =
 			value.preset === "OTHER" ||
-			(value.preset === "ANTHROPIC"
-				? next === "anthropic-messages"
-				: next !== "cohere-rerank" && next !== "anthropic-messages");
+			(value.preset === "ANTHROPIC") === (next === "anthropic-messages");
 		update({
 			...(presetServesIt
 				? {}
@@ -272,15 +267,10 @@ export function LlmConnectionFields({
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent aria-labelledby={apiProtocolLabelId}>
-								{LLM_API_PROTOCOL_GROUPS.map(({ group, label, protocols }) => (
-									<SelectGroup key={group}>
-										<SelectLabel>{label}</SelectLabel>
-										{protocols.map((protocol) => (
-											<SelectItem key={protocol} value={protocol}>
-												{LLM_API_PROTOCOL_LABELS[protocol].label}
-											</SelectItem>
-										))}
-									</SelectGroup>
+								{LLM_API_PROTOCOL_SELECT_ITEMS.map((item) => (
+									<SelectItem key={item.value} value={item.value}>
+										{item.label}
+									</SelectItem>
 								))}
 							</SelectContent>
 						</Select>

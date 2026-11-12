@@ -90,10 +90,6 @@ export function tierMembersPhrase(tiers: readonly DataHandlingTier[]): string {
 	return andList.format(groups);
 }
 
-export function notSetForPhrase(tiers: readonly DataHandlingTier[]): string {
-	return `Not set for ${tierMembersPhrase(tiers)}`;
-}
-
 /** Client twin of the server's `DataHandlingFacts.tier()`, for the live form preview. */
 export function deriveDataHandlingTier(operatedBy: OperatedBy | undefined): DataHandlingTier {
 	if (operatedBy === undefined) {

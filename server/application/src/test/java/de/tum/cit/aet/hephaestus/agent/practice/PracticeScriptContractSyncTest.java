@@ -2,11 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.practice;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
-import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
@@ -16,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
@@ -58,18 +54,9 @@ class PracticeScriptContractSyncTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldUseTheSameModelSlotsProtocolsAndAttributionHeader() throws IOException {
+    void shouldUseTheSameContractVersionAndPracticeSlug() throws IOException {
         var source = contract();
-        assertThat(values(source, "MODEL_SLOTS"))
-                .containsExactlyElementsOf(Arrays.stream(ModelKind.values())
-                        .map(kind -> kind.name().toLowerCase(Locale.ROOT))
-                        .toList());
-        assertThat(values(source, "PROTOCOLS"))
-                .containsExactlyElementsOf(Arrays.stream(LlmApiProtocol.values())
-                        .map(LlmApiProtocol::wire)
-                        .toList());
-        assertThat(source)
-                .contains("CONTRACT_VERSION = 3", JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PRACTICE_HEADER);
+        assertThat(source).contains("CONTRACT_VERSION = 3");
         assertThat(source).contains("PRACTICE_SLUG = /^" + SandboxLayout.PRACTICE_SLUG.pattern() + "$/u");
     }
 }

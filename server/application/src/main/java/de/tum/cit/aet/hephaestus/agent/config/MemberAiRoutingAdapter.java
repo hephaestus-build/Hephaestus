@@ -51,14 +51,6 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
                 .filter(models::isAvailable)
                 .filter(row -> people.stream()
                         .allMatch(person -> permitsModel(workspaceId, person, models.connectionRef(row))));
-        if (purpose != AgentPurpose.PRACTICE_REVIEW) {
-            var review = routePeople(workspaceId, AgentPurpose.PRACTICE_REVIEW, people);
-            if (review.isEmpty()) return Optional.empty();
-            var ceiling = review.get().getDataHandlingTier();
-            candidates = candidates.filter(row -> ceiling == DataHandlingTier.UNDECLARED
-                    ? row.getDataHandlingTier() == DataHandlingTier.UNDECLARED
-                    : row.getDataHandlingTier().isWithin(ceiling));
-        }
         var ordered = candidates
                 .sorted(Comparator.comparingInt(row -> switch (row.getDataHandlingTier()) {
                     case IN_HOUSE -> 0;
@@ -91,44 +83,9 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
     }
 
     /**
-     * The binding that serves one practice script purpose of a review about the developer. A practice script sends
-     * the reviewed work to its models, so its ceiling is the stricter of the developer's ceiling and the tier of
-     * the review binding that serves the developer: work that the review keeps in-house never goes to a cloud
-     * model for practice scripts. Empty when no review binding serves the developer.
-     */
-    @Transactional(readOnly = true)
-    public Optional<WorkspaceAgentBinding> practiceScriptBinding(
-            long workspaceId, AgentPurpose purpose, @Nullable Long developerId) {
-        var review = route(workspaceId, AgentPurpose.PRACTICE_REVIEW, developerId);
-        if (review.isEmpty()) return Optional.empty();
-        var reviewTier = review.get().getDataHandlingTier();
-        if (reviewTier == DataHandlingTier.UNDECLARED) return route(workspaceId, purpose, developerId);
-        return loosestWithin(bindings.findByWorkspaceIdAndPurpose(workspaceId, purpose), reviewTier);
-    }
-
-    /**
-     * The tiers whose members find no ready binding of {@code purpose}: {@code IN_HOUSE} and {@code CLOUD} for
-     * the members who chose them, and {@code UNDECLARED} for the members who have not chosen, when the workspace
-     * lets them leave the choice open. The tiers are judged as {@link #servedTiers} judges them.
-     */
-    @Transactional(readOnly = true)
-    public List<DataHandlingTier> unservedTiers(long workspaceId, AgentPurpose purpose) {
-        var rows = bindings.findByWorkspaceIdAndPurpose(workspaceId, purpose);
-        var reviewRows = AgentPurpose.practiceScript().contains(purpose)
-                ? bindings.findByWorkspaceIdAndPurpose(workspaceId, AgentPurpose.PRACTICE_REVIEW)
-                : List.<WorkspaceAgentBinding>of();
-        boolean choiceOptional = choiceOptional(workspaceId);
-        var serving = serving(rows, reviewRows, choiceOptional);
-        return memberTiers(choiceOptional).stream()
-                .filter(tier -> !serving.containsKey(tier))
-                .toList();
-    }
-
-    /**
      * For each purpose and binding tier of the workspace, the members that the binding serves now, named by the
-     * tier of their choice as in {@link #unservedTiers}. A practice script purpose is capped at the tier of the review
-     * binding that serves the same members, as {@link #practiceScriptBinding} caps it. Members whom no review binding
-     * serves are judged at their own ceiling: no review runs for them, and the review purpose reports that gap.
+     * tier of their choice: {@code IN_HOUSE} and {@code CLOUD} for the members who chose them, and {@code
+     * UNDECLARED} for the members who have not chosen, when the workspace lets them leave the choice open.
      */
     @Transactional(readOnly = true)
     public Map<AgentPurpose, Map<DataHandlingTier, List<DataHandlingTier>>> servedTiers(long workspaceId) {
@@ -140,11 +97,8 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         boolean choiceOptional = choiceOptional(workspaceId);
         var served = new EnumMap<AgentPurpose, Map<DataHandlingTier, List<DataHandlingTier>>>(AgentPurpose.class);
         rows.forEach((purpose, own) -> {
-            var reviewRows = AgentPurpose.practiceScript().contains(purpose)
-                    ? rows.getOrDefault(AgentPurpose.PRACTICE_REVIEW, List.of())
-                    : List.<WorkspaceAgentBinding>of();
             var bySlot = new EnumMap<DataHandlingTier, List<DataHandlingTier>>(DataHandlingTier.class);
-            serving(own, reviewRows, choiceOptional)
+            serving(own, choiceOptional)
                     .forEach((member, binding) -> bySlot.computeIfAbsent(
                                     binding.getDataHandlingTier(), slot -> new ArrayList<>())
                             .add(member));
@@ -153,26 +107,16 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         return served;
     }
 
-    private static List<DataHandlingTier> memberTiers(boolean choiceOptional) {
-        return choiceOptional
-                ? List.of(DataHandlingTier.IN_HOUSE, DataHandlingTier.CLOUD, DataHandlingTier.UNDECLARED)
-                : List.of(DataHandlingTier.IN_HOUSE, DataHandlingTier.CLOUD);
-    }
-
     private boolean choiceOptional(long workspaceId) {
         return !preferences.forDeveloper(workspaceId, null).choiceRequired();
     }
 
-    // Direct-model routes cannot exceed the tier permitted by the review route.
     private Map<DataHandlingTier, WorkspaceAgentBinding> serving(
-            List<WorkspaceAgentBinding> rows, List<WorkspaceAgentBinding> reviewRows, boolean choiceOptional) {
+            List<WorkspaceAgentBinding> rows, boolean choiceOptional) {
         var serving = new EnumMap<DataHandlingTier, WorkspaceAgentBinding>(DataHandlingTier.class);
         for (var choice : List.of(AiChoice.IN_HOUSE_ONLY, AiChoice.CLOUD)) {
             var ceiling = ceiling(choice).orElseThrow();
-            var effective = loosestWithin(reviewRows, ceiling)
-                    .map(WorkspaceAgentBinding::getDataHandlingTier)
-                    .orElse(ceiling);
-            loosestWithin(rows, effective).ifPresent(binding -> serving.put(ceiling, binding));
+            loosestWithin(rows, ceiling).ifPresent(binding -> serving.put(ceiling, binding));
         }
         if (choiceOptional) {
             rows.stream()

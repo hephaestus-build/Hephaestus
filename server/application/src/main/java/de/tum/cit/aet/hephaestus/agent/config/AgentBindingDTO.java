@@ -25,8 +25,7 @@ public record AgentBindingDTO(
         @NonNull
         @Schema(
                 description = "The members this binding serves now, named by the tier of their choice: IN_HOUSE and "
-                        + "CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. A "
-                        + "decision, embedding or reranking binding serves no member whose review model is stricter. "
+                        + "CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. "
                         + "Empty when the binding serves no member.")
         List<DataHandlingTier> servedTiers) {
     public static AgentBindingDTO from(

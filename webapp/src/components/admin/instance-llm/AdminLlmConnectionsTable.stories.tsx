@@ -25,7 +25,7 @@ const mockConnections: LlmConnection[] = [
 		displayName: "On-prem GPU (vLLM)",
 		authMode: "BEARER",
 		apiProtocol: "openai-completions",
-		purposes: ["PRACTICE_REVIEW", "MENTOR", "PRACTICE_DECISION"],
+		purposes: ["PRACTICE_REVIEW", "MENTOR"],
 		baseUrl: "https://gpu.internal.example.com/v1",
 		enabled: false,
 		hasApiKey: false,

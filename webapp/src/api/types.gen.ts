@@ -286,13 +286,13 @@ export type AgentBinding = {
     dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
     enabled: boolean;
     instanceModelId?: number;
-    purpose: 'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING';
+    purpose: 'PRACTICE_REVIEW' | 'MENTOR';
     /**
      * True when the bound model is available to run right now
      */
     ready: boolean;
     /**
-     * The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. A decision, embedding or reranking binding serves no member whose review model is stricter. Empty when the binding serves no member.
+     * The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the binding serves no member.
      */
     servedTiers: Array<'IN_HOUSE' | 'CLOUD' | 'UNDECLARED'>;
     timeoutSeconds?: number;
@@ -425,7 +425,7 @@ export type AvailableLlmModel = {
     /**
      * The purposes a binding may assign this model to, from its connection's protocol
      */
-    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING'>;
+    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR'>;
     /**
      * Reasoning effort requested of the model; null sends none, the provider's default applies
      */
@@ -916,7 +916,7 @@ export type CreateLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses';
     /**
      * Credential shape (default BEARER)
      */
@@ -1059,7 +1059,7 @@ export type CreateWorkspaceLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses';
     /**
      * Credential shape (default BEARER)
      */
@@ -2279,7 +2279,7 @@ export type LlmConnection = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses';
     /**
      * Credential shape
      */
@@ -2315,7 +2315,7 @@ export type LlmConnection = {
     /**
      * The purposes a model on this connection can serve, from its protocol
      */
-    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING'>;
+    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR'>;
     /**
      * Unique slug
      */
@@ -2558,68 +2558,6 @@ export type LlmUsageByJobType = {
     totalCalls: number;
     /**
      * Runs of this job type with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script call counts toward the run of its review. Those calls are excluded from both totals above.
-     */
-    unpricedEventCount: number;
-};
-
-/**
- * The decision, embedding and reranking calls that one practice's script made this month. Each call names the practice that made it.
- */
-export type LlmUsageByPractice = {
-    calls: number;
-    inputTokens: number;
-    /**
-     * This practice's spend on shared (instance) models, in USD.
-     */
-    instanceTotalCostUsd: number;
-    outputTokens: number;
-    /**
-     * This practice's spend on this workspace's own provider(s), in USD.
-     */
-    ownProviderTotalCostUsd: number;
-    /**
-     * The practice name. Null when the slug names no current practice.
-     */
-    practiceName?: string;
-    /**
-     * The practice slug. Null for calls that name no practice: calls recorded before each call had its own row, and calls of a deleted practice.
-     */
-    practiceSlug?: string;
-    /**
-     * The models for practice scripts that the script called.
-     */
-    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING'>;
-    /**
-     * Reviews in which the script called a model for practice scripts. A review with several practices counts for each of them.
-     */
-    reviews: number;
-    /**
-     * Reviews with a call of this practice whose price is not yet known, each review counted once. Those calls are excluded from both totals above. A review with several practices counts for each of them.
-     */
-    unpricedEventCount: number;
-};
-
-/**
- * The decision, embedding and reranking calls of this month, in total. calls, inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and unpricedEventCount do not: one review can count for several practices there.
- */
-export type LlmUsagePracticeScriptTotal = {
-    calls: number;
-    inputTokens: number;
-    /**
-     * Confirmed practice script spend on shared (instance) models, in USD.
-     */
-    instanceTotalCostUsd: number;
-    outputTokens: number;
-    /**
-     * Practice script spend on this workspace's own provider(s), in USD.
-     */
-    ownProviderTotalCostUsd: number;
-    /**
-     * Distinct reviews in which a practice script called a model for practice scripts.
-     */
-    reviews: number;
-    /**
-     * Distinct reviews with a practice script call whose price is not yet known. Those rows are excluded from both totals above.
      */
     unpricedEventCount: number;
 };
@@ -3896,36 +3834,12 @@ export type PracticeReviewSettings = {
     scopeSummary: PracticeReviewScopeSummary;
 };
 
-export type PracticeScriptAsOf = {
-    finishedAt: Date;
-    jobId: string;
-    reviewId: string;
-};
-
-export type PracticeScriptModel = {
-    cacheReadTokens: number;
-    cacheWriteTokens: number;
-    calls: number;
-    dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED' | null;
-    inputTokens: number;
-    kind: 'CHAT' | 'DECISION' | 'EMBEDDING' | 'RERANKING';
-    modelId: string | null;
-    outputTokens: number;
-};
-
-export type PracticeScriptNeed = {
-    need: 'required' | 'optional';
-    slot: 'chat' | 'decision' | 'embedding' | 'reranking';
-    unmetTiers: Array<'IN_HOUSE' | 'CLOUD' | 'UNDECLARED'>;
-};
-
 export type PracticeScriptRun = {
     attempt: number;
     durationMs: null | number;
     error: string | null;
     finishedAt: Date;
     jobId: string;
-    models: Array<PracticeScriptModel>;
     /**
      * Why a run that stopped as OFF_FORMAT has no result, when the runner's counts or the built-in's contract prove it. Absent otherwise; then the stop reason stands alone.
      */
@@ -3939,14 +3853,6 @@ export type PracticeScriptRun = {
     scriptKind: 'BUILTIN' | 'CUSTOM';
     status: 'OK' | 'WITHHELD' | 'FAILED' | 'NOT_REACHED' | 'NOT_FINISHED';
     stopReason: 'UNAVAILABLE' | 'BUDGET' | 'DEADLINE' | 'TOO_LARGE' | 'OFF_FORMAT' | 'REFUSED' | 'ERROR' | 'CANCELLED' | 'INVALID_SCRIPT' | 'INVALID_CANDIDATE' | 'UNREAD_EVIDENCE' | null;
-};
-
-export type PracticeScriptSummary = {
-    asOf: PracticeScriptAsOf | null;
-    needs: Array<PracticeScriptNeed>;
-    practiceName: string;
-    practiceSlug: string;
-    scriptChanged: boolean;
 };
 
 export type PracticeStanding = {
@@ -4082,7 +3988,7 @@ export type ProbeLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses';
     /**
      * Credential shape (default BEARER)
      */
@@ -7050,7 +6956,7 @@ export type WorkspaceLlmConnection = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses';
     /**
      * Credential shape
      */
@@ -7086,7 +6992,7 @@ export type WorkspaceLlmConnection = {
     /**
      * The purposes a model on this connection can serve, from its protocol
      */
-    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING'>;
+    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR'>;
     /**
      * Unique slug within the workspace
      */
@@ -7242,10 +7148,6 @@ export type WorkspaceLlmUsageReport = {
     byDay: Array<LlmUsageByDay>;
     byJobType: Array<LlmUsageByJobType>;
     /**
-     * The decision, embedding and reranking calls of practice scripts, one entry per practice, most spend first. Their spend is already part of byJobType. Chat calls of practice scripts are in each review's own cost and not here.
-     */
-    byPractice: Array<LlmUsageByPractice>;
-    /**
      * Display-only conversion when the instance has a display currency. Absent = show USD only.
      */
     fx?: FxRateInfo;
@@ -7297,10 +7199,6 @@ export type WorkspaceLlmUsageReport = {
      * Own-provider calls this month whose usage was not measured, and the most they can cost. Not part of ownProviderTotalCostUsd.
      */
     ownProviderUnmeasured: LlmUnmeasuredUsage;
-    /**
-     * The byPractice entries in total, read from the ledger.
-     */
-    practiceScriptTotal: LlmUsagePracticeScriptTotal;
     /**
      * Runs this month (job attempts and mentor turn attempts, either purse) with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified, and that has no upper bound, each counted once. A practice script call counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.
      */
@@ -11193,7 +11091,7 @@ export type DeleteAgentData = {
          * Workspace slug
          */
         workspaceSlug: string;
-        purpose: 'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING';
+        purpose: 'PRACTICE_REVIEW' | 'MENTOR';
     };
     query?: {
         dataHandlingTier?: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
@@ -11217,7 +11115,7 @@ export type ConfigureAgentData = {
          * Workspace slug
          */
         workspaceSlug: string;
-        purpose: 'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING';
+        purpose: 'PRACTICE_REVIEW' | 'MENTOR';
     };
     query?: {
         dataHandlingTier?: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
@@ -13571,27 +13469,6 @@ export type GetItemTraceResponses = {
 };
 
 export type GetItemTraceResponse = GetItemTraceResponses[keyof GetItemTraceResponses];
-
-export type ListPracticeScriptNeedsData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/practices/practice-script-needs';
-};
-
-export type ListPracticeScriptNeedsResponses = {
-    /**
-     * OK
-     */
-    200: Array<PracticeScriptSummary>;
-};
-
-export type ListPracticeScriptNeedsResponse = ListPracticeScriptNeedsResponses[keyof ListPracticeScriptNeedsResponses];
 
 export type ListPracticeReleasesData = {
     body?: never;

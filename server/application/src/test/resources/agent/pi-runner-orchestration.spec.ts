@@ -2416,7 +2416,6 @@ if (scenario !== undefined && scenario !== "") {
 										["scope-native-read-correction", "12"],
 									]).get(stage) ?? "6",
 								PI_PRACTICE_OUTPUT_TOKENS: "24000",
-								PI_DIRECT_MODEL_TOKENS: "1000",
 								LLM_PROXY_URL: "https://unused.invalid",
 								LLM_PROXY_TOKEN: "test-token",
 							},
@@ -2495,7 +2494,7 @@ if (scenario !== undefined && scenario !== "") {
 					const reportPath = nodePath.join(cwd, "out/practice-scripts.json");
 					assert.ok(existsSync(reportPath), child.stderr);
 					const report = recordOf(JSON.parse(readFileSync(reportPath, "utf8")));
-					assert.equal(report.schemaVersion, 2);
+					assert.equal(report.schemaVersion, 3);
 					const executions = new Map(
 						listOf(report.practices).map((entry) => [
 							String(recordOf(entry).practiceSlug),

@@ -10,10 +10,7 @@ import org.jspecify.annotations.Nullable;
 public enum LlmApiProtocol {
     ANTHROPIC_MESSAGES("anthropic-messages", ModelKind.CHAT, "/v1/messages"),
     OPENAI_COMPLETIONS("openai-completions", ModelKind.CHAT, "/chat/completions"),
-    OPENAI_RESPONSES("openai-responses", ModelKind.CHAT, "/responses"),
-    OPENAI_DECISIONS("openai-decisions", ModelKind.DECISION, "/decisions"),
-    OPENAI_EMBEDDINGS("openai-embeddings", ModelKind.EMBEDDING, "/embeddings"),
-    COHERE_RERANK("cohere-rerank", ModelKind.RERANKING, "/rerank");
+    OPENAI_RESPONSES("openai-responses", ModelKind.CHAT, "/responses");
 
     private final String wire;
     private final ModelKind kind;
@@ -34,9 +31,8 @@ public enum LlmApiProtocol {
         return kind;
     }
 
-    /** Chat completions can also serve decisions through token log probabilities. */
     public boolean serves(ModelKind slot) {
-        return kind == slot || (this == OPENAI_COMPLETIONS && slot == ModelKind.DECISION);
+        return kind == slot;
     }
 
     /** The path appended to the connection's base URL for one call. */

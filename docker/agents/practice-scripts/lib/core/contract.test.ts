@@ -6,7 +6,7 @@ import {
 	CANDIDATE_REFUSALS,
 	MAX_REVIEW_OPTIONS_BYTES,
 	parseCandidate,
-	parseMeta,
+	metaSchema,
 	parseReviewOptions,
 	type CandidateRefusal,
 } from "./contract.ts";
@@ -375,22 +375,17 @@ void describe("the candidate bounds", () => {
 });
 
 void describe("the program's meta", () => {
-	void test("names the direct models a program needs, and nothing else", () => {
-		assert.deepEqual(parseMeta({}), { meta: {} });
-		assert.deepEqual(parseMeta({ models: { chat: "required", embedding: "optional" } }), {
-			meta: { models: { chat: "required", embedding: "optional" } },
-		});
+	void test("is empty, and holds nothing else", () => {
+		assert.ok(metaSchema.safeParse({}).success);
 		for (const meta of [
-			{ models: { chat: "sometimes" } },
-			{ models: { vision: "required" } },
+			{ models: { chat: "required" } },
+			{ models: {} },
 			{ limits: {} },
 			{ version: 1 },
 			null,
 			"meta",
 		]) {
-			const parsed = parseMeta(meta);
-			assert.ok("error" in parsed, JSON.stringify(meta));
-			assert.match(parsed.error, /^meta: /u);
+			assert.equal(metaSchema.safeParse(meta).success, false, JSON.stringify(meta));
 		}
 	});
 });

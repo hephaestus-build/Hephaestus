@@ -1,11 +1,10 @@
-import { ChevronDown, InfoIcon } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { type ReactNode, type SubmitEvent, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { z } from "zod";
 import type { AgentBinding, AgentBindingRequest, AvailableLlmModel } from "@/api/types.gen";
 import { definitionFor } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { isPracticeScriptPurpose } from "@/components/practice-vocabulary/agent-purpose-defs";
 import {
 	BINDING_READINESS_DEFS,
 	type BindingReadiness,
@@ -112,11 +111,6 @@ interface AgentBindingEditorProps {
 	aiChoiceRequired: boolean;
 	ownProviderAllowed: boolean;
 	practiceReviewsOff: boolean;
-	/**
-	 * A Cloud assignment for practice scripts that Cloud members do not get: their reviews run on an In-house
-	 * model, and a script model is never looser than its review's.
-	 */
-	unusedForCloudMembers: boolean;
 	pendingWrite?: BindingWrite;
 	saveError?: string;
 	onSave: (target: BindingTarget, body: AgentBindingRequest) => void;
@@ -130,7 +124,6 @@ export function AgentBindingEditor({
 	aiChoiceRequired,
 	ownProviderAllowed,
 	practiceReviewsOff,
-	unusedForCloudMembers,
 	pendingWrite,
 	saveError,
 	onSave,
@@ -150,13 +143,12 @@ export function AgentBindingEditor({
 	const noModels = !availableModels.some(
 		(model) => pickerTier === undefined || model.dataHandlingTier === pickerTier,
 	);
-	const pickerExplainsEmpty = isPracticeScriptPurpose(purpose) && availableModels.length === 0;
 	const boundModel = modelOf(binding, availableModels);
 	// A bound model whose facts were re-declared has dropped out of this row: the picker still names
 	// it on the trigger, and the row says why it stopped serving.
 	const boundModelMoved =
 		boundModel !== undefined && pickerTier !== undefined && boundModel.dataHandlingTier !== tier;
-	const hintShown = boundModelMoved || (noModels && !pickerExplainsEmpty);
+	const hintShown = boundModelMoved || noModels;
 
 	const [selection, setSelection] = useState<ModelSelection | null>(bindingToSelection(binding));
 	const [submitted, setSubmitted] = useState<ModelSelection | null>(null);
@@ -167,7 +159,6 @@ export function AgentBindingEditor({
 		String(binding?.timeoutSeconds ?? ceiling.max),
 	);
 	const [showAdvanced, setShowAdvanced] = useState(false);
-	const hasRunLimits = purpose === "PRACTICE_REVIEW" || purpose === "MENTOR";
 	const [showErrors, setShowErrors] = useState(false);
 	const limits = runLimitsSchema(ceiling).safeParse({ timeoutSeconds });
 	const fieldErrors = limitErrors(limits);
@@ -178,11 +169,9 @@ export function AgentBindingEditor({
 	const modelLabelId = `${rowId}-model-label`;
 	const modelHintId = `${rowId}-model-hint`;
 	const modelErrorId = `${rowId}-model-error`;
-	const noteId = `${rowId}-note`;
 	const saveErrorId = `${rowId}-save-error`;
 	const timeoutErrorId = `${rowId}-timeout-error`;
 	const modelDescribedBy = Object.entries({
-		[noteId]: unusedForCloudMembers,
 		[modelHintId]: hintShown,
 		[modelErrorId]: hasText(modelError),
 		[saveErrorId]: hasText(refusal),
@@ -223,13 +212,6 @@ export function AgentBindingEditor({
 				aiChoiceRequired={aiChoiceRequired}
 				readiness={binding && !practiceReviewsOff ? bindingReadiness(binding) : null}
 			/>
-			{unusedForCloudMembers && (
-				<p id={noteId} className="flex gap-2 text-sm text-muted-foreground">
-					<InfoIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-					Cloud members’ reviews run on an In-house model, so this model is not used. Assign a Cloud
-					model for practice reviews to use it.
-				</p>
-			)}
 			<form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-2">
 				{/* Picker, switch and buttons on one line from `md`; the switch and buttons sit level
 				    with the picker, below its label, whatever hint grows under it. */}
@@ -243,8 +225,6 @@ export function AgentBindingEditor({
 							aria-labelledby={modelLabelId}
 							availableModels={availableModels}
 							tier={pickerTier}
-							purpose={purpose}
-							ownProviderAllowed={ownProviderAllowed}
 							value={selection}
 							onChange={setSelection}
 							disabled={pending || noModels}
@@ -283,46 +263,44 @@ export function AgentBindingEditor({
 					/>
 				</div>
 
-				{hasRunLimits && (
-					<Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
-						<CollapsibleTrigger
-							render={
-								<Button type="button" variant="ghost" size="sm" className="group/adv -ml-2">
-									Advanced{forRow}
-									<ChevronDown
-										className="transition-transform group-aria-expanded/adv:rotate-180"
-										aria-hidden
+				<Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+					<CollapsibleTrigger
+						render={
+							<Button type="button" variant="ghost" size="sm" className="group/adv -ml-2">
+								Advanced{forRow}
+								<ChevronDown
+									className="transition-transform group-aria-expanded/adv:rotate-180"
+									aria-hidden
+								/>
+							</Button>
+						}
+					/>
+					<CollapsibleContent>
+						<FieldSet className="pt-2 pb-2">
+							<FieldLegend variant="label">Limits</FieldLegend>
+							<FieldGroup>
+								<Field data-invalid={Boolean(timeoutError)}>
+									<FieldLabel htmlFor={`${rowId}-timeout`}>Timeout (seconds){forRow}</FieldLabel>
+									<Input
+										id={`${rowId}-timeout`}
+										type="number"
+										inputMode="numeric"
+										min={MIN_TIMEOUT_SECONDS}
+										max={ceiling.max}
+										value={timeoutSeconds}
+										aria-invalid={Boolean(timeoutError)}
+										aria-describedby={hasText(timeoutError) ? timeoutErrorId : undefined}
+										onChange={(e) => setTimeoutSeconds(e.target.value)}
+										disabled={pending}
 									/>
-								</Button>
-							}
-						/>
-						<CollapsibleContent>
-							<FieldSet className="pt-2 pb-2">
-								<FieldLegend variant="label">Limits</FieldLegend>
-								<FieldGroup>
-									<Field data-invalid={Boolean(timeoutError)}>
-										<FieldLabel htmlFor={`${rowId}-timeout`}>Timeout (seconds){forRow}</FieldLabel>
-										<Input
-											id={`${rowId}-timeout`}
-											type="number"
-											inputMode="numeric"
-											min={MIN_TIMEOUT_SECONDS}
-											max={ceiling.max}
-											value={timeoutSeconds}
-											aria-invalid={Boolean(timeoutError)}
-											aria-describedby={hasText(timeoutError) ? timeoutErrorId : undefined}
-											onChange={(e) => setTimeoutSeconds(e.target.value)}
-											disabled={pending}
-										/>
-										{hasText(timeoutError) && (
-											<FieldError id={timeoutErrorId}>{timeoutError}</FieldError>
-										)}
-									</Field>
-								</FieldGroup>
-							</FieldSet>
-						</CollapsibleContent>
-					</Collapsible>
-				)}
+									{hasText(timeoutError) && (
+										<FieldError id={timeoutErrorId}>{timeoutError}</FieldError>
+									)}
+								</Field>
+							</FieldGroup>
+						</FieldSet>
+					</CollapsibleContent>
+				</Collapsible>
 			</form>
 		</div>
 	);

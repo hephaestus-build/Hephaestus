@@ -4,7 +4,6 @@ import { expect, fn, within } from "storybook/test";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { withStandardPage } from "@/stories/decorators";
 import { STORY_NOW } from "@/stories/story-clock";
-import { precedes } from "@/test/dom";
 
 import {
 	dayOfMonth,
@@ -13,7 +12,6 @@ import {
 	usageReport,
 	withMonthTotals,
 	withOwnProvider,
-	withPracticeScriptUsage,
 } from "./fixtures";
 import { addMonths, formatMonthLabel } from "./usage-utils";
 import { WorkspaceUsageReport } from "./WorkspaceUsageReport";
@@ -110,29 +108,6 @@ export const UnmeasuredCalls: Story = {
 		await expect(
 			own.getByText("Up to $0.05 more from 1 call whose usage was not measured"),
 		).toBeVisible();
-	},
-};
-
-const PRACTICE_SCRIPT_CARD = "Models for practice scripts, by practice";
-
-export const PracticeScriptModelsByPractice: Story = {
-	args: { report: withPracticeScriptUsage(capped) },
-	play: async ({ canvas }) => {
-		const title = await canvas.findByRole("heading", { name: PRACTICE_SCRIPT_CARD });
-		const runTypes = canvas.getByRole("heading", { name: "By use" });
-		await expect(precedes(runTypes, title)).toBe(true);
-		const link = canvas.getByRole("link", { name: "Comments explain why" });
-		await expect(link.getAttribute("href")).toMatch(/^\/w\/acme\/admin\/practices\?/u);
-		canvas.getByText(
-			"Decision, embedding and reranking calls from finished reviews, to date. Chat calls from scripts are in each review’s cost. A review that ran several scripts counts once in the total.",
-		);
-	},
-};
-
-export const NoPracticeScriptCalls: Story = {
-	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("By use")).toBeVisible();
-		await expect(canvas.queryByText(PRACTICE_SCRIPT_CARD)).toBeNull();
 	},
 };
 
@@ -429,7 +404,7 @@ export const Empty: Story = {
 export const Dark: Story = {
 	args: {
 		report: {
-			...withMonthTotals(withPracticeScriptUsage(capped), {
+			...withMonthTotals(capped, {
 				instanceTotalCostUsd: 25.0142,
 				unpricedEventCount: 7,
 			}),
@@ -441,9 +416,8 @@ export const Dark: Story = {
 	},
 	globals: { theme: "dark" },
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByRole("heading", { name: PRACTICE_SCRIPT_CARD })).toBeVisible();
 		await expect(
-			canvas.getByRole("progressbar", { name: "Shared-model budget used" }),
+			await canvas.findByRole("progressbar", { name: "Shared-model budget used" }),
 		).toBeVisible();
 		await expect(within(await tileOf(canvas, "Shared models")).getByText("Paused")).toBeVisible();
 		const own = within(await tileOf(canvas, "Own provider"));

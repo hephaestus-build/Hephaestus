@@ -330,15 +330,10 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         databaseTestUtils.cleanDatabase();
         when(budget.canRequest(anyLong(), eq(ReviewKind.ITEM), isNull())).thenReturn(true);
         when(models.models(anyLong(), anyList()))
-                .thenReturn(List.of(
-                        new BoundModelSlot("chat", ModelKind.CHAT, null),
-                        new BoundModelSlot("decision", ModelKind.DECISION, null),
-                        new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                        new BoundModelSlot("reranking", ModelKind.RERANKING, null),
-                        new BoundModelSlot(
-                                "review",
-                                ModelKind.CHAT,
-                                new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of()))));
+                .thenReturn(List.of(new BoundModelSlot(
+                        "review",
+                        ModelKind.CHAT,
+                        new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of()))));
     }
 
     @AfterEach

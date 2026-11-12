@@ -1,15 +1,7 @@
-import { type MouseEvent, type ReactNode, useId } from "react";
 import { definitionFor } from "@/components/common/status-def";
 
 import type { AvailableLlmModel } from "@/api/types.gen";
-import { InlineLink } from "@/components/common/InlineLink";
 import { AiMark } from "@/components/icons/AiMark";
-import {
-	UNKNOWN_AGENT_PURPOSE_DEF,
-	AGENT_PURPOSE_DEFS,
-	type AgentPurpose,
-	isPracticeScriptPurpose,
-} from "@/components/practice-vocabulary/agent-purpose-defs";
 import {
 	UNKNOWN_DATA_HANDLING_DEF,
 	DATA_HANDLING_DEFS,
@@ -17,7 +9,6 @@ import {
 } from "@/components/practice-vocabulary/data-handling-defs";
 import { DataHandlingMark } from "@/components/practice-vocabulary/DataHandlingMark";
 import { PURSE_DEFS } from "@/components/practice-vocabulary/purse-defs";
-import { FieldDescription } from "@/components/ui/field";
 import {
 	Select,
 	SelectContent,
@@ -27,22 +18,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { LLM_API_PROTOCOL_LABELS, practiceScriptApiFor } from "@/lib/llm-api-protocol-labels";
 import { priceLabel } from "@/lib/llm-pricing";
 import { hasText } from "@/lib/text";
-
-export const PROVIDER_PANEL_ID = "provider-panel";
-
-// Move focus directly within this page; a bare fragment would pass through the router.
-function revealProviderPanel(event: MouseEvent<HTMLAnchorElement>) {
-	const panel = event.currentTarget.ownerDocument.getElementById(PROVIDER_PANEL_ID);
-	if (!panel) {
-		return;
-	}
-	event.preventDefault();
-	panel.scrollIntoView({ block: "start" });
-	panel.focus({ preventScroll: true });
-}
 
 export interface ModelSelection {
 	scope: "SHARED" | "WORKSPACE";
@@ -60,16 +37,6 @@ export interface ModelPickerProps {
 	 * `listedModels`, because only it knows whether the reader can add a model.
 	 */
 	tier?: DataHandlingTier;
-	/**
-	 * The purpose the model is assigned to. A purpose for practice scripts with no model at all says what to
-	 * connect, and a chosen model that will not serve it well says why, under the picker.
-	 */
-	purpose?: AgentPurpose;
-	/**
-	 * Whether this workspace may add its own providers and models. It decides who the hints send the
-	 * admin to: the connection form below, or an instance admin.
-	 */
-	ownProviderAllowed: boolean;
 	disabled?: boolean;
 	invalid?: boolean;
 	"aria-describedby"?: string;
@@ -106,63 +73,6 @@ function optionLabel(model: AvailableLlmModel): string {
 		UNKNOWN_DATA_HANDLING_DEF,
 	).label;
 	return `${model.displayName} ${priceLabel(model, "workspace")} ${model.connectionDisplayName} ${tier}`;
-}
-
-const REASONING_HINT =
-	"This model reasons before it answers. Decisions need a model that answers at once with token probabilities.";
-/**
- * The host's limit is a budget and the workspace's own is a cap. Only an instance admin prices a
- * shared model; the workspace prices its own.
- */
-const RERANK_UNPRICED_HINT = {
-	SHARED:
-		"If this provider reports no tokens, its calls count as unpriced, which pauses reviews while their spend has a monthly budget. Ask an instance admin to set No metered API cost for a self-hosted reranker.",
-	WORKSPACE:
-		"If this provider reports no tokens, its calls count as unpriced, which pauses reviews while their spend has a monthly cap. Set No metered API cost on this model below for a self-hosted reranker.",
-} satisfies Record<ModelSelection["scope"], string>;
-
-function purposeHint(
-	purpose: AgentPurpose | undefined,
-	availableModels: AvailableLlmModel[],
-	selected: AvailableLlmModel | undefined,
-	ownProviderAllowed: boolean,
-): ReactNode {
-	if (purpose === undefined) {
-		return undefined;
-	}
-	if (!isPracticeScriptPurpose(purpose)) {
-		return undefined;
-	}
-	const { noun } = definitionFor(AGENT_PURPOSE_DEFS, purpose, UNKNOWN_AGENT_PURPOSE_DEF);
-	if (availableModels.length === 0) {
-		if (!ownProviderAllowed) {
-			return `No ${noun} yet. Ask an instance admin to share one.`;
-		}
-		const api = practiceScriptApiFor(purpose);
-		return (
-			<>
-				No {noun} yet. Connect a provider
-				{api === undefined ? "" : ` with the ${LLM_API_PROTOCOL_LABELS[api].label}`} under{" "}
-				<InlineLink render={<a href={`#${PROVIDER_PANEL_ID}`} onClick={revealProviderPanel} />}>
-					Your providers
-				</InlineLink>
-				, then add its model.
-			</>
-		);
-	}
-	// `NONE` is an effort that asks for no reasoning, which is what a decision needs.
-	const reasons = selected?.reasoningEffort !== undefined && selected.reasoningEffort !== "NONE";
-	if (purpose === "PRACTICE_DECISION" && reasons) {
-		return REASONING_HINT;
-	}
-	if (
-		purpose === "PRACTICE_RERANKING" &&
-		selected !== undefined &&
-		selected.pricingMode !== "NO_CHARGE"
-	) {
-		return RERANK_UNPRICED_HINT[selected.scope];
-	}
-	return undefined;
 }
 
 function ModelOptions({ models }: { models: AvailableLlmModel[] }) {
@@ -215,69 +125,55 @@ export function ModelPicker({
 	value,
 	onChange,
 	tier,
-	purpose,
-	ownProviderAllowed,
 	disabled = false,
 	invalid = false,
 	"aria-describedby": ariaDescribedBy,
 	"aria-labelledby": ariaLabelledBy,
 }: ModelPickerProps) {
-	const hintId = useId();
 	const listed = listedModels(availableModels, tier);
 	const shared = listed.filter((model) => model.scope === "SHARED");
 	const own = listed.filter((model) => model.scope === "WORKSPACE");
-	const selected = availableModels.find(
-		(model) => model.scope === value?.scope && model.id === value.id,
-	);
-	const hint = purposeHint(purpose, availableModels, selected, ownProviderAllowed);
-	let describedBy = ariaDescribedBy;
-	if (hint !== undefined) {
-		describedBy = hasText(ariaDescribedBy) ? `${ariaDescribedBy} ${hintId}` : hintId;
-	}
 
 	return (
-		<>
-			<Select
-				// A saved model excluded by the current tier filter must still be named in the trigger.
-				items={availableModels.map((model) => ({
-					value: encode(model.scope, model.id),
-					label: model.displayName,
-				}))}
-				value={value ? encode(value.scope, value.id) : null}
-				onValueChange={(next) => {
-					const selection = hasText(next) ? decode(next) : null;
-					if (selection) {
-						onChange(selection);
-					}
-				}}
-				disabled={disabled || listed.length === 0}
+		<Select
+			// A saved model excluded by the current tier filter must still be named in the trigger.
+			items={availableModels.map((model) => ({
+				value: encode(model.scope, model.id),
+				label: model.displayName,
+			}))}
+			value={value ? encode(value.scope, value.id) : null}
+			onValueChange={(next) => {
+				const selection = hasText(next) ? decode(next) : null;
+				if (selection) {
+					onChange(selection);
+				}
+			}}
+			disabled={disabled || listed.length === 0}
+		>
+			<SelectTrigger
+				id={id}
+				className="w-full"
+				aria-invalid={invalid}
+				aria-describedby={ariaDescribedBy}
 			>
-				<SelectTrigger
-					id={id}
-					className="w-full"
-					aria-invalid={invalid}
-					aria-describedby={describedBy}
-				>
-					<SelectValue>
-						{(current: unknown) => <TriggerValue current={current} models={availableModels} />}
-					</SelectValue>
-				</SelectTrigger>
-				<SelectContent aria-labelledby={ariaLabelledBy}>
-					{shared.length > 0 && (
-						<SelectGroup>
-							<SelectLabel>{PURSE_DEFS.SHARED.label}</SelectLabel>
-							<ModelOptions models={shared} />
-						</SelectGroup>
-					)}
-					{own.length > 0 && (
-						<SelectGroup>
-							<SelectLabel>{PURSE_DEFS.OWN_PROVIDER.label}</SelectLabel>
-							<ModelOptions models={own} />
-						</SelectGroup>
-					)}
-				</SelectContent>
-			</Select>
-			{hint !== undefined && <FieldDescription id={hintId}>{hint}</FieldDescription>}
-		</>
+				<SelectValue>
+					{(current: unknown) => <TriggerValue current={current} models={availableModels} />}
+				</SelectValue>
+			</SelectTrigger>
+			<SelectContent aria-labelledby={ariaLabelledBy}>
+				{shared.length > 0 && (
+					<SelectGroup>
+						<SelectLabel>{PURSE_DEFS.SHARED.label}</SelectLabel>
+						<ModelOptions models={shared} />
+					</SelectGroup>
+				)}
+				{own.length > 0 && (
+					<SelectGroup>
+						<SelectLabel>{PURSE_DEFS.OWN_PROVIDER.label}</SelectLabel>
+						<ModelOptions models={own} />
+					</SelectGroup>
+				)}
+			</SelectContent>
+		</Select>
 	);
 }

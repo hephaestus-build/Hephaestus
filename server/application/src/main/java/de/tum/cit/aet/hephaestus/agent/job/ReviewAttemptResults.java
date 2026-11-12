@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
@@ -295,7 +294,6 @@ public class ReviewAttemptResults {
                 || !fence.runId().equals(locked.getRunId())) return false;
         JsonNode output = objectMapper.valueToTree(measured.agentResult().output());
         boolean storable = textRepresentableInJsonb(output);
-        ConfigSnapshot snapshot = ConfigSnapshot.fromJson(locked.getConfigSnapshot(), objectMapper);
         ObjectNode kept = storable && output instanceof ObjectNode report
                 ? report
                 : objectMapper.createObjectNode().put("resultNotStored", UNSTORABLE_TEXT);
@@ -316,7 +314,6 @@ public class ReviewAttemptResults {
         practiceScriptRuns.record(
                 locked,
                 measured.sandboxResult().outputFiles().get(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE),
-                snapshot.practiceScriptModels(),
                 Instant.now());
         return true;
     }
@@ -580,7 +577,6 @@ public class ReviewAttemptResults {
             }
 
             ReviewJob freshJob = jobRepository.findById(jobId).orElseThrow();
-            ConfigSnapshot snapshot = ConfigSnapshot.fromJson(freshJob.getConfigSnapshot(), objectMapper);
 
             // Admitted claims require their complete supporting text.
             freshJob.setOutput(
@@ -594,10 +590,7 @@ public class ReviewAttemptResults {
             jobRepository.saveAndFlush(freshJob);
 
             practiceScriptRuns.record(
-                    freshJob,
-                    sandboxResult.outputFiles().get(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE),
-                    snapshot.practiceScriptModels(),
-                    finishedAt);
+                    freshJob, sandboxResult.outputFiles().get(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE), finishedAt);
             return terminalStatus;
         });
     }

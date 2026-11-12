@@ -8,7 +8,6 @@ import { requested, scan } from "../../run-bundled.ts";
 import { stagePracticeScripts } from "../../stage.ts";
 import { parseCandidate, validateCitationCapabilities, practiceInputsSchema } from "./contract.ts";
 import { EvidenceReader, noReceipts } from "./evidence-reader.ts";
-import { ModelBudget } from "./models-host.ts";
 import { runPracticeProgram } from "./program-host.ts";
 import { forkedProgram } from "./script-run.ts";
 
@@ -165,9 +164,6 @@ void test("code that only quotes the assigned scan file gets no MET", async (t) 
 			reader,
 			receipts: counters,
 			requiredSources: [],
-			models: {},
-			budget: new ModelBudget(0, 1),
-			awaitModel: () => () => undefined,
 			start: forkedProgram,
 			review: async () => parsed.candidate,
 			signal: new AbortController().signal,

@@ -69,7 +69,7 @@ Only `displayName`, `baseUrl`, and `apiProtocol` are required.
 | ------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Display name**               | yes      | Free text, ≤ 128 characters. Editable after creation. Display name, service declaration, API key, and enabled state can change. Routing identity and slug cannot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **Base URL**                   | yes      | The provider's API root, ≤ 2048 characters. Examples: `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Requires HTTPS. Must have no credentials, query string, or fragment. **Immutable after create.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **API**                        | yes      | The API that the endpoint serves. Under **Chat models**: **Responses API** (`openai-responses`), the default, **Chat Completions API** (`openai-completions`), and **Messages API (Anthropic)** (`anthropic-messages`). Under **For practice scripts**: **Decisions API**, **Embeddings API**, and **Rerank API (Cohere-compatible)**. [Models for practice scripts](#models-for-practice-scripts) describes these three. Prefer Responses API for reviews and conversations, which call tools across many turns. It can preserve reasoning between tool calls for supported models and providers. OpenAI, Vercel AI Gateway, OpenRouter, and vLLM offer it. Support depends on the model and deployment. For Chat Completions-only endpoints, choose **Chat Completions API**. **Immutable after create.** The edit form shows the API as text. |
+| **API**                        | yes      | The API that the endpoint serves. Under **Chat models**: **Responses API** (`openai-responses`), the default, **Chat Completions API** (`openai-completions`), and **Messages API (Anthropic)** (`anthropic-messages`). Prefer Responses API for reviews and conversations, which call tools across many turns. It can preserve reasoning between tool calls for supported models and providers. OpenAI, Vercel AI Gateway, OpenRouter, and vLLM offer it. Support depends on the model and deployment. For Chat Completions-only endpoints, choose **Chat Completions API**. **Immutable after create.** The edit form shows the API as text. |
 | **Authentication**             | no       | `BEARER` → `Authorization: Bearer <key>`, or `API_KEY` → `api-key: <key>`. Defaults to `BEARER`. Azure needs `API_KEY`. **Immutable after create.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Service receiving requests** | no       | Search for the service that receives requests from the configured endpoint, such as Logos, Azure, or Vercel AI Gateway. If absent or uncertain, leave **Not listed or unknown**. This display declaration does not prove where inference runs or who operates the model. You can change or clear it later.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **API key**                    | no       | Write-only and encrypted at rest. Never returned. A saved connection reports only `hasApiKey` and the last four characters. On edit, leave blank to keep the stored key. To delete it, select **Remove stored API key**. Optional: a self-hosted vLLM or Ollama gateway may need no credential.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -108,10 +108,6 @@ The create form offers these presets:
 They only prefill the two fields.
 Nothing about the preset is stored.
 For an Azure mark beside a workspace model, use the separate **Service receiving requests** declaration.
-
-Neither OpenAI nor Azure OpenAI serves a rerank API.
-Thus, when you choose **Rerank API (Cohere-compatible)** with one of these presets, the form changes the preset to **Other endpoint**.
-A base URL that you typed stays.
 
 For a gateway, name the gateway that receives the request, not an unknown downstream service.
 If you cannot confirm the connection, leave it blank.
@@ -272,19 +268,6 @@ Connected. N models available.
 
 Failures show the same message, but provider model IDs never appear.
 
-Many endpoints for practice scripts do not serve `/models`.
-The probe of such a connection can get HTTP 404, 405 or 501.
-Then the result shows this text instead of a failure:
-
-```text
-No model list at this address. Add the model by its ID. If its calls fail too, check the base URL.
-```
-
-A wrong path in the base URL also gives HTTP 404.
-Thus, the text tells you to check the base URL when the calls of the model also fail.
-
-Any other failure of such a probe, such as HTTP 401 or no answer, shows as a failure.
-
 ### Reasoning effort
 
 **Reasoning effort** sets how hard a reasoning model thinks on every review or conversation call.
@@ -428,7 +411,7 @@ If your provider reports cache tokens, price them.
 
 Every chat call that Hephaestus sends to a provider has an output limit.
 The limit of a model is its **Max output tokens**. If the model has none, the limit is its **Context window**.
-Set one of the two on each chat model and on each model that a practice script uses for decisions.
+Set one of the two on each chat model.
 A call to a chat model without either is refused with status 400.
 
 The proxy clamps the output limit of each chat request to the model's limit before the request goes to the provider:
@@ -442,7 +425,6 @@ The proxy clamps the output limit of each chat request to the model's limit befo
   A field of another API does not count, and a field with the value `null` counts as absent.
 - A limit field of the request's own API must be a positive whole number.
   If it is not, the proxy refuses the request with status 400, and the request does not reach the provider.
-- Embedding and reranking calls write no output and need no limit.
 
 Most OpenAI-compatible servers accept `max_tokens`.
 Some OpenAI models accept only `max_completion_tokens` on the Chat Completions API.
@@ -660,7 +642,6 @@ The UI shows the title.
 - **Budgets, caps, and what a cap pauses:** [Workspace budgets and alerting](./production-setup#workspace-budgets-and-alerting).
 - **The environment variables that *are* deploy-time facts:** [Instance-wide LLM settings](./production-setup#instance-wide-llm-settings).
 - **Nothing is being reviewed:** [When a workspace goes quiet](./practice-review#follow-one-review-end-to-end).
-- **Models for practice scripts:** [Models for practice scripts](#models-for-practice-scripts).
 
 ## Data handling and members' AI choices
 
@@ -843,7 +824,7 @@ Enter an Anthropic API key.
 The server sends the key in `x-api-key` and sets `anthropic-version` to `2023-06-01`.
 The connection test reads the native `/models` endpoint.
 
-The Messages API serves reviews, practice script chat models, feedback composition, and conversations.
+The Messages API serves reviews, feedback composition, and conversations.
 It permits custom tools that run in the sandbox.
 It refuses provider-hosted tools and remote MCP servers.
 Bedrock and Google Cloud authentication are not supported by this preset.
@@ -894,36 +875,9 @@ The endpoints are `PUT /admin/llm/models/{id}/capabilities` and
 Each returns the observed `forcedToolChoice` value.
 An inconclusive test returns no value and changes no stored capability.
 
-## Models for practice scripts
+## AI usage
 
-A practice script prepares captured evidence for a review.
-Keep its `meta` empty and call `ctx.review`.
-The public script context has no model slots or direct model helpers.
-[Write a practice script](./practice-scripts.mdx) owns the author procedure.
-
-Configure the practice review model in **AI models**.
-The review uses that model and its workspace budget.
-Decision, embedding and reranking assignments under **Models for practice scripts** have no effect on public scripts.
-Do not configure those purposes for a public script.
-Before an upgrade, remove model declarations from custom script metadata and validate each script.
-
-### Privacy
-
-Review sessions follow the developer's account-wide AI choice and the review's stricter model tier.
-A script cannot bypass that choice by declaring a model.
-The child process has no provider credential.
-
-### Cost and limits
-
-The review sessions that a script opens with `ctx.review()` count against the work budget of the review.
-[Practice review operations](./practice-review-operations.mdx) owns those limits.
-The direct-model token and search-unit settings do not apply to public scripts, because these scripts make no direct model calls.
-Existing direct-model usage remains in **AI usage**.
-The tables below describe those stored usage records.
-
-### Usage by practice
-
-The workspace's **AI usage** page has four sections: **Spend this month**, **By use**, **Models for practice scripts, by practice**, and **By day**.
+The workspace's **AI usage** page has three sections: **Spend this month**, **By use**, and **By day**.
 For an earlier month, the first section is **Spend in** and the month, such as **Spend in September 2026**.
 The first section shows one tile for each purse: **Shared models** and **Own provider**.
 
@@ -953,10 +907,7 @@ This is also true for a $0 cap.
 
 Each table has its own money columns for **Shared models** and for **Own provider**.
 The two purses are never added together.
-Two tables show an average next to the spend of each purse:
-
-- **By use** shows **Spend** and **Avg per use**.
-- **Models for practice scripts, by practice** shows **Spend** and **Avg per review**.
+**By use** shows **Spend** and **Avg per use** for each purse.
 
 **By day** shows only the spend of each purse.
 The table of workspaces on **Instance administration → AI usage** shows the spend of each purse, the shared-model budget, and the provider cap.
@@ -970,62 +921,5 @@ The table of workspaces shows the same line below the spend of each purse.
 **No price set** appears only when a row has usage without a price.
 In **By use** and **By day**, it counts the uses that have usage without a price.
 A use is one review attempt or one conversation answer, with all of its usage rows.
-In **Models for practice scripts, by practice**, it counts reviews.
 
-**Models for practice scripts, by practice** appears only in a month with decision, embedding, or reranking usage.
-On **Instance administration → AI usage**, the same table appears when you select **Details** for a workspace.
-The instance console has no table of practices across all workspaces.
-To see the practices of one workspace, open its details.
-
-The table has one row for each practice:
-
-| Column                                           | What it shows                                                                                                          |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| **Practice**                                     | The practice. A practice that the workspace no longer has shows its identifier and **Not a current practice**.         |
-| **Models**                                       | The models for practice scripts that its script called: decision, embedding, or reranking. Each kind has its own icon. |
-| **Shared models**: **Spend**, **Avg per review** | Its share of the cost on the instance catalog's models, and that cost divided by its reviews.                          |
-| **Own provider**: **Spend**, **Avg per review**  | Its share of the cost on the workspace's own provider, and that cost divided by its reviews.                           |
-| **Reviews**                                      | The reviews whose scripts called its models.                                                                           |
-| **No price set**                                 | The reviews with a usage row without a price that it had a share in.                                                   |
-| **Input tokens**, **Output tokens**, **Calls**   | Its own counts from the proxy.                                                                                         |
-
-The rows show the highest spend first.
-Select the heading of any column except **Models** to sort by that column.
-The [worked example](#worked-example) tells how an amount and an average round.
-
-With two rows or more, the table ends with a **Total** row.
-The total comes from the usage rows themselves, so the costs of the practices and **Not attributed** add up to it.
-A review can count for several practices.
-Thus, the **Reviews** and **No price set** of the rows can add up to more than the total.
-
-A **Not attributed** row shows the cost that no practice can carry.
-An example is a usage row from before Hephaestus recorded each call on its own row.
-Such a row holds the calls of all practices of a review attempt together.
-The usage of a practice that was deleted is also not attributed.
-The row stays last, above **Total**, whatever the sort.
-
-Hephaestus records one usage row for each model call, and each call of a practice script names its practice.
-Thus, each practice gets the cost of its own calls.
-
-A call without a price adds no cost to its practice.
-Its review counts one time in **No price set** for each practice whose call has no price.
-A model with **No metered API cost** adds a confirmed $0.
-
-The table shows the calls that ended to date in the current month, also those of reviews that still run.
-These costs are already part of the uses above it.
-Chat calls from a script are not in this table, because they are part of each review's own cost.
-On **By use** and **By day**, **Uses** counts review attempts and conversation answers.
-A call of a model for practice scripts adds its cost to the attempt of its review, but it is not a use.
-
-:::caution[CAUTION: A priced reranking model that bills search units or reports no tokens]
-
-Some reranking providers, such as Cohere, bill search units and report no token usage.
-Hephaestus records the search units on the usage row.
-A model price has rates for tokens only, so Hephaestus records such a row without a price.
-A call that reports neither tokens nor search units is also recorded without a price.
-
-In a purse with a budget or a cap, unpriced usage makes the month **UNVERIFIABLE**, and reviews pause.
-In such a purse, choose a reranking provider that reports token usage.
-For a self-hosted reranker, declare **No metered API cost**.
-
-:::
+On **By use** and **By day**, **Uses** counts review attempts and conversation answers only.

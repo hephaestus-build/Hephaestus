@@ -22,13 +22,13 @@ import org.springframework.validation.annotation.Validated;
  *     requests get HTTP 429 with a Retry-After header. The default leaves room for one Pod that serves many conversation
  *     turns at once (estimated).
  * @param maxConnections Most connections that the sandbox gateway holds open at once. Up to 100 further connections wait
- *     in the operating system's queue, and the rest fail. A review at its most calls in flight holds 174, and a normal review about 54 (estimated).
+ *     in the operating system's queue, and the rest fail. A review at its most calls in flight holds 170, and a normal review about 54 (estimated).
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.sandbox.gateway")
 public record SandboxGatewayProperties(
         @DefaultValue("8081") @Min(0) @Max(65535) int port,
         @DefaultValue("4194304") @Min(1) int maxRequestBytes,
-        @DefaultValue("696") @Min(1) int requestsPerMinute,
+        @DefaultValue("680") @Min(1) int requestsPerMinute,
         @DefaultValue("12000") @Min(1) int sourceRequestsPerMinute,
         @DefaultValue("4096") @Min(1) int maxConnections) {}

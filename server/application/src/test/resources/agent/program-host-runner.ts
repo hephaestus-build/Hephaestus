@@ -13,7 +13,13 @@ import nodePath from "node:path";
 import { mock } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
+import {
+	createAssistantMessageEventStream,
+	normalizeContext,
+	type AssistantMessage,
+	type Model,
+} from "@earendil-works/pi-ai";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 
 import {
 	createBashToolDefinition,
@@ -75,6 +81,27 @@ function emptyModelStream() {
 	stream.push({ type: "start", partial: message });
 	stream.push({ type: "done", reason: "stop", message });
 	return stream;
+}
+
+/** A model call through the provider client, as a review session makes it, to the gateway the runner names. */
+function gatewayStream(options?: { fetch?: typeof fetch; signal?: AbortSignal }) {
+	const model = {
+		id: "test-model",
+		name: "Test model",
+		api: "openai-completions",
+		provider: "test",
+		baseUrl: `${process.env.LLM_PROXY_URL ?? ""}/v1`,
+		reasoning: false,
+		input: ["text"],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 128_000,
+		maxTokens: 16_384,
+	} satisfies Model<"openai-completions">;
+	return openAICompletionsApi().streamSimple(
+		model,
+		normalizeContext({ messages: [{ role: "user", content: "Review.", timestamp: 0 }] }),
+		{ apiKey: "job-token", maxRetries: 0, ...options },
+	);
 }
 
 export function codingAgentExports(
@@ -155,7 +182,9 @@ export type SessionBehaviour =
 	| "hang"
 	| "budget"
 	| "crash"
-	| "unreachable";
+	| "unreachable"
+	/** One model call through the real provider client to the gateway at `LLM_PROXY_URL`. */
+	| "gateway";
 
 export interface StagedPractice {
 	itemKind?: string | undefined;
@@ -197,10 +226,10 @@ export const SESSION_CANDIDATE = {
 	evidence: {},
 };
 
-function candidateProgram(before: string, imports: string, meta: Record<string, unknown>): string {
-	return `${imports}
+export function publicProgram(before = ""): string {
+	return `import { definePracticeScript } from "@hephaestus/practice-scripts";
 export default definePracticeScript({
-	meta: ${JSON.stringify(meta)},
+	meta: {},
 	async run(ctx) {
 		let note = "none";
 		${before}
@@ -221,22 +250,6 @@ export default definePracticeScript({
 	},
 });
 `;
-}
-
-export function publicProgram(before = ""): string {
-	return candidateProgram(
-		before,
-		'import { definePracticeScript } from "@hephaestus/practice-scripts";',
-		{},
-	);
-}
-
-export function privateModelProgram(before: string): string {
-	return candidateProgram(
-		before,
-		'import { definePracticeScript, generateText, step } from "../lib/core/practice-script.ts";',
-		{ models: { chat: "optional" } },
-	);
 }
 
 export function stagePractices(
@@ -326,7 +339,6 @@ export async function runRunner(
 				AGENT_BUDGET_MS: "60000",
 				PI_PRACTICE_MODEL_CALLS: "36",
 				PI_PRACTICE_OUTPUT_TOKENS: "48000",
-				PI_DIRECT_MODEL_TOKENS: "200000",
 				LLM_PROXY_URL: "https://unused.invalid",
 				LLM_PROXY_TOKEN: "job-token",
 				...env,
@@ -714,10 +726,13 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 				streamFunction: async (
 					_model: unknown,
 					_context: unknown,
-					requestOptions?: { maxTokens?: number },
+					requestOptions?: { maxTokens?: number; fetch?: typeof fetch; signal?: AbortSignal },
 				) => {
 					capture("requests", { slug: sessionSlug, maxTokens: requestOptions?.maxTokens });
 					requestedOutput = requestOptions?.maxTokens ?? 100;
+					if (sessionSlug !== undefined && behaviourOf(sessionSlug) === "gateway") {
+						return gatewayStream(requestOptions);
+					}
 					return emptyModelStream();
 				},
 			};
@@ -799,6 +814,11 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 						});
 						if (behaviour === "hang") {
 							await Promise.withResolvers<never>().promise;
+						}
+						if (behaviour === "gateway") {
+							const response = await agent.streamFunction({ maxTokens: 16_384 }, {}, {});
+							await response.result();
+							return;
 						}
 						if (behaviour === "unreachable") {
 							emit({

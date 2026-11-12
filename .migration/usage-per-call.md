@@ -4,7 +4,7 @@ The usage ledger `llm_usage_event` gets one row for each model call.
 The measurements of each review attempt and conversation attempt move into it, and their tables are dropped.
 The previous release cannot write a model call's usage to the new ledger.
 
-1. Make sure that each chat model, and each model that a practice script uses for decisions, has **Max output tokens** or **Context window**.
+1. Make sure that each chat model has **Max output tokens** or **Context window**.
    After the upgrade, the proxy refuses calls to a chat model without either.
    It clamps the output limit of each request to this value.
    An OpenAI-compatible server that ignores the output-limit field can write past the upper bound of a call.

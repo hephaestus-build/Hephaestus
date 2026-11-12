@@ -3,23 +3,16 @@
  * final value. The host answers each request once, and ends the process at its review or at the
  * practice's deadline.
  */
-import { supportsForcedToolChoice } from "./model-capabilities.ts";
-
 import { fork } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
-	MODEL_SLOTS,
-	parseMeta,
+	metaSchema,
 	parseReviewOptions,
 	type Candidate,
-	type ModelSlot,
-	type ParsedMeta,
-	type Reason,
 	type ReviewOptions,
-	type SlotModels,
 	type StopReason,
 } from "./contract.ts";
 import type { EvidenceReader } from "./evidence-reader.ts";
@@ -32,9 +25,7 @@ import {
 	type ProgramJob,
 } from "./ipc.ts";
 import { isJsonObject } from "./json.ts";
-import { modelCall, type ModelBudget } from "./models-host.ts";
 import { reasonOf, UnratedError } from "./practice-script.ts";
-import { isPracticeScriptPath } from "./script-imports.ts";
 
 const CHILD_HEAP_MB = 256;
 /** A program's process is killed this long after its deadline, so a program that unwinds still returns. */
@@ -48,13 +39,6 @@ export class ProgramSettlementError extends Error {
 const MAX_IN_FLIGHT = 32;
 export const MAX_ERROR_CHARS = 2000;
 const MAX_OUTPUT_CHARS = 64 * 1024;
-
-export interface SlotReport {
-	slot: ModelSlot;
-	need: "required" | "optional";
-	bound: boolean;
-	failures: Partial<Record<Reason, number>>;
-}
 
 /** What starts a program's process: its Node flags, and how long it may run. */
 export interface ProgramStart {
@@ -120,13 +104,6 @@ export interface ProgramServices {
 	/** Starts the program's process. */
 	start: (start: ProgramStart) => ProgramProcess;
 	reader: EvidenceReader;
-	/** The practice's direct models, with the credential: every call names the practice to the proxy. */
-	models: Partial<SlotModels>;
-	budget: ModelBudget;
-	/** A direct model call waits for its answer. The returned function records the answer. */
-	awaitModel: () => () => void;
-	/** Repeated lost responses end the attempt as an infrastructure failure, not a program result. */
-	gatewayUnavailable?: () => void;
 	/** Run one review of this practice. It rejects with `UnratedError` when the session gives no result. */
 	review: (options: ReviewOptions, signal: AbortSignal) => Promise<Candidate>;
 	signal: AbortSignal;
@@ -137,28 +114,19 @@ export interface ProgramExecution {
 	value?: unknown;
 	/** What the kits could not trust in the capture while the program ran. */
 	captureFailures?: readonly string[];
-	failure?: { stopReason: StopReason; error: string; skipped?: true };
-	models: SlotReport[];
-	calls: { review: number } & Record<ModelSlot, number>;
+	failure?: { stopReason: StopReason; error: string };
+	calls: { review: number };
 }
 
 interface OpenRequest {
-	kind: "model" | "read" | "review";
+	kind: "read" | "review";
 	call: AbortController;
-	slot?: ModelSlot;
-	refused?: true;
 }
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const cut = (text: string) => text.slice(0, MAX_ERROR_CHARS).toWellFormed();
 
-export const noCalls = (): ProgramExecution["calls"] => ({
-	review: 0,
-	chat: 0,
-	decision: 0,
-	embedding: 0,
-	reranking: 0,
-});
+export const noCalls = (): ProgramExecution["calls"] => ({ review: 0 });
 
 /**
  * The folders a program's process may read: the toolkit install, the dependency folders that the
@@ -186,30 +154,6 @@ export function readableRoots(inputs: readonly string[]): string[] {
 		.map((dir) => path.resolve(dir));
 }
 
-export function acceptModels(
-	meta: ParsedMeta,
-	models: Partial<SlotModels>,
-): { report: SlotReport[]; available: Partial<Record<ModelSlot, string>>; missing: ModelSlot[] } {
-	const report: SlotReport[] = [];
-	const available: Partial<Record<ModelSlot, string>> = {};
-	for (const slot of MODEL_SLOTS) {
-		const need = meta.models?.[slot];
-		if (need === undefined) {
-			continue;
-		}
-		const modelId = models[slot]?.modelId;
-		report.push({ slot, need, bound: modelId !== undefined, failures: {} });
-		if (modelId !== undefined) {
-			available[slot] = modelId;
-		}
-	}
-	return {
-		report,
-		available,
-		missing: report.filter((r) => r.need === "required" && !r.bound).map((r) => r.slot),
-	};
-}
-
 export function abortReasonOf(signal: AbortSignal): AbortReason {
 	const reason: unknown = signal.reason;
 	return reason instanceof UnratedError &&
@@ -217,8 +161,6 @@ export function abortReasonOf(signal: AbortSignal): AbortReason {
 		? reason.reason
 		: "deadline";
 }
-
-const unratedBy = (reason: AbortReason) => (reason === "cancelled" ? "deadline" : reason);
 
 /** Why a run that `signal` ended has no result. A program never hears `unavailable`: its abort stays a deadline. */
 export function stopReasonOf(signal: AbortSignal) {
@@ -246,11 +188,9 @@ export async function runCustomProgram(
 				stopReason,
 				error: `the host stopped this program before it started: ${stopReason}`,
 			},
-			models: [],
 			calls,
 		};
 	}
-	let report: SlotReport[] = [];
 	// Its own file and the toolkit: another practice's program and inputs stay out of reach.
 	const staged = path.dirname(path.dirname(modulePath));
 	const readable = readableRoots([modulePath, path.join(staged, "lib"), path.join(staged, "kits")]);
@@ -307,12 +247,6 @@ export async function runCustomProgram(
 	const open = new Map<number, OpenRequest>();
 	let lastRequestId = -1;
 	const outstanding = new Map<OpenRequest, Promise<void>>();
-	const countUnrated = (slot: ModelSlot, reason: Reason) => {
-		const slotReport = report.find((r) => r.slot === slot);
-		if (slotReport !== undefined) {
-			slotReport.failures[reason] = (slotReport.failures[reason] ?? 0) + 1;
-		}
-	};
 	const reply = (message: Exclude<HostMessage, { kind: "job" | "abort" | "meta-accepted" }>) => {
 		if (open.has(message.id) && child.connected && !handOff.happened) {
 			child.send(message);
@@ -320,17 +254,10 @@ export async function runCustomProgram(
 		// Only now: a reply that could not go leaves the request open for its failure.
 		open.delete(message.id);
 	};
-	const refuseRequest = (kind: "model" | "read" | "review", id: number, reason: AbortReason) => {
-		if (!child.connected) {
-			return;
+	const refuseRequest = (kind: "read" | "review", id: number, reason: AbortReason) => {
+		if (child.connected) {
+			child.send({ kind: `${kind}-failed`, id, reason, message: `stopped: ${reason}` });
 		}
-		const message = `stopped: ${reason}`;
-		const failures: Record<typeof kind, HostMessage> = {
-			model: { kind: "model-failed", id, reason, message, tokensLeft: services.budget.left },
-			read: { kind: "read-failed", id, reason, message },
-			review: { kind: "review-failed", id, reason, message },
-		};
-		child.send(failures[kind]);
 	};
 	const sendAbort = (reason: AbortReason, stopReason: StopReason = reason) => {
 		if (aborted !== undefined) {
@@ -344,13 +271,9 @@ export async function runCustomProgram(
 		if (child.connected) {
 			child.send({ kind: "abort", reason } satisfies HostMessage);
 		}
-		// Count failures before replying; the child can return as soon as it receives a failure.
+		// Stop each open call before its refusal: the child can return as soon as it receives one.
 		for (const [id, request] of open) {
-			request.refused = true;
 			request.call.abort(new UnratedError(reason, `the host stopped this program: ${reason}`));
-			if (request.slot !== undefined) {
-				countUnrated(request.slot, stopReason === "unavailable" ? stopReason : unratedBy(reason));
-			}
 			refuseRequest(request.kind, id, reason);
 		}
 		open.clear();
@@ -379,69 +302,13 @@ export async function runCustomProgram(
 	};
 	let killLater: ReturnType<typeof setTimeout> | undefined;
 
-	let settled: Omit<ProgramExecution, "models" | "calls"> | undefined;
+	let settled: Omit<ProgramExecution, "calls"> | undefined;
 	let finished = false;
-	let meta: ParsedMeta | undefined;
-	let accepted: Partial<Record<ModelSlot, string>> = {};
+	let metaAccepted = false;
 
 	const fail = (stopReason: StopReason, error: string) => {
 		settled ??= { failure: { stopReason, error: cut(error) } };
 		child.kill();
-	};
-
-	const answerModel = async (
-		message: Extract<ChildMessage, { kind: "model" }>,
-		request: OpenRequest,
-		call: AbortSignal,
-	) => {
-		const { id, slot, label } = message;
-		const model = services.models[slot];
-		if (
-			accepted[slot] === undefined ||
-			model === undefined ||
-			!report.some((r) => r.slot === slot)
-		) {
-			reply({
-				kind: "model-failed",
-				id,
-				reason: "unavailable",
-				message: `no ${slot} model is available to this program`,
-				tokensLeft: services.budget.left,
-			});
-			return;
-		}
-		const asked = modelCall(slot, model, message.options, call, services.gatewayUnavailable);
-		// A call counts as use only once the budget lets it reach the proxy.
-		const outcome =
-			"reason" in asked
-				? asked
-				: await services.budget.run(asked.reserve, call, async () => {
-						calls[slot] += 1;
-						const answered = services.awaitModel();
-						try {
-							return await asked.run();
-						} finally {
-							answered();
-						}
-					});
-		if ("value" in outcome) {
-			reply({ kind: "model", id, answer: outcome.value, tokensLeft: services.budget.left });
-			return;
-		}
-		if (request.refused === true) {
-			return;
-		}
-		countUnrated(slot, outcome.reason);
-		services.log(
-			`  [${slug}] ${slot} call${label === "" ? "" : ` in ${label}`} not rated: ${outcome.reason}`,
-		);
-		reply({
-			kind: "model-failed",
-			id,
-			reason: outcome.reason,
-			message: `${slot} call not rated: ${outcome.reason}`,
-			tokensLeft: services.budget.left,
-		});
 	};
 
 	/**
@@ -462,7 +329,6 @@ export async function runCustomProgram(
 		calls.review += 1;
 		for (const [other, request] of open) {
 			if (other !== id) {
-				request.refused = true;
 				request.call.abort(new UnratedError("cancelled", "the program ended at its review"));
 			}
 		}
@@ -503,54 +369,28 @@ export async function runCustomProgram(
 	};
 
 	const acceptMeta = (value: unknown) => {
-		if (meta !== undefined) {
+		if (metaAccepted) {
 			fail("invalid-program", "meta was sent twice");
 			return;
 		}
-		const parsed = parseMeta(value);
-		if ("error" in parsed) {
-			fail("invalid-program", parsed.error);
-			return;
-		}
-		if (isPracticeScriptPath(modulePath) && Object.keys(parsed.meta).length > 0) {
+		if (!metaSchema.safeParse(value).success) {
 			fail(
 				"invalid-program",
 				"A practice script must declare empty meta. Rewrite the script for this API.",
 			);
 			return;
 		}
-		meta = parsed.meta;
-		const models = acceptModels(meta, services.models);
-		report = models.report;
-		accepted = models.available;
-		if (models.missing.length > 0) {
-			settled ??= {
-				failure: {
-					stopReason: "unavailable",
-					error: `no model is bound for the required slot(s) ${models.missing.join(", ")}`,
-					skipped: true,
-				},
-			};
-			child.kill();
-			return;
-		}
-		child.send({
-			kind: "meta-accepted",
-			models: accepted,
-			forcedToolChoice: supportsForcedToolChoice(services.models.chat),
-			tokens: services.budget.left,
-		} satisfies HostMessage);
+		metaAccepted = true;
+		child.send({ kind: "meta-accepted" } satisfies HostMessage);
 	};
 
 	const answerRequest = async (
-		message: Extract<ChildMessage, { kind: "model" | "read" | "review" }>,
+		message: Extract<ChildMessage, { kind: "read" | "review" }>,
 		request: OpenRequest,
 		callSignal: AbortSignal,
 	) => {
 		try {
-			if (message.kind === "model") {
-				await answerModel(message, request, callSignal);
-			} else if (message.kind === "read") {
+			if (message.kind === "read") {
 				await answerRead(message, callSignal);
 			} else {
 				await answerReview(message, callSignal);
@@ -612,15 +452,8 @@ export async function runCustomProgram(
 				services.log(`  [${slug}] ${message.text}`);
 				return;
 			}
-			case "cancel": {
-				// A cancel may cross the reply it cancels; one for a request already answered changes nothing.
-				open
-					.get(message.id)
-					?.call.abort(new UnratedError("cancelled", "the program cancelled the call"));
-				return;
-			}
 			case "result": {
-				if (meta === undefined) {
+				if (!metaAccepted) {
 					fail("invalid-program", "the program sent its result before meta");
 					return;
 				}
@@ -633,7 +466,7 @@ export async function runCustomProgram(
 			}
 			case "failed": {
 				finished = true;
-				const reason = message.reason ?? (meta === undefined ? "invalid-program" : "error");
+				const reason = message.reason ?? (metaAccepted ? "error" : "invalid-program");
 				settled = {
 					failure: {
 						stopReason: hostStop ?? reason,
@@ -642,10 +475,9 @@ export async function runCustomProgram(
 				};
 				return;
 			}
-			case "model":
 			case "read":
 			case "review": {
-				if (message.kind !== "read" && meta === undefined) {
+				if (message.kind === "review" && !metaAccepted) {
 					fail("invalid-program", `the program sent a ${message.kind} request before meta`);
 					return;
 				}
@@ -665,11 +497,7 @@ export async function runCustomProgram(
 					return;
 				}
 				const call = new AbortController();
-				const request: OpenRequest = {
-					kind: message.kind,
-					call,
-					...(message.kind === "model" && { slot: message.slot }),
-				};
+				const request: OpenRequest = { kind: message.kind, call };
 				open.set(message.id, request);
 				const callSignal = AbortSignal.any([signal, call.signal]);
 				const answering = answerRequest(message, request, callSignal);
@@ -703,9 +531,8 @@ export async function runCustomProgram(
 	} finally {
 		drainTimer.abort();
 	}
-	const done = (outcome: Omit<ProgramExecution, "models" | "calls">): ProgramExecution => ({
+	const done = (outcome: Omit<ProgramExecution, "calls">): ProgramExecution => ({
 		...outcome,
-		models: structuredClone(report),
 		calls: { ...calls },
 	});
 	if (settled !== undefined) {

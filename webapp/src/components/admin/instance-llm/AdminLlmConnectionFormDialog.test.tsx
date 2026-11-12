@@ -16,7 +16,7 @@ const connection: LlmConnection = {
 	slug: "custom",
 	displayName: "Custom endpoint",
 	apiProtocol: "openai-completions",
-	purposes: ["PRACTICE_REVIEW", "MENTOR", "PRACTICE_DECISION"],
+	purposes: ["PRACTICE_REVIEW", "MENTOR"],
 	authMode: "BEARER",
 	baseUrl: "https://llm.example.test/v1",
 	enabled: true,
@@ -58,12 +58,12 @@ describe("AdminLlmConnectionFormDialog", () => {
 	it("creates a connection for the API the admin chooses", async () => {
 		const onCreate = vi.fn<AdminLlmConnectionFormDialogProps["onCreate"]>();
 		renderDialog({ onCreate });
-		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Embeddings" } });
+		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Completions" } });
 		await userEvent.click(screen.getByRole("combobox", { name: "API" }));
-		await userEvent.click(await screen.findByRole("option", { name: "Embeddings API" }));
+		await userEvent.click(await screen.findByRole("option", { name: "Chat Completions API" }));
 		await userEvent.click(screen.getByRole("button", { name: "Add connection" }));
 		expect(onCreate).toHaveBeenCalledWith(
-			expect.objectContaining({ displayName: "Embeddings", apiProtocol: "openai-embeddings" }),
+			expect.objectContaining({ displayName: "Completions", apiProtocol: "openai-completions" }),
 		);
 	});
 
@@ -79,13 +79,7 @@ describe("AdminLlmConnectionFormDialog", () => {
 
 	it.each([
 		[
-			"openai-embeddings",
-			404,
-			"No model list at this address. Add the model by its ID. If its calls fail too, check the base URL.",
-			0,
-		],
-		[
-			"openai-embeddings",
+			"openai-responses",
 			401,
 			"We could not fetch the model list. The provider answered with HTTP 401.",
 			1,

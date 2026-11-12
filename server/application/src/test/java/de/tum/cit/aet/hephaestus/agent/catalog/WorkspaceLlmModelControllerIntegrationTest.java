@@ -423,12 +423,6 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
     void shouldNameThePurposesEachAvailableModelCanServeWhenListed() {
         Workspace workspace = setupWorkspace("avail-purpose-ws");
         LlmModel chat = seedInstanceModel("gpt-5-purpose-upstream", ModelVisibility.PUBLIC, true);
-        LlmConnection embeddingConnection = LlmCatalogTestFixtures.connection("instance-conn-" + System.nanoTime());
-        embeddingConnection.setApiProtocol(LlmApiProtocol.OPENAI_EMBEDDINGS);
-        LlmModel embedding = llmModelRepository.save(LlmCatalogTestFixtures.model(
-                llmConnectionRepository.save(embeddingConnection),
-                "instance-model-" + System.nanoTime(),
-                "text-embedding-purpose-upstream"));
 
         List<AvailableLlmModelDTO> available = webTestClient
                 .get()
@@ -445,12 +439,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .filteredOn(model -> model.id().equals(chat.getId()))
                 .singleElement()
                 .extracting(AvailableLlmModelDTO::purposes)
-                .isEqualTo(List.of(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR, AgentPurpose.PRACTICE_DECISION));
-        assertThat(available)
-                .filteredOn(model -> model.id().equals(embedding.getId()))
-                .singleElement()
-                .extracting(AvailableLlmModelDTO::purposes)
-                .isEqualTo(List.of(AgentPurpose.PRACTICE_EMBEDDING));
+                .isEqualTo(List.of(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR));
     }
 
     @Test

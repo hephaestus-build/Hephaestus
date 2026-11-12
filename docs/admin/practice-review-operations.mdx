@@ -102,7 +102,7 @@ The model proxy also holds each review attempt to twice that budget for all its 
 Past it, the proxy refuses the attempt's next model call with `403`.
 
 A practice script that calls `ctx.review()` opens review sessions, and their calls count against the budget of that practice.
-[Cost and limits](./ai-providers.mdx#cost-and-limits) owns model usage and prices.
+[AI usage](./ai-providers.mdx#ai-usage) owns model usage and prices.
 [Practice scripts](#practice-scripts) tells you how to read what each practice script did.
 
 The defaults cap excessive work at several times a set's normal use.
@@ -297,8 +297,6 @@ Open the review under **Practice reviews → Reviews**.
 
 The line starts with how the script ended.
 It names the script: **Practice script** or **Built-in**.
-If some model calls of the script were not rated, the line adds their count.
-An example is `5 calls were not rated.`
 Then it has at most one link that fixes the cause.
 On the Practice profile, the line also has **Details**, which opens the review's section **Practice scripts**.
 
@@ -338,11 +336,6 @@ Otherwise, make the slow script faster.
 
 [Upgrade a script from an earlier release](./practice-scripts.mdx#upgrade-a-script-from-an-earlier-release) tells what to do.
 
-A script that ran to its end can have calls that were not rated only for causes outside the workspace.
-These causes are a spent token limit, budget or cap, a slow model, and a call with too many entries.
-Then the line links **Why calls go unrated**.
-It opens [Calls that were not rated](#calls-that-were-not-rated), which tells who fixes each cause, and where.
-
 #### The review's practice scripts
 
 The section **Practice scripts** is on the review's sheet, after **Every practice** and the review's delivery checks.
@@ -353,62 +346,22 @@ It has one row for each practice of the review:
 | **Practice**      | The practice. It links to the practice. A practice that the workspace no longer has shows its identifier and **Not a current practice**.                                                                                                                                                                                                                                                       |
 | **Run**           | How the script ended. Examples are **Returned a candidate observation**, **Withheld**, **Failed: ran out of time**, **Not reached** and **Did not finish**. Below it is the same fix link as in the trace line. A practice that the workspace no longer has, or that runs the built-in script, shows no **Edit the script**. For a script that failed, the first line of the error comes last. |
 | **Review calls**  | The model calls of the practice's review sessions, as the review runner counted them. It is not the billed count: the proxy bills these calls for the whole review. A dash means no calls. **Not recorded** means that the review is from an earlier release, or that the runner did not report the practice.                                                                                  |
-| **Script models** | Each decision, embedding or reranking model that the script declared or called. An icon shows the tier of the model that the review had for it. A declared model that the review did not have and that made no calls shows **No model**. The review's own chat model never shows here.                                                                                                         |
-| **Not rated**     | The model calls that were not rated, with one line below for each reason, such as `5 too slow` and `1 wrong format`. [Calls that were not rated](#calls-that-were-not-rated) gives what to do for each reason.                                                                                                                                                                                 |
-| **Script calls**  | The decision, embedding and reranking calls that the proxy recorded for the script. A script that did not run, or that uses no such model, shows a dash.                                                                                                                                                                                                                                       |
 | **Time**          | How long the script ran, such as `4.2 s` or `2 min 5 s`. A run shorter than 0.1 seconds shows `< 0.1 s`. A script that did not run, was not reached, or did not finish shows a dash.                                                                                                                                                                                                           |
-
-A stored script declares and calls no decision, embedding or reranking model, so **Script models** and **Script calls** stay empty for it.
 
 The section shows no cost.
 Its note says `Spend is on AI usage.`
-**AI usage** shows the cost of models for practice scripts, by practice.
 **Technical** on the review's sheet shows the review's **Model** with an icon for its tier.
 Its **Review model calls** and token counts include the review sessions that scripts open with `ctx.review()`.
-They do not include the decision, embedding and reranking calls.
-Its **Cost** includes them: it is what the review's attempts and its practice scripts' models cost together.
+Its **Cost** is what the review's attempts cost.
 
-#### Calls that were not rated
-
-A model call that was not rated has a reason.
-The count is model calls, not places.
-A reason never means that the script found nothing.
-This table is the one list of reasons.
-The column **In a script** gives the name that a script and the review input use.
-
-| Reason        | In a script   | What it means                                                                                                                                                                | What to do                                                                                                           |
-| ------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| model missing | `unavailable` | No model of that slot was available to the script.                                                                                                                           | Assign the model. **Check the decision model**, or the link for the model that the row names, opens its row.         |
-| limit reached | `budget`      | A token limit cannot hold the call, or the shared-model budget or the provider cap is spent.                           | Raise the limit that was spent. The list below tells who raises each limit, and where.                               |
-| too slow      | `deadline`    | The script's deadline passed before the model answered, for example because the model was slow or had to load first. A call that the script aborted also has this reason.    | Ask the operator of the model's host to keep the model loaded, or assign a faster model.                             |
-| too large     | `too-large`   | The call held more entries than one call can send, or the script found an item too large to send. The host refuses a call with too many entries before it reaches the model. | Ask the script's author to send fewer entries in one call. [Limits](./practice-scripts.mdx#limits) gives the limits. |
-| wrong format  | `off-format`  | The model's answer did not have the expected shape.                                                                                                                          | The model is not suitable for this purpose. Choose another model.                                                    |
-| declined      | `refused`     | The model declined to answer. The script sets this reason.                                                                                                                   | Choose another model.                                                                                                |
-| failed        | `error`       | Any other failure, such as an error from the provider or a rate limit.                                                                                                       | Check the provider and the connection.                                                                               |
-
-The column **Not rated** counts only the model calls that the host could not finish.
-Thus, it never shows `refused`.
-The limitations that a script gives to `ctx.review()` reach only the review session, as [What the review reads](./practice-scripts.mdx#the-context) tells.
-
-A token limit, a budget or a cap stops calls in one of these places:
-
-- **The shared-model budget.**
-  Only an instance admin raises it on **Instance administration → AI usage** with **Change budget**.
-- **The provider cap of the workspace's own provider.**
-  A workspace admin raises it on **AI usage** with **Change provider cap**.
-
-On **AI usage**, the tile of a purse whose budget or cap is spent shows **Paused**.
-A purse with a budget or cap also pauses when some of its usage has no price.
-Its tile then shows **No price set**, and an alert gives the number of uses that have usage without a price.
-
-A script that failed, was skipped, or was not reached gives its practice no result in that review.
+A script that failed, was withheld, or was not reached gives its practice no result in that review.
 It never becomes a claim about the developer's work.
 
 #### Practice script metrics
 
-Two metrics count practice script events on the worker:
+One metric counts practice script events on the worker:
 
-- **`agent.review.practice_scripts`** — one count for each practice that the report of a review attempt records, tagged by `status`: `ok`, `skipped`, `failed`, `not_reached` or `not_finished`.
+- **`agent.review.practice_scripts`** — one count for each practice that the report of a review attempt records, tagged by `status`: `ok`, `withheld`, `failed`, `not_reached` or `not_finished`.
   It counts built-in scripts and practice scripts.
   An admitted practice that a complete report does not name counts as `not_finished`.
   A missing report adds no count.
@@ -416,11 +369,6 @@ Two metrics count practice script events on the worker:
   An entry that is not valid adds no count.
   It counts when the attempt's results are stored.
   A growing share of `failed`, `not_reached` or `not_finished` needs attention.
-  `skipped` usually means a missing assignment.
-- **`llm.proxy.practice_script.unattributed`** — direct model calls that the proxy refused with HTTP 400, because they named no valid practice.
-  It is 0 when the server and the agent image come from the same release.
-  A value above 0 means that the agent image does not send the practice of each call.
-  Run the agent image of the server's release.
 
 [Queue health](#queue-health) lists `llm.budget.blocked` with `surface="model_call"`, which counts the model calls that a budget or a cap refused.
 

@@ -30,7 +30,6 @@ import org.springframework.security.web.authentication.AuthenticationFilter;
 import org.springframework.security.web.util.matcher.IpAddressMatcher;
 
 public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
-    static final String PRACTICE_SCRIPT_PATH = "/internal/llm/practice-script/";
     /**
      * The body of the {@code 409} for an attempt that no longer runs. No provider sends it, so a runner that reads it
      * knows its attempt ended rather than that a provider refused a call; {@code pi-model-failure.ts} holds the same.
@@ -42,8 +41,6 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
 
     /** Where the conversation loop pulls turn assignments, with its own credential. */
     static final String ASSIGNMENTS_PATH = "/internal/llm/turn-assignments";
-
-    public static final String PRACTICE_SCRIPT_PRACTICE_HEADER = "x-hephaestus-practice";
 
     private static final BearerTokenAuthenticationConverter CONVERTER = converter();
     private static final List<IpAddressMatcher> PRIVATE_RANGES = List.of(

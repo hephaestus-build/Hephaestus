@@ -238,7 +238,6 @@ const child = spawn(process.execPath, ["--max-old-space-size=256", "/workspace/p
 		AGENT_BUDGET_MS: "60000",
 		PI_PRACTICE_MODEL_CALLS: "36",
 		PI_PRACTICE_OUTPUT_TOKENS: "48000",
-		PI_DIRECT_MODEL_TOKENS: "200000",
 		LLM_PROXY_URL: `http://127.0.0.1:${address.port}/v1`,
 		LLM_PROXY_TOKEN: "synthetic-attempt",
 		TOOLS_SOCKET: toolsSocket,

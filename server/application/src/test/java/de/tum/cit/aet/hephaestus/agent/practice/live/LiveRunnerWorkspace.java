@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.practice.live;
 import static de.tum.cit.aet.hephaestus.agent.practice.live.PracticeCriteriaCaseFixtures.FIXTURE_DIR;
 import static de.tum.cit.aet.hephaestus.agent.practice.live.PracticeCriteriaCaseFixtures.fixtureCommand;
 
-import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeCatalogInjector;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeScriptInputs;
@@ -30,7 +29,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeReads;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
@@ -94,12 +92,10 @@ final class LiveRunnerWorkspace {
                 new PiResultParser(MAPPER, new SimpleMeterRegistry()),
                 new AgentImageProperties("hephaestus/agent-pi:live", ImagePullPolicy.NEVER),
                 // The shipped defaults: a live run must get the budget that a review gets.
-                new Binder(List.of()).bindOrCreate("hephaestus.practice-review", PracticeReviewProperties.class),
-                MAPPER);
+                new Binder(List.of()).bindOrCreate("hephaestus.practice-review", PracticeReviewProperties.class));
     }
 
-    static PracticeAgentRequest request(
-            String modelId, String jobToken, Map<ModelKind, FrozenModel> models, LiveModelSettings settings) {
+    static PracticeAgentRequest request(String modelId, String jobToken, LiveModelSettings settings) {
         return new PracticeAgentRequest(
                 "openai-completions",
                 modelId,
@@ -108,7 +104,6 @@ final class LiveRunnerWorkspace {
                 settings.reasoningEffort(),
                 jobToken,
                 TIMEOUT_SECONDS,
-                models,
                 false);
     }
 

@@ -22,10 +22,6 @@ export interface WorkspacePracticeDefinitionProps {
 	showStanding?: boolean;
 	/** What the reader can do about where it came from, such as reset it to the catalog. */
 	originActions?: ReactNode;
-	/** A notice under the feedback mode, such as the members a practice script does not run for. */
-	notice?: ReactNode;
-	/** What the practice script needs, beside its code; see `PracticeDefinitionPreview`. */
-	practiceScript?: ReactNode;
 	/** `4` under a record sheet's `h3` section; see `PracticeDefinitionPreview`. */
 	headingLevel?: 4;
 }
@@ -36,8 +32,6 @@ export function WorkspacePracticeDefinition({
 	groupName,
 	showStanding = true,
 	originActions,
-	notice,
-	practiceScript,
 	headingLevel,
 }: WorkspacePracticeDefinitionProps) {
 	const { feedbackMode, currentVersion } = practice;
@@ -66,7 +60,6 @@ export function WorkspacePracticeDefinition({
 							</ItemContent>
 						</Item>
 					</ItemGroup>
-					{notice}
 					<Separator />
 				</>
 			)}
@@ -76,7 +69,6 @@ export function WorkspacePracticeDefinition({
 				definition={currentDefinition(practice)}
 				version={currentVersion.number}
 				options={definitionOptions}
-				practiceScript={practiceScript}
 				headingLevel={headingLevel}
 			/>
 		</div>
