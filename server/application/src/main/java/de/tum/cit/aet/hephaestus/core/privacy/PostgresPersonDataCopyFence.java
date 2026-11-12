@@ -6,6 +6,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -96,7 +97,9 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
         }
         var receipts = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
         return new Lease() {
-            private boolean closed;
+            // One close runs the unlock. No monitor: the unlock is SQL, and on Java 21 a virtual thread that blocks
+            // under a monitor pins its carrier.
+            private final AtomicBoolean closed = new AtomicBoolean();
 
             @Override
             public JdbcOperations jdbc() {
@@ -104,9 +107,8 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
             }
 
             @Override
-            public synchronized void close() {
-                if (closed) return;
-                closed = true;
+            public void close() {
+                if (!closed.compareAndSet(false, true)) return;
                 SQLException unlockFailure = null;
                 try {
                     execute(connection, shared ? "pg_advisory_unlock_shared" : "pg_advisory_unlock");

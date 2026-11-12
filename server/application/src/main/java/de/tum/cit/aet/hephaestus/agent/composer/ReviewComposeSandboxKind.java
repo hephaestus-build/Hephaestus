@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -223,6 +224,12 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         private final Instant claimedAt;
         private boolean withheld;
 
+        /**
+         * A lock, not a monitor: withholding closes the open sessions in the database, and on Java 21 a virtual thread
+         * that blocks under a monitor pins its carrier.
+         */
+        private final ReentrantLock withholding = new ReentrantLock();
+
         Decision(@Nullable CompositionStop withholdOnly, Instant claimedAt) {
             this.withholdOnly = withholdOnly;
             this.claimedAt = claimedAt;
@@ -238,10 +245,15 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         }
 
         /** Withholds what is open once for the claim; a failed withholding is tried again by the next call. */
-        synchronized void withholdOnce(Runnable withhold) {
-            if (withheld) return;
-            withhold.run();
-            withheld = true;
+        void withholdOnce(Runnable withhold) {
+            withholding.lock();
+            try {
+                if (withheld) return;
+                withhold.run();
+                withheld = true;
+            } finally {
+                withholding.unlock();
+            }
         }
     }
 }

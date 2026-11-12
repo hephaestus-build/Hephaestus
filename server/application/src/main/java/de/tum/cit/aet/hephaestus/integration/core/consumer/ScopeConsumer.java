@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -35,8 +36,10 @@ import org.slf4j.LoggerFactory;
  *       {@code MaxAckPending=1}, so a retry keeps its place in the stream
  *       without imposing global serialization — sibling scopes drain in parallel
  *       on their own virtual threads.</li>
- *   <li>Lifecycle methods are {@code synchronized} to keep start / stop /
- *       updateSubjects transitions atomic with respect to each other.</li>
+ *   <li>One lock keeps start / stop / updateSubjects transitions atomic with respect
+ *       to each other. A {@link ReentrantLock}, not a monitor: the transitions call the
+ *       broker and join the dispatch thread, and on Java 21 a virtual thread that blocks
+ *       under a monitor pins its carrier.</li>
  *   <li>On stop, the queue is drained and pending messages are NAKed so the
  *       JetStream redelivery loop picks them up after the configured ack-wait —
  *       graceful shutdown without dropping in-flight work.</li>
@@ -53,6 +56,7 @@ import org.slf4j.LoggerFactory;
  * safe publication; the dispatch loop terminates on interrupt or {@code running=false}.
  */
 public final class ScopeConsumer {
+    private final ReentrantLock lifecycle = new ReentrantLock();
 
     private static final Logger log = LoggerFactory.getLogger(ScopeConsumer.class);
     private static final long STOP_TIMEOUT_MILLIS = 10_000;
@@ -135,7 +139,16 @@ public final class ScopeConsumer {
      * JetStream subscription. Idempotent. A failed attach stops the dispatch thread again,
      * because a consumer that never started is never tracked and so never stopped.
      */
-    public synchronized void start() throws IOException, JetStreamApiException {
+    public void start() throws IOException, JetStreamApiException {
+        lifecycle.lock();
+        try {
+            startLocked();
+        } finally {
+            lifecycle.unlock();
+        }
+    }
+
+    private void startLocked() throws IOException, JetStreamApiException {
         if (!running.compareAndSet(false, true)) {
             return;
         }
@@ -159,7 +172,16 @@ public final class ScopeConsumer {
     }
 
     /** Stops the subscription and waits until its dispatch thread can no longer write. */
-    public synchronized void stop() {
+    public void stop() {
+        lifecycle.lock();
+        try {
+            stopLocked();
+        } finally {
+            lifecycle.unlock();
+        }
+    }
+
+    private void stopLocked() {
         boolean wasRunning = running.getAndSet(false);
         Thread thread = processorThread;
         if (!wasRunning && thread == null) {
@@ -196,7 +218,16 @@ public final class ScopeConsumer {
      * recycled. Identical subject sets are a no-op only while the subscription is attached,
      * so a subscription lost to a failed recycle is reattached by the next call.
      */
-    public synchronized void updateSubjects(String @Nullable [] newSubjects) throws IOException, JetStreamApiException {
+    public void updateSubjects(String @Nullable [] newSubjects) throws IOException, JetStreamApiException {
+        lifecycle.lock();
+        try {
+            updateSubjectsLocked(newSubjects);
+        } finally {
+            lifecycle.unlock();
+        }
+    }
+
+    private void updateSubjectsLocked(String @Nullable [] newSubjects) throws IOException, JetStreamApiException {
         if (newSubjects == null) {
             throw new IllegalArgumentException("newSubjects must not be null");
         }

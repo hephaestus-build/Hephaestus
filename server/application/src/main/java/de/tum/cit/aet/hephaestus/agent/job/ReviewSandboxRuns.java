@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import com.github.benmanes.caffeine.cache.AsyncCache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -23,6 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
+import de.tum.cit.aet.hephaestus.core.CacheLoads;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -40,7 +43,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,7 +81,12 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     private final ReviewAttemptResults results;
     private final ReviewRunKind reviewRuns;
     private final AgentRuns runs;
-    private final Map<AdmissionIdentity, Measurement> measurements = new ConcurrentHashMap<>();
+    /**
+     * The measurement of each attempt this replica runs. Preparing one reads the providers and writes the attempt's
+     * folder, so it loads outside the map's lock ({@link CacheLoads}).
+     */
+    private final AsyncCache<AdmissionIdentity, Measurement> measurements =
+            Caffeine.newBuilder().buildAsync();
 
     public ReviewSandboxRuns(
             ReviewJobClaimService claims,
@@ -150,14 +157,15 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     /** No model call before the attempt's execution started: its work deadline counts from there. */
     @Override
     public Optional<ProxyAttempt> attempt(SandboxRun run) {
-        return job(run).flatMap(job -> Optional.ofNullable(measurements.get(identity(run, job)))
-                .map(measurement -> new ProxyAttempt(
-                        ProxyAttempt.Caller.REVIEW,
-                        job.getId(),
-                        job.getWorkspaceId(),
-                        run.fence().epoch(),
-                        job.getRunId(),
-                        measurement.workDeadline())));
+        return job(run).flatMap(
+                        job -> Optional.ofNullable(measurements.synchronous().getIfPresent(identity(run, job)))
+                                .map(measurement -> new ProxyAttempt(
+                                        ProxyAttempt.Caller.REVIEW,
+                                        job.getId(),
+                                        job.getWorkspaceId(),
+                                        run.fence().epoch(),
+                                        job.getRunId(),
+                                        measurement.workDeadline())));
     }
 
     @Override
@@ -191,7 +199,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         var logScope = new ReviewJobLogScope(job, run.fence());
         try {
             AdmissionIdentity attempt = identity(run, job);
-            Measurement measurement = measurements.get(attempt);
+            Measurement measurement = measurements.synchronous().getIfPresent(attempt);
             if (measurement == null) throw new StaleRunException(run.fence());
             try {
                 results.measured(job.getId(), job, run.fence(), measurement.endedBefore(), result);
@@ -217,7 +225,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
             boolean held =
                     reviewRuns.requeue(job.get().getId(), run.fence(), AgentRuns.Charge.SPEND, Duration.ZERO, null);
             custody.release(attempt);
-            Measurement measurement = measurements.remove(attempt);
+            Measurement measurement = measurements.synchronous().asMap().remove(attempt);
             if (measurement != null) close(measurement.session());
             return held
                     || runs.find(new AgentRunRef(
@@ -231,7 +239,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
 
     private void finish(AdmissionIdentity attempt) {
         custody.release(attempt);
-        Measurement measurement = measurements.remove(attempt);
+        Measurement measurement = measurements.synchronous().asMap().remove(attempt);
         if (measurement != null) close(measurement.session());
     }
 
@@ -247,7 +255,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     private Measurement measurement(SandboxRun run) {
         ReviewJob job = job(run).orElseThrow(() -> new StaleRunException(run.fence()));
         AdmissionIdentity attempt = identity(run, job);
-        return measurements.computeIfAbsent(attempt, key -> prepare(run, job, key));
+        return CacheLoads.get(measurements, attempt, key -> prepare(run, job, key));
     }
 
     private Measurement prepare(SandboxRun run, ReviewJob job, AdmissionIdentity attempt) {
