@@ -1,12 +1,14 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -31,14 +33,19 @@ class ProxyBudgetGate {
     private static final long MAX_CACHED_WORKSPACES = 10_000;
 
     private final LlmBudgetService budgetService;
-    private final Cache<Long, LlmBudgetHeadroom> headroomByWorkspace;
+    /**
+     * Holds each workspace's read as a future. Caffeine runs a synchronous loader inside {@code ConcurrentHashMap.compute},
+     * whose monitor pins a virtual thread to its carrier on Java 21; a ledger read there, and the calls of the same
+     * workspace that wait on the monitor, can hold every carrier while the pool waits for one to return a connection.
+     */
+    private final AsyncCache<Long, LlmBudgetHeadroom> headroomByWorkspace;
 
     ProxyBudgetGate(LlmBudgetService budgetService) {
         this.budgetService = budgetService;
         this.headroomByWorkspace = Caffeine.newBuilder()
                 .expireAfterWrite(TTL)
                 .maximumSize(MAX_CACHED_WORKSPACES)
-                .build();
+                .buildAsync();
     }
 
     /**
@@ -50,7 +57,7 @@ class ProxyBudgetGate {
         if (workspaceId == null) {
             return false;
         }
-        LlmBudgetHeadroom headroom = headroomByWorkspace.get(workspaceId, budgetService::headroom);
+        LlmBudgetHeadroom headroom = headroom(workspaceId);
         return headroom != null
                 && headroom.cappedFor(routing.connectionScope())
                 && headroom.decide().blocks(routing.connectionScope());
@@ -65,13 +72,38 @@ class ProxyBudgetGate {
     boolean refusesHold(ProxyRouting routing, @Nullable BigDecimal boundUsd) {
         Long workspaceId = routing.workspaceId();
         if (workspaceId == null || boundUsd == null) return false;
-        LlmBudgetHeadroom cached = headroomByWorkspace.get(workspaceId, budgetService::headroom);
+        LlmBudgetHeadroom cached = headroom(workspaceId);
         if (cached == null || !cached.cappedFor(routing.connectionScope())) return false;
         return budgetService.headroom(workspaceId).refusesHold(routing.connectionScope(), boundUsd);
     }
 
     /** A call of the workspace opened or ended, and its bound or cost is in the ledger: the next call reads it again. */
     void spent(long workspaceId) {
-        headroomByWorkspace.invalidate(workspaceId);
+        headroomByWorkspace.synchronous().invalidate(workspaceId);
+    }
+
+    /**
+     * The cached verdict, or one read now. The cache's lock only installs the future; the caller that installed it reads
+     * the ledger on its own thread, outside the lock, and the calls of the same workspace wait on that future. A verdict
+     * cleared by {@link #spent} while it is read is not put back.
+     */
+    private @Nullable LlmBudgetHeadroom headroom(long workspaceId) {
+        var read = new CompletableFuture<LlmBudgetHeadroom>();
+        var installed = new AtomicBoolean();
+        CompletableFuture<LlmBudgetHeadroom> verdict = headroomByWorkspace.get(workspaceId, (id, unused) -> {
+            installed.set(true);
+            return read;
+        });
+        if (installed.get()) {
+            try {
+                LlmBudgetHeadroom headroom = budgetService.headroom(workspaceId);
+                read.complete(headroom);
+                return headroom;
+            } catch (RuntimeException failure) {
+                read.completeExceptionally(failure);
+                throw failure;
+            }
+        }
+        return verdict.join();
     }
 }
