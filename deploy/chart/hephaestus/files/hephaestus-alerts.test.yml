@@ -1018,7 +1018,7 @@ tests:
               job: hephaestus
               instance: server-b:9090
             exp_annotations:
-              summary: A server has not removed erased or ended evidence folders for ten minutes, so erased evidence can stay on it
+              summary: A server's evidence cleanup has not succeeded for ten minutes, so erased evidence can remain in a folder, archive or sandbox
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a checkout that a server cannot build again fires, cache hits and rebuilds do not

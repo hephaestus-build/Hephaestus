@@ -124,7 +124,8 @@ Safe counts and outcome facts can remain visible while words and evidence are ab
 
 Erasure removes dependent feedback and proof before membership.
 It also removes source-person proof in reviews about another developer or about no developer.
-Physical removal receipts survive parent deletion until their mounted-store acknowledgement arrives.
+PostgreSQL records evidence erasure.
+Evidence-copy receipts keep pending sandbox cleanup identities after parent deletion.
 Audit actors can become null without changing their recorded action.
 
 The [data map](/admin/dsms/personal-data-map) owns retention, export and erasure procedures.

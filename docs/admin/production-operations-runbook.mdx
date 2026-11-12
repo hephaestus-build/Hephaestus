@@ -390,8 +390,8 @@ This page is not a data-subject request portal.
 
     The page follows the job until it finishes.
     The job records progress one store at a time.
-    Server evidence owners must acknowledge removal of each attempt and copy before database evidence clears.
-    An unavailable owner is a failure, not proof of erasure.
+    Evidence erasure commits in PostgreSQL without a server acknowledgement.
+    Each server reconciles its erased copies and retries failed physical cleanup.
 
 22. For erasure, if the job stops, correct the operational failure.
 23. For erasure, after correcting a stopped job's failure, select **Resume erasure…** on the same request.
@@ -466,21 +466,20 @@ The instance-admin person-data page shows the failure and permits a resume.
 2. Correct the failed store before you resume a stopped request.
 3. Confirm that the request reaches `COMPLETE`.
 
-### An evidence store is offline
+### A server with evidence is offline
 
-Person erasure records a deletion request for each mounted store that captured the person's data.
-The owning server cancels the affected attempt and removes the whole job folder, including failed
-rendering folders and retries. It confirms deletion only after the runtime releases its folder.
-A server that has no such folder cannot confirm deletion for the volume of another server.
+Person erasure and workspace purge mark the affected receipts `ERASED` in PostgreSQL and delete their recorded
+attempt inputs. They wait for no server acknowledgement. A server that returns later removes its erased local
+copies in its next reconcile pass. It cannot restore an erased attempt from PostgreSQL.
 
-If the mounted owner does not confirm deletion, the request fails and can resume.
-The store identity stays on the volume across a server restart.
-
-1. Restore the same server volume.
-2. Let its deletion poll run.
-3. Resume the request in instance administration.
-4. Do not replace the volume with an empty one and report the old copy as erased.
-5. Keep a disconnected old volume under access controls until removal of its copy and confirmation of deletion.
+1. Keep disconnected evidence volumes under access controls until their erased copies are removed.
+2. Before you reuse a retained volume, let its server reconcile the folders against PostgreSQL.
+   Start it with `AGENT_ENABLED=false` if it must only clean its local copies.
+3. For a pending sandbox deletion, inspect SandboxClaim `agent-<sandboxId>` and its Pod in the sandbox namespace.
+   Restore the Kubernetes API, the server's `sandboxclaims` permissions and the sandbox controller before its next retry.
+   If agent jobs remain off, delete SandboxClaim `agent-<sandboxId>` and verify that its Pod is gone.
+4. Check [Alert response](#alert-response) for failed cleanup.
+   A restart can clear a Pod's local attempt folders, but it does not prove that a separate sandbox was deleted.
 
 This does not change the normal job-folder contract:
 
@@ -698,7 +697,7 @@ The signal names the alerts of the shipped rules that it answers.
 | A sandbox's network policy did not hold (`HephaestusAgentSandboxUnisolated`) | Read the server log event `agent.sandbox.taken_back` with `sandbox.reason` `unisolated`: it names the sandbox (`sandbox.name`) and its subject (`subject.key`). The sandbox started none of its run's work, and its run goes to a new sandbox. Check that the sandbox namespace still has the chart's NetworkPolicies (`kubectl get networkpolicy -n <sandbox namespace>`) and that the network plugin of the sandbox's node enforces them. Then run the isolation gate (`node scripts/sandbox-isolation.ts`) against the template. | `agent_sandbox_revoked_total{reason="unisolated"}` stops increasing, and the isolation gate passes. |
 | An outbox action waits (`HephaestusOutboxStalled`) | Check that every server replica runs: the executor runs on each one. Read the server's `action.attempt.failed` and `action.batch.outlived` events for the kind. Find the waiting actions with `SELECT id, lane_key, state, attempts, next_attempt_at FROM agent_action WHERE kind = '<kind>' AND state IN ('ADMITTED','EXECUTING') ORDER BY next_attempt_at LIMIT 20`. An `EXECUTING` action at the head of a lane holds the actions behind it until its lease ends. Do not change the rows by hand. | `action_oldest_due_seconds` for the kind falls below 900. |
 | An outbox action ended uncertain (`HephaestusOutboxUncertain`) | Read the server's `action.ended.uncertain` event: `action.id` names the action and `action.reason` the cause. Check at the provider whether the write arrived, for example in the mail log for an email. An uncertain email is never sent again. Tell the person by another channel if the message mattered. An uncertain action stays uncertain: nothing retries it. | No new count of `action_ended_total{state="UNCERTAIN"}` in one hour. |
-| A server's evidence reconcile stopped (`HephaestusEvidenceReconcileStalled`) | Read the server log line `Evidence reconcile failed`: it names the error. Check the server's database connection and the free space and permissions of its Git cache volume. Until a pass succeeds, the server keeps the folders of erased and ended attempts. Restart the server if no pass succeeds: the restart removes every attempt folder, and the erasure bound holds again. | `evidence_reconcile_last_success_seconds` is less than one minute old. |
+| A server's evidence reconcile stopped (`HephaestusEvidenceReconcileStalled`) | Read `Evidence reconcile failed` and `Evidence reconcile left copies for the next pass` for the error and pending cleanup. `Could not remove an erased evidence sandbox` and `Could not remove an erased evidence archive` identify failed copies. Check the database connection, cache volume space and permissions, Kubernetes API, the server's `sandboxclaims` permissions, and the sandbox controller. Verify that failed SandboxClaim `agent-<sandboxId>` and its Pod are gone after the automatic retry. A server restart does not prove sandbox deletion. | `evidence_reconcile_last_success_seconds` is less than one minute old, and each failed sandbox claim and Pod are gone. |
 | A server cannot build a captured checkout again (`HephaestusCheckoutUnverified`) | Read the server log line `Captured checkout cannot be built here`: it names the job and the reason. `fetch_failed` means that the provider no longer has the captured commit, for example after a force-push. `unavailable` means that the workspace no longer monitors the repository or has no SCM connection. `mismatch` means that the built checkout differs from the recorded tree or checkout digest: report it with the job id. The attempt runs again and captures again on the server that runs it. | `evidence_checkout_copies_total` for these outcomes stops increasing. |
 | Reviews with unconfirmed feedback (`HephaestusReviewFeedbackUnconfirmed`) | Find why servers stop during every attempt. The review keeps its results and closes as Partial. | Servers run without restarts, and no review closes with `COMPOSITION_UNCONFIRMED`. |
 | Item reviews that end incomplete (`HephaestusReviewsIncomplete`) | Find the stop reasons with `sum by (status, reason) (increase(practice_review_ended_total{kind="item"}[6h]))`, and the items that each reason left without feedback with `sum by (state, reason) (increase(practice_review_items_ended_total{kind="item"}[6h]))`. `execution_incomplete` and `execution_failed` point to the review runtime: read `agent.job.terminal` and the sandbox exits in the server log. The diagnostics `review.side_lost` and `review.side_unreachable` name a `tools` or `programs` container that stopped. `deadline` points to slow model calls: read `llm_pool_permit_wait_seconds`. `no_sandbox_room` points to the sandbox quota. The alert does not count `readiness_refused`, `budget` or `replaced`, because the runtime did not fail. The work was not ready, the budget was used up, or the work changed during the review. Do not start the reviews again by hand. | Over six hours, at least three quarters of the item reviews that the alert counts end complete. The alert counts complete reviews, partial or failed reviews except `readiness_refused`, `budget` and `replaced`, and reviews cancelled for `no_sandbox_room`. |

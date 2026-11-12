@@ -505,7 +505,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: A server has not removed erased or ended evidence folders for ten minutes, so erased evidence can stay on it
+          summary: A server's evidence cleanup has not succeeded for ten minutes, so erased evidence can remain in a folder, archive or sandbox
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusCheckoutUnverified
         expr: sum(increase(evidence_checkout_copies_total{job="hephaestus",outcome=~"mismatch|fetch_failed|unavailable"}[1h])) > 0
