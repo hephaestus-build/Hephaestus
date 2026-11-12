@@ -300,7 +300,7 @@ More servers or loop replicas do not add turns.
 
 The chart resolves `conversationLoop.turns: auto` from the declared CPU budget.
 It subtracts the role requests, the conversation loop with one surge replica, the tools Pods and the review reservation.
-The `small` profile admits 31 resident turns, and 29 when backups are on. An explicit count overrides the automatic value.
+The `small` profile admits 22 resident turns, and 20 when backups are on. An explicit count overrides the automatic value.
 `0` turns conversations off. The chart then runs no conversation loop.
 
 Resident turns, model calls and tools Pods use separate resources:

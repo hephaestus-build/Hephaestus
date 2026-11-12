@@ -49,12 +49,12 @@ server:
     limits: { ephemeral-storage: 22Gi }
 sandbox:
   enabled: true
-  # Five reviews of 384 MiB. Each review beyond them takes 50m of CPU from the 29 resident turns
+  # Five reviews of 512 MiB. Each review beyond them takes 100m of CPU from the resident turns
   # while a backup runs.
-  reviewMemory: 1920Mi
+  reviewMemory: 2560Mi
 # One node: one loop, and a second one only while it rolls out.
 conversationLoop:
   replicas: 1
-  # The CPU budget admits 31 resident turns, and 29 while a backup runs. The tools quota stays at
+  # The CPU budget admits conversation turns from the remaining CPU budget. The tools quota stays at
   # eight plus two warm Pods.
   turns: auto

@@ -1,5 +1,4 @@
 {
-	"review": { "pods": 1, "memoryMi": 384, "cpuMillis": 50, "ephemeralStorageMi": 1024 },
 	"toolsPod": { "pods": 1, "memoryMi": 160, "cpuMillis": 25, "ephemeralStorageMi": 256 },
 	"isolationProbe": { "pods": 2, "memoryMi": 640, "cpuMillis": 100, "ephemeralStorageMi": 32 },
 	"pooledToolsPods": 2,

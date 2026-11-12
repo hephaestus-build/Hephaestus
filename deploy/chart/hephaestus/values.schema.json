@@ -1099,7 +1099,7 @@
 					"description": "The SandboxTemplates of the sandbox kinds.",
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["runtimeClassName", "review", "conversation"],
+					"required": ["runtimeClassName", "podOverhead", "review", "conversation"],
 					"properties": {
 						"runtimeClassName": {
 							"type": "string"
@@ -1109,6 +1109,23 @@
 						},
 						"conversation": {
 							"$ref": "#/definitions/sandboxTemplate"
+						},
+						"podOverhead": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["cpuMillis", "memoryMi"],
+							"properties": {
+								"cpuMillis": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Whole millicores, read as an integer by chart arithmetic. 1000 millicores is one CPU."
+								},
+								"memoryMi": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Whole mebibytes, read as an integer by chart arithmetic. One mebibyte is 1048576 bytes."
+								}
+							}
 						}
 					}
 				},

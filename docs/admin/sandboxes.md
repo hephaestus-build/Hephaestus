@@ -27,7 +27,10 @@ The server waits for in-flight review runs before closing the gateway, within it
 The server uses the sandbox namespace and its Pod metadata from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
 Sandboxes call its gateway on port 8081.
 
-`sandbox.reviewMemory` and `sandbox.runtime.podOverhead` size the review quota.
+`sandbox.reviewMemory` reserves memory for review sandboxes (3840 MiB by default).
+Capacity follows the review template's memory request plus `sandbox.templates.podOverhead`.
+The default holds seven reviews.
+`small.yaml` holds five before RuntimeClass overhead.
 `conversationLoop.turns` sets conversation capacity ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)).
 
 The sandbox namespace is the one that you created for this release.
@@ -35,7 +38,11 @@ The chart creates no namespace.
 It writes these objects into it:
 
 - One ResourceQuota for each PriorityClass tier: reviews, and conversations for the tools Pods.
-  The chart derives both from `sandbox-pod-requests.json` and from `sandbox.reviewMemory`, `server.replicas` and `conversationLoop.turns`.
+  The chart derives both from the SandboxTemplate requests, `sandbox-pod-requests.json`, `sandbox.reviewMemory`, `server.replicas` and `conversationLoop.turns`.
+  The conversations quota also holds the template isolation gate's two conversation sandboxes.
+  Set `sandbox.templates.podOverhead` to the template RuntimeClass's `overhead.podFixed`.
+  Kubernetes counts this [Pod overhead](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-overhead/) with each Pod's requests at quota admission.
+  `sandbox.runtime.podOverhead` applies separately to the server-built probes and tools Pods.
   The conversations quota holds the tools Pods of the whole installation, not of each server.
   They count requests, not limits: sandbox Pods may use more than they request, up to their limits.
   Thus, Hephaestus's sandboxes never take a review's room, and reviews never take Hephaestus's.
@@ -160,7 +167,7 @@ The sandbox nodes need these items:
 These settings are optional:
 
 - `sandbox.runtime.runtimeClassName`: a RuntimeClass for sandbox Pods. Use only a RuntimeClass that supports `hostUsers: false` and passes the isolation probe. gVisor (`runsc`) with user namespaces is not qualified. To upgrade an install that uses it, clear this setting to use the default runtime, or qualify a compatible runtime.
-- `sandbox.runtime.podOverhead`: the RuntimeClass's `overhead.podFixed`, as `cpuMillis` and `memoryMi`. The sandbox quotas count it with each Pod.
+- `sandbox.runtime.podOverhead`: the RuntimeClass's `overhead.podFixed`, as `cpuMillis` and `memoryMi`, for the server-built probes and tools Pods. The template Pods use `sandbox.templates.podOverhead`.
 - `sandbox.runtime.seccompProfile`: the bundled `sandbox/agent-seccomp-profile.json` as a Localhost profile. Put the file below the kubelet's seccomp directory on every sandbox node, and set its relative path. Without it, sandbox Pods use `RuntimeDefault`.
 - `sandbox.runtime.nodeSelector` and `sandbox.runtime.tolerations`: the nodes of sandbox Pods.
 - A kubelet `podPidsLimit` on the sandbox nodes.
@@ -300,32 +307,24 @@ node scripts/sandbox-isolation.ts --namespace hephaestus-sandboxes --template he
 
 ### Sandbox sizes
 
-The server sizes each sandbox Pod from the measured use of that kind of sandbox.
-The Pod-kind table owns the memory and storage sizes.
-No per-review memory or process setting overrides it.
+The SandboxTemplates own the resource requests and limits of review and conversation sandboxes.
+Set them under `sandbox.templates.<kind>.resources`.
+The quotas follow those requests and `sandbox.templates.podOverhead`.
+Quota arithmetic rounds requests up to whole MiB and millicores.
+The default values are:
 
-| Sandbox Pod | CPU request | Memory request | Memory limit | Disk request | Size limit of each disk volume | Disk limit |
-| --- | --- | --- | --- | --- | --- | --- |
-| Review | 50m | 384 MiB | 1,280 MiB | 1 GiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
-| Tools Pod | 25m | 160 MiB | 512 MiB | 256 MiB | 512 MiB, 1 volume | 512 MiB and 64 MiB |
+| Sandbox | CPU request | Memory request | Memory limit | Disk request | Disk limit |
+| --- | --- | --- | --- | --- | --- |
+| Review template | 100m | 512 MiB | 2 GiB | 1 GiB | 4 GiB |
+| Conversation template | 100m | 384 MiB | 1 GiB | 256 MiB | 2 GiB |
+| Server-built tools Pod | 25m | 160 MiB | 512 MiB | 256 MiB | 512 MiB and 64 MiB |
 
-The review row counts the whole Pod.
-Its `loop` container requests 312 MiB, 30m and 992 MiB of disk and has the memory limit of the table.
-Its `tools` container requests 32 MiB, and its `programs` container requests 40 MiB.
-Each of these two requests 10m and 16 MiB of disk, and has a limit of 768 MiB and 500m.
-A review has `programs` only when it runs a custom practice program.
+Each template sandbox has one container and two disk volumes: `/workspace` and `/tmp`.
+Each volume has the kind's disk limit, and the Pod's disk limit bounds their total with its logs.
+The image's root filesystem is read-only.
+The server-built tools Pod has one disk volume for its tools workspace, and keeps `/run` in memory with 16 MiB.
+Its fixed requests come from `sandbox-pod-requests.json`.
 
-A review has seven volumes on the node's disk: the workspace, `work`, `out`, `.pi`, `.sessions`, `/tmp` and `~/.local`.
-A tools Pod has one: `/tmp`, which holds the tools workspace `/tmp/tools/workspace`.
-The disk limit of the main container holds all the volumes full and 64 MiB for its logs.
-Each other container, such as the isolation init container, has a disk limit of 16 MiB for its logs.
-
-The tools Pod and each probe Pod request a small part of their CPU limit.
-The isolation init container requests 10m.
-The chart's sandbox quotas count the requests of this table, not the limits.
-Four large reviews at once peaked at 632 to 657 MiB each.
-
-`/run` is in memory, with 16 MiB.
 The kubelet evicts a Pod whose volume passes its size limit, or whose disk use passes its disk limit.
 Thus, no sandbox can fill the node's disk and cause the eviction of other Pods.
 The server counts the eviction as a failure of the infrastructure, and the review spends a retry.
@@ -336,6 +335,6 @@ The sandbox uses the cluster runtime and its volume options.
 `/tmp`, with a tools Pod's workspace, and `/run` are not `noexec`, and a sandbox Pod keeps `/dev/shm` in its private IPC namespace.
 [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-24-the-kubernetes-runtime) records why.
 
-Every container command starts through `prlimit` from the agent image.
+Each server-built tools command starts through `prlimit` from the agent image.
 `prlimit` sets the `nofile` limit to 1024 and the `core` limit to 0, both soft and hard.
 A sandbox process cannot raise them.

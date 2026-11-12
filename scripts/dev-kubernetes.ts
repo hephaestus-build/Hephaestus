@@ -1,5 +1,6 @@
 /** Host edit loops share k3d, but each port set owns its sandbox namespace and chart-derived quota. */
 import { createHash, randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import path from "node:path";
@@ -15,7 +16,7 @@ import {
 } from "./kubernetes-cluster.ts";
 import { claimDevNamespace, ownsDevNamespace } from "./lib/dev-namespace.ts";
 import { positivePort, readEnvFile } from "./lib/env.ts";
-import { asArray, asRecord, asString, isRecord, parseJson, readJsonFileSync } from "./lib/json.ts";
+import { asArray, asRecord, asString, at, isRecord, parseJson } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
@@ -87,17 +88,19 @@ export function hostPorts(settings: NodeJS.ProcessEnv): {
 	return { namespace: `heph-dev-${server}-${gateway}`, server, gateway, management };
 }
 
-/** The memory of one review Pod, so that the host loop's reviews quota holds exactly one review. */
+/** The memory request of the review template, so that the host loop's reviews quota holds exactly one review. */
 function oneReviewMemory(): string {
-	const table = asRecord(
-		readJsonFileSync(path.join(CHART, "sandbox-pod-requests.json")),
-		"sandbox-pod-requests.json",
+	const values: unknown = parseAllDocuments(
+		readFileSync(path.join(CHART, "values.yaml"), "utf8"),
+	)[0]?.toJS();
+	return asString(
+		at(
+			values,
+			["sandbox", "templates", "review", "resources", "requests", "memory"],
+			"values.yaml",
+		),
+		"sandbox.templates.review.resources.requests.memory",
 	);
-	const { memoryMi } = asRecord(table.review, "review");
-	if (typeof memoryMi !== "number") {
-		throw new TypeError("sandbox-pod-requests.json review.memoryMi must be a number");
-	}
-	return `${memoryMi}Mi`;
 }
 
 export function hostValues(namespace: string, address: string): Record<string, unknown> {
