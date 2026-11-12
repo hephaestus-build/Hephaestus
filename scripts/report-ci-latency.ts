@@ -121,17 +121,23 @@ export function isFastTier(jobs: readonly { name: string }[]) {
 /** Fewer completed groups than this cannot support the revert criterion's 10 %. */
 export const MINIMUM_GROUPS = 20;
 
+const verdictJob =
+	/^(?:CI Status Gate|Report unsuccessful merge group|Fail fast: )|(?:^| \/ )Stop the merge group early$/u;
+
 /**
  * The share of completed merge groups that a queue-tier job failed, apart from the groups only a
- * fast-tier job failed. A cancelled group was regrouped by the queue and says nothing.
+ * fast-tier job failed. A cancelled group counts only when a worker recorded a failure.
  */
 export function queueTierFailures(
 	groups: readonly { conclusion: string; failedJobs: readonly string[] }[],
 ) {
 	const completed = groups.filter(
-		(group) => group.conclusion === "success" || group.conclusion === "failure",
+		(group) =>
+			group.conclusion === "success" ||
+			group.conclusion === "failure" ||
+			group.failedJobs.some((name) => !verdictJob.test(canonicalCiJobName(name))),
 	);
-	const failed = completed.filter((group) => group.conclusion === "failure");
+	const failed = completed.filter((group) => group.conclusion !== "success");
 	const queueTier = failed.filter((group) =>
 		group.failedJobs.some((name) =>
 			QUEUE_TIER_JOBS.some((pattern) => pattern.test(canonicalCiJobName(name))),
@@ -295,14 +301,21 @@ if (import.meta.main) {
 				Date.parse(asString(run.created_at, "created_at")) >= now - FAILURE_WINDOW_DAYS * DAY,
 		);
 	const outcomes = [];
-	for (const run of recent) {
-		const conclusion = asString(run.conclusion, "conclusion");
-		let failedJobs: string[] = [];
-		if (conclusion === "failure") {
-			const { jobs } = await jobsOf(repository, run, run.run_attempt);
-			failedJobs = failedJobNames(jobs);
-		}
-		outcomes.push({ conclusion, failedJobs });
+	// Cancelled runs need native evidence too; bounded batches keep this read-only observer timely.
+	for (let start = 0; start < recent.length; start += 8) {
+		outcomes.push(
+			...(await Promise.all(
+				recent.slice(start, start + 8).map(async (run) => {
+					const conclusion = asString(run.conclusion, "conclusion");
+					let failedJobs: string[] = [];
+					if (conclusion === "failure" || conclusion === "cancelled") {
+						const { jobs } = await jobsOf(repository, run, run.run_attempt);
+						failedJobs = failedJobNames(jobs);
+					}
+					return { conclusion, failedJobs };
+				}),
+			)),
+		);
 	}
 	const failures = queueTierFailures(outcomes);
 
