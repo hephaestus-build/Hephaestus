@@ -3071,6 +3071,11 @@ export const zReadReceipt = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+	matches: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 	path: z.string().optional(),
 	pattern: z.string().optional(),
 	sourceKind: z.string().optional(),
@@ -5034,6 +5039,7 @@ export const zScanReport = z.object({
 export const zSearchWarrant = z.object({
 	boundary: z.string().optional(),
 	consulted: z.array(z.string()).optional(),
+	hits: z.string().optional(),
 	lookedFor: z.string().optional(),
 });
 

@@ -9978,6 +9978,12 @@ export const ReadReceiptSchema = {
 			type: "integer",
 			format: "int32",
 		},
+		matches: {
+			type: "integer",
+			format: "int32",
+			description:
+				"how many matches a {@link ReadReceiptStatus#SEARCHED ReadReceiptStatus#SEARCHED} search found; null on every other receipt",
+		},
 		path: {
 			type: "string",
 		},
@@ -14587,6 +14593,11 @@ export const SearchWarrantSchema = {
 			items: {
 				type: "string",
 			},
+		},
+		hits: {
+			type: "string",
+			description:
+				"what the matches of the search are, and why they do not show what the result calls absent",
 		},
 		lookedFor: {
 			type: "string",
