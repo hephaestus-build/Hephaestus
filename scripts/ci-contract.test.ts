@@ -5752,9 +5752,10 @@ void test("the image build installs pack from its pin through the CI tool resolv
 		JSON.parse(await readFile(".github/ci-tools/pack.json", "utf8")),
 		"pack pin",
 	);
+	const pin = await ciToolPin("pack", "linux-x64");
 	assert.equal(
-		pack.url,
-		`https://github.com/buildpacks/pack/releases/download/v${String(pack.version)}/`,
+		pin.url,
+		`https://github.com/buildpacks/pack/releases/download/v${pin.version}/${pin.name}`,
 	);
 	const assets = asRecord(pack.assets, "pack assets");
 	assert.deepEqual(Object.keys(assets).toSorted(), ["linux-arm64", "linux-x64"]);
@@ -5762,8 +5763,8 @@ void test("the image build installs pack from its pin through the CI tool resolv
 		["linux-x64", "linux"],
 		["linux-arm64", "linux-arm64"],
 	] as const) {
-		const asset = asRecord(assets[platform], `pack ${platform} asset`);
-		assert.equal(asset.name, `pack-v${String(pack.version)}-${suffix}.tgz`);
+		const asset = await ciToolPin("pack", platform);
+		assert.equal(asset.name, `pack-v${pin.version}-${suffix}.tgz`);
 	}
 	const workflow = parseDocument(
 		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),

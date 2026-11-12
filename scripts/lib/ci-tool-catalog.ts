@@ -27,20 +27,68 @@ async function specification(id: string) {
 	return asRecord(parseJson(await readFile(file, "utf8")), `${id} pin`);
 }
 
-function selectPin(id: string, spec: Record<string, unknown>, platform: string): CiToolPin {
+function githubReleaseAsset(
+	id: string,
+	spec: Record<string, unknown>,
+	assets: Record<string, unknown>,
+	asset: Record<string, unknown>,
+) {
+	const repository = asString(spec.githubRelease, "CI tool GitHub repository");
+	const tag = asString(asset.version, "CI tool release tag");
+	if (
+		!/^\w[\w.-]*\/\w[\w.-]*$/u.test(repository) ||
+		!/^v\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/u.test(tag) ||
+		spec.version !== undefined ||
+		spec.url !== undefined ||
+		asset.url !== undefined
+	) {
+		throw new Error(`Invalid GitHub release pin for ${id}`);
+	}
+	const versions = new Set(
+		Object.values(assets).map((value) =>
+			asString(asRecord(value, `${id} asset`).version, "CI tool release tag"),
+		),
+	);
+	if (versions.size !== 1) {
+		throw new Error(`All ${id} assets must update to the same release tag`);
+	}
+	const name = asString(asset.name, "CI tool asset name").replaceAll("{version}", tag.slice(1));
+	return {
+		version: tag.slice(1).replaceAll("+", "_"),
+		name,
+		url: `https://github.com/${repository}/releases/download/${tag}/${name}`,
+	};
+}
+
+export function selectCiToolPin(
+	id: string,
+	spec: Record<string, unknown>,
+	platform: string,
+): CiToolPin {
 	const assets = asRecord(spec.assets, `${id} assets`);
 	const asset = asRecord(assets[platform] ?? assets.all, `${id} asset for ${platform}`);
-	const name = asString(asset.name, "CI tool asset name");
+	let source: Pick<CiToolPin, "version" | "name" | "url">;
+	if (spec.githubRelease === undefined) {
+		const name = asString(asset.name, "CI tool asset name");
+		source = {
+			version: asString(spec.version, "CI tool version"),
+			name,
+			url:
+				asset.url === undefined
+					? new URL(name, asString(spec.url, "CI tool release URL")).href
+					: asString(asset.url, "CI tool asset URL"),
+		};
+	} else {
+		source = githubReleaseAsset(id, spec, assets, asset);
+	}
+	const { version, name, url } = source;
 	const pin = {
 		id,
 		tool: spec.tool === undefined ? id : asString(spec.tool, "CI tool name"),
-		version: asString(spec.version, "CI tool version"),
+		version,
 		platform,
 		name,
-		url:
-			asset.url === undefined
-				? new URL(name, asString(spec.url, "CI tool release URL")).href
-				: asString(asset.url, "CI tool asset URL"),
+		url,
 		sha256: asString(asset.sha256, "CI tool SHA-256"),
 		...(asset.member === undefined
 			? {}
@@ -72,7 +120,7 @@ export async function ciToolPin(
 	id: string,
 	platform = `${process.platform}-${process.arch}`,
 ): Promise<CiToolPin> {
-	return selectPin(id, await specification(id), platform);
+	return selectCiToolPin(id, await specification(id), platform);
 }
 
 export async function allCiToolPins(): Promise<CiToolPin[]> {
@@ -85,7 +133,7 @@ export async function allCiToolPins(): Promise<CiToolPin[]> {
 	for (const id of ids) {
 		const spec = await specification(id);
 		for (const platform of Object.keys(asRecord(spec.assets, "CI tool assets"))) {
-			pins.push(selectPin(id, spec, platform));
+			pins.push(selectCiToolPin(id, spec, platform));
 		}
 	}
 	return pins;

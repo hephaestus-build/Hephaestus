@@ -30,6 +30,14 @@
 	"postUpdateOptions": ["pnpmDedupe"],
 	"packageRules": [
 		{
+			"description": "CI tool checksums require independent supply-chain review",
+			"matchManagers": ["custom.regex"],
+			"matchDatasources": ["github-release-attachments"],
+			"prBodyNotes": [
+				"Independently verify every changed CI tool asset checksum and Cosign trust material before merge. Renovate obtains digests from the same upstream release; a matching digest proves download integrity, not publisher authenticity. Follow [Release tool downloads](https://docs.hephaestus.build/contributor/ci-cd#release-tool-downloads)."
+			]
+		},
+		{
 			"description": "Gradle updates include reviewed dependency locks and verification metadata, not just version pins",
 			"matchManagers": ["gradle", "gradle-wrapper"],
 			"prBodyNotes": [
@@ -122,7 +130,7 @@
 			"dependencyDashboardApproval": true
 		},
 		{
-			"matchCurrentVersion": "/^0\\./",
+			"matchCurrentVersion": "/^v?0\\./",
 			"matchUpdateTypes": ["minor"],
 			"minimumReleaseAge": "7 days",
 			"addLabels": ["breaking"],
@@ -238,15 +246,16 @@
 			"versioningTemplate": "{{#if versioning}}{{versioning}}{{else}}semver{{/if}}"
 		},
 		{
-			"description": "Track the GitHub release versions of pinned CI tools",
+			"description": "Track CI tool release tags and asset checksums together",
 			"customType": "regex",
 			"managerFilePatterns": ["/^\\.github/ci-tools/(cosign|pack|syft|trivy)\\.json$/"],
 			"matchStrings": [
-				"\"version\":\\s*\"(?<currentValue>[^\"]+)\",[\\s\\S]*?\"url\":\\s*\"https://github\\.com/(?<depName>[\\w.-]+/[\\w.-]+)/releases/download/"
+				"\"githubRelease\":\\s*\"(?<depName>[\\w.-]+/[\\w.-]+)\"[\\s\\S]*",
+				"\"(?<depType>[\\w-]+)\":\\s*\\{\\s*\"version\":\\s*\"(?<currentValue>v[^\"]+)\",\\s*\"sha256\":\\s*\"(?<currentDigest>[a-f0-9]{64})\""
 			],
-			"extractVersionTemplate": "^v(?<version>.*)$",
 			"versioningTemplate": "semver",
-			"datasourceTemplate": "github-releases"
+			"datasourceTemplate": "github-release-attachments",
+			"matchStringsStrategy": "recursive"
 		},
 		{
 			"description": "Track the Zizmor CLI version",

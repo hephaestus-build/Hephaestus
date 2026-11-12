@@ -1,14 +1,15 @@
 {
-	"version": "0.40.10",
-	"url": "https://github.com/buildpacks/pack/releases/download/v0.40.10/",
+	"githubRelease": "buildpacks/pack",
 	"assets": {
 		"linux-x64": {
-			"name": "pack-v0.40.10-linux.tgz",
-			"sha256": "687c3616e21824a449b56d4f989613ca68c921c6cce670b4de4459b025233806"
+			"version": "v0.40.10",
+			"sha256": "687c3616e21824a449b56d4f989613ca68c921c6cce670b4de4459b025233806",
+			"name": "pack-v{version}-linux.tgz"
 		},
 		"linux-arm64": {
-			"name": "pack-v0.40.10-linux-arm64.tgz",
-			"sha256": "9a294abb0576fd95e19a009b3f9d5f5aa9fecdc2d7da7fa05e7e1e94f5085d77"
+			"version": "v0.40.10",
+			"sha256": "9a294abb0576fd95e19a009b3f9d5f5aa9fecdc2d7da7fa05e7e1e94f5085d77",
+			"name": "pack-v{version}-linux-arm64.tgz"
 		}
 	}
 }

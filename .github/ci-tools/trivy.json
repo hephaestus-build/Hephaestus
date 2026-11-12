@@ -1,18 +1,20 @@
 {
-	"version": "0.76.1",
-	"url": "https://github.com/aquasecurity/trivy/releases/download/v0.76.1/",
+	"githubRelease": "aquasecurity/trivy",
 	"assets": {
 		"linux-x64": {
-			"name": "trivy_0.76.1_Linux-64bit.tar.gz",
-			"sha256": "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
+			"version": "v0.76.1",
+			"sha256": "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0",
+			"name": "trivy_{version}_Linux-64bit.tar.gz"
 		},
 		"linux-arm64": {
-			"name": "trivy_0.76.1_Linux-ARM64.tar.gz",
-			"sha256": "e174dff2a6dba5e3ae41f8d0537a6324405bd08132497340304c6b20e0f16a1f"
+			"version": "v0.76.1",
+			"sha256": "e174dff2a6dba5e3ae41f8d0537a6324405bd08132497340304c6b20e0f16a1f",
+			"name": "trivy_{version}_Linux-ARM64.tar.gz"
 		},
 		"checksums": {
-			"name": "trivy_0.76.1_checksums.txt",
-			"sha256": "885debc41b570179e81af560e5f393a66be29b9ff8c52915674f3eb2304c535d"
+			"version": "v0.76.1",
+			"sha256": "885debc41b570179e81af560e5f393a66be29b9ff8c52915674f3eb2304c535d",
+			"name": "trivy_{version}_checksums.txt"
 		}
 	}
 }
