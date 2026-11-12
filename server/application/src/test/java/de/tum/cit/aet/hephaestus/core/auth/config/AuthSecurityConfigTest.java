@@ -5,15 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Base64;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
@@ -29,7 +28,6 @@ import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequ
  * on every restart and differ per replica), while dev/CI tolerate it with a generated key. Mirrors
  * {@code JwtSigningKeySealer}'s prod fail-fast. Fails if either guard is removed.
  */
-@ExtendWith(OutputCaptureExtension.class)
 class AuthSecurityConfigTest extends BaseUnitTest {
 
     private static MockEnvironment environment(String... profiles) {
@@ -50,11 +48,13 @@ class AuthSecurityConfigTest extends BaseUnitTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"specs", "cds-training"})
-    void shouldCreateEphemeralArtifactKeysWithoutRuntimeWarnings(String profile, CapturedOutput output) {
-        byte[] first = AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), environment(profile));
-        byte[] second = AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), environment(profile));
-        assertThat(first).hasSize(32).isNotEqualTo(second);
-        assertThat(output.getAll()).doesNotContain("WARN");
+    void shouldCreateEphemeralArtifactKeysWithoutRuntimeWarnings(String profile) {
+        try (var logs = new LogCapture(AuthSecurityConfig.class)) {
+            byte[] first = AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), environment(profile));
+            byte[] second = AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), environment(profile));
+            assertThat(first).hasSize(32).isNotEqualTo(second);
+            assertThat(logs.messagesAtLeast(Level.WARN)).isEmpty();
+        }
         assertThatThrownBy(
                         () -> AuthSecurityConfig.resolveStateCookieKey(propsWithKey(""), environment(profile, "prod")))
                 .isInstanceOf(IllegalStateException.class);
