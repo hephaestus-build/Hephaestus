@@ -191,19 +191,14 @@ class FilingLifecycleModelTest {
         out.add(new Step("notice changes", w.set(Fact.CONSENT_CURRENT, false)));
         person(w, out);
         switch (w.state()) {
-            case DRAFT_QUEUED -> {
-                out.add(new Step("worker claims", w.with(Event.DRAFT_CLAIMED)));
-                out.add(new Step("no model can draft", w.with(Event.DRAFT_ENDED)));
-                out.add(new Step("expires", routed(w)));
-            }
-            case DRAFTING -> {
-                out.add(new Step("worker ends", w.with(Event.DRAFT_ENDED)));
+            case DRAFT_QUEUED, DRAFTING, DRAFT_WAITING -> {
+                out.add(new Step("draft claimed", w.with(Event.DRAFT_CLAIMED)));
+                if (w.state() == FilingState.DRAFTING) out.add(new Step("model busy", w.with(Event.DRAFT_DEFERRED)));
+                out.add(new Step("draft action ends", w.with(Event.DRAFT_ENDED)));
                 out.add(new Step(
-                        "worker ends with a security draft",
+                        "draft action ends with a security draft",
                         w.set(Fact.LATCH, true).with(Event.DRAFT_ENDED)));
-                out.add(new Step("worker is replaced", w.with(Event.DRAFT_CLAIMED)));
-                out.add(new Step("draft call fails with attempts left", w.with(Event.DRAFT_RETRIED)));
-                out.add(new Step("expires", routed(w)));
+                out.add(new Step("no model can draft", w.with(Event.DRAFT_ENDED)));
             }
             case ANSWERED -> out.add(new Step("routes", routed(w)));
             case HELD -> {

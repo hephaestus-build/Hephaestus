@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794373009770-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <columnExists tableName="agent_action" columnName="kind"/>
+            <columnExists tableName="agent_action" columnName="workspace_id"/>
+            <columnExists tableName="llm_usage_event" columnName="workspace_id"/>
+            <columnExists tableName="llm_usage_event" columnName="source_type"/>
+            <columnExists tableName="llm_usage_event" columnName="run_id"/>
+            <columnExists tableName="llm_usage_event" columnName="lease_epoch"/>
+            <columnExists tableName="llm_usage_event" columnName="call_state"/>
+            <columnExists tableName="llm_usage_event" columnName="pricing_state"/>
+            <columnExists tableName="product_feedback_filing" columnName="state"/>
+            <columnExists tableName="product_feedback_filing" columnName="answer"/>
+            <columnExists tableName="product_feedback_filing" columnName="drafted_at"/>
+            <columnExists tableName="product_feedback_filing" columnName="next_attempt_at"/>
+            <columnExists tableName="product_feedback_filing" columnName="updated_at"/>
+            <columnExists tableName="product_feedback_filing" columnName="claimed_by"/>
+            <columnExists tableName="product_feedback_filing" columnName="lease_until"/>
+            <columnExists tableName="product_feedback_filing" columnName="failures"/>
+            <columnExists tableName="product_feedback" columnName="id"/>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_action
+  DROP CONSTRAINT ck_agent_action_kind,
+  ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK',
+    'RETRACT_FEEDBACK','SLACK_POST','PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE','DRAFT_REPORT')),
+  DROP CONSTRAINT ck_agent_action_workspace,
+  ADD CONSTRAINT ck_agent_action_workspace CHECK (workspace_id IS NOT NULL
+    OR kind IN ('EMAIL','FILE_ISSUE','PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE','DRAFT_REPORT'));
+ALTER TABLE llm_usage_event
+  ALTER COLUMN workspace_id DROP NOT NULL,
+  ADD COLUMN action_id uuid,
+  ADD COLUMN settle_after timestamp(6) with time zone,
+  DROP CONSTRAINT ck_llm_usage_event_open_call,
+  ADD CONSTRAINT ck_llm_usage_event_open_call CHECK (call_state <> 'OPEN' OR
+    ((source_type = 'PRODUCT_FEEDBACK_DRAFT' AND action_id IS NOT NULL AND settle_after IS NOT NULL)
+      OR (run_id IS NOT NULL AND lease_epoch IS NOT NULL))),
+  ADD CONSTRAINT ck_llm_usage_event_scope CHECK (
+    (source_type = 'PRODUCT_FEEDBACK_DRAFT' AND workspace_id IS NULL AND run_id IS NULL AND lease_epoch IS NULL
+      AND funding_source = 'INSTANCE' AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL)
+    OR (source_type <> 'PRODUCT_FEEDBACK_DRAFT' AND workspace_id IS NOT NULL)),
+  DROP CONSTRAINT ck_llm_usage_event_source_type,
+  ADD CONSTRAINT ck_llm_usage_event_source_type CHECK (source_type IN ('REVIEW_JOB', 'MENTOR_TURN',
+    'PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING', 'PRODUCT_FEEDBACK_DRAFT'));
+-- A report that waited for a worker's draft when the instance stopped has no draft action.
+-- It routes without a draft, as a report that no worker drafted within ten minutes did.
+UPDATE product_feedback_filing
+   SET state = 'ANSWERED', answer = NULL, drafted_at = NULL, next_attempt_at = clock_timestamp(), updated_at = clock_timestamp()
+ WHERE state IN ('DRAFT_QUEUED', 'DRAFTING');
+ALTER TABLE product_feedback_filing
+  ADD COLUMN draft_admitted_at timestamp(6) with time zone,
+  DROP CONSTRAINT ck_product_feedback_filing_state,
+  ADD CONSTRAINT ck_product_feedback_filing_state CHECK (state IN ('DRAFT_QUEUED', 'DRAFTING', 'DRAFT_WAITING', 'ANSWERED', 'HELD', 'QUEUED',
+    'FILING', 'FILED', 'SAVED', 'STOPPED')),
+  DROP COLUMN claimed_by,
+  DROP COLUMN lease_until,
+  DROP COLUMN failures;
+-- Accounting survives report erasure, including an open call that completes afterwards.
+CREATE INDEX idx_llm_usage_action ON llm_usage_event(action_id);
+CREATE FUNCTION detach_product_feedback_draft_usage() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ UPDATE llm_usage_event SET source_id = gen_random_uuid(),
+   call_state = CASE WHEN call_state='OPEN' THEN 'SETTLED' ELSE call_state END,
+   measurement_verification = CASE WHEN call_state='OPEN' THEN 'UNVERIFIABLE' ELSE measurement_verification END,
+   pricing_state = CASE WHEN call_state='OPEN' THEN 'UNPRICED' ELSE pricing_state END,
+   cost_usd = CASE WHEN call_state='OPEN' THEN NULL ELSE cost_usd END,
+   unreported_calls = CASE WHEN call_state='OPEN' THEN 1 ELSE unreported_calls END
+  WHERE source_type = 'PRODUCT_FEEDBACK_DRAFT' AND workspace_id IS NULL AND source_id = OLD.id;
+ RETURN OLD;
+END $$;
+CREATE TRIGGER product_feedback_detaches_draft_usage AFTER DELETE ON product_feedback
+ FOR EACH ROW EXECUTE FUNCTION detach_product_feedback_draft_usage();
+]]></sql>
+        <rollback><stop>Restore the verified database backup taken before the draft outbox migration.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

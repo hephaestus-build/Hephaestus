@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
@@ -38,6 +39,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
@@ -50,7 +52,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
     private final AgentRuns runs = mock(AgentRuns.class);
     private final ReviewSnapshotQuery reviews = mock(ReviewSnapshotQuery.class);
-    private final ProxyRoutingService routing = new ProxyRoutingService(jobs, turns, mapper, reviews, runs);
+    private final ProxyRoutingService routing =
+            new ProxyRoutingService(jobs, turns, mapper, reviews, runs, Mockito.mock(ProductFeedbackDraftCalls.class));
     private final ReviewJob job = new ReviewJob();
     private final Instant workDeadline = Instant.now().plusSeconds(30);
     private ProxyIdentity identity;

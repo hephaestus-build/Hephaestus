@@ -626,6 +626,33 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldLeaveNoWaitingRequestWhenABusyPoolDefersADraft() {
+        long pool = pool(1);
+        var draft = new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null);
+        try (var active = Objects.requireNonNull(workerA.acquire(
+                pool,
+                AgentRunBand.INTERACTIVE,
+                caller(1),
+                () -> false,
+                Instant.now().plusSeconds(5)))) {
+            assertThat(active.isRevoked()).isFalse();
+            assertThat(workerB.tryAcquireBackground(
+                            pool, draft, () -> false, Instant.now().plusSeconds(30)))
+                    .isNull();
+            assertThat(rows.countActive(pool)).isEqualTo(1);
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='WAITING'",
+                            Long.class,
+                            pool))
+                    .isZero();
+        }
+        try (var available = workerB.tryAcquireBackground(
+                pool, draft, () -> false, Instant.now().plusSeconds(30))) {
+            assertThat(available).isNotNull();
+        }
+    }
+
+    @Test
     void shouldKeepAnActiveCallWhileItsAttemptAcquiresAnotherPool() {
         long primary = pool(1);
         long auxiliary = pool(1);

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.Optional;
@@ -42,6 +43,9 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
     @Mock
     private MemberAiRoutingAdapter routing;
 
+    @Mock
+    private ProductFeedbackDraftCalls drafts;
+
     private ProxyRequestPolicy policy;
     private final UUID id = UUID.fromString("5f6696f2-1557-4ea1-b3d2-bfc338ae41bc");
     private final LlmModelResolver.ConnectionRef model =
@@ -49,7 +53,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        policy = new ProxyRequestPolicy(egress, jobs, turns, reviews, routing);
+        policy = new ProxyRequestPolicy(drafts, egress, jobs, turns, reviews, routing);
     }
 
     private ProxyRouting request(UsageSourceType source) {
@@ -98,6 +102,30 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
         assertThat(policy.allows(request(UsageSourceType.MENTOR_TURN))).isFalse();
         verify(routing).allows(1L, 20L, model);
         verifyNoInteractions(jobs);
+    }
+
+    @Test
+    void shouldPermitOnlyTheCurrentDisclosedInstanceDraftGeneration() {
+        var request = new ProxyRouting(
+                "draft",
+                "openai-completions",
+                "https://model.example",
+                UsageFundingSource.INSTANCE,
+                7L,
+                8L,
+                null,
+                new ProxyRouting.BilledAttempt(UsageSourceType.PRODUCT_FEEDBACK_DRAFT, id, 3, null),
+                Instant.now().plusSeconds(30),
+                100L);
+        when(drafts.waiting(id, 3))
+                .thenReturn(Optional.of(new ProductFeedbackDraftCalls.DraftCall(8L, "system", "report", 100)));
+        assertThat(policy.allows(request)).isTrue();
+        when(drafts.waiting(id, 3))
+                .thenReturn(Optional.of(new ProductFeedbackDraftCalls.DraftCall(9L, "system", "report", 100)));
+        assertThat(policy.allows(request)).isFalse();
+        when(drafts.waiting(id, 3)).thenReturn(Optional.empty());
+        assertThat(policy.allows(request)).isFalse();
+        verifyNoInteractions(jobs, turns, routing, reviews);
     }
 
     @Test

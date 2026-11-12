@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -30,13 +31,16 @@ class ProxyRoutingService {
     private final ObjectMapper objectMapper;
     private final ReviewSnapshotQuery reviews;
     private final AgentRuns runs;
+    private final ProductFeedbackDraftCalls drafts;
 
     ProxyRoutingService(
             ReviewJobRepository jobs,
             MentorTurnRepository mentorTurns,
             ObjectMapper mapper,
             ReviewSnapshotQuery reviews,
-            AgentRuns runs) {
+            AgentRuns runs,
+            ProductFeedbackDraftCalls drafts) {
+        this.drafts = drafts;
         this.agentJobRepository = jobs;
         this.runs = runs;
         this.mentorTurns = mentorTurns;
@@ -51,6 +55,7 @@ class ProxyRoutingService {
      * @throws ResponseStatusException 409 when the call's review no longer exists
      */
     AgentRunBand band(ProxyRouting routing) {
+        if (routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT) return AgentRunBand.BACKGROUND;
         if (routing.hephTurn()) return AgentRunBand.INTERACTIVE;
         var job = agentJobRepository.findById(routing.sourceId()).orElseThrow(ProxyRoutingService::attemptEnded);
         if (ResultAdmissionService.isAdmitted(job)) return AgentRunBand.BATCH;
@@ -61,6 +66,8 @@ class ProxyRoutingService {
 
     boolean ownsAttempt(ProxyRouting routing) {
         var attempt = routing.attempt();
+        if (attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT)
+            return drafts.waits(attempt.sourceId(), attempt.number());
         UUID lease = attempt.runId();
         Long workspace = routing.workspaceId();
         if (lease == null || workspace == null) return false;

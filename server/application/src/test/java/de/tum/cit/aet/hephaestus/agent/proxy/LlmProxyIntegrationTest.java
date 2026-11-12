@@ -20,10 +20,13 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPrice;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPriceRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver.ConnectionRef;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelVisibility;
+import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -34,12 +37,22 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.productfeedback.DraftReportAdapterFixture;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -48,6 +61,8 @@ import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -161,6 +176,27 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private LlmCallPermitRepository callRows;
 
+    @Autowired
+    private ProductFeedbackDrafts drafts;
+
+    @Autowired
+    private ProductFeedbackDraftCalls draftCalls;
+
+    @Autowired
+    private LlmAdmissionService modelAdmission;
+
+    @Autowired
+    private LlmModelPriceRepository modelPrices;
+
+    @Autowired
+    private AccountRepository accounts;
+
+    @Autowired
+    private AgentActions actions;
+
+    @Autowired
+    private ActionExecutor actionExecutor;
+
     private JobTokenAuthenticationFilter filter;
     private Workspace workspace;
     private SimpleMeterRegistry meterRegistry;
@@ -199,6 +235,133 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"200,100", "429,100", "200,0"})
+    void shouldDraftThroughTheRealInstanceResolverAndLedgerAndSettleTheAction(int providerStatus, int dailyLimit)
+            throws Exception {
+        try (var upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(providerStatus)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Retry-After", "5")
+                    .body(
+                            providerStatus == 200
+                                    ? "{\"choices\":[{\"message\":{\"content\":\"{}\"}}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":2}}"
+                                    : "{\"error\":{\"message\":\"rate limit\"}}")
+                    .build());
+            var connection = LlmCatalogTestFixtures.connection("draft-live-" + UUID.randomUUID());
+            connection.setBaseUrl(upstream.url("/v1").toString());
+            connection = connectionRepository.saveAndFlush(connection);
+            var model = modelRepository.saveAndFlush(LlmCatalogTestFixtures.model(
+                    connection, "draft-live-" + UUID.randomUUID(), "draft-live", ModelVisibility.GRANTED, true));
+            model.setMaxOutputTokens(100);
+            modelRepository.saveAndFlush(model);
+            var price = new LlmModelPrice();
+            price.setModel(model);
+            price.setPricingMode(PricingMode.PRICED);
+            price.setPer1mInputUsd(new BigDecimal("2"));
+            price.setPer1mOutputUsd(new BigDecimal("8"));
+            price.setEffectiveFrom(Instant.now());
+            modelPrices.saveAndFlush(price);
+            var account = new Account();
+            account.setDisplayName("Draft reporter");
+            account = accounts.saveAndFlush(account);
+            UUID report = UUID.randomUUID();
+            jdbc.update("""
+                INSERT INTO product_feedback(id,account_id,kind,message,submission_minute,created_at)
+                VALUES (?,?,'BUG','Synthetic report',clock_timestamp(),clock_timestamp())
+                """, report, account.getId());
+            jdbc.update("""
+                INSERT INTO product_feedback_filing(feedback_id,state,attempt,allow_public,risk_latch,input_tokens,output_tokens,file_disclosed,prompt_input,
+                    created_at,updated_at,next_attempt_at)
+                VALUES (?,'DRAFT_QUEUED',1,false,false,0,0,true,'Synthetic report',clock_timestamp(),clock_timestamp(),clock_timestamp())
+                """, report);
+            var oldDestination = jdbc.queryForList(
+                    "SELECT llm_model_id,daily_draft_limit FROM product_feedback_destination WHERE id=1");
+            jdbc.update("""
+                INSERT INTO product_feedback_destination(id,llm_model_id,daily_draft_limit,paused,notice_version,updated_at)
+                VALUES (1,?,?,false,1,clock_timestamp()) ON CONFLICT(id) DO UPDATE
+                    SET llm_model_id=excluded.llm_model_id,daily_draft_limit=excluded.daily_draft_limit
+                """, model.getId(), dailyLimit);
+            try {
+                String lane = "file_issue:" + report;
+                var request = new ActionRequest(
+                        ActionKind.DRAFT_REPORT,
+                        null,
+                        lane,
+                        "draft:" + report + ":1",
+                        objectMapper.valueToTree(new ProductFeedbackDrafts.Payload(report, 1)),
+                        account.getId(),
+                        3,
+                        Instant.now().plusSeconds(600));
+                UUID action = Objects.requireNonNull(transactionTemplate.execute(tx -> actions.enqueue(request)));
+                var proxy = proxyService(WebClient.builder().build(), mock(LlmBudgetService.class), admittingPermits());
+                var adapter = DraftReportAdapterFixture.adapter(
+                        drafts,
+                        draftCalls,
+                        modelResolver,
+                        new ProductFeedbackModelGateway(proxy, objectMapper),
+                        objectMapper,
+                        usageRecorder);
+                ActionTestSupport.due(jdbc, lane);
+                var result = ActionTestSupport.runLane(actionExecutor, jdbc, lane, adapter)
+                        .orElseThrow();
+                if (dailyLimit == 0) {
+                    assertThat(result).isInstanceOf(ActionResult.Failed.class);
+                    assertThat(upstream.getRequestCount()).isZero();
+                    assertThat(meterRegistry
+                                    .find(AgentMetrics.LLM_BUDGET_BLOCKED)
+                                    .counter())
+                            .isNull();
+                    assertThat(jdbc.queryForObject(
+                                    "SELECT count(*) FROM llm_usage_event WHERE action_id=?", Long.class, action))
+                            .isZero();
+                    return;
+                }
+                assertThat(upstream.getRequestCount()).isEqualTo(1);
+                var sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
+                var body = objectMapper.readTree(
+                        Objects.requireNonNull(sent.getBody()).utf8());
+                long output = body.has("max_completion_tokens")
+                        ? body.path("max_completion_tokens").asLong()
+                        : body.path("max_tokens").asLong();
+                assertThat(output).isEqualTo(100);
+                if (providerStatus == 200) {
+                    assertThat(result).isInstanceOf(ActionResult.Done.class);
+                    assertThat(jdbc.queryForObject("SELECT state FROM agent_action WHERE id=?", String.class, action))
+                            .isEqualTo("DONE");
+                    assertThat(jdbc.queryForObject(
+                                    "SELECT state FROM product_feedback_filing WHERE feedback_id=?",
+                                    String.class,
+                                    report))
+                            .isEqualTo("ANSWERED");
+                } else {
+                    assertThat(result).isInstanceOf(ActionResult.Retry.class);
+                    assertThat(jdbc.queryForObject(
+                                    "SELECT attempts FROM agent_action WHERE id=?", Integer.class, action))
+                            .isEqualTo(1);
+                }
+                var row = jdbc.queryForMap("SELECT * FROM llm_usage_event WHERE action_id=?", action);
+                assertThat(row)
+                        .containsEntry("workspace_id", null)
+                        .containsEntry("run_id", null)
+                        .containsEntry("call_state", "ENDED");
+                if (providerStatus == 200) {
+                    assertThat(row).containsEntry("input_tokens", 10L).containsEntry("output_tokens", 2L);
+                    assertThat((BigDecimal) row.get("cost_usd")).isEqualByComparingTo("0.000036");
+                }
+            } finally {
+                if (oldDestination.isEmpty()) jdbc.update("DELETE FROM product_feedback_destination WHERE id=1");
+                else
+                    jdbc.update(
+                            "UPDATE product_feedback_destination SET llm_model_id=?,daily_draft_limit=? WHERE id=1",
+                            oldDestination.getFirst().get("llm_model_id"),
+                            oldDestination.getFirst().get("daily_draft_limit"));
+            }
+        }
     }
 
     @Test
@@ -800,6 +963,9 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         var permit = mock(LlmCallPermits.Permit.class);
         when(permit.revoked()).thenReturn(Mono.never());
         when(permits.acquire(anyLong(), any(), any(), any(), any())).thenReturn(permit);
+        Mockito.lenient()
+                .when(permits.tryAcquireBackground(anyLong(), any(), any(), any()))
+                .thenReturn(permit);
         return permits;
     }
 
@@ -814,6 +980,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         when(policy.allows(any())).thenReturn(true);
         var gate = new ProxyBudgetGate(budgetService);
         var ledger = new ProxyCallLedger(
+                modelAdmission,
+                draftCalls,
                 usageRecorder,
                 agentRuns,
                 jobRepository,
@@ -830,7 +998,13 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 new ProxyAccounting(gate, ledger, meterRegistry, objectMapper),
                 policy,
                 mock(ScanCallGuard.class),
-                new ProxyRoutingService(jobRepository, turnRepository, objectMapper, reviewSnapshots, agentRuns),
+                new ProxyRoutingService(
+                        jobRepository,
+                        turnRepository,
+                        objectMapper,
+                        reviewSnapshots,
+                        agentRuns,
+                        Mockito.mock(ProductFeedbackDraftCalls.class)),
                 new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 capacity,
@@ -899,7 +1073,13 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private ProxyRouting routingOf(AuthenticationResult result) {
         Authentication authentication = Objects.requireNonNull(result.authentication(), "token did not authenticate");
-        return new ProxyRoutingService(jobRepository, turnRepository, objectMapper, reviewSnapshots, agentRuns)
+        return new ProxyRoutingService(
+                        jobRepository,
+                        turnRepository,
+                        objectMapper,
+                        reviewSnapshots,
+                        agentRuns,
+                        Mockito.mock(ProductFeedbackDraftCalls.class))
                 .resolve((ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal()));
     }
 

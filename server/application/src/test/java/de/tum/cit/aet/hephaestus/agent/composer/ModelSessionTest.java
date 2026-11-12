@@ -13,6 +13,25 @@ import tools.jackson.databind.ObjectMapper;
 
 class ModelSessionTest extends BaseUnitTest {
     @ParameterizedTest
+    @EnumSource(
+            value = LlmApiProtocol.class,
+            names = {"OPENAI_COMPLETIONS", "OPENAI_RESPONSES", "ANTHROPIC_MESSAGES"})
+    void shouldOfferNoToolsWhenTheSessionHasNone(LlmApiProtocol protocol) {
+        var mapper = new ObjectMapper();
+        var session = new ModelSession(
+                body -> new ModelSession.Answer(200, new byte[0], true, null),
+                mapper,
+                new ModelSession.Settings(protocol, "model", null, 100, null),
+                "Draft.",
+                List.of());
+
+        var request = mapper.readTree(session.requestText("Report."));
+
+        assertThat(request.has("tools")).isFalse();
+        assertThat(request.has("tool_choice")).isFalse();
+    }
+
+    @ParameterizedTest
     @EnumSource(ReasoningEffort.class)
     void shouldUseNativeCompositionDefaultsWithoutGuessingOptionsFromAnAlias(ReasoningEffort effort) {
         var mapper = new ObjectMapper();

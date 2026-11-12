@@ -27,12 +27,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
-import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafting;
 import de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -63,8 +61,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * What must hold when a destination or a worker does not behave: a public destination is proven public, and a report
- * never waits for a worker forever. Only the GitHub transport is controlled.
+ * What must hold when a destination does not behave: a public destination is proven public, and a report is never
+ * stuck. The destination names no model here, so every report routes without a draft
+ * ({@link ProductFeedbackDraftIntegrationTest} drafts). Only the GitHub transport is controlled.
  */
 @Import(CapturingMailTestConfiguration.class)
 @TestPropertySource(properties = "hephaestus.email.from=noreply@hephaestus.test")
@@ -101,9 +100,6 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MeterRegistry meters;
-
-    @Autowired
-    private ProductFeedbackDrafting drafting;
 
     @Autowired
     private ProductFeedbackDestinationRepository destinationRows;
@@ -249,10 +245,15 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRouteAReportWithoutADraftWhenNoWorkerTookItInTime() {
+    void shouldRouteAReportWithoutADraftWhenNoModelIsChosen() {
         UUID id = report();
-        backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
 
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_action WHERE lane_key = ? AND kind = 'DRAFT_REPORT'",
+                        Long.class,
+                        FileIssueAdapter.lane(id)))
+                .isZero();
         routing.routeAnswered();
 
         ProductFeedbackFiling routed = filings.findById(id).orElseThrow();
@@ -263,72 +264,8 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRouteAReportWithoutADraftWhenItsWorkerStoppedAndNoneReplacedIt() {
+    void shouldKeepAnUndraftedReportForTheAdminsWhileFilingIsPaused() {
         UUID id = report();
-        jdbc.update(
-                "UPDATE product_feedback_filing SET state = 'DRAFTING', lease_until = ? WHERE feedback_id = ?",
-                Timestamp.from(Instant.now().minus(DraftingService.EXPIRY.plusMinutes(1))),
-                id);
-
-        routing.routeAnswered();
-
-        assertThat(filings.findById(id).orElseThrow().getReason()).isEqualTo(FilingReason.NO_DRAFT);
-    }
-
-    @Test
-    void shouldGiveAFailedDraftMoreChancesBeforeFilingGoesOn() {
-        UUID id = report();
-        for (int attempt = 1; attempt < DraftingService.DRAFT_ATTEMPTS; attempt++) {
-            jdbc.update(
-                    "UPDATE product_feedback_filing SET state = 'DRAFTING', attempt = ? WHERE feedback_id = ?",
-                    attempt,
-                    id);
-
-            drafting.fail(id, attempt, ProductFeedbackDrafting.Failure.PROVIDER_ERROR, 0, 0);
-
-            assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.DRAFT_QUEUED);
-        }
-        jdbc.update(
-                "UPDATE product_feedback_filing SET state = 'DRAFTING', attempt = ? WHERE feedback_id = ?",
-                DraftingService.DRAFT_ATTEMPTS,
-                id);
-
-        drafting.fail(id, DraftingService.DRAFT_ATTEMPTS, ProductFeedbackDrafting.Failure.PROVIDER_ERROR, 0, 0);
-
-        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
-    }
-
-    @Test
-    void shouldNotWaitForADraftWhenNoModelIsThere() {
-        UUID id = report();
-        jdbc.update("UPDATE product_feedback_filing SET state = 'DRAFTING', attempt = 1 WHERE feedback_id = ?", id);
-
-        drafting.fail(id, 1, ProductFeedbackDrafting.Failure.MODEL_UNAVAILABLE, 0, 0);
-
-        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
-    }
-
-    @Test
-    void shouldDropALateAnswerWhenTheReportAlreadyMovedOn() {
-        UUID id = report();
-        jdbc.update(
-                "UPDATE product_feedback_filing SET state = 'DRAFTING', attempt = 1, lease_until = ? WHERE feedback_id = ?",
-                Timestamp.from(Instant.now().minus(DraftingService.EXPIRY.plusMinutes(1))),
-                id);
-        routing.routeAnswered();
-
-        drafting.complete(id, 1, "{\"disposition\":\"ISSUE\"}", 10, 10);
-
-        ProductFeedbackFiling routed = filings.findById(id).orElseThrow();
-        assertThat(routed.getState()).isEqualTo(FilingState.QUEUED);
-        assertThat(routed.getAnswer()).isNull();
-        assertThat(routed.getReason()).isEqualTo(FilingReason.NO_DRAFT);
-    }
-
-    @Test
-    void shouldKeepAnExpiredReportForTheAdminsWhileFilingIsPaused() {
-        UUID id = report();
-        backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
         routing.routeAnswered();
         ProductFeedbackDestination destination = destination();
         destination.setPaused(true);
@@ -345,15 +282,6 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
         assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.SAVED);
         verify(issues, never()).create(any(), anyString(), anyString(), any());
-    }
-
-    @Test
-    void shouldKeepWaitingForAWorkerWhileTheReportIsYoung() {
-        UUID id = report();
-
-        routing.routeAnswered();
-
-        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.DRAFT_QUEUED);
     }
 
     @Test
@@ -428,8 +356,9 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
         assertThat(filing.fileSaved(id, admin)).isTrue();
 
+        // It starts over from drafting; with no model chosen, it goes on without a draft.
         ProductFeedbackFiling started = filings.findById(id).orElseThrow();
-        assertThat(started.getState()).isEqualTo(FilingState.DRAFT_QUEUED);
+        assertThat(started.getState()).isEqualTo(FilingState.ANSWERED);
         assertThat(started.getRoute()).isNull();
         assertThat(started.getPromptInput()).isNotBlank();
         assertThat(started.isAllowPublic()).isFalse();
@@ -446,7 +375,6 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     void shouldNotMakeAFiledReportPublicWithoutTheReportersChoice() {
         UUID id = savedReport(false);
         filing.fileSaved(id, Objects.requireNonNull(admin.getId()));
-        backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
 
         routing.routeAnswered();
 
@@ -477,7 +405,6 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         UUID id = savedReport(true);
 
         assertThat(filing.fileSaved(id, Objects.requireNonNull(admin.getId()))).isTrue();
-        backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
         routing.routeAnswered();
 
         ProductFeedbackFiling routed = filings.findById(id).orElseThrow();
@@ -860,7 +787,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
         assertThat(filing.fileSaved(id, Objects.requireNonNull(admin.getId()))).isTrue();
 
-        // ANSWERED never reaches a worker: only DRAFT_QUEUED and DRAFTING rows are claimed for a model.
+        // ANSWERED never reaches a model: only a DRAFT_QUEUED report has a draft action.
         ProductFeedbackFiling moved = filings.findById(id).orElseThrow();
         assertThat(moved.getState()).isEqualTo(FilingState.ANSWERED);
         assertThat(moved.getPromptInput()).isNull();
@@ -886,19 +813,6 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldNeverHandAReportToAModelWhenItsAuthorWasNotTold() {
-        UUID id = report();
-        jdbc.update(
-                "UPDATE product_feedback_filing SET file_disclosed = false, next_attempt_at = ? WHERE feedback_id = ?",
-                Timestamp.from(Instant.EPOCH),
-                id);
-
-        drafting.claim("test-worker");
-
-        assertThat(filings.findById(id).orElseThrow().getAttempt()).isZero();
-    }
-
-    @Test
     void shouldMoveEverythingOnceWhenAMoveRunsTwice() {
         UUID first = olderReport();
         UUID second = savedReport(false);
@@ -908,7 +822,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         assertThat(filing.fileAllSaved(admin)).isZero();
 
         assertThat(filings.findById(first).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
-        assertThat(filings.findById(second).orElseThrow().getState()).isEqualTo(FilingState.DRAFT_QUEUED);
+        assertThat(filings.findById(second).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
         assertThat(filedAudits(first)).isEqualTo(1);
     }
 
@@ -921,7 +835,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
         filing.fileAllSaved(admin);
 
-        assertThat(filings.findById(left).orElseThrow().getState()).isEqualTo(FilingState.DRAFT_QUEUED);
+        assertThat(filings.findById(left).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
         assertThat(filedAudits(done)).isEqualTo(1);
     }
 
@@ -980,7 +894,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         UUID id = report();
 
         assertThat(filing.fileSaved(id, Objects.requireNonNull(admin.getId()))).isFalse();
-        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.DRAFT_QUEUED);
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
     }
 
     @Test
@@ -1262,7 +1176,6 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldKeepThePageOffEveryPublicRouteWhenNothingWasTicked() {
         UUID id = send(newReporter(), false, "/w/$workspaceSlug/activity");
-        backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
 
         routing.routeAnswered();
 
@@ -1374,10 +1287,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
             boolean hasPublic = true;
             for (int step = 0; step < 14; step++) {
                 switch (random.nextInt(8)) {
-                    case 0 -> {
-                        backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
-                        routing.routeAnswered();
-                    }
+                    case 0 -> routing.routeAnswered();
                     case 1 -> fileWhatIsDue(id);
                     case 2 -> {
                         // Once kept private, a report gets no public issue unless the person allows it again.
@@ -1448,12 +1358,5 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         account.setPrimaryEmail(UUID.randomUUID() + "@hephaestus.test");
         account.setPrimaryEmailVerifiedAt(Instant.now());
         return accounts.save(account);
-    }
-
-    private void backdate(String column, UUID id, Duration age) {
-        jdbc.update(
-                "UPDATE product_feedback_filing SET " + column + " = ? WHERE feedback_id = ?",
-                Timestamp.from(Instant.now().minus(age)),
-                id);
     }
 }

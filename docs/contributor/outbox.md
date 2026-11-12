@@ -5,7 +5,7 @@ page_type: reference
 ---
 
 An effect on the outside world is one action in the `agent_action` table.
-Email, product-feedback issues (`FILE_ISSUE`, `/publish` as `PUBLISH_REPORT`, the scrub after an erasure as `CLEANUP_ISSUE`, and **Make private** as `TRANSFER_ISSUE`), feedback on the reviewed work (`DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`) and Hephaestus's Slack posts (`SLACK_POST`) are the kinds of action in this release.
+Email, product-feedback issues (`FILE_ISSUE`, `/publish` as `PUBLISH_REPORT`, the scrub after an erasure as `CLEANUP_ISSUE`, and **Make private** as `TRANSFER_ISSUE`), the model draft of a product-feedback report (`DRAFT_REPORT`), feedback on the reviewed work (`DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`) and Hephaestus's Slack posts (`SLACK_POST`) are the kinds of action in this release.
 One executor carries out the actions on every server replica.
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) records why there is one outbox.
 The code is in `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/action/`.
@@ -127,6 +127,22 @@ The copies keep their own write fences.
 A send calls `beginWrite` before it fences a copy.
 While a copy's write may have reached the provider, the send returns `Reread`, and the next attempt reads the copy back by its marker.
 The `ended` hook also projects the copies of a send that ended without its own settlement.
+
+## Product-feedback draft
+
+A `DRAFT_REPORT` action makes one model call, not a provider write.
+It is in the outbox because the outbox already owns the claim, the lease, the retry, the expiry and the lane order.
+The action runs in the report's lane, `file_issue:<report>`, so it ends before the report's filing starts.
+Its key is `draft:<report>:<generation>`. It has three attempts and expires ten minutes after it is enqueued.
+
+`DraftReportAdapter` sends the call through `ProductFeedbackModelGateway.draft` to the LLM proxy in the server's JVM.
+The request carries no tools, so the report's text can make the model answer but never act.
+The draft writes nothing outside Hephaestus. Thus, the adapter calls no fence and reads nothing back: a repeated call costs only tokens.
+A served answer is kept on the filing under the attempt's lease, and the action ends `DONE`.
+Capacity refusal returns `Defer` and applies `DRAFT_DEFERRED`, so the filing enters `DRAFT_WAITING` without spending an attempt. The next claim applies `DRAFT_CLAIMED`.
+A provider failure or rate limit returns `Retry`. A draft does not absorb provider throttles into another pool admission. A model that is gone or that the proxy refuses returns `Failed` with `NOT_CONFIGURED`.
+The `ended` hook moves the filing to `ANSWERED`, with the kept answer only when the action is `DONE`.
+[Product feedback architecture](./product-feedback.mdx#the-draft-action) describes the checks before the enqueue.
 
 ## Carry out an effect at once
 

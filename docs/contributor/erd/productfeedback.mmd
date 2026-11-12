@@ -73,11 +73,8 @@ erDiagram
         UUID consent_id
         BOOLEAN risk_latch "NOT NULL"
         INTEGER attempt "NOT NULL"
-        VARCHAR(100) claimed_by
-        TIMESTAMPTZ lease_until
         TIMESTAMPTZ next_attempt_at "NOT NULL"
         TIMESTAMPTZ filed_after
-        INTEGER failures "NOT NULL"
         TEXT prompt_input
         TEXT answer
         VARCHAR(39) publish_requested_by
@@ -113,6 +110,7 @@ erDiagram
         BIGINT predecessor_installation_id
         BIGINT predecessor_issue_number
         VARCHAR(100) predecessor_issue_node_id
+        TIMESTAMPTZ draft_admitted_at
     }
 
     Account["Account · Core"]

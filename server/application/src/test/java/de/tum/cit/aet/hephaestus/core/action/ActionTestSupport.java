@@ -90,6 +90,14 @@ public final class ActionTestSupport {
         });
     }
 
+    /** Ends one action that can no longer run, as the executor's reaper would; its kind's adapters learn of the end. */
+    public static void endStale(ApplicationContext context, UUID id) {
+        var adapters = context.getBeansOfType(ActionAdapter.class).values();
+        context.getBean(ActionStore.class).endStale(id, ended -> {
+            for (ActionAdapter adapter : adapters) if (adapter.kind() == ended.kind()) adapter.ended(ended);
+        });
+    }
+
     /** Ends the lease of a lane's running attempt, as if its process stopped. */
     public static void expireLease(JdbcTemplate jdbc, String laneKey) {
         jdbc.update(

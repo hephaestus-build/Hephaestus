@@ -17,12 +17,10 @@ final class FilingLifecycle {
     private FilingLifecycle() {}
 
     enum Event {
-        /** A server takes the report, or takes over one whose lease ended. */
-        DRAFT_CLAIMED,
-        /** The server handed back an answer, or that none came. */
+        /** The draft action ended with an answer, or without one; or no model may draft the report. */
         DRAFT_ENDED,
-        /** A draft call failed and has attempts left, so the report waits for a server again. */
-        DRAFT_RETRIED,
+        DRAFT_CLAIMED,
+        DRAFT_DEFERRED,
         /** Routing decided: the report waits out its hold. */
         ROUTED_TO_HOLD,
         /** Routing decided: filing takes the report next. */
@@ -95,16 +93,14 @@ final class FilingLifecycle {
     }
 
     static {
-        allow(FilingState.DRAFT_QUEUED, Event.DRAFT_CLAIMED, FilingState.DRAFTING);
-        allow(FilingState.DRAFTING, Event.DRAFT_CLAIMED, FilingState.DRAFTING);
-        allow(FilingState.DRAFT_QUEUED, Event.DRAFT_ENDED, FilingState.ANSWERED);
-        allow(FilingState.DRAFTING, Event.DRAFT_ENDED, FilingState.ANSWERED);
-        allow(FilingState.DRAFTING, Event.DRAFT_RETRIED, FilingState.DRAFT_QUEUED);
-        // An expired report routes straight from a draft state, so a server without agent jobs cannot hold it back.
-        for (FilingState from : EnumSet.of(FilingState.ANSWERED, FilingState.DRAFT_QUEUED, FilingState.DRAFTING)) {
-            allow(from, Event.ROUTED_TO_HOLD, FilingState.HELD);
-            allow(from, Event.ROUTED_TO_FILE, FilingState.QUEUED);
+        for (FilingState state :
+                EnumSet.of(FilingState.DRAFT_QUEUED, FilingState.DRAFTING, FilingState.DRAFT_WAITING)) {
+            allow(state, Event.DRAFT_CLAIMED, FilingState.DRAFTING);
+            allow(state, Event.DRAFT_ENDED, FilingState.ANSWERED);
         }
+        allow(FilingState.DRAFTING, Event.DRAFT_DEFERRED, FilingState.DRAFT_WAITING);
+        allow(FilingState.ANSWERED, Event.ROUTED_TO_HOLD, FilingState.HELD);
+        allow(FilingState.ANSWERED, Event.ROUTED_TO_FILE, FilingState.QUEUED);
         allow(FilingState.HELD, Event.EDITED, FilingState.DRAFT_QUEUED);
         allow(FilingState.HELD, Event.KEPT_PRIVATE, FilingState.QUEUED);
         allow(FilingState.FILING, Event.FILING_REQUEUED, FilingState.QUEUED);
@@ -139,7 +135,7 @@ final class FilingLifecycle {
     /** What a reporter sees. A new state fails to compile here until it has a meaning, and no caller maps one itself. */
     static FilingDTOs.ReportState reporterState(FilingState state, @Nullable FilingRoute route) {
         return switch (state) {
-            case DRAFT_QUEUED, DRAFTING, ANSWERED -> FilingDTOs.ReportState.DRAFTING;
+            case DRAFT_QUEUED, DRAFTING, DRAFT_WAITING, ANSWERED -> FilingDTOs.ReportState.DRAFTING;
             case HELD -> FilingDTOs.ReportState.HELD;
             // A report bound for the admins can wait here behind the hourly limit, and it is not going to GitHub.
             case QUEUED ->
@@ -155,7 +151,7 @@ final class FilingLifecycle {
     static boolean waitsForAdmin(FilingState state) {
         return switch (state) {
             case SAVED, STOPPED -> true;
-            case DRAFT_QUEUED, DRAFTING, ANSWERED, HELD, QUEUED, FILING, FILED -> false;
+            case DRAFT_QUEUED, DRAFTING, DRAFT_WAITING, ANSWERED, HELD, QUEUED, FILING, FILED -> false;
         };
     }
 }

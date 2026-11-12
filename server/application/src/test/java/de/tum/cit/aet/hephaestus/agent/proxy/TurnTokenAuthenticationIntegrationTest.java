@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -150,7 +151,12 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         Authentication authentication = Objects.requireNonNull(result.authentication());
         ProxyIdentity identity = (ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal());
         ProxyRouting routing = new ProxyRoutingService(
-                        jobRepository, turnRepository, objectMapper, Mockito.mock(ReviewSnapshotQuery.class), agentRuns)
+                        jobRepository,
+                        turnRepository,
+                        objectMapper,
+                        Mockito.mock(ReviewSnapshotQuery.class),
+                        agentRuns,
+                        Mockito.mock(ProductFeedbackDraftCalls.class))
                 .resolve(identity);
         ProxyRouting.BilledAttempt attempt = routing.attempt();
         assertThat(routing.workspaceId()).isEqualTo(workspace.getId());

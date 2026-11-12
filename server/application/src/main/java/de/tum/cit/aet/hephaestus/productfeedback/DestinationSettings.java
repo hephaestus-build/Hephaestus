@@ -14,6 +14,13 @@ class DestinationSettings {
         return repository.findById(ProductFeedbackDestination.SINGLETON).orElseGet(ProductFeedbackDestination::new);
     }
 
+    /** Serializes draft quota admission with operator changes to the singleton. */
+    ProductFeedbackDestination locked() {
+        return repository
+                .findForUpdate(ProductFeedbackDestination.SINGLETON)
+                .orElseGet(ProductFeedbackDestination::new);
+    }
+
     /** Puts a newly filed public issue at the head of the snapshot that drafting reads, in the caller's transaction. */
     void recordPublicIssue(long number, String title) {
         repository.findById(ProductFeedbackDestination.SINGLETON).ifPresent(destination -> {

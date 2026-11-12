@@ -9,5 +9,11 @@ public enum UsageSourceType {
      */
     PRACTICE_SCRIPT_DECISION,
     PRACTICE_SCRIPT_EMBEDDING,
-    PRACTICE_SCRIPT_RERANKING;
+    PRACTICE_SCRIPT_RERANKING,
+    /**
+     * The one model call that drafts a product-feedback report; the source is the report, and the number is the
+     * generation in the call's {@code draft_report} action. It belongs to no workspace, and its tokens count on the
+     * report.
+     */
+    PRODUCT_FEEDBACK_DRAFT;
 }

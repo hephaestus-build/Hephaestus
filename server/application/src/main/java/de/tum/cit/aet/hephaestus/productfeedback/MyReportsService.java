@@ -36,6 +36,7 @@ class MyReportsService {
     private final ProductFeedbackConsentRepository consents;
     private final DestinationSettings destinations;
     private final RoutingService routing;
+    private final FileIssueQueue fileIssues;
     private final GitHubLogins logins;
     private final ProductFeedbackIssues issues;
     private final IssueTransfers transfers;
@@ -49,6 +50,7 @@ class MyReportsService {
             ProductFeedbackConsentRepository consents,
             DestinationSettings destinations,
             RoutingService routing,
+            FileIssueQueue fileIssues,
             GitHubLogins logins,
             ProductFeedbackIssues issues,
             IssueTransfers transfers,
@@ -60,6 +62,7 @@ class MyReportsService {
         this.consents = consents;
         this.destinations = destinations;
         this.routing = routing;
+        this.fileIssues = fileIssues;
         this.logins = logins;
         this.issues = issues;
         this.transfers = transfers;
@@ -133,7 +136,9 @@ class MyReportsService {
             if (consent != null && consent.isMention())
                 filing.setMentionLogin(logins.of(report.getAccountId()).orElse(null));
         }
-        return filings.save(filing);
+        ProductFeedbackFiling saved = filings.save(filing);
+        fileIssues.draft(saved, report, now);
+        return saved;
     }
 
     /** The consent behind a tick: the current one if it already allows a public issue, otherwise a new event. */
@@ -208,6 +213,7 @@ class MyReportsService {
         filing.setFiledAfter(now.plus(DraftingService.HOLD));
         filing.setNextAttemptAt(now);
         filing.setUpdatedAt(now);
+        fileIssues.draft(filing, report, now);
         return dto(report, filing);
     }
 
@@ -362,6 +368,7 @@ class MyReportsService {
                         || (filing.isAllowPublic()
                                 && (filing.getState() == FilingState.DRAFT_QUEUED
                                         || filing.getState() == FilingState.DRAFTING
+                                        || filing.getState() == FilingState.DRAFT_WAITING
                                         || filing.getState() == FilingState.ANSWERED)),
                 held && draft != null && filing.getDraftedAt() != null,
                 isPublicIssue && destinations.current().getPrivateRepository() != null,

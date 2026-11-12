@@ -137,6 +137,7 @@ These migration entries also apply to a host that upgrades to 1.0:
 - *Stop every role before the models for practice scripts are deleted*. The upgrade deletes the Decisions, Embeddings and Rerank connections.
 - *Remove the review poll settings and the review Job metrics*. Remove `AGENT_POLL_INTERVAL` and `AGENT_CLAIM_BATCH_SIZE`. Remove your own alerts on these metrics.
 - *Stop every role before moving conversation turn leases to agent runs*. The previous release cannot read the new turn leases.
+- *Product feedback drafts use server egress*: allow the selected instance model's provider through the server firewall. Keep a verified pre-upgrade database backup.
 
 ## Cut over to 1.0.0
 

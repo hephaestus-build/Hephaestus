@@ -54,6 +54,32 @@ Hephaestus refuses to remove the private repository while a public issue can sti
 It also refuses while erasure cleanup still has to move a public issue there.
 You can replace it with another private repository.
 
+## Inspect draft usage
+
+The instance usage screen groups model spend by workspace.
+Product feedback drafts have no workspace, so that screen excludes them.
+A person's data export includes the calls for their reports.
+
+For instance accounting, run this read-only query against PostgreSQL.
+It shows measured cost in USD and the number of calls whose cost remains unknown.
+An unknown call is not a free call.
+
+```sql
+SELECT date_trunc('month', occurred_at AT TIME ZONE 'UTC') AS month,
+       count(*) AS calls,
+       sum(input_tokens + cache_read_tokens + cache_write_tokens) AS input_tokens,
+       sum(output_tokens) AS output_tokens,
+       sum(cost_usd) FILTER (WHERE measurement_verification = 'VERIFIED'
+                            AND pricing_state <> 'UNPRICED') AS measured_cost_usd,
+       count(*) FILTER (WHERE call_state <> 'ENDED'
+                        OR measurement_verification <> 'VERIFIED'
+                        OR pricing_state = 'UNPRICED') AS unknown_calls
+FROM llm_usage_event
+WHERE workspace_id IS NULL AND source_type = 'PRODUCT_FEEDBACK_DRAFT'
+GROUP BY 1
+ORDER BY 1 DESC;
+```
+
 ## Route reports
 
 Code selects the route after the model drafts the issue:
@@ -79,7 +105,7 @@ Each private issue starts with a reason:
 | `about a person` | The report concerns a named person. |
 | `low confidence` | The report is unclear or is not an actionable issue. |
 | `abuse` | The safety check found abuse. |
-| `no model draft finished` | The model was unavailable, the limit was reached, the model response stayed invalid, or no server took the report within 10 minutes. |
+| `no model draft finished` | The model was unavailable, the limit was reached, the model response stayed invalid, or no draft finished within 10 minutes. |
 
 Security, blocking redaction, or a report about a named person sets a persistent risk latch.
 An edit or retry cannot clear it.
@@ -226,7 +252,7 @@ To resume new filing, turn off **Pause** after you correct the cause.
 | Installation missing or suspended | The app cannot reach the named repository. | Restore its installation and **Issues: read and write** permission. Select **Retry**. |
 | Private destination unavailable | The repository is public, inaccessible, or has an unknown visibility. | Turn on **Pause**. Restore private visibility and app access before **Retry**. |
 | Model unavailable | The model, pool, credentials, or provider connection is unavailable. | Restore the instance model and its pool. Reports without drafts stay private. |
-| Many `no model draft finished` routes | The daily limit is reached, model output stays invalid, or no server runs the agent runtime. | Check the count and model health. If `product_feedback_steps_total{step="draft",outcome="expired"}` rises, check the servers with `AGENT_ENABLED`. Reassess the model with the routing evaluation. |
+| Many `no model draft finished` routes | The daily limit is reached, model output stays invalid, or the draft calls fail. | Check the count and model health. If `product_feedback_steps_total{step="draft",outcome="expired"}` rises, check the server's outbox backlog. For `outcome="not_configured"`, check the daily instance and account draft limits, then the model and its provider connection. For `outcome="attempts_exhausted"`, check provider failures. Reassess the model with the routing evaluation. |
 | Many private routes | Read the route split by reason. The gate can be strict or reports can contain detected personal data. | Inspect synthetic evaluation results before you change the model. Keep privacy checks in place. |
 | Public report waits longer than five minutes | The hold is a minimum. Drafts, filing pace, rate limits, or reconciliation can delay it. | Check server health, model availability, and **Needs action**. |
 | GitHub write stopped | `DESTINATION_UNAVAILABLE` or `GITHUB_REFUSED` explains the stop. | Turn on **Pause** if privacy is in doubt. Correct app access or the refusal, then select **Retry**. |

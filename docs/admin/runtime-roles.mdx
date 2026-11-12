@@ -816,7 +816,8 @@ Without the last line, the server runs no agent runtime: no practice review, no 
 
 No LLM environment variables are necessary.
 The LLM proxy runs in-process on each server with agent jobs on.
-It serves queued practice reviews and conversation turns.
+It serves queued practice reviews, conversation turns, and product feedback drafts.
+A draft uses the proxy in the server process and starts no sandbox.
 It reads providers from the same instance/workspace catalog as the API.
 
 1. Register providers at runtime under Instance administration → AI models, or under the workspace's AI models page.

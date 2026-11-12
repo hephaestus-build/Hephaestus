@@ -38,6 +38,10 @@ public class ProductFeedbackFiling {
     @Setter(AccessLevel.NONE)
     private FilingState state;
 
+    /** Reserves the daily draft allowance immediately before the provider call. */
+    @Column(name = "draft_admitted_at")
+    private @Nullable Instant draftAdmittedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 16)
     private @Nullable FilingRoute route;
@@ -62,15 +66,9 @@ public class ProductFeedbackFiling {
     @Column(name = "risk_latch", nullable = false)
     private boolean riskLatch;
 
-    /** Counts up for every claim; a result is written only for the attempt it was claimed under. */
+    /** Counts up for every draft and every hand-over to filing; a result is written only for its own generation. */
     @Column(nullable = false)
     private int attempt;
-
-    @Column(name = "claimed_by", length = 100)
-    private @Nullable String claimedBy;
-
-    @Column(name = "lease_until")
-    private @Nullable Instant leaseUntil;
 
     @Column(name = "next_attempt_at", nullable = false)
     private Instant nextAttemptAt;
@@ -78,9 +76,6 @@ public class ProductFeedbackFiling {
     /** A public report is filed no earlier than this; null for a private one. */
     @Column(name = "filed_after")
     private @Nullable Instant filedAfter;
-
-    @Column(nullable = false)
-    private int failures;
 
     /** The text the model drafts from: the person's report or their edit, after redaction. Set by the server. */
     @Column(name = "prompt_input", columnDefinition = "text")

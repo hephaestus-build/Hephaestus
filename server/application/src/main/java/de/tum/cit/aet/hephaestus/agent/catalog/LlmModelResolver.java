@@ -179,7 +179,17 @@ public class LlmModelResolver {
             ConnectionRef ref,
             ProxyCredential credential,
             LlmApiProtocol protocol,
-            @Nullable ReasoningEffort reasoningEffort) {}
+            @Nullable ReasoningEffort reasoningEffort,
+            @Nullable Integer contextWindow,
+            @Nullable Integer maxOutputTokens) {
+        public InstanceModel(
+                ConnectionRef ref,
+                ProxyCredential credential,
+                LlmApiProtocol protocol,
+                @Nullable ReasoningEffort reasoningEffort) {
+            this(ref, credential, protocol, reasoningEffort, null, null);
+        }
+    }
 
     /**
      * Resolves an instance model for instance-level work, such as product feedback drafting. Workspace grants and
@@ -203,7 +213,9 @@ public class LlmModelResolver {
                         blankToNull(c.getApiKey()),
                         model.getCallPoolId()),
                 c.getApiProtocol(),
-                model.getReasoningEffort());
+                model.getReasoningEffort(),
+                model.getContextWindow(),
+                model.getMaxOutputTokens());
     }
 
     /** Pool-lock rechecks must read the database even when the claim already loaded the model entity. */

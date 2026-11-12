@@ -100,6 +100,16 @@ public class LlmAdmissionService {
         return new AdmittedLlmModel(resolved, ref, price);
     }
 
+    /** Freezes the price of instance work that has no workspace binding or run. */
+    @Transactional
+    public InstanceCharge admitInstance(long modelId) {
+        var model = modelRepository.findByIdForUpdate(modelId).orElseThrow(LlmAdmissionService::modelUnavailable);
+        if (!model.isEnabled() || !model.getConnection().isEnabled()) throw modelUnavailable();
+        return new InstanceCharge(model.getUpstreamModelId(), instancePrice(modelId));
+    }
+
+    public record InstanceCharge(String model, LlmPriceSnapshot price) {}
+
     private LlmPriceSnapshot instancePrice(Long modelId) {
         return priceRepository
                 .findByModelIdAndEffectiveToIsNull(modelId)

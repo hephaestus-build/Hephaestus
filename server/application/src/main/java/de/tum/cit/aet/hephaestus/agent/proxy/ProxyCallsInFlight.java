@@ -150,7 +150,11 @@ public class ProxyCallsInFlight {
     }
 
     private int cap(UsageSourceType sourceType) {
-        return sourceType == UsageSourceType.MENTOR_TURN ? TURN_CALLS : reviewCalls;
+        return switch (sourceType) {
+            case MENTOR_TURN -> TURN_CALLS;
+            case PRODUCT_FEEDBACK_DRAFT -> 1;
+            default -> reviewCalls;
+        };
     }
 
     private Call call(Attempt attempt, Cancellation cancel, boolean hephTurn, boolean overCap) {

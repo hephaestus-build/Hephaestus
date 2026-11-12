@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.CallUsage;
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
 import java.math.BigDecimal;
@@ -63,6 +65,8 @@ class ProxyCallLedger {
         }
     }
 
+    private final LlmAdmissionService admission;
+    private final ProductFeedbackDraftCalls drafts;
     private final LlmUsageRecorder recorder;
     private final AgentRuns runs;
     private final ReviewJobRepository jobs;
@@ -73,6 +77,8 @@ class ProxyCallLedger {
     private final TransactionTemplate ownTransaction;
 
     ProxyCallLedger(
+            LlmAdmissionService admission,
+            ProductFeedbackDraftCalls drafts,
             LlmUsageRecorder recorder,
             AgentRuns runs,
             ReviewJobRepository jobs,
@@ -81,6 +87,8 @@ class ProxyCallLedger {
             ObjectMapper mapper,
             MeterRegistry meterRegistry,
             PlatformTransactionManager transactionManager) {
+        this.admission = admission;
+        this.drafts = drafts;
         this.recorder = recorder;
         this.runs = runs;
         this.jobs = jobs;
@@ -112,6 +120,33 @@ class ProxyCallLedger {
      */
     UUID open(ProxyRouting routing, Bound bound) {
         var attempt = routing.attempt();
+        if (attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT) {
+            return Objects.requireNonNull(ownTransaction.execute(status -> {
+                if (routing.workspaceId() != null
+                        || attempt.runId() != null
+                        || !drafts.waits(attempt.sourceId(), attempt.number()))
+                    throw new ClaimLost(new IllegalStateException("The report no longer waits for this draft"));
+                if (!drafts.admitCall(attempt.sourceId(), attempt.number(), Objects.requireNonNull(routing.modelId())))
+                    throw new BudgetHeld();
+                var charge = admission.admitInstance(Objects.requireNonNull(routing.modelId()));
+                return recorder.open(new OpenCall(
+                        null,
+                        null,
+                        null,
+                        "REPORT_DRAFT",
+                        UsageSourceType.PRODUCT_FEEDBACK_DRAFT,
+                        attempt.sourceId(),
+                        attempt.number(),
+                        null,
+                        ModelKind.CHAT,
+                        null,
+                        charge.model(),
+                        charge.price(),
+                        costBound(charge.price(), bound),
+                        Objects.requireNonNull(routing.actionId()),
+                        Objects.requireNonNull(routing.workDeadline())));
+            }));
+        }
         long workspaceId = Objects.requireNonNull(routing.workspaceId(), "a billed call has a workspace");
         UUID runId = Objects.requireNonNull(attempt.runId(), "a billed call has a run");
         UUID call;
@@ -190,10 +225,21 @@ class ProxyCallLedger {
      * @param usage {@code null} when the provider reported no usage or the call ended without an answer
      */
     void complete(ProxyRouting routing, UUID call, @Nullable CallUsage usage, MentorTurn.@Nullable FailedCall failure) {
-        long workspaceId = Objects.requireNonNull(routing.workspaceId(), "a billed call has a workspace");
+        Long workspaceId = routing.workspaceId();
         try {
-            ownTransaction.executeWithoutResult(status -> recorder.complete(call, workspaceId, usage, failure));
-            budgetGate.spent(workspaceId);
+            ownTransaction.executeWithoutResult(status -> {
+                if (routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT)
+                    drafts.lockForUsage(routing.sourceId());
+                boolean measured = recorder.complete(call, workspaceId, usage, failure);
+                if (measured
+                        && usage != null
+                        && routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT)
+                    drafts.count(
+                            routing.sourceId(),
+                            usage.inputTokens() + usage.cacheReadTokens() + usage.cacheWriteTokens(),
+                            usage.outputTokens());
+            });
+            if (workspaceId != null) budgetGate.spent(workspaceId);
         } catch (RuntimeException e) {
             log.warn("Lost the measurement of model call {}; its claim's end settles it unverifiable", call, e);
             meterRegistry

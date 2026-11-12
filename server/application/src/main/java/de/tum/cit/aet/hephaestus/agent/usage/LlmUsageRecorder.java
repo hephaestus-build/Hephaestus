@@ -43,9 +43,10 @@ public class LlmUsageRecorder {
     }
 
     /**
-     * A model call that its run's claim makes now.
+     * A model call that its run claim or instance action makes now.
      *
-     * @param leaseEpoch the claim of the run that makes the call
+     * @param workspaceId the workspace, or null only for instance report drafts
+     * @param leaseEpoch the claim of the run that makes the call, or null for instance work
      * @param sourceAttempt the job attempt or the turn attempt of the claim
      * @param practiceId the practice whose script makes the call; {@code null} for every other call
      * @param model the upstream model id that the call's configuration froze; {@code null} when none is readable
@@ -53,9 +54,9 @@ public class LlmUsageRecorder {
      *     {@code null} when no bound is known
      */
     public record OpenCall(
-            long workspaceId,
-            UUID runId,
-            int leaseEpoch,
+            @Nullable Long workspaceId,
+            @Nullable UUID runId,
+            @Nullable Integer leaseEpoch,
             String jobType,
             UsageSourceType sourceType,
             UUID sourceId,
@@ -65,7 +66,41 @@ public class LlmUsageRecorder {
             @Nullable Long practiceId,
             @Nullable String model,
             LlmPriceSnapshot price,
-            @Nullable BigDecimal costBoundUsd) {}
+            @Nullable BigDecimal costBoundUsd,
+            @Nullable UUID actionId,
+            @Nullable Instant settleAfter) {
+        public OpenCall(
+                @Nullable Long workspaceId,
+                @Nullable UUID runId,
+                @Nullable Integer leaseEpoch,
+                String jobType,
+                UsageSourceType sourceType,
+                UUID sourceId,
+                int sourceAttempt,
+                @Nullable UUID reviewId,
+                ModelKind modelKind,
+                @Nullable Long practiceId,
+                @Nullable String model,
+                LlmPriceSnapshot price,
+                @Nullable BigDecimal costBoundUsd) {
+            this(
+                    workspaceId,
+                    runId,
+                    leaseEpoch,
+                    jobType,
+                    sourceType,
+                    sourceId,
+                    sourceAttempt,
+                    reviewId,
+                    modelKind,
+                    practiceId,
+                    model,
+                    price,
+                    costBoundUsd,
+                    null,
+                    null);
+        }
+    }
 
     /**
      * What a provider reported for one call.
@@ -121,24 +156,31 @@ public class LlmUsageRecorder {
      * model, the funding source, the rates and the date stay as the row froze them. A row that was measured already, or
      * that retention or a purge deleted, is left as it is.
      *
+     * @return whether this call was measured now; a duplicate completion changes nothing
      * @param usage {@code null} when the provider reported no usage or the proxy could not read it
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void complete(UUID callId, long workspaceId, @Nullable CallUsage usage) {
-        completeCall(callId, workspaceId, usage, null);
+    public boolean complete(UUID callId, @Nullable Long workspaceId, @Nullable CallUsage usage) {
+        return completeCall(callId, workspaceId, usage, null);
     }
 
     /** Records the first failure independently of late usage or repricing, then measures the call. */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void complete(
-            UUID callId, long workspaceId, @Nullable CallUsage usage, MentorTurn.@Nullable FailedCall failure) {
-        completeCall(callId, workspaceId, usage, failure);
+    public boolean complete(
+            UUID callId,
+            @Nullable Long workspaceId,
+            @Nullable CallUsage usage,
+            MentorTurn.@Nullable FailedCall failure) {
+        return completeCall(callId, workspaceId, usage, failure);
     }
 
-    private void completeCall(
-            UUID callId, long workspaceId, @Nullable CallUsage usage, MentorTurn.@Nullable FailedCall failure) {
+    private boolean completeCall(
+            UUID callId,
+            @Nullable Long workspaceId,
+            @Nullable CallUsage usage,
+            MentorTurn.@Nullable FailedCall failure) {
         LlmUsageEvent row = usageRepository.lockCall(callId, workspaceId).orElse(null);
-        if (row == null) return;
+        if (row == null) return false;
         if (failure != null) {
             var status = failure.status();
             // A non-standard provider status must not discard reported usage.
@@ -150,9 +192,9 @@ public class LlmUsageRecorder {
         }
         boolean open = row.getCallState() == UsageCallState.OPEN;
         boolean settled = row.getCallState() == UsageCallState.SETTLED;
-        if (!open && !settled) return;
+        if (!open && !settled) return false;
         if (usage == null) {
-            if (!open) return;
+            if (!open) return false;
             usageRepository.measure(
                     callId,
                     workspaceId,
@@ -164,7 +206,7 @@ public class LlmUsageRecorder {
                             true));
             meterRegistry.counter(AgentMetrics.LLM_USAGE_UNVERIFIABLE).increment();
             meterRegistry.counter(AgentMetrics.LLM_USAGE_UNCOSTED).increment();
-            return;
+            return true;
         }
         LlmPriceSnapshot frozen = new LlmPriceSnapshot(
                 row.getFundingSource(),
@@ -195,7 +237,26 @@ public class LlmUsageRecorder {
         if (price.pricingState() == UsagePricingState.UNPRICED) {
             meterRegistry.counter(AgentMetrics.LLM_USAGE_UNCOSTED).increment();
         }
-        if (open) registerBudgetAlert(workspaceId, price, computed.usd(), row.getOccurredAt());
+        if (open && workspaceId != null) registerBudgetAlert(workspaceId, price, computed.usd(), row.getOccurredAt());
+        return true;
+    }
+
+    /** Ends the unmeasured calls owned by an action, in the transaction that ends it. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void settleAction(UUID actionId) {
+        reportSettled(usageRepository.settleAction(actionId));
+    }
+
+    /** Recovers instance calls after their deadline, lost claim or process failure. Late measurement stays possible. */
+    @Transactional
+    public void recoverInstanceCalls() {
+        reportSettled(usageRepository.settleAbandonedInstanceCalls());
+    }
+
+    private void reportSettled(int count) {
+        if (count == 0) return;
+        meterRegistry.counter(AgentMetrics.LLM_USAGE_UNVERIFIABLE).increment(count);
+        meterRegistry.counter(AgentMetrics.LLM_USAGE_UNCOSTED).increment(count);
     }
 
     /** Reads the failed call on any replica, scoped to the exact run claim that ends. */

@@ -154,8 +154,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
     /**
      * A lost database connection hangs on its socket and raises no error, and the worker's other tasks that read the
      * database hang beside it. The worker must still cut its call before the lease ends. The fake call here ends on the
-     * permit's signal; {@code LlmProxyIntegrationTest} and {@code ProductFeedbackModelAdapterTest} prove that the real
-     * transports end on it.
+     * permit's signal; {@code LlmProxyIntegrationTest} proves that the real transports end on it.
      */
     @Test
     void shouldCloseAPartitionedWorkersTransportBeforeItsLeaseExpires(TestReporter reporter) throws Exception {

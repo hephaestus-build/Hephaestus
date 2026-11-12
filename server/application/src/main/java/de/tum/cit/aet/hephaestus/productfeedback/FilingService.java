@@ -367,7 +367,6 @@ class FilingService {
             filing.setDraft(null);
             filing.setRoute(null);
             filing.setReason(null);
-            filing.setFailures(0);
             filing.setFiledAfter(null);
             // The wait that the stuck alert measures starts here, not when the report was saved.
             filing.setCreatedAt(now);
@@ -375,6 +374,7 @@ class FilingService {
             filing.apply(drafted ? FilingLifecycle.Event.MOVED_DRAFTED : FilingLifecycle.Event.MOVED_UNDRAFTED);
             filing.setNextAttemptAt(now);
             filing.setUpdatedAt(now);
+            if (drafted) fileIssues.draft(filing, report, now);
             return true;
         }));
     }
@@ -399,7 +399,6 @@ class FilingService {
                 .filter(filing -> filing.getState() == FilingState.STOPPED)
                 .map(filing -> {
                     Instant now = clock.instant();
-                    filing.setFailures(0);
                     filing.setNextAttemptAt(now);
                     filing.setUpdatedAt(now);
                     ProductFeedbackIssues.Repository frozen = frozen(filing);
@@ -409,6 +408,7 @@ class FilingService {
                         handOver(filing, feedback.findById(feedbackId).orElseThrow(), frozen, null, now);
                     } else if (filing.getDraft() == null) {
                         filing.apply(FilingLifecycle.Event.RETRIED_DRAFT);
+                        fileIssues.draft(filing, feedback.findById(feedbackId).orElseThrow(), now);
                     } else {
                         filing.setRepository(null);
                         filing.setRepositoryId(null);
