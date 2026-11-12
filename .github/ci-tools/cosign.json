@@ -1,35 +1,40 @@
 {
-	"version": "3.1.4",
-	"url": "https://github.com/sigstore/cosign/releases/download/v3.1.4/",
+	"githubRelease": "sigstore/cosign",
 	"assets": {
 		"linux-x64": {
-			"name": "cosign-linux-amd64",
-			"sha256": "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa"
+			"version": "v3.1.4",
+			"sha256": "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa",
+			"name": "cosign-linux-amd64"
 		},
 		"linux-arm64": {
-			"name": "cosign-linux-arm64",
-			"sha256": "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2"
+			"version": "v3.1.4",
+			"sha256": "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2",
+			"name": "cosign-linux-arm64"
 		},
 		"linux-x64-keyless": {
-			"name": "cosign-linux-amd64.sigstore.json",
-			"sha256": "355244bb0186e950ced20f03106640ba3a4630e1223d0467ff34bcebe10bb18a"
+			"version": "v3.1.4",
+			"sha256": "355244bb0186e950ced20f03106640ba3a4630e1223d0467ff34bcebe10bb18a",
+			"name": "cosign-linux-amd64.sigstore.json"
 		},
 		"linux-arm64-keyless": {
-			"name": "cosign-linux-arm64.sigstore.json",
-			"sha256": "82d1412476b161277e65614a7e21c715fe3612c01d0cf0f77992e8f0081938af"
+			"version": "v3.1.4",
+			"sha256": "82d1412476b161277e65614a7e21c715fe3612c01d0cf0f77992e8f0081938af",
+			"name": "cosign-linux-arm64.sigstore.json"
 		},
 		"linux-x64-kms": {
-			"name": "cosign-linux-amd64-kms.sigstore.json",
-			"sha256": "b1282021bf1d6f1031d5df46cba12386c9b438d56d276d72f4df184a0008512b"
+			"version": "v3.1.4",
+			"sha256": "b1282021bf1d6f1031d5df46cba12386c9b438d56d276d72f4df184a0008512b",
+			"name": "cosign-linux-amd64-kms.sigstore.json"
 		},
 		"linux-arm64-kms": {
-			"name": "cosign-linux-arm64-kms.sigstore.json",
-			"sha256": "844c90077824f8134a8ef5c0d13f60ce4b2942d97e072d7e4c211e9f1d495f76"
+			"version": "v3.1.4",
+			"sha256": "844c90077824f8134a8ef5c0d13f60ce4b2942d97e072d7e4c211e9f1d495f76",
+			"name": "cosign-linux-arm64-kms.sigstore.json"
 		},
 		"key": {
-			"name": "release-cosign.pub",
+			"version": "v3.1.4",
 			"sha256": "f4cea466e5e887a45da5031757fa1d32655d83420639dc1758749b744179f126",
-			"url": "https://raw.githubusercontent.com/sigstore/cosign/v3.1.4/release/release-cosign.pub"
+			"name": "release-cosign.pub"
 		}
 	},
 	"tool": "cosign"

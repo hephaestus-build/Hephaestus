@@ -1673,8 +1673,26 @@ when changing these boundaries, and preserve dependency stats from the single St
 ### Release tool downloads
 
 The tool pins are in `.github/ci-tools/*.json` and `.vale/toolchain.json`.
-Each asset has a version and a SHA-256. Change the version, source URL and checksum together.
-Renovate proposes version changes. Their matching archive checksums must be verified before merge.
+Renovate-managed GitHub pins name the repository in `githubRelease`.
+Each asset pairs its full release tag with its SHA-256.
+The resolver derives the URL and replaces `{version}` in the asset name with the tag's version.
+All assets of a tool must use the same release tag.
+
+Renovate's [release-attachment datasource](https://docs.renovatebot.com/modules/datasource/github-release-attachments/) updates each tag and digest together.
+Keep the `v` prefix: the datasource looks up the exact upstream release tag.
+The manager keeps each asset separate, including checksum files and Cosign signature bundles.
+The Cosign public key comes from the release attachment with the existing pinned SHA-256.
+
+Renovate obtains digests from the same upstream release as the assets.
+A matching digest proves download integrity. It does not prove publisher authenticity.
+Before merge, independently verify every changed asset checksum and Cosign trust material.
+The Renovate PR notes state this requirement for automated updates too.
+Cosign's existing bootstrap and signature checks remain required.
+
+The other pins are manual: Helm, Kind, k3d, Kubeconform, oasdiff, ShellCheck, Gateway API, Vale, ripgrep,
+Liberica, bootstrap tools and buildpack dependencies.
+For a manual update, change the version, source URL and checksum together.
+Apply the same independent verification before merge.
 The resolver never selects a newer release.
 
 `setup-ci-tool` restores the GitHub Actions cache with a key made from the tool, version and SHA-256.

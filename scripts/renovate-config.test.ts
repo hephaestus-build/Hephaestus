@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { parse } from "yaml";
 
+import { selectCiToolPin } from "./lib/ci-tool-catalog.ts";
 import { isSet } from "./lib/env.ts";
 import { isRecord, parseJson } from "./lib/json.ts";
 import { BUNDLED_PINS } from "./lib/toolchain-pins.ts";
@@ -14,6 +15,136 @@ const config = parsedConfig;
 assert.ok(Array.isArray(config.extends));
 assert.ok(config.extends.every((entry) => typeof entry === "string"));
 const extensions = config.extends;
+
+void test("CI tool updates pair every release tag with its asset digest and derive release URLs", async () => {
+	assert.ok(Array.isArray(config.customManagers));
+	const manager = config.customManagers
+		.filter(isRecord)
+		.find((entry) => entry.datasourceTemplate === "github-release-attachments");
+	assert.ok(manager);
+	assert.equal(manager.matchStringsStrategy, "recursive");
+	assert.equal(
+		manager.extractVersionTemplate,
+		undefined,
+		"asset lookup needs the full release tag",
+	);
+	assert.ok(Array.isArray(manager.matchStrings));
+	const patterns = manager.matchStrings;
+	assert.ok(patterns.every((pattern): pattern is string => typeof pattern === "string"));
+	assert.ok(Array.isArray(manager.managerFilePatterns));
+	const filePatterns = manager.managerFilePatterns;
+	assert.ok(filePatterns.every((pattern): pattern is string => typeof pattern === "string"));
+	const files = await readdir(".github/ci-tools");
+	for (const name of files.filter((file) => file.endsWith(".json"))) {
+		const file = `.github/ci-tools/${name}`;
+		const spec = parseJson(await readFile(file, "utf8"));
+		assert.ok(isRecord(spec));
+		const tracked = filePatterns.some((pattern) =>
+			new RegExp(pattern.slice(1, -1), "u").test(file),
+		);
+		assert.equal(
+			spec.githubRelease !== undefined,
+			tracked,
+			`${file}: audit automatic and fixed pins`,
+		);
+	}
+
+	for (const id of ["cosign", "pack", "syft", "trivy"]) {
+		const content = await readFile(`.github/ci-tools/${id}.json`, "utf8");
+		let matches: { content: string; groups: Record<string, string> }[] = [{ content, groups: {} }];
+		for (const pattern of patterns) {
+			matches = matches.flatMap((parent) =>
+				[...parent.content.matchAll(new RegExp(pattern, "gu"))].map((match) => ({
+					content: match[0],
+					groups: { ...parent.groups, ...match.groups },
+				})),
+			);
+		}
+		const parsed = parseJson(content);
+		assert.ok(isRecord(parsed) && isRecord(parsed.assets));
+		assert.equal(
+			matches.length,
+			Object.keys(parsed.assets).length,
+			`${id}: every asset is tracked`,
+		);
+		let updated = content;
+		for (const match of matches) {
+			const { currentValue, currentDigest, depName, depType } = match.groups;
+			assert.equal(depName, parsed.githubRelease);
+			assert.ok(isSet(currentValue) && isSet(currentDigest) && isSet(depType));
+			assert.match(currentValue, /^v\d+\.\d+\.\d+$/u);
+			const before = selectCiToolPin(id, parsed, depType);
+			assert.equal(currentDigest, before.sha256);
+			updated = updated.replace(
+				match.content,
+				match.content.replace(currentValue, "v99.2.3").replace(currentDigest, "a".repeat(64)),
+			);
+		}
+		const next = parseJson(updated);
+		assert.ok(isRecord(next));
+		for (const match of matches) {
+			const platform = match.groups.depType;
+			assert.ok(isSet(platform));
+			const pin = selectCiToolPin(id, next, platform);
+			assert.equal(pin.version, "99.2.3");
+			assert.equal(pin.sha256, "a".repeat(64));
+			assert.equal(
+				pin.url,
+				`https://github.com/${String(parsed.githubRelease)}/releases/download/v99.2.3/${pin.name}`,
+			);
+			assert.ok(!pin.name.includes("{version}"));
+		}
+	}
+});
+
+void test("automated CI tool digests retain independent verification before merge", () => {
+	assert.ok(Array.isArray(config.packageRules));
+	const rule = config.packageRules
+		.filter(isRecord)
+		.find(
+			(candidate) =>
+				Array.isArray(candidate.matchDatasources) &&
+				candidate.matchDatasources.includes("github-release-attachments"),
+		);
+	assert.ok(rule);
+	assert.deepEqual(rule.matchManagers, ["custom.regex"]);
+	assert.ok(Array.isArray(rule.prBodyNotes));
+	assert.match(
+		String(rule.prBodyNotes),
+		/Independently verify every changed CI tool asset checksum/u,
+	);
+	assert.match(String(rule.prBodyNotes), /same upstream release/u);
+});
+
+void test("a partial CI tool update fails closed on every platform", async () => {
+	const parsed = parseJson(await readFile(".github/ci-tools/trivy.json", "utf8"));
+	assert.ok(isRecord(parsed) && isRecord(parsed.assets));
+	assert.ok(isRecord(parsed.assets["linux-x64"]));
+	parsed.assets["linux-x64"].version = "v0.76.2";
+	assert.throws(() => selectCiToolPin("trivy", parsed, "linux-arm64"), /same release tag/u);
+});
+
+void test("an asset update moves Trivy's URL, archive name and SHA-256 together", async () => {
+	const parsed = parseJson(await readFile(".github/ci-tools/trivy.json", "utf8"));
+	assert.ok(isRecord(parsed) && isRecord(parsed.assets));
+	const digests: Record<string, string> = {
+		"linux-x64": "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf",
+		"linux-arm64": "ab9d51f86e6a5fb936f605faff6b593ac51bc378fff4d3e8b9d58358b9c367c3",
+		checksums: "802e4ac1418ed967cd3c4b901f4f71ca00b7363ede67778665a22d9f13f58c83",
+	};
+	for (const [platform, asset] of Object.entries(parsed.assets)) {
+		assert.ok(isRecord(asset));
+		asset.version = "v0.76.2";
+		asset.sha256 = digests[platform];
+	}
+	const pin = selectCiToolPin("trivy", parsed, "linux-x64");
+	assert.equal(pin.name, "trivy_0.76.2_Linux-64bit.tar.gz");
+	assert.equal(
+		pin.url,
+		"https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz",
+	);
+	assert.equal(pin.sha256, "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf");
+});
 
 void test("Gradle artifact updates use the repository JDK and retain human checksum review", async () => {
 	assert.ok(isRecord(config.constraints));
@@ -66,7 +197,7 @@ void test("Renovate creates bounded update PRs without a manual dispatch queue",
 	const rules = config.packageRules.filter(isRecord);
 	for (const [updateType, currentVersion] of [
 		["major", undefined],
-		["minor", String.raw`/^0\./`],
+		["minor", String.raw`/^v?0\./`],
 	]) {
 		const rule = rules.find(
 			(candidate) =>
@@ -279,7 +410,7 @@ void test("every custom manager reads every file it claims to read", async () =>
 		],
 		["Track Dockerfile ARG version pins", ["docker/agents/pi/Dockerfile", "webapp/Dockerfile"]],
 		[
-			"Track the GitHub release versions of pinned CI tools",
+			"Track CI tool release tags and asset checksums together",
 			[
 				".github/ci-tools/cosign.json",
 				".github/ci-tools/pack.json",
