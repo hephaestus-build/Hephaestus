@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,6 +20,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -94,6 +97,16 @@ public class LlmUsageEvent {
     @Nullable
     @Column(name = "lease_epoch", updatable = false)
     private Integer leaseEpoch;
+
+    /** The first failure of the call; no request, response, or provider message is retained. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "call_failure", columnDefinition = "jsonb", updatable = false)
+    private MentorTurn.@Nullable FailedCall callFailure;
+
+    /** Database time when the failure was recorded, independent of when the call opened. */
+    @Nullable
+    @Column(name = "failed_at", updatable = false)
+    private Instant failedAt;
 
     @NonNull
     @ColumnDefault("'ENDED'")

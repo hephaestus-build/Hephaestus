@@ -198,15 +198,7 @@ class LlmProxyService {
             String ended = "error";
             try (var ignored = tracer.withSpan(span)) {
                 var result = forward(routing, protocol, response, incomingHeaders, body, span, inFlight);
-                int status = result == null
-                        ? Objects.requireNonNull(response).getStatus()
-                        : result.getStatusCode().value();
-                if (status >= 400 && inFlight.failure() == null) {
-                    // The proxy answered itself: a refusal names its rule, any other answer is the gateway's own.
-                    String refused = result == null ? null : result.getHeaders().getFirst(REFUSAL_HEADER);
-                    inFlight.failed(new MentorTurn.FailedCall(
-                            refused == null ? GATEWAY_ERROR : "refused_" + refused.toLowerCase(Locale.ROOT), status));
-                }
+                int status = classifyFailure(result, response, inFlight);
                 ended = Integer.toString(status);
                 span.tag("http.response.status_code", status);
                 if (status >= 400) recordSpanError(span, Integer.toString(status));
@@ -244,6 +236,20 @@ class LlmProxyService {
         }
     }
 
+    /** Classifies proxy refusals before the call's row ends, so another replica can read the failure at turn end. */
+    private static int classifyFailure(
+            @Nullable ResponseEntity<?> result, @Nullable HttpServletResponse response, ProxyCallsInFlight.Call call) {
+        int status = result == null
+                ? Objects.requireNonNull(response).getStatus()
+                : result.getStatusCode().value();
+        if (status >= 400 && call.failure() == null) {
+            String refused = result == null ? null : result.getHeaders().getFirst(REFUSAL_HEADER);
+            call.failed(new MentorTurn.FailedCall(
+                    refused == null ? GATEWAY_ERROR : "refused_" + refused.toLowerCase(Locale.ROOT), status));
+        }
+        return status;
+    }
+
     /**
      * The ledger row of one proxied call ({@link ProxyCallLedger}). It opens before the call's first upstream request
      * and ends once: with the usage of a served answer, with nothing for a provider's error answer, which the provider
@@ -252,6 +258,7 @@ class LlmProxyService {
     private final class CallRow {
         private final ProxyRouting routing;
         private final ProxyCallLedger.Bound bound;
+        private final ProxyCallsInFlight.Call inFlight;
         private @Nullable UUID id;
         private LlmUsageRecorder.@Nullable CallUsage unmeasured;
         private boolean ended;
@@ -260,9 +267,10 @@ class LlmProxyService {
          * @param inputBytes the bytes of the call's request, which bound its input tokens
          * @param outputTokens the output tokens that bound the call; {@code null} when nothing bounds them
          */
-        CallRow(ProxyRouting routing, long inputBytes, @Nullable Long outputTokens) {
+        CallRow(ProxyRouting routing, long inputBytes, @Nullable Long outputTokens, ProxyCallsInFlight.Call inFlight) {
             this.routing = routing;
             this.bound = new ProxyCallLedger.Bound(inputBytes, outputTokens);
+            this.inFlight = inFlight;
         }
 
         /** An upstream request leaves now; the first one opens the row. */
@@ -278,7 +286,7 @@ class LlmProxyService {
 
         /** A served answer, with the usage it reported or {@code null} when it reported none. */
         void measured(@Nullable ProxyTokenUsage usage) {
-            finish(usage == null ? null : ProxyCallLedger.usage(usage));
+            unmeasured = usage == null ? null : ProxyCallLedger.usage(usage);
         }
 
         void end() {
@@ -289,7 +297,7 @@ class LlmProxyService {
             UUID call = id;
             if (call == null || ended) return;
             ended = true;
-            accounting.calls().complete(routing, call, usage);
+            accounting.calls().complete(routing, call, usage, inFlight.failure());
         }
     }
 
@@ -345,7 +353,7 @@ class LlmProxyService {
             } catch (JacksonException unreadable) {
                 return ResponseEntity.badRequest().body("Request body must be valid JSON");
             }
-            row = new CallRow(routing, body.length, outputBound);
+            row = new CallRow(routing, body.length, outputBound, call);
             if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
             // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
             // provider
@@ -356,7 +364,11 @@ class LlmProxyService {
                 answer = forwardWithinScanBudget(
                         routing, protocol, response, incomingHeaders, body, span, call, row, absorbUntil);
             } while (answer instanceof AskAgain);
+            classifyFailure(answer, response, call);
             return answer;
+        } catch (RuntimeException failure) {
+            call.failed(new MentorTurn.FailedCall(GATEWAY_ERROR, null));
+            throw failure;
         } finally {
             // Before the scan lease: the attempt's next scan call reads this call's spend.
             if (row != null) row.end();

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.CallUsage;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.OpenCall;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -188,10 +189,10 @@ class ProxyCallLedger {
      *
      * @param usage {@code null} when the provider reported no usage or the call ended without an answer
      */
-    void complete(ProxyRouting routing, UUID call, @Nullable CallUsage usage) {
+    void complete(ProxyRouting routing, UUID call, @Nullable CallUsage usage, MentorTurn.@Nullable FailedCall failure) {
         long workspaceId = Objects.requireNonNull(routing.workspaceId(), "a billed call has a workspace");
         try {
-            ownTransaction.executeWithoutResult(status -> recorder.complete(call, workspaceId, usage));
+            ownTransaction.executeWithoutResult(status -> recorder.complete(call, workspaceId, usage, failure));
             budgetGate.spent(workspaceId);
         } catch (RuntimeException e) {
             log.warn("Lost the measurement of model call {}; its claim's end settles it unverifiable", call, e);

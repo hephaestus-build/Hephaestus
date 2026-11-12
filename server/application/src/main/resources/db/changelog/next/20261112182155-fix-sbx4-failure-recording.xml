@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794507715667-1" author="hephaestus">
+        <addColumn tableName="llm_usage_event">
+            <column name="call_failure" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794507715667-2" author="hephaestus">
+        <addColumn tableName="llm_usage_event">
+            <column name="failed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794507715667-3" author="hephaestus">
+        <comment>A call failure has only a kind and optional HTTP status, recorded with its database time. Existing rows have neither field.</comment>
+        <sql><![CDATA[
+ALTER TABLE llm_usage_event ADD CONSTRAINT ck_llm_usage_event_call_failure CHECK (
+    (call_failure IS NULL AND failed_at IS NULL)
+    OR (call_failure IS NOT NULL AND failed_at IS NOT NULL AND (CASE
+        WHEN jsonb_typeof(call_failure) = 'object' THEN
+        jsonb_exists_all(call_failure, ARRAY['kind', 'status'])
+        AND call_failure - 'kind' - 'status' = '{}'::jsonb
+        AND jsonb_typeof(call_failure -> 'kind') = 'string'
+        AND length(call_failure ->> 'kind') > 0
+        AND (call_failure -> 'status' = 'null'::jsonb
+             OR (jsonb_typeof(call_failure -> 'status') = 'number'
+                 AND call_failure ->> 'status' ~ '^[1-5][0-9]{2}$'))
+        ELSE false END) IS TRUE)
+);
+        ]]></sql>
+        <rollback>
+            <sql>ALTER TABLE llm_usage_event DROP CONSTRAINT ck_llm_usage_event_call_failure;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
