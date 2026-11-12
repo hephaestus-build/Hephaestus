@@ -209,7 +209,7 @@ Configuration binds to
 GitLab and Outline each have a connection endpoint in the adapter's `webhook` package.
 That endpoint verifies a route credential and calls `WebhookIngestPipeline#publishAuthenticated`.
 
-- **Reception stops while no server runs.** A `RollingUpdate` server keeps it across an upgrade.
+- **Reception stops while no server runs.** The chart uses `Recreate` with one server until provider-event processing has per-item ordering across replicas.
   GitHub never retries a failed delivery itself. `GitHubWebhookRedelivery` asks it to redeliver failed
   GitHub App deliveries of the past two hours. A GitLab webhook missed during a restart is lost. Reconciliation
   recovers its effect.

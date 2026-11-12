@@ -225,6 +225,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
             assertThat(servedWithLogContext.get())
                     .containsEntry(StructuredLogKeys.RUN_ID, LEASE.toString())
                     .containsEntry(StructuredLogKeys.RUN_EPOCH, "3")
+                    .containsEntry(StructuredLogKeys.JOB_ATTEMPT, "2")
                     .containsEntry(StructuredLogKeys.WORKSPACE_ID, "7")
                     .containsEntry(StructuredLogKeys.SUBJECT_KEY, "review:9")
                     .containsEntry(StructuredLogKeys.REVIEW_ID, "9");
@@ -242,8 +243,15 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 new AgentSandboxes.LiveSandbox(token.sandboxId(), 7L, "conversation:42", AgentSandboxKind.CONVERSATION);
         when(jwtVerifier.verifySandbox("sandbox-token")).thenReturn(token);
         when(agentSandboxes.authenticate(token)).thenReturn(Optional.of(live));
-        var previous =
-                Map.of(StructuredLogKeys.REVIEW_ID, "enclosing-review", StructuredLogKeys.RUN_ID, "enclosing-run");
+        var previous = Map.of(
+                StructuredLogKeys.REVIEW_ID,
+                "enclosing-review",
+                StructuredLogKeys.RUN_ID,
+                "enclosing-run",
+                StructuredLogKeys.JOB_ID,
+                "enclosing-job",
+                StructuredLogKeys.JOB_ATTEMPT,
+                "7");
         MDC.setContextMap(previous);
         try {
             assertThat(answerTo(withToken(request("POST", "/internal/agent/next", GATEWAY_PORT), "sandbox-token")))
@@ -251,7 +259,11 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
             assertThat(servedWithLogContext.get())
                     .containsEntry(StructuredLogKeys.SUBJECT_KEY, "conversation:42")
                     .doesNotContainKeys(
-                            StructuredLogKeys.REVIEW_ID, StructuredLogKeys.RUN_ID, StructuredLogKeys.RUN_EPOCH);
+                            StructuredLogKeys.REVIEW_ID,
+                            StructuredLogKeys.RUN_ID,
+                            StructuredLogKeys.RUN_EPOCH,
+                            StructuredLogKeys.JOB_ID,
+                            StructuredLogKeys.JOB_ATTEMPT);
             assertThat(MDC.getCopyOfContextMap()).isEqualTo(previous);
         } finally {
             MDC.clear();

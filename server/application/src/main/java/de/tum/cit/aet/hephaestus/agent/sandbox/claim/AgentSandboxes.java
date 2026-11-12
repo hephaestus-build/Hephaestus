@@ -214,6 +214,8 @@ public class AgentSandboxes {
                 MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(sandbox.workspaceId()));
                 MDC.put(StructuredLogKeys.RUN_ID, leased.runId().toString());
                 MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(leased.epoch()));
+                MDC.remove(StructuredLogKeys.JOB_ID);
+                MDC.remove(StructuredLogKeys.JOB_ATTEMPT);
                 String reviewId = sandbox.reviewId();
                 if (reviewId == null) MDC.remove(StructuredLogKeys.REVIEW_ID);
                 else MDC.put(StructuredLogKeys.REVIEW_ID, reviewId);

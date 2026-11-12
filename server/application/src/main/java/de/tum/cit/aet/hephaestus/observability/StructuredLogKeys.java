@@ -20,7 +20,5 @@ public final class StructuredLogKeys {
     /** The review whose subject is running. */
     public static final String REVIEW_ID = "review.id";
 
-    public static final String REVIEW_ID = "review.id";
-
     private StructuredLogKeys() {}
 }

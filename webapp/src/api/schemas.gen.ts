@@ -1867,7 +1867,7 @@ export const ConfigurationFactSchema = {
 			type: "array",
 			items: {
 				type: "string",
-				enum: ["SERVER", "WEBHOOK"],
+				enum: ["SERVER"],
 			},
 		},
 		status: {
@@ -13831,7 +13831,7 @@ export const RunningReleaseSchema = {
 			description: "the runtime roles this process booted with",
 			items: {
 				type: "string",
-				enum: ["SERVER", "WEBHOOK"],
+				enum: ["SERVER"],
 			},
 		},
 		version: {

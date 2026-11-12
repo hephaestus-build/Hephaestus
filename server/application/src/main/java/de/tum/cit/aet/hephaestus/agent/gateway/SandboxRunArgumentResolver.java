@@ -83,7 +83,9 @@ public final class SandboxRunArgumentResolver implements HandlerMethodArgumentRe
         MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(sandbox.workspaceId()));
         MDC.remove(StructuredLogKeys.JOB_ID);
         if (sandbox.subjectKey().startsWith("review:"))
-            MDC.put(StructuredLogKeys.JOB_ATTEMPT, Integer.toString(ReviewRunKind.attempt(run.fence().epoch())));
+            MDC.put(
+                    StructuredLogKeys.JOB_ATTEMPT,
+                    Integer.toString(ReviewRunKind.attempt(run.fence().epoch())));
         else MDC.remove(StructuredLogKeys.JOB_ATTEMPT);
         String reviewId = sandbox.reviewId();
         if (reviewId == null) MDC.remove(StructuredLogKeys.REVIEW_ID);

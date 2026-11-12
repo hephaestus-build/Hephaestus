@@ -86,7 +86,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSatisfyAllChecksForCombinedRole() {
+    void shouldSatisfyAllChecksForTheServer() {
         assertThat(evaluateReadiness(validProperties(), true))
                 .allMatch(fact -> Set.of(ConfigurationStatus.SATISFIED, ConfigurationStatus.NOT_CONFIGURED)
                         .contains(fact.status()));
@@ -94,7 +94,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
 
     @Test
     void shouldRequireAnExplicitApiIssuerOnTheServer() {
-        var properties = role(false, false);
+        var properties = role(false);
         properties.remove("hephaestus.auth.issuer");
 
         assertStatus(evaluateReadiness(properties, true), "external.api-origin", ConfigurationStatus.ACTION_REQUIRED);
@@ -111,7 +111,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
                 "https://api.example.test#api"
             })
     void shouldRejectAnApiIssuerThatIsNotARootHttpsOrigin(String issuer) {
-        var properties = role(false, false);
+        var properties = role(false);
         properties.put("hephaestus.auth.issuer", issuer);
 
         assertStatus(evaluateReadiness(properties, true), "external.api-origin", ConfigurationStatus.ACTION_REQUIRED);

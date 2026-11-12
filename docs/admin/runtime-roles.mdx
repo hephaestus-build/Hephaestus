@@ -37,8 +37,8 @@ The server creates sandbox Pods and sandbox claims through its Kubernetes servic
 No application Pod needs a Docker socket.
 
 While no server is available, providers cannot deliver.
-A `RollingUpdate` server starts the new Pod before the old one stops, so an upgrade keeps reception.
-A `Recreate` server stops reception for the time of the restart.
+The chart uses `Recreate` and permits one server until provider-event processing has per-item ordering across replicas.
+An upgrade stops reception for the time of the restart.
 GitHub deliveries that fail in that time are redelivered (`GitHubWebhookRedelivery`).
 Slack retries a failed event.
 The routine sync repairs the lifecycle facts of GitLab and Outline.

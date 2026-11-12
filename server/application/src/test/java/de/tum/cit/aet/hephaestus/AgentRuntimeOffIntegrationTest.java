@@ -21,7 +21,6 @@ import org.springframework.test.context.DynamicPropertySource;
         properties = {
             "AGENT_ENABLED=false",
             "hephaestus.runtime.server.enabled=true",
-            "hephaestus.runtime.webhook.enabled=false",
             "hephaestus.sandbox.kubernetes.namespace=",
             "hephaestus.sandbox.kubernetes.pod-name=",
             "hephaestus.sandbox.kubernetes.pod-ip=",

@@ -65,7 +65,6 @@ final class SandboxTokenAuthenticationFilter extends OncePerRequestFilter {
         contexts.setContext(context);
         // The resolver adds the checked run and epoch. No enclosing run belongs to this request; all of its
         // correlation is restored when the request ends, including when a handler fails.
-        var previous = MDC.getCopyOfContextMap();
         for (String key : LOG_CONTEXT_KEYS) MDC.remove(key);
         MDC.put(StructuredLogKeys.SANDBOX_NAME, live.claimName());
         MDC.put(StructuredLogKeys.SUBJECT_KEY, live.subjectKey());

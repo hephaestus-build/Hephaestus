@@ -102,14 +102,6 @@ If a change of profile changes a volume size, read [Change a volume size](./upgr
 `small.yaml` supports a node of 4 vCPU, at least 16 GiB of memory, and 150 GiB of disk.
 A node of 32 GiB gives more headroom.
 Its one server runs five reviews at a time. Its one conversation loop runs up to 32 resident conversation turns, also with backups on.
-A chart test adds up what that node holds during an upgrade, with backups on:
-
-| Part | Memory | CPU requests | Disk |
-| --- | --- | --- | --- |
-| Server, conversation loop, webapp, PostgreSQL with pgBackRest, NATS | 9.2 GiB | 1.35 | The volumes of PostgreSQL and NATS, and bounded caches |
-| An upgrade: the new webhook, webapp and conversation loop Pods, the migration Job, the stanza Job and one backup | 3.7 GiB | 0.85 | The new Pods' caches |
-| The sandbox quotas: five reviews, one isolation probe and ten tools Pods, including up to two warm Pods | 4.0 GiB | 0.60 | The disk requests of the sandbox Pods ([Sandbox sizes](./sandboxes#sandbox-sizes)) |
-| Total, against the node less platform reservations and the hard eviction floor | 15.7 GiB of 30.25 GiB | 2.30 of 3.5 | 67.5 GiB of the 110 GiB left beside images and review workspaces |
 
 The server uses `Recreate` in the `small` profile.
 The old server drains before its replacement starts, so reviews and conversations pause during each upgrade.
@@ -134,22 +126,13 @@ Its `outcome` is `ready` or `abandoned`. Model calls still wait for their own pr
 
 The table counts schedulable Pod requests. The resident-turn CPU planning cost is checked separately in steady state.
 
-The table gives the measured resident memory of each role and the chart's sizes.
-Each JVM role requests all of its memory limit, because the heap is sized from the limit, and the limit is the measurement plus headroom.
+The server requests its full memory limit of 3 GiB, because the buildpack sizes its heap from that limit.
 PostgreSQL and its backup containers also request their full memory limits.
 CPU remains burstable, so these Pods keep the Burstable quality-of-service class.
 NATS also requests its full memory limit. The chart sets its `GOMEMLIMIT` to 80 % of that limit ([NATS memory](#nats-memory)).
 
-| Role | Measured | Request | Limit |
-| --- | --- | --- | --- |
-| Server | 1.5 GiB | 2.5 GiB | 2.5 GiB |
-| Server | 0.8 to 1.4 GiB | 2 GiB | 2 GiB |
-| PostgreSQL, at rest in the earlier staging capture | 0.7 GiB | 2 GiB | 2 GiB |
-| pgBackRest | Not measured | 512 MiB | 512 MiB |
-| NATS | About 100 MiB at rest, and up to its soft limit in a catch-up | 1 GiB | 1 GiB |
-
-The server's and the server's caches have a bound of 10 GiB each.
-Thus, the node does not run out of disk and evict a draining server.
+The `small` profile bounds the server's Git cache at 20 GiB and its ephemeral-storage limit at 22 GiB.
+Include those limits and the sandbox disk requests in the node's disk budget ([Sandbox sizes](./sandboxes#sandbox-sizes)).
 Use `small.yaml` on a node of 16 GiB too.
 Its server uses `Recreate`, so the old server stops before its replacement starts.
 The server runs five reviews at a time, and the conversation loop the same resident turns as on a larger node.
@@ -161,9 +144,9 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, the conversation loop, one backup, five reviews, eight active tools Pods and two pooled tools Pods | 12.5 GiB of 13.9 GiB | 1.70 of 3.5 |
-| The same, with the isolation probe | 13.1 GiB | — |
-| An upgrade. The old server is gone. The webapp and conversation loop surge, with the migration and stanza Jobs, the new server's probe, and the pooled tools Pods | 12.1 GiB of 13.9 GiB | 2.10 of 3.5 |
+| Steady: every role, the conversation loop, one backup, five reviews, eight active tools Pods and two pooled tools Pods | 11.0 GiB of 13.9 GiB | 1.70 of 3.5 |
+| The same, with the isolation probe | 11.6 GiB | — |
+| An upgrade. The old server is gone. The webapp and conversation loop surge, with the migration and stanza Jobs, the new server's probe, and the pooled tools Pods | 10.6 GiB of 13.9 GiB | 2.10 of 3.5 |
 
 The table counts requests.
 Its node budget uses the recorded Node capacity of 16 372 036 KiB, less the current platform reservations and hard eviction floor.

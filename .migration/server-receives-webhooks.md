@@ -6,7 +6,7 @@ The server now receives provider webhooks. The chart has no webhook Deployment, 
 
 **Operators:**
 
-1. Stop every role, as phase 1 of [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades) describes.
+1. Stop every role, as phase 1 of [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades) describes.
    The 1.0 upgrade stops every role in any case.
 2. In your values, remove `webhook.replicas` and `webhook.resources`. Keep `webhook.stream`.
    The webhook Pod's memory is free for the server. Keep the server's defaults or add it to `server.resources`.

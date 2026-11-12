@@ -156,7 +156,6 @@ The small profile uses:
 | --- | --- |
 | Server | 40 / 2 |
 | Migration Job | 2 / 1 |
-| Webhook receiver | 0 / 0: no DataSource |
 | Sandboxes | 0 / 0: use their gateway |
 
 Preparing code evidence can hold two connections.
@@ -167,8 +166,7 @@ Do not hold a database transaction while waiting for a model grant or provider r
 The small profile updates the server with `Recreate`, so one server pool of 40 connections is open at a time.
 Budget one dedicated listener outside Hikari, four migration/backup sessions, four operator/monitor sessions, and three superuser-reserved slots.
 The total is 52 of 80.
-With `RollingUpdate`, a replacement server runs beside each old one, and the chart budgets both pools and both listeners.
-Do not overlap another server rollout.
+The chart permits one server and uses `Recreate` until provider-event processing has per-item ordering across replicas.
 
 Without an explicit `max_connections`, the chart sets what the role pools, server surge, listeners, and maintenance reserves need on a bundled database.
 It rejects an explicit value that cannot hold them.
@@ -177,7 +175,7 @@ Inventory dedicated listeners after runtime changes and recompute this budget if
 The independent mentor loop and tool Pods must use the gateway without a database pool.
 
 The chart defaults outside the small profile keep a server pool of 48 with minimum idle five.
-For more replicas, change the role pools and PostgreSQL budget together.
+Recalculate the PostgreSQL budget if the server pool changes.
 Measure pool waits at the actual workload. A rendered connection count does not prove query latency or memory use.
 
 ## Memory headroom

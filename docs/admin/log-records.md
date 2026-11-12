@@ -73,9 +73,8 @@ Workspaces are identified by `workspace.id`. The workspace slug is not a log fie
 Run production at `INFO`.
 `DEBUG` on framework, client or driver packages can write request content, provider responses and container settings that no guard above covers.
 
-The startup event `runtime.roles.configured` records `runtime.server.enabled`,
-and `runtime.webhook.enabled` as booleans. It is informational when any
-role is enabled and warns when all are disabled. A role configuration log is not a readiness probe.
+The startup event `runtime.roles.configured` records the `runtime.server.enabled` boolean.
+It is informational when the server is enabled and warns when it is disabled. A role configuration log is not a readiness probe.
 
 At the shared HTTP boundary, `integration.request.failed` identifies the request method, upstream
 host, and exception class without recording the full URL, headers, or exception message.
