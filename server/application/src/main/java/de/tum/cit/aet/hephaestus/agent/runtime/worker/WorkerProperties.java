@@ -46,8 +46,8 @@ public record WorkerProperties(
     /**
      * Shutdown behavior of this worker.
      *
-     * @param timeout How long a stopping worker waits for running practice reviews to finish before it cancels them.
-     *     Set 0s to cancel them at once.
+     * @param timeout How long the shutdown phase in which a stopping worker stops handing out conversation turns may
+     *     take. Practice reviews run in their own sandboxes, so a worker does not wait for them.
      */
     public record Drain(@DefaultValue("5m") Duration timeout) {
         public Drain {

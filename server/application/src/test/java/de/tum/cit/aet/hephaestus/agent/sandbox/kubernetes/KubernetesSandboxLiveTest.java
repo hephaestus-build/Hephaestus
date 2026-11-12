@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -9,57 +8,34 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import de.tum.cit.aet.hephaestus.agent.gateway.LiveSandboxGateway;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.AgentImageReferenceGuard;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
-import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import io.fabric8.kubernetes.api.model.Container;
-import io.fabric8.kubernetes.api.model.ContainerStatus;
-import io.fabric8.kubernetes.api.model.OwnerReference;
 import io.fabric8.kubernetes.api.model.Pod;
-import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.PodSecurityContext;
 import io.fabric8.kubernetes.api.model.PodSpec;
-import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.SecurityContext;
 import io.fabric8.kubernetes.api.model.batch.v1.Job;
-import io.fabric8.kubernetes.api.model.batch.v1.JobBuilder;
-import io.fabric8.kubernetes.api.model.batch.v1.JobSpec;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.KubernetesClientTimeoutException;
-import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
-import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.math.BigDecimal;
+import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -68,15 +44,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -87,7 +55,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.slf4j.Logger;
@@ -101,8 +68,6 @@ import org.springframework.boot.logging.LoggingSystem;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The Kubernetes sandbox runtime on a live cluster, run as the only JVM in the worker Pod that the chart's Deployment
@@ -183,18 +148,7 @@ class KubernetesSandboxLiveTest {
     /** The gateway port that the chart's policy admits from a sandbox Pod to its worker Pod. */
     private static final int GATEWAY_PORT = 8081;
 
-    private static final Duration START = Duration.ofMinutes(3);
     private static final Duration GONE = Duration.ofMinutes(2);
-    private static final Duration COMMAND = Duration.ofSeconds(30);
-
-    /** The transcript manifest that the agent image's gateway runner adds to every result it uploads. */
-    private static final String TRACE_MANIFEST = "traces/manifest.json";
-
-    /** The runner's cap on a result's transcripts: {@code TRACE_BYTES} in {@code docker/agents/pi/gateway-run.ts}. */
-    private static final long TRACE_BYTES = 7L * 1024 * 1024;
-
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
-
     /** A logger level this run set, and the level it had before. */
     private record Applied(String name, @Nullable LogLevel previous) {}
 
@@ -213,13 +167,10 @@ class KubernetesSandboxLiveTest {
     private KubernetesWorker worker;
     private KubernetesPods pods;
     private KubernetesSandboxJobs reviewJobs;
-    private SandboxWorkspaceManager workspaces;
-    private LiveSandboxGateway gateway;
     private SimpleMeterRegistry meters;
     private SandboxExits exits;
     private KubernetesSandboxCache cache;
-    private SandboxBackend backend;
-    private SandboxManager reviews;
+    private ServerSocket gateway;
 
     @BeforeAll
     void requireTheQualifiedWorker() throws Exception {
@@ -291,15 +242,22 @@ class KubernetesSandboxLiveTest {
         worker = new KubernetesWorker(properties, "live-" + UUID.randomUUID(), gatewayProperties.port());
         requireNoAuthorityInItsOwnNamespace();
         pods = configuration.kubernetesPods(client, worker, sandbox, agentImage);
-        workspaces = new SandboxWorkspaceManager(Path.of(System.getProperty("java.io.tmpdir")));
-        gateway = new LiveSandboxGateway(gatewayProperties.port());
-        assertEquals(GATEWAY_PORT, gateway.port(), "the gateway listens on the port it was given");
         meters = new SimpleMeterRegistry();
         reviewJobs = configuration.kubernetesSandboxJobs(client, worker);
         exits = configuration.sandboxExits(pods, meters);
         cache = configuration.kubernetesSandboxCache(client, worker);
-        backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, exits, cache);
-        reviews = new SandboxAttemptRunner(backend, workspaces, gateway.sessions(), meters);
+        // The probe proves that a sandbox reaches this worker's gateway port, and a TCP connection is all it checks.
+        ServerSocket listening = new ServerSocket(gatewayProperties.port());
+        gateway = listening;
+        Thread.ofVirtual().start(() -> {
+            while (!listening.isClosed()) {
+                try {
+                    listening.accept().close();
+                } catch (IOException closed) {
+                    return;
+                }
+            }
+        });
 
         String managementPort = System.getenv("MANAGEMENT_PORT");
         KubernetesIsolationProbe probe = configuration.kubernetesIsolationProbe(
@@ -356,410 +314,7 @@ class KubernetesSandboxLiveTest {
 
     // --- Practice reviews ---
 
-    @Test
-    void shouldStageATreeFarPastEveryRemovedLimit(@TempDir Path staging) throws Exception {
-
-        Path large = staging.resolve("large.bin");
-        byte[] chunk = new byte[1024 * 1024];
-        Arrays.fill(chunk, (byte) 'x');
-        try (OutputStream out = Files.newOutputStream(large)) {
-            for (int i = 0; i < 64; i++) {
-                out.write(chunk);
-            }
-        }
-
-        Path many = Files.createDirectories(staging.resolve("many"));
-        for (int i = 0; i < 25_000; i++) {
-            Path file = many.resolve("file" + i + ".txt");
-            Files.writeString(file, "content " + i);
-        }
-
-        String script = "set -e\n" + "repo=/workspace/"
-                + SandboxLayout.REPO_MOUNT_RELATIVE
-                + "\n"
-                + "bytes=$(wc -c < ${repo}large.bin)\n"
-                + "files=$(find ${repo}many -type f | wc -l)\n"
-                + "sample=$(cat ${repo}many/file24999.txt)\n"
-                + "echo \"bytes=$bytes files=$files sample=$sample\" > /workspace/"
-                + SandboxLayout.OUTPUT_PREFIX
-                + "seen.txt\n";
-
-        SandboxSpec spec = new SandboxSpec(
-                UUID.randomUUID(),
-                0,
-                agentImage.reference(),
-                List.of("sh", "-c", script),
-                Map.of(),
-                ReviewJob.generateJobToken(),
-                limits(Duration.ofMinutes(5)),
-                null,
-                Map.of(),
-                Map.of(),
-                List.of(new EvidenceDirectory(SandboxLayout.REPO_MOUNT_RELATIVE, staging)));
-
-        SandboxResult result = reviews.execute(spec);
-
-        assertThat(result.exitCode()).as("container logs: %s", result.logs()).isZero();
-        String seen = new String(result.outputFiles().get("seen.txt"), UTF_8).trim();
-        assertThat(seen).isEqualTo("bytes=" + (64 * 1024L * 1024L) + " files=" + 25_000 + " sample=content 24999");
-    }
-
-    @Test
-    void shouldRunAReviewOnItsInjectedFileAndRemoveItsJobAndPod() throws Exception {
-        UUID jobId = UUID.randomUUID();
-        String name = KubernetesSandboxBackend.jobName(jobId, 0);
-        byte[] prompt = synthetic(4096);
-        double succeeded = executions("success");
-
-        long started = System.nanoTime();
-        SandboxResult result = reviews.execute(review(
-                jobId,
-                "cp /workspace/.prompt /workspace/out/echo.bin && printf review-stdout && printf review-stderr >&2",
-                Map.of(".prompt", prompt),
-                Duration.ofMinutes(5)));
-        log.info("TIMING review (create Job, initialize, run, upload, delete): {} ms", millis(started));
-
-        assertThat(result.exitCode()).isZero();
-        assertThat(result.timedOut()).isFalse();
-        assertThat(result.outputFiles()).containsOnlyKeys("echo.bin", TRACE_MANIFEST);
-        assertThat(result.outputFiles().get("echo.bin"))
-                .as("the file the gateway served")
-                .isEqualTo(prompt);
-        requireEmptyTraceManifest(result.outputFiles());
-        // The kubelet keeps one log per container: stdout and stderr arrive in it together.
-        assertThat(result.logs()).contains("review-stdout", "review-stderr");
-        assertThat(executions("success")).isEqualTo(succeeded + 1);
-        assertThat(activeReviews()).isZero();
-        awaitJobGone(name, null);
-        awaitNoPodsOf(jobId);
-    }
-
-    @Test
-    void shouldStartTheProgramSideOfAReviewThatStagesAProgram(@TempDir Path staging) throws Exception {
-        // Job preparation stages a program on disk, so the spec holds it as a file on disk.
-        Path program = Files.write(staging.resolve("a-practice.ts"), synthetic(64));
-        var review = review(
-                UUID.randomUUID(),
-                "for i in $(seq 60); do [ -S /run/programs/programs.sock ] && break; sleep 0.5; done; "
-                        + "node --input-type=module -e \"const { ToolClient } = await import('/opt/pi-sdk/tool-client.js');"
-                        + " const side = await ToolClient.open({ path: '/run/programs/programs.sock' },"
-                        + " process.env.TOOLS_NONCE); side.close();\"",
-                Map.of(),
-                limits(Duration.ofMinutes(5)),
-                Map.of(SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX + "a-practice.ts", program));
-
-        SandboxResult result = reviews.execute(review);
-
-        assertThat(result.exitCode())
-                .as("the loop connects to the program side and it answers")
-                .isZero();
-    }
-
-    @Test
-    void shouldRecordAKernelOomKillOfAReviewInsteadOfAnEviction() throws Exception {
-        UUID jobId = UUID.randomUUID();
-        double killed = meters.get(AgentMetrics.SANDBOX_EXITS)
-                .tags("kind", "review", "reason", "oom_killed")
-                .counter()
-                .count();
-        double evicted = meters.get(AgentMetrics.SANDBOX_EXITS)
-                .tags("kind", "review", "reason", "evicted")
-                .counter()
-                .count();
-
-        CompletableFuture<List<Pod>> terminated = client.pods()
-                .inNamespace(namespace())
-                .withLabel(KubernetesWorker.JOB_ID, jobId.toString())
-                .informOnCondition(candidates ->
-                        candidates.stream().anyMatch(pod -> KubernetesPods.exitCode(pod, KubernetesPods.LOOP) != null));
-        try {
-            // External buffers touch anonymous pages without exhausting the JavaScript heap first.
-            assertThatThrownBy(() -> reviews.execute(review(
-                            jobId,
-                            "exec node --max-old-space-size=64 -e 'const pages=[]; "
-                                    + "setInterval(() => pages.push(Buffer.alloc(16*1024*1024, 1)), 50)'",
-                            Map.of(),
-                            Duration.ofMinutes(3))))
-                    .isInstanceOf(SandboxException.class)
-                    .hasRootCauseInstanceOf(IllegalStateException.class)
-                    .hasRootCauseMessage("Sandbox exited without uploading its result");
-            assertThat(terminated.get(COMMAND.toMillis(), TimeUnit.MILLISECONDS))
-                    .extracting(pod -> KubernetesPods.exitCode(pod, KubernetesPods.LOOP))
-                    .containsExactly(137);
-        } finally {
-            terminated.cancel(true);
-        }
-        assertThat(meters.get(AgentMetrics.SANDBOX_EXITS)
-                        .tags("kind", "review", "reason", "oom_killed")
-                        .counter()
-                        .count())
-                .as("the production exit recorder observed Kubernetes OOMKilled, not merely exit 137")
-                .isEqualTo(killed + 1);
-        assertThat(meters.get(AgentMetrics.SANDBOX_EXITS)
-                        .tags("kind", "review", "reason", "evicted")
-                        .counter()
-                        .count())
-                .isEqualTo(evicted);
-        awaitJobGone(KubernetesSandboxBackend.jobName(jobId, 0), null);
-        awaitNoPodsOf(jobId);
-    }
-
-    @Test
-    void shouldReportTheNonZeroExitOfAReview() throws Exception {
-        UUID jobId = UUID.randomUUID();
-        String name = KubernetesSandboxBackend.jobName(jobId, 0);
-
-        SandboxResult result = reviews.execute(
-                review(jobId, "printf exit-stdout; printf exit-stderr >&2; exit 7", Map.of(), Duration.ofMinutes(5)));
-
-        assertThat(result.exitCode()).isEqualTo(7);
-        assertThat(result.timedOut()).isFalse();
-        assertThat(result.outputFiles()).containsOnlyKeys(TRACE_MANIFEST);
-        requireEmptyTraceManifest(result.outputFiles());
-        assertThat(result.logs()).contains("exit-stdout", "exit-stderr");
-        awaitJobGone(name, null);
-        awaitNoPodsOf(jobId);
-    }
-
-    @Test
-    void shouldEndAReviewAtItsWorkDeadlineWithExit124AndItsPartialOutput() throws Exception {
-        UUID jobId = UUID.randomUUID();
-        String name = KubernetesSandboxBackend.jobName(jobId, 0);
-        Duration maxRuntime = Duration.ofSeconds(90);
-        double timedOut = executions("timeout");
-
-        SandboxResult result = reviews.execute(
-                review(jobId, "printf partial > /workspace/out/partial.txt; sleep 600", Map.of(), maxRuntime));
-        log.info("TIMING review to its work deadline of {}: {}", maxRuntime, result.duration());
-
-        assertThat(result.exitCode()).isEqualTo(SandboxLayout.EXIT_WORK_TIMEOUT);
-        assertThat(result.timedOut()).isTrue();
-        assertThat(result.outputFiles()).containsOnlyKeys("partial.txt", TRACE_MANIFEST);
-        assertThat(result.outputFiles().get("partial.txt")).isEqualTo("partial".getBytes(UTF_8));
-        requireEmptyTraceManifest(result.outputFiles());
-        assertThat(result.duration()).isLessThan(maxRuntime.plus(SandboxLayout.RESULT_UPLOAD_GRACE));
-        assertThat(executions("timeout")).isEqualTo(timedOut + 1);
-        awaitJobGone(name, null);
-        awaitNoPodsOf(jobId);
-    }
-
-    @Test
-    void shouldCancelARunningReviewAndRemoveItsJobAndPodWhenCancelled() throws Exception {
-        UUID jobId = UUID.randomUUID();
-        String name = KubernetesSandboxBackend.jobName(jobId, 0);
-        ResourceLimits limits = limits(Duration.ofMinutes(10));
-        double cancelled = executions("cancelled");
-        ExecutorService executor = Executors.newSingleThreadExecutor(
-                Thread.ofPlatform().name("live-review").factory());
-        try {
-            long started = System.nanoTime();
-            Future<SandboxResult> running =
-                    executor.submit(() -> reviews.execute(review(jobId, "sleep 600", Map.of(), limits)));
-            Job job = awaitJob(name, running);
-            requireBoundedJob(job);
-            // The attempt's upload deadline plus the backstop, counted when the Job was created.
-            long deadline = limits.maxRuntime()
-                    .plus(SandboxLayout.RESULT_UPLOAD_GRACE)
-                    .plus(KubernetesSandboxBackend.DEADLINE_BACKSTOP)
-                    .toSeconds();
-            assertThat(job.getSpec().getActiveDeadlineSeconds()).isBetween(deadline - 60, deadline);
-            String jobUid = job.getMetadata().getUid();
-            Pod pod = awaitPodOf(
-                    job,
-                    candidate -> KubernetesPods.running(candidate, KubernetesPods.LOOP)
-                            || KubernetesPods.terminal(candidate),
-                    running);
-            log.info("TIMING review Job created to its Pod's runtime running: {} ms", millis(started));
-            requireControlledBy(pod, job);
-            assertThat(KubernetesPods.running(pod, KubernetesPods.LOOP))
-                    .as("the runtime runs")
-                    .isTrue();
-            requireCustody(pod, KubernetesWorker.KIND_REVIEW);
-            assertThat(pod.getMetadata().getLabels())
-                    .containsEntry(KubernetesWorker.JOB_ID, jobId.toString())
-                    .containsEntry(KubernetesWorker.JOB_ATTEMPT, "0");
-            requireHardened(pod);
-            requireBounds(container(pod.getSpec().getContainers(), KubernetesPods.LOOP), limits, KubernetesPods.REVIEW);
-            requirePinnedImageRan(pod, KubernetesPods.LOOP);
-            assertThat(pod.getStatus().getQosClass())
-                    .as("its whole memory requested, a share of CPU")
-                    .isEqualTo("Burstable");
-            assertThat(activeReviews()).isOne();
-            String uid = pod.getMetadata().getUid();
-
-            long cancelling = System.nanoTime();
-            reviews.cancel(jobId);
-            assertThatThrownBy(() -> running.get(pods.stopGraceSeconds() + 60, TimeUnit.SECONDS))
-                    .as("the execution ends as cancelled")
-                    .isInstanceOf(ExecutionException.class)
-                    .hasCauseInstanceOf(SandboxCancelledException.class);
-            log.info("TIMING review end after its cancellation: {} ms", millis(cancelling));
-            awaitJobGone(name, jobUid);
-            awaitGone(pod.getMetadata().getName(), uid);
-            assertThat(executions("cancelled")).isEqualTo(cancelled + 1);
-            assertThat(activeReviews()).isZero();
-        } finally {
-            executor.shutdownNow();
-            assertThat(executor.awaitTermination(2, TimeUnit.MINUTES))
-                    .as("the execution's thread ends")
-                    .isTrue();
-        }
-    }
-
-    /**
-     * A kill by another process, which knows the review only by its Job's name, ends the Pod that runs it, and the Job
-     * starts no other Pod: the launching process sees the runtime end.
-     */
-    @Test
-    void shouldEndAReviewThatAnotherProcessKillsByItsNameAndStartNoOtherPod() throws Exception {
-        UUID jobId = UUID.randomUUID();
-        String name = KubernetesSandboxBackend.jobName(jobId, 0);
-        ResourceLimits limits = limits(Duration.ofMinutes(10));
-        ExecutorService executor = Executors.newSingleThreadExecutor(
-                Thread.ofPlatform().name("live-review").factory());
-        try {
-            Future<SandboxResult> running =
-                    executor.submit(() -> reviews.execute(review(jobId, "sleep 600", Map.of(), limits)));
-            Job job = awaitJob(name, running);
-            Pod pod = awaitPodOf(job, candidate -> KubernetesPods.running(candidate, KubernetesPods.LOOP), running);
-
-            new KubernetesSandboxBackend(
-                            pods, reviewJobs, worker, new SandboxExits(pods, new SimpleMeterRegistry()), cache)
-                    .kill(new SandboxBackend.Handle(name));
-
-            SandboxResult result = running.get(pods.stopGraceSeconds() + 90, TimeUnit.SECONDS);
-            assertThat(result.exitCode()).as("the kubelet ended the runtime").isNotZero();
-            assertThat(client.pods()
-                            .inNamespace(namespace())
-                            .withLabel(KubernetesSandboxJobs.JOB_NAME, name)
-                            .list()
-                            .getItems())
-                    .extracting(candidate -> candidate.getMetadata().getUid())
-                    .as("no replacement Pod; the attempt's own removal can have deleted the one it had")
-                    .allMatch(uid -> uid.equals(pod.getMetadata().getUid()));
-            awaitJobGone(name, job.getMetadata().getUid());
-            awaitNoPodsOf(jobId);
-        } finally {
-            executor.shutdownNow();
-            assertThat(executor.awaitTermination(2, TimeUnit.MINUTES))
-                    .as("the execution's thread ends")
-                    .isTrue();
-        }
-    }
-
     // --- The native Job controllers, without an executing adapter ---
-
-    @Test
-    void shouldStopAndRemoveTheOnePodOfAJobAtItsDeadlineWhenNoWorkerStopsIt() {
-        int deadlineSeconds = 20;
-        Job created = disposableJob("sleep 600", deadlineSeconds);
-        String name = created.getMetadata().getName();
-        Set<String> seen = ConcurrentHashMap.newKeySet();
-        // A watch of the Job's Pods by its name from before its creation through its end: every Pod the controller
-        // made.
-        SharedIndexInformer<Pod> children = client.pods()
-                .inNamespace(namespace())
-                .withLabel(KubernetesSandboxJobs.JOB_NAME, name)
-                .inform(new ResourceEventHandler<>() {
-                    @Override
-                    public void onAdd(Pod pod) {
-                        seen.add(pod.getMetadata().getUid());
-                    }
-
-                    @Override
-                    public void onUpdate(Pod before, Pod pod) {
-                        seen.add(pod.getMetadata().getUid());
-                    }
-
-                    @Override
-                    public void onDelete(Pod pod, boolean finalStateUnknown) {
-                        seen.add(pod.getMetadata().getUid());
-                    }
-                });
-        try {
-            reviewJobs.create(created);
-            Job job = presentJob(name);
-            requireBoundedJob(job);
-            // Recorded before the deadline: the Job controller deletes its active Pods when the deadline passes.
-            Pod pod = awaitPodOf(job, candidate -> true, null);
-            requireControlledBy(pod, job);
-
-            Job ended = client.batch()
-                    .v1()
-                    .jobs()
-                    .inNamespace(namespace())
-                    .withName(name)
-                    .waitUntilCondition(
-                            candidate -> candidate != null && failed(candidate) != null,
-                            START.toMillis(),
-                            TimeUnit.MILLISECONDS);
-            assertThat(failed(ended))
-                    .as("the Job controller stopped the Job at its deadline")
-                    .isEqualTo("DeadlineExceeded");
-            // Nothing of this run deletes the Pod: the Job controller does, while the Job itself stays.
-            awaitGone(pod.getMetadata().getName(), pod.getMetadata().getUid());
-            assertThat(seen)
-                    .as("the Job created one Pod and replaced none, up to its end")
-                    .containsExactly(pod.getMetadata().getUid());
-            assertThat(presentJob(name).getMetadata().getUid())
-                    .isEqualTo(job.getMetadata().getUid());
-        } finally {
-            children.stop();
-        }
-    }
-
-    @Test
-    void shouldDeleteThePodOfACompletedJobWithTheJobWhenTheJobIsDeleted() {
-        Job created = disposableJob("exit 0", 300);
-        String name = created.getMetadata().getName();
-        reviewJobs.create(created);
-        Job job = presentJob(name);
-        Pod pod = awaitPodOf(job, KubernetesPods::terminal, null);
-        requireControlledBy(pod, job);
-        client.batch()
-                .v1()
-                .jobs()
-                .inNamespace(namespace())
-                .withName(name)
-                .waitUntilCondition(
-                        candidate -> candidate != null && complete(candidate), START.toMillis(), TimeUnit.MILLISECONDS);
-        assertThat(pods.get(pod.getMetadata().getName()))
-                .as("the production TTL keeps the completed Job, and with it its Pod")
-                .extracting(kept -> kept.getMetadata().getUid())
-                .isEqualTo(pod.getMetadata().getUid());
-
-        reviewJobs.deleteWithPod(name);
-        awaitJobGone(name, job.getMetadata().getUid());
-        // Only the garbage collector deletes the Pod here: nothing of this run deletes it by name.
-        awaitGone(pod.getMetadata().getName(), pod.getMetadata().getUid());
-        // A Job that is gone is no error.
-        reviewJobs.deleteWithPod(name);
-    }
-
-    @Test
-    void shouldRemoveAFinishedJobWithItsPodThroughTheTtlControllerWhenNoWorkerDeletesIt() {
-        Job production = disposableJob("exit 0", 300);
-        assertThat(production.getSpec().getTtlSecondsAfterFinished())
-                .as("the production TTL")
-                .isEqualTo((int) KubernetesSandboxJobs.TTL_AFTER_FINISHED.toSeconds());
-        // A copy with a short TTL, made before the creation, so that the test does not wait for the production one.
-        Job shortLived = new JobBuilder(production)
-                .editSpec()
-                .withTtlSecondsAfterFinished(5)
-                .endSpec()
-                .build();
-        String name = shortLived.getMetadata().getName();
-        reviewJobs.create(shortLived);
-        Job job = presentJob(name);
-        Pod pod = awaitPodOf(job, candidate -> true, null);
-        requireControlledBy(pod, job);
-
-        long started = System.nanoTime();
-        // The TTL controller removes only a finished Job, and the garbage collector its Pod; nothing of this run does.
-        awaitJobGone(name, job.getMetadata().getUid());
-        awaitGone(pod.getMetadata().getName(), pod.getMetadata().getUid());
-        log.info("TIMING Job created to it and its Pod removed by the TTL controller: {} ms", millis(started));
-    }
 
     // --- Conversation tools Pods ---
 
@@ -890,158 +445,6 @@ class KubernetesSandboxLiveTest {
         created.add(name);
     }
 
-    /** Waits for the review Job of the name to exist; a failed execution is reported with the wait. */
-    private Job awaitJob(String name, Future<?> execution) {
-        try {
-            return client.batch()
-                    .v1()
-                    .jobs()
-                    .inNamespace(namespace())
-                    .withName(name)
-                    .waitUntilCondition(job -> job != null, START.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (KubernetesClientTimeoutException e) {
-            throw withFailureOf(e, execution);
-        }
-    }
-
-    /**
-     * Waits for a Pod that the Job controller created for the Job, found by the Job's name as the controller labels it,
-     * to satisfy the condition. A failed execution is reported with the wait.
-     */
-    private Pod awaitPodOf(Job job, Predicate<Pod> condition, @Nullable Future<?> execution) {
-        CompletableFuture<List<Pod>> found = client.pods()
-                .inNamespace(namespace())
-                .withLabel(KubernetesSandboxJobs.JOB_NAME, job.getMetadata().getName())
-                .informOnCondition(candidates -> candidates.stream().anyMatch(condition));
-        try {
-            return found.get(START.toMillis(), TimeUnit.MILLISECONDS).stream()
-                    .filter(condition)
-                    .findFirst()
-                    .orElseThrow();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("Interrupted while waiting for the Pod of a Job", e);
-        } catch (ExecutionException | TimeoutException e) {
-            throw withFailureOf(
-                    new AssertionError("No Pod of Job " + job.getMetadata().getName() + " in time", e), execution);
-        } finally {
-            found.cancel(true);
-        }
-    }
-
-    /** The failure of a wait, with the failure of the execution it waited for when that execution already ended. */
-    private static <T extends Throwable> T withFailureOf(T failure, @Nullable Future<?> execution) {
-        if (execution != null && execution.isDone()) {
-            try {
-                execution.get();
-            } catch (ExecutionException failed) {
-                failure.addSuppressed(failed.getCause());
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                failure.addSuppressed(interrupted);
-            }
-        }
-        return failure;
-    }
-
-    /** The Job runs one Pod, replaces none, is bounded by a deadline and the production TTL, and is this run's. */
-    private void requireBoundedJob(Job job) {
-        JobSpec spec = job.getSpec();
-        assertThat(spec.getCompletions()).isOne();
-        assertThat(spec.getParallelism()).isOne();
-        assertThat(spec.getBackoffLimit()).isZero();
-        assertThat(spec.getActiveDeadlineSeconds()).isPositive();
-        assertThat(spec.getTtlSecondsAfterFinished())
-                .isEqualTo((int) KubernetesSandboxJobs.TTL_AFTER_FINISHED.toSeconds());
-        assertThat(job.getMetadata().getNamespace()).isEqualTo(namespace());
-        assertThat(labelsOf(job))
-                .containsEntry(KubernetesWorker.PART_OF, "hephaestus")
-                .containsEntry(KubernetesWorker.WORKER_POD, properties.podName())
-                .containsEntry(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_REVIEW);
-        assertThat(worker.createdBySelf(labelsOf(job))).isTrue();
-        assertThat(reviewJobs.list())
-                .extracting(listed -> listed.getMetadata().getName())
-                .contains(job.getMetadata().getName());
-    }
-
-    /**
-     * The Job controls the Pod, as the Job controller records it, and the Pod carries this run's review custody. The
-     * runtime itself finds the Pod by the Job's name label only: the namespace is the installation's.
-     */
-    private void requireControlledBy(Pod pod, Job job) {
-        OwnerReference owner = Optional.ofNullable(pod.getMetadata().getOwnerReferences()).orElse(List.of()).stream()
-                .filter(candidate -> Boolean.TRUE.equals(candidate.getController()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("the Pod has a controller"));
-        assertThat(owner.getKind()).isEqualTo("Job");
-        assertThat(owner.getApiVersion()).isEqualTo("batch/v1");
-        assertThat(owner.getUid()).isEqualTo(job.getMetadata().getUid());
-        assertThat(owner.getName()).isEqualTo(job.getMetadata().getName());
-        assertThat(labelsOf(pod))
-                .containsEntry(KubernetesSandboxJobs.JOB_NAME, job.getMetadata().getName());
-        requireCustody(pod, KubernetesWorker.KIND_REVIEW);
-    }
-
-    private Job presentJob(String name) {
-        return Objects.requireNonNull(
-                client.batch()
-                        .v1()
-                        .jobs()
-                        .inNamespace(namespace())
-                        .withName(name)
-                        .get(),
-                () -> "Job " + name + " exists");
-    }
-
-    /** The reason of the Job's {@code Failed} condition, or null while it has none. */
-    private static @Nullable String failed(Job job) {
-        return job.getStatus() == null || job.getStatus().getConditions() == null
-                ? null
-                : job.getStatus().getConditions().stream()
-                        .filter(condition ->
-                                "Failed".equals(condition.getType()) && "True".equals(condition.getStatus()))
-                        .map(condition -> Objects.requireNonNullElse(condition.getReason(), ""))
-                        .findFirst()
-                        .orElse(null);
-    }
-
-    private static boolean complete(Job job) {
-        return job.getStatus() != null
-                && job.getStatus().getConditions() != null
-                && job.getStatus().getConditions().stream()
-                        .anyMatch(condition ->
-                                "Complete".equals(condition.getType()) && "True".equals(condition.getStatus()));
-    }
-
-    /**
-     * A review Job of this run that no adapter executes: the review Pod whose initializer fills nothing, since no gateway
-     * session serves a workspace for it. Its labels, security, isolation gate, limits, deadline and TTL are the production
-     * ones.
-     */
-    private Job disposableJob(String script, long deadlineSeconds) {
-        UUID jobId = UUID.randomUUID();
-        Map<String, String> labels = worker.labels(KubernetesWorker.KIND_REVIEW);
-        labels.put(KubernetesWorker.JOB_ID, jobId.toString());
-        labels.put(KubernetesWorker.JOB_ATTEMPT, "0");
-        Pod reviewPod = pods.workspacePod(
-                new KubernetesPods.Workload(
-                        KubernetesSandboxBackend.jobName(jobId, 0), labels, agentImage.reference(), "agent"),
-                Map.of(),
-                List.of("sh", "-c", script),
-                limits(Duration.ofMinutes(5)),
-                KubernetesPods.REVIEW,
-                null);
-        // The initializer stays, so that it makes the runtime's mount points, but fills nothing.
-        Pod runtimeOnly = new PodBuilder(reviewPod)
-                .editSpec()
-                .editMatchingInitContainer(container -> KubernetesPods.INITIALIZER.equals(container.getName()))
-                .withCommand(KubernetesPods.limited(List.of("true")))
-                .endInitContainer()
-                .endSpec()
-                .build();
-        return reviewJobs.job(runtimeOnly, deadlineSeconds);
-    }
-
     /** Waits until no Job of the name is left, or only one with another UID. */
     private void awaitJobGone(String name, @Nullable String uid) {
         long started = System.nanoTime();
@@ -1056,19 +459,6 @@ class KubernetesSandboxLiveTest {
                         GONE.toMillis(),
                         TimeUnit.MILLISECONDS);
         log.info("TIMING Job gone: {} ms", millis(started));
-    }
-
-    /** Waits until no Pod of the review job is left, whatever created it. */
-    private void awaitNoPodsOf(UUID jobId) throws Exception {
-        CompletableFuture<List<Pod>> gone = client.pods()
-                .inNamespace(namespace())
-                .withLabel(KubernetesWorker.JOB_ID, jobId.toString())
-                .informOnCondition(List::isEmpty);
-        try {
-            gone.get(GONE.toMillis(), TimeUnit.MILLISECONDS);
-        } finally {
-            gone.cancel(true);
-        }
     }
 
     /**
@@ -1142,42 +532,6 @@ class KubernetesSandboxLiveTest {
         });
     }
 
-    /** The API holds the Pod kind's measured requests and limits and the caller's CPU limit. */
-    private static void requireBounds(Container container, ResourceLimits limits, KubernetesPods.Size size) {
-        Map<String, Quantity> bounds = container.getResources().getLimits();
-        Map<String, Quantity> requests = container.getResources().getRequests();
-        assertThat(Quantity.getAmountInBytes(bounds.get("memory")))
-                .isEqualByComparingTo(BigDecimal.valueOf(size.memoryLimit()));
-        assertThat(Quantity.getAmountInBytes(requests.get("memory")))
-                .isEqualByComparingTo(BigDecimal.valueOf(size.memoryRequest()));
-        assertThat(Quantity.getAmountInBytes(bounds.get("cpu")))
-                .isEqualByComparingTo(BigDecimal.valueOf(limits.cpus()));
-        assertThat(Quantity.getAmountInBytes(requests.get("cpu")))
-                .isEqualByComparingTo(
-                        BigDecimal.valueOf(size.cpuRequestMillicores()).movePointLeft(3));
-    }
-
-    /** The Pod requests the pinned image; the runtime may report its resolved platform image ID. */
-    private void requirePinnedImageRan(Pod pod, String name) {
-        assertEquals(
-                agentImage.reference(),
-                container(pod.getSpec().getContainers(), name).getImage());
-        ContainerStatus status = pod.getStatus().getContainerStatuses().stream()
-                .filter(candidate -> name.equals(candidate.getName()))
-                .findFirst()
-                .orElseThrow();
-        assertThat(status.getImageID()).isNotBlank();
-        var state = Objects.requireNonNull(status.getState());
-        assertTrue(state.getRunning() != null || state.getTerminated() != null, "the pinned container started");
-    }
-
-    private static Container container(List<Container> containers, String name) {
-        return containers.stream()
-                .filter(container -> name.equals(container.getName()))
-                .findFirst()
-                .orElseThrow();
-    }
-
     private static Map<String, String> labelsOf(Pod pod) {
         Map<String, String> labels = pod.getMetadata().getLabels();
         return labels == null ? Map.of() : labels;
@@ -1188,9 +542,11 @@ class KubernetesSandboxLiveTest {
         return labels == null ? Map.of() : labels;
     }
 
-    /** Removes the review Jobs this run left, each with its Pod. A Job that this process did not create is kept. */
+    /** Removes the Jobs this run left, each with its Pod. A Job that this process did not create is kept. */
     private void removeCreatedJobs() {
-        for (Job job : reviewJobs.list()) {
+        for (Job job : Stream.of(KubernetesWorker.KIND_TOOLS, KubernetesWorker.KIND_REVIEW)
+                .flatMap(kind -> reviewJobs.list(kind).stream())
+                .toList()) {
             if (!worker.createdBySelf(labelsOf(job))) {
                 continue;
             }
@@ -1233,91 +589,8 @@ class KubernetesSandboxLiveTest {
         }
     }
 
-    // --- Sandboxes ---
-
-    private SandboxSpec review(UUID jobId, String script, Map<String, byte[]> files, Duration maxRuntime) {
-        return review(jobId, script, files, limits(maxRuntime));
-    }
-
-    private SandboxSpec review(UUID jobId, String script, Map<String, byte[]> files, ResourceLimits limits) {
-        return review(jobId, script, files, limits, Map.of());
-    }
-
-    private SandboxSpec review(
-            UUID jobId,
-            String script,
-            Map<String, byte[]> files,
-            ResourceLimits limits,
-            Map<String, Path> filesOnDisk) {
-        return new SandboxSpec(
-                jobId,
-                0,
-                agentImage.reference(),
-                List.of("sh", "-c", script),
-                Map.of(),
-                ReviewJob.generateJobToken(),
-                limits,
-                null,
-                files,
-                filesOnDisk,
-                List.of());
-    }
-
     private static ResourceLimits limits(Duration maxRuntime) {
         return new ResourceLimits(1.0, maxRuntime);
-    }
-
-    private double executions(String outcome) {
-        return meters.get(AgentMetrics.SANDBOX_EXECUTIONS)
-                .tag("outcome", outcome)
-                .counter()
-                .count();
-    }
-
-    private double activeReviews() {
-        return meters.get(AgentMetrics.SANDBOX_CONTAINERS_ACTIVE).gauge().value();
-    }
-
-    /** Every byte value, so that a transfer that alters any byte shows. */
-    private static byte[] synthetic(int length) {
-        byte[] bytes = new byte[length];
-        for (int index = 0; index < length; index++) {
-            bytes[index] = (byte) (index * 31 + 7);
-        }
-        return bytes;
-    }
-
-    /**
-     * The runner's manifest of a result whose command started no model: its four fields exactly, a complete scan and no
-     * session. The budget is what the result had left, up to the runner's cap, so only its bounds are fixed.
-     */
-    private static void requireEmptyTraceManifest(Map<String, byte[]> outputFiles) {
-        JsonNode manifest = MAPPER.readTree(Objects.requireNonNull(outputFiles.get(TRACE_MANIFEST), TRACE_MANIFEST));
-        assertThat(manifest.isObject()).as("the manifest is a JSON object").isTrue();
-        assertThat(manifest.propertyNames())
-                .containsExactlyInAnyOrder("schemaVersion", "budgetBytes", "sessionScanTruncated", "sessions");
-        JsonNode version = manifest.path("schemaVersion");
-        assertThat(version.isIntegralNumber() && version.canConvertToLong())
-                .as("schemaVersion is an integer")
-                .isTrue();
-        assertThat(version.longValue()).isEqualTo(1);
-        JsonNode budget = manifest.path("budgetBytes");
-        assertThat(budget.isIntegralNumber() && budget.canConvertToLong())
-                .as("budgetBytes is an integer")
-                .isTrue();
-        assertThat(budget.longValue()).isPositive().isLessThanOrEqualTo(TRACE_BYTES);
-        JsonNode truncated = manifest.path("sessionScanTruncated");
-        assertThat(truncated.isBoolean())
-                .as("sessionScanTruncated is a boolean")
-                .isTrue();
-        assertThat(truncated.booleanValue())
-                .as("the scan of the sessions was complete")
-                .isFalse();
-        JsonNode sessions = manifest.path("sessions");
-        assertThat(sessions.isArray()).as("sessions is an array").isTrue();
-        assertThat(sessions.size())
-                .as("no session: the command started no model")
-                .isZero();
     }
 
     private static long millis(long startedNanos) {

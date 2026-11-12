@@ -33,11 +33,11 @@ class AgentRoleGatingTest extends BaseUnitTest {
 
     @Test
     void shouldPollJobsOnlyWhenAgentJobsAndTheWorkerRoleAreOn() {
-        assertThat(registers(ReviewJobExecutor.class)).isFalse();
-        assertThat(registers(ReviewJobExecutor.class, AGENT_ON)).isTrue();
-        assertThat(registers(ReviewJobExecutor.class, AGENT_ON, RuntimeRole.WORKER_PROPERTY + "=false"))
+        assertThat(registers(ReviewSandboxRuns.class)).isFalse();
+        assertThat(registers(ReviewSandboxRuns.class, AGENT_ON)).isTrue();
+        assertThat(registers(ReviewSandboxRuns.class, AGENT_ON, RuntimeRole.WORKER_PROPERTY + "=false"))
                 .isFalse();
-        assertThat(registers(ReviewJobExecutor.class, AGENT_ON, RuntimeRole.SERVER_PROPERTY + "=false"))
+        assertThat(registers(ReviewSandboxRuns.class, AGENT_ON, RuntimeRole.SERVER_PROPERTY + "=false"))
                 .isTrue();
     }
 

@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnConfiguration;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.ConversationToolsPods;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.fabric8.kubernetes.api.model.Container;
@@ -23,9 +22,6 @@ import java.util.Map;
 import java.util.function.Function;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.context.properties.bind.Bindable;
-import org.springframework.boot.context.properties.bind.Binder;
-import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -43,17 +39,6 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
 
     private final KubernetesPods pods = new KubernetesPods(
             mock(KubernetesClient.class), KubernetesFixtures.worker("sandboxes"), 10, ImagePullPolicy.IF_NOT_PRESENT);
-
-    @Test
-    @DisplayName("a review sandbox counts what the table says")
-    void shouldMatchTheTableWhenTheWorkerBuildsAReviewPod() throws IOException {
-        ResourceLimits review = new Binder(new MapConfigurationPropertySource())
-                .bindOrCreate("hephaestus.sandbox", Bindable.of(SandboxProperties.class))
-                .defaultResourceLimits()
-                .forAttempt(ResourceLimits.MAX_RUNTIME);
-
-        assertCounts("review", List.of(reviewPod(review)));
-    }
 
     @Test
     @DisplayName("a conversation's tools Pod counts what the table says")
@@ -135,17 +120,6 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
         Map<String, Quantity> requests = container.getResources().getRequests();
         Quantity quantity = requests == null ? null : requests.get(resource);
         return quantity == null ? BigDecimal.ZERO : quantity.getNumericalAmount();
-    }
-
-    /** As {@code KubernetesSandboxBackend.launch} builds it, with a custom program: the largest review, every side. */
-    private Pod reviewPod(ResourceLimits limits) {
-        return pods.workspacePod(
-                workload(KubernetesWorker.KIND_REVIEW),
-                Map.of(),
-                List.of("node"),
-                limits,
-                KubernetesPods.REVIEW,
-                new KubernetesPods.Sidecars("nonce", true));
     }
 
     private static KubernetesPods.Workload workload(String kind) {

@@ -32,10 +32,8 @@ import io.fabric8.kubernetes.client.KubernetesClientTimeoutException;
 import io.fabric8.kubernetes.client.RequestConfigBuilder;
 import java.io.IOException;
 import java.io.Reader;
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -97,35 +95,10 @@ public class KubernetesPods {
     /** Not the loop's user: a tools command cannot signal, trace or read the loop. */
     static final long TOOLS_UID = 1001;
 
-    /** Not the tools user: a tools command cannot trace or rewrite a program, whose result the loop trusts. */
-    static final long PROGRAMS_UID = 1002;
-
     static final String WORKSPACE = "/workspace";
-
-    /** Where the tools side listens: a volume of the loop and the tools alone. */
-    static final String TOOLS_SOCKET = "/run/tools/tools.sock";
-
-    /** Where the program side listens. Only the loop and the programs mount it: the boundary is the missing mount. */
-    static final String PROGRAMS_SOCKET = "/run/programs/programs.sock";
 
     /** Starts the tools program under its system call filter, on either side. */
     static final List<String> TOOLS_COMMAND = List.of("sh", "/opt/pi-sdk/tools-launch.sh");
-
-    /**
-     * The attempt workspace, one volume per path: the initializer writes all of them,
-     * the runtime reads {@code /workspace} only.
-     */
-    private static final Map<String, String> ATTEMPT_VOLUMES = attemptVolumes();
-
-    /**
-     * An empty volume hides the image's {@code /workspace/node_modules} link. The initializer restores that link so
-     * the runner resolves its SDK from the image.
-     */
-    static final List<String> INITIALIZER_COMMAND = List.of(
-            "sh",
-            "-c",
-            "ln -s /opt/pi-sdk/node_modules /workspace/node_modules && exec "
-                    + String.join(" ", SandboxLayout.INITIALIZER_COMMAND));
 
     /**
      * How long the isolation init container waits for the network policy. A network plugin may filter a new Pod only
@@ -175,32 +148,6 @@ public class KubernetesPods {
 
     private static final long SIDE_LOG_BYTES = 16 * MIB;
 
-    /** A socket file and nothing else: the smallest memory volume. */
-    private static final long SOCKET_BYTES = MIB;
-
-    /**
-     * The sides beyond the loop, from measured use. Each has its own limit, so that a memory kill of the tools never takes
-     * the loop. Their requests and the loop's add up to one review in sandbox-pod-requests.json, so a review that runs
-     * programs takes the quota that a review always took. A program process lives briefly, so the limit, not the request,
-     * holds it.
-     */
-    private static final ResourceRequirements TOOLS_RESOURCES = side(32 * MIB);
-
-    private static final ResourceRequirements PROGRAMS_RESOURCES = side(40 * MIB);
-
-    private static ResourceRequirements side(long memoryRequest) {
-        return new ResourceRequirementsBuilder()
-                .withLimits(Map.of(
-                        "cpu", new Quantity("500m"),
-                        "memory", bytes(768 * MIB),
-                        "ephemeral-storage", bytes(SandboxLayout.SCRATCH_BYTES + SIDE_LOG_BYTES)))
-                .withRequests(Map.of(
-                        "cpu", new Quantity("10m"),
-                        "memory", bytes(memoryRequest),
-                        "ephemeral-storage", bytes(SIDE_LOG_BYTES)))
-                .build();
-    }
-
     /**
      * The memory that one kind of sandbox Pod requests and may use, and its local disk. Kubernetes sizes its sandbox
      * Pods here, from measured use. Each of the Pod's {@code diskVolumes} volumes on the node's disk has a size limit of {@code
@@ -221,18 +168,6 @@ public class KubernetesPods {
     }
 
     /**
-     * A review's loop: its commands and programs run on the other sides. A large change can pass the request, so the
-     * limit stays well above it. Its attempt volumes and scratch places each hold one scratch size.
-     */
-    static final Size REVIEW = new Size(
-            312 * MIB,
-            1280 * MIB,
-            992 * MIB,
-            SandboxLayout.SCRATCH_BYTES,
-            ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size(),
-            30);
-
-    /**
      * A conversation's tools Pod: the tools program and the commands of one turn attempt. Its one volume, {@code /tmp},
      * holds the tools workspace, where the turn's documents and the repositories it loads land, and the spill files. It
      * requests 25m: a pooled Pod is idle, and a turn's commands are short bursts that its limit serves.
@@ -246,9 +181,6 @@ public class KubernetesPods {
      * process count stays the cgroup's: {@code RLIMIT_NPROC} counts the user's processes on the whole host.
      */
     static final List<String> RLIMITS = List.of("/usr/bin/prlimit", "--nofile=1024:1024", "--core=0:0", "--");
-
-    /** A review's two sides beyond the loop: the nonce that binds them to this Pod, and whether it runs programs. */
-    public record Sidecars(String nonce, boolean programs) {}
 
     /** Waiting reasons from which a container does not start on its own. */
     private static final Set<String> FATAL_WAITING = Set.of(
@@ -288,7 +220,7 @@ public class KubernetesPods {
     /** How long a deleted Pod may take, beyond its grace period, to report its runtime's exit. */
     private static final Duration STOP_SETTLE = Duration.ofSeconds(30);
 
-    /** The command under the system call filter of a review's tools side (see tools-launch.sh). */
+    /** The command under the system call filter of the tools program (see tools-launch.sh). */
     static List<String> filtered(List<String> command) {
         List<String> argv = new ArrayList<>(List.of(
                 "sh",
@@ -305,103 +237,6 @@ public class KubernetesPods {
         argv.addAll(RLIMITS);
         argv.addAll(command);
         return List.copyOf(argv);
-    }
-
-    /**
-     * A review or host Pod: the initializer fills the attempt volumes from the gateway, then the runtime runs on them
-     * with {@code /workspace} read-only. The initializer mounts {@code /workspace} writable, which makes the mount
-     * points of the runtime's nested volumes. The Pod has no deadline of its own: a review's Job bounds it, and a host
-     * runs until it is removed.
-     */
-    public Pod workspacePod(
-            Workload workload,
-            Map<String, String> environment,
-            List<String> command,
-            ResourceLimits limits,
-            Size size,
-            @Nullable Sidecars sidecars) {
-        List<EnvVar> env = new TreeMap<>(environment)
-                .entrySet().stream()
-                        .map(entry -> new EnvVarBuilder()
-                                .withName(entry.getKey())
-                                .withValue(entry.getValue())
-                                .build())
-                        .toList();
-        List<Volume> volumes = new ArrayList<>();
-        ATTEMPT_VOLUMES.keySet().forEach(name -> volumes.add(diskVolume(name, size.volumeBytes())));
-        volumes.addAll(scratchVolumes(size));
-        ResourceRequirements resources = resources(limits, size);
-        Container initializer = base(INITIALIZER, workload.image(), SANDBOX_UID)
-                .withCommand(limited(INITIALIZER_COMMAND))
-                .withEnv(env)
-                .withVolumeMounts(attemptMounts(false))
-                .withResources(resources)
-                .build();
-        List<EnvVar> loopEnv = new ArrayList<>(env);
-        List<VolumeMount> loopMounts = attemptMounts(true);
-        List<Container> inits = new ArrayList<>(List.of(isolation(workload.image()), initializer));
-        if (sidecars != null) {
-            loopEnv.add(variable("TOOLS_SOCKET", TOOLS_SOCKET));
-            loopEnv.add(variable("TOOLS_NONCE", sidecars.nonce()));
-            volumes.add(memoryVolume("tools-socket", SOCKET_BYTES));
-            volumes.add(diskVolume("tools-tmp", size.volumeBytes()));
-            loopMounts.add(mount("tools-socket", "/run/tools", false));
-            List<EnvVar> gitSettings = env.stream()
-                    .filter(variable -> variable.getName().startsWith("GIT_"))
-                    .toList();
-            inits.add(sidecar(workload, TOOLS, TOOLS_UID, TOOLS_SOCKET, sidecars.nonce(), "tools", gitSettings));
-            if (sidecars.programs()) {
-                loopEnv.add(variable("PROGRAMS_SOCKET", PROGRAMS_SOCKET));
-                volumes.add(memoryVolume("programs-socket", SOCKET_BYTES));
-                volumes.add(diskVolume("programs-tmp", size.volumeBytes()));
-                loopMounts.add(mount("programs-socket", "/run/programs", false));
-                inits.add(sidecar(
-                        workload, PROGRAMS, PROGRAMS_UID, PROGRAMS_SOCKET, sidecars.nonce(), "programs", gitSettings));
-            }
-        }
-        Container loop = base(LOOP, workload.image(), SANDBOX_UID)
-                .withCommand(limited(command))
-                .withEnv(loopEnv)
-                .withVolumeMounts(loopMounts)
-                .withResources(resources)
-                .build();
-        return pod(workload, SANDBOX_UID, null)
-                .editSpec()
-                .withInitContainers(inits)
-                .withContainers(loop)
-                .withVolumes(volumes)
-                .endSpec()
-                .build();
-    }
-
-    /**
-     * A native sidecar: an init container that stays up beside the loop. It gets the nonce, its socket and Git's settings,
-     * so the attempt's credential never reaches it. It mounts the workspace read-only and has its own {@code
-     * /tmp}; the loop's {@code out}, {@code .pi} and {@code .sessions} are not mounted at all.
-     */
-    private Container sidecar(
-            Workload workload,
-            String name,
-            long uid,
-            String socket,
-            String nonce,
-            String role,
-            List<EnvVar> gitSettings) {
-        List<EnvVar> env = new ArrayList<>(gitSettings);
-        env.add(variable("TOOLS_NONCE", nonce));
-        env.add(variable("TOOLS_SOCKET", socket));
-        env.add(variable("TOOLS_ROLE", role));
-        return base(name, workload.image(), uid)
-                .withRestartPolicy("Always")
-                .withCommand(limited(TOOLS_COMMAND))
-                .withEnv(env)
-                .withVolumeMounts(
-                        mount("workspace", WORKSPACE, true),
-                        mount("work", "/workspace/work", true),
-                        mount(name + "-socket", socket.substring(0, socket.lastIndexOf('/')), false),
-                        mount(name + "-tmp", "/tmp", false))
-                .withResources(TOOLS.equals(name) ? TOOLS_RESOURCES : PROGRAMS_RESOURCES)
-                .build();
     }
 
     private static EnvVar variable(String name, String value) {
@@ -596,30 +431,6 @@ public class KubernetesPods {
                 .build();
     }
 
-    /**
-     * What a review Pod holds at most: its loop and both of its sides. A sidecar runs beside the loop, so a quota adds them
-     * up. A review that runs no program holds less, and room is counted for the larger one.
-     */
-    static ResourceRequirements reviewPodResources(ResourceLimits limits) {
-        ResourceRequirements loop = resources(limits, REVIEW);
-        return new ResourceRequirementsBuilder()
-                .withLimits(added(loop.getLimits(), TOOLS_RESOURCES.getLimits(), PROGRAMS_RESOURCES.getLimits()))
-                .withRequests(
-                        added(loop.getRequests(), TOOLS_RESOURCES.getRequests(), PROGRAMS_RESOURCES.getRequests()))
-                .build();
-    }
-
-    @SafeVarargs
-    private static Map<String, Quantity> added(Map<String, Quantity>... parts) {
-        Map<String, BigDecimal> total = new TreeMap<>();
-        for (Map<String, Quantity> part : parts) {
-            part.forEach((name, amount) -> total.merge(name, amount.getNumericalAmount(), BigDecimal::add));
-        }
-        Map<String, Quantity> quantities = new TreeMap<>();
-        total.forEach((name, amount) -> quantities.put(name, new Quantity(amount.toPlainString())));
-        return quantities;
-    }
-
     /** A probe Pod requests the memory it is given and writes nothing but its line of output. */
     private static Size probeSize(ResourceLimits limits, long memoryBytes) {
         long millicores = Math.max(1, Math.round(limits.cpus() * 1000));
@@ -670,13 +481,6 @@ public class KubernetesPods {
         return mounts;
     }
 
-    private static List<VolumeMount> attemptMounts(boolean runtime) {
-        List<VolumeMount> mounts = new ArrayList<>();
-        ATTEMPT_VOLUMES.forEach((name, path) -> mounts.add(mount(name, path, runtime && path.equals(WORKSPACE))));
-        mounts.addAll(scratchMounts());
-        return mounts;
-    }
-
     /** A volume on the node's disk; the kubelet evicts the Pod when it holds more than {@code bytes}. */
     private static Volume diskVolume(String name, long bytes) {
         return new VolumeBuilder()
@@ -703,16 +507,6 @@ public class KubernetesPods {
                 .withMountPath(path)
                 .withReadOnly(readOnly)
                 .build();
-    }
-
-    private static Map<String, String> attemptVolumes() {
-        Map<String, String> volumes = new LinkedHashMap<>();
-        volumes.put("workspace", WORKSPACE);
-        volumes.put("work", "/workspace/work");
-        volumes.put("out", "/workspace/out");
-        volumes.put("pi", "/workspace/.pi");
-        volumes.put("sessions", "/workspace/.sessions");
-        return volumes;
     }
 
     // --- API calls ---

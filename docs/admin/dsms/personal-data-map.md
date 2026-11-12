@@ -420,6 +420,13 @@ An offline mounted store keeps its receipt and exact identity keys until it retu
 folder deletion. After that confirmation, the next review job retention run deletes the receipts of the
 purged workspace. Person erasure still waits for every selected store to acknowledge deletion.
 
+For a review, acknowledgement follows sandbox teardown and deletion of the local gateway archive and attempt folder.
+A failed deletion leaves the receipt pending and the erasure request reports a failure.
+Correct the deletion failure and retry the request.
+Preparation that is waiting for capture admission does not block release.
+Each receipt names its physical sandbox.
+Cleanup also releases the inputs of every local attempt of the affected job, closes that job’s gateway session, and deletes its evidence folder.
+
 ### Copied evidence and secondary subjects
 
 A person can appear in a review's captured evidence without being its primary developer. The preview

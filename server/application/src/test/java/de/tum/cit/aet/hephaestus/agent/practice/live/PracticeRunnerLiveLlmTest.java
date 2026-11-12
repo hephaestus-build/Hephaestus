@@ -325,9 +325,8 @@ class PracticeRunnerLiveLlmTest {
     }
 
     /**
-     * Build a {@link SandboxResult} from the on-disk {@code out/} directory. Mirrors what
-     * {@code SandboxAttemptRunner} does after a container exit so we feed the production parser
-     * the exact map shape it expects.
+     * Build a {@link SandboxResult} from the on-disk {@code out/} directory, as a review sandbox
+     * uploads it, so the production parser gets the exact map shape it expects.
      */
     private static SandboxResult buildSandboxResult(int exitCode) throws IOException {
         Map<String, byte[]> outputFiles = new LinkedHashMap<>();

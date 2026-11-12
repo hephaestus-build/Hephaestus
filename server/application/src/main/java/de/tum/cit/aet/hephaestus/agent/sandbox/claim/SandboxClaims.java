@@ -14,7 +14,7 @@ public interface SandboxClaims {
     /** Creates the claim; a claim of that name that exists already is no error. */
     void create(Claim claim);
 
-    /** Deletes the claim, and with it its sandbox; a claim that is gone is no error. */
+    /** Deletes the claim and waits for its sandbox to be gone; a claim that is gone is no error. */
     void delete(String name);
 
     /** The names of the claims that this owner created, in the sandbox namespace. */

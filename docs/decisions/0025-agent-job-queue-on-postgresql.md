@@ -168,3 +168,8 @@ A worker's review slots and the reviews quota still bound how many reviews run.
 - The band replaces the order by origin with aging. "Started work first" goes: a run of a subject that is already started holds its lease, so it needs no rank.
 - A write is fenced on `(run_id, lease_epoch)` and an unexpired lease, not on a worker id. `worker_registry` and the sweeps by worker go.
 - One reaper on the database clock runs on every server replica. The attempt budget of each kind replaces `AGENT_MAX_RETRIES`.
+
+## Update — 2026-11-10: the worker poll loop is removed
+
+The worker poll loop that claimed and ran review jobs is removed, with `AGENT_POLL_INTERVAL` and `AGENT_CLAIM_BATCH_SIZE`.
+A review's run now starts in the review's own sandbox, which claims the run from PostgreSQL ([Agent runs § A review in its sandbox](../contributor/agent-runs.mdx#a-review-in-its-sandbox)).

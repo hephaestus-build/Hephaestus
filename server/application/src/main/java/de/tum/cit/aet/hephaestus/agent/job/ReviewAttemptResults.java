@@ -280,6 +280,7 @@ public class ReviewAttemptResults {
             return Boolean.TRUE.equals(terminalPersistRetries.execute(named(
                     "Hand-on to composition for jobId=" + jobId,
                     () -> transactionTemplate.execute(status -> {
+                        reviewRuns.lock(fence.run());
                         if (measured != null && !keepMeasurement(jobId, fence, measured)) return false;
                         return reviewRuns.continueToCompose(jobId, fence).isPresent();
                     }))));

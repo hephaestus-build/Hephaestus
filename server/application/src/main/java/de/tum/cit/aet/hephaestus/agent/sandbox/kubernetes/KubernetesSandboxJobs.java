@@ -23,9 +23,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Sandbox Pods as native {@code batch/v1} Jobs: one Job per practice-review attempt, named after the job and the
- * attempt, whose Pod template is the review Pod of {@link KubernetesPods#workspacePod}, and one Job per isolation probe
- * Pod. The Job runs one Pod and replaces none. When its worker no longer bounds it, the control plane does: its deadline
+ * Sandbox Pods as native {@code batch/v1} Jobs: one Job per conversation's tools Pod ({@link KubernetesPods#toolsPod})
+ * and one per isolation probe Pod. The Job runs one Pod and replaces none. When its worker no longer bounds it, the control plane does: its deadline
  * stops it, also while its Pod waits for a node, which a Pod's own deadline does not count, and the TTL controller
  * deletes the finished Job with its Pod.
  *
@@ -123,7 +122,7 @@ public class KubernetesSandboxJobs {
      * @throws SandboxCancelledException when the attempt was cancelled first
      * @throws SandboxCapacityException when the sandbox quota refused the Pod: the Job controller would keep trying
      * @throws SandboxInfrastructureException when no Pod of the Job appeared in time, or the Pods cannot be watched:
-     *     neither says anything of the review
+     *     neither says anything of the work in the Pod
      */
     public Pod awaitPod(String job, Duration timeout, BooleanSupplier cancelled) {
         long deadline = System.nanoTime() + timeout.toNanos();
@@ -169,7 +168,7 @@ public class KubernetesSandboxJobs {
      * Throws when the Job controller reported that the sandbox quota refused this Job's Pod and no Pod of it exists: a
      * Pod that the controller created once room freed wins over its earlier refusal. The event names the Job by its
      * UID, so the event of an earlier Job of the same name does not count. Whether the quota can ever hold the Pod, the
-     * caller asks the quota ({@code SandboxRoom#neverFits}). A worker that may not read the events stops
+     * caller asks the quota ({@link KubernetesSandboxQuota#neverFits}). A worker that may not read the events stops
      * looking after one warning and leaves the wait to its timeout.
      */
     void requireRoom(String job) {
@@ -196,19 +195,19 @@ public class KubernetesSandboxJobs {
                             && event.getMessage().contains(QUOTA_REFUSAL));
             if (refused && podOf(job) == null) {
                 throw new SandboxCapacityException(
-                        "The sandbox quota has no room for the Pod of a review Job",
+                        "The sandbox quota has no room for the Pod of a sandbox Job",
                         SandboxCapacityException.Reason.QUOTA_EXCEEDED);
             }
         } catch (KubernetesClientException e) {
             if (e.getCode() == 403 && eventsDenied.compareAndSet(false, true)) {
-                log.warn("The worker may not read the events of the sandbox namespace, so a review whose Pod the"
-                        + " sandbox quota refuses waits for its timeout and spends a retry. Grant list on"
-                        + " events there (docs/admin/kubernetes.mdx)");
+                log.warn("The worker may not read the events of the sandbox namespace, so a sandbox Job whose Pod the"
+                        + " sandbox quota refuses waits for its timeout. Grant list on events there"
+                        + " (docs/admin/kubernetes.mdx)");
             }
         } catch (SandboxException e) {
             throw e;
         } catch (RuntimeException e) {
-            log.debug("Could not read whether the sandbox quota refused review Job {}", job, e);
+            log.debug("Could not read whether the sandbox quota refused sandbox Job {}", job, e);
         }
     }
 
@@ -231,11 +230,6 @@ public class KubernetesSandboxJobs {
         } catch (KubernetesClientException e) {
             throw KubernetesPods.failure("Could not read the Pod of a sandbox Job", e);
         }
-    }
-
-    /** The review Jobs. */
-    public List<Job> list() {
-        return list(KubernetesWorker.KIND_REVIEW);
     }
 
     /** The sandbox Jobs of one kind. */

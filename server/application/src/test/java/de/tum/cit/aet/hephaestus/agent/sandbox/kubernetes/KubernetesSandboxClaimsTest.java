@@ -5,15 +5,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxClaims;
+import io.fabric8.kubernetes.api.model.DeleteOptions;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResource;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResourceBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
+import io.fabric8.kubernetes.client.server.mock.KubernetesMockServer;
+import io.fabric8.mockwebserver.http.RecordedRequest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -27,6 +31,7 @@ class KubernetesSandboxClaimsTest {
             new AgentSandboxProperties.WarmPools("rel-sandbox-review", "rel-sandbox-conversation");
 
     private @Nullable KubernetesClient client;
+    private @Nullable KubernetesMockServer server;
 
     private KubernetesSandboxClaims claims() {
         return new KubernetesSandboxClaims(Objects.requireNonNull(client), NAMESPACE, POOLS);
@@ -62,7 +67,7 @@ class KubernetesSandboxClaimsTest {
                         "warmPoolRef",
                         Map.of("name", "rel-sandbox-conversation"),
                         "lifecycle",
-                        Map.of("shutdownTime", "2026-11-09T12:00:00Z", "shutdownPolicy", "Delete"),
+                        Map.of("shutdownTime", "2026-11-09T12:00:00Z", "shutdownPolicy", "DeleteForeground"),
                         "env",
                         List.of(
                                 Map.of("name", "HEPHAESTUS_GATEWAY_URL", "value", "http://10.43.0.12:8081"),
@@ -70,10 +75,26 @@ class KubernetesSandboxClaimsTest {
     }
 
     @Test
-    void shouldTakeARepeatedCreateAndADeleteOfAClaimThatIsGoneAsDone() {
+    void shouldTakeARepeatedCreateAndADeleteOfAClaimThatIsGoneAsDone() throws InterruptedException {
         claims().create(claim("agent-two"));
         claims().create(claim("agent-two"));
+        KubernetesMockServer api = Objects.requireNonNull(server);
+        while (api.takeRequest(10, TimeUnit.MILLISECONDS) != null) {
+            // Drop the requests of the setup.
+        }
         claims().delete("agent-two");
+        RecordedRequest deletion = Objects.requireNonNull(api.takeRequest(5, TimeUnit.SECONDS));
+        assertThat(deletion.getMethod()).isEqualTo("DELETE");
+        DeleteOptions options = Objects.requireNonNull(client)
+                .getKubernetesSerialization()
+                .unmarshal(deletion.getUtf8Body(), DeleteOptions.class);
+        assertThat(options.getPropagationPolicy()).isEqualTo("Foreground");
+        assertThat(Objects.requireNonNull(client)
+                        .genericKubernetesResources(KubernetesSandboxClaims.CLAIMS)
+                        .inNamespace(NAMESPACE)
+                        .withName("agent-two")
+                        .get())
+                .isNull();
         claims().delete("agent-two");
 
         assertThat(claims().names()).doesNotContain("agent-two");

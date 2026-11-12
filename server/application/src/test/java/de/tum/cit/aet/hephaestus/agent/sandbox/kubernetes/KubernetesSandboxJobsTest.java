@@ -20,7 +20,6 @@ import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
 import io.fabric8.kubernetes.client.server.mock.KubernetesMockServer;
 import io.fabric8.mockwebserver.http.RecordedRequest;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -217,17 +216,6 @@ class KubernetesSandboxJobsTest {
         jobs.deleteWithPod(name);
     }
 
-    @Test
-    void shouldListOnlyReviewJobsWhenListed() {
-        String review = reviewName();
-        jobs.create(jobs.job(template(review), 900L));
-        Pod tools = template("hephaestus-tools-" + UUID.randomUUID());
-        tools.getMetadata().setLabels(worker.labels(KubernetesWorker.KIND_TOOLS));
-        jobs.create(jobs.job(tools, 900L));
-
-        assertThat(jobs.list()).extracting(job -> job.getMetadata().getName()).containsExactly(review);
-    }
-
     private KubernetesClient api() {
         return Objects.requireNonNull(client, "the mock server injects the client");
     }
@@ -237,13 +225,11 @@ class KubernetesSandboxJobsTest {
     }
 
     private Pod template(String name) {
-        return pods.workspacePod(
-                new KubernetesPods.Workload(name, worker.labels(KubernetesWorker.KIND_REVIEW), "agent", "agent"),
-                Map.of(),
-                List.of("node", "run.ts"),
+        return pods.toolsPod(
+                new KubernetesPods.Workload(name, worker.labels(KubernetesWorker.KIND_TOOLS), "agent", "agent"),
                 LIMITS,
-                KubernetesPods.REVIEW,
-                null);
+                "nonce",
+                Map.of());
     }
 
     /** The Pod that the Job controller creates for the Job of the name. */

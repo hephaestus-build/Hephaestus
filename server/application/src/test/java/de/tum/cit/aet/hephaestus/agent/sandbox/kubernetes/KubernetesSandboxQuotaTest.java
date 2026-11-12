@@ -1,33 +1,33 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
 import io.fabric8.kubernetes.api.model.ResourceQuotaBuilder;
 import io.fabric8.kubernetes.api.model.ResourceQuotaSpecBuilder;
-import io.fabric8.kubernetes.client.KubernetesClientException;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
 
 class KubernetesSandboxQuotaTest extends BaseUnitTest {
 
-    /** The default review sandbox: one CPU. Its memory and disk come from {@link KubernetesPods#REVIEW}. */
-    private static final ResourceLimits LIMITS = new ResourceLimits(1.0, Duration.ofMinutes(30));
-
-    private static final Map<String, Quantity> REVIEW = KubernetesSandboxQuota.footprint(LIMITS, Map.of());
+    /** A review-sized sandbox Pod: it requests 384 MiB and 1 GiB of node disk, and may use two CPUs. */
+    private static final Map<String, Quantity> REVIEW = quantities(Map.ofEntries(
+            Map.entry("pods", "1"),
+            Map.entry("count/pods", "1"),
+            Map.entry("count/jobs.batch", "1"),
+            Map.entry("cpu", "50m"),
+            Map.entry("requests.cpu", "50m"),
+            Map.entry("limits.cpu", "2"),
+            Map.entry("memory", "384Mi"),
+            Map.entry("requests.memory", "384Mi"),
+            Map.entry("limits.memory", "2816Mi"),
+            Map.entry("ephemeral-storage", "1Gi"),
+            Map.entry("requests.ephemeral-storage", "1Gi"),
+            Map.entry("limits.ephemeral-storage", "8Gi")));
 
     /** The PriorityClass of review Pods, which the chart's reviews tier selects. */
     private static final String REVIEWS = "hephaestus-heph-reviews";
@@ -160,19 +160,6 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldChargeTheRuntimeClassOverheadToRequestsAndLimits() {
-        var quota = quota(
-                Map.of("requests.memory", "5632Mi", "limits.memory", "5632Mi"),
-                Map.of("requests.memory", "0", "limits.memory", "0"));
-        var withOverhead = KubernetesSandboxQuota.footprint(LIMITS, Map.of("memory", new Quantity("512Mi")));
-
-        assertThat(KubernetesSandboxQuota.fits(List.of(quota), REVIEW, REVIEWS)).isEqualTo(2);
-        assertThat(KubernetesSandboxQuota.fits(List.of(quota), withOverhead, REVIEWS))
-                .as("5.5 GiB of limits hold one Pod limited to 3.25 GiB")
-                .isEqualTo(1);
-    }
-
-    @Test
     void shouldLeaveAScopedQuotaToTheAdmissionWhenItMayNotCountTheReview() {
         var terminating = quota(Map.of("pods", "2"), Map.of("pods", "2"));
         terminating.setSpec(
@@ -204,44 +191,6 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
                 .isEqualTo(Integer.MAX_VALUE);
         assertThat(KubernetesSandboxQuota.neverFits(List.of(conversations), REVIEW, REVIEWS))
                 .isFalse();
-    }
-
-    @Test
-    void shouldWaitUntilTheQuotasCanBeReadAndLogOneEventForEachTransition() {
-        KubernetesSandboxCache cache = mock(KubernetesSandboxCache.class);
-        when(cache.quotas())
-                .thenThrow(new KubernetesClientException("not listed yet"))
-                .thenThrow(new KubernetesClientException("not listed yet"))
-                .thenReturn(List.of());
-        var quota = new KubernetesSandboxQuota(cache, "sandboxes", "", REVIEWS);
-        var limits = new ResourceLimits(1.0, Duration.ofMinutes(30));
-        Logger logger = (Logger) LoggerFactory.getLogger(KubernetesSandboxQuota.class);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-        try {
-            assertThat(quota.roomFor(limits)).isEqualTo(-1);
-            assertThat(quota.roomFor(limits)).isEqualTo(-1);
-            assertThat(quota.roomFor(limits)).isEqualTo(Integer.MAX_VALUE);
-            assertThat(quota.roomFor(limits)).isEqualTo(Integer.MAX_VALUE);
-        } finally {
-            logger.detachAppender(appender);
-            appender.stop();
-        }
-
-        assertThat(appender.list).hasSize(2);
-        assertThat(appender.list.get(0).getLevel()).isEqualTo(Level.WARN);
-        assertThat(pairs(appender.list.get(0)))
-                .containsEntry("event.name", "sandbox.quota.unreadable")
-                .containsEntry("error.type", KubernetesClientException.class.getName());
-        assertThat(appender.list.get(1).getLevel()).isEqualTo(Level.INFO);
-        assertThat(pairs(appender.list.get(1)))
-                .containsEntry("event.name", "sandbox.quota.readable")
-                .containsKey("duration.ms");
-    }
-
-    private static Map<String, Object> pairs(ILoggingEvent event) {
-        return event.getKeyValuePairs().stream().collect(Collectors.toMap(pair -> pair.key, pair -> pair.value));
     }
 
     private static ResourceQuota tierQuota(String priorityClass, Map<String, String> hard, Map<String, String> used) {

@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.MeasurementVerification;
@@ -55,9 +54,6 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
     private TransactionTemplate transactionTemplate;
 
     @Mock
-    private SandboxManager sandboxManager;
-
-    @Mock
     private LlmUsageRecorder usageRecorder;
 
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
@@ -71,7 +67,6 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
         service = new ReviewJobLifecycleService(
                 jobRepository,
                 transactionTemplate,
-                sandboxManager,
                 TerminalUsageTestFixtures.attemptUsageOverMocks(jobRepository, usageRecorder),
                 objectMapper,
                 new ReviewJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP),

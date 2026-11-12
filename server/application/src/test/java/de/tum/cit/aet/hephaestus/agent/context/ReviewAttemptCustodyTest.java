@@ -12,17 +12,29 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class ReviewAttemptCustodyTest extends BaseUnitTest {
+
+    @TempDir
+    Path root;
 
     private final AgentRuns runs = mock(AgentRuns.class);
     private final ReviewAttemptCustody custody = new ReviewAttemptCustody(runs);
@@ -102,5 +114,53 @@ class ReviewAttemptCustodyTest extends BaseUnitTest {
                 .as("the current attempt keeps its inputs")
                 .isNotNull();
         assertThat(prepared).as("without preparing them again").hasValue(2);
+    }
+
+    @Test
+    void shouldReleaseWithoutWaitingForPreparationAndCloseItsLateInputs() throws Exception {
+        var preparing = new CountDownLatch(1);
+        var admission = new CountDownLatch(1);
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var holder = executor.submit(() -> custody.hold(attempt, () -> {
+                preparing.countDown();
+                try {
+                    if (!admission.await(5, TimeUnit.SECONDS))
+                        throw new IllegalStateException("Admission stayed closed");
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                try {
+                    Path late = Files.writeString(root.resolve("late-input"), "personal evidence");
+                    prepared.incrementAndGet();
+                    return new PreparedJobInputs(
+                            Map.of("context/person.json", late),
+                            List.of(),
+                            List.of(() -> {
+                                Files.delete(late);
+                                closed.incrementAndGet();
+                            }),
+                            null,
+                            null);
+                } catch (IOException failure) {
+                    throw new UncheckedIOException(failure);
+                }
+            }));
+            try {
+                assertThat(preparing.await(5, TimeUnit.SECONDS)).isTrue();
+                // Erasure can release custody while the capture cannot yet obtain admission.
+                executor.submit(() -> custody.releaseJob(attempt.jobId())).get(5, TimeUnit.SECONDS);
+            } finally {
+                admission.countDown();
+            }
+            assertThatThrownBy(() -> holder.get(5, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalStateException.class);
+            assertThat(prepared).hasValue(1);
+            assertThat(closed)
+                    .as("the cancelled preparation cannot retain its late inputs")
+                    .hasValue(1);
+            assertThat(root.resolve("late-input")).doesNotExist();
+        }
     }
 }

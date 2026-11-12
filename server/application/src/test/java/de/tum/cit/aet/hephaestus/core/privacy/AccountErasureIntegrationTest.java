@@ -10,9 +10,10 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -25,6 +26,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.MentorTurnUsageAccumulator;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyTokenUsage;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyUsageAccumulator;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.MeasurementVerification;
@@ -900,7 +902,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 mapper,
                 recorder,
                 copyFence,
-                new DefaultListableBeanFactory().getBeanProvider(ReviewJobExecutor.class),
+                new DefaultListableBeanFactory().getBeanProvider(ReviewAttemptCustody.class),
+                new DefaultListableBeanFactory().getBeanProvider(AgentSandboxes.class),
+                new DefaultListableBeanFactory().getBeanProvider(SandboxGatewaySessions.class),
                 lifecycles);
         List<Path> targetFolders = new ArrayList<>();
         List<Path> otherFolders = new ArrayList<>();

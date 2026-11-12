@@ -6,9 +6,7 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_CLAIM_LATENCY = "agent.job.claim.latency";
     public static final String AGENT_JOB_COMPOSITION_STOPPED = "agent.job.composition.stopped";
     public static final String AGENT_JOB_DURATION = "agent.job.duration";
-    public static final String AGENT_JOB_EXECUTION_DURATION = "agent.job.execution.duration";
     public static final String AGENT_JOB_INFRA_RETRY_REQUEUED = "agent.job.infra.retry.requeued";
-    public static final String AGENT_JOB_DRAINED = "agent.job.drained";
     public static final String AGENT_JOB_MODEL_REFUSED = "agent.job.model.refused";
     public static final String AGENT_JOB_SERVER_ERROR = "agent.job.server.error";
     public static final String AGENT_JOB_RETENTION_DELETED = "agent.job.retention.deleted";
@@ -94,12 +92,6 @@ public final class AgentMetrics {
     public static final String MENTOR_TURN_LEASE_REAPER_FAILURE = "mentor.turn.lease_reaper.failure";
     public static final String MENTOR_TURN_CLAIM_FAILURE = "mentor.turn.claim.failure";
     public static final String MENTOR_LIVE_STREAMS = "mentor.live.streams";
-    public static final String SANDBOX_CLEANUP_FAILURES = "sandbox.cleanup.failures";
-    public static final String SANDBOX_CONTAINERS_ACTIVE = "sandbox.containers.active";
-    public static final String SANDBOX_EXECUTIONS = "sandbox.executions";
-    public static final String SANDBOX_START_FAILURES = "sandbox.start.failures";
-    public static final String SANDBOX_REVIEW_STARVED = "sandbox.review.starved";
-    public static final String SANDBOX_EXECUTION_DURATION = "sandbox.execution.duration";
     public static final String SANDBOX_GATEWAY_CONNECTIONS = "sandbox.gateway.connections";
     public static final String SANDBOX_GATEWAY_CONNECTIONS_LIMIT = "sandbox.gateway.connections.limit";
     public static final String SANDBOX_GATEWAY_LIMITER_ERRORS = "sandbox.gateway.limiter.errors";
@@ -114,13 +106,6 @@ public final class AgentMetrics {
     public static final String SANDBOX_ISOLATION_PASSED = "sandbox.isolation.passed";
     public static final String SANDBOX_ISOLATION_PROCESS_LIMIT = "sandbox.isolation.process_limit";
     public static final String SANDBOX_ISOLATION_USER_NAMESPACES = "sandbox.isolation.user_namespaces";
-    public static final String SANDBOX_RECONCILER_DURATION = "sandbox.reconciler.duration";
-    public static final String SANDBOX_RECONCILER_ORPHANED = "sandbox.reconciler.orphaned";
-    public static final String SANDBOX_RECONCILER_SWEEPS = "sandbox.reconciler.sweeps";
-    public static final String WORKER_CAPACITY_IN_FLIGHT = "worker.capacity.in_flight";
-    public static final String WORKER_CAPACITY_SPARE = "worker.capacity.spare";
-    public static final String WORKER_CAPACITY_TOTAL = "worker.capacity.total";
-    public static final String WORKER_DRAIN_ACTIVE = "worker.drain.active";
     public static final String WORKER_LIVENESS_HEARTBEAT_FAILURES = "worker.liveness.heartbeat.failures";
 
     private AgentMetrics() {}

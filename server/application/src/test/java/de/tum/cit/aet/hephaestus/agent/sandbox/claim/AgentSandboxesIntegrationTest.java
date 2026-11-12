@@ -377,6 +377,44 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRetryExplicitReleaseUntilTheClaimAndItsDeletingRowAreGone() {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        claims.failDeletes = true;
+        assertThatThrownBy(() -> sandboxes.release(workspace, sandbox.id())).isInstanceOf(RuntimeException.class);
+        assertThat(state(sandbox)).isEqualTo("DELETING");
+        assertThat(claims.created).containsKey(claimName(sandbox));
+
+        var newer = ensure(sandbox.subjectKey(), AgentSandboxKind.REVIEW);
+        claims.failDeletes = false;
+        sandboxes.release(workspace, sandbox.id());
+        assertThat(repository.findById(sandbox.id())).isEmpty();
+        assertThat(claims.created).doesNotContainKey(claimName(sandbox));
+        assertThat(repository.findById(newer.id())).isPresent();
+        assertThat(claims.created).containsKey(claimName(newer));
+    }
+
+    @Test
+    void shouldDeleteTheReceiptsPhysicalSandboxAfterWorkspacePurgeRemovedItsRow() {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        transactions.executeWithoutResult(status -> repository.deleteAllByWorkspaceId(workspace));
+        assertThat(repository.findById(sandbox.id())).isEmpty();
+        assertThat(claims.created).containsKey(claimName(sandbox));
+
+        sandboxes.release(workspace, sandbox.id());
+        assertThat(repository.findById(sandbox.id())).isEmpty();
+        assertThat(claims.created).doesNotContainKey(claimName(sandbox));
+    }
+
+    @Test
+    void shouldNeverReleaseAnotherWorkspacesSandboxThroughACopyReceipt() {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        assertThatThrownBy(() -> sandboxes.release(workspace + 1, sandbox.id()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(repository.findById(sandbox.id())).isPresent();
+        assertThat(claims.created).containsKey(claimName(sandbox));
+    }
+
+    @Test
     void shouldDeleteAClaimThatNoRowNamesAsAfterItsWorkspaceWasPurged() {
         var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
         queueRun(sandbox.subjectKey());

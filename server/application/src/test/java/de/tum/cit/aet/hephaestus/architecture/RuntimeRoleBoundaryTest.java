@@ -55,7 +55,8 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.workspace.WorkspaceStartupListener", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
-                    "de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerConfiguration", RuntimeRole.WORKER_PROPERTY),
+                    "de.tum.cit.aet.hephaestus.agent.gateway.SandboxDispatchConfiguration",
+                    RuntimeRole.WORKER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxConfiguration",
                     RuntimeRole.WORKER_PROPERTY),

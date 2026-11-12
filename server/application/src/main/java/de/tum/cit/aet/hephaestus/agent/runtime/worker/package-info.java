@@ -1,8 +1,4 @@
-/**
- * Worker runtime substrate: review capacity and graceful drain. Lives under {@code agent} because it coordinates the
- * agent's runtime — agent jobs flow through {@link WorkerCapacityState} and the drain coordinator owns the
- * {@code ReviewJobExecutor} lifecycle.
- */
+/** Worker runtime settings: its identity and the shutdown phase in which it drains its conversation turns. */
 @NamedInterface("worker-runtime")
 @NullMarked
 package de.tum.cit.aet.hephaestus.agent.runtime.worker;

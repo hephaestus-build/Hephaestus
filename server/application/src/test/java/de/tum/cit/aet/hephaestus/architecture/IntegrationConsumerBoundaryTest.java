@@ -64,8 +64,8 @@ class IntegrationConsumerBoundaryTest extends HephaestusArchitectureTest {
                 .should()
                 .dependOnClassesThat()
                 .resideInAPackage("io.nats..")
-                .because("the agent job queue is Postgres-backed (review_job table, polled by "
-                        + "ReviewJobExecutor) — the agent package must have zero io.nats dependency")
+                .because("agent runs are PostgreSQL-backed (agent_run, claimed by sandboxes) — the agent"
+                        + " package must have zero io.nats dependency")
                 .check(classes);
     }
 }

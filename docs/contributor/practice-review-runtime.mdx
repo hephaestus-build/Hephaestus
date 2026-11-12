@@ -14,7 +14,8 @@ A review can outlive every execution job that produced it.
 ## Execution ownership
 
 The server selects and persists a review before runtime execution.
-A worker claims its job through the PostgreSQL queue. The server and the workers share no other channel.
+The review's sandbox claims its job through the PostgreSQL queue ([Agent runs § A review in its sandbox](./agent-runs.mdx#a-review-in-its-sandbox)).
+The server and the workers share no other channel.
 The webhook role receives provider input and does not execute reviews.
 Only the worker owns sandbox access.
 
@@ -25,14 +26,9 @@ A database index also permits only one active scan per workspace.
 
 Claims carry an attempt fence.
 A requeue after preparation always moves the job to the next attempt number.
-Thus, no evidence folder, sandbox Job name or job token is used twice.
+Thus, no evidence folder is used twice.
 
-Two kinds of requeue spend no retry, because they are not the review's fault.
-A worker's drain counts in `drain_count`, at most 3 times.
-A sandbox runtime without room counts in `room_refusals`, with no limit.
-Only starvation or a quota that is too small ends such a review.
-
-An attempt that ended a practice and then ran out of time also spends no retry.
+An attempt that ended a practice and then ran out of time spends no retry.
 It counts in `progressed_attempts`, and its next attempt starts at once and skips the ended practices.
 A slow provider can thus take many attempts to finish a review.
 The practices of the review bound these attempts, because each one must end a new practice.
@@ -83,7 +79,7 @@ A retry runs under a new fence and reuses durable assignment state.
 
 Each review job points to one agent run (`agent_run`), which holds the job's lease.
 [Agent runs](./agent-runs.mdx) owns the run model: the claim, the epoch fence and the reaper.
-The executor that claims the run is the only writer of its lease, and it renews the lease through every phase of the attempt.
+The sandbox that claims the run is the only writer of its lease, and its driver renews the lease while the run works.
 The job's attempt number is the run's claim epoch less one (`ReviewRunKind.attempt`).
 Every fenced write of the attempt names the run and the attempt.
 

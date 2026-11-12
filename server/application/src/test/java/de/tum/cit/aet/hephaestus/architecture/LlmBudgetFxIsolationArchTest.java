@@ -36,7 +36,7 @@ class LlmBudgetFxIsolationArchTest extends HephaestusArchitectureTest {
             "de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom",
             "de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService",
             "de.tum.cit.aet.hephaestus.agent.proxy.ProxyBudgetGate",
-            "de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor",
+            "de.tum.cit.aet.hephaestus.agent.job.ReviewJobClaimService",
             "de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder");
 
     @Test

@@ -223,6 +223,21 @@ public class AgentSandboxes {
                 .ifPresent(this::deleteClaim);
     }
 
+    /** Deletes the physical sandbox named by a copy receipt; a newer sandbox of the subject stays. */
+    public void release(long workspaceId, UUID sandboxId) {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("A sandbox is released outside a transaction, before its claim is deleted");
+        var row = Objects.requireNonNull(transactions.execute(status -> sandboxes.releaseCopy(sandboxId, workspaceId)));
+        if (row.isPresent()) {
+            deleteClaim(row.get());
+        } else {
+            if (sandboxes.existsById(sandboxId))
+                throw new IllegalArgumentException("The sandbox does not belong to the copy's workspace");
+            // Workspace purge removes the row first. The copy receipt still names its physical sandbox.
+            claims.delete(claimName(sandboxId));
+        }
+    }
+
     /**
      * Takes a sandbox back in the caller's transaction: its token stops when the transaction commits, and the reaper
      * deletes its claim at its next tick. Nothing here calls the API, so the transaction holds no network call.

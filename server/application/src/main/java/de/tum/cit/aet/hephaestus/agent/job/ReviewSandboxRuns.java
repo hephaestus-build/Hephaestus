@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
@@ -15,13 +16,15 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxEnvBlocklist;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxGitHardening;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.io.IOException;
@@ -30,12 +33,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -53,6 +61,8 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @Profile("!specs & !cds-training")
 public class ReviewSandboxRuns implements SandboxRunKind {
+
+    private static final Logger log = LoggerFactory.getLogger(ReviewSandboxRuns.class);
 
     private final ReviewJobClaimService claims;
     private final ReviewAttemptPreparation preparation;
@@ -151,7 +161,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         Measurement measurement = measurement(run);
         var context = objectMapper.createObjectNode();
         context.set("command", objectMapper.valueToTree(measurement.spec().command()));
-        context.set("env", objectMapper.valueToTree(SandboxAttemptRunner.runnerEnvironment(measurement.spec())));
+        context.set("env", objectMapper.valueToTree(runnerEnvironment(measurement.spec())));
         context.put("workDeadline", measurement.workDeadline().toEpochMilli());
         context.put(
                 "uploadDeadline",
@@ -225,63 +235,84 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     }
 
     private Measurement prepare(SandboxRun run, ReviewJob job, AdmissionIdentity attempt) {
-        ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-        var stage = new AtomicReference<>(PreparationFailure.Stage.INPUTS);
-        ReviewAttemptPreparation.PreparedSandbox prepared;
-        try {
-            prepared = preparation.prepare(job.getId(), job, run.fence(), snapshot, stage);
-        } catch (ResultAdmissionService.StaleAttemptException lost) {
-            throw new StaleRunException(run.fence(), lost);
-        } catch (RuntimeException failed) {
-            results.unprepared(job, run.fence(), PreparationFailure.of(stage.get(), failed), failed);
-            throw new StaleRunException(run.fence(), failed);
-        }
-        custody.hold(attempt, prepared::stagedInputs);
-        SandboxSpec spec = prepared.spec();
-        if (spec == null) {
-            // Nothing is left to measure: the attempt completes without its sandbox.
-            transactions.executeWithoutResult(status -> {
-                if (terminal.transition(job.getId(), run.fence(), ReviewJobStatus.COMPLETED, Instant.now(), null) > 0)
-                    jobs.findById(job.getId()).ifPresent(completed -> {
-                        completed.setProcessingStatus(ProcessingStatus.PENDING);
-                        jobs.saveAndFlush(completed);
-                    });
-            });
-            custody.release(attempt);
-            throw new StaleRunException(run.fence());
-        }
-        Instant started = Instant.now();
-        Integer marked = transactions.execute(
-                status -> jobs.markExecutionStarted(job.getId(), job.getRunId(), job.getAttempt(), started));
-        if (marked == null || marked != 1) {
-            custody.release(attempt);
-            throw new StaleRunException(run.fence());
-        }
-        try {
-            Path input = workspaces.createInputTar(spec.inputFiles(), spec.inputFilesOnDisk(), spec.inputDirectories());
+        var measurement = new AtomicReference<Measurement>();
+        custody.hold(attempt, () -> {
+            ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
+            var stage = new AtomicReference<>(PreparationFailure.Stage.INPUTS);
+            ReviewAttemptPreparation.PreparedSandbox prepared;
             try {
-                var session = sessions.registerAttempt(
-                        job.getId(),
-                        job.getAttempt(),
-                        spec.image(),
-                        UUID.randomUUID().toString(),
-                        input,
-                        "out");
-                return new Measurement(
-                        spec,
-                        started,
-                        started.plusSeconds(snapshot.timeoutSeconds()),
-                        handler.endedPractices(job),
-                        session);
-            } catch (IOException | RuntimeException failure) {
-                Files.deleteIfExists(input);
-                throw failure;
+                prepared = preparation.prepare(job.getId(), job, run.fence(), snapshot, stage);
+            } catch (ResultAdmissionService.StaleAttemptException lost) {
+                throw new StaleRunException(run.fence(), lost);
+            } catch (RuntimeException failed) {
+                results.unprepared(job, run.fence(), PreparationFailure.of(stage.get(), failed), failed);
+                throw new StaleRunException(run.fence(), failed);
             }
-        } catch (IOException failure) {
-            throw unstarted(run, job, attempt, new UncheckedIOException(failure));
-        } catch (RuntimeException failure) {
-            throw unstarted(run, job, attempt, failure);
-        }
+            PreparedJobInputs inputs = prepared.stagedInputs();
+            boolean transferred = false;
+            try {
+                SandboxSpec spec = prepared.spec();
+                if (spec == null) {
+                    // Nothing is left to measure: the attempt completes without its sandbox.
+                    transactions.executeWithoutResult(status -> {
+                        if (terminal.transition(
+                                        job.getId(), run.fence(), ReviewJobStatus.COMPLETED, Instant.now(), null)
+                                > 0)
+                            jobs.findById(job.getId()).ifPresent(completed -> {
+                                completed.setProcessingStatus(ProcessingStatus.PENDING);
+                                jobs.saveAndFlush(completed);
+                            });
+                    });
+                    custody.release(attempt);
+                    throw new StaleRunException(run.fence());
+                }
+                Instant started = Instant.now();
+                Integer marked = transactions.execute(
+                        status -> jobs.markExecutionStarted(job.getId(), job.getRunId(), job.getAttempt(), started));
+                if (marked == null || marked != 1) {
+                    custody.release(attempt);
+                    throw new StaleRunException(run.fence());
+                }
+                try {
+                    Path input = workspaces.createInputTar(
+                            spec.inputFiles(), spec.inputFilesOnDisk(), spec.inputDirectories());
+                    try {
+                        var session = sessions.registerAttempt(
+                                job.getId(),
+                                job.getAttempt(),
+                                spec.image(),
+                                UUID.randomUUID().toString(),
+                                input,
+                                "out");
+                        measurement.set(new Measurement(
+                                spec,
+                                started,
+                                started.plusSeconds(snapshot.timeoutSeconds()),
+                                handler.endedPractices(job),
+                                session));
+                        var retained = new PreparedJobInputs(
+                                inputs.filesOnDisk(),
+                                inputs.directories(),
+                                List.of(() -> close(session), inputs),
+                                inputs.folderIndex(),
+                                inputs.automatedReviewReadinessReport(),
+                                inputs.copiesExpireAt());
+                        transferred = true;
+                        return retained;
+                    } catch (IOException | RuntimeException failure) {
+                        Files.deleteIfExists(input);
+                        throw failure;
+                    }
+                } catch (IOException failure) {
+                    throw unstarted(run, job, attempt, new UncheckedIOException(failure));
+                } catch (RuntimeException failure) {
+                    throw unstarted(run, job, attempt, failure);
+                }
+            } finally {
+                if (!transferred) inputs.close();
+            }
+        });
+        return Objects.requireNonNull(measurement.get());
     }
 
     /** Its execution started, and its sandbox cannot measure it: the attempt ends, or goes back to the queue. */
@@ -305,5 +336,41 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                 job.getWorkspaceId(),
                 job.getAttempt(),
                 Objects.requireNonNull(run.fence().runId()));
+    }
+
+    /**
+     * The runner's environment from its spec, without the gateway's routes and credential: the spec's variables less the
+     * blocked ones, the trace, and Git's hardening.
+     */
+    private static Map<String, String> runnerEnvironment(SandboxSpec spec) {
+        Map<String, String> env = new HashMap<>();
+
+        // Enforced values must overwrite caller-supplied variables: SandboxEnvBlocklist already drops the
+        // dangerous ones, and this ordering keeps a value added below winning even if it is not listed there.
+        for (var entry : spec.environment().entrySet()) {
+            if (SandboxEnvBlocklist.isBlocked(entry.getKey())) {
+                log.warn("Blocked dangerous environment variable: {}", entry.getKey());
+            } else {
+                env.put(entry.getKey(), entry.getValue());
+            }
+        }
+        addTraceEnvironment(env);
+
+        // The agent can clone a repository at runtime and carry a hostile .git/config in with it.
+        env.putAll(SandboxGitHardening.environment());
+
+        return env;
+    }
+
+    private static void addTraceEnvironment(Map<String, String> env) {
+        String traceId = MDC.get(StructuredLogKeys.TRACE_ID);
+        String spanId = MDC.get(StructuredLogKeys.SPAN_ID);
+        if (traceId != null && spanId != null) {
+            env.put("TRACE_ID", traceId);
+            env.put(
+                    "TRACEPARENT",
+                    "00-" + traceId + "-" + spanId + "-"
+                            + ("01".equals(MDC.get(StructuredLogKeys.TRACE_FLAGS)) ? "01" : "00"));
+        }
     }
 }

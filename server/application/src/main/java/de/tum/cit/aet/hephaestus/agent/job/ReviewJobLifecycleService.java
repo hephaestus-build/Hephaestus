@@ -2,14 +2,12 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -25,7 +23,6 @@ public class ReviewJobLifecycleService {
 
     private final ReviewJobRepository jobRepository;
     private final TransactionTemplate transactionTemplate;
-    private final @Nullable SandboxManager sandboxManager;
     private final ReviewAttemptUsageService attemptUsage;
     private final ObjectMapper objectMapper;
     private final ReviewJobTelemetry jobTelemetry;
@@ -34,7 +31,6 @@ public class ReviewJobLifecycleService {
     public ReviewJobLifecycleService(
             ReviewJobRepository jobRepository,
             TransactionTemplate transactionTemplate,
-            @Nullable SandboxManager sandboxManager,
             ReviewAttemptUsageService attemptUsage,
             ObjectMapper objectMapper,
             ReviewJobTelemetry jobTelemetry,
@@ -42,7 +38,6 @@ public class ReviewJobLifecycleService {
         this.jobRepository = jobRepository;
         this.runs = runs;
         this.transactionTemplate = transactionTemplate;
-        this.sandboxManager = sandboxManager;
         this.attemptUsage = attemptUsage;
         this.objectMapper = objectMapper;
         this.jobTelemetry = jobTelemetry;
@@ -54,27 +49,13 @@ public class ReviewJobLifecycleService {
      * Idempotent when the job is already CANCELLED; throws 409 for any other terminal state.
      *
      * <p>The ledger write runs INSIDE the status-transition transaction ({@link ReviewAttemptUsageService}'s
-     * settlement is {@code MANDATORY}) so accounting and the state change stand or fall together. Only the
-     * sandbox cancel runs after the commit, because it leaves the database.
+     * settlement is {@code MANDATORY}) so accounting and the state change stand or fall together.
      */
     public ReviewJob cancel(Long workspaceId, UUID jobId) {
         CancelOutcome outcome = transactionTemplate.execute(status -> cancelTransition(workspaceId, jobId));
 
-        // The proxy refuses the cancelled attempt's next call at once. Its own worker stops the sandbox at its next
-        // lease renewal; a worker in this process stops it now.
-        if (outcome.stopContainer()) {
-            if (sandboxManager != null) {
-                try {
-                    sandboxManager.cancel(jobId);
-                } catch (Exception e) {
-                    log.warn(
-                            "Sandbox cancel failed for job {} (status already CANCELLED): errorType={}",
-                            jobId,
-                            e.getClass().getName());
-                }
-            }
-        }
-
+        // The gateway refuses the cancelled attempt's next call at once, and its sandbox's driver stops the run at its
+        // next lease renewal.
         return outcome.job();
     }
 

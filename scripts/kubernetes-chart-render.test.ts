@@ -1583,7 +1583,7 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 				// How many reviews fit, watched as Pods and Jobs are, so a claim poll reads a cache.
 				...["list", "watch"].map((verb) => `/resourcequotas:${verb}`),
 				// A subject's sandbox: its claim, never the Sandbox or its Pod, which the controller owns.
-				...["create", "delete", "list"].map(
+				...["create", "delete", "get", "list", "watch"].map(
 					(verb) => `extensions.agents.x-k8s.io/sandboxclaims:${verb}`,
 				),
 			],
