@@ -20,7 +20,6 @@ import tools.jackson.databind.ObjectMapper;
 
 // Authorize before consuming rate limits, and key buckets by principal to isolate sandboxes.
 // An unavailable bucket store permits the call; authentication and budget checks still apply.
-// The exempt requests are a Heph host's turn bookkeeping, which it sends several times a second.
 public final class SandboxGatewayRateLimitFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(SandboxGatewayRateLimitFilter.class);

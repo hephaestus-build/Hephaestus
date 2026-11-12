@@ -100,7 +100,7 @@ The timeout is longer than the 10 minutes that a new Pod waits for the schema.
 
 The server uses `Recreate` and stops before its new version starts.
 In the single-node profile, the server drains and stops before its replacement starts.
-The replacement proves the cluster with the isolation probe before it claims work.
+Qualify sandbox isolation with the platform isolation gate before enabling work.
 
 An old server drains for up to `server.drainTimeoutSeconds`, and Kubernetes no longer counts it while it stops.
 The value is 30 minutes by default and 10 minutes in the single-node profile.
@@ -138,11 +138,9 @@ Each phase is a separate `helm upgrade` with that phase's chart, profile and sit
 Keep PostgreSQL and NATS running throughout these phases.
 Use `server.replicas=0`, not `sandbox.enabled=false`, to stop the server.
 
-The conversation loop keeps its replicas in every phase. It uses no database, and it gets no turn while no server runs.
-
-While no server runs, no server removes the conversation's tools Pods. After phase 1, remove them so that the sandbox namespace empties:
-`kubectl --namespace <sandbox namespace> delete jobs --selector hephaestus.build/sandbox-kind=tools --cascade=foreground`.
-They hold nothing that outlives their turn. The pull-based reconciler does this step itself.
+Before the cutover to conversation sandboxes, stop the source release's conversation loop too.
+After every server has stopped, foreground-delete its SandboxClaims and legacy sandbox Jobs, and wait for their Pods to disappear.
+[Upgrade to 1.0](./upgrade-to-1-0) gives the stopped cutover procedure. The pull-based reconciler checks that procedure before migration.
 
 Apply each row's values after your profile and site values, so that they take precedence.
 Use `--wait=watcher --wait-for-jobs --timeout 45m`, without automatic rollback.
@@ -389,3 +387,18 @@ The next run logs `Adopted the tooling of v1.0.0-rc.4`.
 The run after it logs `Applied v1.0.0-rc.4`: the new verifier checks the release, and a host that already runs it restarts no Pod.
 
 After the timer starts, do not restore the record. The older tooling would then apply the older chart. Use [Rollback](#rollback).
+
+## Sandbox capacity during upgrade
+
+A supplied `sandbox.budget` must hold both the steady-state requests and the drained-upgrade peak.
+[Sandbox capacity budget](./helm-chart#sandbox-capacity-budget) owns the formula and the values to supply.
+`auto` requires both CPU and memory values. With explicit counts, the budget is optional. A supplied budget rejects a count that exceeds either phase.
+
+Finish the review drain before the upgrade's transient peak. Do not resume review work while migration and stanza Jobs or replacement-role surge still consume that budget.
+A drain timeout does not prove that reviews have ended. Check the remaining runs and complete the stopped procedure before proceeding.
+Conversation sandboxes can remain warm within their admitted quota.
+The cutover to 1.0 still removes the source release's claims and legacy Jobs before migration, as [Upgrade to 1.0](./upgrade-to-1-0) describes.
+
+The small profile supplies its existing allocatable budget. Managed clusters have no assumed aggregate budget.
+When moving a managed cluster to `auto`, declare its allocatable CPU and memory before upgrading.
+Keep the current template requests until workload qualification supplies measured replacements.

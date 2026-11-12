@@ -3011,14 +3011,7 @@ void describe("CI contract", () => {
 			needsClosure(workflow, "Kubernetes").has("server-package"),
 			"Images already waits for the packaged JAR",
 		);
-		const artifact = workflow.getIn(["jobs", "Kubernetes", "with", "application-artifact"]);
-		for (const event of ["pull_request", "merge_group", "push", "workflow_dispatch"]) {
-			assert.equal(
-				expandExpressions(artifact, { github: { event_name: event, run_id: 123 } }),
-				event === "merge_group" ? "" : "server-build-123",
-				"PR qualification consumes this image producer's packaged artifact; queue drills need no JAR",
-			);
-		}
+		assert.doesNotMatch(cluster, /application-artifact:/u);
 		for (const digest of ["", `sha256:${"a".repeat(64)}`]) {
 			assert.equal(
 				jobRuns(workflow, "Kubernetes", "pull_request", {
@@ -3036,8 +3029,10 @@ void describe("CI contract", () => {
 		assert.match(reusable, /resolve-release-images\.ts "\$COMMIT"/u);
 		assert.match(reusable, /kubernetes-cluster\.ts verify/u);
 		assert.match(reusable, /kubernetes-cluster\.ts request/u);
-		assert.match(reusable, /kubernetes-cluster\.ts live --packaged/u);
-		assert.match(reusable, /inputs\.application-artifact != '' && env\.QUALIFY == 'true'/u);
+		assert.doesNotMatch(
+			reusable,
+			/kubernetes-cluster\.ts live|restore-server-build|application-artifact/u,
+		);
 		assert.doesNotMatch(source, /sandbox-isolation-probe\.ts/u);
 	});
 
@@ -6364,7 +6359,7 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	);
 });
 
-void test("the queue runs roll, while nightly and dispatch add eviction and PR adapters keep their artifact", async () => {
+void test("the queue runs roll, while nightly and dispatch add eviction", async () => {
 	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
 	const rootEnv = kubernetes.get("env");
 	assert.ok(isMap(rootEnv));
@@ -6393,7 +6388,7 @@ void test("the queue runs roll, while nightly and dispatch add eviction and PR a
 				);
 				const steps = jobs.getIn([key, "steps"]);
 				assert.ok(isSeq(steps));
-				const selected = (name: string, artifact = "server-build", eviction = true) => {
+				const selected = (name: string, eviction = true) => {
 					const worker = namedStep(kubernetes, ["jobs", key], name);
 					const condition = asString(
 						worker.get("if") ?? "true",
@@ -6403,7 +6398,6 @@ void test("the queue runs roll, while nightly and dispatch add eviction and PR a
 						expandExpressions(`\${{ ${condition} }}`, {
 							env: environment,
 							inputs: {
-								"application-artifact": artifact,
 								"backup-drill": true,
 								"eviction-drill": eviction,
 							},
@@ -6413,26 +6407,14 @@ void test("the queue runs roll, while nightly and dispatch add eviction and PR a
 				};
 				const drills = key === "k3d-drills";
 				assert.equal(
-					selected(
-						"Verify kubelet memory eviction order on a disposable node",
-						"server-build",
-						false,
-					),
+					selected("Verify kubelet memory eviction order on a disposable node", false),
 					false,
 				);
-				assert.equal(
-					selected("Keep a conversation turn through a server roll and a loop roll"),
-					drills,
-				);
+				assert.equal(selected("Keep a TURN run in its sandbox through a server roll"), drills);
 				assert.equal(
 					selected("Verify kubelet memory eviction order on a disposable node"),
 					drills && event !== "pull_request" && event !== "merge_group",
 				);
-				assert.equal(
-					selected("Qualify the sandbox adapters in the chart server Pod"),
-					key === "k3d" && event !== "merge_group",
-				);
-				assert.equal(selected("Qualify the sandbox adapters in the chart server Pod", ""), false);
 				assert.equal(selected("Install, upgrade and verify"), !drills);
 				assert.equal(
 					selected("Start a sandbox on a new node without an image pull"),
@@ -6452,7 +6434,7 @@ void test("the queue runs roll, while nightly and dispatch add eviction and PR a
 	assert.ok(isSeq(steps));
 	const join = steps.items.findIndex((item) => isMap(item) && item.get("wait-all") === true);
 	for (const name of [
-		"Keep a conversation turn through a server roll and a loop roll",
+		"Keep a TURN run in its sandbox through a server roll",
 		"Verify kubelet memory eviction order on a disposable node",
 	]) {
 		const index = steps.items.findIndex((item) => isMap(item) && item.get("name") === name);

@@ -181,7 +181,6 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                         .workDeadline()
                         .plus(SandboxLayout.RESULT_UPLOAD_GRACE)
                         .toEpochMilli());
-        context.put("programs", measurement.spec().hasPracticeProgram());
         return context;
     }
 

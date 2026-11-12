@@ -15,16 +15,12 @@ import org.springframework.validation.annotation.Validated;
  * Kubernetes Pod kinds own their memory, disk, and process-isolation bounds.
  *
  * @param maxConcurrentContainers the most review sandboxes this server runs at once
- * @param containerStopTimeoutSeconds the grace period before a stopped sandbox is killed
- * @param reconciliationIntervalSeconds the interval between abandoned sandbox sweeps
  * @param defaultResourceLimits the CPU limit of each review sandbox
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.sandbox")
 public record SandboxProperties(
         @DefaultValue("5") @Min(1) int maxConcurrentContainers,
-        @DefaultValue("10") @Min(1) int containerStopTimeoutSeconds,
-        @DefaultValue("60") @Min(10) int reconciliationIntervalSeconds,
         @DefaultValue @Valid DefaultResourceLimits defaultResourceLimits) {
 
     /**

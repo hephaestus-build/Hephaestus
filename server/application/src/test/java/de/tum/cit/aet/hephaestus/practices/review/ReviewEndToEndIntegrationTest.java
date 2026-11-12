@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.mockito.Mockito.doReturn;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmConnectionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmModelRequestDTO;
@@ -27,9 +26,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
-import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesIsolationProbe;
-import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxCache;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -98,7 +94,6 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -112,7 +107,6 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.TestSocketUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
@@ -125,21 +119,9 @@ import tools.jackson.databind.ObjectMapper;
  */
 // The agent runtime without a cluster, as AgentRuntimeWithoutCluster builds it; the sandbox is the runner stub.
 @MockitoBean(name = "sandboxKubernetesClient", types = KubernetesClient.class, enforceOverride = true)
-@MockitoBean(
-        types = {KubernetesSandboxCache.class, KubernetesIsolationProbe.class},
-        enforceOverride = true)
 // Its worker claims every queued review job of the shared database, so its context must not outlive the class.
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
-
-    @MockitoSpyBean
-    private ToolsPods sandboxRuntime;
-
-    @BeforeEach
-    void isolatedTestRuntime() {
-        // The container and its isolation probe are stubbed; the runtime admits this test's sandbox claims.
-        doReturn(true).when(sandboxRuntime).ready();
-    }
 
     private static final MockWebServer PROVIDER = new MockWebServer();
     private static final int GATEWAY_PORT = TestSocketUtils.findAvailableTcpPort();
@@ -152,8 +134,6 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         // A review's sandbox reaches the gateway at this address, as the claim passes it.
         registry.add("hephaestus.agent.sandbox.gateway-url", () -> "http://127.0.0.1:" + GATEWAY_PORT);
         registry.add("hephaestus.sandbox.kubernetes.namespace", () -> "review-end-to-end");
-        registry.add("hephaestus.sandbox.kubernetes.pod-name", () -> "review-end-to-end");
-        registry.add("hephaestus.sandbox.kubernetes.pod-ip", () -> "127.0.0.1");
         registry.add("hephaestus.agent.image.pull-policy", () -> "NEVER");
         // The stub provider listens on this host.
         registry.add("hephaestus.llm.egress.allow-loopback", () -> "true");

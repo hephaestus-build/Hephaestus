@@ -3,14 +3,17 @@ package de.tum.cit.aet.hephaestus.agent.practice.live;
 import static de.tum.cit.aet.hephaestus.agent.practice.live.PracticeCriteriaCaseFixtures.FIXTURE_DIR;
 import static de.tum.cit.aet.hephaestus.agent.practice.live.PracticeCriteriaCaseFixtures.fixtureCommand;
 
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.exception.NotFoundException;
+import com.github.dockerjava.api.model.Capability;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeCatalogInjector;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeScriptInputs;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
+import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
-import de.tum.cit.aet.hephaestus.agent.runtime.PiRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -37,11 +40,12 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
-import de.tum.cit.aet.hephaestus.testconfig.PiSdkInstallation;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -49,17 +53,27 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.bind.Binder;
+import org.testcontainers.DockerClientFactory;
+import org.testcontainers.Testcontainers;
+import org.testcontainers.containers.BindMode;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.startupcheck.StartupCheckStrategy;
+import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.utility.DockerStatus;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-// The harness maps container paths to owned directories while preserving the runtime spec and inputs.
+// Real tools and practice programs run in the agent image; only this test's owned workspace is mounted.
 final class LiveRunnerWorkspace {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    private static final Logger LOGGER = LoggerFactory.getLogger(LiveRunnerWorkspace.class);
 
     static final Path TOOLKIT = Path.of("..", "..", "docker", "agents", "practice-scripts", "lib")
             .toAbsolutePath()
@@ -70,19 +84,20 @@ final class LiveRunnerWorkspace {
 
     private LiveRunnerWorkspace() {}
 
-    static void installToolkit() throws IOException, InterruptedException {
-        // Production toolkit dependencies use the same lockfile as the image.
-        Process installer = new ProcessBuilder(
-                        "pnpm", "install", "--prod", "--frozen-lockfile", "--ignore-scripts", "--reporter=silent")
-                .directory(Objects.requireNonNull(TOOLKIT.getParent()).toFile())
-                .inheritIO()
-                .start();
-        if (!installer.waitFor(180, TimeUnit.SECONDS)) {
-            installer.destroyForcibly();
-            throw new IllegalStateException("Practice script toolkit installation timed out");
-        }
-        if (installer.exitValue() != 0) {
-            throw new IllegalStateException("Practice script toolkit installation failed; see stderr above");
+    static String image() {
+        String reference = System.getProperty(
+                "hephaestus.live.agent-image",
+                System.getenv().getOrDefault("HEPHAESTUS_LIVE_AGENT_IMAGE", "hephaestus/agent-pi:live"));
+        if (reference.isBlank()) throw new IllegalArgumentException("The live agent image reference is empty");
+        return reference;
+    }
+
+    static void requireImage() {
+        try {
+            DockerClientFactory.instance().client().inspectImageCmd(image()).exec();
+        } catch (NotFoundException missing) {
+            throw new IllegalStateException(
+                    "Build or load the selected live agent image before qualification: " + image(), missing);
         }
     }
 
@@ -90,7 +105,7 @@ final class LiveRunnerWorkspace {
         return new PracticePiAdapter(
                 new PiRuntimeFactory(MAPPER),
                 new PiResultParser(MAPPER, new SimpleMeterRegistry()),
-                new AgentImageProperties("hephaestus/agent-pi:live", ImagePullPolicy.NEVER),
+                new AgentImageProperties(image(), ImagePullPolicy.NEVER),
                 // The shipped defaults: a live run must get the budget that a review gets.
                 new Binder(List.of()).bindOrCreate("hephaestus.practice-review", PracticeReviewProperties.class));
     }
@@ -114,12 +129,13 @@ final class LiveRunnerWorkspace {
             Files.write(target, file.getValue());
         }
         // ESM resolution walks node_modules upward from the importing file; production binds the SDK there.
-        link(workspace.resolve("node_modules"), PiSdkInstallation.SDK_DIR.resolve("node_modules"));
+        link(workspace.resolve("node_modules"), Path.of("/opt/pi-sdk/node_modules"));
         Path toolkit = workspace.resolve(SandboxLayout.PRACTICE_SCRIPT_LIBRARY_LINK);
         Files.createDirectories(toolkit.getParent());
-        link(toolkit, TOOLKIT);
-        link(workspace.resolve(SandboxLayout.PRACTICE_SCRIPT_KITS_LINK), TOOLKIT.resolveSibling("kits"));
-        Files.createDirectories(workspace.resolve(".home"));
+        link(toolkit, Path.of(SandboxLayout.PRACTICE_SCRIPT_LIBRARY_TARGET));
+        link(
+                workspace.resolve(SandboxLayout.PRACTICE_SCRIPT_KITS_LINK),
+                Path.of(SandboxLayout.PRACTICE_SCRIPT_KITS_TARGET));
     }
 
     static final Path CART_CHANGE = Path.of("..", "..", "docker", "agents", "practice-scripts", "fixtures")
@@ -355,40 +371,104 @@ final class LiveRunnerWorkspace {
                 MAPPER.writerWithDefaultPrettyPrinter().writeValueAsBytes(envelope));
     }
 
-    /**
-     * Starts the runner with the spec's variables and the proxy's URL and job token, as the sandbox adapter adds
-     * them. Nothing else of this JVM's environment reaches it: the review session has a bash tool. With a log, its
-     * output and errors go there; without one, the caller reads them.
-     */
-    static Process spawn(
-            Path workspace, Map<String, String> specEnvironment, String proxyUrl, String jobToken, @Nullable Path log)
+    /** The caller owns the container, including a startup failure or a run that passes its deadline. */
+    static GenericContainer<?> runner(Path workspace, PracticeSandboxSpec spec, String proxyUrl, String jobToken)
             throws IOException {
-        ProcessBuilder runner = new ProcessBuilder("node", SandboxLayout.RUNNER_SCRIPT_FILENAME);
-        runner.directory(workspace.toFile());
-        if (log != null) {
-            runner.redirectErrorStream(true).redirectOutput(log.toFile());
+        String user = workspaceUser(workspace);
+        URI proxy = proxyInContainer(proxyUrl);
+        // Testcontainers tunnels only this listener, including a listener bound to loopback on Linux.
+        Testcontainers.exposeHostPorts(proxy.getPort());
+        Map<String, String> environment = new HashMap<>(spec.environment());
+        environment.put("PI_RUNNER_CWD", SandboxLayout.WORKSPACE_ROOT);
+        environment.put("LLM_PROXY_URL", proxy.toString());
+        environment.put("LLM_PROXY_TOKEN", jobToken);
+        List<String> command = spec.command();
+        if (command.isEmpty()) throw new IllegalArgumentException("The live runner has no command");
+        return new GenericContainer<>(DockerImageName.parse(spec.image()))
+                // The caller selects a prebuilt image. A missing image fails before a model request.
+                .withImagePullPolicy(ignored -> false)
+                .withStartupAttempts(1)
+                .withAccessToHost(true)
+                .withWorkingDirectory(SandboxLayout.WORKSPACE_ROOT)
+                .withFileSystemBind(
+                        workspace.toAbsolutePath().toString(), SandboxLayout.WORKSPACE_ROOT, BindMode.READ_WRITE)
+                .withTmpFs(Map.of("/tmp", "rw,nosuid,nodev,size=512m"))
+                .withEnv(environment)
+                .withCreateContainerCmdModifier(created -> {
+                    created.withEntrypoint(command.getFirst()).withUser(user);
+                    Objects.requireNonNull(created.getHostConfig())
+                            .withReadonlyRootfs(true)
+                            .withCapDrop(Capability.ALL)
+                            .withSecurityOpts(List.of("no-new-privileges:true"))
+                            .withMemory(1024L * 1024 * 1024)
+                            .withPidsLimit(512L);
+                })
+                .withCommand(command.subList(1, command.size()).toArray(String[]::new))
+                .withStartupCheckStrategy(
+                        new StartupCheckStrategy() {
+                            @Override
+                            public StartupStatus checkStartupState(DockerClient docker, String id) {
+                                // Completion is distinct from a successful review: the caller checks its actual exit
+                                // code.
+                                return DockerStatus.isContainerStopped(getCurrentState(docker, id))
+                                        ? StartupStatus.SUCCESSFUL
+                                        : StartupStatus.NOT_YET_KNOWN;
+                            }
+                        }.withTimeout(Duration.ofSeconds(TIMEOUT_SECONDS)));
+    }
+
+    static int run(GenericContainer<?> runner, @Nullable Path log) throws IOException {
+        var captured = new ConcurrentLinkedQueue<String>();
+        runner.withLogConsumer(frame -> {
+            captured.add(frame.getUtf8String());
+        });
+        try {
+            runner.start();
+            writeLog(log, runner.getLogs());
+            return Math.toIntExact(Objects.requireNonNull(
+                    runner.getCurrentContainerInfo().getState().getExitCodeLong(),
+                    "A completed runner has no exit code"));
+        } catch (RuntimeException | IOException failed) {
+            // Testcontainers can remove a failed startup's container before the caller's close; keep its streamed log.
+            try {
+                writeLog(log, String.join("", captured));
+            } catch (IOException logFailure) {
+                failed.addSuppressed(logFailure);
+            }
+            throw failed;
         }
-        Map<String, String> env = runner.environment();
-        String path = env.getOrDefault("PATH", "/usr/local/bin:/usr/bin:/bin");
-        env.clear();
-        Map<String, String> moved = new HashMap<>();
-        specEnvironment.forEach((name, value) -> moved.put(
-                name,
-                value.replace(SandboxLayout.WORKSPACE_ROOT, workspace.toString())
-                        .replace(
-                                PiRunnerProfile.AGENT_HOME,
-                                workspace.resolve(".home").toString())));
-        env.putAll(moved);
-        env.put("PATH", path);
-        env.put("LANG", "C.UTF-8");
-        env.put("PI_RUNNER_CWD", workspace.toString());
-        env.put("LLM_PROXY_URL", proxyUrl);
-        env.put("LLM_PROXY_TOKEN", jobToken);
-        // Some Node versions skip a symlinked node_modules; NODE_PATH resolves the SDK's bare specifiers.
-        env.put("NODE_PATH", PiSdkInstallation.SDK_DIR.resolve("node_modules").toString());
-        Files.createDirectories(Path.of(
-                moved.getOrDefault("TMPDIR", workspace.resolve(".home/tmp").toString())));
-        return runner.start();
+    }
+
+    private static void writeLog(@Nullable Path log, String output) throws IOException {
+        if (log == null) LOGGER.info("[practice-runner] {}", output);
+        else Files.writeString(log, output);
+    }
+
+    /** Keeps the proxy's path and port while replacing the host with Testcontainers' scoped listener tunnel. */
+    static URI proxyInContainer(String proxyUrl) {
+        URI proxy = URI.create(proxyUrl);
+        String host = proxy.getHost();
+        if (!"http".equals(proxy.getScheme())
+                || proxy.getUserInfo() != null
+                || proxy.getFragment() != null
+                || host == null
+                || !List.of("127.0.0.1", "localhost", "::1", "[::1]").contains(host)
+                || proxy.getPort() < 1
+                || proxy.getPort() > 65_535) {
+            throw new IllegalArgumentException("The live runner requires a loopback proxy with an explicit port");
+        }
+        return URI.create("http://host.testcontainers.internal:" + proxy.getPort() + proxy.getRawPath()
+                + (proxy.getRawQuery() == null ? "" : "?" + proxy.getRawQuery()));
+    }
+
+    /** Match the owned bind mount's non-root identity, so result files stay readable and removable by the test. */
+    static String workspaceUser(Path workspace) throws IOException {
+        int uid = (Integer) Files.getAttribute(workspace, "unix:uid");
+        int gid = (Integer) Files.getAttribute(workspace, "unix:gid");
+        if (uid <= 0 || gid <= 0) {
+            throw new IllegalArgumentException("The live runner workspace must have a non-root UID and GID");
+        }
+        return uid + ":" + gid;
     }
 
     private static String git(Path workspace, String... arguments) throws IOException, InterruptedException {

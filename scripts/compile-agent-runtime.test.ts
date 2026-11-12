@@ -25,7 +25,8 @@ await test("the trusted runtime build emits JavaScript and removes obsolete file
 		assert.equal(built.status, 0, built.stderr);
 		const files = await readdir(output);
 		assert.ok(files.includes("pi-runner.js"));
-		assert.ok(files.includes("heph-host.js"));
+		assert.ok(files.includes("driver.js"));
+		assert.ok(files.includes("turn.js"));
 		assert.ok(!files.some((file) => file.endsWith(".ts")));
 		await assert.rejects(readFile(path.join(output, "obsolete.js")), { code: "ENOENT" });
 		const refused = spawnSync(

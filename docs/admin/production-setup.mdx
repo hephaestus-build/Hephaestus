@@ -355,13 +355,13 @@ Slack revocation alerts and Outline expiry information stay unchanged.
 
 Two deployment-topology facts belong here.
 `AGENT_ENABLED` on the server role activates Kubernetes sandbox work. The chart sets it from `sandbox.enabled`.
-Only a server with it launches sandbox Pods, for queued reviews and for the tools Pods of conversations.
+Only a server with it creates sandbox claims for reviews and conversation turns.
 
 The server uses NATS.
 Production startup refuses a server without NATS, as [Runtime roles](./runtime-roles#boot-log) describes.
 
-One conversation loop runs all conversation turns of the installation, as a Deployment beside the servers.
-[Runtime Roles](./runtime-roles.mdx#the-conversation-loop) gives its lifecycle, and [Helm chart reference § Conversation loop](./helm-chart#conversation-loop) gives its values.
+Each conversation runs its turns in one conversation sandbox.
+[Runtime Roles](./runtime-roles.mdx#conversation-sandboxes) gives its lifecycle, and [Helm chart reference § Conversation capacity](./helm-chart#conversation-capacity) gives its values.
 The application server needs no memory for Conversation runtimes.
 [Runtime Roles](./runtime-roles.mdx#conversation-turns) explains dispatch and capacity.
 

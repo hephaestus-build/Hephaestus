@@ -179,7 +179,8 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Test
     void shouldRegisterTheTurnTimersAtStartWithTheObjectivesBuckets() {
-        assertThat(Arrays.stream(metrics.get(AgentMetrics.MENTOR_TURN_FIRST_TOKEN)
+        assertThat(Arrays.stream(metrics.get(AgentMetrics.AGENT_RUN_FIRST_TOKEN)
+                                .tags("kind", "turn", "start", "cold")
                                 .timer()
                                 .takeSnapshot()
                                 .histogramCounts())

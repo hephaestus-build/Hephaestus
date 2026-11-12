@@ -10,8 +10,8 @@ Each one stops the roles that the work affects, and starts them again afterwards
 
 ## Planned node maintenance
 
-PodDisruptionBudgets block voluntary eviction of the bundled PostgreSQL and NATS Pods, the server and a singleton conversation loop.
-With two or more servers, at most one server can be unavailable. The same applies to the conversation loop.
+PodDisruptionBudgets block voluntary eviction of the bundled PostgreSQL and NATS Pods, and the server.
+With two or more servers, at most one server can be unavailable.
 Each budget selects one role in one release. Sandbox Pods have no budget.
 
 These budgets do not prevent pressure eviction or OOM, and they do not provide high availability on one node.

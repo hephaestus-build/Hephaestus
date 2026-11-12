@@ -159,13 +159,17 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("turnTtlSeconds") long turnTtlSeconds,
             @Param("agingSeconds") long agingSeconds);
 
+    String KIND_CLAIM_LOCK = "hashtextextended('agent-run-claim:' || :kind, 0)";
+
     /** Serialises the capped claims of one kind until the transaction ends ({@link AgentRuns#claimCapped}). */
     @WorkspaceAgnostic("A kind's cap holds across every workspace")
-    @Query(
-            value =
-                    "SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended('agent-run-claim:' || :kind, 0))) held",
-            nativeQuery = true)
+    @Query(value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock(" + KIND_CLAIM_LOCK + ")) held", nativeQuery = true)
     int lockKindClaims(@Param("kind") String kind);
+
+    /** A subject pull skips a busy cap lock instead of waiting while it holds its sandbox row. */
+    @WorkspaceAgnostic("A kind's cap holds across every workspace")
+    @Query(value = "SELECT pg_try_advisory_xact_lock(" + KIND_CLAIM_LOCK + ")", nativeQuery = true)
+    boolean tryLockKindClaims(@Param("kind") String kind);
 
     @WorkspaceAgnostic("A kind's cap counts its leased runs in every workspace")
     @Query(value = "SELECT count(*) FROM agent_run WHERE kind = :kind AND state = 'LEASED'", nativeQuery = true)

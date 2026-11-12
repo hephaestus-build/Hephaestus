@@ -1,9 +1,8 @@
 {{- /*
-The server runs every sandbox as a Pod, Job or agent-sandbox claim in the sandbox namespace.
+The server creates SandboxClaims in the sandbox namespace.
 The operator creates that namespace with the Restricted Pod Security level, for this release alone:
 the servers remove what they do not use there. The chart writes its quota, its policies and the
-server's API authority in it. Each server proves at its start, and then on a schedule, that the
-cluster enforces them (the isolation probe, docs/admin/kubernetes.mdx § Sandbox prerequisites).
+server's API authority in it. The platform isolation gate proves the boundary before a release runs (docs/admin/kubernetes.mdx § Sandbox prerequisites).
 The server's own Deployment, Service account and policy are in server.yaml and networkpolicy.yaml.
 */}}
 {{- if .Values.sandbox.enabled }}
@@ -16,51 +15,35 @@ The server's own Deployment, Service account and policy are in server.yaml and n
 {{- fail "networkPolicy.kubernetesApi.port is required: state the API endpoint port that the network plugin sees" }}
 {{- end }}
 {{- /* values.schema.json owns each value's shape; the server refuses the same values at start. */}}
-{{- $runtime := .Values.sandbox.runtime }}
-{{- if regexMatch "(^|/)\\.\\.(/|$)" $runtime.seccompProfile }}
-{{- fail "sandbox.runtime.seccompProfile must stay inside the kubelet's seccomp directory" }}
-{{- end }}
 {{- if .Values.sandbox.quota.enabled }}
 {{- /*
 Each PriorityClass tier has its own quota, so that review and conversation sandboxes cannot take each
-other's room. Review requests come from the review SandboxTemplate and its RuntimeClass overhead.
-sandbox-pod-requests.json holds the requests of the server-built Pods; SandboxPodRequestsTableTest
-pins it to the Pods the server builds, and the chart's fit tests read it too. The reviews tier holds the
+other's room. Each sandbox template owns its requests. The reviews tier holds the
 reviews that sandbox.reviewMemory holds, once: during a rollout the new server waits for the old one's
-room. Every running server, the old one during a rollout included, has its isolation probe there.
-The conversations tier holds the tools Pods of the whole installation, not of each server: two warm
-ones, and one for each turn up to eight. Resident turn admission does not enlarge that memory quota.
+room.
+The conversations tier holds the conversation sandboxes of the whole installation, not of each
+server. Each admitted turn has room for its conversation sandbox.
 */}}
-{{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson }}
-{{- $replicas := int .Values.server.replicas }}
-{{- $running := ternary $replicas (mul $replicas 2) (eq .Values.server.rolloutStrategy "Recreate") }}
 {{- $turns := int (include "hephaestus.conversationTurns" .) }}
 {{- $review := include "hephaestus.templateSandbox" (dict "root" . "kind" "review") | fromJson }}
-{{- $probe := $table.isolationProbe }}
-{{- $turn := $table.toolsPod }}
-{{- $tools := min $turns (int $table.activeToolsPods) }}
-{{- $turnSandboxes := add (int $table.pooledToolsPods) $tools }}
+{{- $conversation := include "hephaestus.templateSandbox" (dict "root" . "kind" "conversation") | fromJson }}
+{{- $conversations := $turns }}
 {{- $reviews := int (include "hephaestus.reviews" .) }}
 {{- /* Requests, not limits: sandbox Pods are Burstable, and a quota on limits would admit about half the reviews
 that the node holds. The scheduler places Pods by their requests; a limit bounds one Pod's own peak. */}}
 {{- /* A quota counts a Pod's RuntimeClass overhead with its requests, so each Pod adds the class's overhead. */}}
-{{- $overhead := $runtime.podOverhead }}
-{{- $probePods := mul $running (int $probe.pods) }}
-{{- $reviewPods := add $reviews $probePods }}
-{{- /* The template isolation gate runs two conversation sandboxes at once, alongside the tools pool. */}}
-{{- $gate := include "hephaestus.templateSandbox" (dict "root" . "kind" "conversation") | fromJson }}
-{{- $conversationPods := add 2 (mul $turnSandboxes (int $turn.pods)) }}
+{{- $reviewPods := $reviews }}
 {{- $tiers := list
   (dict "tier" "reviews"
     "pods" $reviewPods
-    "memoryMi" (add (mul $reviews (int $review.memoryMi)) (mul $running (int $probe.memoryMi)) (mul $probePods (int $overhead.memoryMi)))
+    "memoryMi" (mul $reviews (int $review.memoryMi))
     "cpuMillis" (int (include "hephaestus.reviewCpuMillis" .))
-    "diskMi" (add (mul $reviews (int $review.ephemeralStorageMi)) (mul $running (int $probe.ephemeralStorageMi))))
+    "diskMi" (mul $reviews (int $review.ephemeralStorageMi)))
   (dict "tier" "conversations"
-    "pods" $conversationPods
-    "memoryMi" (add (mul $turnSandboxes (add (int $turn.memoryMi) (int $overhead.memoryMi))) (mul 2 (int $gate.memoryMi)))
-    "cpuMillis" (add (mul $turnSandboxes (add (int $turn.cpuMillis) (int $overhead.cpuMillis))) (mul 2 (int $gate.cpuMillis)))
-    "diskMi" (add (mul $turnSandboxes (int $turn.ephemeralStorageMi)) (mul 2 (int $gate.ephemeralStorageMi)))) }}
+    "pods" $conversations
+    "memoryMi" (mul $conversations (int $conversation.memoryMi))
+    "cpuMillis" (mul $conversations (int $conversation.cpuMillis))
+    "diskMi" (mul $conversations (int $conversation.ephemeralStorageMi))) }}
 {{- if eq (include "hephaestus.priorityClass" (dict "root" . "tier" "reviews")) (include "hephaestus.priorityClass" (dict "root" . "tier" "conversations")) }}
 {{- fail "priorityClasses.reviews and priorityClasses.conversations must differ: each tier's quota selects its Pods by PriorityClass" }}
 {{- end }}
@@ -109,8 +92,7 @@ spec:
     secrets: "0"
 ---
 {{- end }}
-# No ingress and no egress for any pod of the namespace. A conversation's tools Pod gets only the
-# ingress from the conversation loop below, so it reaches nothing.
+# Every sandbox starts with no ingress or egress. The gateway policy below grants its only egress.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -131,30 +113,8 @@ metadata:
   labels:
     {{- include "hephaestus.labels" (dict "root" . "component" "sandbox") | nindent 4 }}
 rules:
-  # The server creates Pods only through Jobs. The create verb is for the isolation probe's
-  # Pod Security dry run, which creates nothing; "jobs create" already gives the same authority.
-  # The server has no Pod patch, because a patch can change the image of a sandbox that runs.
-  # It has no Pod delete: to stop a sandbox, it deletes the Job with Foreground propagation.
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch", "create"]
-  - apiGroups: [""]
-    resources: ["pods/log"]
-    verbs: ["get"]
-  # One Job per conversation tools Pod or isolation probe.
-  - apiGroups: ["batch"]
-    resources: ["jobs"]
-    verbs: ["get", "list", "watch", "create", "delete"]
-  # The Job controller reports a quota refusal of a tools or probe Pod as an event. The server lists them.
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["list"]
-  # Tools-Pod creation reads the quota cache, populated by the same watches as Pods and Jobs.
-  - apiGroups: [""]
-    resources: ["resourcequotas"]
-    verbs: ["list", "watch"]
-  # The controller creates each claim's sandbox and Pod. The server watches foreground deletion to completion
-  # before acknowledging removal of evidence that the sandbox copied.
+  # A subject's sandbox is an agent-sandbox claim. The server creates and deletes claims and lists its own; the
+  # controller creates the sandbox and its Pod from the kind's template.
   - apiGroups: ["extensions.agents.x-k8s.io"]
     resources: ["sandboxclaims"]
     verbs: ["get", "list", "watch", "create", "delete"]
@@ -175,7 +135,7 @@ subjects:
     name: {{ $name }}
     namespace: {{ .Release.Namespace }}
 ---
-# Review sandboxes may reach the servers on the gateway port, and nothing else: no
+# Sandboxes may reach the servers on the gateway port, and nothing else: no
 # DNS, no API, no database, no broker.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -200,33 +160,7 @@ spec:
         - port: {{ $port }}
           protocol: TCP
 ---
-# A conversation's tools Pod serves the conversation loop on the tools port, and no other Pod reaches it.
-# The loop dials it there, and the tools side answers with the nonce that the server wrote into its spec.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: {{ include "hephaestus.name" (dict "root" . "component" "sandbox-tools") }}
-  namespace: {{ $sandboxes }}
-  labels:
-    {{- include "hephaestus.labels" (dict "root" . "component" "sandbox") | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      hephaestus.build/sandbox-kind: tools
-  policyTypes: ["Ingress"]
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ .Release.Namespace }}
-          podSelector:
-            matchLabels:
-              {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 14 }}
-      ports:
-        - port: {{ include "hephaestus.toolsPort" . }}
-          protocol: TCP
----
-# The servers' gateway port. A server starts no sandbox before its isolation probe passed.
+# The servers' gateway port.
 # A review sandbox's attempt lives on the server that took the sandbox's first call, so each caller
 # stays on one server until the gateway keeps no attempt state of its own.
 apiVersion: v1
@@ -244,25 +178,6 @@ spec:
   sessionAffinityConfig:
     clientIP:
       timeoutSeconds: 86400
-  selector:
-    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "server") | nindent 4 }}
-  ports:
-    - name: sandbox-gateway
-      port: {{ $port }}
-      targetPort: sandbox-gateway
-      protocol: TCP
----
-# The isolation probe proves a sandbox's route through a Service before its server is ready, so this
-# one also selects a server that is not ready. Nothing else calls it.
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "hephaestus.name" (dict "root" . "component" "sandbox-gateway-probe") }}
-  labels:
-    {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
-spec:
-  type: ClusterIP
-  publishNotReadyAddresses: true
   selector:
     {{- include "hephaestus.selectorLabels" (dict "root" . "component" "server") | nindent 4 }}
   ports:

@@ -1,13 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
-import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
-import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
-import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import jakarta.validation.Valid;
@@ -19,17 +17,11 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -38,91 +30,71 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The endpoints the conversation loop calls for one turn attempt, on any server's sandbox gateway, with the attempt's
- * credential. Each acts only for the turn, developer and conversation the credential names, and only while the
- * attempt holds its live lease ({@link MentorLeaseLostException}); every server reads that from the turn's row. A
- * stopped attempt, or one past its deadline, may only renew its lease and end ({@link HephTurns.StopException}). The
- * ledger classifies the entries that the end carries; the loop's word is not taken for that.
+ * The routes that a conversation sandbox's loop calls for the turn its run drives, on any replica's sandbox gateway.
+ * Each acts only for the turn, developer and conversation of the run, and only while the run's claim holds it
+ * ({@link HephTurns#held(SandboxRun, boolean)}); every replica reads that from the turn's and the run's rows. A tool in
+ * the sandbox can call these routes too, so each one checks this itself. A stopped attempt, or one past its work
+ * deadline, may only end ({@link HephTurns.StopException}). The ledger classifies the entries that the end carries; the
+ * loop's word is not taken for that. The run's context, lease and end are the driver's ({@code AgentRunController}).
  */
 @RestController
-@RequestMapping("/internal/llm/turn/{turnId}")
+@RequestMapping("/internal/agent/runs/{runId}/turn")
 @PreAuthorize("isAuthenticated()")
 @ConditionalOnAgentRuntime
 @Profile(HephTurnConfiguration.PROFILES)
-@WorkspaceAgnostic("The turn credential binds the workspace, the developer and the conversation of every call")
+@WorkspaceAgnostic("The sandbox's run names the workspace, and its turn names the developer and the conversation")
 public class HephTurnController {
-
-    private static final Logger log = LoggerFactory.getLogger(HephTurnController.class);
 
     private final HephTurnContexts contexts;
 
     private final MentorTurnCompletion completion;
     private final HephTurns turns;
-    private final ProxyCallsInFlight callsInFlight;
+    private final LlmUsageRecorder usage;
 
     public HephTurnController(
-            HephTurnContexts contexts,
-            MentorTurnCompletion completion,
-            HephTurns turns,
-            ProxyCallsInFlight callsInFlight) {
+            HephTurnContexts contexts, MentorTurnCompletion completion, HephTurns turns, LlmUsageRecorder usage) {
         this.contexts = contexts;
         this.completion = completion;
         this.turns = turns;
-        this.callsInFlight = callsInFlight;
-    }
-
-    /**
-     * Renews the attempt's lease; the loop calls it every few seconds. A {@code 409} says that the attempt must stop
-     * and end, or that it lost its lease.
-     */
-    @PostMapping("/lease")
-    public ResponseEntity<Void> lease(@PathVariable UUID turnId, Authentication authentication) {
-        turns.lease(token(turnId, authentication));
-        return ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/context")
-    public HephTurnContexts.Context context(@PathVariable UUID turnId, Authentication authentication) {
-        TurnAttempt turn = turn(turnId, authentication);
-        return contexts.context(turn);
+        this.usage = usage;
     }
 
     /** {@code link_result}: the echo admits the link; a refusal is {@code 422} and the host shows nothing. */
     public record ResultLink(@NotNull UUID resultId) {}
 
     @PostMapping("/link-result")
-    public ResultLink linkResult(
-            @PathVariable UUID turnId, @Valid @RequestBody ResultLink request, Authentication authentication) {
-        TurnAttempt turn = turn(turnId, authentication);
-        return HephToolCalls.logged(
-                turn,
-                "link_result",
-                () -> {
-                    if (!contexts.admitsResult(turn, request.resultId())) {
-                        throw refused("it is not a result of the developer that Hephaestus may show");
-                    }
-                    return request;
-                },
-                linked -> "ok");
+    public ResultLink linkResult(SandboxRun run, @Valid @RequestBody ResultLink request) {
+        return turns.write(run, false, turn -> {
+            return HephToolCalls.logged(
+                    turn,
+                    "link_result",
+                    () -> {
+                        if (!contexts.admitsResult(turn, request.resultId())) {
+                            throw refused("it is not a result of the developer that Hephaestus may show");
+                        }
+                        return request;
+                    },
+                    linked -> "ok");
+        });
     }
 
     /** {@code link_problem}: admitted through the result that carries the problem. */
     public record ProblemLink(@NotNull UUID problemId) {}
 
     @PostMapping("/link-problem")
-    public ProblemLink linkProblem(
-            @PathVariable UUID turnId, @Valid @RequestBody ProblemLink request, Authentication authentication) {
-        TurnAttempt turn = turn(turnId, authentication);
-        return HephToolCalls.logged(
-                turn,
-                "link_problem",
-                () -> {
-                    if (!contexts.admitsProblem(turn, request.problemId())) {
-                        throw refused("it is not a problem on a result of the developer that Hephaestus may show");
-                    }
-                    return request;
-                },
-                linked -> "ok");
+    public ProblemLink linkProblem(SandboxRun run, @Valid @RequestBody ProblemLink request) {
+        return turns.write(run, false, turn -> {
+            return HephToolCalls.logged(
+                    turn,
+                    "link_problem",
+                    () -> {
+                        if (!contexts.admitsProblem(turn, request.problemId())) {
+                            throw refused("it is not a problem on a result of the developer that Hephaestus may show");
+                        }
+                        return request;
+                    },
+                    linked -> "ok");
+        });
     }
 
     /**
@@ -132,19 +104,19 @@ public class HephTurnController {
     public record FeedbackShow(@NotNull UUID feedbackId) {}
 
     @PostMapping("/show-feedback")
-    public FeedbackShow showFeedback(
-            @PathVariable UUID turnId, @Valid @RequestBody FeedbackShow request, Authentication authentication) {
-        TurnAttempt turn = turn(turnId, authentication);
-        return HephToolCalls.logged(
-                turn,
-                "show_feedback",
-                () -> {
-                    if (!contexts.showFeedback(turn, request.feedbackId())) {
-                        throw refused("it is not conversation feedback that is ready for the developer now");
-                    }
-                    return request;
-                },
-                shown -> "ok");
+    public FeedbackShow showFeedback(SandboxRun run, @Valid @RequestBody FeedbackShow request) {
+        return turns.write(run, false, turn -> {
+            return HephToolCalls.logged(
+                    turn,
+                    "show_feedback",
+                    () -> {
+                        if (!contexts.showFeedback(turn, request.feedbackId())) {
+                            throw refused("it is not conversation feedback that is ready for the developer now");
+                        }
+                        return request;
+                    },
+                    shown -> "ok");
+        });
     }
 
     private static ResponseStatusException refused(String reason) {
@@ -164,28 +136,28 @@ public class HephTurnController {
     public record SearchResponse(List<HephTurnContexts.SearchHit> hits) {}
 
     @PostMapping("/search")
-    public SearchResponse search(
-            @PathVariable UUID turnId, @Valid @RequestBody SearchRequest request, Authentication authentication) {
-        TurnAttempt turn = turn(turnId, authentication);
-        String branch = request.branch();
-        MentorEntryService.SearchScope scope;
-        try {
-            scope = branch == null
-                    ? MentorEntryService.SearchScope.ALL
-                    : MentorEntryService.SearchScope.valueOf(branch.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_CONTENT, "branch is one of main, this or all", unknown);
-        }
-        Integer limit = request.limit();
-        var query = new MentorEntryService.SearchQuery(
-                request.query(),
-                scope,
-                request.before(),
-                request.after(),
-                limit == null ? MentorEntryService.MAX_SEARCH_HITS : limit);
-        return HephToolCalls.logged(
-                turn, "search_conversation", () -> new SearchResponse(contexts.search(turn, query)), found -> "ok");
+    public SearchResponse search(SandboxRun run, @Valid @RequestBody SearchRequest request) {
+        return turns.write(run, false, turn -> {
+            String branch = request.branch();
+            MentorEntryService.SearchScope scope;
+            try {
+                scope = branch == null
+                        ? MentorEntryService.SearchScope.ALL
+                        : MentorEntryService.SearchScope.valueOf(branch.toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException unknown) {
+                throw new ResponseStatusException(
+                        HttpStatus.UNPROCESSABLE_CONTENT, "branch is one of main, this or all", unknown);
+            }
+            Integer limit = request.limit();
+            var query = new MentorEntryService.SearchQuery(
+                    request.query(),
+                    scope,
+                    request.before(),
+                    request.after(),
+                    limit == null ? MentorEntryService.MAX_SEARCH_HITS : limit);
+            return HephToolCalls.logged(
+                    turn, "search_conversation", () -> new SearchResponse(contexts.search(turn, query)), found -> "ok");
+        });
     }
 
     /**
@@ -193,26 +165,20 @@ public class HephTurnController {
      *
      * @param first whether it is the attempt's first, which times the attempt's first token
      */
-    @PutMapping("/partial")
+    @PostMapping("/partial")
     public ResponseEntity<Void> partial(
-            @PathVariable UUID turnId,
+            SandboxRun run,
             @RequestParam(defaultValue = "false") boolean first,
-            @Valid @RequestBody MentorTurnProgress.Update update,
-            Authentication authentication) {
-        AttemptJwt token = token(turnId, authentication);
-        TurnAttempt turn = turns.held(token, false);
-        if (!MentorTurnProgress.wellFormed(update)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "A partial answer is a change of the one before it");
-        }
-        completion.progress(
-                turn.workspaceId(),
-                turn.turnId(),
-                turn.attempt(),
-                turn.runId(),
-                update,
-                first ? token.issuedAt() : null);
-        return ResponseEntity.noContent().build();
+            @Valid @RequestBody MentorTurnProgress.Update update) {
+        return turns.write(run, false, turn -> {
+            if (!MentorTurnProgress.wellFormed(update)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "A partial answer is a change of the one before it");
+            }
+            var start = first ? turns.start(run) : null;
+            completion.progress(turn, update, start == null ? null : start.startedAt(), start != null && start.cold());
+            return ResponseEntity.noContent().build();
+        });
     }
 
     public enum Outcome {
@@ -258,39 +224,33 @@ public class HephTurnController {
             @NotNull Outcome outcome,
             @NotNull @Size(max = 500) List<JsonNode> entries,
             @Nullable FailureReason reason,
-            @Nullable @Size(max = 500) String detail) {}
+            @Nullable @Size(max = 500) String detail,
+            @Nullable JsonNode lastPartial) {}
 
     @PostMapping("/end")
-    public ResponseEntity<Void> end(
-            @PathVariable UUID turnId, @Valid @RequestBody EndRequest request, Authentication authentication) {
-        TurnAttempt turn = turns.held(token(turnId, authentication), true);
-        List<JsonNode> entries = validated(request.entries());
-        MentorTurn.Status outcome = switch (request.outcome()) {
-            case DONE -> MentorTurn.Status.DONE;
-            case STOPPED -> MentorTurn.Status.STOPPED;
-            case FAILED -> MentorTurn.Status.FAILED;
-        };
-        FailureReason reason = request.reason() == null ? FailureReason.ERROR : request.reason();
-        String error = outcome != MentorTurn.Status.FAILED
-                ? null
-                : switch (reason) {
-                    case DEADLINE -> MentorTurnCompletion.TOOK_TOO_LONG;
-                    case STALLED -> HephTurns.MODEL_STOPPED_ANSWERING;
-                    case ERROR -> HephTurns.COULD_NOT_FINISH;
-                };
-        String detail = request.detail();
-        String cause = outcome != MentorTurn.Status.FAILED
-                ? null
-                : "its conversation loop reported " + reason
-                        + (detail == null ? "" : ": " + (FAILURE_DETAILS.contains(detail) ? detail : "unrecognized"));
-        // A loop that gave up on its model call cannot wait for it: a silent provider would hold the end.
-        if (!callsInFlight.settle(turn.turnId(), turn.attempt(), outcome != MentorTurn.Status.DONE)) {
-            log.warn(
-                    "conversation turn {} attempt {} ended with a model call still in flight; that call may go unbilled",
-                    turn.turnId(),
-                    turn.attempt());
-        }
-        try {
+    public ResponseEntity<Void> end(SandboxRun run, @Valid @RequestBody EndRequest request) {
+        return turns.write(run, true, turn -> {
+            List<JsonNode> entries = validated(request.entries());
+            MentorTurn.Status outcome = switch (request.outcome()) {
+                case DONE -> MentorTurn.Status.DONE;
+                case STOPPED -> MentorTurn.Status.STOPPED;
+                case FAILED -> MentorTurn.Status.FAILED;
+            };
+            FailureReason reason = request.reason() == null ? FailureReason.ERROR : request.reason();
+            String error = outcome != MentorTurn.Status.FAILED
+                    ? null
+                    : switch (reason) {
+                        case DEADLINE -> MentorTurnCompletion.TOOK_TOO_LONG;
+                        case STALLED -> HephTurns.MODEL_STOPPED_ANSWERING;
+                        case ERROR -> HephTurns.COULD_NOT_FINISH;
+                    };
+            String detail = request.detail();
+            String cause = outcome != MentorTurn.Status.FAILED
+                    ? null
+                    : "its conversation sandbox reported " + reason
+                            + (detail == null
+                                    ? ""
+                                    : ": " + (FAILURE_DETAILS.contains(detail) ? detail : "unrecognized"));
             completion.end(
                     turn.workspaceId(),
                     turn.turnId(),
@@ -301,34 +261,10 @@ public class HephTurnController {
                             entries,
                             error,
                             cause,
-                            callsInFlight.lastFailed(turn.turnId(), turn.attempt()),
-                            turns.lastPartial(turn)));
-            callsInFlight.forgetFailed(turn.turnId(), turn.attempt());
-        } finally {
-            contexts.forget(turn);
-            turns.ended(turn);
-        }
-        return ResponseEntity.noContent().build();
-    }
-
-    /** The attempt of this request's credential, for a call that neither renews nor ends it. */
-    private TurnAttempt turn(UUID turnId, Authentication authentication) {
-        return turn(turns, turnId, authentication);
-    }
-
-    /** {@link #turn(UUID, Authentication)}, for the other controllers of the turn endpoints. */
-    static TurnAttempt turn(HephTurns turns, UUID turnId, Authentication authentication) {
-        return turns.held(token(turnId, authentication), false);
-    }
-
-    /** The turn credential of this request, for this turn; any other credential is answered as if it did not exist. */
-    static AttemptJwt token(UUID turnId, Authentication authentication) {
-        if (!(authentication.getDetails() instanceof AttemptJwt token)
-                || token.kind() != AttemptJwt.Kind.TURN
-                || !token.id().equals(turnId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
-        return token;
+                            usage.latestFailure(turn.workspaceId(), turn.runId(), turn.attempt()),
+                            request.lastPartial()));
+            return ResponseEntity.noContent().build();
+        });
     }
 
     private static List<JsonNode> validated(List<JsonNode> entries) {

@@ -1063,7 +1063,8 @@ process.exit(result.status ?? 1);`,
 		cosign: 'process.exit(process.env.FAIL_VERIFICATION === "1" ? 1 : 0);',
 		systemctl:
 			'if (args[0] === "show") console.log("yes"); if (args[0] === "daemon-reload" && process.env.FAIL_RELOAD === "1") process.exit(1);',
-		kubectl: "console.log(process.env.CHART_WORKLOADS ?? JSON.stringify({items: []}));",
+		kubectl: `if (args[0] === "api-resources") console.log("sandboxclaims.extensions.agents.x-k8s.io");
+else console.log(process.env.CHART_WORKLOADS ?? JSON.stringify({items: []}));`,
 	})) {
 		await writeFile(
 			path.join(bin, name),
@@ -1528,6 +1529,130 @@ await test(
 	},
 );
 
+for (const phase of [
+	"ready",
+	"server draining",
+	"claim deletion failed",
+	"Pod remained",
+	"legacy source",
+] as const) {
+	await test(`stopped cutover sandbox cleanup: ${phase}`, reconcilerSubprocess, async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-sandbox-stop-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const appliedFile = path.join(directory, "applied.json");
+			const previous = { ...fixture.record, release: "v0.95.1" };
+			await writeFile(appliedFile, JSON.stringify(previous));
+			const stateFile = path.join(directory, "sandbox-resources.json");
+			const owned = {
+				name: "owned-conversation",
+				sandboxId: "11111111-1111-4111-8111-111111111111",
+			};
+			const unrelated = { name: "manual-claim", sandboxId: null };
+			const initial = {
+				claims: phase === "legacy source" ? [] : [owned, unrelated],
+				jobs: ["legacy-review"],
+				pods:
+					phase === "legacy source"
+						? ["legacy-review-pod"]
+						: ["owned-conversation", "legacy-review-pod"],
+			};
+			await writeFile(stateFile, JSON.stringify(initial));
+			await writeFile(
+				path.join(directory, "bin/kubectl"),
+				`#!/usr/bin/env -S node --
+import assert from "node:assert/strict";
+import {appendFileSync,readFileSync,writeFileSync} from "node:fs";
+const args=process.argv.slice(2);
+appendFileSync(${JSON.stringify(path.join(directory, "calls"))}, "kubectl "+args.join(" ")+"\\n");
+const phase=${JSON.stringify(phase)};
+const file=${JSON.stringify(stateFile)};
+const state=JSON.parse(readFileSync(file,"utf8"));
+const namespace=args[args.indexOf("--namespace")+1];
+if(args[0]==="api-resources") {
+    if(phase!=="legacy source") console.log("sandboxclaims.extensions.agents.x-k8s.io");
+} else if(args[0]==="wait" && namespace==="hephaestus") {
+    assert.equal(args[args.indexOf("--selector")+1],"app.kubernetes.io/instance=hephaestus,app.kubernetes.io/component=server");
+    if(phase==="server draining") process.exit(1);
+} else if(args[0]==="delete") {
+    assert.equal(namespace,"sandboxes");
+    assert.ok(args.includes("--cascade=foreground") && args.includes("--wait=true"));
+    if(args[1]==="sandboxclaims.extensions.agents.x-k8s.io") {
+        assert.equal(args[args.indexOf("--selector")+1],"hephaestus.build/sandbox-id");
+        if(phase==="claim deletion failed") process.exit(1);
+        state.claims=state.claims.filter((c)=>c.sandboxId===null);
+        if(phase!=="Pod remained") state.pods=state.pods.filter((p)=>p!=="owned-conversation");
+    } else {
+        assert.equal(args[1],"jobs");
+        assert.equal(args[args.indexOf("--selector")+1],"app.kubernetes.io/part-of=hephaestus");
+        state.jobs=[];
+        state.pods=state.pods.filter((p)=>p!=="legacy-review-pod");
+    }
+    writeFileSync(file,JSON.stringify(state));
+} else if(args[0]==="wait") {
+    assert.equal(namespace,"sandboxes");
+    assert.ok(args.includes("--for=delete") && args.includes("--all"));
+    if(state.pods.length!==0) process.exit(1);
+} else {
+    assert.equal(args[0],"get");
+    assert.equal(args[1],"pods,jobs");
+    console.log(JSON.stringify({items:namespace==="sandboxes" ? [...state.pods,...state.jobs].map((name)=>({metadata:{name}})) : []}));
+}
+`,
+				{ mode: 0o755 },
+			);
+			const result = fixture.run();
+			const remaining = asRecord(parseJson(await readFile(stateFile, "utf8")), "sandbox resources");
+			const callLog = await fixture.calls();
+			const calls = callLog
+				.split("\n")
+				.filter((call) => call.startsWith("kubectl ") || call.startsWith("helm upgrade "));
+			assert.match(
+				calls[0] ?? "",
+				/^kubectl wait --for=delete pods --namespace hephaestus --selector app\.kubernetes\.io\/instance=hephaestus,app\.kubernetes\.io\/component=server /u,
+			);
+			if (phase === "ready" || phase === "legacy source") {
+				assert.equal(result.status, 0, result.stderr);
+				assert.deepEqual(remaining, {
+					claims: phase === "ready" ? [unrelated] : [],
+					jobs: [],
+					pods: [],
+				});
+				const accepted = await readApplied(appliedFile);
+				assert.equal(accepted?.release, "v1.0.0");
+				const claimDelete = calls.findIndex((call) =>
+					call.startsWith("kubectl delete sandboxclaims."),
+				);
+				const jobsDelete = calls.findIndex((call) => call.startsWith("kubectl delete jobs "));
+				const podsGone = calls.indexOf(
+					"kubectl wait --for=delete pods --namespace sandboxes --all --timeout=100s",
+				);
+				const upgrade = calls.findIndex((call) => call.startsWith("helm upgrade "));
+				assert.ok(jobsDelete > 0 && podsGone > jobsDelete && upgrade > podsGone, calls.join("\n"));
+				assert.equal(claimDelete === -1, phase === "legacy source");
+				if (phase === "ready") {
+					assert.ok(claimDelete > 0 && claimDelete < jobsDelete);
+				}
+			} else {
+				assert.notEqual(result.status, 0, result.stdout);
+				assert.deepEqual(await readApplied(appliedFile), previous);
+				assert.ok(!calls.some((call) => call.startsWith("helm upgrade ")), calls.join("\n"));
+				assert.deepEqual(
+					remaining,
+					phase === "Pod remained"
+						? { claims: [unrelated], jobs: [], pods: ["owned-conversation"] }
+						: initial,
+				);
+				if (phase === "server draining") {
+					assert.equal(calls.length, 1, "a draining server's sandboxes remain untouched");
+				}
+			}
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+}
+
 await test(
 	"this tree's installed reconciler applies the rc.1 chart on Kubernetes",
 	{
@@ -1567,11 +1692,11 @@ await test(
 			);
 			kubectl("create", "namespace", namespace);
 			kubectl("create", "namespace", `${namespace}-sandboxes`);
-			// A tools Pod that the stopped server left: no server reaps it, so the stop removes it.
+			// A legacy Job left by the stopped source release is removed before the cutover.
 			kubectl(
 				"create",
 				"job",
-				"tools-left",
+				"legacy-left",
 				"--namespace",
 				`${namespace}-sandboxes`,
 				"--image=registry.k8s.io/pause:3.10",
@@ -1579,10 +1704,10 @@ await test(
 			kubectl(
 				"label",
 				"job",
-				"tools-left",
+				"legacy-left",
 				"--namespace",
 				`${namespace}-sandboxes`,
-				"hephaestus.build/sandbox-kind=tools",
+				"app.kubernetes.io/part-of=hephaestus",
 			);
 			helm("install", "hephaestus", source, "--namespace", namespace, "--wait", "--timeout", "30s");
 			await writeFile(

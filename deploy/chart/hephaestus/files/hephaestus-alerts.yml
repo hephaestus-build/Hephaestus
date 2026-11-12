@@ -508,14 +508,6 @@ groups:
         annotations:
           summary: An outbox action ended uncertain, so its write may have reached the provider and nothing confirms it
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusSandboxIsolationFailed
-        expr: sandbox_isolation_passed{job="hephaestus",runtime_role="server"} == 0
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: A server's sandbox isolation probe failed, so the server starts no sandbox
-          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWalArchiveFailing
         expr: >-
           max(database_wal_archive_failing{job="hephaestus"}) == 1
@@ -679,9 +671,9 @@ groups:
       # so the floors keep one slow turn in a quiet hour from firing.
       - alert: HephaestusConversationFirstTokenBudgetBurnFast
         expr: >-
-          (1 - sum(increase(mentor_turn_first_token_seconds_bucket{job="hephaestus",le="10.0"}[1h])) / sum(increase(mentor_turn_first_token_seconds_count{job="hephaestus"}[1h]))) > 14.4 * 0.05
-          and (1 - sum(increase(mentor_turn_first_token_seconds_bucket{job="hephaestus",le="10.0"}[5m])) / sum(increase(mentor_turn_first_token_seconds_count{job="hephaestus"}[5m]))) > 14.4 * 0.05
-          and sum(increase(mentor_turn_first_token_seconds_count{job="hephaestus"}[1h])) >= 5
+          (1 - sum(increase(agent_run_first_token_seconds_bucket{job="hephaestus",kind="turn",le="10.0"}[1h])) / sum(increase(agent_run_first_token_seconds_count{job="hephaestus",kind="turn"}[1h]))) > 14.4 * 0.05
+          and (1 - sum(increase(agent_run_first_token_seconds_bucket{job="hephaestus",kind="turn",le="10.0"}[5m])) / sum(increase(agent_run_first_token_seconds_count{job="hephaestus",kind="turn"}[5m]))) > 14.4 * 0.05
+          and sum(increase(agent_run_first_token_seconds_count{job="hephaestus",kind="turn"}[1h])) >= 5
         for: 2m
         labels:
           severity: warning
@@ -690,9 +682,9 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusConversationFirstTokenBudgetBurnSlow
         expr: >-
-          (1 - sum(increase(mentor_turn_first_token_seconds_bucket{job="hephaestus",le="10.0"}[6h])) / sum(increase(mentor_turn_first_token_seconds_count{job="hephaestus"}[6h]))) > 6 * 0.05
-          and (1 - sum(increase(mentor_turn_first_token_seconds_bucket{job="hephaestus",le="10.0"}[30m])) / sum(increase(mentor_turn_first_token_seconds_count{job="hephaestus"}[30m]))) > 6 * 0.05
-          and sum(increase(mentor_turn_first_token_seconds_count{job="hephaestus"}[6h])) >= 10
+          (1 - sum(increase(agent_run_first_token_seconds_bucket{job="hephaestus",kind="turn",le="10.0"}[6h])) / sum(increase(agent_run_first_token_seconds_count{job="hephaestus",kind="turn"}[6h]))) > 6 * 0.05
+          and (1 - sum(increase(agent_run_first_token_seconds_bucket{job="hephaestus",kind="turn",le="10.0"}[30m])) / sum(increase(agent_run_first_token_seconds_count{job="hephaestus",kind="turn"}[30m]))) > 6 * 0.05
+          and sum(increase(agent_run_first_token_seconds_count{job="hephaestus",kind="turn"}[6h])) >= 10
         for: 15m
         labels:
           severity: warning

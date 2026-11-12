@@ -31,7 +31,6 @@ import {
 // Run each golden capture in its own process; runner paths and state are module-local.
 
 import { SUPPORTED_SCHEMA_VERSION } from "../../../main/resources/agent/pi-task-paths.ts";
-import { startHarnessSides } from "./harness-tool-side.ts";
 import { mockChange, mockPiCodingAgent } from "./program-host-runner.ts";
 
 const GOLDEN = nodePath.join(import.meta.dirname, "golden-prompts");
@@ -507,7 +506,8 @@ if (scenario !== undefined && scenario !== "") {
 		},
 		(options) => capture("system-prompt.md", options.systemPrompt),
 	);
-	await startHarnessSides(cwd);
+	const { deriveChangeView } = await import("../../../main/resources/agent/pi-change-view.ts");
+	deriveChangeView(cwd);
 	const { runReviewJob } = await import("../../../main/resources/agent/pi-runner.ts");
 	await runReviewJob();
 } else {

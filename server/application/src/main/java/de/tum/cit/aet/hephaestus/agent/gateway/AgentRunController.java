@@ -88,6 +88,7 @@ public class AgentRunController {
                         .findFirst()
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown outcome"));
         boolean held = Boolean.TRUE.equals(transactions.execute(status -> {
+            kind.beforeWrite(run.sandbox());
             if (unisolated) sandboxes.revoke(run.sandbox(), AgentSandboxes.Revocation.UNISOLATED);
             return kind.end(run, outcome);
         }));

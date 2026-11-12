@@ -23,7 +23,6 @@ const GENERATED = [
 	"DATABASE_APP_PASSWORD",
 	"DATABASE_OWNER_PASSWORD",
 	"HEPHAESTUS_AUTH_STATE_COOKIE_KEY",
-	"HEPHAESTUS_CONVERSATION_LOOP_SECRET",
 	"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
 	"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
 	"NATS_PASSWORD",
@@ -61,7 +60,6 @@ if (has("deployment")) {
 	const role = /component=([\\w-]+)/.exec(args.join(" "))[1];
 	const deployments = state.deployments ?? {
 		server: ["server"],
-		"conversation-loop": ["conversation-loop"],
 	};
 	for (const name of deployments[role] ?? []) {
 		console.log("deployment.apps/hephaestus-" + name);
@@ -708,36 +706,6 @@ await test(
 		assert.deepEqual(rest, before, "no other key changed");
 		assert.deepEqual(restarts(result.argv), ["server"]);
 		assert.ok(!result.output.includes(result.secret.HEPHAESTUS_AUTH_STATE_COOKIE_KEY ?? "-"));
-	},
-);
-
-await test(
-	"--rotate replaces the conversation-loop secret alone, and restarts the server and then the loop",
-	{ skip },
-	() => {
-		const first = run();
-		const result = run({
-			cluster: { secret: encoded(first.secret) },
-			args: ["--rotate", "HEPHAESTUS_CONVERSATION_LOOP_SECRET"],
-			tools: { openssl: windowsTool("openssl") },
-		});
-		assert.equal(result.status, 0, result.output);
-		assert.match(result.secret.HEPHAESTUS_CONVERSATION_LOOP_SECRET ?? "", /^[0-9a-f]{64}$/u);
-		assert.notEqual(
-			result.secret.HEPHAESTUS_CONVERSATION_LOOP_SECRET,
-			first.secret.HEPHAESTUS_CONVERSATION_LOOP_SECRET,
-		);
-		const { HEPHAESTUS_CONVERSATION_LOOP_SECRET: _new, ...rest } = result.secret;
-		const { HEPHAESTUS_CONVERSATION_LOOP_SECRET: _old, ...before } = first.secret;
-		assert.deepEqual(rest, before, "no other key changed");
-		// The server checks the credential that the loop presents, so both restart.
-		assert.deepEqual(rollouts(result.argv), [
-			"restart server",
-			"status server",
-			"restart conversation-loop",
-			"status conversation-loop",
-		]);
-		assert.ok(!result.output.includes(result.secret.HEPHAESTUS_CONVERSATION_LOOP_SECRET ?? "-"));
 	},
 );
 

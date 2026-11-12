@@ -595,17 +595,7 @@ hephaestus:
     sandbox:
         kubernetes:
             namespace: ${HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE:}
-            pod-name: ${HEPHAESTUS_SANDBOX_KUBERNETES_POD_NAME:}
-            pod-ip: ${HEPHAESTUS_SANDBOX_KUBERNETES_POD_IP:}
-            runtime-class-name: ${HEPHAESTUS_SANDBOX_KUBERNETES_RUNTIME_CLASS_NAME:}
-            seccomp-profile: ${HEPHAESTUS_SANDBOX_KUBERNETES_SECCOMP_PROFILE:}
-            node-selector: ${HEPHAESTUS_SANDBOX_KUBERNETES_NODE_SELECTOR:}
-            tolerations: ${HEPHAESTUS_SANDBOX_KUBERNETES_TOLERATIONS:}
-            probe-interval: ${HEPHAESTUS_SANDBOX_KUBERNETES_PROBE_INTERVAL:15m}
-            gateway-probe-service: ${HEPHAESTUS_SANDBOX_KUBERNETES_GATEWAY_PROBE_SERVICE:}
         max-concurrent-containers: ${SANDBOX_MAX_CONCURRENT:5}
-        container-stop-timeout-seconds: ${SANDBOX_STOP_TIMEOUT:10}
-        reconciliation-interval-seconds: ${SANDBOX_RECONCILIATION_INTERVAL:60}
         gateway:
             port: ${SANDBOX_API_PORT:8081}
             max-request-bytes: ${SANDBOX_API_MAX_REQUEST_BYTES:4194304}
@@ -615,11 +605,6 @@ hephaestus:
         # Each review sandbox; the sizing behind the defaults is in docs/admin/sizing.mdx § Review sandbox limits.
         default-resource-limits:
             cpus: ${SANDBOX_CPUS:1.0}
-
-    # The conversation loop's credential for its turn pulls (ConversationLoopProperties). The chart sets it on the server
-    # when agent jobs run.
-    conversation-loop:
-        secret: ${HEPHAESTUS_CONVERSATION_LOOP_SECRET:}
 
     # Age at which what Hephaestus says about a person is erased: conversation entries, feedback and practice results.
     # The erasure is irreversible. docs/admin/data-retention.mdx.

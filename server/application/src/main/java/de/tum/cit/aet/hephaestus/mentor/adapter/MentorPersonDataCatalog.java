@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorContextChanges;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
+import de.tum.cit.aet.hephaestus.mentor.spi.ConversationSandboxCopies;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -39,11 +40,12 @@ public class MentorPersonDataCatalog implements PersonDataCatalog {
     private final MentorRedaction redaction;
     private final List<PersonConversationCopySource> copySources;
     private final MentorContextChanges contextChanges;
+    private final ConversationSandboxCopies sandboxCopies;
 
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
-                new MentorToolResultCopyPersonDataStore(jdbc, mapper, redaction, contextChanges),
+                new MentorToolResultCopyPersonDataStore(jdbc, mapper, redaction, contextChanges, sandboxCopies),
                 new MentorFeedbackCopyPersonDataStore(jdbc, mapper, redaction, copySources),
                 new MentorEntryPersonDataStore(
                         jdbc,

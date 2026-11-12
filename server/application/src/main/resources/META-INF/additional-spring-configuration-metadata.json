@@ -320,6 +320,11 @@
       "name": "logging.structured.ecs.service.version",
       "type": "java.lang.String",
       "description": "Each log record names this version as its service version."
+    },
+    {
+      "name": "hephaestus.sandbox.kubernetes.namespace",
+      "type": "java.lang.String",
+      "description": "The dedicated Kubernetes namespace for this release's sandbox claims, Pods and warm pools."
     }
   ],
   "hints": [

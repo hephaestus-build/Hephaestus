@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
@@ -151,8 +150,6 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
                     "attemptTokenVerifier",
                     new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry()));
             factory.registerSingleton("sandboxGatewaySessions", new SandboxGatewaySessions());
-            factory.registerSingleton(
-                    "conversationLoopProperties", new ConversationLoopProperties("0123456789abcdef".repeat(4)));
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
             // The server's shared buckets, which the gateway's rate limit draws from.
             factory.registerSingleton("bucketResolver", buckets);

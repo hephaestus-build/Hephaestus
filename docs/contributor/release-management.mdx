@@ -167,7 +167,7 @@ The smoke disables swap on its disposable runner. It explicitly passes `--allow-
 This qualification override retains the effective kubelet policy and allocatable checks. It does not establish loaded-host capacity.
 
 It runs the command a second time, which must keep the release Secret, and then an upgrade that rolls every role except PostgreSQL and NATS. The upgrade fails if it replaced their Pods.
-It waits for the migration Job, every role, and each server's isolation probe, and it sends requests through the Gateway.
+It waits for the migration Job, every role, and the platform isolation gate, and it sends requests through the Gateway.
 It also checks that the kubelet and logind run with the configured shutdown budget. It does not reboot.
 Publication waits for both native k3s smokes and their matching `host-smoke-k3s-<architecture>.json` receipts.
 
@@ -257,7 +257,7 @@ The upgrade issues of agent-sandbox 1.0 ([#2122](https://github.com/kubernetes-s
 Hephaestus started at `v1.0.10`, so no installation has `v1alpha1` objects or a conversion webhook to remove.
 
 A pull request that can change fresh-installation bindings runs the Kubernetes cluster qualification.
-It starts the chart with that run's images, waits for every role and isolation probe, and checks HTTPS through the Gateway.
+It starts the chart with that run's images, waits for every role and the platform isolation gate, and checks HTTPS through the Gateway.
 The latest amd64 k3s leg also runs the sandbox live suite from the compiled server artifact.
 [CI/CD § Path filters](./ci-cd.mdx#path-filters) lists the selection paths.
 

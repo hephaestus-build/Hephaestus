@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.turn;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
@@ -79,15 +80,10 @@ public class MentorTurnCompletion {
      *     {@code null} for every later one
      */
     public boolean progress(
-            long workspaceId,
-            UUID turnId,
-            int epoch,
-            UUID runId,
-            MentorTurnProgress.Update update,
-            @Nullable Instant startedAt) {
-        boolean sent = turns.updatePartial(workspaceId, turnId, epoch, runId, update);
+            TurnAttempt turn, MentorTurnProgress.Update update, @Nullable Instant startedAt, boolean cold) {
+        boolean sent = turns.updatePartial(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId(), update);
         if (sent && startedAt != null) {
-            firstToken(meters).record(Duration.between(startedAt, clock.instant()));
+            firstToken(meters, cold).record(Duration.between(startedAt, clock.instant()));
         }
         return sent;
     }
@@ -384,13 +380,15 @@ public class MentorTurnCompletion {
     /** Registers both timers at zero, so {@code increase()} also counts the first turn after a start. */
     @PostConstruct
     void registerTimers() {
-        firstToken(meters);
+        firstToken(meters, true);
+        firstToken(meters, false);
         duration(meters);
     }
 
     /** The conversation objective's 10 seconds, with room above it. */
-    private static Timer firstToken(MeterRegistry meters) {
-        return Timer.builder(AgentMetrics.MENTOR_TURN_FIRST_TOKEN)
+    private static Timer firstToken(MeterRegistry meters, boolean cold) {
+        return Timer.builder(AgentMetrics.AGENT_RUN_FIRST_TOKEN)
+                .tags("kind", "turn", "start", cold ? "cold" : "warm")
                 .serviceLevelObjectives(
                         Duration.ofMillis(500),
                         Duration.ofSeconds(1),

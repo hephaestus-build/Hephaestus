@@ -23,28 +23,34 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeToolsPods;
+import de.tum.cit.aet.hephaestus.agent.gateway.AgentGatewayErrorFixtures;
+import de.tum.cit.aet.hephaestus.agent.gateway.AgentRunController;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnEvidence;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
-import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
-import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
+import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxOwnerFixtures;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
+import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
-import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
@@ -52,6 +58,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.CopyWriteFence;
+import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
@@ -60,16 +67,18 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
 import jakarta.persistence.EntityManager;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -81,6 +90,8 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.AdditionalAnswers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -91,24 +102,23 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The worker endpoints the conversation loop calls for one turn. The worker role is off in the test context, so the controller
- * is built by hand from the context's own beans. The gateway client sends the contract files in
- * {@code heph-turn-contract/} with a signed turn credential, authenticated by the gateway's own filter, and maps
- * errors with the production controller advice. The direct client passes an authenticated credential as the gateway
- * would, to reach the controller after the lease is lost.
+ * The routes of one conversation turn run through the production sandbox credential filter, run resolver and
+ * controller advice. The test profile disables the sandbox runtime, so these controllers use the context's beans.
+ * Requests send the contract files in {@code heph-turn-contract/} with the sandbox credential and run fence.
  */
 class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -123,7 +133,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     private static final String QUESTION = "How should I pin the deployment image?";
 
-    private static final String TURN_PATH = "/internal/llm/turn/{turnId}/";
+    private static final String RUN_PATH = "/internal/agent/runs/{runId}/";
+    private static final String TURN_PATH = RUN_PATH + "turn/";
 
     @Autowired
     private ApplicationContext beans;
@@ -147,12 +158,9 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private MeterRegistry metrics;
 
     @Autowired
-    private ReviewJobRepository jobRepository;
-
-    @Autowired
     private AgentRuns agentRuns;
 
-    /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
+    /** This fixture's signing key; the test profile disables the sandbox runtime. */
     private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
     private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(AttemptKeyFixtures.keyring(KEY));
@@ -163,8 +171,11 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private JsonMapper mapper;
 
-    private final ProxyCallsInFlight callsInFlight = new ProxyCallsInFlight(12);
+    @Autowired
+    private LlmUsageRecorder usage;
+
     private HephTurns hephTurns;
+    private final MutableClock turnClock = new MutableClock(Instant.now(), ZoneOffset.UTC);
     private HephTurnController controller;
     private MockMvc gateway;
     private MockMvc direct;
@@ -173,7 +184,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private Workspace workspace;
     private MentorConversation conversation;
     private MentorTurn turn;
-    private Authentication authentication;
+    private AgentSandboxes sandboxes;
+    private AgentSandboxes.LiveSandbox sandbox;
     private TurnAttempt attempt;
 
     @BeforeEach
@@ -192,47 +204,17 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 conversation.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getRunId()));
-        authentication = HephTurnFixtures.authenticated(attempt);
-        hephTurns = HephTurnFixtures.turns(
-                beans,
-                mock(MentorLedgerNotifications.class),
-                callsInFlight,
-                HephTurnFixtures.toolsPods(beans, new FakeToolsPods()),
-                issuer,
-                Clock.systemUTC(),
-                new SimpleMeterRegistry(),
-                Integer.MAX_VALUE,
-                Duration.ofMillis(100));
+        sandboxes = SandboxOwnerFixtures.owner(beans, issuer);
+        sandbox = sandboxes.ensure(
+                workspace.getId(), "conversation:" + conversation.getId(), AgentSandboxKind.CONVERSATION);
+        hephTurns = HephTurnFixtures.turns(beans, sandboxes, turnClock);
         controller = controller(HephTurnFixtures.contexts(beans));
         gateway = gateway(controller);
-        direct = MockMvcBuilders.standaloneSetup(controller)
-                .setControllerAdvice(new AgentControllerAdvice(), problemDetails(), new GlobalControllerAdvice())
-                .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
-                .build();
-    }
-
-    @Test
-    void shouldBuildTheDocumentsAgainWhenTheWorkspaceContextChangedAfterTheyWereCached() {
-        TurnContextGenerations generations = new TurnContextGenerations();
-        HephTurnContexts contexts = HephTurnFixtures.contexts(beans, generations);
-        TurnAttempt credential = attempt;
-        Map<String, byte[]> first = contexts.documents(credential);
-        assertThat(contexts.documents(credential)).as("cached for the attempt").isSameAs(first);
-
-        generations.changed(workspace.getId());
-
-        Map<String, byte[]> second = contexts.documents(credential);
-        assertThat(second)
-                .as("an erasure or a consent change drops the cached build")
-                .isNotSameAs(first);
-        generations.changedAll();
-        assertThat(contexts.documents(credential))
-                .as("a reconnect that may have missed changes too")
-                .isNotSameAs(second);
+        direct = gateway;
     }
 
     private HephTurnController controller(HephTurnContexts contexts) {
-        return new HephTurnController(contexts, completion, hephTurns, callsInFlight);
+        return new HephTurnController(contexts, completion, hephTurns, usage);
     }
 
     /** The controller behind the gateway's own credential filter. */
@@ -240,12 +222,31 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         // The gateway chain hands the controller its Authentication through the servlet API, as Spring Security does.
         var servletApi = new SecurityContextHolderAwareRequestFilter();
         servletApi.afterPropertiesSet();
-        return MockMvcBuilders.standaloneSetup(served)
-                .setControllerAdvice(new AgentControllerAdvice(), problemDetails(), new GlobalControllerAdvice())
+        var kind = new TurnSandboxRunKind(
+                MentorTurnStarts.admitting(beans, metrics),
+                beans.getBean(TurnRunsAdapter.class),
+                agentRuns,
+                hephTurns,
+                HephTurnFixtures.contexts(beans),
+                turnRepository,
+                turns,
+                completion,
+                beans.getBean(Clock.class),
+                mapper,
+                metrics);
+        var runController =
+                new AgentRunController(agentRuns, sandboxes, beans.getBean(TransactionTemplate.class), List.of(kind));
+        return MockMvcBuilders.standaloneSetup(served, runController)
+                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(agentRuns, beans.getBean(Tracer.class)))
+                .defaultRequest(get("/").header(SandboxRunArgumentResolver.RUN_HEADER, turn.getRunId())
+                        .header(SandboxRunArgumentResolver.EPOCH_HEADER, turn.getAttempt()))
+                .setControllerAdvice(
+                        AgentGatewayErrorFixtures.errors(),
+                        new AgentControllerAdvice(),
+                        problemDetails(),
+                        new GlobalControllerAdvice())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
-                .addFilters(
-                        SandboxGatewayFixtures.credentialFilter(jobRepository, agentRuns, turnRepository, verifier),
-                        servletApi)
+                .addFilters(SandboxGatewayFixtures.sandboxCredentialFilter(verifier, sandboxes), servletApi)
                 .build();
     }
 
@@ -262,25 +263,23 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         return UUID.randomUUID().toString().substring(0, 8);
     }
 
-    /** The signed credential the worker issues for this attempt of the turn, with five minutes of work left. */
-    private String credential(int attempt) {
-        Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
-        return issuer.issueForTurn(
-                turn.getId(),
-                workspace.getId(),
-                attempt,
-                Objects.requireNonNull(turn.getRunId()),
-                deadline,
-                deadline.plus(Duration.ofMinutes(1)));
+    /** The signed token of this conversation sandbox, valid for five more minutes. */
+    private String credential() {
+        return issuer.issueForSandbox(
+                sandbox.id(),
+                sandbox.workspaceId(),
+                sandbox.subjectKey(),
+                Instant.now().plusSeconds(300));
     }
 
     private ResultActions call(String method, String endpoint, int attempt, String body) throws Exception {
         var request = switch (method) {
-            case "POST" -> post(TURN_PATH + endpoint, turn.getId());
-            case "PUT" -> put(TURN_PATH + endpoint, turn.getId());
+            case "POST" -> post((endpoint.equals("lease") ? RUN_PATH : TURN_PATH) + endpoint, turn.getRunId());
+            case "PUT" -> put(TURN_PATH + endpoint, turn.getRunId());
             default -> throw new IllegalArgumentException(method);
         };
-        return gateway.perform(request.header(HttpHeaders.AUTHORIZATION, "Bearer " + credential(attempt))
+        return gateway.perform(request.header(SandboxRunArgumentResolver.EPOCH_HEADER, attempt)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }
@@ -350,8 +349,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     void shouldServeTheContextInTheShapeTheHostReadsWhenItAsksWithTheTurnCredential() throws Exception {
-        String served = gateway.perform(get(TURN_PATH + "context", turn.getId())
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential(turn.getAttempt())))
+        String served = gateway.perform(get(RUN_PATH + "context", turn.getRunId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sessionId").value(conversation.getId().toString()))
                 .andExpect(jsonPath("$.prompt").value(containsString(QUESTION)))
@@ -394,7 +393,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldRenewTheLeaseOfTheTurnsRunWhenTheLoopRenewsIt() throws Exception {
         Instant claimedUntil = runLeasedUntil();
 
-        call("POST", "lease", turn.getAttempt(), "").andExpect(status().isNoContent());
+        call("POST", "lease", turn.getAttempt(), "{}").andExpect(status().isOk());
 
         assertThat(runLeasedUntil()).isAfter(claimedUntil);
         assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
@@ -404,15 +403,13 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldAnswerThatTheTurnStoppedAndStillTakeItsEndWhenTheDeveloperStopsIt() throws Exception {
         turns.stop(workspace.getId(), turn.getId());
 
-        call("PUT", "partial", turn.getAttempt(), """
+        call("POST", "partial", turn.getAttempt(), """
                         {"sequence":1,"baseSequence":0,"prefix":0,"suffix":0,"text":"{}"}""")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.type")
                         .value(ProblemType.MENTOR_TURN_STOPPED.uri().toString()))
                 .andExpect(jsonPath("$.stop").value("developer"));
-        call("POST", "lease", turn.getAttempt(), "")
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.stop").value("developer"));
+        call("POST", "lease", turn.getAttempt(), "{}").andExpect(status().isOk());
         call("POST", "end", turn.getAttempt(), """
                         {"outcome":"STOPPED","entries":[%s],"reason":null}""".formatted(
                                 piMessage("s0a1b2c3", "question", assistantText("First, tag the"))))
@@ -424,20 +421,25 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(stored("s0a1b2c3").getText()).isEqualTo("First, tag the");
     }
 
-    @Test
-    void shouldAnswerThatTheDeadlinePassedAndStillTakeTheEndWhenTheAttemptRunsPastIt() throws Exception {
-        Authentication late =
-                HephTurnFixtures.authenticated(attempt, Instant.now().minusSeconds(1));
+    @ParameterizedTest
+    @ValueSource(longs = {0, 1})
+    void shouldAnswerThatTheDeadlinePassedAndStillTakeTheEndWhenTheAttemptRunsPastIt(long millisPastDeadline)
+            throws Exception {
+        Instant deadline = Objects.requireNonNull(jdbc.queryForObject(
+                        "SELECT deadline FROM agent_run WHERE id = ?", Timestamp.class, turn.getRunId()))
+                .toInstant()
+                .minus(TurnRunsAdapter.GRACE);
+        turnClock.advance(Duration.between(turnClock.instant(), deadline).plusMillis(millisPastDeadline));
 
-        direct.perform(put(TURN_PATH + "partial", turn.getId())
-                        .principal(late)
+        direct.perform(post(TURN_PATH + "partial", turn.getRunId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"sequence":1,"baseSequence":0,"prefix":0,"suffix":0,"text":"{}"}"""))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.stop").value("deadline"));
-        direct.perform(post(TURN_PATH + "end", turn.getId())
-                        .principal(late)
+        direct.perform(post(TURN_PATH + "end", turn.getRunId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(contract("end-deadline.request.json")))
                 .andExpect(status().isNoContent());
@@ -445,17 +447,18 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.FAILED);
     }
 
-    /** A turn that this worker cannot give a folder is told so, or its instructions would send it to read files. */
     @Test
-    void shouldTellATurnWithoutAContextFolderThatItCannotReadFiles() throws Exception {
-        var folder = mock(TurnContextFolder.class);
-        when(folder.available()).thenReturn(false);
-        gateway(controller(HephTurnFixtures.contexts(beans, folder)))
-                .perform(get(TURN_PATH + "context", turn.getId())
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential(turn.getAttempt())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.contextFolder").value(false))
-                .andExpect(jsonPath("$.situation").value(containsString(HephTurnContexts.NO_CONTEXT_FOLDER)));
+    void shouldRefuseAPartialWhenTheStartedRunHasNoDeadline() throws Exception {
+        // The database permits clearing a deadline only on requeue.
+        claims.takeBackUnbilled(turn);
+        turn = claims.claim(turn);
+
+        call("POST", "partial", turn.getAttempt(), """
+                        {"sequence":1,"baseSequence":0,"prefix":0,"suffix":0,"text":"{}"}""")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("A started turn's run has a deadline"));
+
+        assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
     }
 
     /** One result in the developer's history, about {@code developerAccountId}, carrying {@code problems}. */
@@ -601,27 +604,23 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     void shouldRefuseATokenOfAnotherWorkspaceAndReadOrWriteNothingOfTheTurn() throws Exception {
-        Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
-        String foreign = issuer.issueForTurn(
-                turn.getId(),
+        String foreign = issuer.issueForSandbox(
+                sandbox.id(),
                 workspace.getId() + 1,
-                turn.getAttempt(),
-                Objects.requireNonNull(turn.getRunId()),
-                deadline,
-                deadline.plus(Duration.ofMinutes(1)));
+                sandbox.subjectKey(),
+                Instant.now().plusSeconds(300));
         int entries = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
                 .size();
 
         // The turn's row holds no lease for that workspace, as for an attempt that ended.
-        gateway.perform(get(TURN_PATH + "context", turn.getId()).header(HttpHeaders.AUTHORIZATION, "Bearer " + foreign))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.type")
-                        .value(ProblemType.MENTOR_LEASE_LOST.uri().toString()));
-        gateway.perform(post(TURN_PATH + "end", turn.getId())
+        gateway.perform(get(RUN_PATH + "context", turn.getRunId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + foreign))
+                .andExpect(status().isUnauthorized());
+        gateway.perform(post(TURN_PATH + "end", turn.getRunId())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + foreign)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(contract("end.request.json")))
-                .andExpect(status().isConflict());
+                .andExpect(status().isUnauthorized());
 
         assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
         assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId()))
@@ -657,7 +656,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(ended.getError()).isEqualTo(MentorTurnCompletion.TOOK_TOO_LONG);
-        assertThat(ended.getFailureCause()).isEqualTo("its conversation loop reported DEADLINE: deadline");
+        assertThat(ended.getFailureCause()).isEqualTo("its conversation sandbox reported DEADLINE: deadline");
         assertThat(ended.getFailedCall())
                 .as("no model call of the attempt failed")
                 .isNull();
@@ -666,46 +665,49 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     void shouldRecordTheLastFailedModelCallOnTheTurnWhenTheHostEndsItFailed() throws Exception {
-        var attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getRunId());
-        try (var call = callsInFlight.begin(attempt)) {
-            call.failed(new MentorTurn.FailedCall("WebClientRequestException", null));
-        }
-        try (var call = callsInFlight.begin(attempt)) {
-            call.failed(new MentorTurn.FailedCall("upstream_status", 503));
-        }
+        UUID firstCall = failedCall(new MentorTurn.FailedCall("WebClientRequestException", null));
+        UUID lastCall = failedCall(new MentorTurn.FailedCall("upstream_status", 503));
 
         call("POST", "end", turn.getAttempt(), """
                         {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider_unavailable"}""").andExpect(status().isNoContent());
 
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(ended.getFailureCause()).isEqualTo("its conversation loop reported ERROR: provider_unavailable");
+        assertThat(ended.getFailureCause()).isEqualTo("its conversation sandbox reported ERROR: provider_unavailable");
         assertThat(ended.getFailedCall()).isEqualTo("upstream_status");
         assertThat(ended.getFailedCallStatus()).isEqualTo(503);
-        assertThat(callsInFlight.lastFailed(turn.getId(), turn.getAttempt()))
-                .as("the committed end forgot it")
-                .isNull();
+        assertThat(usage.latestFailure(workspace.getId(), Objects.requireNonNull(turn.getRunId()), turn.getAttempt()))
+                .as("the committed end retains the durable failure")
+                .isEqualTo(new MentorTurn.FailedCall("upstream_status", 503));
+        assertThat(jdbc.queryForObject(
+                        "SELECT call_failure ->> 'kind' FROM llm_usage_event WHERE id = ?", String.class, firstCall))
+                .isEqualTo("WebClientRequestException");
+        assertThat(jdbc.queryForObject(
+                        "SELECT (call_failure ->> 'status')::integer FROM llm_usage_event WHERE id = ?",
+                        Integer.class,
+                        lastCall))
+                .isEqualTo(503);
     }
 
     @Test
     void shouldStillRecordTheFailedModelCallWhenTheEndRollsBackAndTheHostRepeatsIt() throws Exception {
-        var attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getRunId());
-        try (var call = callsInFlight.begin(attempt)) {
-            call.failed(new MentorTurn.FailedCall("upstream_status", 503));
-        }
+        UUID failedCall = failedCall(new MentorTurn.FailedCall("upstream_status", 503));
         MentorTurnCompletion failingOnce = mock(MentorTurnCompletion.class);
         doThrow(new DataAccessResourceFailureException("the database went away"))
                 .doAnswer(AdditionalAnswers.delegatesTo(completion))
                 .when(failingOnce)
                 .end(anyLong(), any(), anyInt(), any(), any());
-        gateway = gateway(
-                new HephTurnController(HephTurnFixtures.contexts(beans), failingOnce, hephTurns, callsInFlight));
+        gateway = gateway(new HephTurnController(HephTurnFixtures.contexts(beans), failingOnce, hephTurns, usage));
         String end = """
                 {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider_unavailable"}""";
 
         call("POST", "end", turn.getAttempt(), end).andExpect(status().is5xxServerError());
+        assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+        assertThat(jdbc.queryForObject(
+                        "SELECT (call_failure ->> 'status')::integer FROM llm_usage_event WHERE id = ?",
+                        Integer.class,
+                        failedCall))
+                .isEqualTo(503);
         call("POST", "end", turn.getAttempt(), end).andExpect(status().isNoContent());
 
         MentorTurn ended = reloaded();
@@ -714,12 +716,41 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(ended.getFailedCallStatus()).isEqualTo(503);
     }
 
+    private UUID failedCall(MentorTurn.FailedCall failure) {
+        return Objects.requireNonNull(beans.getBean(TransactionTemplate.class).execute(tx -> {
+            UUID id = usage.open(new LlmUsageRecorder.OpenCall(
+                    workspace.getId(),
+                    Objects.requireNonNull(turn.getRunId()),
+                    turn.getAttempt(),
+                    "MENTOR_TURN",
+                    UsageSourceType.MENTOR_TURN,
+                    turn.getId(),
+                    turn.getAttempt(),
+                    null,
+                    ModelKind.CHAT,
+                    null,
+                    "test-model",
+                    new LlmPriceSnapshot(
+                            UsageFundingSource.INSTANCE,
+                            UsagePricingState.NO_CHARGE,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null),
+                    null));
+            usage.complete(id, workspace.getId(), null, failure);
+            return id;
+        }));
+    }
+
     @Test
     void shouldRecordAHostDetailOutsideTheClosedSetAsUnrecognized() throws Exception {
         call("POST", "end", turn.getAttempt(), """
                         {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider said: rate limited for alice@example.com"}""").andExpect(status().isNoContent());
 
-        assertThat(reloaded().getFailureCause()).isEqualTo("its conversation loop reported ERROR: unrecognized");
+        assertThat(reloaded().getFailureCause()).isEqualTo("its conversation sandbox reported ERROR: unrecognized");
     }
 
     @Test
@@ -732,7 +763,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(ended.getError()).isEqualTo(HephTurns.MODEL_STOPPED_ANSWERING);
-        assertThat(output.getAll()).contains("failed: its conversation loop reported STALLED: upstream_stalled");
+        assertThat(output.getAll()).contains("failed: its conversation sandbox reported STALLED: upstream_stalled");
     }
 
     /**
@@ -754,7 +785,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(ended.getError()).isEqualTo(HephTurns.COULD_NOT_FINISH);
         assertThat(output.getAll())
                 .contains("conversation turn " + turn.getId() + " attempt " + turn.getAttempt()
-                        + " failed: its conversation loop reported ERROR: unrecognized")
+                        + " failed: its conversation sandbox reported ERROR: unrecognized")
                 .doesNotContain(key)
                 .doesNotContain(quoted);
     }
@@ -770,8 +801,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         int prefix = first.indexOf("Pin") + 3;
         int suffix = first.length() - prefix;
 
-        call("PUT", "partial", turn.getAttempt(), update(10, 0, 0, 0, first)).andExpect(status().isNoContent());
-        call("PUT", "partial", turn.getAttempt(), update(11, 10, prefix, suffix, " the image"))
+        call("POST", "partial", turn.getAttempt(), update(10, 0, 0, 0, first)).andExpect(status().isNoContent());
+        call("POST", "partial", turn.getAttempt(), update(11, 10, prefix, suffix, " the image"))
                 .andExpect(status().isNoContent());
 
         Awaitility.await()
@@ -782,8 +813,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     void shouldRefuseAPartialAnswerThatCouldBeNoChangeOfItsAttempt() throws Exception {
-        call("PUT", "partial", turn.getAttempt(), update(0, 0, 0, 0, "{}")).andExpect(status().isBadRequest());
-        call("PUT", "partial", turn.getAttempt(), update(5, 5, 0, 0, "x")).andExpect(status().isBadRequest());
+        call("POST", "partial", turn.getAttempt(), update(0, 0, 0, 0, "{}")).andExpect(status().isBadRequest());
+        call("POST", "partial", turn.getAttempt(), update(5, 5, 0, 0, "x")).andExpect(status().isBadRequest());
     }
 
     /** The loop stops sending an answer that readers would drop; both sides hold the one limit. */
@@ -856,14 +887,20 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         loseTheLease();
         String late = piId();
 
-        direct.perform(post(TURN_PATH + "end", turn.getId())
-                        .principal(authentication)
+        direct.perform(post(TURN_PATH + "end", turn.getRunId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(lateEnd(late)))
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.type")
-                        .value(ProblemType.MENTOR_LEASE_LOST.uri().toString()));
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.title").value("Lease lost"))
+                .andExpect(jsonPath("$.detail").value(JobTokenAuthenticationFilter.ATTEMPT_ENDED))
+                .andExpect(result -> {
+                    var problem = mapper.readValue(result.getResponse().getContentAsString(), ProblemDetail.class);
+                    assertThat(Optional.ofNullable(problem.getType()).orElse(URI.create("about:blank")))
+                            .hasToString("about:blank");
+                });
 
         assertThat(storedFor(late)).isEmpty();
     }
@@ -871,7 +908,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Test
     void shouldAnswerNotFoundWhenTheCredentialIsForAnotherTurn() throws Exception {
         direct.perform(post(TURN_PATH + "end", UUID.randomUUID())
-                        .principal(authentication)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"outcome":"DONE","entries":[],"reason":null}"""))

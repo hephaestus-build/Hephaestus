@@ -42,10 +42,8 @@ const sample = {
 
 const clean = (index: number): ReviewOutcome => ({
 	index,
-	initExit: 0,
 	runtimeExit: 0,
 	uploads: 1,
-	initSamples: 3,
 	runtimeSamples: RUNTIME_SAMPLE_FLOOR,
 });
 
@@ -109,9 +107,6 @@ await test("verdict fails a runtime without samples", () => {
 		passed: false,
 		reasons: [`review 0: the runtime has 0 samples, fewer than ${String(RUNTIME_SAMPLE_FLOOR)}`],
 	});
-	assert.deepEqual(run([{ ...clean(0), initSamples: 0 }]).reasons, [
-		"review 0: the initializer has no samples",
-	]);
 });
 
 await test("verdict fails a review whose result the gateway did not receive", () => {
@@ -127,13 +122,8 @@ await test("verdict names a runtime that the kernel or a signal killed", () => {
 });
 
 await test("verdict reports a runtime that did not start once, not as missing samples", () => {
-	const decided = run([
-		{ ...clean(0), initExit: 1, runtimeExit: NOT_STARTED, runtimeSamples: 0, uploads: 0 },
-	]);
-	assert.deepEqual(decided.reasons, [
-		"review 0: initializer exited 1",
-		"review 0: the runtime did not start",
-	]);
+	const decided = run([{ ...clean(0), runtimeExit: NOT_STARTED, runtimeSamples: 0, uploads: 0 }]);
+	assert.deepEqual(decided.reasons, ["review 0: the runtime did not start"]);
 });
 
 await test("verdict fails when the submissions do not match reviews times practices", () => {

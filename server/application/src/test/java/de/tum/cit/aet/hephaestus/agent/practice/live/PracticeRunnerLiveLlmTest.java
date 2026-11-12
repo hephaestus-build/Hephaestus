@@ -25,12 +25,9 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmCredentials;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmTest;
-import de.tum.cit.aet.hephaestus.testconfig.PiSdkInstallation;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -58,12 +55,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.CleanupMode;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.JsonNode;
@@ -78,40 +75,21 @@ import tools.jackson.databind.node.ObjectNode;
 class PracticeRunnerLiveLlmTest {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
-    /** The runner reads/writes here verbatim; we own the directory for the duration of one test. */
-    // Somewhere writable, rather than a root-owned /workspace this harness may not be able to create.
-    private static final Path WORKSPACE =
-            Path.of(System.getenv().getOrDefault("PI_RUNNER_CWD", "/workspace")).toAbsolutePath();
+
+    @TempDir(cleanup = CleanupMode.ON_SUCCESS)
+    Path workspace;
 
     private static final String PRACTICE = "avoids-insecure-defaults-and-over-broad-permissions";
 
-    // Read once in installPiSdk, so every case of this class sends the same settings.
+    // Read once in configureLiveModel, so every case of this class sends the same settings.
     private static LiveModelSettings modelSettings = LiveModelSettings.DEFAULTS;
 
     @BeforeAll
-    static void installPiSdk() throws Exception {
-        // An invalid request limit or model setting fails here, before the SDK install, the credentials or any model
-        // request.
+    static void configureLiveModel() {
+        // An invalid limit or model setting fails before the credentials or any model request.
         ProxyStandIn.requestLimit(System.getProperty(ProxyStandIn.REQUEST_LIMIT_PROPERTY));
         modelSettings = LiveModelSettings.fromSystemProperties();
-        PiSdkInstallation.ensureInstalled();
-    }
-
-    @BeforeEach
-    void cleanWorkspace() throws IOException {
-        // The runner hard-codes /workspace; we own it exclusively (@LiveLlmTest pins to SAME_THREAD).
-        // Per-test isolation: clear everything before each run so leftovers from a failed previous
-        // attempt cannot satisfy result.json checks.
-        if (Files.exists(WORKSPACE)) {
-            deleteTree(WORKSPACE);
-        }
-        Files.createDirectories(WORKSPACE);
-    }
-
-    @AfterEach
-    void leaveWorkspaceArtifacts() {
-        // Intentionally do NOT delete /workspace here. If the test fails, the next run's @BeforeEach
-        // will clean — but a developer hand-running locally keeps the .output files for diagnostics.
+        LiveRunnerWorkspace.requireImage();
     }
 
     @Test
@@ -135,32 +113,13 @@ class PracticeRunnerLiveLlmTest {
 
     private void runAndVerify(LiveLlmCredentials creds, ProxyStandIn proxy, @Nullable JsonNode scenario)
             throws Exception {
-        Map<String, String> environment = stageWorkspace(creds, scenario);
-        Process runner =
-                LiveRunnerWorkspace.spawn(WORKSPACE, environment, proxy.baseUrl(), "live-test-job-token", null);
-
-        // Drain stdout/stderr into the JVM console with a tag so failures show what the agent said.
-        Thread stdoutPump = pumpStream(runner.getInputStream(), "[practice-runner stdout]");
-        Thread stderrPump = pumpStream(runner.getErrorStream(), "[practice-runner stderr]");
-
-        // The process needs the job's shutdown buffer after its own model budget ends.
-        boolean finished = runner.waitFor(LiveRunnerWorkspace.TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        if (!finished) {
-            runner.destroyForcibly();
-            stdoutPump.join(5_000);
-            stderrPump.join(5_000);
-            fail("pi-runner did not exit within " + LiveRunnerWorkspace.TIMEOUT_SECONDS
-                    + "s. Check "
-                    + "the [practice-runner *] output above for diagnostics.");
-            return;
+        PracticeSandboxSpec spec = stageWorkspace(creds, scenario);
+        int exitCode;
+        try (var runner = LiveRunnerWorkspace.runner(workspace, spec, proxy.baseUrl(), "live-test-job-token")) {
+            exitCode = LiveRunnerWorkspace.run(runner, null);
+            // A refused model request fails the case even if the final result matches.
+            proxy.assertRequestLimitNotSpent();
         }
-        stdoutPump.join(5_000);
-        stderrPump.join(5_000);
-
-        // Before the exit code and the result: a refused model request fails the case even if the result matches.
-        proxy.assertRequestLimitNotSpent();
-
-        int exitCode = runner.exitValue();
 
         // The runner returns 0 on success, 1 on retry-budget exhaustion. Anything else (2 fatal,
         // 3 watchdog kill, 42 envelope mismatch) is a real bug.
@@ -272,25 +231,25 @@ class PracticeRunnerLiveLlmTest {
         System.out.printf("[practice-live] %d practiceResult(s)%n", practiceResults.size());
     }
 
-    private Map<String, String> stageWorkspace(LiveLlmCredentials creds, @Nullable JsonNode scenario) throws Exception {
+    private PracticeSandboxSpec stageWorkspace(LiveLlmCredentials creds, @Nullable JsonNode scenario) throws Exception {
         System.out.printf("[practice-live] model settings: %s%n", modelSettings);
         PracticeSandboxSpec spec = LiveRunnerWorkspace.adapter()
                 .buildSandboxSpec(LiveRunnerWorkspace.request(creds.model(), "live-test-job-token", modelSettings));
-        LiveRunnerWorkspace.stageSpec(WORKSPACE, spec.inputFiles());
+        LiveRunnerWorkspace.stageSpec(workspace, spec.inputFiles());
         String kind = "scm.pull_request";
         Map<String, JsonNode> definitions;
         if (scenario == null) {
-            LiveRunnerWorkspace.stageLoginChange(WORKSPACE);
+            LiveRunnerWorkspace.stageLoginChange(workspace);
             definitions = Map.of(
                     PRACTICE,
                     LiveRunnerWorkspace.stagePractice(
-                            WORKSPACE,
+                            workspace,
                             PRACTICE,
                             "Hardcoded Secrets",
                             Files.readString(FIXTURE_DIR.resolve("practices/" + PRACTICE + ".md")),
                             1L));
             LiveRunnerWorkspace.stageTask(
-                    WORKSPACE,
+                    workspace,
                     "Review merge request #1 in test/fixture against " + PRACTICE + ". Follow "
                             + SandboxLayout.ORCHESTRATOR_PATH + ".",
                     UUID.randomUUID(),
@@ -298,38 +257,20 @@ class PracticeRunnerLiveLlmTest {
                     0,
                     1L);
         } else {
-            definitions = PracticeCriteriaCaseFixtures.stage(WORKSPACE, scenario);
+            definitions = PracticeCriteriaCaseFixtures.stage(workspace, scenario);
             if (scenario.path("workType").asString().equals("issue")) kind = "scm.issue";
         }
-        LiveRunnerWorkspace.stageFixtureInputs(WORKSPACE, kind, definitions);
-        return spec.environment();
-    }
-
-    private static Thread pumpStream(InputStream stream, String tag) {
-        Thread t = new Thread(
-                () -> {
-                    try (var reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            System.out.println(tag + " " + line);
-                        }
-                    } catch (IOException ignored) {
-                        // Stream closed when the child exits — nothing to do.
-                    }
-                },
-                "practice-runner-log-" + tag.hashCode());
-        t.setDaemon(true);
-        t.start();
-        return t;
+        LiveRunnerWorkspace.stageFixtureInputs(workspace, kind, definitions);
+        return spec;
     }
 
     /**
      * Build a {@link SandboxResult} from the on-disk {@code out/} directory, as a review sandbox
      * uploads it, so the production parser gets the exact map shape it expects.
      */
-    private static SandboxResult buildSandboxResult(int exitCode) throws IOException {
+    private SandboxResult buildSandboxResult(int exitCode) throws IOException {
         Map<String, byte[]> outputFiles = new LinkedHashMap<>();
-        Path outputDir = WORKSPACE.resolve("out");
+        Path outputDir = workspace.resolve("out");
         if (Files.isDirectory(outputDir)) {
             try (DirectoryStream<Path> stream = Files.newDirectoryStream(outputDir)) {
                 for (Path entry : stream) {
@@ -340,32 +281,6 @@ class PracticeRunnerLiveLlmTest {
             }
         }
         return new SandboxResult(exitCode, outputFiles, "", false, Duration.ZERO);
-    }
-
-    private static void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root)) {
-            return;
-        }
-        // Manual walk to avoid Files.walk + lambda surprises with symlinks (we have node_modules + repo).
-        List<Path> entries = new ArrayList<>();
-        try (var stream = Files.walk(root)) {
-            stream.forEach(entries::add);
-        }
-        // Reverse: children before parents.
-        for (int i = entries.size() - 1; i >= 0; i--) {
-            Path p = entries.get(i);
-            if (p.equals(root)) {
-                continue;
-            }
-            try {
-                Files.deleteIfExists(p);
-            } catch (IOException e) {
-                // Symlink targets may be unreadable; remove the link itself.
-                if (Files.isSymbolicLink(p)) {
-                    Files.deleteIfExists(p);
-                }
-            }
-        }
     }
 
     /**

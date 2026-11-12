@@ -1,6 +1,6 @@
 // pi-pinned-object.ts — what a pinned commit holds at a path, read through an untrusted source.
 //
-// Git runs on the tools side, which the loop does not trust. A Git object is named by the hash of its bytes, so the loop
+// Commands run in the same sandbox as the loop and can change its checkout. A Git object is named by the hash of its bytes, so the loop
 // walks from the commit id that the capture pinned: commit, each tree, then the blob, checking each object's hash before
 // it reads the next id from it. A hostile source can refuse, or stall until a call's time-out, and that reads as
 // unreadable. It can overstate a size, and that reads as too large. It cannot supply a byte that the pinned commit
@@ -9,11 +9,11 @@
 // A hash proves only that bytes match their id, so anyone can make a commit whose id is right. A commit id that a citation
 // names therefore counts only when `PinnedHistory` reaches it from a commit the capture pinned, parent by parent.
 
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { promisify } from "node:util";
 
 import { isCommitId, type PinnedBlob, safeRepositoryPath } from "./pi-change.ts";
-import type { ToolClient } from "./tool-client.ts";
-import { LIMITS } from "./tool-protocol.ts";
 
 export type ObjectType = "commit" | "tree" | "blob";
 
@@ -26,7 +26,7 @@ export interface ObjectSource {
 }
 
 /** The most bytes of a commit or a tree that the walk reads: what one `exec` streams, over 100,000 tree entries. */
-export const TREE_BYTES = LIMITS.execStreamBytes;
+export const TREE_BYTES = 8 * 1024 * 1024;
 
 /** The most commits that the walk visits to find a cited one, across an attempt. */
 export const HISTORY_COMMITS = 5000;
@@ -39,29 +39,23 @@ interface TreeEntry {
 	id: string;
 }
 
-/** How long the tools side may take to answer for one object. */
+/** How long Git may take to answer for one object. */
 const OBJECT_TIMEOUT_MS = 30_000;
 
-/** The Git objects of `repository`, from the tools side. A failed call answers null: it is not a claim about the object. */
-export function toolObjects(tools: ToolClient, repository: string): ObjectSource {
+// oxlint-disable-next-line typescript/strict-void-return -- Node types `execFile`'s promise form through `util.promisify.custom`, which tsc resolves to `{ stdout, stderr }` and the rule does not read.
+const execFileAsync = promisify(execFile);
+
+/** Reads Git objects in the sandbox. The walk still verifies every object against its pinned hash. */
+export function repositoryObjects(repository: string): ObjectSource {
 	const git = async (args: string[], limit: number): Promise<Buffer | null> => {
-		const chunks: Buffer[] = [];
 		try {
-			const exit = await tools.exec(
-				{
-					argv: ["git", "-C", repository, ...args],
-					cwd: repository,
-					timeoutMs: OBJECT_TIMEOUT_MS,
-					maxOutputBytes: limit,
-					uncounted: true,
-				},
-				(chunk) => {
-					chunks.push(chunk);
-				},
-				// A wait for a slot counts too: a citation's check must not outlast its session.
-				AbortSignal.timeout(OBJECT_TIMEOUT_MS),
-			);
-			return exit.code === 0 && !exit.truncated ? Buffer.concat(chunks) : null;
+			const { stdout } = await execFileAsync("git", ["-C", repository, ...args], {
+				encoding: "buffer",
+				maxBuffer: limit,
+				timeout: OBJECT_TIMEOUT_MS,
+				env: { ...process.env, GIT_NO_REPLACE_OBJECTS: "1" },
+			});
+			return stdout;
 		} catch {
 			return null;
 		}

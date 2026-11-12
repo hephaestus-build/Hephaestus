@@ -1160,8 +1160,9 @@ Right after a merge, that run is still building, so the pull request builds ever
   node, because with them no sandbox Pod with `hostUsers: false` can start. It tests the commit that `main` receives, so a pull request does not repeat
   them. A dispatch runs the same legs as the queue.
   On the latest minor on amd64, the separate queue/nightly drill job runs `kubernetes-cluster.ts turn-roll`.
-  In this drill, a conversation turn runs `bash` in its tools Pod while the servers roll, and then the loop.
-  The turn must end DONE on its first attempt, with the same tools Pod.
+  In this drill, a conversation turn runs `bash` in its conversation sandbox while the servers roll.
+  The sandbox driver keeps the run lease and uses the gateway of the replacement server.
+  The turn must end DONE on its first attempt in the same sandbox.
   The fake model provider of the [capacity benchmark](./capacity-benchmark.md) scripts the turn.
   arm64 runs only the lowest minor, the minor of the arm64 host.
   A push to `main` that a merge group tested runs no leg, because its commit is the group's commit.

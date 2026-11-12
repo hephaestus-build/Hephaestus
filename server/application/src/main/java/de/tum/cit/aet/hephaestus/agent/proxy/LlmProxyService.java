@@ -390,7 +390,7 @@ class LlmProxyService {
             CallRow row,
             Instant absorbUntil) {
         ProxyRouting.BilledAttempt attempt = routing.attempt();
-        if (call.isCancelled()) {
+        if (!routingService.ownsAttempt(routing)) {
             return refusal(HttpStatus.CONFLICT, ProxyRefusal.ATTEMPT_ENDED, "This turn attempt has ended");
         }
 
@@ -451,7 +451,7 @@ class LlmProxyService {
                 attempt.number(),
                 new LlmModelResolver.ConnectionRef(
                         routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()));
-        BooleanSupplier attemptEnded = () -> call.isCancelled() || !routingService.ownsAttempt(routing);
+        BooleanSupplier attemptEnded = () -> !routingService.ownsAttempt(routing);
         LlmCallPermits.Permit poolPermit = attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                 ? callPermits.tryAcquireBackground(
                         credential.callPoolId(), caller, attemptEnded, Objects.requireNonNull(routing.workDeadline()))
@@ -491,7 +491,7 @@ class LlmProxyService {
                     upstreamUri,
                     buildUpstreamHeaders(incomingHeaders, credential),
                     attempt.sourceType() == UsageSourceType.MENTOR_TURN || reviewStream ? silenceBounds : null,
-                    Mono.firstWithSignal(call.cancelled(), poolPermit.revoked()),
+                    poolPermit.revoked(),
                     transports,
                     headers -> callPermits.served(poolPermit, headers, instanceCredential));
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
@@ -553,7 +553,7 @@ class LlmProxyService {
                         permit.released();
                         return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
                     }
-                    if (!callPermits.beforeRetry(poolPermit, call::isCancelled, deadline)) {
+                    if (!callPermits.beforeRetry(poolPermit, () -> !routingService.ownsAttempt(routing), deadline)) {
                         permit.released();
                         return refusal(
                                 HttpStatus.SERVICE_UNAVAILABLE,
@@ -633,7 +633,7 @@ class LlmProxyService {
                         || ended == StreamOutcome.STREAM_FAILED;
                 // The silence bound is the one that cuts the call: a provider that sends only comments never trips it.
                 Bounds silence = exchange.bounds();
-                boolean stoppedAnswering = (providerEnded && !call.isCancelled())
+                boolean stoppedAnswering = providerEnded
                         || (silence != null && tap.sinceSent() >= silence.idle().toNanos());
                 callPermits.unanswered(poolPermit, stoppedAnswering, tap.sinceSent(), instanceCredential);
             }
@@ -644,7 +644,7 @@ class LlmProxyService {
                 if (attempt.sourceType() != UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                         && attempt.sourceType() != UsageSourceType.PROBE
                         && asked != null
-                        && !call.isCancelled()
+                        && routingService.ownsAttempt(routing)
                         && absorbs(upstream, asked, absorbUntil)) {
                     // This answer says the provider is busy, not that it fails, so the breaker hears nothing of it.
                     permit.released();
@@ -657,9 +657,8 @@ class LlmProxyService {
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
                 errors.writeErrorFrame(response, protocol, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
-            if (call.isCancelled() || attempt.sourceType() == UsageSourceType.PROBE) {
-                // A cancelled call says nothing about provider health. Administrative capability tests also
-                // have their own deadline and can exercise features that a live model does not support.
+            if (attempt.sourceType() == UsageSourceType.PROBE) {
+                // Capability probes have their own deadline and may exercise unsupported model features.
                 permit.released();
             } else {
                 ProxyStallErrors.judge(upstream, permit);

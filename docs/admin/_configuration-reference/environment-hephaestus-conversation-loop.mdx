@@ -1,5 +1,0 @@
-### `hephaestus.conversation-loop`
-
-| Variable | Setting | Application default | Containers | Description |
-| --- | --- | --- | --- | --- |
-| `HEPHAESTUS_CONVERSATION_LOOP_SECRET` | `hephaestus.conversation-loop.secret` | `default: (empty)` | `server` | The credential of the conversation loop's assignment pulls, as 64 lowercase hexadecimal characters (`openssl rand -hex 32`). The server and the loop read it; no other role does. A server with agent jobs enabled refuses startup without it. |

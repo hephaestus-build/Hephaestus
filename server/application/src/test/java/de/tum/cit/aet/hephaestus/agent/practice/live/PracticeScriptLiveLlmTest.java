@@ -44,8 +44,6 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesIsolationProbe;
-import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxCache;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEvent;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
@@ -82,7 +80,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmCredentials;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmTest;
-import de.tum.cit.aet.hephaestus.testconfig.PiSdkInstallation;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -191,22 +188,15 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
     static void sandboxRuntime(DynamicPropertyRegistry registry) {
         registry.add("hephaestus.sandbox.gateway.port", () -> "8081");
         registry.add("hephaestus.sandbox.kubernetes.namespace", () -> "practice-script-live");
-        registry.add("hephaestus.sandbox.kubernetes.pod-name", () -> "practice-script-live");
-        registry.add("hephaestus.sandbox.kubernetes.pod-ip", () -> "127.0.0.1");
         registry.add("hephaestus.fabric.root", FABRIC_ROOT::toString);
-        // No sandbox runs here, so the worker does not pull the agent image.
+        registry.add("hephaestus.agent.image.reference", LiveRunnerWorkspace::image);
+        // The harness uses the selected prebuilt image and never pulls another build.
         registry.add("hephaestus.agent.image.pull-policy", () -> "NEVER");
     }
 
-    // This suite runs scripts on the host and exercises the real proxy; it launches no sandbox Pod.
+    // The real runner runs in its agent container; this suite exercises the proxy without Kubernetes.
     @MockitoBean(name = "sandboxKubernetesClient", enforceOverride = true)
     private KubernetesClient kubernetesClient;
-
-    @MockitoBean(enforceOverride = true)
-    private KubernetesSandboxCache sandboxCache;
-
-    @MockitoBean(enforceOverride = true)
-    private KubernetesIsolationProbe isolationProbe;
 
     @Autowired
     private InstanceLlmSettingsRepository instanceLlmSettings;
@@ -282,9 +272,8 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
     private final List<PreparedJobInputs> prepared = new ArrayList<>();
 
     @BeforeAll
-    static void installPiSdk() throws Exception {
-        PiSdkInstallation.ensureInstalled();
-        LiveRunnerWorkspace.installToolkit();
+    static void requireAgentImage() {
+        LiveRunnerWorkspace.requireImage();
     }
 
     @AfterEach
@@ -384,11 +373,12 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
 
         warmUp(chat, warmUps);
         Path log = workDir.resolve("runner.log");
-        Process runner = LiveRunnerWorkspace.spawn(
-                workDir, spec.environment(), "http://127.0.0.1:" + gateway.port() + "/internal/llm", jobToken, log);
-        if (!runner.waitFor(LiveRunnerWorkspace.TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            runner.destroyForcibly();
-            throw new AssertionError("runner did not finish:\n" + Files.readString(log));
+        try (var runner = LiveRunnerWorkspace.runner(
+                workDir, spec, "http://127.0.0.1:" + gateway.port() + "/internal/llm", jobToken)) {
+            int exitCode = LiveRunnerWorkspace.run(runner, log);
+            assertThat(exitCode)
+                    .as("the review completed within its budget: %s", log)
+                    .isZero();
         }
         String runnerLog = Files.readString(log);
 

@@ -31,7 +31,7 @@ It does not keep that container active between reviews.
 
 The [chart topology](./helm-chart#what-the-chart-runs) describes the roles, persistent storage and network policies.
 The Gateway API controller routes public traffic to the webapp and server.
-The server runs sandboxes in a separate namespace with Restricted Pod Security and an isolation probe.
+The server runs sandboxes in a separate namespace with Restricted Pod Security. The platform isolation gate qualifies their boundary before work starts.
 
 ## Two kinds of admin
 

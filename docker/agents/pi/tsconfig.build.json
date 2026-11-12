@@ -1,5 +1,5 @@
 {
-	// The image runs the sandbox driver, the gateway, the tools program and the conversation loop as JavaScript: Node's TypeScript
+	// The image runs the sandbox driver, the gateway as JavaScript: Node's TypeScript
 	// loader is the largest part of a small process's memory. CI type-checks these files (tsconfig.node.json);
 	// this build only emits them.
 	"compilerOptions": {
@@ -16,13 +16,5 @@
 		"inlineSources": true,
 		"outDir": "dist"
 	},
-	"files": [
-		"gateway-init.ts",
-		"gateway-run.ts",
-		"tools-server.ts",
-		"tool-client.ts",
-		"tools-seccomp.ts",
-		"heph-host.ts",
-		"driver.ts"
-	]
+	"files": ["gateway-init.ts", "gateway-run.ts", "driver.ts"]
 }

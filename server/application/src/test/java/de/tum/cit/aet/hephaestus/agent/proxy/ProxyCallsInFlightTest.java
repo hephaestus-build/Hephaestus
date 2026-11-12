@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -35,7 +35,6 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
 
         assertThat(open).noneMatch(ProxyCallsInFlight.Call::isOverCap);
         assertThat(past.isOverCap()).isTrue();
-        assertThat(past.isCancelled()).isFalse();
     }
 
     @Test
@@ -85,16 +84,17 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a call of a sealed attempt is cancelled, not refused for the cap")
-    void shouldCancelNotRefuseWhenTheAttemptIsSealed() {
-        ProxyRouting.BilledAttempt turn = attempt(UsageSourceType.MENTOR_TURN);
-        begin(turn, ProxyCallsInFlight.TURN_CALLS);
-        calls.seal(turn.sourceId(), turn.number(), false);
-
-        ProxyCallsInFlight.Call late = calls.begin(turn);
-
-        assertThat(late.isCancelled()).isTrue();
-        assertThat(late.isOverCap()).isFalse();
+    void shouldKeepEachCallsFirstFailureUntilItsCompletion() {
+        var turn = attempt(UsageSourceType.MENTOR_TURN);
+        try (var call = calls.begin(turn)) {
+            var first = new MentorTurn.FailedCall("upstream_status", 503);
+            call.failed(first);
+            call.failed(new MentorTurn.FailedCall("stream_failed", null));
+            assertThat(call.failure()).isEqualTo(first);
+        }
+        try (var next = calls.begin(turn)) {
+            assertThat(next.failure()).isNull();
+        }
     }
 
     @Test
@@ -128,9 +128,6 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
 
         assertThat(most.get()).isLessThanOrEqualTo(REVIEW_CALLS);
         assertThat(admitted.get()).isPositive();
-        assertThat(calls.awaitNone(review.sourceId(), review.number(), Duration.ZERO))
-                .as("no place is left taken")
-                .isTrue();
         assertThat(begin(review, REVIEW_CALLS)).noneMatch(ProxyCallsInFlight.Call::isOverCap);
     }
 

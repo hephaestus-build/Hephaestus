@@ -10,7 +10,7 @@ public final class SandboxTestLimits {
 
     public static final ResourceLimits ATTEMPT = REVIEW.forAttempt(Duration.ofMinutes(10));
 
-    public static final SandboxProperties PROPERTIES = new SandboxProperties(5, 10, 60, REVIEW);
+    public static final SandboxProperties PROPERTIES = new SandboxProperties(5, REVIEW);
 
     private SandboxTestLimits() {}
 }

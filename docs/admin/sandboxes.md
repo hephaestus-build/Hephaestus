@@ -4,71 +4,37 @@ description: The server, the sandbox namespace, its quotas and priorities, the s
 page_type: reference
 ---
 
-Each practice review and each conversation tool call runs in a sandbox Pod.
-This page describes the server that runs them, the objects that the chart writes into the sandbox namespace, and what the sandbox nodes need.
-
-<a id="worker"></a>
+Each practice review and each conversation turn runs in a subject's sandbox Pod.
+The server owns its SandboxClaim. Reviews and turns use the same claim, lease, and gateway.
 
 ## Server
 
-The server runs review sandboxes and conversation tools Pods. The [conversation loop](./helm-chart#conversation-loop) calls its gateway.
-The chart disables sandboxes by default. The `small` and `cluster` profiles enable them with `sandbox.enabled`.
-
+The chart disables sandboxes by default. The `small` and `cluster` profiles enable `sandbox.enabled`.
 Prepare the [sandbox prerequisites](#sandbox-prerequisites).
 Set `sandbox.namespace` and `networkPolicy.kubernetesApi` ([Install](./kubernetes#install)).
 The chart refuses enabled sandboxes without both settings.
 
-The server Deployment also serves the API, syncs provider work and delivers feedback.
-`server.replicas` is capped at one. The server uses `Recreate` until provider events have ordering across replicas.
+The server also serves the API, syncs provider work, and delivers feedback.
+`server.replicas` is capped at one. It uses `Recreate` until provider events have ordering across replicas.
+A stopping server takes no new claims. It keeps its gateway available within the [review drain window](./runtime-roles#graceful-drain).
+Sandbox calls use port 8081.
 
-A server that stops takes no new conversation turns. Calls can reach another ready server.
-The server waits for in-flight review runs before closing the gateway, within its configured [drain window](./runtime-roles#graceful-drain).
+`sandbox.reviewMemory` sizes the review quota.
+`sandbox.conversationTurns` sets turn capacity ([Conversation turn capacity](./runtime-roles#conversation-turn-capacity)).
+The conversation quota uses the requests in `sandbox.templates.conversation.resources`.
+It also counts the RuntimeClass overhead from `sandbox.templates.podOverhead`.
 
-The server uses the sandbox namespace and its Pod metadata from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
-Sandboxes call its gateway on port 8081.
+The operator creates the sandbox namespace for this release alone.
+The chart writes these objects into it:
 
-`sandbox.reviewMemory` reserves memory for review sandboxes (3840 MiB by default).
-Capacity follows the review template's memory request plus `sandbox.templates.podOverhead`.
-The default holds seven reviews.
-`small.yaml` holds five before RuntimeClass overhead.
-`conversationLoop.turns` sets conversation capacity ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)).
-
-The sandbox namespace is the one that you created for this release.
-The chart creates no namespace.
-It writes these objects into it:
-
-- One ResourceQuota for each PriorityClass tier: reviews, and conversations for the tools Pods.
-  The chart derives both from the SandboxTemplate requests, `sandbox-pod-requests.json`, `sandbox.reviewMemory`, `server.replicas` and `conversationLoop.turns`.
-  The conversations quota also holds the template isolation gate's two conversation sandboxes.
-  Set `sandbox.templates.podOverhead` to the template RuntimeClass's `overhead.podFixed`.
-  Kubernetes counts this [Pod overhead](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-overhead/) with each Pod's requests at quota admission.
-  `sandbox.runtime.podOverhead` applies separately to the server-built probes and tools Pods.
-  The conversations quota holds the tools Pods of the whole installation, not of each server.
-  They count requests, not limits: sandbox Pods may use more than they request, up to their limits.
-  Thus, Hephaestus's sandboxes never take a review's room, and reviews never take Hephaestus's.
-  Each tier's quota counts Pods, CPU and memory. Kubernetes does not let a quota that selects a PriorityClass count disk.
-  The quota without a scope counts the disk requests of both tiers together.
-  A quota also counts the Pod overhead of a RuntimeClass, such as gVisor's on some clusters.
-  For such a class, set `sandbox.runtime.podOverhead` to its `overhead.podFixed`: `cpuMillis` and `memoryMi`.
-  The chart then adds the overhead to each Pod in the quotas.
-  Set `sandbox.quota.enabled=false` to manage the quotas yourself.
-  `priorityClasses.reviews` and `priorityClasses.conversations` must name different classes, because each quota selects its Pods by class.
-  A server creates a tools Pod only when every quota that counts the Pod has room for it.
-  An unscoped quota counts it, and so does a quota that selects the Pod's PriorityClass.
-  The server's Role lets it list the quotas.
-  Its permissions are listed below.
-  It reads the Pod overhead of the sandbox RuntimeClass from its own sandbox Pods.
-  A quota with another scope does not hold a tools Pod back. A quota that the server cannot read does not hold it back either.
-  Another server can still take the room first. The quota then refuses the Pod.
-  The dispatch of review sandboxes does not read the quotas.
-- A deny-all policy for ingress and egress, `<release>-sandbox-deny`.
-- One policy, `<release>-sandbox-gateway`, that lets review sandboxes reach port 8081 of the server Pods, and nothing else.
-  Those sandboxes carry the label `hephaestus.build/sandbox-kind` from the runtime.
-  The server policy admits the same sandboxes on the same port.
-- One policy for the conversation's tools Pods, which have the label `hephaestus.build/sandbox-kind=tools`.
-  `<release>-sandbox-tools` admits ingress to tools Pods on TCP port 7100, only from the conversation loop's Pods in the release namespace.
-  Tools Pods get no egress.
-- The server's Role and RoleBinding.
+- One ResourceQuota per PriorityClass tier: reviews and conversations.
+  Each quota counts Pods, CPU requests, and memory requests. The quota without a scope counts both tiers' disk requests.
+  It counts actual sandbox requests. No tools Pod, isolation probe, or conversation-loop reservation remains.
+  Set `sandbox.quota.enabled=false` to manage quotas yourself.
+  `priorityClasses.reviews` and `priorityClasses.conversations` must differ.
+- A deny-all ingress and egress policy, `<release>-sandbox-deny`.
+- The policy `<release>-sandbox-gateway`. Sandbox Pods can reach only the server gateway on port 8081.
+- The server's Role and RoleBinding. They grant only SandboxClaim authority, as listed below.
 
 ## Priorities
 
@@ -78,9 +44,9 @@ Thus, priority alone does not protect a stateful Pod that exceeds its request.
 The scheduler can also preempt Pods of a lower priority to place one of a higher priority.
 The chart gives every Pod one of three priorities, highest first:
 
-1. The roles, the conversation loop, PostgreSQL, NATS, and the migration and backup Jobs. They serve everyone.
-2. The tools Pods of conversations. A person waits for the answer.
-3. The review sandboxes and the isolation probe. A review is an attempt that runs again. It never preempts another Pod.
+1. The roles, PostgreSQL, NATS, and the migration and backup Jobs. They serve everyone.
+2. The conversation sandboxes. A person waits for the answer.
+3. The review sandboxes. A review is an attempt that runs again. It never preempts another Pod.
 
 A preempted or evicted review counts as an attempt that the server lost, and the review runs again.
 
@@ -111,114 +77,46 @@ Do not share it with another release or another application.
 
 ## When the sandbox quota is full
 
-When the quota has no room for the Pod of a review sandbox, the Pod does not start.
-The reaper takes back each sandbox that did not call the gateway within 2 minutes of its request ([Agent runs § Sandbox reaper](/contributor/agent-runs#sandbox-reaper)).
-The review's run stays queued, and the dispatch requests a new sandbox at a later pass.
-
-The server learns from the events of the sandbox namespace when the quota refuses a tools Pod or an isolation probe Pod.
-It reads its quotas to tell whether a tools Pod can fit at all.
-It needs `list` on `events`, and `list` and `watch` on `resourcequotas` there. The chart's Role grants them.
-Without `list` on `events`, the server logs one warning, and it waits for a refused Pod until the start timeout.
-Without `list` and `watch` on `resourcequotas`, `pods` or `jobs`, the server stays not ready ([Troubleshooting](./kubernetes#troubleshooting)).
-
-The server watches the Pods, Jobs and quotas of the sandbox namespace.
-Thus, a quota check and a readiness probe send no request to the API server.
+A sandbox Pod waits while its quota has no room.
+The reaper takes back a sandbox that did not call the gateway within its start deadline ([Sandbox reaper](/contributor/agent-runs#sandbox-reaper)).
+Its run stays queued. Dispatch can request a new sandbox later.
+The server does not read Pod events or quotas to admit a run.
 
 The server reaches the Kubernetes API only at `networkPolicy.kubernetesApi`.
-Set the address and port that the selected network plugin sees after address translation.
-The plugins that CI runs, k3s's kube-router and Calico, see the endpoint of the `kubernetes` Service ([Install](./kubernetes#install), step 4).
-The chart has no default for them, because only the running cluster knows them.
+Set the address and port that the network plugin sees after address translation.
+The chart has no default: only the running cluster knows this endpoint.
 
-The server's service account has these permissions in the sandbox namespace, and none elsewhere:
+The server's service account has only these sandbox-namespace permissions:
 
-- Pods: `get`, `list`, `watch`, and `create`. The server creates Pods only through Jobs. The isolation probe uses `create` for a Pod Security dry run, which creates nothing.
-- `pods/log`: `get`.
-- Jobs: `get`, `list`, `watch`, `create`, and `delete`. Each tools Pod and each isolation probe Pod is a Job. A cancellation or a timeout deletes the Job, and Kubernetes deletes its Pod before the Job goes.
-- Events: `list`. The Job controller reports a Pod that the sandbox quota refuses as an event.
-- ResourceQuotas: `list` and `watch`. The quota tells whether a tools Pod fits now and whether it can ever fit.
-- SandboxClaims (`extensions.agents.x-k8s.io`): `get`, `list`, `watch`, `create`, and `delete`. A subject's sandbox is a claim, and the agent-sandbox controller creates its Pod from the kind's template. The server deletes each claim that no work needs. It watches foreground deletion until the sandbox and Pod are gone.
+- SandboxClaims (`extensions.agents.x-k8s.io`): `get`, `list`, `watch`, `create`, and `delete`.
+  The controller creates the Sandbox and Pod from the template.
+  The server deletes claims that no work needs. It watches foreground deletion before it acknowledges removal of copied evidence.
 
-The server cannot patch or delete a Pod, and it cannot run a command in one.
-A patch could change the image of a sandbox that runs.
-
-Kubernetes removes a sandbox Job 15 minutes after it ends.
-The review-ledger server identity stays per process.
-The chart does not set `HEPHAESTUS_WORKER_ID`.
+The server has no authority over Pods, Jobs, logs, events, or ResourceQuotas.
+It cannot run a command inside a Pod.
 
 ## Sandbox prerequisites
 
 The sandbox nodes need these items:
 
-1. A network plugin that enforces NetworkPolicy, for egress as well as ingress.
-2. The sandbox namespace with the label `pod-security.kubernetes.io/enforce=restricted`.
-3. Encrypted node storage, for example LUKS or the disk encryption of the cloud provider.
-   A sandbox Pod writes to the node's disk: the review workspace with the repository, `/tmp`, and the `~/.local` of a probe Pod.
-   A tools Pod's workspace is in its `/tmp`.
-   Only `/run` is in memory.
-   Encryption protects a stolen disk and a backup of it without the key.
-   It does not protect against a compromised running node or a privileged workload on the node.
-   The kubelet deletes a Pod's volumes with the Pod, but deletion does not erase the data from the disk.
+1. A network plugin that enforces ingress and egress NetworkPolicy.
+2. A sandbox namespace with `pod-security.kubernetes.io/enforce=restricted`.
+3. Encrypted node storage. Sandbox workspaces and temporary files use node disk.
+   Volume deletion does not erase bytes from a disk. Encryption protects an offline disk, not a compromised running node.
+4. A compatible runtime for each template.
+   The default runtime needs [user namespace support](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/) and `hostUsers: false`.
+   A `gvisor` template omits `hostUsers` and uses gVisor's kernel boundary instead.
+5. The pinned agent-sandbox controller and its extensions.
 
-4. [User namespace support](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/) on every sandbox node.
-   It needs Linux 6.3 or later and a compatible container runtime, such as containerd 2.0 or later.
-   Every sandbox and probe Pod sets `hostUsers: false`.
-   The server must prove that a real Pod has a private user mapping before it starts sandboxes.
+Use `sandbox.templates.runtimeClassName` for the template runtime.
+`sandbox.runtime.nodeSelector` and `sandbox.runtime.tolerations` select sandbox nodes.
+Set `sandbox.templates.podOverhead` to the RuntimeClass's `overhead.podFixed`, as `cpuMillis` and `memoryMi`.
+The template uses `RuntimeDefault` seccomp.
 
-These settings are optional:
-
-- `sandbox.runtime.runtimeClassName`: a RuntimeClass for sandbox Pods. Use only a RuntimeClass that supports `hostUsers: false` and passes the isolation probe. gVisor (`runsc`) with user namespaces is not qualified. To upgrade an install that uses it, clear this setting to use the default runtime, or qualify a compatible runtime.
-- `sandbox.runtime.podOverhead`: the RuntimeClass's `overhead.podFixed`, as `cpuMillis` and `memoryMi`, for the server-built probes and tools Pods. The template Pods use `sandbox.templates.podOverhead`.
-- `sandbox.runtime.seccompProfile`: the bundled `sandbox/agent-seccomp-profile.json` as a Localhost profile. Put the file below the kubelet's seccomp directory on every sandbox node, and set its relative path. Without it, sandbox Pods use `RuntimeDefault`.
-- `sandbox.runtime.nodeSelector` and `sandbox.runtime.tolerations`: the nodes of sandbox Pods.
-- A kubelet `podPidsLimit` on the sandbox nodes.
-
-Each server runs the isolation probe in the sandbox namespace at its start, and then every `sandbox.runtime.probeInterval`, 15 minutes by default.
-The probe checks these items on the running cluster:
-
-- The API server refuses, in a dry run, a Pod that the Baseline standard admits and the Restricted standard refuses.
-- A Pod with the labels of a review sandbox reaches the server's gateway port, directly and through a Service.
-  It does not reach the server's management port, the Kubernetes API, or the cluster DNS server.
-- A Pod of no sandbox kind reaches the gateway port by neither route. A tools Pod has no egress either.
-- The user of a review's `tools` container reaches the gateway port by neither route, though the Pod's policy admits it.
-- The probe Pods have no service account token, a read-only root filesystem, and a non-root user.
-- A named RuntimeClass exists: without it, no probe Pod runs.
-- A Pod with `hostUsers: false` has a private user mapping. A RuntimeClass does not replace this requirement.
-
-The server starts no sandbox while one of these items fails.
-At its start, the server then logs each failed item and stops, and Kubernetes starts it again.
-On a later probe, it logs each failed item, reports itself not ready, and starts no new sandbox until a probe passes again.
-
-Until a probe passes, at the start and after a failed later probe, the server is not ready.
-It claims no practice review and no conversation turn.
-They stay queued for a ready server. Reviews and turns that already run continue.
-
-A Pod that reaches a node but cannot start with the sandbox configuration fails the probe.
-A later probe whose Pods cannot start, because the sandbox quota is full or the nodes have no room, proves nothing.
-The same is true when the server cannot resolve the name of its gateway probe Service.
-The server logs a warning and keeps its last passing proof.
-A Pod that the sandbox quota refuses delays that verdict by up to 2 minutes.
-The tools probe runs after the other probes, so a refusal of both delays the verdict by up to 4 minutes.
-
-The probe also records the runtime and process limit, which are optional:
-
-| Item | Effect |
-| --- | --- |
-| RuntimeClass | The runtime that isolates sandboxes from the node kernel, or the cluster's default. |
-| Process limit | The number of processes that a sandbox Pod could start before the node refused one, or no limit. |
-
-The server's log and the metrics `sandbox.isolation.passed`, `sandbox.isolation.user_namespaces` and `sandbox.isolation.process_limit` show the tier.
-The probe Pods use the agent image and the sandbox configuration.
-They prove the nodes on which they run, not every eligible node. Make sure that every node selected for sandboxes meets the prerequisites.
-
-Each probe Pod is the Pod of a Job.
-A run takes 640 MiB of the sandbox quota on the cluster's default runtime.
-That is 512 MiB for the Pod that tries 1024 processes, and 128 MiB for the other Pod.
-The server deletes the Jobs when the probe ends.
-If the server stops during a run, the Job's deadline ends a Pod that still waits for a node.
-Kubernetes deletes the finished Job with its Pod after 15 minutes.
-
-Some network plugins apply the policy of a new Pod a few seconds after the Pod starts.
-Each sandbox Pod therefore starts with an init container that waits, at most 60 seconds, until it cannot reach the Kubernetes API.
+Run `node scripts/sandbox-isolation.ts` against each template before enabling work.
+The gate below replaces the server's old startup and scheduled isolation probes.
+The server no longer creates probe Pods or blocks its API on a probe.
+Qualify every eligible sandbox node. A gate proves enforcement only where and when it runs.
 
 ## Sandbox templates
 
@@ -307,34 +205,14 @@ node scripts/sandbox-isolation.ts --namespace hephaestus-sandboxes --template he
 
 ### Sandbox sizes
 
-The SandboxTemplates own the resource requests and limits of review and conversation sandboxes.
-Set them under `sandbox.templates.<kind>.resources`.
-The quotas follow those requests and `sandbox.templates.podOverhead`.
-Quota arithmetic rounds requests up to whole MiB and millicores.
-The default values are:
+Each template owns its requests and limits under `sandbox.templates.<kind>.resources`.
+The conversation quota uses the conversation template's requests and RuntimeClass overhead.
+The review quota uses the review template and `sandbox.reviewMemory`.
+No server probe, tools pool, or conversation-loop replica consumes quota.
 
-| Sandbox | CPU request | Memory request | Memory limit | Disk request | Disk limit |
-| --- | --- | --- | --- | --- | --- |
-| Review template | 100m | 512 MiB | 2 GiB | 1 GiB | 4 GiB |
-| Conversation template | 100m | 384 MiB | 1 GiB | 256 MiB | 2 GiB |
-| Server-built tools Pod | 25m | 160 MiB | 512 MiB | 256 MiB | 512 MiB and 64 MiB |
+Every sandbox has one container. The driver, Pi sessions, commands, Git, and practice programs share that container.
 
-Each template sandbox has one container and two disk volumes: `/workspace` and `/tmp`.
-Each volume has the kind's disk limit, and the Pod's disk limit bounds their total with its logs.
-The image's root filesystem is read-only.
-The server-built tools Pod has one disk volume for its tools workspace, and keeps `/run` in memory with 16 MiB.
-Its fixed requests come from `sandbox-pod-requests.json`.
-
-The kubelet evicts a Pod whose volume passes its size limit, or whose disk use passes its disk limit.
-Thus, no sandbox can fill the node's disk and cause the eviction of other Pods.
-The server counts the eviction as a failure of the infrastructure, and the review spends a retry.
-A review whose sandbox keeps filling its disk ends at `AGENT_MAX_RETRIES`.
-The chart's sandbox quota without a scope counts the disk requests of all sandbox Pods.
-
-The sandbox uses the cluster runtime and its volume options.
-`/tmp`, with a tools Pod's workspace, and `/run` are not `noexec`, and a sandbox Pod keeps `/dev/shm` in its private IPC namespace.
-[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-24-the-kubernetes-runtime) records why.
-
-Each server-built tools command starts through `prlimit` from the agent image.
-`prlimit` sets the `nofile` limit to 1024 and the `core` limit to 0, both soft and hard.
-A sandbox process cannot raise them.
+Its read-only root permits writes only under `/workspace` and `/tmp`.
+The Pod's ephemeral-storage limit bounds both volumes together.
+A command can read the sandbox token. The server checks the subject, current run epoch, lease, and turn state on every write.
+The sandbox can reach only the gateway. It has no provider credential or Kubernetes API credential.

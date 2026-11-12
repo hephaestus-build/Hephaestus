@@ -6,12 +6,16 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.mentor.MentorContextChanges;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
+import de.tum.cit.aet.hephaestus.mentor.spi.ConversationSandboxCopies;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -40,16 +44,20 @@ final class MentorToolResultCopyPersonDataStore extends JdbcPersonDataStore {
             UNION SELECT workspace_id FROM review_job WHERE id = ANY(:derivedJobs)
             """;
 
+    private static final TypeReference<Set<UUID>> SANDBOX_IDS = new TypeReference<>() {};
+
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final MentorRedaction redaction;
     private final MentorContextChanges contextChanges;
+    private final ConversationSandboxCopies sandboxCopies;
 
     MentorToolResultCopyPersonDataStore(
             NamedParameterJdbcTemplate jdbc,
             ObjectMapper mapper,
             MentorRedaction redaction,
-            MentorContextChanges contextChanges) {
+            MentorContextChanges contextChanges,
+            ConversationSandboxCopies sandboxCopies) {
         super(
                 jdbc,
                 mapper,
@@ -64,23 +72,45 @@ final class MentorToolResultCopyPersonDataStore extends JdbcPersonDataStore {
         this.mapper = mapper;
         this.redaction = redaction;
         this.contextChanges = contextChanges;
+        this.sandboxCopies = sandboxCopies;
     }
 
     @Override
     public PersonDataSelection select(PersonScope person) {
-        return new PersonDataSelection(jdbc.query(
-                """
+        List<Long> workspaces =
+                jdbc.query("""
                 SELECT person.workspace_id FROM (%s) person
                 WHERE person.workspace_id IS NOT NULL
                 ORDER BY person.workspace_id
-                """.formatted(PERSON_WORKSPACES),
-                parameters(person, mapper),
-                (rs, row) -> new PersonDataSelection.RowKey(Map.of("workspace_id", Long.toString(rs.getLong(1))))));
+                """.formatted(PERSON_WORKSPACES), parameters(person, mapper), (rs, row) -> rs.getLong(1));
+        var copies = sandboxCopies.snapshot(Set.copyOf(workspaces));
+        return new PersonDataSelection(workspaces.stream()
+                .map(workspace -> new PersonDataSelection.RowKey(Map.of(
+                        "workspace_id", workspace.toString(),
+                        "sandbox_ids",
+                                mapper.writeValueAsString(Objects.requireNonNull(copies.get(workspace)).stream()
+                                        .sorted()
+                                        .toList()))))
+                .toList());
     }
 
     @Override
     public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
         return List.of();
+    }
+
+    @Override
+    public void prepareErasure(PersonDataSelection selection) {
+        sandboxCopies.erase(selection.rows().stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        row -> Long.valueOf(Objects.requireNonNull(row.columns().get("workspace_id"))),
+                        this::frozenSandboxes)));
+    }
+
+    private Set<UUID> frozenSandboxes(PersonDataSelection.RowKey row) {
+        String frozen = row.columns().get("sandbox_ids");
+        // A persisted request from before the sandbox cutover has only its workspace key.
+        return frozen == null ? Set.of() : Objects.requireNonNull(mapper.readValue(frozen, SANDBOX_IDS));
     }
 
     /** Counts workspaces, matching the preview. */

@@ -1,5 +1,6 @@
-// The host's HTTP client for a turn against the worker's wire shape. The request bodies and the context are the files
-// in heph-turn-contract/, which HephTurnControllerIntegrationTest sends to and reads from the real controller.
+// The host's HTTP client for a turn against the worker's wire shape, on the run's routes: the context at
+// `<run>/context`, every other call under `<run>/turn/`. The request bodies and the context are the files in
+// heph-turn-contract/, which HephTurnControllerIntegrationTest sends to and reads from the real controller.
 
 import assert from "node:assert/strict";
 import { once } from "node:events";
@@ -20,7 +21,7 @@ import {
 	isTooLarge,
 	WorkerStatusError,
 	partialUpdates,
-} from "../../../main/resources/agent/heph-host.ts";
+} from "../../../main/resources/agent/turn.ts";
 
 function contract(name: string): unknown {
 	const value: unknown = JSON.parse(
@@ -70,9 +71,13 @@ async function fakeWorker(answers: Answer[], unknownKeyDelayMs = 0) {
 			if (answer.body === undefined) {
 				response.writeHead(answer.status).end();
 			} else {
+				const body = JSON.stringify(answer.body);
 				response
-					.writeHead(answer.status, { "content-type": "application/json" })
-					.end(JSON.stringify(answer.body));
+					.writeHead(answer.status, {
+						"content-type": "application/json",
+						"content-length": Buffer.byteLength(body),
+					})
+					.end(body);
 			}
 		});
 	});
@@ -87,9 +92,11 @@ async function fakeWorker(answers: Answer[], unknownKeyDelayMs = 0) {
 		stops,
 		// Repeats wait no time here; the delays are the host's to choose.
 		api: httpTurnApi(
-			`http://127.0.0.1:${address.port}`,
-			"turn-1",
-			"turn-token",
+			{
+				base: `http://127.0.0.1:${address.port}/internal/agent/runs/run-1`,
+				headers: { Authorization: "Bearer turn-token" },
+				label: "turn run run-1",
+			},
 			(reason) => {
 				stops.push(reason);
 			},
@@ -122,9 +129,9 @@ function isPartialMessages(value: unknown): value is PartialMessage[] {
 	return isList(value) && value.every((message) => isRecord(message) && isList(message.content));
 }
 
-const READ_ANSWER = { ok: true, text: '{\n  "pullRequests": []\n}' };
+const REFUSAL = { ok: false, error: "NOT_VISIBLE", detail: "You cannot read that repository." };
 
-void test("a tools quota wait ends when its turn is stopped", async () => {
+void test("a context folder call ends when its turn is stopped", async () => {
 	const received = Promise.withResolvers<undefined>();
 	const server = createServer(() => received.resolve(undefined));
 	server.listen(0, "127.0.0.1");
@@ -132,8 +139,12 @@ void test("a tools quota wait ends when its turn is stopped", async () => {
 	const address = server.address();
 	assert.ok(address !== null && typeof address !== "string");
 	const stop = new AbortController();
-	const api = httpTurnApi(`http://127.0.0.1:${address.port}`, "turn-1", "turn-token");
-	const waiting = api.read({ path: "INDEX.md" }, stop.signal);
+	const api = httpTurnApi({
+		base: `http://127.0.0.1:${address.port}/internal/agent/runs/run-1`,
+		headers: { Authorization: "Bearer turn-token" },
+		label: "turn run run-1",
+	});
+	const waiting = api.folder.load("repos/github.com/acme/api", stop.signal);
 	try {
 		await received.promise;
 		stop.abort(new Error("turn stopped"));
@@ -145,39 +156,39 @@ void test("a tools quota wait ends when its turn is stopped", async () => {
 	}
 });
 
-void test("tools wait for their turn budget instead of the shorter worker-request timeout", async (context) => {
-	const worker = await fakeWorker([
-		{ status: 200, body: { ok: false, error: "NOT_FOUND", detail: "No such file." } },
-	]);
+void test("a load waits for its turn budget instead of the shorter worker-request timeout", async (context) => {
+	const worker = await fakeWorker([{ status: 200, body: REFUSAL }]);
 	context.mock.method(AbortSignal, "timeout", () =>
 		AbortSignal.abort(new Error("request timeout")),
 	);
 	try {
-		const answer = await worker.api.read({ path: "INDEX.md" }, new AbortController().signal);
-		assert.deepEqual(answer, { ok: false, error: "NOT_FOUND", detail: "No such file." });
+		const answer = await worker.api.folder.load(
+			"repos/github.com/acme/secret",
+			new AbortController().signal,
+		);
+		assert.deepEqual(answer, REFUSAL);
 	} finally {
 		worker.close();
 	}
 });
 
-void test("the host sends its partial answer, searches, document reads and end in the shape the worker binds", async () => {
+void test("the host sends its partial answer, searches, loads and end in the shape the worker binds", async () => {
 	const worker = await fakeWorker([
 		{ status: 204 },
 		{ status: 200, body: { hits: [] } },
-		{ status: 200, body: READ_ANSWER },
+		{ status: 200, body: REFUSAL },
 	]);
 	try {
 		const partial = recordOf(contract("partial.request.json"));
 		const search = recordOf(contract("search.request.json"));
-		const read = recordOf(contract("sandbox-document.request.json"));
+		const load = recordOf(contract("sandbox-load.request.json"));
 		const end = recordOf(contract("end.request.json"));
 		const deadline = recordOf(contract("end-deadline.request.json"));
 		// The server binds the update; its text is the whole snapshot, as the loop's encoder writes it.
 		const snapshot = recordOf(JSON.parse(String(partial.text)));
 		assert.ok(isPartialMessages(snapshot.messages));
 		assert.ok(isList(end.entries));
-		assert.ok(typeof read.path === "string" && typeof read.offset === "number");
-		assert.ok(typeof read.limit === "number");
+		assert.ok(typeof load.path === "string");
 		const { signal } = new AbortController();
 
 		await worker.api.partial(
@@ -192,32 +203,36 @@ void test("the host sends its partial answer, searches, document reads and end i
 			),
 		);
 		await worker.api.search(search, signal);
-		assert.deepEqual(
-			await worker.api.read({ path: read.path, offset: read.offset, limit: read.limit }, signal),
-			READ_ANSWER,
-		);
-		await worker.api.end({ outcome: "DONE", entries: end.entries, reason: null, detail: null });
+		assert.deepEqual(await worker.api.folder.load(load.path, signal), REFUSAL);
+		await worker.api.end({
+			outcome: "DONE",
+			entries: end.entries,
+			reason: null,
+			detail: null,
+			lastPartial: null,
+		});
 		assert.equal(deadline.detail, "deadline");
 		await worker.api.end({
 			outcome: "FAILED",
 			entries: [],
 			reason: "DEADLINE",
 			detail: "deadline",
+			lastPartial: null,
 		});
 
 		assert.deepEqual(
 			worker.received.map(({ method, path, authorization }) => [method, path, authorization]),
 			[
-				["PUT", "/turn/turn-1/partial?first=true", "Bearer turn-token"],
-				["POST", "/turn/turn-1/search", "Bearer turn-token"],
-				["POST", "/turn/turn-1/sandbox/document", "Bearer turn-token"],
-				["POST", "/turn/turn-1/end", "Bearer turn-token"],
-				["POST", "/turn/turn-1/end", "Bearer turn-token"],
+				["POST", "/internal/agent/runs/run-1/turn/partial?first=true", "Bearer turn-token"],
+				["POST", "/internal/agent/runs/run-1/turn/search", "Bearer turn-token"],
+				["POST", "/internal/agent/runs/run-1/turn/sandbox/load", "Bearer turn-token"],
+				["POST", "/internal/agent/runs/run-1/turn/end", "Bearer turn-token"],
+				["POST", "/internal/agent/runs/run-1/turn/end", "Bearer turn-token"],
 			],
 		);
 		assert.deepEqual(
 			worker.received.map(({ body }) => body),
-			[partial, search, read, end, deadline],
+			[partial, search, load, end, deadline],
 		);
 	} finally {
 		worker.close();
@@ -229,7 +244,10 @@ void test("the host reads the context the worker serves", async () => {
 	const worker = await fakeWorker([{ status: 200, body: served }]);
 	try {
 		assert.deepEqual(await worker.api.context(), served);
-		assert.deepEqual(worker.received[0]?.method, "GET");
+		assert.deepEqual(
+			worker.received.map(({ method, path, authorization }) => [method, path, authorization]),
+			[["GET", "/internal/agent/runs/run-1/context", "Bearer turn-token"]],
+		);
 	} finally {
 		worker.close();
 	}
@@ -240,7 +258,13 @@ void test("a 409 without a stop means the attempt lost its lease, on every call"
 	try {
 		await assert.rejects(worker.api.partial(WHOLE), isLeaseLost);
 		await assert.rejects(
-			worker.api.end({ outcome: "DONE", entries: [], reason: null, detail: null }),
+			worker.api.end({
+				outcome: "DONE",
+				entries: [],
+				reason: null,
+				detail: null,
+				lastPartial: null,
+			}),
 			isLeaseLost,
 		);
 		await assert.rejects(worker.api.context(), isLeaseLost);
@@ -261,9 +285,9 @@ void test("a 409 that names a stop reports that stop before the call fails as no
 	const worker = await fakeWorker([problem("developer"), problem("deadline"), problem("bored")]);
 	try {
 		const { signal } = new AbortController();
-		await assert.rejects(worker.api.read({ path: "INDEX.md" }, signal), isLeaseLost);
+		await assert.rejects(worker.api.folder.load("repos/github.com/acme/api", signal), isLeaseLost);
 		await assert.rejects(worker.api.context(), {
-			message: "turn turn-1 must stop: deadline",
+			message: "turn run run-1 must stop: deadline",
 		});
 		await assert.rejects(worker.api.search({ query: "pin" }, signal), isLeaseLost);
 
@@ -285,7 +309,13 @@ void test("a 401 is sent once more after a wait, and a second 401 fails the call
 		assert.deepEqual(await worker.api.context(), served);
 		const waited = performance.now() - asked;
 		await assert.rejects(
-			worker.api.end({ outcome: "DONE", entries: [], reason: null, detail: null }),
+			worker.api.end({
+				outcome: "DONE",
+				entries: [],
+				reason: null,
+				detail: null,
+				lastPartial: null,
+			}),
 			(error) => error instanceof WorkerStatusError && error.status === 401,
 		);
 
@@ -294,10 +324,10 @@ void test("a 401 is sent once more after a wait, and a second 401 fails the call
 		assert.deepEqual(
 			worker.received.map(({ method, path }) => `${method} ${path}`),
 			[
-				"GET /turn/turn-1/context",
-				"GET /turn/turn-1/context",
-				"POST /turn/turn-1/end",
-				"POST /turn/turn-1/end",
+				"GET /internal/agent/runs/run-1/context",
+				"GET /internal/agent/runs/run-1/context",
+				"POST /internal/agent/runs/run-1/turn/end",
+				"POST /internal/agent/runs/run-1/turn/end",
 			],
 		);
 	} finally {
@@ -315,34 +345,11 @@ void test("only the first partial answer the worker took is marked first", async
 		assert.deepEqual(
 			worker.received.map(({ method, path }) => `${method} ${path}`),
 			[
-				"PUT /turn/turn-1/partial?first=true",
-				"PUT /turn/turn-1/partial?first=true",
-				"PUT /turn/turn-1/partial",
+				"POST /internal/agent/runs/run-1/turn/partial?first=true",
+				"POST /internal/agent/runs/run-1/turn/partial?first=true",
+				"POST /internal/agent/runs/run-1/turn/partial",
 			],
 		);
-	} finally {
-		worker.close();
-	}
-});
-
-void test("a lease renewal posts to the turn's lease, and a stop or a failure it gets does not fail it", async () => {
-	const worker = await fakeWorker([
-		{ status: 204 },
-		{ status: 409, body: { type: "about:blank", status: 409, stop: "developer" } },
-		{ status: 409 },
-		{ status: 500 },
-	]);
-	try {
-		await worker.api.lease();
-		await worker.api.lease();
-		await worker.api.lease();
-		await worker.api.lease();
-
-		assert.deepEqual(
-			worker.received.map(({ method, path, authorization }) => [method, path, authorization]),
-			Array.from({ length: 4 }, () => ["POST", "/turn/turn-1/lease", "Bearer turn-token"]),
-		);
-		assert.deepEqual(worker.stops, ["developer", "lease"]);
 	} finally {
 		worker.close();
 	}
@@ -352,7 +359,13 @@ void test("an end over the worker's size bound is refused at once, not repeated"
 	const worker = await fakeWorker([{ status: 413 }]);
 	try {
 		await assert.rejects(
-			worker.api.end({ outcome: "DONE", entries: [], reason: null, detail: null }),
+			worker.api.end({
+				outcome: "DONE",
+				entries: [],
+				reason: null,
+				detail: null,
+				lastPartial: null,
+			}),
 			isTooLarge,
 		);
 
@@ -385,7 +398,7 @@ for (const [tool, fixture, idKey] of LINKS) {
 				reason: "That feedback was already shown elsewhere.",
 			});
 			assert.deepEqual(await worker.api.link(tool, id, signal), { admitted: false, reason: null });
-			const path = `/turn/turn-1/${fixture.replace(".request.json", "")}`;
+			const path = `/internal/agent/runs/run-1/turn/${fixture.replace(".request.json", "")}`;
 			assert.deepEqual(
 				worker.received.map((received) => [received.method, received.path, received.body]),
 				[
@@ -400,55 +413,34 @@ for (const [tool, fixture, idKey] of LINKS) {
 	});
 }
 
-void test("a sandbox refusal is an answer, and an answer of another shape fails the call", async () => {
-	const refusal = {
-		ok: false,
-		error: "NOT_FOUND",
-		detail: "File not found: inputs/context/nothing.json",
-	};
+void test("a refused load is an answer, and an answer of another shape fails the load", async () => {
 	const worker = await fakeWorker([
-		{ status: 200, body: refusal },
-		{
-			status: 200,
-			body: { ok: false, error: "UNAVAILABLE", detail: "No tools can start now." },
-		},
+		{ status: 200, body: REFUSAL },
 		{ status: 200, body: { ok: true, content: "a shape no endpoint answers" } },
-		{ status: 200, body: { ok: true, id: "hephaestus-tools-1", host: "10.0.0.1", port: "7100" } },
 	]);
 	try {
 		const { signal } = new AbortController();
-		assert.deepEqual(
-			await worker.api.read({ path: "inputs/context/nothing.json" }, signal),
-			refusal,
-		);
-		assert.deepEqual(await worker.api.exec({ command: "true" }, signal), {
-			ok: false,
-			error: "UNAVAILABLE",
-			detail: "No tools can start now.",
+		assert.deepEqual(await worker.api.folder.load("repos/github.com/acme/secret", signal), REFUSAL);
+		await assert.rejects(worker.api.folder.load("repos/github.com/acme/api", signal), {
+			message: "the worker sent a malformed sandbox/load answer",
 		});
-		await assert.rejects(worker.api.read({ path: "INDEX.md" }, signal), {
-			message: "the server sent a malformed sandbox/document answer",
-		});
-		await assert.rejects(worker.api.exec({ command: "true" }, signal), {
-			message: "the server sent a malformed sandbox/bind answer",
-		});
-		assert.deepEqual(worker.received[0]?.body, { path: "inputs/context/nothing.json" });
+		assert.deepEqual(worker.received[0]?.body, { path: "repos/github.com/acme/secret" });
 	} finally {
 		worker.close();
 	}
 });
 
-void test("a command the worker did not answer is not run again", async () => {
+void test("a load the worker did not answer is not asked again", async () => {
 	const worker = await fakeWorker([{ status: 503 }, { status: 409 }]);
 	try {
 		const { signal } = new AbortController();
 		// A 503 is the worker's status, not a lost lease; only the 409 after it is.
 		await assert.rejects(
-			worker.api.exec({ command: "git log -n 1" }, signal),
+			worker.api.folder.load("repos/github.com/acme/api", signal),
 			(error) => error instanceof WorkerStatusError && error.status === 503 && !isLeaseLost(error),
 		);
 		assert.equal(worker.received.length, 1);
-		await assert.rejects(worker.api.read({ path: "INDEX.md" }, signal), isLeaseLost);
+		await assert.rejects(worker.api.folder.load("repos/github.com/acme/api", signal), isLeaseLost);
 		assert.deepEqual(worker.stops, ["lease"]);
 	} finally {
 		worker.close();
@@ -465,15 +457,21 @@ void test("a context read and an end the worker did not answer are sent again", 
 	]);
 	try {
 		assert.deepEqual(await worker.api.context(), served);
-		await worker.api.end({ outcome: "DONE", entries: [], reason: null, detail: null });
+		await worker.api.end({
+			outcome: "DONE",
+			entries: [],
+			reason: null,
+			detail: null,
+			lastPartial: null,
+		});
 
 		assert.deepEqual(
 			worker.received.map(({ method, path }) => `${method} ${path}`),
 			[
-				"GET /turn/turn-1/context",
-				"GET /turn/turn-1/context",
-				"POST /turn/turn-1/end",
-				"POST /turn/turn-1/end",
+				"GET /internal/agent/runs/run-1/context",
+				"GET /internal/agent/runs/run-1/context",
+				"POST /internal/agent/runs/run-1/turn/end",
+				"POST /internal/agent/runs/run-1/turn/end",
 			],
 		);
 		assert.deepEqual(worker.received[3]?.body, worker.received[2]?.body);
@@ -492,15 +490,21 @@ void test("a gateway limit does not end a turn: a refused context read and end a
 	]);
 	try {
 		assert.deepEqual(await worker.api.context(), served);
-		await worker.api.end({ outcome: "DONE", entries: [], reason: null, detail: null });
+		await worker.api.end({
+			outcome: "DONE",
+			entries: [],
+			reason: null,
+			detail: null,
+			lastPartial: null,
+		});
 
 		assert.deepEqual(
 			worker.received.map(({ method, path }) => `${method} ${path}`),
 			[
-				"GET /turn/turn-1/context",
-				"GET /turn/turn-1/context",
-				"POST /turn/turn-1/end",
-				"POST /turn/turn-1/end",
+				"GET /internal/agent/runs/run-1/context",
+				"GET /internal/agent/runs/run-1/context",
+				"POST /internal/agent/runs/run-1/turn/end",
+				"POST /internal/agent/runs/run-1/turn/end",
 			],
 		);
 		assert.deepEqual(worker.received[3]?.body, worker.received[2]?.body);
@@ -534,7 +538,7 @@ void test("a size the worker did not declare is no size: missing, empty and malf
 	assert.equal(sizeOf("4096"), 4096);
 });
 
-/** A worker that answers a load with an archive, `sized` or chunked, and every other call with a refusal. */
+/** A worker that answers the documents and a load with an archive, `sized` or chunked. */
 async function archiveWorker(sized: boolean) {
 	const about = Buffer.from(
 		JSON.stringify({
@@ -545,20 +549,17 @@ async function archiveWorker(sized: boolean) {
 			summary: [],
 		}),
 	).toString("base64url");
-	const archive = Buffer.alloc(1024);
+	const archive = Buffer.alloc(1024, 7);
+	const received: string[] = [];
 	const server = createServer((request, response) => {
+		received.push(`${request.method ?? ""} ${request.url ?? ""}`);
 		request.resume();
 		request.on("end", () => {
-			if (request.url?.endsWith("/sandbox/load") !== true) {
-				response
-					.writeHead(200, { "content-type": "application/json" })
-					.end(JSON.stringify({ ok: false, error: "UNAVAILABLE", detail: "No tools now." }));
-				return;
-			}
 			response.writeHead(200, {
 				"content-type": "application/x-tar",
-				"hephaestus-load": about,
-				"hephaestus-load-sha256": "0".repeat(64),
+				...(request.url?.endsWith("/sandbox/load") === true
+					? { "hephaestus-load": about, "hephaestus-load-sha256": "0".repeat(64) }
+					: {}),
 				...(sized ? { "content-length": String(archive.length) } : {}),
 			});
 			// Without a content-length, Node sends the body chunked.
@@ -571,10 +572,14 @@ async function archiveWorker(sized: boolean) {
 	const address = server.address();
 	assert.ok(address !== null && typeof address !== "string");
 	return {
+		archive,
+		received,
 		api: httpTurnApi(
-			`http://127.0.0.1:${address.port}`,
-			"turn-1",
-			"turn-token",
+			{
+				base: `http://127.0.0.1:${address.port}/internal/agent/runs/run-1`,
+				headers: { Authorization: "Bearer turn-token" },
+				label: "turn run run-1",
+			},
 			() => undefined,
 			[0, 0, 0],
 		),
@@ -582,17 +587,46 @@ async function archiveWorker(sized: boolean) {
 	};
 }
 
-void test("a load archive with its size goes on to bind its tools Pod, and waits on no unread copy of itself", async () => {
+/** Every byte of an archive's stream. */
+async function bytesOf(bytes: AsyncIterable<Buffer>): Promise<Buffer> {
+	const chunks: Buffer[] = [];
+	for await (const chunk of bytes) {
+		chunks.push(chunk);
+	}
+	return Buffer.concat(chunks);
+}
+
+void test("the context response carries the documents archive with its receipt", async () => {
+	const worker = await fakeWorker([{ status: 200, body: contract("context.response.json") }]);
+	try {
+		const context = await worker.api.context();
+		assert.equal(typeof context.documents, "string");
+		assert.equal(worker.received.length, 1);
+		assert.equal(worker.received[0]?.path, "/internal/agent/runs/run-1/context");
+	} finally {
+		worker.close();
+	}
+});
+
+void test("a load archive with its size is the load's answer, and waits on no unread copy of itself", async () => {
 	const worker = await archiveWorker(true);
 	try {
+		const loaded = await worker.api.folder.load(
+			"repos/github.com/acme/api",
+			AbortSignal.timeout(10_000),
+		);
+		assert.ok(loaded.ok);
 		assert.deepEqual(
-			await worker.api.load({ path: "repos/github.com/acme/api" }, AbortSignal.timeout(10_000)),
+			{ path: loaded.path, resolved: loaded.resolved, note: loaded.note, summary: loaded.summary },
 			{
-				ok: false,
-				error: "UNAVAILABLE",
-				detail: "No tools now.",
+				path: "repos/github.com/acme/api",
+				resolved: { ref: "main", sha: "abc", cite: "@abc" },
+				note: "Loaded.",
+				summary: [],
 			},
 		);
+		assert.deepEqual([loaded.archive.size, loaded.archive.sha256], [1024, "0".repeat(64)]);
+		assert.deepEqual(await bytesOf(loaded.archive.bytes), worker.archive);
 	} finally {
 		worker.close();
 	}
@@ -602,8 +636,37 @@ void test("a load archive that comes chunked, with no declared size, fails the l
 	const worker = await archiveWorker(false);
 	try {
 		await assert.rejects(
-			worker.api.load({ path: "repos/github.com/acme/api" }, AbortSignal.timeout(10_000)),
+			worker.api.folder.load("repos/github.com/acme/api", AbortSignal.timeout(10_000)),
 			/malformed sandbox\/load answer/u,
+		);
+	} finally {
+		worker.close();
+	}
+});
+
+await test("item reads preserve the JSON body and use the run's fenced document route", async () => {
+	const item = { title: "A visible item" };
+	const worker = await fakeWorker([{ status: 200, body: item }, { status: 404 }]);
+	try {
+		const { signal } = new AbortController();
+		const document = await worker.api.folder.document("inputs/context/scm/item.json", signal);
+		assert.ok(document !== null);
+		assert.deepEqual(JSON.parse(document.toString("utf8")), item);
+		assert.equal(await worker.api.folder.document("inputs/context/scm/missing.json", signal), null);
+		assert.deepEqual(
+			worker.received.map(({ method, path, body }) => ({ method, path, body })),
+			[
+				{
+					method: "POST",
+					path: "/internal/agent/runs/run-1/turn/sandbox/document",
+					body: { path: "inputs/context/scm/item.json" },
+				},
+				{
+					method: "POST",
+					path: "/internal/agent/runs/run-1/turn/sandbox/document",
+					body: { path: "inputs/context/scm/missing.json" },
+				},
+			],
 		);
 	} finally {
 		worker.close();

@@ -10,6 +10,7 @@ import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -228,10 +229,20 @@ public class AgentRuns {
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<AgentRunLease> claimSubject(long workspaceId, String concurrencyKey, Set<AgentRunKind> kinds) {
         if (kinds.isEmpty()) return Optional.empty();
+        Set<AgentRunKind> offered = kinds;
+        Integer turnCap = capacity.turns();
+        if (kinds.contains(AgentRunKind.TURN)
+                && turnCap != null
+                && (!runs.tryLockKindClaims(AgentRunKind.TURN.name())
+                        || runs.countLeased(AgentRunKind.TURN.name()) >= turnCap)) {
+            offered = EnumSet.copyOf(kinds);
+            offered.remove(AgentRunKind.TURN);
+            if (offered.isEmpty()) return Optional.empty();
+        }
         return runs.claimSubject(
                         workspaceId,
                         concurrencyKey,
-                        kinds.stream().map(Enum::name).toList(),
+                        offered.stream().map(Enum::name).toList(),
                         capacity.leaseTtl().toSeconds(),
                         capacity.turnLeaseTtl().toSeconds(),
                         capacity.bandAging().toSeconds())

@@ -44,7 +44,10 @@ public interface ContextLoader {
     /** What a load resolved: the version asked for, its exact id, and how the model cites it. */
     record Version(String ref, String id, String cite) {}
 
-    /** A prepared item; {@link #close()} deletes its files. */
+    /**
+     * A prepared item. Its directory stays immutable until {@link #close()}, which deletes its files or throws.
+     * A cleanup failure must not report that the captured copy is gone.
+     */
     interface Loaded extends AutoCloseable {
         /** Where it goes in the folder, without a version: {@code repos/github.com/acme/api}. */
         String path();

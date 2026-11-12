@@ -101,6 +101,31 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     Optional<SandboxRow> lockLive(
             @Param("id") UUID id, @Param("workspaceId") long workspaceId, @Param("subjectKey") String subjectKey);
 
+    /** The first claim of a run is cold only when this physical sandbox served no earlier claim. */
+    interface RunStart {
+        Instant getStartedAt();
+
+        boolean getCold();
+    }
+
+    @Query(value = """
+            SELECT r.started_at AS "startedAt", NOT EXISTS (
+                     SELECT 1 FROM agent_run previous
+                      WHERE previous.workspace_id = s.workspace_id AND previous.concurrency_key = s.subject_key
+                        AND previous.started_at >= s.created_at
+                        AND (previous.id <> r.id OR r.lease_epoch > 1)) AS cold
+              FROM agent_sandbox s
+              JOIN agent_run r ON r.workspace_id = s.workspace_id AND r.concurrency_key = s.subject_key
+             WHERE s.id = :sandboxId AND s.workspace_id = :workspaceId AND s.subject_key = :subjectKey
+               AND r.id = :runId AND r.lease_epoch = :epoch AND r.started_at IS NOT NULL
+            """, nativeQuery = true)
+    Optional<RunStart> findRunStart(
+            @Param("sandboxId") UUID sandboxId,
+            @Param("workspaceId") long workspaceId,
+            @Param("subjectKey") String subjectKey,
+            @Param("runId") UUID runId,
+            @Param("epoch") int epoch);
+
     /** The sandbox leased a run of its subject: the idle limits count from now. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
@@ -129,6 +154,21 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
              WHERE workspace_id = :workspaceId AND subject_key = :subjectKey AND state IN ('REQUESTED', 'READY')
             RETURNING""" + COLUMNS, nativeQuery = true)
     Optional<SandboxRow> release(@Param("workspaceId") long workspaceId, @Param("subjectKey") String subjectKey);
+
+    /** Physical conversation copies still owned by a selected workspace, including failed deletions. */
+    @Query(
+            value = "SELECT" + COLUMNS + " FROM agent_sandbox WHERE workspace_id = :workspaceId"
+                    + " AND kind = 'CONVERSATION' AND state IN ('REQUESTED', 'READY', 'DELETING') ORDER BY id",
+            nativeQuery = true)
+    List<SandboxRow> findConversationCopies(@Param("workspaceId") long workspaceId);
+
+    /** Revokes conversation credentials in the transaction that changes access. The reaper deletes claims. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE agent_sandbox SET state = 'DELETING'
+             WHERE workspace_id = :workspaceId AND kind = 'CONVERSATION' AND state IN ('REQUESTED', 'READY')
+            """, nativeQuery = true)
+    int revokeConversations(@Param("workspaceId") long workspaceId);
 
     /**
      * The reaper's one rule. A live sandbox is taken back when its shutdown time passed, when it did not call the

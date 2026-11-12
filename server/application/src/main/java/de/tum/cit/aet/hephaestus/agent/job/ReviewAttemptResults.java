@@ -325,9 +325,6 @@ public class ReviewAttemptResults {
         if (exitCode == SandboxLayout.EXIT_PROVIDER_UNREACHABLE) {
             return RequeueCause.PROVIDER_UNREACHABLE;
         }
-        if (exitCode == SandboxLayout.EXIT_SIDE_LOST) {
-            return RequeueCause.SANDBOX;
-        }
         return null;
     }
 

@@ -1,5 +1,5 @@
 {
-	"$comment": "The review runtime's diagnostic vocabulary. pi-diagnostics.ts writes only these events and fields, and SandboxExits.java keeps only lines that use them. A field's type is count, ratio or flag, or the list of its codes.",
+	"$comment": "The review runtime's diagnostic vocabulary. pi-diagnostics.ts writes only these events and fields. A field's type is count, ratio or flag, or the list of its codes.",
 	"events": [
 		"admission.retrying",
 		"admission.withheld",

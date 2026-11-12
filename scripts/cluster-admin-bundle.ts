@@ -41,7 +41,7 @@ metadata:
 value: 100000
 globalDefault: false
 preemptionPolicy: PreemptLowerPriority
-description: "Hephaestus roles, the conversation loop, PostgreSQL and NATS"
+description: "Hephaestus roles, PostgreSQL and NATS"
 ---
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
@@ -50,7 +50,7 @@ metadata:
 value: 10000
 globalDefault: false
 preemptionPolicy: PreemptLowerPriority
-description: "Hephaestus tools Pods of conversations"
+description: "Hephaestus conversation sandboxes"
 ---
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
@@ -59,7 +59,7 @@ metadata:
 value: 1000
 globalDefault: false
 preemptionPolicy: Never
-description: "Hephaestus review sandboxes and isolation probes"
+description: "Hephaestus review sandboxes"
 ---
 # Read only. The agent-sandbox controller in the namespace ${CONTROLLER.namespace} lists and watches these kinds
 # in all namespaces. It writes only in the release's sandbox namespace, through a Role.

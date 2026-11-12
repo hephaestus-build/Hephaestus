@@ -742,10 +742,10 @@
 			"required": [
 				"replicas",
 				"rolloutStrategy",
-				"drainTimeoutSeconds",
 				"gitCache",
 				"resources",
-				"databasePool"
+				"databasePool",
+				"drainTimeoutSeconds"
 			],
 			"properties": {
 				"databasePool": {
@@ -759,17 +759,17 @@
 				"rolloutStrategy": {
 					"enum": ["Recreate"]
 				},
-				"drainTimeoutSeconds": {
-					"type": "integer",
-					"minimum": 0,
-					"maximum": 86400,
-					"description": "Whole seconds. The chart emits a Spring Boot Duration for the server's drain and an integer Kubernetes termination grace period."
-				},
 				"gitCache": {
 					"$ref": "#/definitions/cache"
 				},
 				"resources": {
 					"$ref": "#/definitions/resources"
+				},
+				"drainTimeoutSeconds": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 86400,
+					"description": "Whole seconds. The chart emits a Spring Boot Duration for the server's drain and an integer Kubernetes termination grace period."
 				}
 			}
 		},
@@ -944,7 +944,8 @@
 				"quota",
 				"gateway",
 				"runtime",
-				"templates"
+				"templates",
+				"conversationTurns"
 			],
 			"properties": {
 				"enabled": {
@@ -975,43 +976,11 @@
 					}
 				},
 				"runtime": {
-					"description": "The sandbox nodes, as KubernetesSandboxProperties accepts them. Every value is optional.",
+					"description": "The node selectors and tolerations shared by sandbox templates.",
 					"type": "object",
 					"additionalProperties": false,
-					"required": [
-						"runtimeClassName",
-						"podOverhead",
-						"seccompProfile",
-						"nodeSelector",
-						"tolerations",
-						"probeInterval"
-					],
+					"required": ["nodeSelector", "tolerations"],
 					"properties": {
-						"runtimeClassName": {
-							"type": "string",
-							"pattern": "^(?:[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)?$"
-						},
-						"podOverhead": {
-							"type": "object",
-							"additionalProperties": false,
-							"required": ["cpuMillis", "memoryMi"],
-							"properties": {
-								"cpuMillis": {
-									"type": "integer",
-									"minimum": 0,
-									"description": "Whole millicores, read as an integer by chart arithmetic. 1000 millicores is one CPU."
-								},
-								"memoryMi": {
-									"type": "integer",
-									"minimum": 0,
-									"description": "Whole mebibytes, read as an integer by chart arithmetic. One mebibyte is 1048576 bytes."
-								}
-							}
-						},
-						"seccompProfile": {
-							"type": "string",
-							"pattern": "^(?:[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*)?$"
-						},
 						"nodeSelector": {
 							"type": "object",
 							"additionalProperties": {
@@ -1043,11 +1012,6 @@
 									}
 								}
 							}
-						},
-						"probeInterval": {
-							"type": "string",
-							"pattern": "^[1-9][0-9]*(?:m|h)$",
-							"description": "Time parsed by Spring Boot Duration. Use a positive integer followed by m for minutes or h for hours."
 						}
 					}
 				},
@@ -1103,22 +1067,9 @@
 							"$ref": "#/definitions/resources"
 						}
 					}
-				}
-			}
-		},
-		"conversationLoop": {
-			"description": "The Deployment that runs every conversation turn of the installation. It runs with the sandboxes.",
-			"type": "object",
-			"additionalProperties": false,
-			"required": ["replicas", "turns", "resources"],
-			"properties": {
-				"replicas": {
-					"type": "integer",
-					"minimum": 1,
-					"maximum": 8
 				},
-				"turns": {
-					"description": "HEPHAESTUS_MENTOR_TURN_CAPACITY: auto, or the conversation turns that the whole installation runs at once. Each server and each loop replica get this one count.",
+				"conversationTurns": {
+					"description": "Concurrent conversation turns: auto derives the largest count within sandbox.budget; an explicit count is checked when a budget is set.",
 					"oneOf": [
 						{
 							"const": "auto"
@@ -1126,12 +1077,22 @@
 						{
 							"type": "integer",
 							"minimum": 0,
-							"maximum": 64
+							"maximum": 2147483647
 						}
 					]
 				},
-				"resources": {
-					"$ref": "#/definitions/resources"
+				"budget": {
+					"type": "object",
+					"additionalProperties": false,
+					"description": "Allocatable CPU and memory available to this release at steady state and the drained-upgrade peak. Required for auto admission. No managed-cluster default.",
+					"properties": {
+						"cpu": {
+							"$ref": "#/definitions/quantity"
+						},
+						"memory": {
+							"$ref": "#/definitions/quantity"
+						}
+					}
 				}
 			}
 		},

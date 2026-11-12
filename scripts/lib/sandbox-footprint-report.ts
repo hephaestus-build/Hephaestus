@@ -189,11 +189,9 @@ export function largest<T>(entries: readonly T[], size: (entry: T) => number, li
 
 export interface ReviewOutcome {
 	index: number;
-	initExit: number;
 	runtimeExit: number;
 	/** The result uploads that the stand-in gateway received for the review's session. */
 	uploads: number;
-	initSamples: number;
 	runtimeSamples: number;
 }
 
@@ -211,12 +209,6 @@ function exited(container: string, code: number): string {
 
 function reviewFailures(review: ReviewOutcome): string[] {
 	const failures: string[] = [];
-	if (review.initExit !== 0) {
-		failures.push(exited("initializer", review.initExit));
-	}
-	if (review.initSamples < 1) {
-		failures.push("the initializer has no samples");
-	}
 	if (review.runtimeExit === NOT_STARTED) {
 		failures.push("the runtime did not start");
 		return failures;
