@@ -95,7 +95,7 @@ formatter with a different style would undo Spotless's Palantir formatting.
 
 For development stick to the `local` profile, which is the default. The other shipped profiles each
 have their own `application-<name>.yml` under `server/application/src/main/resources/` — `prod` and `specs`, plus
-the per-role and per-purpose overlays (`webhook`, `e2e`, `cds-training`) documented where
+the per-purpose overlays (`e2e`, `cds-training`, `migrate`, `playwright`) documented where
 they are used.
 
 These are Spring profiles, not build profiles. Gradle’s `bootRun` passes `-Pprofiles=…` through to

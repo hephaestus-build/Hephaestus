@@ -378,10 +378,10 @@ A workspace admin cannot grant another person's research consent.
 
 | Term | Meaning | Avoid for this concept |
 | --- | --- | --- |
-| **Runtime role** | Server or webhook: the part of one application JAR that a container starts. |  |
+| **Runtime role** | The part of one application JAR that a container starts. The server is the only runtime role ([Runtime roles](/admin/runtime-roles)). |  |
 | **Server** | The service that handles application requests. |  |
 | **Worker** | The runtime role that executed reviews and conversation turns before 1.0. The server replaced it in 1.0 and does its work ([ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md)). |  |
-| **Webhook** | A provider's HTTP request that reports an event. Also the runtime role that receives it. |  |
+| **Webhook** | A provider's HTTP request that reports an event. |  |
 | **API** | An interface for software calls. |  |
 | **UI** | The interface that a person uses. |  |
 | **Pull request** | A GitHub request to merge a branch. |  |

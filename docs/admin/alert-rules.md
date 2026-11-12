@@ -17,7 +17,7 @@ Each alert has one of three `severity` labels:
 
 - `critical`: data, isolation or the service is at risk now. Send these alerts to a person at once. These alerts are critical:
   - `HephaestusPostgresVolumeFilling`, `HephaestusWalArchiveFailing` and `HephaestusBackupStale`.
-  - `HephaestusDatabaseTransactionIdAgeHigh` and `HephaestusWebhookReceiverDown`.
+  - `HephaestusDatabaseTransactionIdAgeHigh` and `HephaestusServerDown`.
   - `HephaestusAgentSandboxUnisolated`.
   - `HephaestusApiErrorBudgetBurnFast` and `HephaestusApiLatencyBudgetBurnFast`.
 - `warning`: a fault needs work during working hours. All other alerts are warnings.
@@ -27,16 +27,16 @@ Each alert has one of three `severity` labels:
 
 The rules read the exported Prometheus names, not the dotted Micrometer names.
 The rules of the group `hephaestus` read the application's metrics.
-Budget admission and committed agent-job outcomes can occur in different roles, so their rules aggregate all scraped roles.
+The rules aggregate the server's metrics.
 They need these target labels from the scrape configuration:
 
-- `job="hephaestus"` on each target of the runtime roles.
-- `runtime_role`, with the value `server`, `worker` or `webhook`.
+- `job="hephaestus"` on each server target.
+- `runtime_role="server"`.
 - A different `instance` on each target.
 
 `HephaestusMetricsUnavailable` fires only for a target that Prometheus still discovers.
-When service discovery loses all targets of a role, no `up` series remains.
-To detect that, add a rule for each role that you run, for example `absent(up{job="hephaestus",runtime_role="server"})`.
+When service discovery loses all server targets, no `up` series remains.
+To detect that, add a rule for the server, for example `absent(up{job="hephaestus",runtime_role="server"})`.
 
 The rules of the group `hephaestus-kubernetes` read cluster metrics.
 Each rule needs its exporter, scraped by the same Prometheus:
@@ -62,7 +62,7 @@ kube-state-metrics exports these labels only when you allow them:
 - Start kube-state-metrics with `--metric-labels-allowlist=deployments=[app.kubernetes.io/name,app.kubernetes.io/component],cronjobs=[app.kubernetes.io/name,app.kubernetes.io/component,app.kubernetes.io/instance]`.
 - With kube-prometheus-stack, set the value `kube-state-metrics.metricLabelsAllowlist` to `["deployments=[app.kubernetes.io/name,app.kubernetes.io/component]", "cronjobs=[app.kubernetes.io/name,app.kubernetes.io/component,app.kubernetes.io/instance]"]`.
 
-Without these labels, the two webhook rules find no Deployment and never fire.
+Without these labels, the two server rules find no Deployment and never fire.
 
 The other rules find the release's objects by the names that the chart gives them: `data-<release>-postgresql-0`, `data-<release>-nats-0`, and the CronJobs `<release>-postgresql-backup-full` and `<release>-postgresql-backup-diff`.
 Another application in the cluster can use the same names, for example another PostgreSQL chart.

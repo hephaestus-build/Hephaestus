@@ -18,7 +18,7 @@ People who change the code need the [Contributor guide](/contributor/overview).
 
 ## What a deployment consists of
 
-One application image starts in two runtime roles: `server` and `webhook`.
+One application image runs the server.
 A deployment also has PostgreSQL and a NATS event buffer.
 On [Helm chart reference](./helm-chart#what-the-chart-runs), the Helm chart runs them on a cluster or on one host with k3s, and a Gateway API controller handles TLS.
 

@@ -63,7 +63,7 @@ networkPolicy:
   metrics:
     namespace: ""
     podLabels: {}
-  # The OTLP trace collector in this cluster that the server and webhook send to when
+  # The OTLP trace collector in this cluster that the server sends to when
   # `config.tracing.otlpEnabled` is on, on the port of `config.tracing.otlpEndpoint`. An empty
   # namespace opens no path. Outside the cluster, only the server reaches a collector,
   # and only on 443 (externalEgress), so run the collector in the cluster.
@@ -126,7 +126,7 @@ postgresql:
       # true when the endpoint's certificate comes from a CA of your own: put that CA in the
       # PostgreSQL TLS Secret as s3-ca.crt.
       privateCa: false
-    # A restore replaces the database with the backup. While it is enabled, the server, webhook
+    # A restore replaces the database with the backup. While it is enabled, the server
     # and PostgreSQL Pods stop, and a Job restores the PostgreSQL volume. Upgrade again with
     # restore.enabled=false to start them. docs/admin/backup-restore.mdx § Back up the database.
     restore:
@@ -169,7 +169,7 @@ nats:
   maxPayloadBytes: 26279936
   jetstream:
     maxMemory: 1G
-    # The broker's max_file and the webhook role's stream storage budget. The bundled volume is
+    # The broker's max_file and the server's stream storage budget. The bundled volume is
     # sized from it, so the two cannot drift. For an external broker, state that broker's max_file.
     maxFileBytes: 17179869184
   persistence:

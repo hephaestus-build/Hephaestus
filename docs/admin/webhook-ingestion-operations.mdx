@@ -4,10 +4,10 @@ description: Metrics, storage bounds, and recovery for the webhook receiver and 
 page_type: reference
 ---
 
-Hephaestus receives webhooks in a separate container.
+The server receives provider webhooks.
 It buffers all deliveries on NATS JetStream before anything else reads them.
 This page explains what to monitor, configure, and do after a failure.
-[ADR 0008](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) explains the design.
+[Runtime roles](./runtime-roles) describes the server and its restart behavior.
 
 GitHub counts a delivery as failed when the receiver answers with an error or takes longer than 10 seconds.
 It never retries a failed delivery on its own, but it keeps deliveries from the past three days and can [redeliver](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks) them.
@@ -231,11 +231,11 @@ To apply the new age once:
 
 1. Check that `webhook.stream.consumer.pending` and `webhook.stream.consumer.ack.pending` are near zero.
    The messages that the new age deletes were then delivered already.
-2. Set `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true` and restart the webhook receiver.
+2. Set `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true` and restart the server.
    On the Helm chart, set `webhook.stream.allowDestructiveLimitUpdates` instead.
    The broker deletes the old messages before it answers.
    How long that takes on a large stream on a slow disk is unmeasured.
-   With several webhook receivers, the others keep publishing while one applies the limit.
+   [Reception during a restart](./runtime-roles#reception-during-a-restart) describes the interruption and provider recovery.
    If the log reports a timeout, raise `HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT` (chart: `webhook.stream.limitUpdateTimeout`) and restart again.
 3. Look for `Reconciled JetStream stream limits and DELETED stored messages` in the log.
 4. Set the flag back to `false`.
@@ -339,7 +339,8 @@ To apply a withheld change deliberately:
 3. If it is, raise `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB` (or `..._MAX_BYTES`) instead.
 4. Keep the four bounds under `NATS_JS_MAX_FILE_BYTES`.
 5. If the size is not legitimate, set `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true`.
-6. If the size is not legitimate, restart the receiver **once**.
+6. If the size is not legitimate, restart the server **once**.
+   [Reception during a restart](./runtime-roles#reception-during-a-restart) describes the interruption and provider recovery.
 7. After that destructive restart, confirm the `DELETED stored messages` log line.
 8. After that confirmation, unset the flag again.
 
@@ -421,11 +422,13 @@ Use the names below for a release named `hephaestus` in namespace `hephaestus`.
    kubectl -n hephaestus rollout status statefulset/hephaestus-nats --timeout=5m
    ```
 
-4. **Restart the receiver** so it re-establishes its connection and re-reconciles the streams:
+4. **Restart the server** so it re-establishes its connection and reconciles the streams.
+   The rollout waits for the server's [graceful drain](./runtime-roles#graceful-drain).
+   Follow [Reception during a restart](./runtime-roles#reception-during-a-restart) for the interruption and provider recovery:
 
    ```bash
-   kubectl -n hephaestus rollout restart deployment/hephaestus-webhook
-   kubectl -n hephaestus rollout status deployment/hephaestus-webhook --timeout=5m
+   kubectl -n hephaestus rollout restart deployment/hephaestus-server
+   kubectl -n hephaestus rollout status deployment/hephaestus-server
    ```
 
 5. Before another incident, set `nats.jetstream.maxFileBytes` below the volume's actual free space.
@@ -469,7 +472,8 @@ What happens to a refused delivery depends on [the provider](#which-providers-de
 - GitLab and Outline do not retry, and repeated failures can disable the hook.
   Reconciliation recovers the event.
 
-To hold more at once, raise `webhook.resources`.
+To hold more at once, raise `server.resources`.
+The same server memory also holds API requests and provider-event processing.
 
 A delivery's body must arrive within 30 seconds, or the receiver answers `408` and counts `webhook_rejected_total{reason="too-slow"}`.
 No provider waits that long for an answer.
@@ -504,7 +508,7 @@ Those messages are not delivered.
 ## Who reaches the broker
 
 The chart exposes the broker on its private cluster Service.
-The NetworkPolicy admits only the roles that use NATS and the configured administrative clients.
+The NetworkPolicy admits only the server and the configured administrative clients.
 Do not add an internet Gateway route or a public Service for the broker.
 Use an authenticated NATS CLI context from an allowed administrative Pod.
 

@@ -380,7 +380,6 @@ config:
     filelog:
       include:
         - /var/log/pods/hephaestus_hephaestus-server-*/*/*.log
-        - /var/log/pods/hephaestus_hephaestus-webhook-*/*/*.log
         - /var/log/pods/hephaestus_hephaestus-migration-*/*/*.log
         - /var/log/pods/hephaestus_hephaestus-nats-*/*/*.log
       exclude: []
@@ -419,8 +418,7 @@ Each stage has a bound, and each bound can lose lines:
 ## Export traces
 
 Hephaestus uses Spring Boot's OpenTelemetry starter and the OTLP HTTP exporter. Export is disabled
-by default. Configure these settings on the runtime
-roles whose spans you want to collect:
+by default. Configure these settings on the server:
 
 | Variable                       | Default                           | Purpose                                                                        |
 | ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
@@ -451,15 +449,15 @@ The chart ships no collector and no trace store. To send traces to your own Open
 The chart sets the variables above on the server from `config.tracing.otlpEnabled`, `config.tracing.otlpEndpoint` and `config.tracing.samplingProbability`.
 By default, the chart's network policy admits no collector inside the cluster.
 Set `networkPolicy.traceCollector` to the namespace and pod labels of that collector ([Network policy](./helm-chart.md#network-policy)).
-The roles can then reach it on the port that `config.tracing.otlpEndpoint` names.
+The server can then reach it on the port that `config.tracing.otlpEndpoint` names.
 
 Run the collector in the cluster.
-Outside the cluster, only the server and the worker reach a collector, and only on port 443, through `networkPolicy.externalEgress`.
-The webhook has no path to an external collector, so its traces are lost.
+Outside the cluster, the server reaches a collector only on port 443, through `networkPolicy.externalEgress`.
+Webhook request spans use the same collector as the other server spans.
 
 Each span carries the running version as `service.version` and the deployment environment as `deployment.environment.name`.
 The Helm chart exposes no value for authenticated OTLP headers.
-Use an in-cluster collector that accepts the roles without those headers.
+Use an in-cluster collector that accepts the server without those headers.
 Configure authentication for the collector's upstream destination in the collector itself.
 
 Do not put collector credentials in a URL. OTLP log and metric export stay disabled: enabling traces does not
@@ -505,7 +503,7 @@ they ended. It is not a record of what a review read or said.
 Durable review records retain admitted results, their problems and citation checks, not raw inputs,
 model requests or session transcripts. The [payload retention](./data-retention#postgresql) strips diagnostic job output.
 
-The worker can separately retain bounded debug session transcripts. The
+The server can separately retain bounded debug session transcripts. The
 [retention decision](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-09-debug-transcripts)
 defines their ownership checks, metadata fallback, erasure and expiry.
 
