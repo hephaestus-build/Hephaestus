@@ -10,14 +10,20 @@
  * tmp/platform-policy, replaces the exceptions that it wrote before in
  * security/vulnerability-policy.json, and prints the summary that the change's review reads.
  */
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { parseAllDocuments } from "yaml";
 
-import { reportStem } from "./lib/image-scan.ts";
+import { validatedTrivyReport } from "./check-release-vulnerabilities.ts";
+import { reportStem, resolvePlatformDigest, type Subject } from "./lib/image-scan.ts";
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
-import { agentSandboxPin, platformPins, policyDirectory } from "./scan-platform-images.ts";
+import {
+	agentSandboxPin,
+	platformPins,
+	policyDirectory,
+	verifiedPlatformSubjects,
+} from "./scan-platform-images.ts";
 import { PLATFORMS } from "./scan-upstream-images.ts";
 
 const POLICY = "security/vulnerability-policy.json";
@@ -119,7 +125,7 @@ export function platformPinsOf(platformSource: string, agentSandboxSource: strin
 			// The official image appears on Docker Hub hours after the GitHub release.
 			source: { kind: "dockerhub", repository: "library/traefik" },
 			pinned: traefikImage,
-			owns: (image) => image === "traefik",
+			owns: (image) => image === "platform-traefik",
 		},
 		{
 			name: "agent-sandbox",
@@ -130,25 +136,73 @@ export function platformPinsOf(platformSource: string, agentSandboxSource: strin
 	];
 }
 
-async function getJson(url: string, headers: Record<string, string> = {}): Promise<unknown> {
+async function getResponse(url: string, headers: Record<string, string> = {}) {
 	const response = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
 	if (!response.ok) {
+		if (response.status === 429) {
+			throw new Error(
+				`${url} is rate limited; Retry-After: ${response.headers.get("retry-after") ?? "not supplied"}. No exceptions were written.`,
+			);
+		}
 		throw new Error(`${url} is unavailable: HTTP ${response.status}`);
 	}
+	return response;
+}
+
+async function getJson(url: string, headers: Record<string, string> = {}): Promise<unknown> {
+	const response = await getResponse(url, headers);
 	return parseJson(await response.text());
 }
 
-async function releasesOf(source: Pin["source"]) {
+export async function releasesOf(source: Pin["source"]) {
 	if (source.kind === "dockerhub") {
-		// Newest first: the newest stable version is on the first page.
-		const page = await getJson(
-			`https://hub.docker.com/v2/repositories/${source.repository}/tags?page_size=100&ordering=last_updated`,
+		const credentials = asRecord(
+			await getJson(
+				`https://auth.docker.io/token?service=registry.docker.io&scope=${encodeURIComponent(`repository:${source.repository}:pull`)}`,
+			),
+			"Docker Hub credentials",
 		);
-		return asArray(asRecord(page, "tags").results, "results").map((value) => ({
-			tag: asString(asRecord(value, "tag").name, "tag.name"),
-			draft: false,
-			prerelease: false,
-		}));
+		const bearer = asString(credentials.token ?? credentials.access_token, "registry token");
+		if (bearer === "") {
+			throw new Error("Empty Docker Hub token");
+		}
+		const first = new URL(`https://registry-1.docker.io/v2/${source.repository}/tags/list?n=1000`);
+		let next: string | null = first.href;
+		const seen = new Set<string>();
+		const releases: { tag: string; draft: boolean; prerelease: boolean }[] = [];
+		while (next !== null) {
+			const url = new URL(next, first);
+			if (url.origin !== first.origin || url.pathname !== first.pathname || seen.has(url.href)) {
+				throw new Error("Invalid Docker Hub tag pagination");
+			}
+			seen.add(url.href);
+			const response = await getResponse(url.href, { authorization: `Bearer ${bearer}` });
+			const page = asRecord(parseJson(await response.text()), "registry tags");
+			if (page.name !== source.repository) {
+				throw new Error("Docker Hub returned tags for another repository");
+			}
+			releases.push(
+				...asArray(page.tags, "tags").map((tag) => ({
+					tag: asString(tag, "tag"),
+					draft: false,
+					prerelease: false,
+				})),
+			);
+			const link = response.headers
+				.get("link")
+				?.split(",")
+				.find((part) => /;\s*rel=(?:"[^"]*\bnext\b[^"]*"|next)(?:\s*;|\s*$)/u.test(part));
+			if (link === undefined) {
+				next = null;
+			} else {
+				const target = /^\s*<(?<target>[^>]+)>/u.exec(link)?.groups?.target;
+				if (target === undefined) {
+					throw new Error("Invalid Docker Hub tag pagination");
+				}
+				next = target;
+			}
+		}
+		return releases;
 	}
 	const headers: Record<string, string> = { accept: "application/vnd.github+json" };
 	const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
@@ -197,7 +251,7 @@ export function blockingFindings(
 	report: unknown,
 ): Refusal[] {
 	const findings = new Map<string, Refusal>();
-	for (const entry of asArray(asRecord(report, "Trivy report").Results ?? [], "Results")) {
+	for (const entry of asArray(validatedTrivyReport(report).Results ?? [], "Results")) {
 		for (const value of isRecord(entry) && Array.isArray(entry.Vulnerabilities)
 			? entry.Vulnerabilities
 			: []) {
@@ -232,21 +286,29 @@ const exceptionKey = (entry: Record<string, unknown>) =>
 /**
  * The policy's exceptions with this generator's own entries replaced: `affected` entries for a
  * platform image whose evidence is a release of a platform pin. Every other entry stays, such as a
- * reviewed `not_affected` decision, or an entry for another image of the same name. A finding that
- * such an entry already accepts gets no second one.
+ * reviewed `not_affected` decision for the current digest. A matching key on an old digest is replaced
+ * by the current disposition, rather than silently suppressing it or creating a duplicate key.
  */
 export function mergeExceptions(
 	existing: readonly unknown[],
 	generated: readonly Record<string, unknown>[],
-	platformImages: ReadonlySet<string>,
 	pins: readonly Pin[],
 ): unknown[] {
 	const owned = (entry: unknown) =>
 		isRecord(entry) &&
 		entry.status === "affected" &&
-		platformImages.has(String(entry.image)) &&
-		pins.some((pin) => String(entry.evidence).startsWith(releaseUrl(pin, "")));
-	const kept = existing.filter((entry) => !owned(entry));
+		pins.some(
+			(pin) =>
+				pin.owns(String(entry.image)) && String(entry.evidence).startsWith(releaseUrl(pin, "")),
+		);
+	const replacements = new Map(generated.map((entry) => [exceptionKey(entry), entry]));
+	const kept = existing.filter((entry) => {
+		if (owned(entry)) {
+			return false;
+		}
+		const replacement = isRecord(entry) ? replacements.get(exceptionKey(entry)) : undefined;
+		return replacement === undefined || (isRecord(entry) && entry.digest === replacement.digest);
+	});
 	const accepted = new Set(kept.filter(isRecord).map(exceptionKey));
 	return [
 		...kept,
@@ -254,6 +316,38 @@ export function mergeExceptions(
 			.filter((entry) => !accepted.has(exceptionKey(entry)))
 			.toSorted((a, b) => exceptionKey(a).localeCompare(exceptionKey(b))),
 	];
+}
+
+/** Every current platform subject needs its own completed, digest-bound scan, including passes. */
+export async function platformFindings(
+	subjects: readonly (Subject & { platform: string; digest: string })[],
+	directory: string,
+): Promise<Refusal[]> {
+	const findings: Refusal[] = [];
+	for (const subject of subjects) {
+		const stem = reportStem(subject.image, subject.platform);
+		const result = asRecord(
+			parseJson(await readFile(path.join(directory, `${stem}.policy.json`), "utf8")),
+			"policy result",
+		);
+		const report = asRecord(
+			parseJson(await readFile(path.join(directory, `${stem}.json`), "utf8")),
+			"Trivy report",
+		);
+		if (
+			result.image !== subject.image ||
+			result.platform !== subject.platform ||
+			result.digest !== subject.digest ||
+			!Array.isArray(result.errors) ||
+			report.ArtifactName !== `${subject.repository}@${subject.digest}`
+		) {
+			throw new Error(`No completed current scan for ${subject.image} (${subject.platform})`);
+		}
+		// An expired policy exception can need renewal; it does not make acquisition incomplete.
+		// Failed acquisitions produce no current result. The report shape has one owning validator.
+		findings.push(...blockingFindings(subject, report));
+	}
+	return findings;
 }
 
 /** The exception that accepts one refused finding while its pin is the newest upstream release. */
@@ -275,6 +369,23 @@ export function exceptionFor(refusal: Refusal, pin: Pin, checked: string, today:
 		owner: OWNER,
 		expires: expires.toISOString().replace(".000Z", "Z"),
 	};
+}
+
+/** A version tag can be rebuilt; exceptions must not retain an older build under that tag. */
+async function currentSubject(subject: Subject, platform: string, pin: Pin | undefined) {
+	const digest = await resolvePlatformDigest(subject.reference, platform);
+	if (pin?.source.kind === "dockerhub") {
+		const current = await resolvePlatformDigest(
+			`docker.io/${pin.source.repository}:${pin.pinned}`,
+			platform,
+		);
+		if (current !== digest) {
+			throw new Error(
+				`Bump the ${subject.image} digest to the current ${pin.pinned} build before excepting its findings (${platform})`,
+			);
+		}
+	}
+	return { ...subject, platform, digest };
 }
 
 if (import.meta.main) {
@@ -301,24 +412,19 @@ if (import.meta.main) {
 	}
 
 	const refusals: Refusal[] = [];
-	const platformImages = new Set<string>();
+	const subjects = await verifiedPlatformSubjects();
 	for (const platform of PLATFORMS) {
-		const directory = policyDirectory(platform);
-		const files = await readdir(directory);
-		for (const file of files.filter((name) => name.endsWith(".policy.json"))) {
-			const result = asRecord(
-				parseJson(await readFile(path.join(directory, file), "utf8")),
-				"policy result",
-			);
-			const image = asString(result.image, "image");
-			platformImages.add(image);
-			const report = parseJson(
-				await readFile(path.join(directory, `${reportStem(image, platform)}.json`), "utf8"),
-			);
-			refusals.push(
-				...blockingFindings({ image, platform, digest: asString(result.digest, "digest") }, report),
+		const expected = [];
+		for (const subject of subjects) {
+			expected.push(
+				await currentSubject(
+					subject,
+					platform,
+					pins.find((candidate) => candidate.owns(subject.image)),
+				),
 			);
 		}
+		refusals.push(...(await platformFindings(expected, policyDirectory(platform))));
 	}
 
 	const today = new Date();
@@ -330,12 +436,7 @@ if (import.meta.main) {
 		return exceptionFor(refusal, pin, checked.get(pin.name) ?? pin.pinned, today);
 	});
 	const policy = asRecord(parseJson(await readFile(POLICY, "utf8")), "policy");
-	policy.exceptions = mergeExceptions(
-		asArray(policy.exceptions, "exceptions"),
-		exceptions,
-		platformImages,
-		pins,
-	);
+	policy.exceptions = mergeExceptions(asArray(policy.exceptions, "exceptions"), exceptions, pins);
 	await writeFile(POLICY, `${JSON.stringify(policy, null, "\t")}\n`);
 
 	const count = (list: readonly Refusal[], severity: string) =>

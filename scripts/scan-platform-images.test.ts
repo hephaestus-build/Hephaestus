@@ -31,7 +31,7 @@ void test("the platform rescan reads every add-on digest and the installed k3s v
 			"cert-manager-cainjector",
 			"cert-manager-acmesolver",
 			"cert-manager-startupapicheck",
-			"traefik",
+			"platform-traefik",
 			"k3s",
 		],
 	);

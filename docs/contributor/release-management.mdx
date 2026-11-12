@@ -196,6 +196,10 @@ Submission to the Chrome Web Store is a manual step: [Releasing to the Chrome We
 
 ### Platform pins
 
+After a k3s, cert-manager, Traefik or agent-sandbox pin change, run `node scripts/scan-platform-images.ts --policy`.
+Regenerate its exceptions with `node scripts/write-platform-exceptions.ts` and review the summary.
+See [Platform image exceptions](./vulnerability-remediation#platform-image-exceptions).
+
 `deploy/platform/k3s-platform.yaml` holds the pins of k3s, Traefik, and cert-manager.
 k3s brings the Gateway API definitions with its bundled `gateway-api-crd` chart.
 The clusters of `ci-kubernetes.yml` run no cert-manager: only the k3s smoke tests that pin.
@@ -231,8 +235,6 @@ To upgrade the controller:
    Also compare them with the read-only ClusterRole of the bundle.
    Add each new kind or verb that the controller writes to the Role of the sandbox namespace.
    If the controller watches a new kind, add it to the read-only ClusterRole.
-9. Run `node scripts/scan-platform-images.ts --policy`. A new pin has new digests, so its exceptions no longer match.
-   Write new ones with `scripts/write-platform-exceptions.ts` ([Platform image exceptions](./vulnerability-remediation#platform-image-exceptions)).
 
 `deploy/platform/k3s-containerd.toml.tmpl` holds the pin of gVisor: the release and the SHA-512 of the `x86_64` and `aarch64` archives.
 To upgrade gVisor, download `gvisor.tar.bz2` of the new release for both architectures.

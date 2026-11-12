@@ -895,6 +895,7 @@ jobs:
         run: node scripts/scan-upstream-images.ts reports
 
       - uses: ./.github/actions/setup-helm
+        if: ${{ !cancelled() }}
 
       # The installer ships these images too, so its policy judges each platform digest.
       - name: Enforce the release vulnerability policy on the platform images
