@@ -41,7 +41,6 @@ A rule that main does not satisfy yet says "1.0 target" and names its pull reque
 ## Decision
 
 1. **Only the server captures.** Capture uses the server's credentials and writes the attempt's folder. `review_job.capture` records the SHA-256 digest of each captured file and of each checkout. A digest proves integrity, not permission. The sandbox gets captured bytes from the gateway and holds no provider credential ([ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) decision 5).
-   1.0 target: on main, the worker captures. [#4079](https://github.com/hephaestus-build/Hephaestus/pull/4079) moves capture into the server.
    Not enforced. Code review catches a capture outside the server.
 2. **Every source is an integration's.** Each source of evidence is a source kind in the versioned source catalog. The adapter of its integration captures it. Core review code, Heph and the evidence module never import a provider integration. A Heph conversation is not a source kind, so it is never evidence.
    Enforced by: `PracticeReviewModuleBoundaryTest#shouldKeepDomainAndProviderTypesOutOfCoreProducts`, `SourceCatalogCoverageTest`.

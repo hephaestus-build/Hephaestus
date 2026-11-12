@@ -59,7 +59,7 @@ This ADR states at 1.0 who sees what, as rules. Rule 9 records a product decisio
     Enforced by: the stories of `PublicActivityNotice.stories.tsx`. No test checks the return on the next visit.
 11. **The page shows only human work in public GitHub and GitLab repositories.** For each person, it shows login, name, avatar, profile link, the counts of `PublicActivityCountsDTO`, first contribution and weekly counts. A person's detail adds review kinds, repositories and a work timeline without other participants. It never shows practices, feedback, observations, Slack, Outline, AI content, teams, comments or automation.
     Enforced by: `ActivityControllerIntegrationTest#shouldIncludeOutsideHumansButNotPrivateRepositoriesCommentsAutomationOrOtherWorkspaces` and `#shouldPublishOnlyGitHubAndGitLabActivity`. No test fails for a new practice field. Review of the DTO catches it.
-12. **The page names no "top helpers".** `highlights.mostPeopleHelped` leaves `PublicActivityDTO` and `ActivityHighlightsDTO`. No client reads it. Decided, not shipped. No pull request delivers it yet.
+12. **The page names no "top helpers".** `PublicActivityDTO` and `ActivityHighlightsDTO` have no `highlights.mostPeopleHelped` ([#4155](https://github.com/hephaestus-build/Hephaestus/pull/4155)). Not enforced.
 13. **A repository is public on the page only while it is confirmed.** Its stored visibility must be public, read within `repository-visibility-max-age` (48 hours by default). A sync that records access loss stops publication at once.
     Enforced by: `ActivityControllerIntegrationTest#shouldExcludeUnconfirmedExpiredAndUnavailableRepositoriesAndRestoreAfterSync` and `#shouldStopPublicationAtOnceWhenTheSyncProviderRecordsAccessLoss`.
 14. **A hidden, erased or deleted person leaves the page and every total.** Positions are computed after the removal. Admins see only how many people the page leaves out, never who hid themselves.
@@ -77,8 +77,7 @@ This ADR states at 1.0 who sees what, as rules. Rule 9 records a product decisio
 19. **Workspace admins read observations, not private feedback text.** They read observations and the review and delivery pages, and can mark an observation incorrect. Practice-page and conversation feedback shows them its existence and delivery state, never its text (`FeedbackListReadQuery`, `FeedbackReadService`).
     Enforced by: `MigratedHistoryReadIntegrationTest#shouldKeepPrivateFeedbackOutOfOperatorProjectionsWithoutHidingItFromItsRecipient`.
 20. **Admins read a developer's answer, not their rating.** They read the current answer and the explanation of a current **Disagree**. The form says so before sending. A rating and every other note stay the developer's.
-    Enforced by: `ResultControllerIntegrationTest#shouldReadLatestFeedbackFactsAndKeepThemScopedToTheResultOwner` for observation pages.
-    1.0 target: on main, the admin feedback detail returns the full response. [#4110](https://github.com/hephaestus-build/Hephaestus/pull/4110) gives it its own projection and adds `FeedbackAnswerPrivacyArchTest`.
+    Enforced by: `ResultControllerIntegrationTest#shouldReadLatestFeedbackFactsAndKeepThemScopedToTheResultOwner` for observation pages, and `FeedbackAnswerPrivacyArchTest` for the admin feedback detail.
 21. **Only an instance admin reads another member's Practice profile,** through a read-only user view with a stated reason. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16 owns that view. Workspace admins have no such access.
     Enforced by: `UserViewIntegrationTest#shouldDenyPrivateContentToAWorkspaceOwnerWhoIsNotAnInstanceAdministrator`, `#shouldRejectAViewAndRecordNothingWhenTheReasonIsMissing` and `UserViewArchitectureTest`.
 22. **Practices across the workspace counts developers and never names one.** Members read it. Each counted developer counts once, at their Practice profile standing. Hidden members, members who left, inactive accounts and suppressed people are not counted.
@@ -112,7 +111,7 @@ This ADR states at 1.0 who sees what, as rules. Rule 9 records a product decisio
 
 ## Confirmation
 
-Each rule names its test or says `Not enforced.` Rules 5, 12 and 20 are 1.0 targets.
+Each rule names its test or says `Not enforced.` Rule 5 is a 1.0 target.
 No architecture rule covers rules 18 and 24. Code review catches a user parameter on a Practice profile handler and a practice field on an activity DTO.
 
 ## Revisit trigger

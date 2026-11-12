@@ -52,8 +52,8 @@ On k3s, a `HelmChart` resource in the auto-deploy folder could apply the applica
 5. **The platform layer is the cluster administrator's.** It holds the Gateway API controller, a network plugin that enforces NetworkPolicy, and cert-manager. It also holds the agent-sandbox controller with its definitions, and the sandbox RuntimeClass. On k3s, `deploy/platform/` installs them and pins each version. The Gateway controller there is our pinned Traefik, not the one that k3s bundles. Thus a release can update it without a k3s patch.
    Enforced by: `platform-pins.yml` (`scan-platform-images.ts --check-pins`). `crd-schemas.test.ts` checks that the pinned definitions cover each kind that the chart renders.
 6. **The chart installs only the release.** It renders the workloads, the migration Job, one `HTTPRoute`, the NetworkPolicies and the sandbox templates. At 1.0 the workloads are the server and the bundled PostgreSQL. The server also serves the web app. It creates no Namespace, Gateway, CRD or Secret, and no Helm hook. PriorityClasses are its only cluster-scoped objects.
-   1.0 target: [#4079](https://github.com/hephaestus-build/Hephaestus/pull/4079) removes the worker, [#4100](https://github.com/hephaestus-build/Hephaestus/pull/4100) the webhook role, and ADR 0100 ([#4135](https://github.com/hephaestus-build/Hephaestus/pull/4135)) the web app container.
-   1.0 target: [#4090](https://github.com/hephaestus-build/Hephaestus/pull/4090) adds a managed-cluster profile with no cluster-scoped object. It can run the agent-sandbox controller in the release namespace.
+   [#4079](https://github.com/hephaestus-build/Hephaestus/pull/4079) removed the worker. 1.0 target: [#4100](https://github.com/hephaestus-build/Hephaestus/pull/4100) removes the webhook role. No pull request yet removes the web app container, as ADR 0100 decides.
+   On a managed cluster, the `cluster` profile renders namespaced objects only. The cluster's admins apply every cluster-scoped object from `deploy/platform/hephaestus-cluster-admin.yaml`, and the agent-sandbox controller runs in the release namespace ([#4090](https://github.com/hephaestus-build/Hephaestus/pull/4090)).
    Enforced by: the role image and route assertions in `kubernetes-chart-render.test.ts`.
 7. **cert-manager issues every certificate.** On k3s, a public ACME issuer gives the host certificate through HTTP-01 on the Gateway. Workspace subdomains need an operator's DNS-01 `ClusterIssuer` for the wildcard certificate.
    Enforced by: `k3s-platform.test.ts` "workspace certificates use DNS-01, and backup Jobs get their own client identity".
@@ -97,7 +97,7 @@ Where the other parts of ADR 0041 went:
 - Bad: Kubernetes is an operator prerequisite from 1.0. An operator needs `kubectl` during an incident.
 - Bad: an operator upgrades the cluster about once a year to stay on a supported release.
 - Bad: the qualified host is narrow. A different OS or kernel needs a rehearsal with the override.
-- Bad: on main, a cluster without cluster-admin cannot install the chart (rule 6, 1.0 target).
+- Bad: on a managed cluster, the agent-sandbox controller reads Pods, Services and NetworkPolicies in all namespaces. Its version cannot limit its reads to one namespace ([managed cluster](../admin/managed-cluster.mdx)).
 - Bad: a one-host upgrade stops every role. The server uses `Recreate` until ADR 0081 rule 1 ships.
 - Bad: the platform pins can block a release when an upstream add-on changes.
 

@@ -6,7 +6,7 @@
 
 **Supersedes:** [ADR 0073](0073-product-feedback-is-worked-on-in-github.md)
 
-**Amends:** [ADR 0079](0079-one-agent-system.md): the `action` sandbox kind and the band of `report_draft`.
+**Amends:** [ADR 0079](0079-one-agent-system.md): the `action` sandbox kind and the `report_draft` run kind go, because a draft is an outbox action.
 
 **Builds on:** [ADR 0044](0044-email-is-a-notification-transport.md), [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md), [ADR 0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md), [ADR 0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md)
 
@@ -31,9 +31,10 @@ The [contributor page](../contributor/product-feedback.mdx) holds the design. Th
 ## Considered options
 
 1. **The draft runs in an `action` sandbox** (ADR 0073 update 2026-11-09). This costs a Pod, a template and a warm pool for one call. The sandbox contains code that a model runs, and a draft runs none.
-2. **The server runs the draft as a `report_draft` run, with no tools, on the shared model path (chosen).**
+2. **The server runs the draft as a `DRAFT_REPORT` outbox action, with no run (chosen).** The action makes one model call with no tools through the proxy.
 3. **Keep the direct adapter of main.** It keeps a second lease model and a provider client without the egress guard.
 4. **Drop follow-up and `/publish` for 1.0.** This removes two polls. Reporters lose update emails, and **Allow public** on a filed private report does nothing.
+5. **The draft as a `report_draft` run in `agent_run`.** It adds a run kind and a lease for one model call that no sandbox holds. The outbox already gives each action a row, a retry allowance and one executor ([ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) decision 10).
 
 ## Decision
 
@@ -47,13 +48,12 @@ The [contributor page](../contributor/product-feedback.mdx) holds the design. Th
    Enforced by: `RoutingGateTest`, `ProductFeedbackRoutingEvalTest` (unit tier, with a model answer that allows everything) and `FilingLifecycleModelTest`.
 5. **Redaction runs twice, and the model only drafts.** Deterministic redaction runs before the model call and on every rendered body. The renderer escapes model text. The model chooses no label, and it never comments on, edits or closes another issue.
    Enforced by: `IssueRendererTest#shouldRenderPersonTextAsInertTextWhenItCarriesMarkup` and `ProductFeedbackRoutingEvalTest`.
-6. **A draft is one server-run model call with no tools.** It is a `report_draft` run in the lowest band, and no sandbox runs it. The call uses the proxy's guarded client, permit and usage record. It never passes a waiting call, and at most one runs in each pool. Its spend counts against the instance's draft limits, never a workspace.
-   1.0 target: no pull request delivers it yet. On main, `ProductFeedbackModelAdapter` runs in the worker role with its own lease and a plain `WebClient`. [#4079](https://github.com/hephaestus-build/Hephaestus/pull/4079) moves it to the server, and [#4095](https://github.com/hephaestus-build/Hephaestus/pull/4095) puts it in the `background` band.
+6. **A draft is one model call with no tools, as a `DRAFT_REPORT` outbox action.** No run and no sandbox carry it. The call uses the proxy's guarded client, permit and usage record, in the lowest band. It never passes a waiting call, and at most one runs in each pool. Its spend counts against the instance's draft limits, never a workspace.
+   1.0 target: [#4214](https://github.com/hephaestus-build/Hephaestus/pull/4214) delivers it. On main, `ProductFeedbackModelAdapter` runs in the server and takes a `background` permit ([#4095](https://github.com/hephaestus-build/Hephaestus/pull/4095)). It keeps its own claim loop and calls the provider with a plain `WebClient`.
    Enforced by: `LlmProductFeedbackAdmissionIntegrationTest`. No test checks the empty tool list.
 7. **A public report waits five minutes.** In that time the reporter can select **Keep private** or **Edit**. An edit starts a new hold and new checks. The hold catches a slip. It is not the legal basis.
    Enforced by: `ProductFeedbackTrustGatesIntegrationTest#shouldFileAPrivateIssueWhenTheReporterKeepsAHeldReportPrivate` and `FilingLifecycleTest`.
-8. **Each GitHub write is an outbox action.** Filing is a `file_issue` action in `agent_action`. A marker lets a retry find an earlier issue, and an unclear lookup counts as unknown. The server checks that the private repository is private before each private write.
-   1.0 target: [#4029](https://github.com/hephaestus-build/Hephaestus/pull/4029) moves filing. No pull request moves promotion, transfer and cleanup writes yet.
+8. **Each GitHub write is an outbox action.** Filing, `/publish`, **Make private** and the scrub after an erasure are the `FILE_ISSUE`, `PUBLISH_REPORT`, `TRANSFER_ISSUE` and `CLEANUP_ISSUE` actions in `agent_action`. A marker lets a retry find an earlier issue, and an unclear lookup counts as unknown. The server checks that the private repository is private before each private write.
    Enforced by: `FilingLifecycleModelTest` (no second issue, no private report made public) and `GitHubProductFeedbackIssuesTest#shouldReturnUnknownWhenSecondMarkerPageFailsEvenAfterMatch`.
 9. **One state table owns the filing.** `FilingLifecycle` names every state and every allowed move. Each status that a person sees derives from the state.
    Enforced by: `FilingLifecycleTest`, `FilingLifecycleModelTest` and the `ck_product_feedback_filing_state` CHECK.
@@ -62,7 +62,7 @@ The [contributor page](../contributor/product-feedback.mdx) holds the design. Th
 11. **Withdrawal and erasure.** **Make private** moves a public issue to the private repository. Erasure deletes the rows at once. A cleanup record without person data then moves or scrubs the issues. Deletion of an issue is a maintainer step.
     Enforced by: `ProductFeedbackCleanupIntegrationTest`.
 12. **Updates say only what the poll saw.** The server polls filed issues. It emails the reporter on filing, publication, a public comment, a close, a reopen and a withdrawal. Hephaestus sends no release email and never claims that a change shipped.
-    1.0 target: no pull request yet deletes the unused `INCLUDED_IN_RELEASE` kind or corrects the duplicate email's false claim.
+    [#4146](https://github.com/hephaestus-build/Hephaestus/pull/4146) deleted the unused `INCLUDED_IN_RELEASE` kind. 1.0 target: the duplicate email still says that Hephaestus follows the original issue. No pull request corrects that claim yet.
     Enforced by: `ProductFeedbackUpdateEmailIntegrationTest#shouldNotifyReporterWithoutCopyingReportTextWhenSubscribed`.
 13. **The operator works in the instance admin console only.** It shows destination health, **Pause**, **Needs action** with **Retry**, and the reports not on GitHub. An admin can send a saved report as a private issue, never a public one. **Pause** stops filing and `/publish`, but follow-up, withdrawal and cleanup go on.
     Enforced by: `RecentSignInByDefaultArchTest`, `AuditByDefaultArchTest`, `ProductFeedbackTrustGatesIntegrationTest#shouldNeverPublishByAnAdminsAction` and `#shouldNeverHandAReportToAModelWhenItsAuthorWasNotTold`.
@@ -70,9 +70,9 @@ The [contributor page](../contributor/product-feedback.mdx) holds the design. Th
 ## What changed, and why
 
 - **The draft stays out of a sandbox.** Option 17 holds, and the 2026-11-09 update is reversed. A sandbox contains code that a model runs. A draft offers the model no tool, so it has nothing to contain. OWASP names the minimal tool set as the defence ([LLM06](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/)).
-- **The draft joins the one run table.** Option 17 also rejected the review queue. `agent_run` is not that queue: the band keeps a draft behind every other call ([ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) decision 3).
-- **The `action` sandbox kind goes** (amends ADR 0079). Its only user was the draft. `AgentSandboxKind.ACTION`, its chart template and warm pool, and its isolation-gate case go. Decided, not shipped: no pull request deletes them yet.
-- **`report_draft` is `background`, not `interactive`.** ADR 0079 said that a person waits. A reporter's effort ends at **Send**, so nobody waits for the draft.
+- **The draft is an outbox action, not a run** (option 5). Option 17 also rejected the review queue, and the draft joins no queue of agent work. The `background` band keeps its call behind every other call ([ADR 0079](0079-one-agent-system.md) § Data model).
+- **The `action` sandbox kind goes** (amends ADR 0079). Its only user was the draft. [#4154](https://github.com/hephaestus-build/Hephaestus/pull/4154) deleted `AgentSandboxKind.ACTION`, its chart template and warm pool, and its isolation-gate case.
+- **The draft call is `background`, not `interactive`.** ADR 0079 made `report_draft` interactive, because a person waits. A reporter's effort ends at **Send**, so nobody waits for the draft.
 - **No release email.** ADR 0073 decision 11 promised one. Main has no code that sends it, and the user guide does not list it. Under the 1.0 rule against unused paths, it goes.
 - **The filing lease goes,** as the 2026-11-09 update decided. The marker, the frozen target and payload, and the cleanup records stay.
 - **The two 2026-11-06 updates are folded in.** A first report never waits for a choice. Admins can send saved reports to GitHub.
@@ -99,6 +99,7 @@ Ledger row PF-1 is the production proof: one report filed on production from the
 - GitHub can transfer an issue from a private repository to a public one. Private first then costs less.
 - A draft needs tools or source evidence ([contributor page § Source investigation boundary](../contributor/product-feedback.mdx#source-investigation-boundary)). Then a sandbox is the place for it.
 - A destination other than GitHub is needed.
+- Reporters need progress or release facts that the poll does not see. Then a successor ADR moves follow-up onto the provider event inbox ([ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md)) and supersedes rule 12.
 
 ## Sources
 

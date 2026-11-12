@@ -35,15 +35,14 @@ A rule that main does not satisfy yet says "1.0 target" and names the pull reque
 
 1. **One runtime role.** The JAR runs as the server, with N replicas and rolling updates, and as the `migrate` profile in the migration Job. The server also serves the web app. There is no worker role, no webhook role, and no web app container or nginx.
    ADR 0100 ([#4135](https://github.com/hephaestus-build/Hephaestus/pull/4135)) owns how the server serves the web app. It also owns the path map. The server answers `/api/**`, `/webhooks/**` and `/.well-known/**`. The gateway port answers `/internal/**`. Every other path is the web app.
-   1.0 target: [#4079](https://github.com/hephaestus-build/Hephaestus/pull/4079) removes the worker role, and [#4100](https://github.com/hephaestus-build/Hephaestus/pull/4100) removes the webhook role. ADR 0100 removes the web app image, the Gateway `/api` rewrite and `hephaestus.auth.api-base-path`.
+   [#4079](https://github.com/hephaestus-build/Hephaestus/pull/4079) removed the worker role. 1.0 target: [#4100](https://github.com/hephaestus-build/Hephaestus/pull/4100) removes the webhook role. No pull request yet removes the web app image, the Gateway `/api` rewrite and `hephaestus.auth.api-base-path`, as ADR 0100 decides.
    Enforced by: `RuntimeRoleBoundaryTest`, `scripts/check-env-roles.ts` and the rollout assertions in `scripts/kubernetes-chart-render.test.ts`.
 2. **Provider events** go to a PostgreSQL inbox in the server, as [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md) decides.
 3. **Agent work is a row.** A run is an `agent_run` row. A claim takes it with `FOR UPDATE SKIP LOCKED`. The claim sets a lease on the database clock and a new lease epoch. One reaper requeues an expired lease. Every write of a run is fenced on its epoch.
-   1.0 target: conversation turns move from their own lease to `agent_run` in [#4072](https://github.com/hephaestus-build/Hephaestus/pull/4072).
-   Enforced by: `AgentRunsIntegrationTest` (a stale claim, an expired lease, a second leased run of one subject).
+   Enforced by: `AgentRunsIntegrationTest` (a stale claim, an expired lease, a second leased run of one subject) and, for conversation turns, `HephTurnsIntegrationTest#shouldClaimAQueuedTurnAndHandOutATokenWhoseWorkEndsAtTheAdmittedTimeout`.
 4. **Sandboxes:** one agent-sandbox `Sandbox` for each subject, as [ADR 0079](0079-one-agent-system.md) § Subject and sandbox decides.
 5. **Only the server holds model keys.** A sandbox holds a token for its own subject, and its egress reaches only the server's gateway port 8081. Every model call passes the server's LLM proxy, which counts its usage against its run.
-   1.0 target: the proxy moves from the worker to the server in [#4079](https://github.com/hephaestus-build/Hephaestus/pull/4079). `ProductFeedbackModelAdapter` and the model capability probe still call providers directly. No pull request moves them yet.
+   1.0 target: [#4214](https://github.com/hephaestus-build/Hephaestus/pull/4214) moves the product feedback draft onto the proxy. On main, `ProductFeedbackModelAdapter` calls the provider directly. `LlmModelCapabilityProbe` also calls providers directly, and no pull request moves it yet.
    Enforced by: `LlmProxySecurityConfigTest` for the 404 rules of both ports. The chart test "network policy denies by default and names exact peers" and `scripts/sandbox-isolation.test.ts` check the egress.
 6. **The sandbox Pod is restricted.** It meets the `restricted` Pod Security Standard of Kubernetes. It runs as a non-root user, with no privilege escalation and with all capabilities dropped. Its seccomp profile is `RuntimeDefault` or `Localhost`. It also mounts no service-account token. The chart's default runtime is runc with `hostUsers: false`. gVisor is an option where a node offers it, and the one-host k3s platform selects it. A node without user namespaces fails closed with a named reason. No Docker backend exists.
    Enforced by: the sandbox template assertions in `scripts/kubernetes-chart-render.test.ts`, `scripts/sandbox-isolation.ts`, and `SandboxArchitectureTest#applicationMustNotUseADockerSandboxClient`.
@@ -54,7 +53,6 @@ A rule that main does not satisfy yet says "1.0 target" and names the pull reque
 9. **The provider sets the pace.** The runner starts the next practice session only when no session waits for the model and the sandbox has room. The server bounds the calls in flight to each provider. It learns that limit from refusals (429, 503, 529) and from latency.
    Enforced by: `pi-session-pace.spec.ts`, `LlmCallLimitTest` and `LlmCallPoolLearningIntegrationTest`.
 10. **The agent proposes, and the server acts.** Each write to a provider, Slack or email is an `agent_action` row with an idempotency key. The transaction that decides the write inserts the row. One executor sends it.
-    1.0 target: on main, the outbox sends email only. Issue filing, feedback on the work and Slack posts move in [#4029](https://github.com/hephaestus-build/Hephaestus/pull/4029), [#4070](https://github.com/hephaestus-build/Hephaestus/pull/4070) and [#4081](https://github.com/hephaestus-build/Hephaestus/pull/4081).
     Enforced by: `ActionStoreIntegrationTest`. No architecture rule forbids a provider write outside the executor yet.
 
 The loop keeps two rules of ADR 0068:

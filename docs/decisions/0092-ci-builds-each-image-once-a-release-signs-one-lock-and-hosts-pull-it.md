@@ -64,8 +64,8 @@ This ADR states how a release is built, signed and delivered at 1.0 as rules.
 12. **The approval is the identity of `promote.yml`.** Hosts pin that workflow identity. A GitHub environment with required reviewers gates the job. `promote.yml` runs only by `workflow_dispatch` and is never reusable.
     Not enforced for the trigger set. The header comment of `promote.yml` states the rule, and review catches a `workflow_call` trigger.
 13. **Staging follows `main`, and Production runs releases.** A commit channel names a commit on `main` and the digests of its build. The promotion checks each digest against build provenance for that commit. The channel signature covers the digests.
-    1.0 target: today `resolve-promotion.ts` accepts a commit for Production too. [#4107](https://github.com/hephaestus-build/Hephaestus/pull/4107) refuses it.
     Enforced by: `scripts/resolve-promotion.test.ts` ("a commit outside the default branch is refused before any image is resolved") and `scripts/commit-image-lock.test.ts`.
+    Production is enforced by: `scripts/resolve-promotion.test.ts` ("an environment that runs releases refuses a commit of the default branch").
 14. **The apply is one `helm upgrade --install`.** A release channel applies the signed chart of that release. A commit channel applies the source chart of that commit with the verified pins. The lock images come last. The flags are `--rollback-on-failure --wait=watcher --wait-for-jobs`.
     Enforced by: the chart-host and commit-channel apply cases in `reconcile-deployment.test.ts`.
 15. **A release never supplies its own verifier.** The host verifies with the tooling of the last release that it applied. It adopts the tooling of the next release only after it applies that release.

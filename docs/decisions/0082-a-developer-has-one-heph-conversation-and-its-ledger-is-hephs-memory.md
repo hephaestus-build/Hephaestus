@@ -49,7 +49,7 @@ A rule that main does not satisfy yet says "1.0 target" ([ADR 0070](0070-1-0-is-
 5. **The answer appears where the developer asked.** The app shows everything. A Slack question gets its answer in Slack. An app question never goes to Slack. A Slack question gets 👀 while Heph works. At the top level, one reply follows. In a Slack thread, the answer streams.
    Enforced by: `SlackMentorProjectorIntegrationTest#shouldNeverTouchSlackWhenTheQuestionWasAskedInTheApp` and `#shouldStreamTheAnswerAndStopItUnderFeedbackButtonsWhenAThreadTurnRuns`.
 6. **A Slack reply is never posted twice.** If Slack cannot confirm a reply, the server reads the Slack history once. The app marks a reply that Slack lacks or cut as "Not fully delivered to Slack".
-   1.0 target: the reply is a `slack_post` action in the outbox ([ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) decision 10), in [#4081](https://github.com/hephaestus-build/Hephaestus/pull/4081).
+   The reply is a `slack_post` action in the outbox ([ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) decision 10).
    Enforced by: `SlackMentorProjectorIntegrationTest#shouldFailTheAnswerAndItsFeedbackAndNeverPostItAgainWhenTheSlackHistoryDoesNotHoldIt`.
 7. **Stop.** The developer can stop any turn in the app. A stopped running turn keeps its cut-off answer. A stopped queued turn keeps its question. In a Slack thread, Slack's Stop stops only that thread's running Slack turn.
    Enforced by: `MentorTurnServiceIntegrationTest#shouldStopAQueuedTurnAtOnceAndKeepItsQuestionWhenTheDeveloperStopsIt`, `SlackMentorProjectorIntegrationTest#shouldStopOnlyTheStreamingTurnWhenSlackReportsThatTheDeveloperStoppedIt`.
@@ -81,7 +81,7 @@ A rule that main does not satisfy yet says "1.0 target" ([ADR 0070](0070-1-0-is-
 19. **The weekly digest is opt-in.** It is off by default, and one account switch covers every workspace. It is due on Monday from 09:00 to 21:00 local time. A quiet week writes nothing. It shows no score, rank or streak ([ADR 0045](0045-activity-counts-work-and-never-ranks-people.md)).
     Enforced by: `WeeklyDigestComposerTest#shouldBeDueOnlyOnMondayFromNineToNineInTheEveningLocalTimeWhenTheJobRuns`, `WeeklyDigestIntegrationTest#shouldWriteNothingWhenTheWeekWasQuiet`.
 20. **A note points to the digest.** A Slack note, or else an email, says that it is ready. The note has no counts, no practice names and no feedback text.
-    1.0 target: the Slack note is a `slack_post` action, in [#4081](https://github.com/hephaestus-build/Hephaestus/pull/4081). The email already goes through the outbox.
+    The Slack note is a `slack_post` action, and the email is an `email` action. Both go through the outbox.
     Enforced by: `SlackWeeklyDigestPointerIntegrationTest#shouldPostOneNoteWithoutContentsAndLearnTheDmWhenADigestIsWritten`.
 21. **A model writes the digest and nudges.** Each is a `digest` run in the conversation's sandbox ([ADR 0079](0079-one-agent-system.md) § Interactive and proactive work). Admission checks each claim against its sources. The destination rules of [ADR 0057](0057-one-heph-conversation-per-developer.md#weekly-digest) choose its facts.
     Nudges follow the digest opt-in, so they are off by default. A nudge outside the conversation carries no content, as the digest note does.
