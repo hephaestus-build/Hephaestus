@@ -227,17 +227,13 @@ public class MentorTurnCompletion {
                 NOT_SHOWN);
     }
 
-    /**
-     * Settles the feedback a Slack answer claimed when Silent Mode kept the rest of the answer from leaving the
-     * instance: what a stream already showed counts as {@link #recordDelivery} counts it, and the rest failed.
-     */
+    /** Records no shown feedback when Silent Mode keeps the complete Slack reply inside the instance. */
     @Transactional
-    public void recordSilenced(
-            long workspaceId, UUID turnId, Collection<UUID> shownInSlack, Collection<UUID> partlyShownInSlack) {
+    public void recordSilenced(long workspaceId, UUID turnId) {
         receiptsDue(
                 turns.require(workspaceId, turnId),
-                Set.copyOf(shownInSlack),
-                Set.copyOf(partlyShownInSlack),
+                Set.of(),
+                Set.of(),
                 ConversationCopyOutcome.FAILED,
                 SLACK_PARTLY,
                 SILENCED);

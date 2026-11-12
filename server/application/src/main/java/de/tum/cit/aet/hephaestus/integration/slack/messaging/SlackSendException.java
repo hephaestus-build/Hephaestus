@@ -68,13 +68,4 @@ public class SlackSendException extends RuntimeException {
     public boolean isRateLimited() {
         return retryAfterMillis != NOT_RATE_LIMITED;
     }
-    /** A transport failure or invalid acknowledgement can follow a provider write. */
-    public boolean visibilityUnknown() {
-        return "stream_visibility_unknown".equals(slackError)
-                || "transport_failure".equals(slackError)
-                || "invalid_receipt".equals(slackError)
-                || "internal_error".equals(slackError)
-                || "fatal_error".equals(slackError)
-                || "unknown".equals(slackError);
-    }
 }

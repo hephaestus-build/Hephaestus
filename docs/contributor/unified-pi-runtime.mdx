@@ -339,206 +339,22 @@ A `show_feedback` call for a piece of the digest gets `422`, because that feedba
 
 ## Slack replies
 
-`SlackMentorProjector` (server role) sends the reply to each turn that the developer asked in Slack.
-A turn asked in the app never reaches Slack.
-The reply is what the app shows for the turn (`SlackMentorPosts.reply`).
-It has each message that Hephaestus wrote, followed by the quoted words of each result, problem, and piece of feedback that it showed.
+The ledger stores the complete admitted answer and enqueues one `SLACK_POST` action in the same transaction.
+`SlackMentorProjector` only wakes the outbox executor for a terminal turn.
+Its subscription is excluded from the `test` profile.
+The [outbox](./outbox.md) owns the post, its lease, retry, metadata readback and terminal outcome.
+Slack receives no model text while a turn runs.
+The app's live hub keeps its existing partial-answer path.
 
-One server projects a turn: the server that creates the reply's outbox action ([A reply without its server](#a-reply-without-its-server)).
-While that action runs, it is the state of the whole reply: the app shows `PENDING` or `UNCERTAIN`.
-When it ends, the question records how the reply ended in `slack_delivery`: `DELIVERED`, `UNCERTAIN`, or `FAILED`.
+An unknown post is read back by its metadata before its outcome is recorded.
+It is never posted again on an unknown outcome.
+Unreadable history stays uncertain.
+The action's end commits the Slack message reference and the receipts for practice feedback whose quotes Slack actually shows.
+Long answers keep the existing cut note and the full answer remains in the app.
 
-Hephaestus's answer entry carries only `slack_ts`, the message that shows it, so that a Slack thread on that message finds it.
-Every post carries Slack metadata with the entry id (event type `heph_entry`).
-A notice to the developer, such as a refusal, carries the event type `heph_notice`.
-Thus, only a stream that no server ended is a Hephaestus message without metadata.
-
-| Where the developer asked | While the turn runs | When the turn ends |
-| --- | --- | --- |
-| The top level of the direct message | Hephaestus reacts with 👀. After 5 seconds, one notice says what Hephaestus does, such as "Reading your pull requests…", and changes with the stage (`SlackMentorProjector.PROGRESS_NOTICE_AFTER`). | One post with the reply, then Hephaestus deletes the notice and removes 👀. Slack shows at most 12,000 characters. A longer reply is cut and ends with "… The full answer is in Hephaestus." |
-| A Slack thread | Hephaestus reacts with 👀 and sets the thread's agent session to `processing` (`agents.sessions.setStatus`), so Slack shows its Stop. The partial answer streams (`chat.startStream`, then `chat.appendStream`). The question's `slack_stream_ts` holds the stream's `ts`. | The rest of the answer, then `chat.stopStream` with the Helpful and Not helpful buttons, then the session's status, then Hephaestus removes 👀. |
-
-A question whose turn has not run 10 seconds after it was asked gets one notice where it was asked (`SlackMentorProjector.WAITING_NOTICE`).
-Earlier turns hold the server's turn slots, and without the notice Slack shows nothing while it waits.
-The server deletes the notice when the turn runs or ends.
-A turn that ran and waits again gets no notice.
-If the turn waits for a free Hephaestus (`MentorTurnWaits`), the notice says that Hephaestus answers other questions (`WAITING_FOR_HEPH_NOTICE`).
-
-The progress notice of a top-level question carries its turn id in its metadata.
-A retried attempt deletes it, and the next run posts a new one.
-A rate limit pauses it for the time that Slack asks.
-Sometimes Slack did not answer its post, or another server posted it.
-Then the end of the reply finds it in the DM history and deletes it.
-
-The notice does not claim the reply.
-A claim before the turn runs would lose the answer if the server restarted during the wait.
-Thus, the notice relies on the one server that the chart runs.
-That server keeps the notice in memory, so after a restart a question that still waits can get it again.
-
-A failed turn gets its reason as the reply.
-A stopped turn's reply is what Hephaestus wrote before the stop.
-If Hephaestus wrote nothing, nothing is posted.
-
-A developer can stop any active turn in the app, also a turn asked in Slack.
-When Slack rejects a running turn's stream append with `stopped_by_user`, the projector calls the same workspace-scoped turn stop.
-The stream belongs to one claimed turn, so the stop changes that turn only. Queued follow-ups stay queued.
-Other stream failures do not mean the developer asked to stop the turn.
-
-### Stop in a Slack thread
-
-In a Slack thread, the developer can also press Slack's Stop, also before the first words and during a tool wait.
-Slack sends `agent_session_stopped`, and `SlackAgentSessionStoppedMessageHandler` hands it to `SlackMentorService.handleSessionStop`.
-
-- The event must come from the developer's own DM.
-  The team's current Slack connection must match.
-  The DM of the main conversation, the existing parent entry and its existing thread must also match.
-  A thread is never opened, and no turn id is taken from the event.
-- An event that lacks a field, or has a field of another type, is acknowledged and changes nothing.
-- The event stops the thread's running Slack turn only, under the turn's lock (`MentorTurnService.stopRunning` with a predicate).
-  `event_ts` must be after the start of the running attempt.
-  When `streaming_message_ts` names streams, one of them must also be the question's `slack_stream_ts`.
-  Queued follow-ups and the main conversation stay as they are, and a turn that already ended stays unchanged.
-- The stop writes only to the ledger. It calls no Slack API.
-  The loop learns of the stop at the attempt's next call. It then aborts the turn, as for a stop in the app. The turn's end then ends the stream and the session's status.
-
-The time check has no margin.
-It compares Slack's clock (`event_ts`) with the database's clock (the attempt's `started_at`).
-A difference between the two clocks can make a stop just after a start do nothing.
-In a narrow window, it can also let a delayed stop of an earlier attempt stop the next attempt.
-The recorded stream is more evidence, but it names no attempt.
-After a lost lease, `slack_stream_ts` still names the lost attempt's stream until the projector starts the answer again.
-
-### The session's status
-
-The projector sets the status of a thread's agent session.
-`processing` means that a Slack turn of the thread runs now. A queued question alone shows `active`.
-
-- When it takes a running thread turn, the projector sets `processing`, if that attempt still runs.
-- It opens a stream only while the stream's attempt still runs.
-- When a stream ends, `chat.stopStream` sends the status of the thread's running Slack work as `session_status`. Slack's default is `active`.
-- At the end of the turn, `agents.sessions.setStatus` sends that status again, also for a reply that is posted instead of streamed.
-
-Slack keeps the status that it got last.
-Thus, each of these calls runs in `MentorSlackDelivery.callInThreadSession`.
-First it holds the developer's person-data write fence (`PersonDataWriteFence.holdForAccountWrite`).
-This precedes every ledger lock, as for other writes about the developer ([Personal data](#personal-data)).
-If the fence refuses the developer, for example after an erasure request, no Slack call is made.
-Then it shares the main conversation's row and locks the thread's row, until Slack answers.
-
-An erasure that holds the fence makes a session call wait before any row lock.
-An erasure also waits at the fence for an active session call.
-On every server, the session calls of one thread run one at a time.
-Each reads the thread's running Slack work after the preceding call ends.
-
-A server's claim takes neither row, so the next turn can start while an earlier stream ends.
-Its own status call then comes after.
-While such a call waits for Slack, appends to that thread and writes that lock the main conversation's row wait.
-No turn, entry or receipt is written in the call.
-The projector records Slack's answer after it.
-A top-level question gets no session status.
-
-### Retries, rate limits and stream failures
-
-A retried attempt starts its answer again, in a new message.
-If Slack still streams the lost attempt's stream, it ends with "… Hephaestus had to start again. The answer follows below."
-
-A stream appends at most once each second.
-`chat.appendStream` is Tier 4: Slack allows 100 calls each minute for each workspace.
-On one server, the appends of running turns in one workspace are at least 600 ms apart (`SlackMentorProjector.WORKSPACE_APPEND_SPACING`).
-Server replicas do not share this spacing, and the rest of an answer at the end of its turn is not spaced.
-For these appends, Slack's rate limit applies: the server waits for the `Retry-After` time, then tries again.
-
-Each HTTP call of the Slack gateway's own client (`SlackMessageService`) has a deadline of 10 seconds.
-One SDK call can make two HTTP calls: `auth.test` for a token that the SDK has not seen, then the requested call.
-A send has a budget of 30 seconds and a history read 150 seconds, counted on the monotonic clock with the time of the calls.
-
-After a 429, a retry waits for the whole `Retry-After`.
-The wait must be within its cap.
-It and two more HTTP calls must also fit in the remaining budget.
-Otherwise it gives up with the 429, and never tries earlier than Slack asked.
-
-The deadline does not end a call that already runs when the budget ends.
-A call that runs out of time is a `transport_failure`: Slack may still have applied the write, so the reply's outcome stays unknown.
-
-The table gives what the end of the turn does with the stream.
-It applies to a refused append and to an answer that no longer starts with what the stream shows.
-The same rules apply to the append and `chat.stopStream` at the end of the turn.
-A stream that takes no more text gets no more text until the turn ends.
-Slack documents no way to keep a stream open while it gets no text.
-
-| Cause | The stream | When the turn ends |
-| --- | --- | --- |
-| `stopped_by_user`: the developer stopped the stream in Slack. | Takes no more text. A refused append while the turn runs also stops that turn. | The stream ends where it is. |
-| `message_not_in_streaming_state`: Slack ended the stream, for example after a timeout that it does not document. | Takes no more text. | `chat.update` replaces the message with the whole reply. |
-| A transport failure or a Slack server error. Slack can show the text already, so the append is not sent again. | Takes no more text. | `chat.stopStream`, then `chat.update` with the whole reply. If this error answered `chat.startStream`, the server does not know the stream's `ts`. It reads the thread for a message with the app's `bot_id` (from `auth.test`) and without metadata, from within 2 seconds of the refused start. It replaces that message only if exactly one matches. Otherwise, it posts the whole reply. |
-| A rate limit, or any other error. | Takes the text again a second later. After 8 refused appends in a row, it takes no more text. | As for a transport failure. |
-| No error, but Hephaestus's answer no longer starts with what the stream shows, for example after a retried model call. | Takes no more text. | `chat.stopStream`, then `chat.update` with the whole reply. |
-| An error in `SlackMentorProjector.STREAM_GONE`, for example a deleted message. | Takes no more text. | The server clears `slack_stream_ts` and posts the whole reply as a new message. |
-
-For a stopped turn, the stream ends where it is, unless it shows text that the stored answer does not start with.
-For a failed turn, the reason replaces the message instead of the whole reply.
-
-A Slack error decides the state of the reply (`SlackMentorPoster`):
-
-- A transport failure or a Slack server error leaves `UNCERTAIN`. The server cannot tell whether Slack stored the post.
-- A rate limit after the retry budget also leaves `UNCERTAIN`. Every try got a 429, so Slack stored nothing. The conservative state is still `UNCERTAIN`.
-- Any other error that Slack answered is final: `FAILED`.
-- Silent Mode is `FAILED`.
-
-A reply that can no longer reach Slack is `FAILED`, for example after the Slack connection or the direct message is gone (`MentorSlackDelivery.giveUp`).
-
-### Feedback in a Slack reply
-
-The end of a turn that ended `DONE` does not settle the feedback of a turn asked in Slack.
-What Slack shows settles it (`MentorTurnCompletion.recordDelivery`).
-Slack shows a piece of feedback when the shown part of the reply holds each of its quotes whole.
-A piece that the reply quotes more than once, with only some quotes whole, is partly shown.
-The shown part is what the stream sent, or the part of a post or a `chat.update` that Slack renders.
-
-| What happened in Slack | Feedback |
-| --- | --- |
-| The post reached Slack, the stream ended, or `chat.update` replaced the message, and Slack shows the feedback. | `DELIVERED` |
-| The same, but Slack shows the feedback only partly. | `UNCONFIRMED` |
-| The same, but Slack does not show the feedback. | `FAILED` |
-| Slack refused the reply. | `DELIVERED` if a stream already showed it, otherwise `FAILED` |
-| Silent Mode kept the reply from Slack (`MentorTurnCompletion.recordSilenced`). | `DELIVERED` if a stream already showed it, otherwise `FAILED` |
-| The reply is `UNCERTAIN` on the projecting server. | It stays `UNCONFIRMED` until a read of the history decides. |
-| The reply can no longer reach Slack. | It stays `UNCONFIRMED`. |
-
-A turn asked in Slack that ended `STOPPED` or `FAILED` settles its feedback at the end, as an app turn does ([Delivery of shown feedback](#delivery-of-shown-feedback)).
-Only a `DONE` turn's Slack projection publishes feedback receipts. A later stream, post, Silent Mode refusal, or disconnected-reply reconciliation cannot replace the end's cutoff receipt.
-
-### A reply without its server
-
-The reply is an outbox action of kind `SLACK_POST`, keyed by the question (`slack_reply:<question id>`, [The outbox](./outbox.md)).
-The server that projects a turn creates the action while the turn runs (`MentorSlackReplies.own`), and the action waits for one day.
-The end of the turn makes the action due within 2 minutes (`MentorSlackReplies.ended`).
-If no server took the reply, the end creates the action itself.
-The projecting server carries out the action at once with its own stream (`ActionExecutor.runNow`).
-When that server died or missed the end, the executor of any server takes the action after the 2 minutes.
-
-That server has no stream of the reply, and it never posts again what Slack can hold:
-
-- A reply that no server took is sent now.
-- A reply that a server took gets a read of the history of the direct message, by its metadata (`SlackMentorPoster.reconcile`).
-  - The post is there: the reply is `DELIVERED`, and its feedback settles as for a post that reached Slack.
-  - The post is not there, and Slack has no more pages: the reply is `FAILED`.
-    The feedback that the reply claimed is `FAILED` too, and the reply is never posted again.
-    The app shows "Not fully delivered to Slack. The full answer is here." under the answer.
-  - The history cannot be read, or Slack has more pages than the one it returned: the reply stays `UNCERTAIN`.
-    Its feedback is `UNCONFIRMED` (`MentorTurnCompletion.recordUncertain`).
-    The history is read again a minute later, for 3 attempts in all.
-- A stream that another server left is never posted again, because its shown part is unknown.
-  For a turn that ended `DONE`, that server ends the stream with "… The full answer is in Hephaestus.", and the feedback of the reply is `UNCONFIRMED`.
-  If Slack already ended that stream, it replaces the message with the whole reply (`chat.update`).
-  The feedback then settles as for a replaced message.
-  For a stopped turn, it ends the stream where it is.
-  For a failed turn, it ends the stream with the reason.
-  If Slack already ended the stream, it replaces the message with the reason.
-- An attempt after one whose post may have reached Slack reads the history first, in the same way.
-
-The Slack note of a weekly digest is an action of the same kind (`slack_digest:<digest id>`), and gets the same history read.
-A note whose direct message Hephaestus never learned stays `UNCERTAIN`.
+Use **Stop answer** in the app to stop an unfinished turn.
+The Slack app subscribes to no session-stop event.
+The Slack note of a weekly digest uses the same adapter and readback rule, keyed by the digest.
 
 ### Slack disconnect
 
@@ -1031,7 +847,7 @@ A tool's stage holds for the partial-answer window in which the tool started, so
 A stage never contains a tool name, a path, a command, or a repository name, because the model selects them.
 
 The app shows the stage of a running turn (`MentorTurnPartialDTO.stage`).
-Slack shows 👀 and the streamed text, not the stage.
+Slack receives the complete admitted answer when the turn ends.
 
 ### Tool results
 

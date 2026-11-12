@@ -15,14 +15,12 @@ class SlackConnectionScopesTest extends BaseUnitTest {
         assertThat(SlackConnectionStrategy.DEFAULT_SCOPES)
                 .containsExactlyInAnyOrder(
                         "chat:write",
-                        "assistant:write",
                         "im:history",
                         "channels:history",
                         "groups:history",
                         "channels:read",
                         "channels:join",
                         "groups:read",
-                        "reactions:write",
                         "users:read");
     }
 

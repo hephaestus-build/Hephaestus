@@ -83,7 +83,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("integration.slack.connect.SlackScopesControllerIntegrationTest", "slack-signed"),
             assignment("integration.slack.item.SlackThreadProjectionIntegrationTest", "slack-ingest"),
             assignment("integration.slack.item.ThreadItemSourceIntegrationTest", "slack-enabled"),
-            assignment("integration.slack.mentor.SlackMentorProjectorIntegrationTest", "slack-receipt-order"),
             assignment("notification.AccountSecurityEmailIntegrationTest", "email-capture"),
             assignment("notification.email.EmailAdminControllerIntegrationTest", "email-capture"),
             assignment("notification.NotificationPublicationFairnessIntegrationTest", "registry-fairness"),
@@ -265,10 +264,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry("slack-enabled", "real Slack item resolution with the configured provider adapter"),
             Map.entry("slack-ingest", "enabled Slack ingest wiring with its review-submission spy"),
             Map.entry("slack-lifecycle", "agent submission boundary override"),
-            Map.entry(
-                    "slack-receipt-order",
-                    "real turn endings and persisted feedback receipts with the completion listener held"
-                            + " to replay both publication orders"),
             Map.entry("slack-signed", "enabled signed Slack HTTP wiring"),
             Map.entry("startup", "production main-method startup instrumentation"),
             Map.entry("agent-off-e2e", "E2E profile precedence with agent jobs off and no Kubernetes Pod metadata"),

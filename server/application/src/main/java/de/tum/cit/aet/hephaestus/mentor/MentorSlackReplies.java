@@ -5,35 +5,26 @@ import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.action.LaneAction;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * The Slack posts of the ledger as outbox actions ({@link ActionKind#SLACK_POST}): the reply to a Slack turn, keyed by
- * its question, and a weekly digest's note, keyed by the digest.
- *
- * <p>The server that streams a turn's reply owns it: its {@link #own} creates the reply's action, held back for
- * {@link #HOLD}, and the owner carries it out when the turn ends. When the turn ends, {@link #ended} makes the reply
- * due within {@link #GRACE}, or creates it unclaimed: if no owner carries it out by then, the executor of any server
- * does.
- */
+/** One completed Slack reply or digest note, keyed by its ledger entry and owned by the outbox. */
 @Component
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class MentorSlackReplies {
-
-    /** How long the reply of a running turn waits for its owner: the turn's end shortens it to {@link #GRACE}. */
-    static final Duration HOLD = Duration.ofDays(1);
-
-    /** How long the reply of an ended turn waits for its owner before any server sends or settles it. */
-    static final Duration GRACE = Duration.ofMinutes(2);
 
     /** How long a reply whose post may have reached Slack waits before the history is read. */
     public static final Duration REREAD = Duration.ofMinutes(1);
@@ -48,10 +39,10 @@ public class MentorSlackReplies {
      * What an action posts.
      *
      * @param turnId the turn whose reply it is; {@code null} for a weekly digest's note
-     * @param taken whether a server owned the reply while its turn ran: Slack may then show part of it already
      */
-    public record Payload(UUID entryId, @Nullable UUID turnId, boolean taken) {}
+    public record Payload(UUID entryId, @Nullable UUID turnId) {}
 
+    private final MentorEntryRepository entries;
     private final AgentActions actions;
     private final ObjectMapper mapper;
 
@@ -87,31 +78,18 @@ public class MentorSlackReplies {
         return delivery(actions.byKeys(workspaceId, List.of(key)).get(key));
     }
 
-    /** Takes the reply of a running turn for this server. Empty when another server took it, or its turn ended. */
-    @Transactional
-    public Optional<UUID> own(long workspaceId, long accountId, UUID questionId, UUID turnId) {
-        return actions.enqueueNew(
-                request(workspaceId, accountId, replyKey(questionId), new Payload(questionId, turnId, true)), HOLD);
-    }
-
-    /** Creates a weekly digest's note for this server to send now. Empty when it exists already. */
+    /** Creates one digest note; the executor can carry it out immediately. */
     @Transactional
     public Optional<UUID> digest(long workspaceId, long accountId, UUID digestId) {
         return actions.enqueueNew(
-                request(workspaceId, accountId, digestKey(digestId), new Payload(digestId, null, false)), GRACE);
+                request(workspaceId, accountId, digestKey(digestId), new Payload(digestId, null)), Duration.ZERO);
     }
 
-    /**
-     * The reply's action when no server owns it and no attempt took it yet: a server that sees the turn end can carry
-     * it out at once instead of waiting for {@link #GRACE}.
-     */
+    /** The action of a Slack turn's question, including an action another replica already claimed. */
     @Transactional(readOnly = true)
-    public Optional<UUID> unowned(long workspaceId, UUID questionId) {
-        String key = replyKey(questionId);
-        if (actions.admittedPayload(workspaceId, key)
-                .filter(payload -> !mapper.treeToValue(payload, Payload.class).taken())
-                .isEmpty()) return Optional.empty();
-        return Optional.ofNullable(actions.byKeys(workspaceId, List.of(key)).get(key))
+    public Optional<UUID> forQuestion(long workspaceId, UUID questionId) {
+        return Optional.ofNullable(actions.byKeys(workspaceId, List.of(replyKey(questionId)))
+                        .get(replyKey(questionId)))
                 .map(LaneAction::id);
     }
 
@@ -120,14 +98,33 @@ public class MentorSlackReplies {
         return UUID.fromString(idempotencyKey.substring(idempotencyKey.indexOf(':') + 1));
     }
 
-    /** A Slack turn ended: its reply is due within {@link #GRACE}, unclaimed when no server owned it. */
+    /** A Slack turn ended: enqueue its complete reply in the same transaction. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void ended(MentorTurn turn, long accountId, UUID questionId) {
         String key = replyKey(questionId);
-        if (actions.enqueueNew(
-                        request(turn.getWorkspaceId(), accountId, key, new Payload(questionId, turn.getId(), false)),
-                        GRACE)
-                .isEmpty()) actions.advance(turn.getWorkspaceId(), key, GRACE);
+        actions.enqueue(request(turn.getWorkspaceId(), accountId, key, new Payload(questionId, turn.getId())));
+    }
+
+    /** The durable ledger event runs after redaction commits, without its conversation locks. */
+    @ApplicationModuleListener(propagation = Propagation.REQUIRES_NEW)
+    public void changed(MentorLedgerEvents.EntryChanged changed) {
+        forget(changed.workspaceId(), changed.entryIds());
+    }
+
+    /** Also called by action settlement if its source was erased while the action was still live. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void forgetRedacted(long workspaceId, Collection<UUID> ids) {
+        forget(workspaceId, ids);
+    }
+
+    private void forget(long workspaceId, Collection<UUID> ids) {
+        if (ids.isEmpty()) return;
+        var kept = entries.findUnredactedIds(workspaceId, ids);
+        var keys = ids.stream()
+                .filter(id -> !kept.contains(id))
+                .flatMap(id -> Stream.of(replyKey(id), digestKey(id)))
+                .toList();
+        actions.forgetEnded(workspaceId, keys);
     }
 
     private ActionRequest request(long workspaceId, long accountId, String key, Payload payload) {

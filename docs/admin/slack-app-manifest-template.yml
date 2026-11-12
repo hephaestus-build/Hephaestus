@@ -28,7 +28,6 @@ oauth_config:
     - <api-public-base-url>/login/oauth2/code/slack
   scopes:
     bot:
-      - assistant:write
       - chat:write
       - im:history
       - channels:history
@@ -36,7 +35,6 @@ oauth_config:
       - channels:read
       - channels:join
       - groups:read
-      - reactions:write
       - users:read
     user:
       - openid
@@ -59,7 +57,6 @@ settings:
       - group_left
       - group_rename
       - app_home_opened
-      - agent_session_stopped
       - app_uninstalled
       - tokens_revoked
   interactivity:

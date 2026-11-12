@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.JsonNode;
 
 /** Enqueues effects on the outside world. The executor carries them out after the caller's transaction commits. */
 @Service
@@ -28,24 +27,17 @@ public class AgentActions {
     }
 
     /**
-     * Enqueues an action that is due only after {@code delay}, so that the caller that creates it can carry it out
-     * first ({@link ActionExecutor#runNow(UUID, ActionAdapter)}). Empty when the key was already enqueued: then another caller owns it.
+     * Enqueues an action due after {@code delay}. Empty when its idempotency key was already enqueued.
      */
     @Transactional
     public Optional<UUID> enqueueNew(ActionRequest request, Duration delay) {
         return store.insert(request, delay);
     }
 
-    /** Makes a waiting action due within {@code delay}, in the caller's transaction. */
+    /** Removes terminal outcomes after their domain source has been erased. Live actions still settle. */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void advance(long workspaceId, String idempotencyKey, Duration delay) {
-        store.advance(workspaceId, idempotencyKey, delay);
-    }
-
-    /** The payload of an action that waits under {@code idempotencyKey}, before any attempt takes it. */
-    @Transactional(readOnly = true)
-    public Optional<JsonNode> admittedPayload(long workspaceId, String idempotencyKey) {
-        return store.admittedPayload(workspaceId, idempotencyKey);
+    public void forgetEnded(long workspaceId, Collection<String> keys) {
+        store.forgetEnded(workspaceId, keys);
     }
 
     /** The actions of a workspace under these keys, by key. */

@@ -90,11 +90,7 @@ public class MentorEntry implements Persistable<UUID> {
         DELIVERED,
         /** The post may have reached Slack; a read of the Slack history decides. */
         UNCERTAIN,
-        /**
-         * Settled as not fully delivered: Slack or Silent Mode refused the post or the end of its stream, there was
-         * nothing to post, or the Slack history did not show an uncertain post. A stream can have shown
-         * part of the reply before, so Slack may show part of it; the app shows "Not fully delivered to Slack".
-         */
+        /** Slack refused the post, there was nothing to post, or complete history proved it absent. */
         FAILED,
     }
 
@@ -151,17 +147,6 @@ public class MentorEntry implements Persistable<UUID> {
     @Nullable
     @Column(name = "slack_ts", length = 32)
     private String slackTs;
-
-    /** How this entry's Slack post ended, once its outbox action ended ({@link MentorSlackReplies}). */
-    @Nullable
-    @Enumerated(EnumType.STRING)
-    @Column(name = "slack_delivery", length = 16)
-    private SlackDelivery slackDelivery;
-
-    /** The Slack stream that carries the reply to this question, from the moment Slack opened it. */
-    @Nullable
-    @Column(name = "slack_stream_ts", length = 32)
-    private String slackStreamTs;
 
     @Nullable
     @Enumerated(EnumType.STRING)

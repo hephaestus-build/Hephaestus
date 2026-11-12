@@ -150,32 +150,6 @@ class SlackMentorPostsTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldHoldBackOnlyALinkThatIsStillBeingWritten() {
-        Set<String> hosts = Set.of("github.com");
-
-        assertThat(SlackMentorPosts.streamable("Your reviews are", hosts)).isEqualTo("Your reviews are");
-        assertThat(SlackMentorPosts.streamable("Read [this guide](https://evil.exa", hosts))
-                .isEqualTo("Read ");
-        assertThat(SlackMentorPosts.streamable("Read https://evil.example/x and more", hosts))
-                .isEqualTo("Read ");
-        assertThat(SlackMentorPosts.streamable("Open ht", hosts)).isEqualTo("Open ");
-        assertThat(SlackMentorPosts.streamable("Look ![", hosts)).isEqualTo("Look ");
-        assertThat(SlackMentorPosts.streamable("See https://evil.example/a.\n\nNext we", hosts))
-                .isEqualTo("See `https://evil.example/a`.\n\nNext we");
-    }
-
-    @Test
-    void shouldStreamTheStartOfTheFinishedReply() {
-        Set<String> hosts = Set.of("github.com");
-        String answer = "See https://evil.example/a.\n\nThen [the PR](https://github.com/a/b/pull/1) and <!here>.";
-        String finished = SlackMentorPosts.reply(List.of(heph(answer)), hosts).text();
-
-        for (int end = 0; end <= answer.length(); end++) {
-            assertThat(finished).startsWith(SlackMentorPosts.streamable(answer.substring(0, end), hosts));
-        }
-    }
-
-    @Test
     void shouldReadTheJoinedReplyAsOneTextWhenAMessageClosesAnotherMessagesFence() {
         SlackMentorPosts.Reply reply = SlackMentorPosts.reply(
                 List.of(heph("```"), heph("```\n[x](https://evil.example/?q=s)")), Set.of("github.com"));

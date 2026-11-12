@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794504322820-1" author="hephaestus">
+    <preConditions onFail="HALT"><columnExists tableName="mentor_entry" columnName="slack_delivery"/><columnExists tableName="mentor_entry" columnName="slack_stream_ts"/></preConditions>
+    <sql splitStatements="false"><![CDATA[
+-- The pre-upgrade procedure stops all server replicas. Locks keep the cutover atomic with its data moves.
+LOCK TABLE agent_action, mentor_entry IN ACCESS EXCLUSIVE MODE;
+-- This one-time cutover moves immutable legacy payloads/outcomes. Restore the runtime guard before commit.
+ALTER TABLE agent_action DISABLE TRIGGER agent_action_lifecycle;
+INSERT INTO agent_action(id,workspace_id,kind,lane_key,idempotency_key,state,payload,subject_account_id,
+ attempts,max_attempts,next_attempt_at,lease_epoch,stop_reason,created_at,updated_at,ended_at)
+SELECT uuidv7(),e.workspace_id,'SLACK_POST',k.key,k.key,
+ CASE WHEN e.slack_delivery='DELIVERED' THEN 'DONE' WHEN e.slack_delivery='FAILED' THEN 'FAILED' ELSE 'UNCERTAIN' END,
+ NULL,c.account_id,1,3,clock_timestamp(),0,
+ CASE WHEN e.slack_delivery='DELIVERED' THEN 'COMPLETED' WHEN e.slack_delivery='FAILED' THEN 'REJECTED' ELSE 'WRITE_UNCONFIRMED' END,
+ e.created_at,clock_timestamp(),clock_timestamp()
+FROM mentor_entry e JOIN mentor_conversation c ON c.id=e.conversation_id AND c.workspace_id=e.workspace_id
+CROSS JOIN LATERAL (SELECT CASE WHEN e.kind='DIGEST' THEN 'slack_digest:' ELSE 'slack_reply:' END || e.id AS key) k
+WHERE e.redacted_at IS NULL AND e.slack_delivery IS NOT NULL AND (e.kind='DIGEST' OR (e.kind='USER' AND e.surface='SLACK'))
+ON CONFLICT(idempotency_key) DO NOTHING;
+-- An old owner could have opened a stream without metadata or without recording its receipt. Never post it again.
+UPDATE agent_action SET state='UNCERTAIN',payload=NULL,leased_until=NULL,ended_at=clock_timestamp(),
+ stop_reason='WRITE_UNCONFIRMED',updated_at=clock_timestamp()
+WHERE kind='SLACK_POST' AND ended_at IS NULL AND
+ ((payload->>'taken')::boolean IS TRUE OR EXISTS(SELECT 1 FROM mentor_entry e
+     WHERE e.id=(payload->>'entryId')::uuid AND e.workspace_id=agent_action.workspace_id AND e.slack_stream_ts IS NOT NULL));
+UPDATE agent_action SET payload=payload-'taken',next_attempt_at=clock_timestamp()
+WHERE kind='SLACK_POST' AND payload IS NOT NULL AND jsonb_exists(payload, 'taken');
+ALTER TABLE agent_action ENABLE TRIGGER agent_action_lifecycle;
+]]></sql>
+    <dropColumn tableName="mentor_entry" columnName="slack_delivery"/>
+    <dropColumn tableName="mentor_entry" columnName="slack_stream_ts"/>
+    <rollback><stop>Restore the verified pre-upgrade database backup to recover the old Slack delivery schema and payloads.</stop></rollback>
+  </changeSet>
+</databaseChangeLog>

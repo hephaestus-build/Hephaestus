@@ -463,13 +463,10 @@ public class MentorTimeline {
                 digest);
     }
 
-    /** How a Slack question's reply stands: its recorded outcome, else its action while it runs. */
+    /** How a Slack question's reply stands: its outbox action, including its terminal outcome. */
     private static MentorEntry.@Nullable SlackDelivery slackDelivery(MentorEntry row, Map<String, LaneAction> replies) {
         if (row.getKind() != MentorEntry.Kind.USER || row.getSurface() != MentorEntry.Surface.SLACK) return null;
-        MentorEntry.SlackDelivery ended = row.getSlackDelivery();
-        return ended != null
-                ? ended
-                : MentorSlackReplies.delivery(replies.get(MentorSlackReplies.replyKey(row.getId())));
+        return MentorSlackReplies.delivery(replies.get(MentorSlackReplies.replyKey(row.getId())));
     }
 
     /** The link tool calls in a Heph message, in order. */

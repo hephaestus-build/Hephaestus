@@ -82,19 +82,8 @@ class SlackMessageServiceTest extends BaseUnitTest {
         return Stream.of(
                 Arguments.of("sendEphemeralForWorkspace", (ThrowingSend)
                         s -> s.sendEphemeralForWorkspace(7L, "C1ABCDEFGH", "U123", List.of(), "f")),
-                Arguments.of("startStream", (ThrowingSend) s -> s.startStream(7L, "C1ABCDEFGH", "171234.5678", "hi")),
-                Arguments.of("appendStream", (ThrowingSend) s -> s.appendStream(7L, "C1ABCDEFGH", "171234.5678", "hi")),
-                Arguments.of("stopStream", (ThrowingSend) s -> s.stopStream(
-                        7L,
-                        "C1ABCDEFGH",
-                        "171234.5678",
-                        new SlackMessageService.StreamStop(null, List.of(), null, false))),
-                Arguments.of("setSessionStatus", (ThrowingSend)
-                        s -> s.setSessionStatus(7L, "D1ABCDEFGH", "171234.5678", true)),
                 Arguments.of("postMessage", (ThrowingSend)
-                        s -> s.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null)),
-                Arguments.of("setReaction", (ThrowingSend)
-                        s -> s.setReaction(7L, "D1ABCDEFGH", "171234.5678", "eyes", true)));
+                        s -> s.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null)));
     }
 
     /** These ride inbound events whose handlers do not catch, so a throw would NAK into the poison alarm. */
@@ -129,13 +118,13 @@ class SlackMessageServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRejectStreamWriteWhenSilentModeEngagesDuringCredentialResolution() {
+    void shouldRejectAPostWhenSilentModeEngagesDuringCredentialResolution() {
         when(credentialProvider.resolve(any(IntegrationRef.class))).thenAnswer(invocation -> {
             silentModeEngaged = true;
             return Optional.of(new BearerToken("token", null));
         });
 
-        assertThatThrownBy(() -> service.appendStream(7L, "C1ABCDEFGH", "171234.5678", "delta"))
+        assertThatThrownBy(() -> service.postMessage(7L, "C1ABCDEFGH", null, List.of(), "message", null))
                 .isInstanceOf(SlackSendException.class)
                 .satisfies(
                         ex -> assertThat(((SlackSendException) ex).slackError()).isEqualTo("silent_mode_engaged"));
@@ -178,35 +167,6 @@ class SlackMessageServiceTest extends BaseUnitTest {
             assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/auth.test");
             assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/chat.postMessage");
             assertThat(slackApi.getRequestCount()).isEqualTo(2);
-        }
-    }
-
-    @Test
-    void shouldSendTheSessionStatusThatTheCallerNames() throws Exception {
-        try (MockWebServer slackApi = new MockWebServer()) {
-            slackApi.start();
-            slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\"}"));
-            slackApi.enqueue(json("{\"ok\":true}"));
-            slackApi.enqueue(json("{\"ok\":true}"));
-            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
-            try {
-                local.setSessionStatus(7L, "D1ABCDEFGH", "171234.5678", true);
-                local.stopStream(
-                        7L,
-                        "D1ABCDEFGH",
-                        "171299.0001",
-                        new SlackMessageService.StreamStop(null, List.of(), null, false));
-            } finally {
-                local.close();
-            }
-
-            assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/auth.test");
-            RecordedRequest status = slackApi.takeRequest();
-            assertThat(status.getUrl().encodedPath()).isEqualTo("/api/agents.sessions.setStatus");
-            assertThat(bodyOf(status)).contains("status=processing").contains("thread_ts=171234.5678");
-            RecordedRequest stop = slackApi.takeRequest();
-            assertThat(stop.getUrl().encodedPath()).isEqualTo("/api/chat.stopStream");
-            assertThat(bodyOf(stop)).contains("session_status=active");
         }
     }
 

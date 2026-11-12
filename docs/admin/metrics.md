@@ -234,20 +234,11 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 | `mentor_turn_first_token_seconds`          | Histogram | none      | From the start of an attempt to the first part of Hephaestus's answer         |
 | `mentor_turn_cost_usd`                     | Summary   | none      | The cost of the calls of one attempt that ended by its end, in US dollars                            |
 | `mentor_turn_claim_failure_total`          | Counter   | none      | Claims and starts of a turn that failed with an error                   |
-| `mentor_slack_reply_total`                 | Counter   | `state`   | Replies to questions asked in Slack, by the state they were left in     |
 | `mentor_live_streams`                      | Gauge     | none      | Live Hephaestus streams that the app holds open on this server                |
 
 `outcome` is one of `success`, `stopped`, `failed`, or `lease_expired`.
-`state` is one of `delivered`, `failed`, or `uncertain`.
-`failed` includes a reply that Silent Mode kept from Slack.
-A turn with nothing to post, such as a turn that the developer stopped before Hephaestus wrote, is not counted.
-
-A reply whose server is gone is finished by another server, through the outbox, and is counted again in its new state.
-That server reads the Slack history for a reply that the first server may have posted.
-A reply that it finds is `delivered`.
-A reply that it does not find is `failed`, and Hephaestus never posts it again.
-A reply whose history it cannot read stays `uncertain`.
-[Conversation runtime](/contributor/unified-pi-runtime#a-reply-without-its-server) gives its limits.
+Slack delivery uses the [outbox metrics](#outbox-metrics), with `kind="SLACK_POST"`.
+[Slack replies](/contributor/unified-pi-runtime#slack-replies) describes its metadata readback and unknown outcomes.
 
 Web and Slack turns both count.
 An attempt that ends before any part of an answer records no first-token time.

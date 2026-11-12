@@ -508,6 +508,16 @@ The binding is now as follows:
   The wait and two more HTTP calls must fit in the remaining budget.
   A call that runs out of time leaves the effect of its write unknown, as before.
 
+## Amendment of 2026-11-12: completed answers in Slack
+
+Slack receives one complete answer after admission through the `SLACK_POST` outbox action.
+This replaces the streaming, session-stop and progress-reaction decisions above.
+There is no Slack session, stream or progress reaction, and the Slack app needs no `assistant:write`, `reactions:write` or `agent_session_stopped` subscription.
+The app continues to show live answer text and provides **Stop answer**.
+
+The outbox owns the lease, metadata readback, retries and terminal outcome. Entry rows retain only confirmed Slack message references.
+[The outbox](../contributor/outbox.md#carry-out-an-effect-at-once) owns the current contract.
+
 ## Consequences
 
 - The upgrade deletes all earlier Heph conversations. Slack keeps its own copy of the direct messages.

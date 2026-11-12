@@ -16,7 +16,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** The outbox's short transactions: each one statement of {@link AgentActionRepository}, mapped to records. */
@@ -92,20 +91,10 @@ class ActionStore {
                 delay.toSeconds());
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void advance(long workspaceId, String idempotencyKey, Duration delay) {
-        actions.advance(workspaceId, idempotencyKey, delay.toSeconds());
-    }
-
     /** Takes one admitted lane head now ({@link AgentActionRepository#claimById}). */
     @Transactional
     public Optional<Claim> claim(UUID id, Duration lease) {
         return actions.claimById(id, lease.toSeconds()).map(ActionStore::claim);
-    }
-
-    @Transactional(readOnly = true)
-    public Optional<JsonNode> admittedPayload(long workspaceId, String idempotencyKey) {
-        return actions.findAdmittedPayload(workspaceId, idempotencyKey).map(mapper::readTree);
     }
 
     @Transactional(readOnly = true)
@@ -230,6 +219,14 @@ class ActionStore {
                 .map(ActionStore::settled);
         settled.flatMap(Settled::ended).ifPresent(onEnd);
         return settled;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void forgetEnded(long workspaceId, Collection<String> keys) {
+        if (keys.isEmpty()) return;
+        // Redaction may commit while a terminal action is still uncommitted. Read its state after that end commits.
+        actions.lockByKeys(workspaceId, keys);
+        actions.deleteEndedByKeys(workspaceId, keys);
     }
 
     /** Deletes what ended more than {@code retention} ago. */
