@@ -6352,7 +6352,7 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	);
 });
 
-void test("roll and eviction run in a separate parallel queue cluster while PR adapters keep their own artifact", async () => {
+void test("the queue runs roll, while nightly and dispatch add eviction and PR adapters keep their artifact", async () => {
 	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
 	const rootEnv = kubernetes.get("env");
 	assert.ok(isMap(rootEnv));
@@ -6374,7 +6374,7 @@ void test("roll and eviction run in a separate parallel queue cluster while PR a
 				);
 				const steps = jobs.getIn([key, "steps"]);
 				assert.ok(isSeq(steps));
-				const selected = (name: string, artifact = "server-build") => {
+				const selected = (name: string, artifact = "server-build", eviction = true) => {
 					const worker = namedStep(kubernetes, ["jobs", key], name);
 					const condition = asString(
 						worker.get("if") ?? "true",
@@ -6383,16 +6383,32 @@ void test("roll and eviction run in a separate parallel queue cluster while PR a
 					return (
 						expandExpressions(`\${{ ${condition} }}`, {
 							env: environment,
-							inputs: { "application-artifact": artifact, "backup-drill": true },
+							inputs: {
+								"application-artifact": artifact,
+								"backup-drill": true,
+								"eviction-drill": eviction,
+							},
+							github: { event_name: event },
 						}) === "true"
 					);
 				};
 				const drills = key === "k3d-drills";
 				assert.equal(
+					selected(
+						"Verify kubelet memory eviction order on a disposable node",
+						"server-build",
+						false,
+					),
+					false,
+				);
+				assert.equal(
 					selected("Keep a conversation turn through a server roll and a loop roll"),
 					drills,
 				);
-				assert.equal(selected("Verify kubelet memory eviction order on a disposable node"), drills);
+				assert.equal(
+					selected("Verify kubelet memory eviction order on a disposable node"),
+					drills && (event === "schedule" || event === "workflow_dispatch"),
+				);
 				assert.equal(
 					selected("Qualify the sandbox adapters in the chart server Pod"),
 					key === "k3d" && event !== "merge_group",
@@ -7266,4 +7282,103 @@ void test("the focused stable task selects every architecture ratchet and requir
 	}
 	assert.ok(clients.includes("LifecycleSetterArchTest.java"));
 	assert.ok(clients.includes("AfterCommitRepairArchTest.java"));
+});
+
+void test("release eviction uses only its drill cluster and captured images and blocks publication", async () => {
+	const release = parseDocument(await readFile(".github/workflows/release.yml", "utf8"));
+	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
+	const worker = release.getIn(["jobs", "kubernetes-eviction"]);
+	assert.ok(isMap(worker));
+	assert.equal(worker.get("uses"), "./.github/workflows/ci-kubernetes.yml");
+	assert.equal(worker.getIn(["with", "commit"]), `\${{ needs.release.outputs.sha }}`);
+	assert.equal(worker.getIn(["with", "ref"]), `\${{ needs.release.outputs.sha }}`);
+	assert.equal(worker.getIn(["with", "queue"]), true);
+	assert.equal(worker.getIn(["with", "eviction-drill"]), true);
+	assert.equal(worker.getIn(["with", "drills-only"]), true);
+	for (const name of ["application-server", "webapp", "agent-pi", "postgres"]) {
+		assert.ok(
+			String(worker.getIn(["with", "image-digests"])).includes(
+				`"${name}":"\${{ needs.tag-images.outputs.${name}-digest }}"`,
+			),
+		);
+		assert.equal(
+			release.getIn(["jobs", "tag-images", "outputs", `${name}-digest`]),
+			`\${{ steps.retag.outputs.${name}-digest }}`,
+		);
+	}
+	for (const event of ["workflow_run", "workflow_dispatch"]) {
+		for (const name of ["k3d", "k3d-drills", "k3d-1-35-amd64", "k3d-1-35-arm64", "calico"]) {
+			assert.equal(
+				jobRuns(kubernetes, name, event, {}, false, {
+					queue: true,
+					arm64: true,
+					"drills-only": true,
+				}),
+				name === "k3d-drills",
+				name,
+			);
+		}
+	}
+	assert.ok(needsOf(release, "publish-release").includes("kubernetes-eviction"));
+	const completions: Record<string, Completion> = Object.fromEntries(
+		[...needsClosure(release, "publish-release")].map((name) => [name, { result: "success" }]),
+	);
+	completions.release = { result: "success", outputs: { released: "true" } };
+	for (const result of ["success", "failure", "cancelled", "skipped"]) {
+		completions["kubernetes-eviction"] = { result };
+		assert.equal(
+			jobRuns(release, "publish-release", "workflow_run", completions),
+			result === "success",
+		);
+	}
+	const nightly = parseDocument(await readFile(".github/workflows/kubernetes-nightly.yml", "utf8"));
+	assert.equal(nightly.getIn(["jobs", "Kubernetes", "with", "eviction-drill"]), true);
+	const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	assert.equal(
+		cicd.getIn(["jobs", "Kubernetes", "with", "eviction-drill"]),
+		`\${{ github.event_name == 'workflow_dispatch' && inputs.eviction-drill }}`,
+	);
+});
+
+void test("a nightly eviction failure opens or updates the existing Kubernetes tracking issue", async (context) => {
+	const nightly = parseDocument(await readFile(".github/workflows/kubernetes-nightly.yml", "utf8"));
+	assert.ok(needsOf(nightly, "report").includes("Kubernetes"));
+	assert.equal(nightly.getIn(["jobs", "report", "if"]), "failure()");
+	const script = asString(
+		nightly.getIn(["jobs", "report", "steps", 0, "run"]),
+		"nightly report script",
+	);
+	const directory = await mkdtemp(path.join(tmpdir(), "nightly-eviction-report-"));
+	context.after(async () => rm(directory, { recursive: true, force: true }));
+	const log = path.join(directory, "calls.log");
+	const answer = path.join(directory, "issues.json");
+	await writeFile(
+		path.join(directory, "gh"),
+		`#!/bin/sh\necho "$*" >> "${log}"\n[ "$1 $2" = "issue list" ] && cat "${answer}"\nexit 0\n`,
+	);
+	await chmod(path.join(directory, "gh"), 0o755);
+	for (const existing of [false, true]) {
+		await writeFile(log, "");
+		await writeFile(
+			answer,
+			JSON.stringify(existing ? [{ number: 7, title: "The nightly Kubernetes run failed" }] : []),
+		);
+		const result = spawnSync("bash", ["--noprofile", "--norc", "-c", script], {
+			encoding: "utf8",
+			env: environmentForGitFixture({
+				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+				REPOSITORY: "owner/repository",
+				COMMIT: "tested-commit",
+				RUN_URL: "https://example.invalid/run",
+				BUILD: "success",
+				KUBERNETES: "failure",
+				FOOTPRINT: "success",
+			}),
+		});
+		assert.equal(result.status, 0, result.stderr);
+		const calls = await readFile(log, "utf8");
+		assert.match(calls, existing ? /issue comment 7/u : /issue create/u);
+		assert.match(calls, /The nightly Kubernetes run failed|tested-commit/u);
+		assert.match(calls, /https:\/\/example.invalid\/run/u);
+	}
 });

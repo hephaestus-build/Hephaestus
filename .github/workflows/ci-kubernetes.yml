@@ -13,7 +13,19 @@ on:
         type: string
         required: true
       queue:
-        description: Add the roll and eviction job, the lowest minor on amd64 and kind with Calico
+        description: Add the roll job, the lowest minor on amd64 and kind with Calico
+        type: boolean
+        default: false
+      image-digests:
+        description: Captured release image digests as an object keyed by image name; empty resolves the commit tag
+        type: string
+        default: ""
+      eviction-drill:
+        description: Also run eviction on the drill cluster, outside the merge group
+        type: boolean
+        default: false
+      drills-only:
+        description: Run only the drill cluster when the release qualifies its captured images
         type: boolean
         default: false
       arm64:
@@ -51,6 +63,7 @@ env:
 jobs:
   k3d:
     name: k3s 1.37 amd64
+    if: ${{ !inputs.drills-only }}
     permissions:
       contents: read
       actions: read
@@ -63,7 +76,7 @@ jobs:
       PROFILES: --profile dev
       GVISOR: "true"
       # Adapter qualification stays on the PR's own packaged classes. The queue tests its combined
-      # tree's install here and runs roll/eviction in the independent drill cluster below.
+      # tree's install here and runs roll in the independent drill cluster below.
       QUALIFY: ${{ github.event_name != 'merge_group' }}
       DRILLS: "false"
     steps: &k3d-steps
@@ -108,8 +121,14 @@ jobs:
           artifact: ${{ inputs.application-artifact }}
       - name: Resolve this run's images
         env:
+          RELEASE_IMAGE_DIGESTS: ${{ inputs.image-digests }}
           COMMIT: ${{ inputs.commit }}
-        run: node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+        run: |
+          if [ -n "$RELEASE_IMAGE_DIGESTS" ]; then
+            node scripts/resolve-captured-release-images.ts release-images.tsv
+          else
+            node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+          fi
       - name: Free disk space for the cluster
         run: node scripts/prepare-kubernetes-runner.ts
       # k3s enforces NetworkPolicy with its embedded controller, so the isolation probe judges it.
@@ -194,7 +213,7 @@ jobs:
       # the turn on the release's untainted nodes. Both results join before this job can pass.
       - name: Verify kubelet memory eviction order on a disposable node
         background: true
-        if: ${{ env.DRILLS == 'true' }}
+        if: ${{ env.DRILLS == 'true' && inputs.eviction-drill && github.event_name != 'merge_group' && github.event_name != 'pull_request' }}
         run: node scripts/kubernetes-memory-drill.ts release-images.tsv
       - wait-all: true
       - name: Record the cluster state
@@ -222,7 +241,7 @@ jobs:
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
 
   k3d-drills:
-    name: k3s 1.37 amd64 roll and eviction
+    name: k3s 1.37 amd64 drills
     if: inputs.queue
     permissions:
       contents: read
@@ -239,7 +258,7 @@ jobs:
 
   k3d-1-35-amd64:
     name: k3s 1.35 amd64
-    if: inputs.queue
+    if: inputs.queue && !inputs.drills-only
     permissions:
       contents: read
       actions: read
@@ -256,7 +275,7 @@ jobs:
 
   k3d-1-35-arm64:
     name: k3s 1.35 arm64
-    if: inputs.queue && inputs.arm64
+    if: inputs.queue && inputs.arm64 && !inputs.drills-only
     permissions:
       contents: read
       actions: read
@@ -273,7 +292,7 @@ jobs:
 
   calico:
     name: "kind 1.35 Calico"
-    if: inputs.queue
+    if: inputs.queue && !inputs.drills-only
     permissions:
       contents: read
       packages: read
@@ -299,8 +318,14 @@ jobs:
           gateway-api: "true"
       - name: Resolve this run's images
         env:
+          RELEASE_IMAGE_DIGESTS: ${{ inputs.image-digests }}
           COMMIT: ${{ inputs.commit }}
-        run: node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+        run: |
+          if [ -n "$RELEASE_IMAGE_DIGESTS" ]; then
+            node scripts/resolve-captured-release-images.ts release-images.tsv
+          else
+            node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+          fi
       - name: Free disk space for the cluster
         run: node scripts/prepare-kubernetes-runner.ts
       - name: Create three nodes with Calico

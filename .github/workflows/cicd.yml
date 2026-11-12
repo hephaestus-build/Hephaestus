@@ -3,6 +3,10 @@ name: CI/CD
 on:
   workflow_dispatch:
     inputs:
+      eviction-drill:
+        description: Add the nightly eviction drill to this explicit queue-tier reproduction
+        type: boolean
+        default: false
       release-preflight:
         description: "Generate and verify this ref's release evidence bundle, everything the release gate checks except the signatures that only exist at a release"
         type: boolean
@@ -1148,9 +1152,10 @@ jobs:
     with:
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
       # A pull request runs the chart and latest k3s on amd64. The queue adds the floor on amd64 and
-      # kind and parallel roll/eviction, using the commit that main receives. ci:full reproduces
+      # kind and a parallel roll, using the commit that main receives. ci:full reproduces
       # those legs on a PR too. Only the nightly run adds arm64.
       queue: ${{ needs.detect-changes.outputs.queue-tier == 'true' }}
+      eviction-drill: ${{ github.event_name == 'workflow_dispatch' && inputs.eviction-drill }}
       application-artifact: ${{ github.event_name != 'merge_group' && format('server-build-{0}', github.run_id) || '' }}
       backup-drill: ${{ needs.detect-changes.outputs.kubernetes-recovery == 'true' }}
 

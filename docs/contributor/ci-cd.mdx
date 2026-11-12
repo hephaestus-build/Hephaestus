@@ -777,20 +777,28 @@ The `kubernetes` path filter selects the cluster legs for chart, platform, sandb
 A selected ordinary PR runs the latest-minor `amd64` install, upgrade, isolation probes and adapter qualification.
 It also runs the [replacement-storage recovery drill](#recovery-tests) when its inputs change.
 
-The queue tier and nightly runs add **Kubernetes / k3s 1.37 amd64 roll and eviction** on a separate cluster.
+The queue tier and nightly runs add **Kubernetes / k3s 1.37 amd64 drills** on a separate cluster.
 It starts alongside the install/qualification job after the images are ready.
 The caller needs only the image producer and change metadata. The image producer already waits for the packaged server.
 
-Its conversation roll runs on the release nodes while eviction fixtures run in their own namespace on a tainted disposable node.
-Native background steps run both drills together. `wait-all` requires both results before the job passes.
+The merge group runs the conversation roll, which installs the release and rolls the server and loop.
+Eviction runs nightly, on release and on an explicit CI dispatch. It runs no eviction on a PR or merge group.
+The nightly and dispatch clusters run roll and eviction as native background steps, and `wait-all` requires both results.
+Eviction fixtures use their own namespace and a tainted disposable node.
 The qualification cluster owns chart lint, upgrade checks, adapter probes, recovery and new-node image prepull checks, so the drill cluster does not repeat them.
 
-If this split increases the measured merge-group verdict median or p90, revert the split or move roll and eviction to nightly.
+If this split increases the measured merge-group verdict median or p90, revert the split or move the roll to nightly.
+A failed roll fails the Kubernetes stage and blocks the merge group through `CI Status Gate`.
+Use `ci:full` to reproduce the queue legs on a PR, including the separate roll job, lowest-minor k3s and Calico.
 
-A failed roll or eviction fails the Kubernetes stage and blocks the merge group through `CI Status Gate`.
-Use `ci:full` to reproduce the queue legs on a PR, including the separate drill job, lowest-minor k3s and Calico.
-The nightly run adds arm64. A failed nightly run opens or updates the issue "The nightly Kubernetes run failed".
+The nightly run adds arm64 and eviction. A failed nightly eviction fails the Kubernetes stage.
+Its existing `Report a failure` job opens or updates the issue "The nightly Kubernetes run failed" and links the run.
 The release evidence preflight also requires that the newest nightly run on `main` passed its cluster legs within 48 hours (`scripts/check-nightly-kubernetes.ts`).
+
+Before final release publication, `Kubernetes eviction` runs the drill cluster on the exact image digests that the release captured and verified.
+It uses the candidate source, packages no server or images, and runs no extra compatibility clusters.
+A failed or cancelled release drill blocks `publish-release` through its native dependency.
+A candidate source that predates the captured-image verifier fails closed and needs a new qualified candidate.
 
 The `review` shard holds `ReviewEndToEndIntegrationTest`: one review of a real pull request, from its request to its admitted results.
 Only the sandbox container and the model provider are stubbed.
