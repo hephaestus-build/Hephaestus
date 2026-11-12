@@ -66,6 +66,14 @@ A listener may enqueue the action. [The outbox](./outbox.md) has the rules and t
 - Use a plain `@TransactionalEventListener` after commit only for an effect that the next poll repairs: a UI push, a cache eviction, a metric or a wake-up.
   The listener must be `@Async` or `@Transactional(propagation = REQUIRES_NEW)` or `NOT_SUPPORTED`.
   `SpringCorrectnessArchitectureTest` refuses a listener without one of them.
+  `AfterCommitRepairArchTest` lists each plain after-commit listener and names its poll, reconcile or durable repair.
+  A new plain listener without an entry fails the architecture check.
+  An unrepaired listener has an owner and a reason in `UNREPAIRED`.
+  The 1.0 ratchet fails until that list is empty.
+
+Passkey success audits run before commit and join the passkey transaction.
+If the audit fails, the passkey operation rolls back.
+Failure audits still run after completion to record attempts whose transactions rolled back.
 
 The listener needs its own boundary because of this behavior. After commit, "the transactional resources might still be active and accessible. As a consequence, any data access code triggered at this point will still "participate" in the original transaction, allowing to perform some cleanup (with no commit following anymore!)". Spring adds: "Use `PROPAGATION_REQUIRES_NEW` for any transactional operation that is called from here" ([TransactionSynchronization](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/transaction/support/TransactionSynchronization.html)).
 Prefer `NOT_SUPPORTED`.
