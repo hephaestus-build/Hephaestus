@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
@@ -775,7 +776,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(DefaultReviewExecutionHandler.class),
                 mock(ReviewAttemptResults.class),
                 reviewRuns,
-                agentRuns);
+                agentRuns,
+                mock(JobEvidenceFiles.class));
         String subject = Objects.requireNonNull(
                 jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, job.getRunId()));
 

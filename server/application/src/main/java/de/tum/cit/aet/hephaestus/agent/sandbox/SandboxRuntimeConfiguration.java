@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,7 +14,7 @@ import org.springframework.context.annotation.Profile;
 public class SandboxRuntimeConfiguration {
 
     @Bean
-    public SandboxWorkspaceManager sandboxWorkspaceManager(FabricLayout layout) {
-        return new SandboxWorkspaceManager(layout.root());
+    public SandboxWorkspaceManager sandboxWorkspaceManager() {
+        return new SandboxWorkspaceManager();
     }
 }

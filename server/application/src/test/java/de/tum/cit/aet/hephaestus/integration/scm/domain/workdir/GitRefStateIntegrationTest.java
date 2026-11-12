@@ -224,6 +224,7 @@ class GitRefStateIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(root.resolve(role).toString()),
                 GitTransportFixtures.guarded(),
-                refs);
+                refs,
+                GitTransportFixtures.copyFence());
     }
 }

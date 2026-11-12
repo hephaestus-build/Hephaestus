@@ -19,7 +19,6 @@ import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
@@ -1037,9 +1036,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     private int cleanAttempts(boolean restarting) {
-        cleanStaleGitSpool();
-        if (!Files.isDirectory(layout.jobsRoot())) return 0;
-        int remaining = 0;
+        int remaining = layout.spool().reconcile();
+        if (!Files.isDirectory(layout.jobsRoot())) return remaining;
         try (var paths = Files.walk(layout.jobsRoot(), 3)) {
             var roots = new HashSet<Path>();
             var traces = new HashSet<Path>();
@@ -1189,34 +1187,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
         jobs.expireCaptureInventory(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
     }
 
-    private void cleanStaleGitSpool() {
-        if (!Files.isDirectory(layout.root())) return;
-        try (var entries = Files.list(layout.root())) {
-            for (Path entry : entries.toList()) {
-                String name = entry.getFileName().toString();
-                if (!name.startsWith(EvidenceSpool.PREFIX)) continue;
-                if (EvidenceSpool.isCurrentProcess(entry)) continue;
-                try {
-                    if (Files.getLastModifiedTime(entry, LinkOption.NOFOLLOW_LINKS)
-                            .toInstant()
-                            .plus(RETENTION_GRACE)
-                            .isAfter(clock.instant())) {
-                        continue;
-                    }
-                    if (Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS)) {
-                        delete(entry);
-                    } else {
-                        Files.deleteIfExists(entry);
-                    }
-                } catch (RuntimeException | IOException exception) {
-                    log.warn("Could not clean stale Git spool entry {}", entry, exception);
-                }
-            }
-        } catch (IOException exception) {
-            throw new UncheckedIOException(exception);
-        }
-    }
-
     private Optional<ReviewJob> recordedJob(Path root) {
         Path jobDirectory = Objects.requireNonNull(root.getParent());
         Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
@@ -1265,6 +1235,14 @@ public class JobEvidenceFiles implements SandboxResultListener {
             throw new IllegalArgumentException("Evidence path is not a regular captured file");
         }
         return sourceFile;
+    }
+
+    /** Gateway archives belong to the same durable receipt and folder lease as the frozen attempt. */
+    public Path archiveDirectory(ReviewJob job) {
+        Path root = directory(job);
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS))
+            throw new UncheckedIOException(new NoSuchFileException(root.toString()));
+        return root.resolve(".archives");
     }
 
     private Path directory(ReviewJob job) {

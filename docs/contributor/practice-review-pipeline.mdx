@@ -823,3 +823,39 @@ Marks, reuse, withholding and missing reads do not prove absence.
 Completed files in a partial scan can support comparison. The unreached remainder cannot.
 
 The [scan guide](/admin/practice-scans) owns user procedures, report counts and export availability.
+
+## Temporary copy custody
+
+`FabricLayout.spool()` owns temporary code copies below the server's existing evidence home.
+`directory(workspaceId)` requires an active capture scope and registers the workspace and file lease before the caller can write content.
+`Copy.close()` throws on cleanup failure and retains the resource for reconciliation.
+An unknown existing path passed to `EvidenceSpool.close(Path)` throws and is left untouched.
+Closing an already removed spool entry again succeeds without recreating custody.
+The [operator inventory](../admin/practice-review-operations#temporary-evidence-and-restarts) owns paths and restart procedures.
+
+Repository-owned checkout caches are built inside their mirror, under its lock and retention.
+They do not open a capture session inside a transaction that already holds copy admission.
+
+For returned snapshots, `GitRepositoryManager` enters `spool.capture(workspaceId, fence::capture)` before taking a mirror lock or reading source content.
+Review capture enters an outer scope so its nested Git reads reuse the same admission session.
+A caller that prepares several copies enters that scope inside its preparation worker before calling the loader.
+Nested operations in that worker borrow the same admission session.
+
+Closing the scope detaches its thread-local context. Copies retain the supplied lease until physical removal, including failed-close retries.
+The last physical removal closes that lease once.
+No second admission connection or database ledger is created.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Temporary evidence copy custody
+    accDescr: A copy retains its workspace and leases until physical removal succeeds. Failed removal keeps custody for reconciliation.
+    [*] --> OPEN: Workspace and lease registered
+    OPEN --> REMOVING: Close requested
+    REMOVING --> REMOVING: Removal fails, retain custody
+    REMOVING --> CLOSED: Files removed, release leases
+    CLOSED --> [*]
+```
+
+The [Java file-lock contract](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/channels/FileLock.html) makes locks process-owned and advisory.
+Allocation and reconciliation therefore use the same local registry lock, and reconciliation never opens a second channel for an active local copy's lease.
+The [PostgreSQL session-lock contract](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS) lets the existing capture session cover file IO without an open row transaction.

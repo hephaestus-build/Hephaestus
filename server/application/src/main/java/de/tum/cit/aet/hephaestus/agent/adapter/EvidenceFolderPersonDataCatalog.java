@@ -128,7 +128,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
 
     public void beginCapture(ReviewJob job) {
         if (ACTIVE.get() != null) throw new IllegalStateException("An evidence capture is already active");
-        var admission = fence.capture();
+        var admission = layout.spool().capture(job.getWorkspaceId(), fence::capture);
         EvidenceFolderLease lease = null;
         PersonDataCopyRecorder.Capture provenance = null;
         try {

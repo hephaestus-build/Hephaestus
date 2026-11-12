@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
@@ -101,7 +102,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         when(preparation.prepare(eq(jobId), eq(job), eq(fence), any(), any()))
                 .thenReturn(new ReviewAttemptPreparation.PreparedSandbox(spec, inputs));
         when(transactions.execute(any())).thenReturn(1);
-        when(workspaces.createInputTar(anyMap(), anyMap(), anyList())).thenReturn(archive);
+        when(workspaces.createInputTar(any(), anyMap(), anyMap(), anyList())).thenReturn(archive);
         var runtime = new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
                 preparation,
@@ -115,7 +116,8 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 mock(DefaultReviewExecutionHandler.class),
                 mock(ReviewAttemptResults.class),
                 mock(ReviewRunKind.class),
-                runs);
+                runs,
+                mock(JobEvidenceFiles.class));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, "review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
@@ -168,7 +170,8 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 mock(DefaultReviewExecutionHandler.class),
                 mock(ReviewAttemptResults.class),
                 reviewRuns,
-                mock(AgentRuns.class));
+                mock(AgentRuns.class),
+                mock(JobEvidenceFiles.class));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);

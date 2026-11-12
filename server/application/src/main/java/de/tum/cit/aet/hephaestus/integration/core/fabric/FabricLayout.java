@@ -11,13 +11,19 @@ public class FabricLayout {
     private static final String JOBS = "jobs";
 
     private final Path root;
+    private final EvidenceSpool spool;
 
     public FabricLayout(@Value("${hephaestus.fabric.root:/data/git-repos}") String root) {
         this.root = Path.of(root).toAbsolutePath().normalize();
+        this.spool = new EvidenceSpool(this.root);
     }
 
     public Path root() {
         return root;
+    }
+
+    public EvidenceSpool spool() {
+        return spool;
     }
 
     public Path jobsRoot() {
