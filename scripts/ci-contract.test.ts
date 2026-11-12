@@ -1107,7 +1107,7 @@ void describe("CI contract", () => {
 			evaluateTierOutput(decision, "pull_request", {
 				full: "false",
 				light: "true",
-				filter: { "queue-tier-inputs": "true" },
+				filter: { migrations: "true" },
 			}),
 			"false",
 		);
@@ -1136,34 +1136,23 @@ void describe("CI contract", () => {
 			evaluateTierOutput(skip, "pull_request", { full: "false", preview: "true" }),
 			"false",
 		);
-		// A change to the tier's own inputs runs it on the pull request, label or not.
-		for (const filter of ["queue-tier-inputs", "test-config", "build-config"]) {
+		// Changing CI, browser specs or migrations does not promote every suite on a PR.
+		for (const filter of ["migrations", "test-config", "build-config", "e2e", "extension-e2e"]) {
 			assert.equal(
 				evaluateTierOutput(decision, "pull_request", {
 					full: "false",
 					filter: { [filter]: "true" },
 				}),
-				"true",
+				"false",
 				filter,
 			);
 		}
-		// What the queue tier replays, and what defines the shards, first runs on the pull request.
-		assert.deepEqual(
-			[
-				...pathFilter(orchestratorSource, "queue-tier-inputs").matchAll(
-					/^\s+- '(?<path>[^']+)'$/gmu,
-				),
-			].map((match) => match.groups?.path),
-			[
-				"server/application/build.gradle.kts",
-				"server/application/integration-test-durations.json",
-				"server/application/src/main/resources/db/**",
-				"webapp/e2e/**",
-				"webapp/playwright.config.ts",
-				"extension/e2e/**",
-				"extension/playwright.config.ts",
-			],
+		assert.equal(
+			evaluateTierOutput(decision, "pull_request", { full: "false", releaseCandidate: "true" }),
+			"false",
+			"release evidence does not opt a Version PR into every queue-tier suite",
 		);
+		assert.equal(orchestratorSource.includes("queue-tier-inputs"), false);
 
 		// The queue tier is exactly these jobs, and the latency report counts them by these names.
 		const guarded: string[] = [];
@@ -1350,8 +1339,9 @@ void describe("CI contract", () => {
 			for (const name of queue) {
 				assert.match(
 					String(workflow.getIn(["jobs", name, "if"])),
-					// Of the integration shards, the review shard also runs in the fast tier.
-					/&& inputs\.queue_tier == 'true'$/u,
+					name === "server-database" || name === "postgres-drill"
+						? /&& \(inputs\.queue_tier == 'true' \|\| inputs\.migrations_changed == 'true'\)$/u
+						: /&& inputs\.queue_tier == 'true'$/u,
 					`${name} belongs to the queue tier`,
 				);
 			}
@@ -1362,6 +1352,191 @@ void describe("CI contract", () => {
 					`${name} belongs to the fast tier`,
 				);
 			}
+		}
+	});
+
+	void test("migration PRs select database checks without promoting every shard", async () => {
+		const caller = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const build = parseDocument(await readFile(".github/workflows/ci-build.yml", "utf8"));
+		const filters = asRecord(
+			parseDocument(
+				String(step(caller, ["jobs", "detect-changes"], "dorny/paths-filter").get("filters")),
+			).toJSON(),
+			"filters",
+		);
+		const migrate = "server/application/src/main/resources/db/changelog/next/migration.xml";
+		const source = "server/application/src/main/java/Application.java";
+		// files, event, ci:full, release candidate, migration-only, queue tier, database checks
+		for (const [files, event, full, candidate, only, queue, database] of [
+			[[source], "pull_request", "false", "false", false, false, false],
+			[[migrate, ".changeset/migration.md"], "pull_request", "false", "false", true, false, true],
+			[
+				[migrate, ".migration/schema.md", "docs/contributor/erd/schema.mmd"],
+				"pull_request",
+				"false",
+				"false",
+				true,
+				false,
+				true,
+			],
+			[[migrate, source], "pull_request", "false", "false", false, false, true],
+			[[migrate, ".changeset/config.json"], "pull_request", "false", "false", false, false, true],
+			[[".github/workflows/cicd.yml"], "pull_request", "false", "false", false, false, false],
+			[["webapp/e2e/review.spec.ts"], "pull_request", "false", "false", false, false, false],
+			[[migrate], "pull_request", "true", "false", false, true, true],
+			[[migrate], "pull_request", undefined, "false", false, true, true],
+			[[migrate], "pull_request", "false", "true", false, false, true],
+			[[migrate], "merge_group", "false", "false", false, true, true],
+			[[source], "merge_group", "false", "false", false, true, true],
+			[[migrate], "workflow_dispatch", "false", "false", false, true, true],
+			[[migrate], "push", "false", "false", false, true, false],
+		] as const) {
+			const label = JSON.stringify({ files, event, full, candidate });
+			const selected = Object.fromEntries(
+				Object.entries(filters).map(([key, value]) => {
+					const patterns = asArray(value, key).map((pattern) => asString(pattern, "path pattern"));
+					const matches = files.some(
+						(file) =>
+							patterns
+								.filter((pattern) => !pattern.startsWith("!"))
+								.some((pattern) => minimatch(file, pattern, { dot: true })) &&
+							patterns
+								.filter((pattern) => pattern.startsWith("!"))
+								.every((pattern) => !minimatch(file, pattern.slice(1), { dot: true })),
+					);
+					return [key, String(matches)];
+				}),
+			);
+			const run = { full, releaseCandidate: candidate, filter: selected };
+			const output = (name: string) =>
+				evaluateTierOutput(
+					String(caller.getIn(["jobs", "detect-changes", "outputs", name])),
+					event,
+					run,
+				);
+			assert.equal(output("queue-tier"), String(queue), label);
+			assert.equal(output("migration-only"), String(only), label);
+			assert.equal(
+				caller.getIn(["jobs", "Test", "with", "migration_only"]),
+				`\${{ needs.detect-changes.outputs.migration-only }}`,
+			);
+			assert.equal(
+				caller.getIn(["jobs", "Build", "with", "migrations_changed"]),
+				`\${{ needs.detect-changes.outputs.migrations-changed }}`,
+			);
+			const server = output("server-tests") === "true";
+			const shards = server ? serverShards(caller, queue, only) : [];
+			assert.deepEqual(
+				shards,
+				server
+					? [...(only ? [] : SERVER_TIERS), ...(queue ? integrationShards() : ["review"])]
+					: [],
+			);
+			const contracts = expandExpressions(
+				caller.getIn(["jobs", "Build", "with", "contracts_changed"]),
+				{
+					github: { event_name: event },
+					needs: {
+						"detect-changes": {
+							outputs: { ...selected, unfiltered: output("unfiltered"), "version-bump": "false" },
+						},
+					},
+				},
+			);
+			for (const name of ["server-database", "postgres-drill"]) {
+				assert.equal(
+					jobRuns(build, name, event, {}, false, {
+						should_skip: "false",
+						contracts_changed: contracts,
+						queue_tier: output("queue-tier"),
+						migrations_changed: output("migrations-changed"),
+					}),
+					database,
+					`${name}: ${label}`,
+				);
+			}
+			if (only) {
+				assert.equal(
+					jobRuns(build, "server-api", event, {}, false, {
+						should_skip: "false",
+						contracts_changed: contracts,
+					}),
+					true,
+					"migration-only PRs keep generated schema and ERD drift proof",
+				);
+			}
+		}
+	});
+
+	void test("migration caller conditions preserve draft and fork checks and the stacked light tier", async () => {
+		const caller = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const build = parseDocument(await readFile(".github/workflows/ci-build.yml", "utf8"));
+		for (const [draft, light, fork] of [
+			[false, "false", false],
+			[true, "false", false],
+			[false, "true", false],
+			[true, "true", false],
+			[false, "false", true],
+			[true, "false", true],
+			[false, undefined, false],
+		] as const) {
+			const run = {
+				full: "false",
+				preview: "false",
+				light,
+				filter: { "application-server": "true", migrations: "true", "non-migration": "false" },
+				pullRequest: { draft, head: { repo: { full_name: fork ? "fork/repo" : "owner/repo" } } },
+			};
+			const declared = caller.getIn(["jobs", "detect-changes", "outputs"]);
+			assert.ok(isMap(declared));
+			const names = [
+				"server-tests",
+				"migration-only",
+				"migrations-changed",
+				"queue-tier",
+				"light-tier",
+				"draft",
+				"head-images",
+				"images",
+				"any-code",
+				"all-images",
+				"unfiltered",
+				"publishable",
+			];
+			const outputs: Record<string, string> = {
+				...run.filter,
+				should_skip: "false",
+				"queue-images-complete": "false",
+			};
+			for (const name of names) {
+				outputs[name] = evaluateTierOutput(String(declared.get(name)), "pull_request", run);
+			}
+			const results: Record<string, Completion> = {
+				"detect-changes": { result: "success", outputs },
+				Security: { result: "success" },
+			};
+			const packaged = jobRuns(caller, "server-package", "pull_request", results);
+			results["server-package"] = { result: packaged ? "success" : "skipped" };
+			assert.equal(packaged, light !== "true", JSON.stringify(run));
+			assert.equal(jobRuns(caller, "Build", "pull_request", results), packaged);
+			assert.equal(jobRuns(caller, "Test", "pull_request", results), packaged);
+			const inputs = Object.fromEntries(
+				["should_skip", "contracts_changed", "queue_tier", "migrations_changed"].map((name) => [
+					name,
+					expandExpressions(caller.getIn(["jobs", "Build", "with", name]), {
+						github: { event_name: "pull_request" },
+						needs: results,
+					}),
+				]),
+			);
+			for (const name of ["server-database", "postgres-drill"]) {
+				assert.equal(
+					packaged && jobRuns(build, name, "pull_request", {}, false, inputs),
+					packaged,
+					`${name}: ${JSON.stringify(run)}`,
+				);
+			}
+			assert.equal(outputs.publishable, String(!fork));
 		}
 	});
 
@@ -4961,7 +5136,7 @@ function integrationShards(): string[] {
 	return ["review", ...Array.from({ length: committedShards() }, (_, index) => `${index + 1}`)];
 }
 
-function serverShards(workflow: Document, queue: boolean): string[] {
+function serverShards(workflow: Document, queue: boolean, migrationOnly = false): string[] {
 	assert.equal(workflow.getIn(["jobs", "Test", "uses"]), "./.github/workflows/ci-tests.yml");
 	assert.equal(workflow.hasIn(["jobs", "Test", "strategy"]), false);
 	const suites = parseDocument(readFileSync(".github/workflows/ci-tests.yml", "utf8"));
@@ -4977,6 +5152,7 @@ function serverShards(workflow: Document, queue: boolean): string[] {
 			should_skip: "false",
 			application_server_changed: "true",
 			queue_tier: String(queue),
+			migration_only: String(migrationOnly),
 		})
 			? [asString(tier, "server tier or shard")]
 			: [];

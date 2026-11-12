@@ -87,6 +87,28 @@ void test("the pull-request cohort is the server fast tier", () => {
 	);
 });
 
+void test("migration PR latency includes database checks while full-suite runs stay excluded", () => {
+	const database = [{ name: "Build / Database migrations" }, { name: "Build / PostgreSQL drills" }];
+	const review = { name: "Server tests / Integration (review)" };
+	const unit = { name: "Server tests / Unit" };
+	assert.equal(isFastTier([review, ...database]), true, "migration-only PRs have no Unit job");
+	assert.equal(isFastTier([unit, review, ...database]), true, "mixed migration/source PRs");
+	assert.equal(isFastTier(database), false, "a run that exercised no server test is not sampled");
+	for (const name of [
+		"Server tests / Integration (1 of 8)",
+		"Browser tests / Webapp",
+		"Browser tests / Extension",
+	]) {
+		assert.equal(isFastTier([review, ...database, { name }]), false, name);
+	}
+	assert.equal(
+		queueTierFailures([{ conclusion: "failure", failedJobs: database.map((job) => job.name) }])
+			.queueTierFailed,
+		1,
+		"database failures still count in the merge-group revert criterion",
+	);
+});
+
 void test("a release candidate's evidence run is not a latency sample", () => {
 	assert.equal(isLatencySample([{ name: "Detect changes" }]), true);
 	assert.equal(

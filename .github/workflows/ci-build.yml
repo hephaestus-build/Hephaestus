@@ -22,6 +22,10 @@ on:
         description: "Commit whose published PostgreSQL image the database legs reuse"
         required: true
         type: string
+      migrations_changed:
+        description: "Whether the diff changes migrations, which also select database tests and drills on a PR"
+        required: true
+        type: string
       queue_tier:
         description: "Whether the run also verifies the queue tier (docs/contributor/ci-cd.mdx § Two verification tiers)"
         required: true
@@ -155,7 +159,7 @@ jobs:
 
   server-database:
     name: Database migrations
-    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && inputs.queue_tier == 'true'
+    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && (inputs.queue_tier == 'true' || inputs.migrations_changed == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -222,7 +226,7 @@ jobs:
 
   postgres-drill:
     name: PostgreSQL drills
-    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && inputs.queue_tier == 'true'
+    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && (inputs.queue_tier == 'true' || inputs.migrations_changed == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

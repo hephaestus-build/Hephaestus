@@ -42,8 +42,9 @@ Two path groups need attention:
 - `package.json` or `pnpm-lock.yaml` select every source leg.
 
 A pull request runs only the fast tier, with the `review` integration shard. The merge queue runs the
-other integration shards, the database tests, the drills and the browser suites. To run them before you queue a change, add the `ci:full`
-label ([Two verification tiers](../../../docs/contributor/ci-cd.mdx#two-verification-tiers)).
+other integration shards, the database tests, the drills and the browser suites. Migration changes
+also run the database tests and drills on the pull request. Use the `ci:full` label to reproduce a
+queue-tier failure ([Two verification tiers](../../../docs/contributor/ci-cd.mdx#two-verification-tiers)).
 
 Reconcile changed dependency inputs before local gates.
 See [Dependency installation](../../../docs/contributor/local-verification.mdx#dependency-installation)

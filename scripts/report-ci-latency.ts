@@ -86,30 +86,35 @@ export function isLatencySample(jobs: readonly { name: string }[]) {
 	return !jobs.some((job) => job.name === "Release evidence preflight");
 }
 
-// The queue tier's job names, past drill names included; ci-contract.test.ts holds them to the
-// jobs that carry the tier guard. The `review` integration shard also runs in the fast tier.
-export const QUEUE_TIER_JOBS = [
+// Database and PostgreSQL drills can also run in the PR fast tier. These jobs cannot.
+const QUEUE_ONLY_JOBS = [
 	/^Server tests \/ Integration \((?!review\))/u,
-	/^Build \/ Database migrations$/u,
-	/^Build \/ PostgreSQL drill/u,
 	/^Browser tests \/ Webapp$/u,
 	/^Browser tests \/ Extension$/u,
 ];
 
+// The merge group's queue-tier failure classes, including database checks that also run on a
+// migration PR. ci-contract.test.ts ties this list to the jobs that carry the tier guard.
+export const QUEUE_TIER_JOBS = [
+	...QUEUE_ONLY_JOBS,
+	/^Build \/ Database migrations$/u,
+	/^Build \/ PostgreSQL drill/u,
+];
+
 /**
- * A pull request's fast-tier verdict: the server suites ran and no queue-tier job did. Docs-only,
- * duplicate-skipped and `ci:full` runs measure something else.
+ * A PR that exercised server tests without numbered integration shards or browser suites.
+ * Migration-only PRs exercise review instead of Unit; their database checks stay in this cohort.
  */
 export function isFastTier(jobs: readonly { name: string }[]) {
+	const names = jobs.map((job) => canonicalCiJobName(job.name));
 	return (
-		jobs.some(
-			(job) =>
-				canonicalCiJobName(job.name) === "Server tests / Unit" ||
-				canonicalCiJobName(job.name) === "Server tests / Unit and architecture",
-		) &&
-		!jobs.some((job) =>
-			QUEUE_TIER_JOBS.some((pattern) => pattern.test(canonicalCiJobName(job.name))),
-		)
+		names.some((name) =>
+			[
+				"Server tests / Unit",
+				"Server tests / Unit and architecture",
+				"Server tests / Integration (review)",
+			].includes(name),
+		) && !names.some((name) => QUEUE_ONLY_JOBS.some((pattern) => pattern.test(name)))
 	);
 }
 
