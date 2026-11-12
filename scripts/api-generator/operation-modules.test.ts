@@ -24,7 +24,7 @@ await test("each operation has its own SDK and query module, and the plugin file
 	assert.deepEqual(await moduleNames("@tanstack/react-query/"), operations);
 
 	const sdk = await readFile(new URL("sdk.gen.ts", api), "utf8");
-	assert.doesNotMatch(sdk, /url: '/u);
+	assert.doesNotMatch(sdk, /\burl:\s*["']/u);
 	const query = await readFile(new URL("@tanstack/react-query.gen.ts", api), "utf8");
 	assert.doesNotMatch(query, /queryOptions\(|infiniteQueryOptions</u);
 	assert.doesNotMatch(query, /mutationFn/u);

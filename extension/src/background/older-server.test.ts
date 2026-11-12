@@ -208,9 +208,10 @@ function callsOfTheClient(): { name: string; address: string }[] {
 		.filter(Boolean)
 		.map((name) => {
 			const start = sdk.indexOf(`export const ${name} = `);
-			const body = sdk.slice(start, sdk.indexOf("\n});", start));
+			expect(start).toBeGreaterThanOrEqual(0);
+			const body = required(sdk.slice(start).split("\nexport const ")[0]);
 			const method = /\.(?<method>get|post|patch|put|delete)</u.exec(body)?.groups?.method;
-			const url = /url: '(?<url>[^']+)'/u.exec(body)?.groups?.url;
+			const url = /url:\s*["'](?<url>[^"']+)["']/u.exec(body)?.groups?.url;
 			return { name, address: `${method?.toUpperCase() ?? ""} ${url ?? ""}` };
 		});
 }
