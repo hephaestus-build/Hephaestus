@@ -87,9 +87,13 @@ public class LlmUsageAdminService {
     private static AdminWorkspaceLlmUsageDTO toRollup(
             LlmUsageEventRepository.WorkspaceAggregate row, YearMonth month, boolean isCurrentMonth) {
         LlmBudgetVerdict instanceVerdict = LlmBudgetService.verdictFor(
-                row.getPricedTotalCostUsd(), row.isHasUnpricedInstanceUsage(), row.getMonthlyBudgetUsd());
+                row.getPricedTotalCostUsd().add(row.getInstanceUpperBoundUsd()),
+                row.isHasUnpricedInstanceUsage(),
+                row.getMonthlyBudgetUsd());
         LlmBudgetVerdict ownProviderVerdict = LlmBudgetService.verdictFor(
-                row.getByoTotalCostUsd(), row.isHasUnpricedByoUsage(), row.getByoMonthlyBudgetUsd());
+                row.getByoTotalCostUsd().add(row.getOwnProviderUpperBoundUsd()),
+                row.isHasUnpricedByoUsage(),
+                row.getByoMonthlyBudgetUsd());
         return new AdminWorkspaceLlmUsageDTO(
                 row.getWorkspaceSlug(),
                 row.getDisplayName(),
@@ -97,6 +101,8 @@ public class LlmUsageAdminService {
                 row.getByoMonthlyBudgetUsd(),
                 row.getPricedTotalCostUsd(),
                 row.getByoTotalCostUsd(),
+                new LlmUnmeasuredUsageDTO(row.getInstanceUnmeasuredCalls(), row.getInstanceUpperBoundUsd()),
+                new LlmUnmeasuredUsageDTO(row.getOwnProviderUnmeasuredCalls(), row.getOwnProviderUpperBoundUsd()),
                 LlmUsageService.ownProviderInUse(month, row.isOwnProviderConnected(), row.isHasByoUsage()),
                 row.getEvents(),
                 instanceVerdict,

@@ -24,6 +24,7 @@ Code cites these rules by number.
 | **price** (or **rate**) | A published per-1M-token rate, as the provider lists it | `per1mInputUsd`, `per1mOutputUsd`, `per1mCacheReadUsd`, `per1mCacheWriteUsd` | `formatRateUsd` |
 | **cost** | What one recorded thing cost — a call, an `llm_usage_event`, a job, a turn | `llm_usage_event.cost_usd` (`NUMERIC(18,6)`). No single item's cost is published on its own. The API exposes cost only as a total | `formatCostUsd` |
 | **spend** | Cost summed over a window, usually a month, usually a workspace | `instanceTotalCostUsd`, `ownProviderTotalCostUsd` | `formatCostUsd` |
+| **upper bound** | The most one call can cost at its frozen rates, from its request and its output limit. Held for a call whose usage is not measured ([Rule 11](#rule-11--an-unmeasured-call-counts-at-its-upper-bound)) | `llm_usage_event.cost_bound_usd`, `instanceUnmeasured.upperBoundUsd`, `ownProviderUnmeasured.upperBoundUsd` | `formatCostUsd`, always after "Up to" |
 
 The wire deliberately has no `totalCostUsd` or `spentUsd`.
 Spend is always published split by purse.
@@ -191,33 +192,75 @@ Historical priced amounts remain in spend totals without gaining a verification 
 Do not repair verification decisions with manual database edits.
 This distinction does not establish complete call coverage.
 
-## Rule 10 — A review attempt's ledger rows project its measurement
+## Rule 10 — Each model call is one ledger row
 
-Each review job attempt has one measurement, `ReviewAttemptUsage`, and one frozen charge per model kind, `ReviewAttemptCharge`.
+The proxy measures every model call, and each call has one `llm_usage_event` row ([agent runs](agent-runs#model-calls)).
+The row freezes the model, the funding source and the rates of the call's model kind when the call opens. A call is dated by its start, so a call that ends after midnight on the 1st stays in the month it started in.
+The runner's own usage report is not a billing source.
 
-The proxy registers a call before it forwards it. Registration needs the attempt to still run on its worker. It freezes the model kind's charge, and it counts no call.
-Several calls of one attempt can register at the same time. One of them creates the measurement, and none of them fails because of the others.
+- A served call with reported usage is `VERIFIED`, and its cost follows from the frozen rates.
+- A served call without reported usage is `UNVERIFIABLE` and `UNPRICED`, with `unreported_calls = 1`.
+  So is a call cut off before an answer, and a call that the end of its claim settled.
+  They are never billed as zero.
+- A call that its provider answered with an error status costs nothing: it is `VERIFIED` with no tokens.
+- A practice script call names its practice (`practice_id`). Its chat calls bill as the review's own calls (`REVIEW_JOB`).
 
-A returned call settles on the attempt that authenticated it, also after a cancellation or a requeue. A practice script row and the attempt's proxy total change in one transaction.
-The ledger rows of the attempt are its projection. `TerminalUsage.resolve` selects the vector again at each projection.
+The budget caps, the scan budget and the reports read the rows.
+[Rule 11](#rule-11--an-unmeasured-call-counts-at-its-upper-bound) says what each row adds to a total.
 
-A late call is never added to a selected runner report.
-If the report covers the proxy total, it stays selected.
-If the proxy total covers the report, it replaces the report.
-If the two are incomparable, the row is `UNVERIFIABLE`.
+A late completion replaces a settlement with the measurement at the initial price mode and frozen rates.
+A known price applies at once.
+An unknown price needs the repricing pass.
+The repricing pass reads every month, oldest first, in batches of `LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS`.
 
-A projection changes only the measurement and the cost that follows from it. Source, model, funding source, rates and date stay frozen.
-A late correction keeps the month of the attempt. It sends a budget alert only for an increase in the current month.
-A price that the repricing pass resolved is also written to the attempt's charge, so a later verified projection keeps it.
+Rows from before each call had a row hold one review attempt, one practice script model kind of an attempt, or one turn attempt each. They keep their `total_calls`, they have no run, and they name no practice.
 
-This covers only calls the proxy observed with reported usage. It does not recover a call whose response carried no usage, or a call the provider billed after the proxy gave up. It does not recover usage that was dropped before this rule existed. An attempt whose ledger row exists without a measurement stays as it is.
-
-An erasure that cancels a running selected job settles the attempt first, so its ledger row exists before the erasure removes the job's measurements. The preparation then detaches the review ledger rows of each selected job (same job id and workspace) with the ledger store's own redaction. The rows keep their tokens, cost and date.
-
-**Rollout gate.** An attempt that crosses the upgrade can lose its pre-upgrade proxy totals or usage from calls without a registered measurement. Before you start the new version, let every old worker finish its active review attempts with a [graceful drain](/admin/runtime-roles#graceful-drain). Use a drain timeout that is long enough for those attempts, not `timeout=0`. Then make sure that no review job is `RUNNING` on an old worker. Queued jobs need not drain: the new version registers their first call.
+An erasure detaches every row of each selected job or turn from its source.
+The rows of one source take one new source id together and lose their review. The rows keep their tokens, cost and date. A call that returns after the erasure measures its detached row and never names its source again.
 
 `unpricedEventCount` follows the run-count definition in [Rule 4](#rule-4--never-render-a-pricing-or-budget-enum).
 It is not a per-purse count and must not be used as one in budget banners.
+
+## Rule 11 — An unmeasured call counts at its upper bound
+
+Every generative model call carries an output limit ([AI providers](/admin/ai-providers#output-limit)).
+When a call opens, its row stores its **upper bound** in `cost_bound_usd`: the most that the call can cost at its frozen rates.
+
+- The input is the request's bytes. A token covers at least one byte, so the bytes bound the input tokens.
+  Each byte is priced at the highest of the input, cache read and cache write rates.
+- The output is the effective output limit of the call: the limit in the forwarded request.
+  The proxy clamped that limit or wrote it ([AI providers](/admin/ai-providers#output-limit)).
+  An embedding or reranking call writes no output.
+- Tokens that a provider adds on its own side, such as a hidden system prompt, are not in the bound.
+  Output that a server writes past a limit that it ignores is not in the bound either.
+- A `NO_CHARGE` model bounds each call at zero.
+- An `UNPRICED` model, a priced model without the input or output rate, and a priced reranking call have no bound.
+  A reranking call bills search units, which no token rate bounds.
+- A measurement that needs a rate that the frozen price does not have clears the bound.
+
+A row adds its upper bound to every spend total while its call is open or the row has no price.
+Otherwise it adds its cost.
+`LlmUsageEventRepository.SPEND` owns this expression.
+The monthly caps, the scan budget, the scan call guard, the batch budget and the mean cost per review use it.
+
+A call opens only while its bound fits under its purse's cap: the spend total plus the call's own bound must not pass the cap (`ProxyBudgetGate#refusesHold`).
+Thus, an open call holds its bound while it is at its provider, and a call whose usage was not measured keeps its bound.
+Such a call does not make a purse or a review unverifiable.
+Only a row with neither a price nor a bound does ([Rule 4](#rule-4--never-render-a-pricing-or-budget-enum)).
+
+An upper bound is never shown as a cost.
+Confirmed spend is the measured cost of the rows that do not count at a bound (`LlmUsageEventRepository.CONFIRMED`).
+A report reads it in the same statement as the bounds, never as a spend total less the bounds.
+The budget alert compares confirmed spend with the cap, so a bound never raises it.
+
+The reports show the bound apart from the confirmed spend: `instanceUnmeasured` and `ownProviderUnmeasured` give the calls and their summed bound for each purse.
+The screen says "Up to $X more from N calls whose usage was not measured".
+A review's usage marks a cost that includes a bound with `includesUpperBound`, and the screen says "Up to $X".
+The repricing pass never prices an `UNVERIFIABLE` row, so such a row keeps its bound.
+
+Chat-completion calls multiply their output bound by the requested completion count `n`.
+The proxy accepts explicit text input and client-run tools.
+It refuses images, audio, files and provider-stored input because request bytes cannot bound their token counts.
 
 ## Where the words are enforced
 
@@ -227,5 +270,6 @@ It is not a per-purse count and must not be used as one in budget banners.
 | USD rendering (rules 1, 5) | `webapp/src/lib/money.ts` |
 | Which purse, and whether it pauses (rules 2, 4) | `LlmBudgetVerdict`, `UsageFundingSource`, `LlmBudgetService` |
 | Measurement acceptance and repair eligibility (rule 9) | `MeasurementVerification`, `LlmUsageRecorder`, `LlmUsageRepricer`, `LlmUsageEventRepository` |
-| One measurement per review attempt, late calls (rule 10) | `ReviewAttemptUsageService`, `ReviewAttemptUsage`, `ReviewAttemptCharge`, `ProxyUsageAccumulator` |
+| One row per model call, settlement, late calls (rule 10) | `LlmUsageRecorder`, `ProxyCallLedger`, `AgentRuns` |
+| The upper bound and what a row adds to a total (rule 11) | `OutputLimit`, `LlmPriceSnapshot#upperBound`, `LlmUsageEventRepository#SPEND`, `LlmUsageEventRepository#CONFIRMED`, `ProxyBudgetGate#refusesHold` |
 | The in-flight bound behind rule 7's "within a minute" | [ADR 0026](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0026-per-purpose-agent-bindings-and-llm-governance.md) |

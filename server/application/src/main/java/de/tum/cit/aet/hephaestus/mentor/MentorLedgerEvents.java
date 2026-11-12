@@ -20,7 +20,7 @@ public final class MentorLedgerEvents {
 
     /**
      * The ledger took back a running attempt outside the lease reaper, for example to merge two conversations of an
-     * absorbed account. The attempt is billed and its feedback claims are due their receipts, as for an expired lease.
+     * absorbed account. The attempt's feedback claims are due their receipts, as for an expired lease.
      * Published in the transaction that takes it back; a listener reads the turn.
      */
     public record AttemptTakenBack(
@@ -28,19 +28,8 @@ public final class MentorLedgerEvents {
             UUID turnId,
             int attempt,
             @Nullable JsonNode admission,
-            MentorTurnUsage proxyUsage,
             Instant startedAt,
             Instant lostAt) {}
-
-    /**
-     * An attempt ended, was taken back, or failed after its lease: the one fact that dates its spend. Published
-     * synchronously in the transaction that ends the attempt, before a requeue resets the turn, so a listener that dates
-     * the attempt's usage joins that transaction. A model call that returns later, and a billing listener that runs
-     * later, read this date and never choose their own.
-     *
-     * @param endedAt the end of the attempt: the end's instant, or the database clock at which the lease was taken back
-     */
-    public record AttemptEnded(long workspaceId, UUID turnId, int attempt, Instant endedAt) {}
 
     /** One ledger change, as {@link MentorLedgerNotifications} carries it between processes. */
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")

@@ -189,6 +189,7 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
         usage.setSourceType(UsageSourceType.REVIEW_JOB);
         usage.setSourceId(job.getId());
         usage.setOccurredAt(Instant.now());
+        usage.setStartedAt(usage.getOccurredAt());
         usage.setPricingState(UsagePricingState.UNPRICED);
         usage.setFundingSource(UsageFundingSource.WORKSPACE);
         usageRepository.save(usage);

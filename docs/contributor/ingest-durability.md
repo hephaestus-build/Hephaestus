@@ -167,7 +167,7 @@ Therefore a registry redelivery still needs an idempotency rule; the framework c
 | `ReviewCommandListener.on(BotCommandReceivedEvent)` | The provider, comment id and kind derive the review request key. A refusal reply is an external effect. |
 | `ReviewCommandListener.on(CommentRequestedReviewEnded)` | Reads the recorded review outcome and replies through the provider. The remote reply retains its delivery limitation. |
 | `ReviewJobCompletionService.cancel` | Cancels only queued or running jobs, under the job lifecycle's state guard. |
-| `MentorTurnCompletion.billTakenBack` | Attempt usage settles by turn and attempt. Repeated billing cannot add a second charge; counters can repeat. |
+| `MentorTurnCompletion.billTakenBack` | Each model call already has its ledger row, so a repeat bills nothing twice; the cost metric can repeat. |
 | `MentorTurnCompletion.settle` | Settles the remaining conversation-copy claims by their persisted receipt identity. |
 | `SlackThreadEventScheduler.onReviewCompleted` | A version check advances the reviewed watermark to the same thread timestamp. |
 | `SlackWeeklyDigestPointer.on` | Uses the stored message claim and receipt; uncertain sends are reconciled from Slack history rather than posted again. |

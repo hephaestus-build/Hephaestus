@@ -21,8 +21,8 @@ import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanBudget;
-import de.tum.cit.aet.hephaestus.agent.scan.ScanModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
@@ -72,6 +72,9 @@ class ScanCallGuardTest extends BaseUnitTest {
     /** The lease row as the database holds it: one call at a time, whichever replica asks. */
     private final AtomicReference<@Nullable UUID> leaseRow = new AtomicReference<>();
 
+    private final LlmUsageEventRepository usage = mock(LlmUsageEventRepository.class);
+    private long calls;
+    private long outputTokens;
     private final JsonMapper mapper = new JsonMapper();
     private final ReviewJob job = RuntimeReviewTestData.job();
     private ReviewSnapshot scan;
@@ -85,6 +88,7 @@ class ScanCallGuardTest extends BaseUnitTest {
             new SandboxGatewayProperties(8081, 10000, 120, 1000, 4096),
             mapper,
             PRACTICE_REVIEW,
+            usage,
             leases);
 
     private ProxyRouting route() {
@@ -103,7 +107,8 @@ class ScanCallGuardTest extends BaseUnitTest {
                 new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, LEASE),
                 null,
                 null,
-                workDeadline);
+                workDeadline,
+                100L);
     }
 
     @Test
@@ -243,7 +248,7 @@ class ScanCallGuardTest extends BaseUnitTest {
         lenient()
                 .when(budget.spent(1, job.getReviewId()))
                 .thenReturn(new ReviewRuntimeRepository.Spend(BigDecimal.ZERO, true));
-        lenient().when(budget.inFlight(any(), any())).thenReturn(BigDecimal.ZERO);
+        lenient().when(usage.countReviewCalls(anyLong(), any(), anyInt())).thenAnswer(invocation -> reviewCalls());
     }
 
     private void refused(String json) {
@@ -265,6 +270,22 @@ class ScanCallGuardTest extends BaseUnitTest {
         }
     }
 
+    /** An earlier call whose usage was not measured counts at its upper bound and blocks no later call. */
+    @Test
+    void permitsTheNextCallWithinTheCapWhenEarlierCallsCountAtTheirUpperBound() {
+        byte[] body = "{\"max_tokens\":10}".getBytes(StandardCharsets.UTF_8);
+        when(budget.spent(1, job.getReviewId()))
+                .thenReturn(new ReviewRuntimeRepository.Spend(new BigDecimal("0.999000"), true));
+        try (var lease = guard.acquire(route(), body).orElseThrow()) {
+            assertThat(lease).isNotNull();
+        }
+
+        // The next call's own bound, 17 bytes and 10 output tokens at $1 per 1M, must fit as well.
+        when(budget.spent(1, job.getReviewId()))
+                .thenReturn(new ReviewRuntimeRepository.Spend(new BigDecimal("0.999974"), true));
+        refused("{\"max_tokens\":10}");
+    }
+
     @Test
     void refusesTheNextCallAfterTheCapIsSpent() {
         when(budget.spent(1, job.getReviewId())).thenReturn(new ReviewRuntimeRepository.Spend(BigDecimal.ONE, true));
@@ -278,23 +299,38 @@ class ScanCallGuardTest extends BaseUnitTest {
     }
 
     @Test
-    void refusesUnavailableFrozenPricing() {
-        when(budget.inFlight(any(), any())).thenThrow(new ScanModelUnavailableException("Unpriced model"));
-        refused("{}");
+    void shouldCountTheAttemptsCallsWithoutUsageAgainstTheScanCallCap() {
+        // Every call the attempt opened is a row, also one whose provider reported no usage.
+        calls = 36;
+        refused("{\"max_tokens\":10}");
+
+        calls = 35;
+        assertThat(guard.acquire(route(), "{\"max_tokens\":10}".getBytes(StandardCharsets.UTF_8)))
+                .isPresent()
+                .get()
+                .satisfies(ScanCallGuard.Lease::close);
+    }
+
+    /** A request above the frozen limit is forwarded clamped to it, so its bound is the frozen limit's. */
+    @Test
+    void boundsAnOutputAboveTheFrozenLimitAtTheFrozenLimit() {
+        byte[] body = "{\"max_tokens\":16384}".getBytes(StandardCharsets.UTF_8);
+        // 20 bytes and 100 output tokens at $1 per 1M: 0.000120.
+        when(budget.spent(1, job.getReviewId()))
+                .thenReturn(new ReviewRuntimeRepository.Spend(new BigDecimal("0.999880"), true));
+        try (var lease = guard.acquire(route(), body).orElseThrow()) {
+            assertThat(lease).isNotNull();
+        }
+
+        when(budget.spent(1, job.getReviewId()))
+                .thenReturn(new ReviewRuntimeRepository.Spend(new BigDecimal("0.999881"), true));
+        refused("{\"max_tokens\":16384}");
     }
 
     @Test
-    void programmingFailureDoesNotBecomeABudgetRefusal() {
-        var bug = new IllegalStateException("Invariant failed");
-        when(budget.inFlight(any(), any())).thenThrow(bug);
-        assertThatThrownBy(() -> guard.acquire(route(), "{}".getBytes(StandardCharsets.UTF_8)))
-                .isSameAs(bug);
-    }
-
-    @Test
-    void refusesAnOutputAboveTheFrozenLimit() {
-        refused("{\"max_tokens\":101}");
-        refused("{\"generationConfig\":{\"maxOutputTokens\":101}}");
+    void refusesAnOutputLimitThatIsNotAPositiveWholeNumber() {
+        refused("{\"max_tokens\":0}");
+        refused("{\"max_tokens\":1.5}");
     }
 
     @Test
@@ -344,8 +380,8 @@ class ScanCallGuardTest extends BaseUnitTest {
     @Test
     void shouldServeAReviewThatStaysWithinTwiceWhatItsLoopMaySpend() {
         ordinaryReview();
-        job.setLlmCalls((int) (ScanCallGuard.WORK_MARGIN * loopCalls() - 1));
-        job.setLlmOutputTokens(ScanCallGuard.WORK_MARGIN * loopOutputTokens() - 1);
+        calls = ScanCallGuard.WORK_MARGIN * loopCalls() - 1;
+        outputTokens = ScanCallGuard.WORK_MARGIN * loopOutputTokens() - 1;
 
         assertThat(guard.acquire(route(), "{}".getBytes(StandardCharsets.UTF_8)))
                 .isEmpty();
@@ -354,18 +390,18 @@ class ScanCallGuardTest extends BaseUnitTest {
     @Test
     void shouldRefuseADirectCallPastTwiceTheCallsOrTokensThatTheLoopMaySpend() {
         ordinaryReview();
-        job.setLlmCalls((int) (ScanCallGuard.WORK_MARGIN * loopCalls()));
+        calls = ScanCallGuard.WORK_MARGIN * loopCalls();
         refusedForWork(route());
 
-        job.setLlmCalls(0);
-        job.setLlmOutputTokens(ScanCallGuard.WORK_MARGIN * loopOutputTokens());
+        calls = 0;
+        outputTokens = ScanCallGuard.WORK_MARGIN * loopOutputTokens();
         refusedForWork(route());
     }
 
     @Test
     void shouldLeaveAPracticeScriptsDirectCallsToTheirOwnTokenBound() {
         ordinaryReview();
-        job.setLlmCalls((int) (ScanCallGuard.WORK_MARGIN * loopCalls()));
+        calls = ScanCallGuard.WORK_MARGIN * loopCalls();
         var script = new ProxyRouting(
                 "job",
                 "openai-completions",
@@ -377,8 +413,25 @@ class ScanCallGuardTest extends BaseUnitTest {
                 new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, LEASE),
                 ModelKind.CHAT,
                 null,
-                Instant.now().plusSeconds(60));
+                Instant.now().plusSeconds(60),
+                null);
 
         assertThat(guard.acquire(script, "{}".getBytes(StandardCharsets.UTF_8))).isEmpty();
+    }
+
+    private LlmUsageEventRepository.ReviewCalls reviewCalls() {
+        long counted = calls;
+        long output = outputTokens;
+        return new LlmUsageEventRepository.ReviewCalls() {
+            @Override
+            public long getCalls() {
+                return counted;
+            }
+
+            @Override
+            public long getOutputTokens() {
+                return output;
+            }
+        };
     }
 }

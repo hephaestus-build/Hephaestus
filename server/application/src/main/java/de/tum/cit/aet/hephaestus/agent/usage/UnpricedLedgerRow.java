@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -23,7 +25,12 @@ public record UnpricedLedgerRow(
         long searchUnits,
         @Nullable Long appliedPriceId,
         @Nullable Long appliedWorkspaceModelId,
-        MeasurementVerification measurementVerification) {
+        MeasurementVerification measurementVerification,
+        UsagePricingState initialPricingState,
+        @Nullable BigDecimal appliedPer1mInputUsd,
+        @Nullable BigDecimal appliedPer1mOutputUsd,
+        @Nullable BigDecimal appliedPer1mCacheReadUsd,
+        @Nullable BigDecimal appliedPer1mCacheWriteUsd) {
 
     public boolean hasTokenEvidence() {
         return inputTokens > 0 || outputTokens > 0 || cacheReadTokens > 0 || cacheWriteTokens > 0;

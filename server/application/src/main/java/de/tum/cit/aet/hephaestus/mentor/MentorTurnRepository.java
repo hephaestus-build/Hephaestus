@@ -35,18 +35,6 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
                        AND held.state = de.tum.cit.aet.hephaestus.agent.run.AgentRunState.LEASED))
             """;
 
-    /** The turns of a workspace that the ledger does not show yet: a stopped turn is held until its holder ends it. */
-    @Query("""
-            SELECT new de.tum.cit.aet.hephaestus.mentor.RunningTurnUsage(
-              t.admission, t.inputTokens, t.outputTokens, t.cachedTokens, t.cacheWriteTokens)
-            FROM MentorTurn t
-            WHERE t.workspaceId = :workspaceId
-              AND (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING
-                OR (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED AND""" + HELD_RUN + """
-                ))
-            """)
-    List<RunningTurnUsage> findRunningUsage(@Param("workspaceId") long workspaceId);
-
     interface TurnStatus {
         UUID getId();
 
@@ -382,31 +370,6 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
             @Param("id") UUID id,
             @Param("epoch") int epoch,
             @Param("runId") UUID runId);
-
-    /**
-     * Adds one proxied call to the attempt that made it. The fence drops a call that arrives after the attempt
-     * ended: that attempt is already billed, and a later attempt must not pay for it.
-     *
-     * @return 1 if the attempt still holds its run's claim, 0 otherwise
-     */
-    @WorkspaceAgnostic("The proxy credential already resolved the turn and its workspace")
-    @Modifying
-    @Query("""
-            UPDATE MentorTurn t
-               SET t.llmCalls = t.llmCalls + :#{#call.calls()},
-                   t.inputTokens = t.inputTokens + :#{#call.inputTokens()},
-                   t.outputTokens = t.outputTokens + :#{#call.outputTokens()},
-                   t.reasoningTokens = t.reasoningTokens + :#{#call.reasoningTokens()},
-                   t.cachedTokens = t.cachedTokens + :#{#call.cacheReadTokens()},
-                   t.cacheWriteTokens = t.cacheWriteTokens + :#{#call.cacheWriteTokens()}
-             WHERE t.id = :id AND t.attempt = :attempt
-               AND t.status IN (de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING,
-                                de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED)
-               AND EXISTS (SELECT 1 FROM AgentRun r WHERE r.id = t.runId AND r.leaseEpoch = :attempt
-                             AND r.state = de.tum.cit.aet.hephaestus.agent.run.AgentRunState.LEASED
-                             AND r.leasedUntil > CURRENT_TIMESTAMP)
-            """)
-    int accumulateUsage(@Param("id") UUID id, @Param("attempt") int attempt, @Param("call") MentorTurnUsage call);
 
     /** The account a turn answers. */
     @Query("""

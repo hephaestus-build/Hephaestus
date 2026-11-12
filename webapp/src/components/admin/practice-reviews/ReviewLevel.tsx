@@ -668,7 +668,8 @@ function costText(usage: ReviewUsage): string {
 		return "No usage recorded";
 	}
 	if (priced && costUsd !== null) {
-		const cost = formatCostUsd(Number(costUsd));
+		// A cost that counts an unmeasured call's upper bound is a ceiling, never an exact cost.
+		const cost = `${usage.includesUpperBound ? "Up to " : ""}${formatCostUsd(Number(costUsd))}`;
 		return attempts.length > 1 ? `${cost} over ${attempts.length} attempts` : cost;
 	}
 	const unpriced = attempts.filter((attempt) => attempt.pricingState === "UNPRICED").length;
@@ -681,7 +682,11 @@ function attemptCostText(attempt: ReviewUsageAttempt): string {
 	if (attempt.pricingState === "NO_CHARGE") {
 		return "no charge";
 	}
-	return attempt.costUsd === null ? "no price known" : formatCostUsd(Number(attempt.costUsd));
+	if (attempt.costUsd === null) {
+		return "no price known";
+	}
+	const cost = formatCostUsd(Number(attempt.costUsd));
+	return attempt.includesUpperBound ? `up to ${cost}, usage of some calls not measured` : cost;
 }
 
 function UsageAttempts({ attempts }: { attempts: ReviewUsageAttempt[] }) {

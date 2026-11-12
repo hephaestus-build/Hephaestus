@@ -1,9 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
-import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
-import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
@@ -27,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
@@ -56,15 +56,9 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
         """;
     private static final String SELECTED_JOBS = SUBJECT_JOBS + " UNION " + COPYING_JOBS;
 
-    /**
-     * How an erased ledger row is detached from its source; the ledger store, review job preparation and {@code
-     * MentorAttemptUsageService#forgetTurn} share it.
-     */
-    public static final String LEDGER_REDACTION = "source_id=gen_random_uuid(),review_id=NULL";
-
-    /** The ledger source kinds of a review job attempt: its own row and one per practice script model kind. */
+    /** The ledger source kinds of a review job's calls: its own model and each model kind of its practice scripts. */
     private static final Object[] REVIEW_SOURCE_TYPES = Arrays.stream(ModelKind.values())
-            .map(ScriptUsage::ledgerSourceType)
+            .map(UsageSourceType::ofReviewCall)
             .map(Enum::name)
             .distinct()
             .toArray();
@@ -73,7 +67,6 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
     private final ObjectMapper mapper;
     private final List<PersonEvidenceErasure> evidenceCopies;
     private final ReviewJobLifecycleService lifecycle;
-    private final ReviewAttemptUsageService attemptUsage;
     private final AgentRuns agentRuns;
 
     @Override
@@ -90,7 +83,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                         "",
                         -82),
                 new AgentJobStore(),
-                new JdbcPersonDataStore(
+                new LedgerStore(
                         jdbc,
                         mapper,
                         "llm_usage_event",
@@ -101,9 +94,9 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                                 + ")) OR (t.source_type='MENTOR_TURN' AND t.source_id IN (SELECT mt.id FROM"
                                 + " mentor_turn mt JOIN mentor_conversation mc ON mc.id=mt.conversation_id WHERE"
                                 + " mc.account_id=:account))",
-                        "id,workspace_id,job_type,source_type,source_id,source_attempt,review_id,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,search_units,total_calls,unreported_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,occurred_at,usage_provenance",
-                        "id,workspace_id",
-                        LEDGER_REDACTION,
+                        "id,workspace_id,job_type,source_type,source_id,source_attempt,review_id,run_id,lease_epoch,call_state,model_kind,practice_id,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,search_units,total_calls,unreported_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,started_at,occurred_at,usage_provenance",
+                        "source_id,workspace_id",
+                        "review_id=NULL",
                         -85),
                 new JdbcPersonDataStore(
                         jdbc,
@@ -186,15 +179,13 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
         }
 
         /**
-         * Cancels the selected jobs that still run, then removes every attempt measurement of every selected job, then
-         * detaches every review ledger row of those jobs from them. Each step uses the job id together with its own
-         * workspace, exactly as the frozen selection names it.
+         * Cancels the selected jobs that still run, then detaches every ledger row of those jobs from them. Each step
+         * uses the job id together with its own workspace, exactly as the frozen selection names it.
          *
-         * <p>The cancellation settles the attempt, which can append a ledger row that the frozen ledger selection does
-         * not hold. Removing the measurements first leaves a call that returns later with no attempt to settle on, so
-         * nothing writes the job back into the ledger after the detach. The detach keeps every row with its tokens, cost
-         * and date, and applies the ledger store's own redaction. Repeating the preparation is safe: a cancelled job is
-         * not cancelled again, a removed measurement stays removed, and a detached row no longer names the job.
+         * <p>The cancellation ends the job's run, which settles its open calls, so no call of the job opens after it.
+         * The detach gives the job's rows one new source id together and keeps every row with its tokens, cost and date.
+         * A call that returns later measures its detached row and never writes the job back. Repeating the preparation is
+         * safe: a cancelled job is not cancelled again, and a detached row no longer names the job.
          */
         @Override
         public void prepareErasure(PersonDataSelection selection) {
@@ -204,16 +195,17 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                 if (row.status() == ReviewJobStatus.QUEUED || row.status() == ReviewJobStatus.RUNNING)
                     lifecycle.cancel(row.workspaceId(), row.id());
             }
-            for (var key : frozen) attemptUsage.forgetJob(key.workspaceId(), key.id());
             for (var key : frozen) detachLedger(key);
             eraseEvidence(selection);
         }
 
         private void detachLedger(JobKey key) {
             jdbc.update(
-                    "UPDATE llm_usage_event SET " + LEDGER_REDACTION
+                    "UPDATE llm_usage_event SET source_id=:detached, review_id=NULL"
                             + " WHERE workspace_id=:workspace AND source_id=:job AND source_type=ANY(:types)",
                     Map.of(
+                            "detached",
+                            UUID.randomUUID(),
                             "workspace",
                             key.workspaceId(),
                             "job",
@@ -230,6 +222,88 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
             if (evidenceCopies.isEmpty() && jobs(selection).stream().anyMatch(JobRow::evidence))
                 throw new IllegalStateException("Evidence-copy erasure acknowledgement is unavailable");
             evidenceCopies.forEach(copy -> copy.eraseJobEvidence(ids));
+        }
+    }
+
+    /**
+     * The ledger rows of the person's jobs and turns, selected by their source: a job or a turn, each with its own
+     * workspace. The person's turns are selected also before they have a row, because a call of a turn that runs may
+     * open after the preview. The erasure detaches every row of each selected source from it: all of them take one new
+     * source id together and lose their review, so the calls of one attempt still count as one run. Each row keeps its
+     * tokens, cost and date.
+     */
+    private static final class LedgerStore extends JdbcPersonDataStore {
+        private final NamedParameterJdbcTemplate jdbc;
+        private final ObjectMapper mapper;
+        private final String predicate;
+
+        LedgerStore(
+                NamedParameterJdbcTemplate jdbc,
+                ObjectMapper mapper,
+                String store,
+                String table,
+                String predicate,
+                String columns,
+                String keys,
+                String redaction,
+                int order) {
+            super(jdbc, mapper, store, table, predicate, columns, keys, redaction, order);
+            this.jdbc = jdbc;
+            this.mapper = mapper;
+            this.predicate = predicate;
+        }
+
+        @Override
+        public PersonDataSelection select(PersonScope scope) {
+            return new PersonDataSelection(jdbc.query(
+                    "SELECT DISTINCT s.source_id::text AS source_id, s.workspace_id::text AS workspace_id FROM ("
+                            + "SELECT t.source_id, t.workspace_id FROM llm_usage_event t WHERE " + predicate
+                            + " UNION SELECT mt.id, mt.workspace_id FROM mentor_turn mt JOIN mentor_conversation mc"
+                            + " ON mc.id = mt.conversation_id AND mc.workspace_id = mt.workspace_id"
+                            + " WHERE mc.account_id = :account) s ORDER BY 1, 2",
+                    parameters(scope, mapper),
+                    (rs, row) -> new PersonDataSelection.RowKey(Map.of(
+                            "source_id",
+                            Objects.requireNonNull(rs.getString("source_id")),
+                            "workspace_id",
+                            Objects.requireNonNull(rs.getString("workspace_id"))))));
+        }
+
+        /** One entry for each selected source, with the rows of its calls, also when it has none yet. */
+        @Override
+        public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
+            if (selection.rows().isEmpty()) return List.of();
+            return jdbc.query(
+                    """
+                    SELECT jsonb_build_object('source_id', s.source_id, 'workspace_id', s.workspace_id, 'calls',
+                        COALESCE((SELECT jsonb_agg(to_jsonb(t) ORDER BY t.started_at, t.id) FROM llm_usage_event t
+                                  WHERE t.workspace_id = s.workspace_id AND t.source_id = s.source_id), '[]'::jsonb))::text
+                    FROM jsonb_to_recordset(CAST(:keys AS jsonb)) AS s(source_id uuid, workspace_id bigint)
+                    ORDER BY s.source_id
+                    """,
+                    Map.of("keys", keys(selection)),
+                    (rs, row) -> mapper.readTree(Objects.requireNonNull(rs.getString(1))));
+        }
+
+        private String keys(PersonDataSelection selection) {
+            return mapper.writeValueAsString(selection.rows().stream()
+                    .map(PersonDataSelection.RowKey::columns)
+                    .toList());
+        }
+
+        /** The unit is the selected source, so the receipt counts what the preview counted. */
+        @Override
+        public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+            if (selection.rows().isEmpty()) return 0;
+            jdbc.update("""
+                    WITH detached AS (
+                        SELECT s.workspace_id, s.source_id, gen_random_uuid() AS detached
+                        FROM jsonb_to_recordset(CAST(:keys AS jsonb)) AS s(source_id uuid, workspace_id bigint))
+                    UPDATE llm_usage_event e SET source_id = d.detached, review_id = NULL
+                    FROM detached d
+                    WHERE e.workspace_id = d.workspace_id AND e.source_id = d.source_id
+                    """, Map.of("keys", keys(selection)));
+            return selection.rows().size();
         }
     }
 }

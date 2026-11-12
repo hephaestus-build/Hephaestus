@@ -392,6 +392,8 @@ A workspace admin cannot grant another person's research consent.
 | **Loading state** | A UI state while required data is not yet available. |  |
 | **Shared models** | Defined in the [LLM cost vocabulary](./llm-cost-vocabulary.md). |  |
 | **Own provider** | Defined in the [LLM cost vocabulary](./llm-cost-vocabulary.md). |  |
+| **Upper bound** | Defined in the [LLM cost vocabulary](./llm-cost-vocabulary.md). | estimate, reservation |
+| **Output limit** | The most output tokens that one model call may write. [AI providers](/admin/ai-providers#output-limit) owns the rule. | max tokens |
 
 ## Technical verbs
 

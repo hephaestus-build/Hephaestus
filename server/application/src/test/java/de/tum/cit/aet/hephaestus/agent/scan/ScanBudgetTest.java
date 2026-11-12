@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMethodVerifier;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
@@ -44,7 +43,6 @@ class ScanBudgetTest extends BaseUnitTest {
     private final LlmBudgetService monthly = mock(LlmBudgetService.class);
     private final ScanBudget budget = new ScanBudget(
             mock(ReviewMethodVerifier.class),
-            mock(ReviewJobRepository.class),
             new SandboxGatewayProperties(8081, 4194304, 120, 1000, 4096),
             runtime,
             policy,

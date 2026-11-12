@@ -66,11 +66,38 @@ public class LlmUsageRepricer {
         if (!row.hasTokenEvidence()) {
             return ResultOutcome.NO_TOKEN_EVIDENCE;
         }
-        Rates rates = resolveRates(row);
-        if (rates == null) {
-            return ResultOutcome.UNIDENTIFIABLE;
+        LlmPriceSnapshot price = new LlmPriceSnapshot(
+                row.fundingSource(),
+                row.initialPricingState(),
+                row.appliedPriceId(),
+                row.appliedWorkspaceModelId(),
+                row.appliedPer1mInputUsd(),
+                row.appliedPer1mOutputUsd(),
+                row.appliedPer1mCacheReadUsd(),
+                row.appliedPer1mCacheWriteUsd());
+        if (price.pricingState() == UsagePricingState.UNPRICED || missesARateItNeeds(row, price)) {
+            Rates rates = resolveRates(row);
+            if (rates == null) return ResultOutcome.UNIDENTIFIABLE;
+            LlmPriceSnapshot resolved = rates.toSnapshot(row.fundingSource());
+            // A catalogue edit may fill a missing rate, but cannot replace a rate that this call froze.
+            price = new LlmPriceSnapshot(
+                    row.fundingSource(),
+                    row.initialPricingState() == UsagePricingState.UNPRICED
+                            ? resolved.pricingState()
+                            : row.initialPricingState(),
+                    row.appliedPriceId() != null ? row.appliedPriceId() : resolved.appliedPriceId(),
+                    row.appliedWorkspaceModelId() != null
+                            ? row.appliedWorkspaceModelId()
+                            : resolved.appliedWorkspaceModelId(),
+                    row.appliedPer1mInputUsd() != null ? row.appliedPer1mInputUsd() : resolved.per1mInputUsd(),
+                    row.appliedPer1mOutputUsd() != null ? row.appliedPer1mOutputUsd() : resolved.per1mOutputUsd(),
+                    row.appliedPer1mCacheReadUsd() != null
+                            ? row.appliedPer1mCacheReadUsd()
+                            : resolved.per1mCacheReadUsd(),
+                    row.appliedPer1mCacheWriteUsd() != null
+                            ? row.appliedPer1mCacheWriteUsd()
+                            : resolved.per1mCacheWriteUsd());
         }
-        LlmPriceSnapshot price = rates.toSnapshot(row.fundingSource());
         if (price.pricingState() == UsagePricingState.UNPRICED) {
             return ResultOutcome.STILL_UNPRICEABLE;
         }
@@ -86,8 +113,6 @@ public class LlmUsageRepricer {
         if (updated == 0) {
             return ResultOutcome.STILL_UNPRICEABLE;
         }
-        // The ledger row first, then the attempt's charge: a projection reads charges before it locks a ledger row.
-        usageRepository.adoptResolvedPriceInAttemptCharge(row.id(), price);
         log.info(
                 "Repriced ledger event {} ({} tokens in / {} out, model {}) as {} at {} USD",
                 row.id(),
@@ -102,7 +127,7 @@ public class LlmUsageRepricer {
     /**
      * A rate the resolved price is missing cannot be charged. Mirrors the same rule in
      * {@code LlmUsageRecorder}, deliberately duplicated rather than shared: this one is asked about a
-     * stored row and that one about a sample, and collapsing them would mean one of the two callers
+     * stored row and that one about a call's usage, and collapsing them would mean one of the two callers
      * building a fake instance of the other's type to ask its question.
      */
     private static boolean missesARateItNeeds(UnpricedLedgerRow row, LlmPriceSnapshot price) {

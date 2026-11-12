@@ -1134,6 +1134,6 @@ This table gives the fixed limits that only contributors change.
 ## Billing
 
 The loop reports no usage.
-The worker bills each attempt from the LLM proxy's counters on the `mentor_turn` row, priced at the frozen admission rates.
-The ledger row in `llm_usage_event` has the turn id and the attempt number.
+The LLM proxy writes one `llm_usage_event` row for each model call of the turn, priced at the frozen admission rates.
+Each row has the turn id, the attempt number, and the run and epoch of the attempt's claim.
 A summary call during the turn counts against the turn's budget.

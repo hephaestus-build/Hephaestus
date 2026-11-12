@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
-import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -14,11 +13,9 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
@@ -26,7 +23,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -61,7 +57,6 @@ public class ReviewRunKind implements AgentRunHandler {
     private final ReviewJobRepository jobs;
     private final AgentRuns runs;
     private final AgentCapacityProperties capacity;
-    private final ReviewAttemptUsageService usage;
     private final ReviewJobAssignments assignments;
     private final JobEvidenceFiles files;
     private final ObjectMapper mapper;
@@ -72,7 +67,6 @@ public class ReviewRunKind implements AgentRunHandler {
             ReviewJobRepository jobs,
             AgentRuns runs,
             AgentCapacityProperties capacity,
-            ReviewAttemptUsageService usage,
             ReviewJobAssignments assignments,
             JobEvidenceFiles files,
             ObjectMapper mapper,
@@ -81,7 +75,6 @@ public class ReviewRunKind implements AgentRunHandler {
         this.jobs = jobs;
         this.runs = runs;
         this.capacity = capacity;
-        this.usage = usage;
         this.assignments = assignments;
         this.files = files;
         this.mapper = mapper;
@@ -149,8 +142,8 @@ public class ReviewRunKind implements AgentRunHandler {
     }
 
     /**
-     * The lost attempt is billed, and the job goes back to the queue with it, unless the lost lease spent its last
-     * retry: then the review fails now, and its run ends with it.
+     * The job goes back to the queue, unless the lost lease spent its last retry: then the review fails now, and its
+     * run ends with it. The reaper's write settles the lost claim's open calls.
      */
     @Override
     public boolean lost(AgentRunFence lost) {
@@ -158,7 +151,6 @@ public class ReviewRunKind implements AgentRunHandler {
                 .filter(found -> holds(found, lost))
                 .orElse(null);
         if (job == null) return true;
-        settle(job);
         // The lost lease spends one retry, which the run counts once the reaper writes it.
         int spent = job.spentAttempts() + 1;
         if (!ResultAdmissionService.isAdmitted(job)
@@ -185,7 +177,6 @@ public class ReviewRunKind implements AgentRunHandler {
             return;
         }
         if (job.getStatus() != ReviewJobStatus.RUNNING || job.getAttempt() != attempt(lastEpoch)) return;
-        settle(job);
         if (ResultAdmissionService.isAdmitted(job)) {
             // Its results stay. Settlement closes the review as partial: nothing confirms each destination's decision.
             jobs.failCompositionUnconfirmed(
@@ -216,7 +207,6 @@ public class ReviewRunKind implements AgentRunHandler {
         jobs.lockParentOfJob(jobId);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return false;
-        settle(job);
         if (jobs.requeueRunning(jobId, fence.runId(), attempt(fence.epoch())) == 0) return false;
         reviewStart.requeue(job.getWorkspaceId(), job.getReviewId());
         Duration wait = charge == AgentRuns.Charge.SPEND ? AgentRuns.backoff(job.spentAttempts() + 1) : delay;
@@ -227,7 +217,7 @@ public class ReviewRunKind implements AgentRunHandler {
 
     /**
      * Hands an admitted review from its measuring run on to the run that composes it, in the caller's transaction: the
-     * measuring attempt is settled, its run ends, and the job waits on a {@code REVIEW_COMPOSE} run that continues it
+     * measuring run ends, which settles its open model calls, and the job waits on a {@code REVIEW_COMPOSE} run that continues it
      * ({@link AgentRuns#continueAs}). The sandbox of the review drives the composition next.
      *
      * @return the composing run; empty when {@code fence} no longer holds the job
@@ -238,7 +228,6 @@ public class ReviewRunKind implements AgentRunHandler {
         jobs.lockParentOfJob(jobId);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return Optional.empty();
-        settle(job);
         if (runs.end(fence) != AgentRuns.EndOutcome.ENDED) return Optional.empty();
         AgentRunRef ended = new AgentRunRef(fence.runId(), fence.workspaceId());
         AgentRunRef composing = runs.continueAs(ended, fence.epoch(), AgentRunKind.REVIEW_COMPOSE);
@@ -308,34 +297,5 @@ public class ReviewRunKind implements AgentRunHandler {
         return ResultAdmissionService.isAdmitted(job)
                 ? job.spentAttempts() >= limit + WITHHOLD_ATTEMPTS
                 : job.spentAttempts() > limit + (staged ? 1 : 0);
-    }
-
-    /**
-     * Keeps the attempt's measurement and bills it before the job is handed on: the requeue zeroes the counters and the
-     * next claim replaces the configuration, so only the locked attempt may settle it.
-     */
-    private void settle(ReviewJob job) {
-        if (job.getExecutionStartedAt() == null) return;
-        ReviewJobLlmUsage counts = jobs.findLlmUsageById(job.getId()).orElse(null);
-        Map<ModelKind, FrozenCharge> charges = admittedCharges(job);
-        usage.holdAttempt(job, charges, counts);
-        usage.settleAttempt(job, charges, null, counts);
-    }
-
-    private Map<ModelKind, FrozenCharge> admittedCharges(ReviewJob job) {
-        ConfigSnapshot snapshot = frozen(job);
-        LlmPriceSnapshot price = snapshot != null && snapshot.model().priceSnapshot() != null
-                ? snapshot.model().priceSnapshot()
-                : LlmPriceSnapshot.unpricedInstance();
-        return FrozenCharge.admitted(snapshot, price);
-    }
-
-    private @Nullable ConfigSnapshot frozen(ReviewJob job) {
-        try {
-            return ConfigSnapshot.fromJson(job.getConfigSnapshot(), mapper);
-        } catch (RuntimeException failure) {
-            log.warn("Cannot read frozen model for job {}", job.getId(), failure);
-            return null;
-        }
     }
 }

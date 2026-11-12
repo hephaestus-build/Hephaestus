@@ -152,6 +152,7 @@ class LlmUsageFxDisplayIntegrationTest extends AbstractWorkspaceIntegrationTest 
         event.setFundingSource(UsageFundingSource.INSTANCE);
         event.setOccurredAt(
                 CURRENT.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant().plusSeconds(3600));
+        event.setStartedAt(event.getOccurredAt());
         usageRepository.save(event);
     }
 

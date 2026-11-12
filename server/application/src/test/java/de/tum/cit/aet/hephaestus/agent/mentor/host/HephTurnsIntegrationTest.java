@@ -29,6 +29,8 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -48,7 +50,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnUsage;
+import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -98,8 +100,6 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private static final UUID BILLED_LEASE = UUID.randomUUID();
 
     /** Usage a provider that sends nothing more has already streamed when the call is cancelled. */
-    private static final MentorTurnUsage RECEIVED = new MentorTurnUsage(900, 40, 0, 0, 0, 1);
-
     @Autowired
     private ApplicationContext beans;
 
@@ -126,6 +126,9 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private LlmUsageRecorder recorder;
 
     @Autowired
     private AgentRunReaper reaper;
@@ -284,19 +287,52 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
      */
     private ProxyCallsInFlight.Call silentCall(MentorTurn asked, int attempt) {
         ProxyCallsInFlight.Call call = call(asked, attempt);
+        UUID row = openCall(asked, attempt);
         call.cancelled().subscribe(null, null, () -> {
-            transactions.executeWithoutResult(tx -> turnRepository.accumulateUsage(asked.getId(), attempt, RECEIVED));
+            completeCall(asked, row, 900);
             call.close();
         });
         return call;
     }
 
+    /** Opens the ledger row of one model call of the attempt, as the proxy does before the call leaves. */
+    private UUID openCall(MentorTurn asked, int attempt) {
+        MentorTurn turn = row(asked);
+        return Objects.requireNonNull(transactions.execute(tx -> recorder.open(new LlmUsageRecorder.OpenCall(
+                turn.getWorkspaceId(),
+                turn.getRunId(),
+                attempt,
+                UsageSourceType.MENTOR_TURN.name(),
+                UsageSourceType.MENTOR_TURN,
+                turn.getId(),
+                attempt,
+                null,
+                ModelKind.CHAT,
+                null,
+                "test-model",
+                LlmPriceSnapshot.unpricedInstance(),
+                null))));
+    }
+
+    private void completeCall(MentorTurn asked, UUID call, long inputTokens) {
+        transactions.executeWithoutResult(tx -> recorder.complete(
+                call, asked.getWorkspaceId(), new LlmUsageRecorder.CallUsage(inputTokens, 40, 0, 0, 0, 0)));
+    }
+
+    /** The input tokens that the attempt's call rows measured. */
+    private long measuredInput(MentorTurn asked, int attempt) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT COALESCE(SUM(input_tokens), 0) FROM llm_usage_event WHERE source_type = 'MENTOR_TURN'"
+                        + " AND source_id = ? AND source_attempt = ? AND measurement_verification = 'VERIFIED'",
+                Long.class,
+                asked.getId(),
+                attempt));
+    }
+
     /** The worker's own end cancelled the call, billed what it received, and refuses the attempt's later calls. */
     private void assertSettled(MentorTurn asked, int attempt, ProxyCallsInFlight.Call call) {
         assertThat(call.isCancelled()).as("the call in flight is cancelled").isTrue();
-        MentorTurn billed = row(asked);
-        assertThat(billed.getLlmCalls()).isEqualTo(1);
-        assertThat(billed.getInputTokens()).isEqualTo(900);
+        assertThat(measuredInput(asked, attempt)).isEqualTo(900);
         assertThat(call(asked, attempt).isCancelled())
                 .as("a later call of the attempt is refused")
                 .isTrue();
@@ -736,6 +772,7 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         MentorTurn asked = ask("Is the deployment ready?");
         AttemptJwt token = token(assigned(worker, asked));
         ProxyCallsInFlight.Call lastCall = call(asked, token.epoch());
+        UUID lastRow = openCall(asked, token.epoch());
 
         // The loop read the end of the answer from the stream; the proxy has not written the call's usage yet.
         CompletableFuture<Void> ended = CompletableFuture.runAsync(() -> controller(worker)
@@ -745,15 +782,13 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 HephTurnController.Outcome.DONE, List.of(answer("It is ready.")), null, null),
                         HephTurnFixtures.authenticated(token)));
         await().during(Duration.ofMillis(300)).atMost(Duration.ofSeconds(2)).until(() -> !ended.isDone());
-        transactions.executeWithoutResult(tx -> turnRepository.accumulateUsage(
-                asked.getId(), token.epoch(), new MentorTurnUsage(1200, 80, 0, 0, 0, 1)));
+        completeCall(asked, lastRow, 1200);
         lastCall.close();
         ended.get(10, TimeUnit.SECONDS);
 
         MentorTurn billed = row(asked);
         assertThat(billed.getStatus()).isEqualTo(MentorTurn.Status.DONE);
-        assertThat(billed.getLlmCalls()).isEqualTo(1);
-        assertThat(billed.getInputTokens()).isEqualTo(1200);
+        assertThat(measuredInput(asked, token.epoch())).isEqualTo(1200);
     }
 
     @Test

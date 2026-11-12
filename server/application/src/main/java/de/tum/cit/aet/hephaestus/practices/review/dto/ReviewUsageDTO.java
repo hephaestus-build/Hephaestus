@@ -11,6 +11,13 @@ public record ReviewUsageDTO(
         String costUsd,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean priced,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Whether costUsd counts the upper bound of a call whose usage was not measured, so the"
+                        + " review cost at most costUsd")
+        boolean includesUpperBound,
+
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) long calls,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) long inputTokens,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) long outputTokens,

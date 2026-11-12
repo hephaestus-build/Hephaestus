@@ -108,17 +108,23 @@ public class LlmUsageService {
                 practiceScript.getOwnProviderTotalCostUsd(),
                 practiceScript.getUnpricedEventCount());
 
-        BigDecimal pricedTotal = usageRepository.sumCost(workspaceId, window.from(), window.to());
-        BigDecimal ownProviderTotal = usageRepository.sumByoCost(workspaceId, window.from(), window.to());
+        // One read, so a call that ends meanwhile is either confirmed or bounded, never both. The caps compare
+        // confirmed spend plus the bounds; the report shows the bounds apart from the confirmed spend.
+        LlmUsageEventRepository.MonthSpend spend =
+                usageRepository.aggregateSpend(workspaceId, window.from(), window.to());
+        BigDecimal pricedTotal = spend.getInstanceConfirmedUsd();
+        BigDecimal ownProviderTotal = spend.getOwnProviderConfirmedUsd();
+        BigDecimal instanceCapSpend = pricedTotal.add(spend.getInstanceUpperBoundUsd());
+        BigDecimal ownProviderCapSpend = ownProviderTotal.add(spend.getOwnProviderUpperBoundUsd());
         BigDecimal instanceBudget = workspace.getMonthlyLlmBudgetUsd();
         BigDecimal ownProviderBudget = workspace.getMonthlyByoLlmBudgetUsd();
         long unpricedRuns = usageRepository.countUnpricedRuns(workspaceId, window.from(), window.to());
         LlmBudgetVerdict instanceVerdict = LlmBudgetService.verdictFor(
-                pricedTotal,
+                instanceCapSpend,
                 usageRepository.existsUnpricedInstanceFunded(workspaceId, window.from(), window.to()),
                 instanceBudget);
         LlmBudgetVerdict ownProviderVerdict = LlmBudgetService.verdictFor(
-                ownProviderTotal,
+                ownProviderCapSpend,
                 usageRepository.existsUnpricedWorkspaceFunded(workspaceId, window.from(), window.to()),
                 ownProviderBudget);
         LlmBudgetDecision decision = livePauseDecision(workspaceId, month);
@@ -132,6 +138,8 @@ public class LlmUsageService {
                 ownProviderBudget,
                 pricedTotal,
                 ownProviderTotal,
+                new LlmUnmeasuredUsageDTO(spend.getInstanceCalls(), spend.getInstanceUpperBoundUsd()),
+                new LlmUnmeasuredUsageDTO(spend.getOwnProviderCalls(), spend.getOwnProviderUpperBoundUsd()),
                 ownProviderInUse,
                 unpricedRuns,
                 instanceVerdict,

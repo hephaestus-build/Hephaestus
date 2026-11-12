@@ -82,11 +82,34 @@ export const BothCapsHealthy: Story = {
 		await expect(own.getByText("of $10")).toBeVisible();
 		await expect(own.getByText("Billed to you by your provider")).toBeVisible();
 		await expect(canvas.queryByText(/^Near the /u)).toBeNull();
+		await expect(canvas.queryByText(/whose usage was not measured$/u)).toBeNull();
 		const sharedTile = await tileOf(canvas, "Shared models");
 		const ownTile = await tileOf(canvas, "Own provider");
 		await expect(sharedTile.getBoundingClientRect().height).toBe(
 			ownTile.getBoundingClientRect().height,
 		);
+	},
+};
+
+/** A cap counts each unmeasured call at its upper bound; the tile shows that bound apart, never as spend. */
+export const UnmeasuredCalls: Story = {
+	args: {
+		report: {
+			...capped,
+			instanceUnmeasured: { calls: 3, upperBoundUsd: 0.42 },
+			ownProviderUnmeasured: { calls: 1, upperBoundUsd: 0.05 },
+		},
+	},
+	play: async ({ canvas }) => {
+		const shared = within(await tileOf(canvas, "Shared models"));
+		await expect(shared.getByText("$13.48")).toBeVisible();
+		await expect(
+			shared.getByText("Up to $0.42 more from 3 calls whose usage was not measured"),
+		).toBeVisible();
+		const own = within(await tileOf(canvas, "Own provider"));
+		await expect(
+			own.getByText("Up to $0.05 more from 1 call whose usage was not measured"),
+		).toBeVisible();
 	},
 };
 

@@ -171,9 +171,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private final Map<String, List<UUID>> owned = new HashMap<>();
 
     @Autowired
-    private ReviewAttemptUsageService attemptUsage;
-
-    @Autowired
     private MeterRegistry meterRegistry;
 
     @Autowired
@@ -482,13 +479,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(ResultAdmissionService.isContinuation(continuing)).isTrue();
         assertThat(ResultAdmissionService.citationAttempt(continuing)).isZero();
         assertThat(practiceResultRepository.findById(observed.getId())).isPresent();
-        // The lost attempt is settled as itself; the new attempt starts from nothing.
-        assertThat(continuing.getLlmCalls()).isZero();
-        assertThat(jdbc.queryForList(
-                        "SELECT total_calls FROM llm_usage_event WHERE source_id::text = ? AND source_attempt = 0",
-                        Integer.class,
-                        jobId.toString()))
-                .containsExactly(3);
+        // The lost claim's open calls are settled as its own; the new attempt starts from nothing.
+        assertThat(usageCalls(jobId))
+                .containsExactly("SETTLED:UNVERIFIABLE", "SETTLED:UNVERIFIABLE", "SETTLED:UNVERIFIABLE");
         // The lost worker's own attempt is gone: its requeue matches nothing now.
         Boolean staleRequeue = transactionTemplate.execute(s -> reviewRuns.requeue(
                 jobId, requireNonNull(lostFence.get(jobId)), AgentRuns.Charge.SPEND, Duration.ZERO, null));
@@ -545,11 +538,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(handedOn.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(handedOn.getAttempt()).isEqualTo(1);
         assertThat(ResultAdmissionService.isContinuation(handedOn)).isTrue();
-        assertThat(jdbc.queryForList(
-                        "SELECT total_calls FROM llm_usage_event WHERE source_id::text = ? AND source_attempt = 0",
-                        Integer.class,
-                        jobId.toString()))
-                .containsExactly(2);
+        assertThat(usageCalls(jobId)).containsExactly("SETTLED:UNVERIFIABLE", "SETTLED:UNVERIFIABLE");
     }
 
     @Test
@@ -929,7 +918,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(ended.getErrorMessage()).isEqualTo("The container timed out.");
         assertThat(compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
                 .isEmpty();
-        assertThat(usageCalls(jobId)).containsExactly(2);
+        assertThat(usageCalls(jobId))
+                .as("the end of the run settles the calls it left open")
+                .containsExactly("SETTLED:UNVERIFIABLE", "SETTLED:UNVERIFIABLE");
     }
 
     @Test
@@ -1022,7 +1013,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         // This run decided no destination, so the review's feedback is still open and its inputs stay for it.
         assertThat(compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
                 .isPresent();
-        assertThat(usageCalls(jobId)).contains(2);
+        assertThat(usageCalls(jobId)).containsExactly("SETTLED:UNVERIFIABLE", "SETTLED:UNVERIFIABLE");
     }
 
     /**
@@ -1073,9 +1064,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                         transactionTemplate,
                         objectMapper,
                         telemetry),
-                new ReviewJobTerminal(jobRepository, agentRuns, attemptUsage, objectMapper, null, continuation),
+                new ReviewJobTerminal(jobRepository, agentRuns, continuation),
                 reviewRuns,
-                attemptUsage,
                 new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
                 transactionTemplate,
                 objectMapper,
@@ -1095,6 +1085,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         // The stranger claimed this attempt once, under an epoch that a later claim has since replaced.
         var stranger = RuntimeJobTestData.fence(jdbc, running);
         claimAgainAfterLoss(jobId);
+        var callsBefore = usageCalls(jobId);
 
         assertThat(results().measured(jobId, running, stranger, 0, TIMED_OUT)).isNull();
 
@@ -1103,7 +1094,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(kept.getAttempt()).isEqualTo(1);
         assertThat(compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
                 .isPresent();
-        assertThat(usageCalls(jobId)).as("a stranger bills nothing").isEmpty();
+        assertThat(usageCalls(jobId)).as("a stranger settles nothing").isEqualTo(callsBefore);
     }
 
     @Test
@@ -1412,9 +1403,13 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE review_job SET public_review_digest = ? WHERE id = ?", "b".repeat(64), jobId);
     }
 
-    private List<@Nullable Integer> usageCalls(UUID jobId) {
+    /** The state and verification of each call row of the job. */
+    private List<@Nullable String> usageCalls(UUID jobId) {
         return jdbc.queryForList(
-                "SELECT total_calls FROM llm_usage_event WHERE source_id::text = ?", Integer.class, jobId.toString());
+                "SELECT call_state || ':' || measurement_verification FROM llm_usage_event WHERE source_id = ?"
+                        + " ORDER BY id",
+                String.class,
+                jobId);
     }
 
     private Result admitWithResult(UUID jobId) {
@@ -1504,8 +1499,17 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         transactionTemplate.executeWithoutResult(status -> compositionBasisRepository.save(basis));
     }
 
+    /** The attempt made {@code calls} model calls whose provider had not answered when it was lost. */
     private void spentBeforeItWasLost(UUID jobId, int calls) {
-        jdbc.update("UPDATE review_job SET execution_started_at = now(), llm_calls = ? WHERE id = ?", calls, jobId);
+        jdbc.update("UPDATE review_job SET execution_started_at = now() WHERE id = ?", jobId);
+        for (int i = 0; i < calls; i++) jdbc.update("""
+                    INSERT INTO llm_usage_event (id, workspace_id, run_id, lease_epoch, call_state, job_type,
+                        source_type, source_id, source_attempt, review_id, model_kind, pricing_state, funding_source,
+                        cost_usd, started_at, occurred_at)
+                    SELECT gen_random_uuid(), j.workspace_id, j.run_id, r.lease_epoch, 'OPEN', 'PRACTICE_REVIEW',
+                        'REVIEW_JOB', j.id, r.lease_epoch - 1, j.review_id, 'CHAT', 'PRICED', 'INSTANCE', 0, now(), now()
+                    FROM review_job j JOIN agent_run r ON r.id = j.run_id WHERE j.id = ?
+                    """, jobId);
     }
 
     private void changePracticeDefinition() {

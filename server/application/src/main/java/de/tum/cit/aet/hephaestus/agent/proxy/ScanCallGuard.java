@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanBudget;
-import de.tum.cit.aet.hephaestus.agent.scan.ScanModelUnavailableException;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
@@ -16,21 +16,17 @@ import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
@@ -44,6 +40,7 @@ public class ScanCallGuard {
     private final SandboxGatewayProperties gateway;
     private final ObjectMapper mapper;
     private final PracticeReviewProperties practiceReview;
+    private final LlmUsageEventRepository usage;
 
     /** How many times the loop's own budget an attempt's review calls may take before the proxy refuses them. */
     static final int WORK_MARGIN = 2;
@@ -91,16 +88,9 @@ public class ScanCallGuard {
                     : snapshot.practiceScriptSlot(route.practiceScriptSlot());
             if (model == null || model.priceSnapshot() == null) throw refused();
             var cap = reviews.budgetUsd(workspace, job.getReviewId()).orElseThrow(ScanCallGuard::refused);
+            // Every call of the review is in its rows, those of this attempt included; an open or unmeasured one
+            // counts at its upper bound.
             var spent = budget.spent(workspace, job.getReviewId());
-            BigDecimal inFlight;
-            try {
-                inFlight = budget.inFlight(job, snapshot);
-            } catch (ScanModelUnavailableException unavailable) {
-                throw new ResponseStatusException(
-                        HttpStatus.PAYMENT_REQUIRED,
-                        "The scan budget or its frozen execution bounds do not permit this call.",
-                        unavailable);
-            }
             String slot = route.practiceScriptSlot() == null
                     ? "review"
                     : route.practiceScriptSlot().name().toLowerCase(Locale.ROOT);
@@ -117,54 +107,30 @@ public class ScanCallGuard {
                     .orElseThrow(ScanCallGuard::refused)
                     .options();
             var context = options.get("contextWindow");
-            var maxOutput = options.get("maxOutputTokens");
             long maximumInput = context == null ? 0 : context.asLong();
-            long maximumOutput = maxOutput == null ? maximumInput : maxOutput.asLong();
-            if (maximumOutput <= 0
-                    || maximumInput <= 0
-                    || body.length > Math.min(gateway.maxRequestBytes(), maximumInput)) throw refused();
+            if (maximumInput <= 0 || body.length > Math.min(gateway.maxRequestBytes(), maximumInput)) throw refused();
             var request = mapper.readTree(body);
-            requireTextOnly(request);
-            long output = requestedOutput(request, maximumOutput);
-            BigDecimal next =
-                    ScanBudget.cost(model.priceSnapshot(), body.length, output).setScale(6, RoundingMode.CEILING);
-            if (!spent.priced() || spent.cost().add(inFlight).add(next).compareTo(cap) > 0) throw refused();
+            if (!ProxyRequestBody.hasTextOnlyInput(request)) throw refused();
+            Long output;
+            try {
+                output = OutputLimit.bound(model.apiProtocol(), route.outputLimit(), request);
+            } catch (OutputLimit.Refused unbounded) {
+                throw refused(unbounded);
+            }
+            // The bound that the call's ledger row holds while the call is open or unmeasured.
+            ModelKind scriptSlot = route.practiceScriptSlot();
+            ModelKind kind = scriptSlot == null ? ModelKind.CHAT : scriptSlot;
+            BigDecimal next = ProxyCallLedger.costBound(
+                    kind, model.priceSnapshot(), new ProxyCallLedger.Bound(body.length, output));
+            if (next == null || !spent.priced() || spent.cost().add(next).compareTo(cap) > 0) throw refused();
             if (route.practiceScriptSlot() == null
-                    && job.getLlmCalls()
+                    && reviewCalls(job, attempt.number()).getCalls()
                             >= budget.callCap(job.getInput().assignments().size())) throw refused();
             return Optional.of(new Lease(leases, job.getId(), workspace, lease));
         } catch (RuntimeException | Error failure) {
             leases.release(job.getId(), workspace, lease);
             throw failure;
         }
-    }
-
-    private static long requestedOutput(JsonNode request, long limit) {
-        long requested = limit;
-        for (String field : List.of("max_tokens", "max_completion_tokens", "max_output_tokens")) {
-            if (!request.has(field)) continue;
-            var value = request.path(field);
-            if (!value.isIntegralNumber() || value.asLong() <= 0 || value.asLong() > limit) throw refused();
-            requested = Math.min(requested, value.asLong());
-        }
-        var generation = request.path("generationConfig");
-        if (generation.has("maxOutputTokens")) {
-            var value = generation.path("maxOutputTokens");
-            if (!value.isIntegralNumber() || value.asLong() <= 0 || value.asLong() > limit) throw refused();
-            requested = Math.min(requested, value.asLong());
-        }
-        return requested;
-    }
-
-    private static void requireTextOnly(JsonNode value) {
-        if (value.isObject()) {
-            String type = value.path("type").asString("");
-            if (Set.of("image", "image_url", "input_image", "input_audio", "input_file")
-                            .contains(type)
-                    || value.has("inlineData")
-                    || value.has("fileData")) throw refused();
-        }
-        if ((value.isObject() || value.isArray())) for (var child : value) requireTextOnly(child);
     }
 
     /**
@@ -178,9 +144,15 @@ public class ScanCallGuard {
         if (route.practiceScriptSlot() != null
                 || job.getAttempt() != route.attempt().number()) return;
         long practices = job.getInput().assignments().size();
-        if (job.getLlmCalls() >= WORK_MARGIN * practices * practiceReview.practiceModelCalls()
-                || job.getLlmOutputTokens() >= WORK_MARGIN * practices * practiceReview.practiceOutputTokens())
+        var used = reviewCalls(job, route.attempt().number());
+        if (used.getCalls() >= WORK_MARGIN * practices * practiceReview.practiceModelCalls()
+                || used.getOutputTokens() >= WORK_MARGIN * practices * practiceReview.practiceOutputTokens())
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, ATTEMPT_WORK_SPENT);
+    }
+
+    /** The attempt's calls on the review's own model: every call it opened, with usage or without. */
+    private LlmUsageEventRepository.ReviewCalls reviewCalls(ReviewJob job, int attempt) {
+        return usage.countReviewCalls(job.getWorkspaceId(), job.getId(), attempt);
     }
 
     private static ResponseStatusException workTimeOver(@Nullable Throwable cause) {
@@ -188,8 +160,14 @@ public class ScanCallGuard {
     }
 
     private static ResponseStatusException refused() {
+        return refused(null);
+    }
+
+    private static ResponseStatusException refused(@Nullable Throwable cause) {
         return new ResponseStatusException(
-                HttpStatus.PAYMENT_REQUIRED, "The scan budget or its frozen execution bounds do not permit this call.");
+                HttpStatus.PAYMENT_REQUIRED,
+                "The scan budget or its frozen execution bounds do not permit this call.",
+                cause);
     }
 
     /** The attempt's scan call lease, which the call releases when it ends. */

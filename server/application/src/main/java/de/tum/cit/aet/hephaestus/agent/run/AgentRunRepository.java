@@ -19,6 +19,13 @@ import org.springframework.data.repository.query.Param;
  */
 interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
+    /** How the end of a claim settles a call it left open. */
+    String SETTLE = """
+            UPDATE llm_usage_event
+               SET call_state = 'SETTLED', measurement_verification = 'UNVERIFIABLE', pricing_state = 'UNPRICED',
+                   cost_usd = NULL, unreported_calls = 1
+            """;
+
     /** A leased run as a claim or a lookup returns it. */
     interface LeaseRow {
         UUID getId();
@@ -384,6 +391,34 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("workspaceId") long workspaceId,
             @Param("epoch") int epoch,
             @Param("reason") String reason);
+
+    /**
+     * Settles the model calls that the claim {@code epoch} left open: each ends unverifiable and unpriced, never at zero
+     * cost. The caller writes the run's end or requeue in the same transaction. A call that returns later measures its
+     * row again ({@code LlmUsageRecorder#complete}).
+     *
+     * @return how many calls were settled
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = SETTLE + """
+             WHERE run_id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch AND call_state = 'OPEN'
+            """, nativeQuery = true)
+    int settleOpenCalls(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId, @Param("epoch") int epoch);
+
+    /** {@link #settleOpenCalls} for every claim of a run that someone other than its holder ends. */
+    @Modifying(flushAutomatically = true)
+    @Query(value = SETTLE + """
+             WHERE run_id = :runId AND workspace_id = :workspaceId AND call_state = 'OPEN'
+            """, nativeQuery = true)
+    int settleOpenCallsOfRun(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
+
+    /** {@link #settleOpenCallsOfRun} for runs that a fleet-wide verdict ends in every workspace. */
+    @WorkspaceAgnostic("A fleet-wide verdict ends the runs it selected in every workspace")
+    @Modifying(flushAutomatically = true)
+    @Query(value = SETTLE + """
+             WHERE run_id IN (:runIds) AND call_state = 'OPEN'
+            """, nativeQuery = true)
+    int settleOpenCallsOfRuns(@Param("runIds") Collection<UUID> runIds);
 
     @WorkspaceAgnostic("The wake names only a run kind; every claimer reads the queue through the claim")
     @Query(value = "SELECT 1 FROM (SELECT pg_notify(:channel, :kind)) sent", nativeQuery = true)

@@ -13,11 +13,12 @@ public final class StructuredLogKeys {
     /** The lease epoch of that holder: two records of one run with different epochs come from different claims. */
     public static final String RUN_EPOCH = "run.epoch";
 
-    public static final String REVIEW_ID = "review.id";
     /** The subject of the run, such as {@code review:<id>}. */
     public static final String SUBJECT_KEY = "subject.key";
     /** The agent sandbox that the record is about: its claim's name, which is also its Pod's. */
     public static final String SANDBOX_NAME = "sandbox.name";
+
+    public static final String REVIEW_ID = "review.id";
 
     private StructuredLogKeys() {}
 }

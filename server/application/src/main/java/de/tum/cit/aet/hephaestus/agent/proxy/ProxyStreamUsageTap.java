@@ -59,6 +59,8 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
     @Nullable
     private ProxyTokenUsage observed;
 
+    private @Nullable ProxyTokenUsage finalAnthropicUsage;
+
     private boolean malformedUsage;
 
     private @Nullable String stopReason;
@@ -147,6 +149,12 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
         pending.write(chunk, lineStart, remaining);
     }
 
+    /** Whole-call usage: Anthropic's opening and intermediate counts do not measure the final output. */
+    @Nullable
+    ProxyTokenUsage finalUsage() {
+        return protocol == LlmApiProtocol.ANTHROPIC_MESSAGES ? finalAnthropicUsage : observed;
+    }
+
     private void handleLine(byte[] line) {
         int from = startsWith(line, DATA_PREFIX) ? DATA_PREFIX.length : -1;
         if (from >= 0 && !content && carriesContent(line, from)) {
@@ -189,6 +197,8 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
                             ProxyTokenUsage.from(objectMapper.createObjectNode().set("usage", merged), protocol);
                     anthropicUsage.setAll(merged);
                     observed = parsed;
+                    if (type.equals("message_delta") && reason != null && usage.hasNonNull("output_tokens"))
+                        finalAnthropicUsage = parsed;
                 }
                 return;
             }

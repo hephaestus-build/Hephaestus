@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRun;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRunRepository;
-import de.tum.cit.aet.hephaestus.agent.job.ScriptUsageRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeScriptRunDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
@@ -64,13 +63,12 @@ class ReviewPracticeScriptServiceTest extends BaseUnitTest {
     @Test
     void shouldTellABuiltInsEvidenceRefusalFromAFormatFailureAndLeaveUnrecordedCallsUnknown() {
         var runs = mock(ScriptRunRepository.class);
-        var usage = mock(ScriptUsageRepository.class);
         var reviews = mock(ReviewService.class);
         var runtime = mock(ReviewRuntimeRepository.class);
         when(reviews.findPinned(eq(WORKSPACE), anyCollection())).thenReturn(Map.of(REVIEW, List.of()));
         when(runtime.jobsOf(eq(WORKSPACE), anyCollection()))
                 .thenReturn(List.of(new ReviewRuntimeRepository.JobOfReview(JOB, REVIEW)));
-        when(usage.findByWorkspaceIdAndJobIdIn(eq(WORKSPACE), anyCollection())).thenReturn(List.of());
+        when(runs.sumScriptCalls(eq(WORKSPACE), anyCollection())).thenReturn(List.of());
         when(runs.findByWorkspaceIdAndJobIdIn(eq(WORKSPACE), anyCollection()))
                 .thenReturn(List.of(
                         // Six model calls, four evidence refusals and one schema refusal, then a loop stop.
@@ -105,7 +103,7 @@ class ReviewPracticeScriptServiceTest extends BaseUnitTest {
                                         "\"review\":1,\"chat\":0,\"decision\":1,\"embedding\":0,\"reranking\":0",
                                         "{\"modelCalls\":3,\"evidenceRefusals\":1,\"formatRefusals\":0}"))));
 
-        List<PracticeScriptRunDTO> mapped = new ReviewPracticeScriptService(usage, runs, reviews, runtime)
+        List<PracticeScriptRunDTO> mapped = new ReviewPracticeScriptService(runs, reviews, runtime)
                 .forReviews(WORKSPACE, List.of(REVIEW))
                 .get(REVIEW);
 

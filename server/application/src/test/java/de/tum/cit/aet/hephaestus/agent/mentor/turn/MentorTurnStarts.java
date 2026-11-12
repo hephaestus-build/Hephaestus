@@ -1,16 +1,15 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.turn;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -26,45 +25,20 @@ public final class MentorTurnStarts {
 
     private MentorTurnStarts() {}
 
-    /**
-     * A starter that admits every turn and records only the admission, not a usage measurement: for tests that do not
-     * bill. A test that bills uses {@link #admitting(ApplicationContext, MentorAttemptUsageService, MeterRegistry,
-     * Integer)}.
-     */
+    /** A starter that admits every turn on the test model. */
     public static MentorTurnStarter admitting(ApplicationContext beans, MeterRegistry metrics) {
         return admitting(beans, metrics, null);
     }
 
     /** As {@link #admitting(ApplicationContext, MeterRegistry)}, with at most {@code cap} turns at once. */
     public static MentorTurnStarter admitting(ApplicationContext beans, MeterRegistry metrics, @Nullable Integer cap) {
-        MentorTurnService turns = beans.getBean(MentorTurnService.class);
-        MentorAttemptUsageService admissionOnly = mock(MentorAttemptUsageService.class);
-        doAnswer(call -> {
-                    MentorTurnAdmission admitted = call.getArgument(4);
-                    turns.admit(
-                            call.getArgument(0),
-                            call.getArgument(1),
-                            call.getArgument(2),
-                            call.getArgument(3),
-                            admitted.toJson());
-                    return true;
-                })
-                .when(admissionOnly)
-                .admit(anyLong(), any(), anyInt(), any(), any());
-        return admitting(beans, admissionOnly, metrics, cap);
-    }
-
-    public static MentorTurnStarter admitting(
-            ApplicationContext beans,
-            MentorAttemptUsageService attemptUsage,
-            MeterRegistry metrics,
-            @Nullable Integer cap) {
         MentorAdmission admission = mock(MentorAdmission.class);
         when(admission.admit(anyLong(), anyLong())).thenReturn(LlmCatalogTestFixtures.admittedMentorConfig());
         return new MentorTurnStarter(
                 beans.getBean(MentorTurnService.class),
                 admission,
-                attemptUsage,
+                beans.getBean(MentorTurnRepository.class),
+                beans.getBean(PersonDataWriteFence.class),
                 metrics,
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 beans.getBean(AgentRuns.class),

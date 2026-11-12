@@ -743,7 +743,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     }
 
     @Test
-    void shouldRewriteTheRunningTurnInPlaceWhenItsHostAdmitsAndReportsUsage() {
+    void shouldRewriteTheRunningTurnInPlaceWhenItsHostAdmits() {
         ask(main, "Question");
 
         long[] counts = transactionTemplate.execute(tx -> {
@@ -758,16 +758,13 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                     leaseId,
                     JsonNodeFactory.instance.objectNode().put("model", "admitted"));
             entityManager.flush();
-            turnRepository.accumulateUsage(
-                    running.getId(), running.getAttempt(), new MentorTurnUsage(1_000, 200, 0, 0, 0, 1));
-            entityManager.flush();
             long[] after = turnUpdatesInThisTransaction();
             return new long[] {after[0] - before[0], after[1] - before[1]};
         });
 
         assertThat(counts)
                 .as("updates, and those that added no index entry (HOT)")
-                .containsExactly(2, 2);
+                .containsExactly(1, 1);
     }
 
     /** This transaction's updates of {@code mentor_turn}, and how many of them were HOT, so far. */
@@ -777,25 +774,6 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         + " WHERE relid = 'mentor_turn'::regclass")
                 .getSingleResult();
         return new long[] {((Number) row[0]).longValue(), ((Number) row[1]).longValue()};
-    }
-
-    @Test
-    void shouldKeepTheProxysCountsWhenAStaleTurnSnapshotIsSavedAfterThem() {
-        ask(main, "Question");
-        MentorTurn running = claims.claimNext().orElseThrow();
-
-        transactionTemplate.executeWithoutResult(tx -> {
-            MentorTurn stale = turnRepository.findById(running.getId()).orElseThrow();
-            turnRepository.accumulateUsage(
-                    running.getId(), running.getAttempt(), new MentorTurnUsage(4_242, 99, 0, 0, 0, 1));
-            stale.admit(JsonNodeFactory.instance.objectNode().put("model", "stale"));
-            turnRepository.saveAndFlush(stale);
-        });
-
-        MentorTurn row = stored(running);
-        assertThat(row.getInputTokens()).isEqualTo(4_242);
-        assertThat(row.getOutputTokens()).isEqualTo(99);
-        assertThat(row.getLlmCalls()).isEqualTo(1);
     }
 
     @Test

@@ -20,6 +20,8 @@ const julyFifth: LlmUsageByDay = {
 const report: WorkspaceLlmUsageReport = {
 	month: "2026-07",
 	instanceTotalCostUsd: 4.25,
+	instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+	ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 	ownProviderTotalCostUsd: 1.75,
 	instanceBudgetVerdict: "WITHIN",
 	instancePaused: false,

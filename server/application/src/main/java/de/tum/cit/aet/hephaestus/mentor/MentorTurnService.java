@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.mentor.spi.TurnRuns;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -84,11 +83,10 @@ public class MentorTurnService {
     /**
      * An ended attempt, read under the turn's lock after the proxy's fence closed.
      *
-     * @param proxyUsage what the LLM proxy recorded for the attempt's calls
      * @param feedbackCalled the feedback the attempt called {@code show_feedback} for, in its entries or its last
      *     partial answer
      */
-    public record EndedTurn(MentorTurn turn, long accountId, MentorTurnUsage proxyUsage, Set<UUID> feedbackCalled) {}
+    public record EndedTurn(MentorTurn turn, long accountId, Set<UUID> feedbackCalled) {}
 
     /**
      * How an attempt ends.
@@ -112,12 +110,7 @@ public class MentorTurnService {
      * @param lostAt when its lease was taken back, on the database clock; the attempt claimed nothing after it
      */
     public record LostAttempt(
-            MentorTurn turn,
-            int attempt,
-            @Nullable JsonNode admission,
-            MentorTurnUsage proxyUsage,
-            Instant startedAt,
-            Instant lostAt) {}
+            MentorTurn turn, int attempt, @Nullable JsonNode admission, Instant startedAt, Instant lostAt) {}
 
     /**
      * Hephaestus's answer to a turn and the feedback it showed, in the order Hephaestus showed it.
@@ -238,7 +231,6 @@ public class MentorTurnService {
      */
     @Transactional
     public EndedTurn end(long workspaceId, UUID turnId, int epoch, UUID runId, Ending ending) {
-        int attempt = epoch;
         MentorTurn.Status outcome = ending.outcome();
         List<JsonNode> appended = ending.appended();
         // Before any row lock: a person erasure holds this fence while it deletes the ledger.
@@ -270,10 +262,9 @@ public class MentorTurnService {
                 endedAt);
         if (contextErased) turn.recordFailure("context_changed", null);
         turns.flush();
-        events.publishEvent(new MentorLedgerEvents.AttemptEnded(turn.getWorkspaceId(), turnId, attempt, endedAt));
         runs.ended(workspaceId, runId, epoch);
         changed(turn, true);
-        return new EndedTurn(turn, accountId(turn), usage(turn), contextErased ? Set.of() : feedbackCalled);
+        return new EndedTurn(turn, accountId(turn), contextErased ? Set.of() : feedbackCalled);
     }
 
     /**
@@ -287,24 +278,8 @@ public class MentorTurnService {
         Instant endedAt = clock.instant();
         locked.end(outcome, error, endedAt);
         turns.flush();
-        events.publishEvent(new MentorLedgerEvents.AttemptEnded(
-                locked.getWorkspaceId(), locked.getId(), locked.getAttempt(), endedAt));
         changed(locked, true);
-        return new EndedTurn(
-                locked, accountId(locked), usage(locked), MentorPiEntries.feedbackCalled(List.of(), lastPartial));
-    }
-
-    /**
-     * Records the cost an ended attempt was billed with; its usage is already on the row. The row holds one attempt's
-     * usage, so a cost of an earlier attempt, billed late, never replaces the cost of the attempt the row holds now.
-     */
-    @Transactional
-    public void recordCost(UUID turnId, int attempt, @Nullable BigDecimal costUsd) {
-        MentorTurn turn =
-                turns.lockById(turnId).orElseThrow(() -> new EntityNotFoundException("MentorTurn", turnId.toString()));
-        if (turn.getAttempt() == attempt) {
-            turn.recordCost(costUsd);
-        }
+        return new EndedTurn(locked, accountId(locked), MentorPiEntries.feedbackCalled(List.of(), lastPartial));
     }
 
     /**
@@ -427,7 +402,6 @@ public class MentorTurnService {
                 taken.turn().getId(),
                 taken.attempt(),
                 taken.admission(),
-                taken.proxyUsage(),
                 taken.startedAt(),
                 taken.lostAt())));
         return lost;
@@ -443,12 +417,9 @@ public class MentorTurnService {
     private LostAttempt takeBack(MentorTurn turn, boolean retry, Instant now, String reply, String cause) {
         int attempt = turn.getAttempt();
         JsonNode admission = turn.getAdmission();
-        MentorTurnUsage proxyUsage = usage(turn);
         Instant startedAt = Objects.requireNonNull(turn.getStartedAt(), "A leased turn has started");
         // Under the turn's lock, which a claim of the attempt shares: every claim it made committed before this.
         Instant lostAt = turns.databaseClock();
-        // Dates the attempt's spend in this transaction, before the requeue resets the turn.
-        events.publishEvent(new MentorLedgerEvents.AttemptEnded(turn.getWorkspaceId(), turn.getId(), attempt, lostAt));
         if (retry) {
             turn.requeue(now);
         } else {
@@ -456,7 +427,7 @@ public class MentorTurnService {
             turn.recordFailure(cause, null);
         }
         changed(turn, true);
-        return new LostAttempt(turn, attempt, admission, proxyUsage, startedAt, lostAt);
+        return new LostAttempt(turn, attempt, admission, startedAt, lostAt);
     }
 
     /** The database clock, which stamps attempt starts and the feedback claims of their turns. */
@@ -570,16 +541,6 @@ public class MentorTurnService {
                 .findAccountIdByIdAndWorkspaceId(turn.getConversationId(), turn.getWorkspaceId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "MentorConversation", turn.getConversationId().toString()));
-    }
-
-    private static MentorTurnUsage usage(MentorTurn turn) {
-        return new MentorTurnUsage(
-                turn.getInputTokens(),
-                turn.getOutputTokens(),
-                turn.getCachedTokens(),
-                turn.getCacheWriteTokens(),
-                turn.getReasoningTokens(),
-                turn.getLlmCalls());
     }
 
     private void changed(MentorTurn turn, boolean slotsChanged) {

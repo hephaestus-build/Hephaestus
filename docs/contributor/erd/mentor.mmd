@@ -48,17 +48,10 @@ erDiagram
         UUID id PK,UK
         JSONB admission
         INTEGER attempt "NOT NULL"
-        BIGINT cache_write_tokens "NOT NULL"
-        BIGINT cached_tokens "NOT NULL"
         UUID conversation_id FK "NOT NULL"
-        NUMERIC(19,9) cost_usd
         TIMESTAMPTZ created_at "NOT NULL"
         TEXT error
         TIMESTAMPTZ finished_at
-        BIGINT input_tokens "NOT NULL"
-        INTEGER llm_calls "NOT NULL"
-        BIGINT output_tokens "NOT NULL"
-        BIGINT reasoning_tokens "NOT NULL"
         VARCHAR(200) request_id UK "NOT NULL"
         TIMESTAMPTZ started_at
         VARCHAR(16) status "NOT NULL"

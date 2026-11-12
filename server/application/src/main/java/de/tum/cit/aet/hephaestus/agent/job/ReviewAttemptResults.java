@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
@@ -75,7 +74,6 @@ public class ReviewAttemptResults {
     private final ReviewAttemptPreparation preparation;
     private final ReviewJobTerminal terminal;
     private final ReviewRunKind reviewRuns;
-    private final ReviewAttemptUsageService attemptUsage;
     private final PracticeScriptRunRecorder practiceScriptRuns;
     private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
@@ -92,7 +90,6 @@ public class ReviewAttemptResults {
             ReviewAttemptPreparation preparation,
             ReviewJobTerminal terminal,
             ReviewRunKind reviewRuns,
-            ReviewAttemptUsageService attemptUsage,
             PracticeScriptRunRecorder practiceScriptRuns,
             TransactionTemplate transactionTemplate,
             ObjectMapper objectMapper,
@@ -104,7 +101,6 @@ public class ReviewAttemptResults {
         this.preparation = preparation;
         this.terminal = terminal;
         this.reviewRuns = reviewRuns;
-        this.attemptUsage = attemptUsage;
         this.practiceScriptRuns = practiceScriptRuns;
         this.transactionTemplate = transactionTemplate;
         this.objectMapper = objectMapper;
@@ -174,11 +170,12 @@ public class ReviewAttemptResults {
                 if (state.isSuccessful()) {
                     return;
                 }
+                Throwable failure = state.getLastException();
                 log.warn(
                         "{} failed (attempt {}): {}",
                         operation.getName(),
                         state.getExceptions().size(),
-                        String.valueOf(state.getLastException()));
+                        failure == null ? "none" : failure.getClass().getName());
             }
         });
         return template;
@@ -270,8 +267,8 @@ public class ReviewAttemptResults {
 
     /**
      * Hands the admitted review of the attempt that runs here on to the run that composes its feedback in the review's
-     * sandbox ({@link ReviewRunKind#continueToCompose}). An attempt that measured keeps its output, exit code, usage
-     * and practice-script runs first, in the same transaction, because no later attempt reports them again.
+     * sandbox ({@link ReviewRunKind#continueToCompose}). An attempt that measured keeps its output, exit code and
+     * practice-script runs first, in the same transaction, because no later attempt reports them again.
      *
      * @return false when the attempt no longer holds its job
      */
@@ -289,7 +286,7 @@ public class ReviewAttemptResults {
         }
     }
 
-    /** Keeps a measuring attempt's report on its job, settles the attempt with it, and records its script runs. */
+    /** Keeps a measuring attempt's report on its job and records its script runs. */
     private boolean keepMeasurement(UUID jobId, AgentRunFence fence, Measured measured) {
         ReviewJob locked = jobRepository.lockById(jobId).orElse(null);
         if (locked == null
@@ -298,7 +295,6 @@ public class ReviewAttemptResults {
                 || !fence.runId().equals(locked.getRunId())) return false;
         JsonNode output = objectMapper.valueToTree(measured.agentResult().output());
         boolean storable = textRepresentableInJsonb(output);
-        ReviewJobLlmUsage proxyCounts = jobRepository.findLlmUsageById(jobId).orElse(null);
         ConfigSnapshot snapshot = ConfigSnapshot.fromJson(locked.getConfigSnapshot(), objectMapper);
         ObjectNode kept = storable && output instanceof ObjectNode report
                 ? report
@@ -316,12 +312,6 @@ public class ReviewAttemptResults {
                             .put("error", terminalError(status, measured.sandboxResult(), storable)));
         locked.setOutput(kept);
         locked.setExitCode(measured.sandboxResult().exitCode());
-        // A later settlement of the same attempt, as the hand-on's own, keeps this report.
-        attemptUsage.settleAttempt(
-                locked,
-                FrozenCharge.admitted(snapshot, admittedPrice(snapshot)),
-                measured.agentResult().usage(),
-                proxyCounts);
         jobRepository.saveAndFlush(locked);
         practiceScriptRuns.record(
                 locked,
@@ -500,8 +490,7 @@ public class ReviewAttemptResults {
         return Boolean.TRUE.equals(updated);
     }
 
-    // Bills within the requeue transaction before it clears usage counters; an attempt that started no sandbox has
-    // none.
+    // The requeue of the run settles the attempt's open calls in the same transaction.
     private boolean requeueForAnotherAttempt(ReviewJob job, AgentRunFence fence, RequeueCause cause) {
         if (!reviewRuns.mayRetry(job)) return false;
         Boolean updated = transactionTemplate.execute(
@@ -551,8 +540,8 @@ public class ReviewAttemptResults {
         return ReviewJobStatus.FAILED;
     }
 
-    // Retain RUNNING state if accounting cannot commit; rerunning completed provider work would bill it twice.
-    // Its lease expires, and the run reaper ends the attempt and records its proxy usage.
+    // Retain RUNNING state if the terminal write cannot commit; rerunning completed provider work would bill it twice.
+    // Its lease expires, and the run reaper ends the attempt and settles its open calls.
     private @Nullable ReviewJobStatus persistTerminalState(
             UUID jobId, AgentRunFence fence, AgentResult agentResult, SandboxResult sandboxResult) {
         JsonNode output = objectMapper.valueToTree(agentResult.output());
@@ -591,12 +580,7 @@ public class ReviewAttemptResults {
             }
 
             ReviewJob freshJob = jobRepository.findById(jobId).orElseThrow();
-            // Read the counters BEFORE the selected totals are written over them below: they start the attempt's
-            // measurement when no proxied call registered one.
-            ReviewJobLlmUsage proxyCounts =
-                    jobRepository.findLlmUsageById(jobId).orElse(null);
             ConfigSnapshot snapshot = ConfigSnapshot.fromJson(freshJob.getConfigSnapshot(), objectMapper);
-            LlmPriceSnapshot price = admittedPrice(snapshot);
 
             // Admitted claims require their complete supporting text.
             freshJob.setOutput(
@@ -606,24 +590,6 @@ public class ReviewAttemptResults {
             if (terminalStatus == ReviewJobStatus.COMPLETED) {
                 freshJob.setProcessingStatus(ProcessingStatus.PENDING);
             }
-
-            var runnerUsage = agentResult.usage();
-            // The attempt's measurement keeps the runner's report and projects one coherent observed token vector,
-            // including a proxy-only fallback when the runner never wrote usage.json.
-            TerminalUsage usage = attemptUsage
-                    .settleAttempt(freshJob, FrozenCharge.admitted(snapshot, price), runnerUsage, proxyCounts)
-                    .usage();
-
-            // Use the ledger totals: the runner may omit usage details counted by the proxy.
-            if (runnerUsage != null && runnerUsage.totalCalls() > 0) {
-                freshJob.setLlmCalls(usage.totalCalls());
-                freshJob.setLlmInputTokens(Math.clamp(usage.inputTokens(), 0, Integer.MAX_VALUE));
-                freshJob.setLlmOutputTokens(Math.clamp(usage.outputTokens(), 0, Integer.MAX_VALUE));
-                freshJob.setLlmReasoningTokens(Math.clamp(usage.reasoningTokens(), 0, Integer.MAX_VALUE));
-                freshJob.setLlmCacheReadTokens(Math.clamp(usage.cacheReadTokens(), 0, Integer.MAX_VALUE));
-                freshJob.setLlmCacheWriteTokens(Math.clamp(usage.cacheWriteTokens(), 0, Integer.MAX_VALUE));
-            }
-            // Provider output is telemetry only. The admitted snapshot is authoritative identity.
 
             jobRepository.saveAndFlush(freshJob);
 
@@ -661,11 +627,7 @@ public class ReviewAttemptResults {
         private static final long serialVersionUID = 1L;
 
         private TerminalPersistenceException(Throwable cause) {
-            super("Could not durably persist terminal job result and usage", cause);
+            super("Could not durably persist terminal job result", cause);
         }
-    }
-
-    private LlmPriceSnapshot admittedPrice(ConfigSnapshot snapshot) {
-        return terminal.admittedPrice(snapshot);
     }
 }

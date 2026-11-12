@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
+import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -22,15 +23,15 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Records the LLM usage of review jobs and mentor turns for spending totals and budget caps.
- * Source identity, model, funding source, rates and date stay frozen; an operator can price an unpriced row. A
- * review job attempt's rows project its measurement: a call that returns after the attempt ended replaces their
- * measurement ({@link LlmUsageRecorder#project}). A Heph turn attempt's row projects its measurement the same way.
+ * One model call of an agent run, for spending totals and budget caps ({@link LlmUsageRecorder}). The proxy writes the
+ * row {@link UsageCallState#OPEN} before the call leaves, and the call's end measures it. Source identity, model,
+ * funding source, rates and date stay frozen; an operator can price an unpriced row. Rows written before calls had
+ * rows of their own hold one job attempt, practice script model kind or turn attempt each, have no run, and keep
+ * their {@code totalCalls}.
  *
- * <p>{@code sourceId} is a soft reference (no FK) to the originating {@code review_job.id} or
- * {@code mentor_turn.id}: accounting must survive source-row deletion. Source kind, id, and
- * attempt form the idempotency key, so retries are billed once each without collapsing distinct
- * provider calls.
+ * <p>{@code sourceId} is a soft reference (no FK) to the originating {@code review_job.id} or {@code mentor_turn.id},
+ * and {@code practiceId} to the practice whose script made the call: accounting must survive their deletion. The run
+ * reference is cleared when the run is deleted, for the same reason.
  */
 @Entity
 @Table(
@@ -39,12 +40,11 @@ import org.jspecify.annotations.Nullable;
             @Index(name = "idx_llm_usage_ws_time", columnList = "workspace_id, occurred_at"),
             // The retention sweep filters on age alone, which the composite above cannot serve: its
             // leading column is absent from that predicate.
-            @Index(name = "idx_llm_usage_occurred_at", columnList = "occurred_at")
+            @Index(name = "idx_llm_usage_occurred_at", columnList = "occurred_at"),
+            // The end of a claim settles the open calls of that claim, and a deleted run clears its rows' reference.
+            @Index(name = "idx_llm_usage_run", columnList = "run_id, workspace_id, lease_epoch")
         },
         uniqueConstraints = {
-            @UniqueConstraint(
-                    name = "ux_llm_usage_event_source_attempt",
-                    columnNames = {"source_type", "source_id", "source_attempt"}),
             @UniqueConstraint(
                     name = "uk_llm_usage_event_workspace",
                     columnNames = {"id", "workspace_id"})
@@ -85,6 +85,37 @@ public class LlmUsageEvent {
     @Column(name = "review_id", updatable = false)
     private UUID reviewId;
 
+    /** The run whose claim made the call; {@code null} for a row from before calls had rows, or a deleted run. */
+    @Nullable
+    @Column(name = "run_id")
+    private UUID runId;
+
+    /** The claim ({@code agent_run.lease_epoch}) that made the call; {@code null} for a row from before. */
+    @Nullable
+    @Column(name = "lease_epoch", updatable = false)
+    private Integer leaseEpoch;
+
+    @NonNull
+    @ColumnDefault("'ENDED'")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "call_state", nullable = false, length = 8)
+    private UsageCallState callState = UsageCallState.ENDED;
+
+    @NonNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "model_kind", nullable = false, length = 16, updatable = false)
+    private ModelKind modelKind = ModelKind.CHAT;
+
+    /** The practice whose script made the call; {@code null} for every other call. */
+    @Nullable
+    @Column(name = "practice_id", updatable = false)
+    private Long practiceId;
+
+    /** When the call opened. A row from before calls had rows takes its date. */
+    @NonNull
+    @Column(name = "started_at", nullable = false, updatable = false)
+    private Instant startedAt;
+
     @Nullable
     @Column(name = "model", length = 128)
     private String model;
@@ -114,6 +145,15 @@ public class LlmUsageEvent {
     @Column(name = "cost_usd", precision = 18, scale = 6)
     private BigDecimal costUsd;
 
+    /**
+     * The most the call can cost at its frozen rates: its request bytes and its output limit. Spend reads count it in
+     * place of the cost while the call is open or has no price ({@link LlmUsageEventRepository#SPEND}). {@code null}
+     * when no bound is known, and on a row from before calls had bounds.
+     */
+    @Nullable
+    @Column(name = "cost_bound_usd", precision = 18, scale = 6)
+    private BigDecimal costBoundUsd;
+
     @NonNull
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
@@ -123,6 +163,13 @@ public class LlmUsageEvent {
     @Enumerated(EnumType.STRING)
     @Column(name = "pricing_state", nullable = false, length = 16)
     private UsagePricingState pricingState = UsagePricingState.UNPRICED;
+
+    /** The price mode frozen when the call opened; settlement must not erase it before a late measurement. */
+    @NonNull
+    @ColumnDefault("'UNPRICED'")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "initial_pricing_state", nullable = false, length = 16, updatable = false)
+    private UsagePricingState initialPricingState = UsagePricingState.UNPRICED;
 
     @ColumnDefault("0")
     @Column(name = "reasoning_tokens", nullable = false)

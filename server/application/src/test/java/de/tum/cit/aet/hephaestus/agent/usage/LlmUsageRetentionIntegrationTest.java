@@ -75,6 +75,7 @@ class LlmUsageRetentionIntegrationTest extends AbstractWorkspaceIntegrationTest 
         event.setSourceId(UUID.randomUUID());
         event.setSourceType(UsageSourceType.REVIEW_JOB);
         event.setOccurredAt(occurredAt);
+        event.setStartedAt(event.getOccurredAt());
         return event;
     }
 }

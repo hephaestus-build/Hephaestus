@@ -68,6 +68,8 @@ function report(overrides: Partial<WorkspaceLlmUsageReport> = {}): WorkspaceLlmU
 		byJobType,
 		byDay,
 		instanceTotalCostUsd: rows.reduce((total, row) => total + row.instanceTotalCostUsd, 0),
+		instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+		ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 		ownProviderTotalCostUsd: rows.reduce((total, row) => total + row.ownProviderTotalCostUsd, 0),
 		unpricedEventCount: rows.reduce((total, row) => total + row.unpricedEventCount, 0),
 		instanceBudgetVerdict: "WITHIN",

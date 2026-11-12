@@ -3,10 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.scan;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMethodVerifier;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
@@ -18,7 +15,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ScanExecutionSnapshot;
 import java.math.BigDecimal;
@@ -35,7 +31,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ScanBudget {
     private final ReviewMethodVerifier methods;
-    private final ReviewJobRepository jobs;
     private final SandboxGatewayProperties gateway;
     private final ReviewRuntimeRepository runtime;
     private final ReviewMemberAiPolicy policy;
@@ -151,32 +146,5 @@ public class ScanBudget {
         if (price.per1mCacheReadUsd() != null) rate = rate.max(price.per1mCacheReadUsd());
         if (price.per1mCacheWriteUsd() != null) rate = rate.max(price.per1mCacheWriteUsd());
         return rate;
-    }
-
-    public BigDecimal inFlight(ReviewJob job, ConfigSnapshot snapshot) {
-        var price = snapshot.model().priceSnapshot();
-        if (price == null || price.pricingState() == UsagePricingState.UNPRICED)
-            throw new ScanModelUnavailableException("The active scan has no usable frozen price");
-        BigDecimal total = Objects.requireNonNull(price.calculateCost(
-                        job.getLlmInputTokens(),
-                        job.getLlmOutputTokens(),
-                        job.getLlmCacheReadTokens(),
-                        job.getLlmCacheWriteTokens())
-                .usd());
-        for (var used : jobs.sumPracticeScriptUsageByKind(job.getWorkspaceId(), job.getId(), job.getAttempt())) {
-            var model = used.modelKind() == ModelKind.CHAT
-                    ? snapshot.model()
-                    : snapshot.practiceScriptSlot(used.modelKind());
-            if (model == null
-                    || model.priceSnapshot() == null
-                    || model.priceSnapshot().pricingState() == UsagePricingState.UNPRICED
-                    || used.searchUnits() > 0)
-                throw new ScanUsageUnverifiableException("The scan's direct spend is unverifiable");
-            total = total.add(Objects.requireNonNull(model.priceSnapshot()
-                    .calculateCost(
-                            used.inputTokens(), used.outputTokens(), used.cacheReadTokens(), used.cacheWriteTokens())
-                    .usd()));
-        }
-        return total;
     }
 }

@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.YearMonth;
@@ -38,13 +37,11 @@ class LlmBudgetServiceTest extends BaseUnitTest {
     @Mock
     private WorkspaceRepository workspaceRepository;
 
-    private SimpleMeterRegistry meterRegistry;
     private LlmBudgetService budgetService;
 
     @BeforeEach
     void setUp() {
-        meterRegistry = new SimpleMeterRegistry();
-        budgetService = new LlmBudgetService(usageRepository, workspaceRepository, meterRegistry);
+        budgetService = new LlmBudgetService(usageRepository, workspaceRepository);
     }
 
     private Workspace workspaceWithBudgets(@Nullable BigDecimal instanceBudget, @Nullable BigDecimal byoBudget) {
@@ -236,61 +233,6 @@ class LlmBudgetServiceTest extends BaseUnitTest {
             assertThat(LlmBudgetDecision.ALLOWED.forFunding(null)).isEqualTo(LlmBudgetBlockReason.NONE);
             assertThat(LlmBudgetDecision.ALLOWED.blocks(null)).isFalse();
         }
-    }
-
-    @Nested
-    @DisplayName("blockSubmission is scoped to whoever pays")
-    class BlockSubmission {
-
-        @ParameterizedTest(name = "{4}")
-        @MethodSource("de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetServiceTest#exhaustedCaps")
-        void anExhaustedCapBlocksOnlyItsOwnFundingSource(
-                String instanceSpend,
-                String byoSpend,
-                UsageFundingSource blockedSource,
-                String expectedCapTag,
-                String why) {
-            stubLedger(instanceSpend, false, byoSpend, false);
-            Workspace workspace = workspaceWithBudgets(new BigDecimal("10.00"), new BigDecimal("10.00"));
-            UsageFundingSource openSource = blockedSource == UsageFundingSource.INSTANCE
-                    ? UsageFundingSource.WORKSPACE
-                    : UsageFundingSource.INSTANCE;
-
-            assertThat(budgetService.blockSubmission(workspace, "PRACTICE_REVIEW", openSource))
-                    .as(why)
-                    .isFalse();
-            assertThat(budgetService.blockSubmission(workspace, "PRACTICE_REVIEW", blockedSource))
-                    .isTrue();
-            assertThat(meterRegistry
-                            .counter("llm.budget.blocked", "surface", "review_job", "cap", expectedCapTag)
-                            .count())
-                    .isEqualTo(1d);
-
-            // An unattributable submission is blocked by either cap — and is filed under the cap that
-            // actually refused it, not the one the caller happened to be asking about.
-            assertThat(budgetService.blockSubmission(workspace, "PRACTICE_REVIEW", null))
-                    .isTrue();
-            assertThat(meterRegistry
-                            .counter("llm.budget.blocked", "surface", "review_job", "cap", expectedCapTag)
-                            .count())
-                    .isEqualTo(2d);
-        }
-    }
-
-    static Stream<Arguments> exhaustedCaps() {
-        return Stream.of(
-                Arguments.of(
-                        "10.00",
-                        "0.00",
-                        UsageFundingSource.INSTANCE,
-                        "instance",
-                        "an exhausted instance cap does not block workspace-funded work"),
-                Arguments.of(
-                        "0.00",
-                        "10.00",
-                        UsageFundingSource.WORKSPACE,
-                        "byo",
-                        "an exhausted BYO cap does not block instance-funded work"));
     }
 
     @Nested

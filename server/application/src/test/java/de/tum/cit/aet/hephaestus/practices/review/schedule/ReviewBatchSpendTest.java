@@ -61,6 +61,29 @@ class ReviewBatchSpendTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCountAnUnmeasuredCallAtItsUpperBoundAndKeepTheBudgetVerified() {
+        spent(
+                priced("3"),
+                new ReviewUsageAttempt(
+                        UUID.randomUUID(),
+                        0,
+                        1,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        new BigDecimal("1.50"),
+                        UsagePricingState.PRICED,
+                        true));
+
+        var remaining = spend.remaining(batch);
+
+        assertThat(remaining.verified()).isTrue();
+        assertThat(remaining.remainingUsd()).isEqualByComparingTo("5.5");
+    }
+
+    @Test
     void shouldInventNoBudgetForDatedWork() {
         assertThat(spend.remaining(ReviewBatch.builder().build())).isEqualTo(new ReviewBatchSpend.Snapshot(null, true));
         verifyNoInteractions(runtime, reviews);
@@ -86,6 +109,6 @@ class ReviewBatchSpendTest extends BaseUnitTest {
     }
 
     private static ReviewUsageAttempt attempt(@Nullable BigDecimal cost, UsagePricingState state) {
-        return new ReviewUsageAttempt(UUID.randomUUID(), 0, 1, 100, 100, 0, 0, 0, cost, state);
+        return new ReviewUsageAttempt(UUID.randomUUID(), 0, 1, 100, 100, 0, 0, 0, cost, state, false);
     }
 }

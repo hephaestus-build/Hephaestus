@@ -10,7 +10,11 @@ import { ChevronDown, ChevronRight, CircleDollarSign, Info, Search } from "lucid
 import { type ReactNode, useMemo } from "react";
 
 import { cn } from "cn";
-import type { AdminWorkspaceLlmUsage, WorkspaceLlmUsageReport } from "@/api/types.gen";
+import type {
+	AdminWorkspaceLlmUsage,
+	LlmUnmeasuredUsage,
+	WorkspaceLlmUsageReport,
+} from "@/api/types.gen";
 import { type DataTableFeatures, dataTableFeatures } from "@/components/common/data-table";
 import { DataTableHeader } from "@/components/common/DataTableHeader";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
@@ -56,6 +60,8 @@ import {
 	practiceScriptByPracticeDescription,
 	projectBudget,
 	purseCap,
+	unmeasuredOf,
+	unmeasuredSpendText,
 	pursesOf,
 } from "./usage-utils";
 
@@ -202,10 +208,11 @@ export function AdminInstanceLlmUsageTable({
 								{
 									id: purse === "SHARED" ? "sharedSpend" : "ownProviderSpend",
 									header: () => <PurseLeaf purse={purse}>Spend</PurseLeaf>,
-									cell: ({ getValue }) => (
+									cell: ({ getValue, row }) => (
 										<>
 											<MoneyCell>{formatCostUsd(getValue())}</MoneyCell>
 											<FxSpendLine usd={getValue()} fx={fx} />
+											<UnmeasuredSpendLine unmeasured={unmeasuredOf(row.original, purse)} />
 										</>
 									),
 									enableGlobalFilter: false,
@@ -563,6 +570,14 @@ function WorkspaceUsageDetails({
 			)}
 		</Section>
 	);
+}
+
+function UnmeasuredSpendLine({ unmeasured }: { unmeasured: LlmUnmeasuredUsage }) {
+	const text = unmeasuredSpendText(unmeasured);
+	if (text == null) {
+		return null;
+	}
+	return <div className="text-xs font-normal text-muted-foreground tabular-nums">{text}</div>;
 }
 
 interface HelpHeaderProps {

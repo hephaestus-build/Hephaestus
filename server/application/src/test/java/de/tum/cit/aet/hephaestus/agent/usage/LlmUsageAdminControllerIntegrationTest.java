@@ -83,6 +83,7 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         event.setPricingState(pricing);
         event.setFundingSource(funding);
         event.setOccurredAt(Instant.now());
+        event.setStartedAt(event.getOccurredAt());
         usageRepository.save(event);
     }
 
@@ -123,6 +124,8 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(idleRow.instanceTotalCostUsd()).isEqualByComparingTo("0");
         assertThat(idleRow.instanceBudgetVerdict()).isEqualTo(LlmBudgetVerdict.WITHIN);
         assertThat(idleRow.instancePaused()).isFalse();
+        assertThat(idleRow.events()).isZero();
+        assertThat(spenderRow.events()).isEqualTo(1L);
     }
 
     @Test
@@ -162,6 +165,37 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(row.ownProviderBudgetVerdict()).isEqualTo(LlmBudgetVerdict.UNVERIFIABLE);
         assertThat(row.instancePaused()).isFalse();
         assertThat(row.ownProviderPaused()).isTrue();
+    }
+
+    @Test
+    void theRollupShowsTheUpperBoundOfUnmeasuredCallsApartAndTheCapCountsIt() {
+        Workspace workspace = setupWorkspace("adm-unmeasured");
+        workspace.setMonthlyLlmBudgetUsd(new BigDecimal("1.50"));
+        workspaceRepository.save(workspace);
+        seedEvent(workspace, "1.00");
+        LlmUsageEvent unmeasured = new LlmUsageEvent();
+        unmeasured.setId(UUID.randomUUID());
+        unmeasured.setWorkspaceId(workspace.getId());
+        unmeasured.setJobType("PRACTICE_REVIEW");
+        unmeasured.setSourceType(UsageSourceType.REVIEW_JOB);
+        unmeasured.setSourceId(UUID.randomUUID());
+        unmeasured.setPricingState(UsagePricingState.UNPRICED);
+        unmeasured.setMeasurementVerification(MeasurementVerification.UNVERIFIABLE);
+        unmeasured.setUnreportedCalls(1);
+        unmeasured.setCostBoundUsd(new BigDecimal("0.50"));
+        unmeasured.setOccurredAt(Instant.now());
+        unmeasured.setStartedAt(unmeasured.getOccurredAt());
+        usageRepository.save(unmeasured);
+
+        var row = rollupFor(workspace);
+
+        assertThat(row.instanceTotalCostUsd()).isEqualByComparingTo("1.00");
+        assertThat(row.instanceUnmeasured().calls()).isEqualTo(1);
+        assertThat(row.instanceUnmeasured().upperBoundUsd()).isEqualByComparingTo("0.50");
+        assertThat(row.ownProviderUnmeasured().calls()).isZero();
+        assertThat(row.instanceBudgetVerdict())
+                .as("the confirmed spend and the bound reach the cap together")
+                .isEqualTo(LlmBudgetVerdict.EXHAUSTED);
     }
 
     @Test

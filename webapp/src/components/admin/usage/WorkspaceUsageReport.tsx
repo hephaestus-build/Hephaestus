@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { CircleAlert, CircleDollarSign } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
+import type { LlmUnmeasuredUsage, WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { BudgetExhaustedAlert } from "@/components/admin/workspace-llm/BudgetExhaustedAlert";
 import { StatTile } from "@/components/common/StatTile";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -42,6 +42,8 @@ import {
 	projectBudget,
 	purseCap,
 	pursesOf,
+	unmeasuredOf,
+	unmeasuredSpendText,
 } from "./usage-utils";
 
 export interface WorkspaceUsageReportProps {
@@ -175,6 +177,7 @@ export function WorkspaceUsageReport({
 						spendUsd={sharedSpend}
 						capUsd={sharedBudget}
 						titleFx={sharedTitleFx}
+						unmeasured={unmeasuredOf(report, "SHARED")}
 						meterLabel="Shared-model budget used"
 						paused={sharedPaused}
 						state={sharedState}
@@ -186,6 +189,7 @@ export function WorkspaceUsageReport({
 							spendUsd={providerSpend}
 							capUsd={providerCap}
 							titleFx={providerTitleFx}
+							unmeasured={unmeasuredOf(report, "OWN_PROVIDER")}
 							meterLabel="Your provider cap used"
 							paused={providerPaused}
 							state={providerState}
@@ -296,6 +300,8 @@ interface PurseTileProps {
 	spendUsd: number;
 	capUsd: number | undefined;
 	titleFx: FxConversion | null;
+	/** Calls whose usage was not measured: their upper bound shows apart from the spend. */
+	unmeasured: LlmUnmeasuredUsage;
 	meterLabel: string;
 	paused: boolean;
 	state: CapState | null;
@@ -312,12 +318,14 @@ function PurseTile({
 	spendUsd,
 	capUsd,
 	titleFx,
+	unmeasured,
 	meterLabel,
 	paused,
 	state,
 	unpriced,
 }: PurseTileProps) {
 	const showsDescription = purse === "OWN_PROVIDER" || capUsd != null;
+	const unmeasuredText = unmeasuredSpendText(unmeasured);
 	return (
 		<StatTile
 			icon={<PurseIcon purse={purse} />}
@@ -331,6 +339,7 @@ function PurseTile({
 							<FxApprox conversion={titleFx} />
 						</TileLine>
 					)}
+					{unmeasuredText != null && <TileLine>{unmeasuredText}</TileLine>}
 					{capUsd == null && <TileLine>{NO_LIMIT_SET[purse]}</TileLine>}
 					{showsDescription && <TileLine>{PURSE_DEFS[purse].description}</TileLine>}
 				</>

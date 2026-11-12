@@ -46,9 +46,6 @@ public final class SandboxReviewClaims {
         return new ReviewJobTerminal(
                 context.getBean(ReviewJobRepository.class),
                 context.getBean(AgentRuns.class),
-                context.getBean(ReviewAttemptUsageService.class),
-                context.getBean(JsonMapper.class),
-                null,
                 context.getBean(ReviewCompositionContinuation.class));
     }
 }

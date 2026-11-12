@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import java.util.Arrays;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -23,28 +24,37 @@ final class ProxyRequestBody {
     }
 
     /**
-     * Lock the model, strip what the sandbox may not ask for, and — on a streaming chat-completions
-     * request — ask the provider to report usage.
+     * Lock the model, clamp or write the output limit, strip what the sandbox may not ask for, and — on a streaming
+     * chat-completions request — ask the provider to report usage.
      *
-     * @param includeStreamingUsage true for chat-completions, whose streams report no usage unless the
-     *     request carries {@code stream_options.include_usage}; the responses API reports it regardless
+     * <p>A chat-completions stream reports no usage unless the request carries {@code stream_options.include_usage};
+     * the responses API reports it regardless.
+     *
      * @return {@code null} when the body is not a JSON object or asks for a capability the proxy
      *     refuses to forward
      */
     @Nullable
     private static PreparedBody prepareOpenAi(
-            ObjectMapper objectMapper, byte[] body, String upstreamModelId, boolean includeStreamingUsage) {
+            ObjectMapper objectMapper,
+            byte[] body,
+            String upstreamModelId,
+            LlmApiProtocol protocol,
+            @Nullable Long outputLimit) {
+        boolean includeStreamingUsage = protocol == LlmApiProtocol.OPENAI_COMPLETIONS;
         if (body == null || body.length == 0) return null;
         try {
             JsonNode tree = objectMapper.readTree(body);
             if (!tree.isObject()) return null;
             ObjectNode object = (ObjectNode) tree;
-            if (usesProviderHostedTool(object.get("tools"))
+            if (!hasTextOnlyInput(object)
+                    || usesProviderHostedTool(object.get("tools"))
                     || object.has("web_search_options")
                     || object.has("audio")
                     || !isTextOnlyModality(object.get("modalities"))) return null;
             object.put("model", upstreamModelId);
             object.remove("service_tier");
+            if (outputLimit != null && OutputLimit.generative(protocol))
+                OutputLimit.clamp(object, protocol, outputLimit);
             if (!includeStreamingUsage || !object.path("stream").asBoolean(false)) {
                 return new PreparedBody(objectMapper.writeValueAsBytes(object), null);
             }
@@ -62,24 +72,74 @@ final class ProxyRequestBody {
         }
     }
 
+    /**
+     * @param outputLimit the call's output limit, which a generative request is clamped to ({@link OutputLimit#clamp});
+     *     {@code null} for a call that writes no output
+     */
     @Nullable
     static PreparedBody prepare(
-            ObjectMapper objectMapper, byte[] body, String upstreamModelId, LlmApiProtocol protocol) {
+            ObjectMapper objectMapper,
+            byte[] body,
+            String upstreamModelId,
+            LlmApiProtocol protocol,
+            @Nullable Long outputLimit) {
         if (protocol != LlmApiProtocol.ANTHROPIC_MESSAGES) {
-            return prepareOpenAi(objectMapper, body, upstreamModelId, protocol == LlmApiProtocol.OPENAI_COMPLETIONS);
+            return prepareOpenAi(objectMapper, body, upstreamModelId, protocol, outputLimit);
         }
         try {
             JsonNode tree = objectMapper.readTree(body);
             if (!(tree instanceof ObjectNode object)
+                    || !hasTextOnlyInput(object)
                     || object.has("mcp_servers")
                     || object.has("container")
                     || usesAnthropicHostedTool(object.get("tools"))) return null;
             object.put("model", upstreamModelId);
             object.remove("service_tier");
+            if (outputLimit != null && OutputLimit.generative(protocol))
+                OutputLimit.clamp(object, protocol, outputLimit);
             return new PreparedBody(objectMapper.writeValueAsBytes(object), null);
         } catch (RuntimeException unreadable) {
             return null;
         }
+    }
+
+    /** Request bytes bound text tokens, but cannot bound provider-side state, images, audio or fetched files. */
+    static boolean hasTextOnlyInput(JsonNode request) {
+        if (request.hasNonNull("previous_response_id")
+                || request.hasNonNull("conversation")
+                || request.hasNonNull("prompt")) return false;
+        for (String field : new String[] {"messages", "input", "system"}) {
+            JsonNode value = request.get(field);
+            if (value != null && containsNonTextInput(value)) return false;
+        }
+        return true;
+    }
+
+    private static boolean containsNonTextInput(JsonNode value) {
+        if (value.isObject()) {
+            String type = value.path("type").asString("");
+            if (Set.of(
+                                    "image",
+                                    "image_url",
+                                    "input_image",
+                                    "input_audio",
+                                    "audio",
+                                    "input_file",
+                                    "file",
+                                    "document",
+                                    "video",
+                                    "input_video",
+                                    "item_reference")
+                            .contains(type)
+                    || value.has("inlineData")
+                    || value.has("fileData")
+                    || value.hasNonNull("file_id")) return true;
+            // Tool arguments are text to the model; their field names do not name input modalities.
+            if (type.equals("tool_use") || type.equals("function_call")) return false;
+        }
+        if (value.isObject() || value.isArray())
+            for (JsonNode child : value) if (containsNonTextInput(child)) return true;
+        return false;
     }
 
     private static boolean usesAnthropicHostedTool(@Nullable JsonNode tools) {

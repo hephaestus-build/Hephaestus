@@ -2,22 +2,12 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult.LlmUsage;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
-import de.tum.cit.aet.hephaestus.agent.usage.MeasurementVerification;
-import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
-import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -41,94 +31,6 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactions;
-
-    @Autowired
-    private LlmUsageRecorder usageRecorder;
-
-    @Autowired
-    private LlmUsageEventRepository usage;
-
-    @Autowired
-    private ReviewRuntimeRepository runtime;
-
-    @Test
-    void shouldKeepSpendPricedAndWriteNoUsageWhenASandboxFailsBeforeAnyModelCall() {
-        var job = running("runtime-terminal-zero-calls");
-        transactions.executeWithoutResult(status -> {
-            job.setExecutionStartedAt(Instant.now());
-            job.setStatus(ReviewJobStatus.FAILED);
-            job.setCompletedAt(Instant.now());
-            job.setExitCode(1);
-            jobs.saveAndFlush(job);
-            RuntimeJobTestData.agree(jdbc, job.getId());
-            TerminalUsageTestFixtures.project(
-                    TerminalUsage.resolve(
-                            new LlmUsage("model", 0, 0, 0, 0, 0, 0.0, 0),
-                            jobs.findLlmUsageById(job.getId()).orElseThrow(),
-                            List.of()),
-                    usageRecorder,
-                    jobs,
-                    job.getWorkspaceId(),
-                    job,
-                    null,
-                    priced());
-        });
-
-        var stored = jobs.findById(job.getId()).orElseThrow();
-        assertThat(stored.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
-        assertThat(stored.getExitCode()).isEqualTo(1);
-        assertThat(usage.findByWorkspaceIdAndSourceTypeAndSourceIdOrderBySourceAttemptAsc(
-                        job.getWorkspaceId(), UsageSourceType.REVIEW_JOB, job.getId()))
-                .isEmpty();
-        var spend = runtime.spent(job.getWorkspaceId(), job.getReviewId());
-        assertThat(spend.priced()).isTrue();
-        assertThat(spend.cost()).isZero();
-    }
-
-    @Test
-    void shouldKeepUnpricedUsageWhenAFailedSandboxReportsCallsWithoutTokens() {
-        var job = running("runtime-terminal-unknown-usage");
-        transactions.executeWithoutResult(status -> {
-            job.setExecutionStartedAt(Instant.now());
-            job.setStatus(ReviewJobStatus.FAILED);
-            job.setCompletedAt(Instant.now());
-            job.setExitCode(1);
-            jobs.saveAndFlush(job);
-            RuntimeJobTestData.agree(jdbc, job.getId());
-            TerminalUsageTestFixtures.project(
-                    TerminalUsage.resolve(new LlmUsage("model", 0, 0, 0, 0, 0, 0.0, 2), null, List.of()),
-                    usageRecorder,
-                    jobs,
-                    job.getWorkspaceId(),
-                    job,
-                    null,
-                    priced());
-        });
-
-        assertThat(usage.findByWorkspaceIdAndSourceTypeAndSourceIdOrderBySourceAttemptAsc(
-                        job.getWorkspaceId(), UsageSourceType.REVIEW_JOB, job.getId()))
-                .singleElement()
-                .satisfies(row -> {
-                    assertThat(row.getTotalCalls()).isEqualTo(2);
-                    assertThat(row.getMeasurementVerification()).isEqualTo(MeasurementVerification.UNVERIFIABLE);
-                    assertThat(row.getPricingState()).isEqualTo(UsagePricingState.UNPRICED);
-                    assertThat(row.getCostUsd()).isNull();
-                });
-        assertThat(runtime.spent(job.getWorkspaceId(), job.getReviewId()).priced())
-                .isFalse();
-    }
-
-    private static LlmPriceSnapshot priced() {
-        return new LlmPriceSnapshot(
-                UsageFundingSource.INSTANCE,
-                UsagePricingState.PRICED,
-                null,
-                null,
-                BigDecimal.ONE,
-                BigDecimal.ONE,
-                BigDecimal.ONE,
-                BigDecimal.ONE);
-    }
 
     /** A terminal write ends its run in the same transaction, as the executor's does. */
     private int ended(int updated, ReviewJob job) {

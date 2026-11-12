@@ -18,8 +18,8 @@ public record LlmUsageByJobTypeDTO(
         @NonNull
         @Schema(
                 description =
-                        "Runs of this job type with at least one ledger row whose cost is unavailable because a rate is missing or the measurement is unverified. A "
-                                + "practice script row counts toward the run of its review. Those rows are excluded from both "
+                        "Runs of this job type with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A "
+                                + "practice script call counts toward the run of its review. Those calls are excluded from both "
                                 + "totals above.")
         Long unpricedEventCount,
 
@@ -30,10 +30,12 @@ public record LlmUsageByJobTypeDTO(
 
         @NonNull
         @Schema(
-                description = "LLM API calls, as reported by the runtime. Practice reviews and mentor turns both "
+                description = "LLM API calls that the proxy served. Practice reviews and mentor turns both "
                         + "include every assistant call in an internal tool loop.")
         Long totalCalls,
 
         @NonNull
-        @Schema(description = "Runs: job attempts and mentor turns. Rows of models for practice scripts are not runs.")
+        @Schema(
+                description =
+                        "Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.")
         Long events) {}

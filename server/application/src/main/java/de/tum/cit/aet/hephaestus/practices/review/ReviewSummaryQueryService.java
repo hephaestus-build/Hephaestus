@@ -342,6 +342,7 @@ public class ReviewSummaryQueryService {
         return new ReviewUsageDTO(
                 u.costUsd() == null ? null : u.costUsd().toPlainString(),
                 u.priced(),
+                u.includesUpperBound(),
                 u.calls(),
                 u.inputTokens(),
                 u.outputTokens(),
@@ -356,7 +357,8 @@ public class ReviewSummaryQueryService {
                                 a.cacheReadTokens(),
                                 a.cacheWriteTokens(),
                                 a.costUsd() == null ? null : a.costUsd().toPlainString(),
-                                a.pricingState()))
+                                a.pricingState(),
+                                a.includesUpperBound()))
                         .toList());
     }
 

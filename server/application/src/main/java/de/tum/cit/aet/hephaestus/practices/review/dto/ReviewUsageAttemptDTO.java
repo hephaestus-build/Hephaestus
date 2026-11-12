@@ -20,4 +20,10 @@ public record ReviewUsageAttemptDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         String costUsd,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) UsagePricingState pricingState) {}
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) UsagePricingState pricingState,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Whether costUsd counts the upper bound of a call whose usage was not measured, so the"
+                        + " attempt cost at most costUsd")
+        boolean includesUpperBound) {}

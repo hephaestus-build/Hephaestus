@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import static de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.BOUNDED;
+import static de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.SPEND;
+
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
@@ -61,19 +64,28 @@ public interface ReviewRuntimeRepository extends Repository<ReviewJob, UUID> {
                 row.cacheReadTokens(),
                 row.cacheWriteTokens(),
                 row.costUsd(),
-                UsagePricingState.valueOf(row.pricingState()));
+                UsagePricingState.valueOf(row.pricingState()),
+                row.includesUpperBound());
     }
 
-    @Query(value = """
-        SELECT review_id, source_id, source_attempt, CAST(SUM(total_calls) AS bigint), CAST(SUM(input_tokens) AS bigint),
-          CAST(SUM(output_tokens) AS bigint), CAST(SUM(reasoning_tokens) AS bigint),
-          CAST(SUM(cache_read_tokens) AS bigint), CAST(SUM(cache_write_tokens) AS bigint),
-          CASE WHEN bool_and(cost_usd IS NOT NULL AND pricing_state<>'UNPRICED') THEN SUM(cost_usd) END,
-          CASE WHEN bool_or(cost_usd IS NULL OR pricing_state='UNPRICED') THEN 'UNPRICED'
-               WHEN bool_and(pricing_state='NO_CHARGE') THEN 'NO_CHARGE' ELSE 'PRICED' END
-        FROM llm_usage_event WHERE workspace_id=:workspaceId AND review_id = ANY(:reviewIds)
-        GROUP BY review_id,source_id,source_attempt ORDER BY review_id,source_id,source_attempt
-        """, nativeQuery = true)
+    /**
+     * Each attempt's calls. Its cost counts each open or unmeasured call at its upper bound ({@code
+     * LlmUsageEventRepository.SPEND}); it is unknown while one call has neither a price nor a bound.
+     */
+    @Query(
+            value = "SELECT e.review_id, e.source_id, e.source_attempt, CAST(SUM(e.total_calls) AS bigint),"
+                    + " CAST(SUM(e.input_tokens) AS bigint), CAST(SUM(e.output_tokens) AS bigint),"
+                    + " CAST(SUM(e.reasoning_tokens) AS bigint), CAST(SUM(e.cache_read_tokens) AS bigint),"
+                    + " CAST(SUM(e.cache_write_tokens) AS bigint),"
+                    + " CASE WHEN bool_and(" + SPEND + " IS NOT NULL) THEN SUM(" + SPEND + ") END,"
+                    + " CASE WHEN bool_or(" + SPEND + " IS NULL) THEN 'UNPRICED'"
+                    + " WHEN bool_and(e.pricing_state = 'NO_CHARGE' OR (" + BOUNDED + " AND e.cost_bound_usd = 0))"
+                    + " THEN 'NO_CHARGE' ELSE 'PRICED' END,"
+                    + " bool_or(" + BOUNDED + ")"
+                    + " FROM llm_usage_event e WHERE e.workspace_id = :workspaceId AND e.review_id = ANY(:reviewIds)"
+                    + " GROUP BY e.review_id, e.source_id, e.source_attempt"
+                    + " ORDER BY e.review_id, e.source_id, e.source_attempt",
+            nativeQuery = true)
     List<UsageRow> usageRows(@Param("workspaceId") long workspaceId, @Param("reviewIds") UUID[] reviewIds);
 
     default QueueCounts queueCounts(long workspaceId, Instant asOf) {
@@ -104,10 +116,14 @@ public interface ReviewRuntimeRepository extends Repository<ReviewJob, UUID> {
         """)
     List<TimingJob> timingJobs(@Param("workspaceId") long workspaceId, @Param("reviewIds") List<UUID> reviewIds);
 
-    @Query(value = """
-        SELECT COALESCE(SUM(cost_usd),0),COALESCE(bool_and(cost_usd IS NOT NULL AND pricing_state<>'UNPRICED'),true)
-        FROM llm_usage_event WHERE workspace_id=:workspaceId AND review_id=:reviewId
-        """, nativeQuery = true)
+    /**
+     * What a review's calls cost, each open or unmeasured call at its upper bound ({@code
+     * LlmUsageEventRepository.SPEND}); not priced while one call has neither a price nor a bound.
+     */
+    @Query(
+            value = "SELECT COALESCE(SUM(" + SPEND + "), 0), COALESCE(bool_and(" + SPEND + " IS NOT NULL), true)"
+                    + " FROM llm_usage_event e WHERE e.workspace_id = :workspaceId AND e.review_id = :reviewId",
+            nativeQuery = true)
     Spend spent(@Param("workspaceId") long workspaceId, @Param("reviewId") UUID reviewId);
 
     /** Each review's jobs counted by status, for many reviews in one read. */
@@ -141,7 +157,8 @@ public interface ReviewRuntimeRepository extends Repository<ReviewJob, UUID> {
             long cacheReadTokens,
             long cacheWriteTokens,
             @Nullable BigDecimal costUsd,
-            String pricingState) {}
+            String pricingState,
+            boolean includesUpperBound) {}
 
     record TimingJob(
             UUID reviewId,

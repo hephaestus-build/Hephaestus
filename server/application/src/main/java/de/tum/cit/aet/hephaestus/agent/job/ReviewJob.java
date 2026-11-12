@@ -166,30 +166,6 @@ public class ReviewJob {
     @Column(name = "scan_call_until")
     private @Nullable Instant scanCallUntil;
 
-    @ColumnDefault("0")
-    @Column(name = "llm_calls", nullable = false)
-    private int llmCalls = 0;
-
-    @ColumnDefault("0")
-    @Column(name = "llm_input_tokens", nullable = false)
-    private long llmInputTokens = 0;
-
-    @ColumnDefault("0")
-    @Column(name = "llm_output_tokens", nullable = false)
-    private long llmOutputTokens = 0;
-
-    @ColumnDefault("0")
-    @Column(name = "llm_reasoning_tokens", nullable = false)
-    private long llmReasoningTokens = 0;
-
-    @ColumnDefault("0")
-    @Column(name = "llm_cache_read_tokens", nullable = false)
-    private long llmCacheReadTokens = 0;
-
-    @ColumnDefault("0")
-    @Column(name = "llm_cache_write_tokens", nullable = false)
-    private long llmCacheWriteTokens = 0;
-
     @Column(name = "started_at")
     private @Nullable Instant startedAt;
 

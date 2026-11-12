@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 /** Everything the LLM proxy records or decides about a request's cost. */
-// Gated like the worker-only accumulators it depends on; an ungated bean here would fail the context
+// Gated like the worker-only budget gate it depends on; an ungated bean here would fail the context
 // of every tier that runs with the worker role off.
 @Component
 @ConditionalOnWorkerRole
@@ -24,8 +24,7 @@ public class ProxyAccounting {
     private static final Logger log = LoggerFactory.getLogger(ProxyAccounting.class);
 
     private final ProxyBudgetGate budgetGate;
-    private final ProxyUsageAccumulator usageAccumulator;
-    private final MentorTurnUsageAccumulator mentorTurnUsageAccumulator;
+    private final ProxyCallLedger callLedger;
     private final MeterRegistry meterRegistry;
     private final ObjectMapper objectMapper;
 
@@ -38,13 +37,11 @@ public class ProxyAccounting {
 
     ProxyAccounting(
             ProxyBudgetGate budgetGate,
-            ProxyUsageAccumulator usageAccumulator,
-            MentorTurnUsageAccumulator mentorTurnUsageAccumulator,
+            ProxyCallLedger callLedger,
             MeterRegistry meterRegistry,
             ObjectMapper objectMapper) {
         this.budgetGate = budgetGate;
-        this.usageAccumulator = usageAccumulator;
-        this.mentorTurnUsageAccumulator = mentorTurnUsageAccumulator;
+        this.callLedger = callLedger;
         this.meterRegistry = meterRegistry;
         this.objectMapper = objectMapper;
         this.gatewayRequests = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_REQUESTS)
@@ -68,11 +65,16 @@ public class ProxyAccounting {
     }
 
     /**
-     * Whether the payer of THIS call has crossed their monthly cap, counting what the workspace's running
-     * work has spent, which the ledger cannot see until each run ends.
+     * Whether the payer of THIS call has crossed their monthly cap, counting every call of the month: an open or
+     * unmeasured call at its upper bound.
      */
     public boolean refuseForBudget(ProxyRouting routing) {
         return budgetBlocked(budgetGate.isBlocked(routing), UsageFundingSource.capTag(routing.connectionScope()));
+    }
+
+    /** A call whose upper bound did not fit under its payer's monthly cap ({@link ProxyBudgetGate#refusesHold}). */
+    public void budgetHeld(ProxyRouting routing) {
+        budgetBlocked(true, UsageFundingSource.capTag(routing.connectionScope()));
     }
 
     public boolean refuseForDirectModelCap(ProxyRouting routing, ProxyRouting.BilledAttempt attempt) {
@@ -110,18 +112,14 @@ public class ProxyAccounting {
     }
 
     /**
-     * Never throws: a body this cannot read must not turn a call the provider already served — and
-     * already charged us for — into an error for the runner. Counted instead, since an unreadable body
-     * means this call's tokens were billed to nobody.
+     * Reads the usage that a served answer reports. Never throws: a body this cannot read must not turn a call the
+     * provider already served — and already charged us for — into an error for the runner. Counted instead, since an
+     * unreadable body leaves the call's measurement unverifiable.
      *
-     * @param practiceScript the practice script call; {@code null} for every other call
-     * @return the usage that was recorded; {@code null} when the body reports none or cannot be read
+     * @return the usage; {@code null} when the body reports none or cannot be read
      */
-    public @Nullable ProxyTokenUsage recordUsage(
-            ProxyRouting.BilledAttempt attempt,
-            @Nullable PracticeScriptCall practiceScript,
-            LlmApiProtocol protocol,
-            byte[] upstreamBody) {
+    public @Nullable ProxyTokenUsage readUsage(
+            ProxyRouting.BilledAttempt attempt, LlmApiProtocol protocol, byte[] upstreamBody) {
         ProxyTokenUsage usage;
         try {
             usage = ProxyTokenUsage.from(objectMapper.readTree(upstreamBody), protocol);
@@ -131,47 +129,29 @@ public class ProxyAccounting {
             log.atWarn()
                     .addKeyValue("event.name", "llm.proxy.usage.unparseable")
                     .addKeyValue("error.type", e.getClass().getName())
-                    .log("Could not parse upstream usage for {} — this call's tokens go unbilled", attempt.sourceId());
+                    .log(
+                            "Could not parse upstream usage for {} — this call's usage is unverifiable",
+                            attempt.sourceId());
             recordMalformedUsage(attempt);
-            // An unreadable body is not also an absent one: the practice script row still counts the
-            // call, and only the unparseable counter records the gap.
-            if (practiceScript != null) {
-                usageAccumulator.accumulate(attempt, practiceScript, null);
-            }
             return null;
         }
-        recordUsage(attempt, practiceScript, usage);
+        if (usage == null) recordMissingUsage(attempt);
         return usage;
     }
 
-    /**
-     * A practice script call counts on its row even when its provider reports no tokens, so the row shows
-     * every call. A practice script call on the chat model also goes into the attempt's own total, because the
-     * review's ledger row bills the chat model; the two change in one settlement. A served response without
-     * reported usage is counted by source type; tokens and provider charges are never estimated.
-     */
-    public void recordUsage(
-            ProxyRouting.BilledAttempt attempt,
-            @Nullable PracticeScriptCall practiceScript,
-            @Nullable ProxyTokenUsage usage) {
-        if (usage == null) {
-            meterRegistry
-                    .counter(
-                            AgentMetrics.LLM_PROXY_USAGE_MISSING,
-                            "sourceType",
-                            attempt.sourceType().name())
-                    .increment();
-        }
-        switch (attempt.sourceType()) {
-            case MENTOR_TURN -> {
-                if (usage != null) mentorTurnUsageAccumulator.accumulate(attempt, usage);
-            }
-            case REVIEW_JOB, PRACTICE_SCRIPT_DECISION, PRACTICE_SCRIPT_EMBEDDING, PRACTICE_SCRIPT_RERANKING -> {
-                // The review's own call without usage has nothing to settle; it stays the missing-usage count.
-                if (practiceScript != null || usage != null)
-                    usageAccumulator.accumulate(attempt, practiceScript, usage);
-            }
-        }
+    /** A served answer without reported usage, counted by source type; tokens and charges are never estimated. */
+    public void recordMissingUsage(ProxyRouting.BilledAttempt attempt) {
+        meterRegistry
+                .counter(
+                        AgentMetrics.LLM_PROXY_USAGE_MISSING,
+                        "sourceType",
+                        attempt.sourceType().name())
+                .increment();
+    }
+
+    /** The usage ledger of each proxied call ({@link ProxyCallLedger}). */
+    ProxyCallLedger calls() {
+        return callLedger;
     }
 
     public void recordMalformedUsage(ProxyRouting.BilledAttempt attempt) {

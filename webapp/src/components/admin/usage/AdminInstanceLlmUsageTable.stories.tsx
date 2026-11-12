@@ -31,6 +31,8 @@ const pausedOnSharedBudget: AdminWorkspaceLlmUsage = {
 	displayName: "Example Workspace",
 	instanceMonthlyBudgetUsd: 25,
 	instanceTotalCostUsd: 25.0142,
+	instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+	ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 	instanceBudgetVerdict: "EXHAUSTED",
 	instancePaused: true,
 	ownProviderMonthlyBudgetUsd: 40,
@@ -46,6 +48,8 @@ const nearingItsOwnProviderCap: AdminWorkspaceLlmUsage = {
 	displayName: "Hephaestus Dev",
 	instanceMonthlyBudgetUsd: 100,
 	instanceTotalCostUsd: 13.4821,
+	instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+	ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 	instanceBudgetVerdict: "WITHIN",
 	instancePaused: false,
 	ownProviderMonthlyBudgetUsd: 25,
@@ -61,6 +65,8 @@ const sharedBudgetOnlyUnverifiable: AdminWorkspaceLlmUsage = {
 	displayName: "Launchpad",
 	instanceMonthlyBudgetUsd: 50,
 	instanceTotalCostUsd: 38.2,
+	instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+	ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 	instanceBudgetVerdict: "UNVERIFIABLE",
 	instancePaused: true,
 	ownProviderTotalCostUsd: 0,
@@ -74,6 +80,8 @@ const uncapped: AdminWorkspaceLlmUsage = {
 	workspaceSlug: "sandbox",
 	displayName: "Sandbox",
 	instanceTotalCostUsd: 0.42,
+	instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+	ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 	instanceBudgetVerdict: "WITHIN",
 	ownProviderTotalCostUsd: 0,
 	ownProviderInUse: false,
@@ -96,6 +104,8 @@ const pausedOnItsOwnProviderCap: AdminWorkspaceLlmUsage = {
 	workspaceSlug: "atelier",
 	displayName: "Atelier",
 	instanceTotalCostUsd: 0,
+	instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+	ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 	instanceBudgetVerdict: "WITHIN",
 	ownProviderMonthlyBudgetUsd: 12,
 	ownProviderTotalCostUsd: 12.4,
@@ -232,6 +242,26 @@ export const AllCapCombinationsInUsd: Story = {
 		await expect(workbench.textContent).toBe("—Unavailable cost");
 		await expect(within(workbench).getByText("Unavailable cost")).toBeVisible();
 		await expect(canvas.queryByRole("columnheader", { name: "Status" })).toBeNull();
+	},
+};
+
+/** The spend column shows each purse's unmeasured calls apart from its spend, at their upper bound. */
+export const UnmeasuredCalls: Story = {
+	args: {
+		rows: [
+			{
+				...nearingItsOwnProviderCap,
+				instanceUnmeasured: { calls: 2, upperBoundUsd: 1.5 },
+			},
+		],
+	},
+	play: async ({ canvas }) => {
+		const row = within(await canvas.findByRole("row", { name: /^Hephaestus Dev/u }));
+		await expect(row.getByText("$13.48")).toBeVisible();
+		await expect(
+			row.getByText("Up to $1.50 more from 2 calls whose usage was not measured"),
+		).toBeVisible();
+		await expect(row.queryAllByText(/whose usage was not measured$/u)).toHaveLength(1);
 	},
 };
 
@@ -479,6 +509,8 @@ export const NearCap: Story = {
 				displayName: "Close Call",
 				instanceMonthlyBudgetUsd: 50,
 				instanceTotalCostUsd: 41,
+				instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+				ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 				instanceBudgetVerdict: "WITHIN",
 				instancePaused: false,
 				ownProviderMonthlyBudgetUsd: 30,
@@ -521,6 +553,8 @@ export const PausedByBothCaps: Story = {
 				displayName: "Full Stop",
 				instanceMonthlyBudgetUsd: 20,
 				instanceTotalCostUsd: 20.5,
+				instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+				ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 				instanceBudgetVerdict: "EXHAUSTED",
 				instancePaused: true,
 				ownProviderMonthlyBudgetUsd: 15,
@@ -546,6 +580,8 @@ export const ZeroInstanceCap: Story = {
 				displayName: "Frozen",
 				instanceMonthlyBudgetUsd: 0,
 				instanceTotalCostUsd: 0,
+				instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+				ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 				instanceBudgetVerdict: "EXHAUSTED",
 				instancePaused: true,
 				ownProviderTotalCostUsd: 0,

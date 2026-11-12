@@ -5,7 +5,6 @@ import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,34 +17,45 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UUID> {
-    @Query("SELECT e FROM LlmUsageEvent e WHERE e.workspaceId = :workspaceId AND e.sourceType ="
-            + " :sourceType AND e.sourceId = :sourceId ORDER BY e.sourceAttempt")
-    List<LlmUsageEvent> findByWorkspaceIdAndSourceTypeAndSourceIdOrderBySourceAttemptAsc(
-            @Param("workspaceId") Long workspaceId,
-            @Param("sourceType") UsageSourceType sourceType,
-            @Param("sourceId") UUID sourceId);
-
-    @Query("SELECT e FROM LlmUsageEvent e WHERE e.workspaceId = :workspaceId AND e.sourceType IN"
-            + " :sourceTypes AND e.sourceId = :sourceId ORDER BY e.sourceAttempt, e.occurredAt")
-    List<LlmUsageEvent> findByWorkspaceIdAndSourceTypeInAndSourceIdOrderBySourceAttemptAsc(
-            @Param("workspaceId") Long workspaceId,
-            @Param("sourceTypes") Collection<UsageSourceType> sourceTypes,
-            @Param("sourceId") UUID sourceId);
+    /**
+     * The runs among the ledger rows of {@code e}: one per job attempt and one per mentor turn attempt. Every call of an
+     * attempt, a practice script call included, carries the job or turn id and the attempt number, so it counts toward
+     * that run and never as a run of its own.
+     */
+    String RUNS = "COUNT(DISTINCT (e.source_id, e.source_attempt)) FILTER (WHERE e.id IS NOT NULL)";
 
     /**
-     * The runs among the ledger rows of {@code e}: one per job attempt and one per mentor turn. A
-     * practice script row adds calls and cost to the attempt that it belongs to, but it is not a
-     * run of its own.
+     * Whether ledger row {@code e} counts at its upper bound ({@code cost_bound_usd}): its call is still open, or it
+     * has no price, which a call whose usage was not measured never gets. Such a row is never an exact cost.
      */
-    String RUNS = "COUNT(e.id) FILTER (WHERE e.source_type IN ('REVIEW_JOB', 'MENTOR_TURN'))";
+    String BOUNDED = "(e.cost_bound_usd IS NOT NULL AND (e.call_state = 'OPEN' OR e.pricing_state = 'UNPRICED'))";
+
+    /** Whether nobody knows what ledger row {@code e} cost: it has no price and no upper bound. */
+    String UNKNOWN = "(e.pricing_state = 'UNPRICED' AND e.cost_bound_usd IS NULL)";
 
     /**
-     * The runs among the ledger rows of {@code e} that have at least one row with no price. A
-     * practice script row carries the job id and attempt of its run, so it counts toward that run
-     * and never as a run of its own.
+     * What ledger row {@code e} adds to a spend total: its upper bound while it is {@link #BOUNDED}, else its measured
+     * cost. {@code NULL} only for an {@link #UNKNOWN} row. Every spend read that a cap or a budget compares uses it, so
+     * no call can make a cap or a review unverifiable once its bound is known.
      */
-    String UNPRICED_RUNS =
-            "COUNT(DISTINCT (e.source_id, e.source_attempt)) FILTER (WHERE e.pricing_state =" + " 'UNPRICED')";
+    String SPEND =
+            "(CASE WHEN " + BOUNDED + " THEN e.cost_bound_usd WHEN e.pricing_state <> 'UNPRICED' THEN e.cost_usd END)";
+
+    /**
+     * The measured cost that ledger row {@code e} adds to confirmed spend: its cost once it has a price and does not
+     * count at its upper bound. {@link #SPEND} is this plus the bound of each {@link #BOUNDED} row.
+     */
+    String CONFIRMED = "(CASE WHEN NOT " + BOUNDED + " AND e.pricing_state <> 'UNPRICED' THEN e.cost_usd END)";
+
+    /**
+     * The runs among the ledger rows of {@code e} that have at least one row whose cost is {@link #UNKNOWN}. A practice
+     * script row carries the job id and attempt of its run, so it counts toward that run and never as a run of its own.
+     */
+    String UNPRICED_RUNS = "COUNT(DISTINCT (e.source_id, e.source_attempt)) FILTER (WHERE " + UNKNOWN + ")";
+
+    /** The calls of practice scripts on a model other than the review's own: decision, embedding and reranking. */
+    String PRACTICE_SCRIPT_ROWS =
+            "e.source_type IN ('PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING')";
 
     /**
      * Whether workspace {@code w} has an enabled own-provider model on an enabled own-provider
@@ -67,100 +77,126 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
     int deleteExpired(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 
     /**
-     * Idempotent append. The column list, the VALUES list and {@link LlmUsageInsert}'s components
-     * are one list written three times, checked against each other position by position by {@code
-     * LlmUsageInsertContractTest}.
+     * Writes one call {@code OPEN}, dated by the database clock, which every lease compares with. Its measurement is
+     * zero until the call ends; {@code costUsd} is zero for a priced or free model and {@code null} for an unpriced one.
+     * The call's upper bound counts in its place ({@link #SPEND}).
      */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query(value = """
         INSERT INTO llm_usage_event (
-            id, workspace_id, review_id, job_type, source_type, source_id, source_attempt, model,
-            input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
-            total_calls, cost_usd, occurred_at, pricing_state, funding_source, applied_price_id,
+            id, workspace_id, run_id, lease_epoch, initial_pricing_state, call_state, job_type, source_type, source_id, source_attempt,
+            review_id, model_kind, practice_id, model, cost_usd, pricing_state, funding_source, applied_price_id,
             applied_workspace_model_id, applied_per_1m_input_usd, applied_per_1m_output_usd,
-            applied_per_1m_cache_read_usd, applied_per_1m_cache_write_usd, usage_provenance, search_units,
-            unreported_calls, measurement_verification
+            applied_per_1m_cache_read_usd, applied_per_1m_cache_write_usd, cost_bound_usd, total_calls, started_at,
+            occurred_at
         ) VALUES (
-            :#{#event.id()}, :#{#event.workspaceId()}, :#{#event.reviewId()}, :#{#event.jobType()}, :#{#event.sourceType()},
-            :#{#event.sourceId()}, :#{#event.sourceAttempt()}, :#{#event.model()},
-            :#{#event.inputTokens()}, :#{#event.outputTokens()}, :#{#event.cacheReadTokens()},
-            :#{#event.cacheWriteTokens()}, :#{#event.reasoningTokens()}, :#{#event.totalCalls()},
-            :#{#event.costUsd()}, :#{#event.occurredAt()}, :#{#event.pricingState()},
-            :#{#event.fundingSource()}, :#{#event.appliedPriceId()},
-            :#{#event.appliedWorkspaceModelId()}, :#{#event.appliedPer1mInputUsd()},
-            :#{#event.appliedPer1mOutputUsd()}, :#{#event.appliedPer1mCacheReadUsd()},
-            :#{#event.appliedPer1mCacheWriteUsd()}, :#{#event.usageProvenance()}, :#{#event.searchUnits()},
-            :#{#event.unreportedCalls()}, :#{#event.measurementVerification()}
-        ) ON CONFLICT (source_type, source_id, source_attempt) DO NOTHING
+            :id, :#{#call.workspaceId()}, :#{#call.runId()}, :#{#call.leaseEpoch()}, :#{#call.price().pricingState().name()}, 'OPEN', :#{#call.jobType()},
+            :#{#call.sourceType().name()}, :#{#call.sourceId()}, :#{#call.sourceAttempt()}, :#{#call.reviewId()},
+            :#{#call.modelKind().name()}, :#{#call.practiceId()}, :#{#call.model()}, :costUsd,
+            :#{#call.price().pricingState().name()}, :#{#call.price().fundingSource().name()},
+            :#{#call.price().appliedPriceId()}, :#{#call.price().appliedWorkspaceModelId()},
+            :#{#call.price().per1mInputUsd()}, :#{#call.price().per1mOutputUsd()},
+            :#{#call.price().per1mCacheReadUsd()}, :#{#call.price().per1mCacheWriteUsd()}, :#{#call.costBoundUsd()},
+            1, clock_timestamp(), clock_timestamp()
+        )
         """, nativeQuery = true)
-    int insertIfAbsent(@Param("event") LlmUsageInsert event);
+    int insertOpen(
+            @Param("id") UUID id,
+            @Param("call") LlmUsageRecorder.OpenCall call,
+            @Param("costUsd") @Nullable BigDecimal costUsd);
 
-    /** The ledger row a projection of a review job attempt replaces, held until the projection commits. */
+    /** The call a measurement replaces, held until the measurement commits. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT e FROM LlmUsageEvent e WHERE e.workspaceId = :workspaceId AND e.sourceType = :sourceType"
-            + " AND e.sourceId = :sourceId AND e.sourceAttempt = :sourceAttempt")
-    Optional<LlmUsageEvent> lockBySource(
-            @Param("workspaceId") Long workspaceId,
-            @Param("sourceType") UsageSourceType sourceType,
-            @Param("sourceId") UUID sourceId,
-            @Param("sourceAttempt") int sourceAttempt);
-
-    boolean existsByWorkspaceIdAndSourceTypeNotAndSourceIdAndSourceAttempt(
-            Long workspaceId, UsageSourceType sourceType, UUID sourceId, int sourceAttempt);
+    @Query("SELECT e FROM LlmUsageEvent e WHERE e.id = :id AND e.workspaceId = :workspaceId")
+    Optional<LlmUsageEvent> lockCall(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
     /**
-     * Gives a review job attempt's frozen charge the price the repricing pass just resolved for one of its rows, in
-     * the repricing transaction. A later projection of the attempt that finds the row unpriced again, because its
-     * measurement became unverifiable meanwhile, then prices a verified measurement with this resolved price and not
-     * with the price the attempt started with. Mentor turns have no attempt charge.
+     * Ends one call with its measurement and nothing else; see {@link LlmUsageRecorder#complete}. A {@code null} cost
+     * leaves the call unpriced. An unverifiable call is one call without reported usage.
+     *
+     * The measurement keeps the call's upper bound unless it found a missing price rate.
      */
-    @WorkspaceAgnostic("ID-based price repair; the event id comes from the cross-tenant repricing enumeration")
-    @Modifying(flushAutomatically = true)
-    @Query(
-            value = "UPDATE review_job_attempt_charge c SET pricing_state = :#{#price.pricingState().name()},"
-                    + " applied_price_id = :#{#price.appliedPriceId()}, applied_workspace_model_id ="
-                    + " :#{#price.appliedWorkspaceModelId()}, applied_per_1m_input_usd = :#{#price.per1mInputUsd()},"
-                    + " applied_per_1m_output_usd = :#{#price.per1mOutputUsd()}, applied_per_1m_cache_read_usd ="
-                    + " :#{#price.per1mCacheReadUsd()}, applied_per_1m_cache_write_usd = :#{#price.per1mCacheWriteUsd()}"
-                    + " FROM llm_usage_event e WHERE e.id = :id AND e.workspace_id = c.workspace_id AND c.job_id ="
-                    + " e.source_id AND c.attempt = e.source_attempt AND e.source_type <> 'MENTOR_TURN' AND"
-                    + " c.model_kind = CASE e.source_type WHEN 'REVIEW_JOB' THEN 'CHAT' ELSE"
-                    + " REPLACE(e.source_type, 'PRACTICE_SCRIPT_', '') END",
-            nativeQuery = true)
-    int adoptResolvedPriceInAttemptCharge(@Param("id") UUID id, @Param("price") LlmPriceSnapshot price);
-
-    /** Replaces the measurement of one row and nothing else; see {@link LlmUsageRecorder#project}. */
-    @Modifying(flushAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-        UPDATE llm_usage_event SET input_tokens = :#{#m.inputTokens()}, output_tokens = :#{#m.outputTokens()},
-            cache_read_tokens = :#{#m.cacheReadTokens()}, cache_write_tokens = :#{#m.cacheWriteTokens()},
-            reasoning_tokens = :#{#m.reasoningTokens()}, search_units = :#{#m.searchUnits()},
-            total_calls = :#{#m.totalCalls()}, unreported_calls = :#{#m.unreportedCalls()},
-            usage_provenance = :#{#m.usageProvenance()}, measurement_verification = :#{#m.measurementVerification()},
-            pricing_state = :#{#m.pricingState()}, cost_usd = :#{#m.costUsd()}
-        WHERE id = :#{#m.id()} AND workspace_id = :#{#m.workspaceId()}
+        UPDATE llm_usage_event SET call_state = 'ENDED', input_tokens = :#{#measurement.usage().inputTokens()},
+            output_tokens = :#{#measurement.usage().outputTokens()}, cache_read_tokens = :#{#measurement.usage().cacheReadTokens()},
+            cache_write_tokens = :#{#measurement.usage().cacheWriteTokens()}, reasoning_tokens = :#{#measurement.usage().reasoningTokens()},
+            search_units = :#{#measurement.usage().searchUnits()}, usage_provenance = 'PROXY',
+            unreported_calls = CASE WHEN CAST(:#{#measurement.verification().name()} AS text) = 'UNVERIFIABLE' THEN 1 ELSE 0 END,
+            measurement_verification = :#{#measurement.verification().name()},
+            pricing_state = :#{#measurement.pricingState().name()},
+            cost_usd = :#{#measurement.costUsd()}, cost_bound_usd = CASE WHEN :#{#measurement.keepBound()} THEN cost_bound_usd END
+        WHERE id = :id AND workspace_id = :workspaceId
         """, nativeQuery = true)
-    int remeasure(@Param("m") LlmUsageRemeasurement m);
+    int measure(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("measurement") LlmUsageRecorder.Measurement measurement);
 
+    /**
+     * What the practice script calls of one claim have used, on every model kind and for every practice: the whole
+     * prompt and the output, and the search units of reranking calls. A call counts once it has ended.
+     */
     @Query(value = """
-        SELECT COALESCE(SUM(u.calls - u.reported_calls), 0)
-        FROM review_job_script_usage u
-        WHERE u.workspace_id = :workspaceId AND u.job_id = :sourceId AND u.attempt = :attempt
-            AND CASE u.model_kind WHEN 'CHAT' THEN 'REVIEW_JOB'
-                ELSE 'PRACTICE_SCRIPT_' || u.model_kind END = :sourceType
+        SELECT COALESCE(SUM(e.input_tokens + e.cache_read_tokens + e.cache_write_tokens + e.output_tokens), 0) AS tokens,
+            COALESCE(SUM(e.search_units), 0) AS searchUnits
+        FROM llm_usage_event e
+        WHERE e.workspace_id = :workspaceId AND e.run_id = :runId AND e.lease_epoch = :epoch
+          AND e.practice_id IS NOT NULL
         """, nativeQuery = true)
-    long sumUnreportedPracticeScriptCalls(
-            @Param("workspaceId") Long workspaceId,
+    DirectModelUsage sumDirectModelUsage(
+            @Param("workspaceId") long workspaceId, @Param("runId") UUID runId, @Param("epoch") int epoch);
+
+    /**
+     * The calls of one review attempt on the review's own model, those without reported usage and those still open
+     * included, and the output tokens of the ended ones.
+     */
+    @Query(value = """
+        SELECT COUNT(*) AS calls, COALESCE(SUM(e.output_tokens), 0) AS outputTokens
+        FROM llm_usage_event e
+        WHERE e.workspace_id = :workspaceId AND e.source_type = 'REVIEW_JOB' AND e.source_id = :jobId
+          AND e.source_attempt = :attempt
+        """, nativeQuery = true)
+    ReviewCalls countReviewCalls(
+            @Param("workspaceId") long workspaceId, @Param("jobId") UUID jobId, @Param("attempt") int attempt);
+
+    /**
+     * What one attempt's ended calls of a source cost; {@code null} when it made no call or one of its calls has no
+     * price.
+     */
+    @Query(value = """
+        SELECT CASE WHEN bool_or(e.pricing_state = 'UNPRICED') THEN NULL ELSE SUM(e.cost_usd) END
+        FROM llm_usage_event e
+        WHERE e.workspace_id = :workspaceId AND e.source_type = :sourceType AND e.source_id = :sourceId
+          AND e.source_attempt = :attempt
+        """, nativeQuery = true)
+    @Nullable
+    BigDecimal sumAttemptCost(
+            @Param("workspaceId") long workspaceId,
+            @Param("sourceType") String sourceType,
             @Param("sourceId") UUID sourceId,
-            @Param("attempt") int attempt,
-            @Param("sourceType") String sourceType);
+            @Param("attempt") int attempt);
 
-    /** The sum the instance cap compares against. Own-provider spend is a different purse. */
+    interface DirectModelUsage {
+        long getTokens();
+
+        long getSearchUnits();
+    }
+
+    interface ReviewCalls {
+        long getCalls();
+
+        long getOutputTokens();
+    }
+
+    /**
+     * The sum the instance cap compares against ({@link #SPEND}): measured cost, and the upper bound of each call that
+     * is open or was not measured. Own-provider spend is a different purse.
+     */
     @Query(
-            value = "SELECT COALESCE(SUM(e.cost_usd), 0) FROM llm_usage_event e WHERE"
+            value = "SELECT COALESCE(SUM(" + SPEND + "), 0) FROM llm_usage_event e WHERE"
                     + " e.workspace_id = :workspaceId AND e.occurred_at >= :from AND"
-                    + " e.occurred_at < :to AND e.pricing_state = 'PRICED' AND e.funding_source"
-                    + " = 'INSTANCE'",
+                    + " e.occurred_at < :to AND e.funding_source = 'INSTANCE'",
             nativeQuery = true)
     BigDecimal sumCost(@Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
 
@@ -169,25 +205,18 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
      * total, the two are different people's money.
      */
     @Query(
-            value = "SELECT COALESCE(SUM(e.cost_usd), 0) FROM llm_usage_event e WHERE"
+            value = "SELECT COALESCE(SUM(" + SPEND + "), 0) FROM llm_usage_event e WHERE"
                     + " e.workspace_id = :workspaceId AND e.occurred_at >= :from AND"
-                    + " e.occurred_at < :to AND e.pricing_state = 'PRICED' AND e.funding_source"
-                    + " = 'WORKSPACE'",
+                    + " e.occurred_at < :to AND e.funding_source = 'WORKSPACE'",
             nativeQuery = true)
     BigDecimal sumByoCost(@Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
 
     /**
-     * The runs ({@link #UNPRICED_RUNS}) that either sum leaves out in part, because no price could
-     * be resolved for one of their rows, so the blind spot is visible.
+     * The runs ({@link #UNPRICED_RUNS}) that either sum leaves out in part, because one of their rows has neither a
+     * price nor an upper bound, so the blind spot is visible.
      *
-     * <p>Reads {@code pricing_state}, not {@code cost_usd IS NULL}. The two are meant to say the
-     * same thing and the application only ever writes rows where they do, but the 1785015307013
-     * ledger backfill classified a zero-cost row with real tokens as UNPRICED while storing the
-     * zero, so those rows blocked every job in the month and this count did not mention them: an
-     * operator read "1 unpriced event" off a month that had nineteen holding the cap shut. The
-     * state column is the arbiter because it is what {@link #existsUnpricedInstanceFunded} — the
-     * thing that actually blocks — reads. The migration repairs the rows and a CHECK constraint now
-     * stops the two from parting again; this query stops depending on that constraint holding.
+     * <p>Reads {@code pricing_state}, not {@code cost_usd IS NULL}: a CHECK constraint keeps the two together, and the
+     * state column is what {@link #existsUnpricedInstanceFunded}, the read that blocks, reads too.
      */
     @Query(
             value = "SELECT "
@@ -199,25 +228,39 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
 
     /**
-     * Every UNPRICED row in the window with no unreported calls and at least one billable token,
-     * across all workspaces — the repricing pass's work list. Incomplete usage is unknown spend
-     * that no rate repairs, so it is never selected and cannot hold a page against the rows behind
-     * it.
+     * Every ended UNPRICED row with a verified measurement, no unreported calls and at least one billable token, in
+     * every month and across all workspaces — the repricing pass's work list. Incomplete usage is unknown spend that no
+     * rate repairs, so it is never selected and cannot hold a page against the rows behind it. A partial index holds
+     * exactly these rows.
      *
-     * <p>Ordered oldest first so a backlog is cleared in the order it accumulated, and paged
-     * because one catalogue gap can leave a month's worth of rows behind it.
+     * <p>Ordered oldest first so a backlog is cleared in the order it accumulated, and paged because one catalogue gap
+     * can leave a month's worth of rows behind it.
      */
     @WorkspaceAgnostic("Repricing pass enumerates the instance's unpriced spend across all tenants")
     @Query("SELECT new de.tum.cit.aet.hephaestus.agent.usage.UnpricedLedgerRow(e.id, e.workspaceId, e.model,"
             + " e.fundingSource, e.inputTokens, e.outputTokens, e.cacheReadTokens, e.cacheWriteTokens, e.searchUnits,"
-            + " e.appliedPriceId, e.appliedWorkspaceModelId, e.measurementVerification) FROM LlmUsageEvent e WHERE"
-            + " e.occurredAt >= :from AND e.occurredAt < :to AND e.pricingState ="
+            + " e.appliedPriceId, e.appliedWorkspaceModelId, e.measurementVerification, e.initialPricingState,"
+            + " e.appliedPer1mInputUsd, e.appliedPer1mOutputUsd, e.appliedPer1mCacheReadUsd, e.appliedPer1mCacheWriteUsd) FROM LlmUsageEvent e WHERE"
+            + " e.pricingState ="
             + " de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState.UNPRICED AND e.measurementVerification ="
             + " de.tum.cit.aet.hephaestus.agent.usage.MeasurementVerification.VERIFIED AND e.unreportedCalls = 0 AND"
             + " (e.inputTokens > 0 OR e.outputTokens > 0 OR e.cacheReadTokens > 0 OR e.cacheWriteTokens > 0) ORDER BY"
-            + " e.occurredAt")
-    List<UnpricedLedgerRow> findUnpricedInWindow(
-            @Param("from") Instant from, @Param("to") Instant to, Pageable pageable);
+            + " e.occurredAt, e.id")
+    List<UnpricedLedgerRow> findUnpriced(Pageable pageable);
+
+    /** {@link #findUnpriced} after a row of an earlier pass, so rows that stay unpriced cannot hold every pass. */
+    @WorkspaceAgnostic("Repricing pass enumerates the instance's unpriced spend across all tenants")
+    @Query("SELECT new de.tum.cit.aet.hephaestus.agent.usage.UnpricedLedgerRow(e.id, e.workspaceId, e.model,"
+            + " e.fundingSource, e.inputTokens, e.outputTokens, e.cacheReadTokens, e.cacheWriteTokens, e.searchUnits,"
+            + " e.appliedPriceId, e.appliedWorkspaceModelId, e.measurementVerification, e.initialPricingState,"
+            + " e.appliedPer1mInputUsd, e.appliedPer1mOutputUsd, e.appliedPer1mCacheReadUsd, e.appliedPer1mCacheWriteUsd) FROM LlmUsageEvent e WHERE"
+            + " e.pricingState ="
+            + " de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState.UNPRICED AND e.measurementVerification ="
+            + " de.tum.cit.aet.hephaestus.agent.usage.MeasurementVerification.VERIFIED AND e.unreportedCalls = 0 AND"
+            + " (e.inputTokens > 0 OR e.outputTokens > 0 OR e.cacheReadTokens > 0 OR e.cacheWriteTokens > 0) AND (e.occurredAt > :afterAt OR (e.occurredAt = :afterAt AND e.id > :afterId)) ORDER BY"
+            + " e.occurredAt, e.id")
+    List<UnpricedLedgerRow> findUnpricedAfter(
+            @Param("afterAt") Instant afterAt, @Param("afterId") UUID afterId, Pageable pageable);
 
     /**
      * Prices only complete UNPRICED measurements, without changing token counts or the funding source.
@@ -247,13 +290,14 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             @Param("priced") UnpricedLedgerRow priced);
 
     /**
-     * What turns the instance verdict from WITHIN into UNVERIFIABLE: spend {@link #sumCost} cannot
-     * see.
+     * What turns the instance verdict from WITHIN into UNVERIFIABLE: a row that {@link #sumCost} cannot count, as it
+     * has neither a price nor an upper bound ({@link #UNKNOWN}).
      */
     @Query(
             value = "SELECT EXISTS(SELECT 1 FROM llm_usage_event e WHERE e.workspace_id ="
-                    + " :workspaceId AND e.occurred_at >= :from AND e.occurred_at < :to AND"
-                    + " e.pricing_state = 'UNPRICED' AND e.funding_source = 'INSTANCE')",
+                    + " :workspaceId AND e.occurred_at >= :from AND e.occurred_at < :to AND "
+                    + UNKNOWN
+                    + " AND e.funding_source = 'INSTANCE')",
             nativeQuery = true)
     boolean existsUnpricedInstanceFunded(
             @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
@@ -264,8 +308,9 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
      */
     @Query(
             value = "SELECT EXISTS(SELECT 1 FROM llm_usage_event e WHERE e.workspace_id ="
-                    + " :workspaceId AND e.occurred_at >= :from AND e.occurred_at < :to AND"
-                    + " e.pricing_state = 'UNPRICED' AND e.funding_source = 'WORKSPACE')",
+                    + " :workspaceId AND e.occurred_at >= :from AND e.occurred_at < :to AND "
+                    + UNKNOWN
+                    + " AND e.funding_source = 'WORKSPACE')",
             nativeQuery = true)
     boolean existsUnpricedWorkspaceFunded(
             @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
@@ -285,6 +330,54 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             value = "SELECT " + OWN_PROVIDER_CONNECTED + " FROM workspace w WHERE w.id = :workspaceId",
             nativeQuery = true)
     boolean isOwnProviderConnected(@Param("workspaceId") Long workspaceId);
+
+    /**
+     * The measured instance-funded cost of a month ({@link #CONFIRMED}), without the bound of any open or unmeasured
+     * call: what the budget alert compares with the cap.
+     */
+    @Query(
+            value = "SELECT COALESCE(SUM(" + CONFIRMED + "), 0) FROM llm_usage_event e WHERE"
+                    + " e.workspace_id = :workspaceId AND e.occurred_at >= :from AND"
+                    + " e.occurred_at < :to AND e.funding_source = 'INSTANCE'",
+            nativeQuery = true)
+    BigDecimal sumConfirmedCost(
+            @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
+
+    /**
+     * The spend of a month in each purse, read in one statement: the confirmed cost ({@link #CONFIRMED}), and the calls
+     * that count at their upper bound ({@link #BOUNDED}) with their bounds. Confirmed cost plus the bounds is the sum
+     * that the cap compares ({@link #sumCost}, {@link #sumByoCost}), and no call can be in both.
+     */
+    @Query(
+            value = "SELECT COALESCE(SUM(" + CONFIRMED + ") FILTER (WHERE e.funding_source = 'INSTANCE'), 0)"
+                    + " AS instanceConfirmedUsd,"
+                    + " COUNT(*) FILTER (WHERE " + BOUNDED + " AND e.funding_source = 'INSTANCE') AS instanceCalls,"
+                    + " COALESCE(SUM(e.cost_bound_usd) FILTER (WHERE " + BOUNDED
+                    + " AND e.funding_source = 'INSTANCE'), 0) AS instanceUpperBoundUsd,"
+                    + " COALESCE(SUM(" + CONFIRMED + ") FILTER (WHERE e.funding_source = 'WORKSPACE'), 0)"
+                    + " AS ownProviderConfirmedUsd,"
+                    + " COUNT(*) FILTER (WHERE " + BOUNDED + " AND e.funding_source = 'WORKSPACE') AS ownProviderCalls,"
+                    + " COALESCE(SUM(e.cost_bound_usd) FILTER (WHERE " + BOUNDED
+                    + " AND e.funding_source = 'WORKSPACE'), 0) AS ownProviderUpperBoundUsd"
+                    + " FROM llm_usage_event e WHERE e.workspace_id = :workspaceId AND e.occurred_at >= :from"
+                    + " AND e.occurred_at < :to",
+            nativeQuery = true)
+    MonthSpend aggregateSpend(
+            @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
+
+    interface MonthSpend {
+        BigDecimal getInstanceConfirmedUsd();
+
+        long getInstanceCalls();
+
+        BigDecimal getInstanceUpperBoundUsd();
+
+        BigDecimal getOwnProviderConfirmedUsd();
+
+        long getOwnProviderCalls();
+
+        BigDecimal getOwnProviderUpperBoundUsd();
+    }
 
     @Query(
             value = "SELECT e.job_type AS jobType, COALESCE(SUM(e.cost_usd) FILTER (WHERE"
@@ -334,10 +427,18 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
                     + " e.funding_source = 'INSTANCE'), 0) AS pricedTotalCostUsd,"
                     + " COALESCE(SUM(e.cost_usd) FILTER (WHERE e.pricing_state = 'PRICED' AND"
                     + " e.funding_source = 'WORKSPACE'), 0) AS byoTotalCostUsd,"
-                    + " COALESCE(BOOL_OR(e.pricing_state = 'UNPRICED' AND e.funding_source ="
+                    + " COALESCE(BOOL_OR(" + UNKNOWN + " AND e.funding_source ="
                     + " 'WORKSPACE'), false) AS hasUnpricedByoUsage,"
-                    + " COALESCE(bool_or(e.pricing_state = 'UNPRICED' AND e.funding_source ="
+                    + " COALESCE(bool_or(" + UNKNOWN + " AND e.funding_source ="
                     + " 'INSTANCE'), false) AS hasUnpricedInstanceUsage,"
+                    + " COUNT(e.id) FILTER (WHERE " + BOUNDED + " AND e.funding_source = 'INSTANCE')"
+                    + " AS instanceUnmeasuredCalls,"
+                    + " COALESCE(SUM(e.cost_bound_usd) FILTER (WHERE " + BOUNDED + " AND e.funding_source ="
+                    + " 'INSTANCE'), 0) AS instanceUpperBoundUsd,"
+                    + " COUNT(e.id) FILTER (WHERE " + BOUNDED + " AND e.funding_source = 'WORKSPACE')"
+                    + " AS ownProviderUnmeasuredCalls,"
+                    + " COALESCE(SUM(e.cost_bound_usd) FILTER (WHERE " + BOUNDED + " AND e.funding_source ="
+                    + " 'WORKSPACE'), 0) AS ownProviderUpperBoundUsd,"
                     + " COALESCE(BOOL_OR(e.funding_source = 'WORKSPACE'), false) AS"
                     + " hasByoUsage, "
                     + OWN_PROVIDER_CONNECTED
@@ -352,112 +453,38 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
     List<WorkspaceAggregate> aggregateByWorkspace(@Param("from") Instant from, @Param("to") Instant to);
 
     /**
-     * Mean cost of one <em>review</em> of this job type, over reviews this window could price in
-     * full.
+     * The decision, embedding and reranking calls of a month, by the practice whose script made them. The practice is
+     * {@code null} for rows that name none: rows from before calls had rows, which hold every practice of an attempt
+     * together, and rows of a practice that no longer exists.
      *
-     * <p>Deliberately not derived from {@link #aggregateByJobType}: a row there is one
-     * <em>attempt</em>, not one review, so dividing spend by attempt count under-quotes exactly the
-     * retry-heavy workspaces whose campaigns cost the most. Grouping by source first makes
-     * "reviews" the denominator. The source id alone is the review: its practice script rows carry
-     * the job id under their own source types.
-     *
-     * <p>A review with any unpriced attempt is dropped from numerator and denominator together, so
-     * a half-priced catalogue reports the mean of what it could price rather than one dragged
-     * toward zero.
+     * <p>An UNPRICED call adds no cost. A call with neither a price nor an upper bound ({@link #UNKNOWN}) counts its
+     * review once in the {@code unpricedEventCount} of its practice,
+     * however many unpriced calls and attempts the review has: the unit is the same as that of {@code reviews}. A
+     * NO_CHARGE call adds a confirmed zero. Chat calls of practice scripts are not here: they bill on the review's own
+     * model. {@code inputTokens} is the whole prompt, cache reads and writes included, here and in {@link
+     * #aggregatePracticeScriptTotal}.
      */
     @Query(value = """
-        SELECT COALESCE(SUM(r.review_cost), 0) AS totalCostUsd, COUNT(*) AS reviews
-        FROM (
-            SELECT e.source_id, SUM(e.cost_usd) AS review_cost
-            FROM llm_usage_event e
-            WHERE e.workspace_id = :workspaceId AND e.job_type = :jobType
-              AND e.occurred_at >= :from AND e.occurred_at < :to
-            GROUP BY e.source_id
-            HAVING COUNT(*) FILTER (WHERE e.pricing_state = 'UNPRICED') = 0
-        ) r
-        """, nativeQuery = true)
-    ReviewCostAggregate aggregateCostPerReview(
-            @Param("workspaceId") Long workspaceId,
-            @Param("jobType") String jobType,
-            @Param("from") Instant from,
-            @Param("to") Instant to);
-
-    /**
-     * The decision, embedding, and reranking ledger rows of a month, split between the practices
-     * whose practice scripts made the calls. One row per practice; the practice is {@code null} for
-     * the ledger rows that have no usage rows left to split them by, such as the rows of a deleted
-     * job.
-     *
-     * <p>Each ledger row is joined to the usage rows of its job, attempt, and kind. A practice
-     * weighs each of its token buckets at the row's applied rate for that bucket, and takes that
-     * fraction of the row's cost, truncated to the ledger scale. The practice with the largest
-     * weight takes the remainder, so the shares of one row add up to its cost exactly and none is
-     * negative. When no practice weighs anything, the row costs nothing and each share is zero.
-     *
-     * <p>An UNPRICED row adds no cost to any practice. Its review counts once in the {@code
-     * unpricedEventCount} of each practice that has a share in it, however many unpriced rows and
-     * attempts the review has: the unit is the same as that of {@code reviews}. A NO_CHARGE row
-     * adds a confirmed zero. Chat calls of practice scripts are not here: the ledger bills them on
-     * the review's own row. {@code inputTokens} is the whole prompt, cache reads and writes
-     * included, here and in {@link #aggregatePracticeScriptTotal}.
-     */
-    @Query(value = """
-        WITH ledger AS (
-            SELECT e.id, e.source_id, e.source_attempt, e.funding_source, e.pricing_state, e.cost_usd,
-                e.total_calls, e.input_tokens + e.cache_read_tokens + e.cache_write_tokens AS prompt_tokens,
-                e.output_tokens,
-                e.applied_per_1m_input_usd AS input_rate, e.applied_per_1m_output_usd AS output_rate,
-                e.applied_per_1m_cache_read_usd AS cache_read_rate,
-                e.applied_per_1m_cache_write_usd AS cache_write_rate,
-                REPLACE(e.source_type, 'PRACTICE_SCRIPT_', '') AS model_kind
-            FROM llm_usage_event e
-            WHERE e.workspace_id = :workspaceId AND e.occurred_at >= :from AND e.occurred_at < :to
-              AND e.source_type IN ('PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING')
-        ),
-        shares AS (
-            SELECT l.id AS ledger_id, l.source_id, l.model_kind, l.funding_source, l.pricing_state, l.cost_usd,
-                usage_practice.slug AS practice_slug,
-                COALESCE(u.calls, l.total_calls) AS calls,
-                COALESCE(u.input_tokens + u.cache_read_tokens + u.cache_write_tokens, l.prompt_tokens) AS input_tokens,
-                COALESCE(u.output_tokens, l.output_tokens) AS output_tokens,
-                COALESCE(u.input_tokens * l.input_rate, 0) + COALESCE(u.output_tokens * l.output_rate, 0)
-                    + COALESCE(u.cache_read_tokens * l.cache_read_rate, 0)
-                    + COALESCE(u.cache_write_tokens * l.cache_write_rate, 0) AS weight
-            FROM ledger l
-            LEFT JOIN review_job_script_usage u
-              ON u.workspace_id = :workspaceId AND u.job_id = l.source_id AND u.attempt = l.source_attempt
-             AND u.model_kind = l.model_kind
-            LEFT JOIN practice usage_practice ON usage_practice.workspace_id = u.workspace_id AND usage_practice.id = u.practice_id
-        ),
-        truncated AS (
-            SELECT s.*,
-                CASE WHEN s.pricing_state = 'UNPRICED' THEN NULL
-                     WHEN SUM(s.weight) OVER row_shares = 0 THEN 0
-                     ELSE TRUNC(s.cost_usd * s.weight / SUM(s.weight) OVER row_shares, 6) END AS floor_cost,
-                ROW_NUMBER() OVER (PARTITION BY s.ledger_id ORDER BY s.weight DESC, s.practice_slug) AS position
-            FROM shares s
-            WINDOW row_shares AS (PARTITION BY s.ledger_id)
-        ),
-        allocated AS (
-            SELECT t.*,
-                CASE WHEN t.floor_cost IS NULL THEN NULL
-                     WHEN t.position = 1
-                        THEN t.cost_usd - (SUM(t.floor_cost) OVER (PARTITION BY t.ledger_id) - t.floor_cost)
-                     ELSE t.floor_cost END AS cost_share
-            FROM truncated t
-        )
-        SELECT a.practice_slug AS practiceSlug, pv.definition->>'name' AS practiceName,
-            STRING_AGG(DISTINCT a.model_kind, ',') AS modelKinds,
-            COUNT(DISTINCT a.source_id) AS reviews,
-            SUM(a.calls) AS calls, SUM(a.input_tokens) AS inputTokens, SUM(a.output_tokens) AS outputTokens,
-            COALESCE(SUM(a.cost_share) FILTER (WHERE a.funding_source = 'INSTANCE'), 0) AS instanceTotalCostUsd,
-            COALESCE(SUM(a.cost_share) FILTER (WHERE a.funding_source = 'WORKSPACE'), 0) AS ownProviderTotalCostUsd,
-            COUNT(DISTINCT a.source_id) FILTER (WHERE a.pricing_state = 'UNPRICED') AS unpricedEventCount
-        FROM allocated a
-        LEFT JOIN practice p ON p.workspace_id = :workspaceId AND p.slug = a.practice_slug
+        SELECT p.slug AS practiceSlug, pv.definition->>'name' AS practiceName,
+            STRING_AGG(DISTINCT e.model_kind, ',') AS modelKinds,
+            COUNT(DISTINCT e.review_id) AS reviews,
+            COALESCE(SUM(e.total_calls), 0) AS calls,
+            COALESCE(SUM(e.input_tokens + e.cache_read_tokens + e.cache_write_tokens), 0) AS inputTokens,
+            COALESCE(SUM(e.output_tokens), 0) AS outputTokens,
+            COALESCE(SUM(e.cost_usd) FILTER (WHERE e.pricing_state <> 'UNPRICED' AND e.funding_source = 'INSTANCE'), 0)
+                AS instanceTotalCostUsd,
+            COALESCE(SUM(e.cost_usd) FILTER (WHERE e.pricing_state <> 'UNPRICED' AND e.funding_source = 'WORKSPACE'), 0)
+                AS ownProviderTotalCostUsd,
+            COUNT(DISTINCT e.review_id) FILTER (WHERE
+        """ + UNKNOWN + """
+            ) AS unpricedEventCount
+        FROM llm_usage_event e
+        LEFT JOIN practice p ON p.workspace_id = e.workspace_id AND p.id = e.practice_id
         LEFT JOIN practice_version pv ON pv.id = p.current_version_id AND pv.workspace_id = p.workspace_id
-        GROUP BY a.practice_slug, pv.definition->>'name'
-        ORDER BY COALESCE(SUM(a.cost_share), 0) DESC, a.practice_slug NULLS LAST
+        WHERE e.workspace_id = :workspaceId AND e.occurred_at >= :from AND e.occurred_at < :to
+          AND e.source_type IN ('PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING')
+        GROUP BY p.slug, pv.definition->>'name'
+        ORDER BY COALESCE(SUM(e.cost_usd) FILTER (WHERE e.pricing_state <> 'UNPRICED'), 0) DESC, p.slug NULLS LAST
         """, nativeQuery = true)
     List<PracticeAggregate> aggregatePracticeScriptByPractice(
             @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
@@ -468,7 +495,7 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
      * LlmUsagePracticeScriptTotalDTO} states which of these sums equal the practices' sums.
      */
     @Query(
-            value = "SELECT COUNT(DISTINCT e.source_id) AS reviews, COALESCE(SUM(e.total_calls), 0)"
+            value = "SELECT COUNT(DISTINCT e.review_id) AS reviews, COALESCE(SUM(e.total_calls), 0)"
                     + " AS calls, COALESCE(SUM(e.input_tokens + e.cache_read_tokens +"
                     + " e.cache_write_tokens), 0) AS inputTokens,"
                     + " COALESCE(SUM(e.output_tokens), 0) AS outputTokens,"
@@ -476,11 +503,10 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
                     + " AND e.funding_source = 'INSTANCE'), 0) AS instanceTotalCostUsd,"
                     + " COALESCE(SUM(e.cost_usd) FILTER (WHERE e.pricing_state <> 'UNPRICED'"
                     + " AND e.funding_source = 'WORKSPACE'), 0) AS ownProviderTotalCostUsd,"
-                    + " COUNT(DISTINCT e.source_id) FILTER (WHERE e.pricing_state = 'UNPRICED')"
+                    + " COUNT(DISTINCT e.review_id) FILTER (WHERE " + UNKNOWN + ")"
                     + " AS unpricedEventCount FROM llm_usage_event e WHERE e.workspace_id ="
-                    + " :workspaceId AND e.occurred_at >= :from AND e.occurred_at < :to AND"
-                    + " e.source_type IN ('PRACTICE_SCRIPT_DECISION',"
-                    + " 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING')",
+                    + " :workspaceId AND e.occurred_at >= :from AND e.occurred_at < :to AND "
+                    + PRACTICE_SCRIPT_ROWS,
             nativeQuery = true)
     PracticeScriptTotalAggregate aggregatePracticeScriptTotal(
             @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
@@ -523,13 +549,6 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
         BigDecimal getOwnProviderTotalCostUsd();
 
         long getUnpricedEventCount();
-    }
-
-    /** Both purses summed: a forecast is about the work, not about who pays for it. */
-    interface ReviewCostAggregate {
-        BigDecimal getTotalCostUsd();
-
-        long getReviews();
     }
 
     interface JobTypeAggregate {
@@ -586,6 +605,14 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
         boolean isHasUnpricedInstanceUsage();
 
         boolean isHasUnpricedByoUsage();
+
+        long getInstanceUnmeasuredCalls();
+
+        BigDecimal getInstanceUpperBoundUsd();
+
+        long getOwnProviderUnmeasuredCalls();
+
+        BigDecimal getOwnProviderUpperBoundUsd();
 
         boolean isHasByoUsage();
 

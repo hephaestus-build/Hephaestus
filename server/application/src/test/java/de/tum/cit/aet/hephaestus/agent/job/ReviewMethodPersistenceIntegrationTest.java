@@ -19,10 +19,6 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
-import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
@@ -112,12 +108,6 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ScriptRunRepository scriptRuns;
-
-    @Autowired
-    private LlmUsageRecorder usageRecorder;
-
-    @Autowired
-    private LlmUsageEventRepository usageEvents;
 
     @Autowired
     private MeterRegistry meters;
@@ -213,14 +203,6 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
                 new PiResultParser(mapper, meters), scriptRuns, meters, mapper, assignments);
         transactions.executeWithoutResult(status -> {
             recorder.record(job, report, Map.of(), Instant.now());
-            TerminalUsageTestFixtures.project(
-                    TerminalUsage.fromProxy(new ReviewJobLlmUsage(1, 120, 30, 0, 0, 0)),
-                    usageRecorder,
-                    jobs,
-                    workspaceId,
-                    job,
-                    null,
-                    LlmPriceSnapshot.unpricedInstance());
         });
         assertThat(assignments.load(job)).containsExactly(pinned);
         assertThat(snapshots.find(workspaceId, job.getReviewId()).orElseThrow().practices())
@@ -232,13 +214,6 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
                     assertThat(run.getPracticeVersionId())
                             .isEqualTo(pinned.practice().practiceVersionId());
                     assertThat(run.getStatus()).isEqualTo(ScriptRunStatus.WITHHELD);
-                });
-        assertThat(usageEvents.findByWorkspaceIdAndSourceTypeAndSourceIdOrderBySourceAttemptAsc(
-                        workspaceId, UsageSourceType.REVIEW_JOB, job.getId()))
-                .singleElement()
-                .satisfies(usage -> {
-                    assertThat(usage.getInputTokens()).isEqualTo(120);
-                    assertThat(usage.getOutputTokens()).isEqualTo(30);
                 });
         assertThat(jdbc.queryForObject(
                         "SELECT status FROM review_practice WHERE workspace_id=? AND review_id=? AND practice_id=?",

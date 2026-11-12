@@ -211,7 +211,7 @@ export type AdminLlmUsageReport = {
 export type AdminWorkspaceLlmUsage = {
     displayName: string;
     /**
-     * Runs this month, either purse: job attempts and mentor turns. Rows of models for practice scripts are not runs.
+     * Runs this month, either purse: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.
      */
     events: number;
     /**
@@ -227,9 +227,13 @@ export type AdminWorkspaceLlmUsage = {
      */
     instancePaused: boolean;
     /**
-     * This month's confirmed spend on shared (instance) models, in USD — compared against instanceMonthlyBudgetUsd.
+     * This month's confirmed spend on shared (instance) models, in USD. instanceMonthlyBudgetUsd compares against it plus instanceUnmeasured.upperBoundUsd.
      */
     instanceTotalCostUsd: number;
+    /**
+     * Shared-model calls whose usage was not measured, and the most they can cost.
+     */
+    instanceUnmeasured: LlmUnmeasuredUsage;
     /**
      * The same verdict for the workspace's own-provider spend against its own cap.
      */
@@ -247,9 +251,13 @@ export type AdminWorkspaceLlmUsage = {
      */
     ownProviderPaused: boolean;
     /**
-     * This month's confirmed spend on the workspace's own connected provider(s), in USD — compared against ownProviderMonthlyBudgetUsd.
+     * This month's confirmed spend on the workspace's own connected provider(s), in USD. ownProviderMonthlyBudgetUsd compares against it plus ownProviderUnmeasured.upperBoundUsd.
      */
     ownProviderTotalCostUsd: number;
+    /**
+     * Own-provider calls whose usage was not measured, and the most they can cost.
+     */
+    ownProviderUnmeasured: LlmUnmeasuredUsage;
     /**
      * Addresses the workspace everywhere else in the API, including its cap
      */
@@ -2487,12 +2495,26 @@ export type LlmProbeResult = {
 };
 
 /**
+ * Calls of one purse whose usage was not measured, and the most they can cost
+ */
+export type LlmUnmeasuredUsage = {
+    /**
+     * Calls this month that are still running or whose provider reported no usage.
+     */
+    calls: number;
+    /**
+     * The most these calls can cost, in USD: each call's request size and output limit at its frozen rates. The cap counts it on top of the confirmed spend. Not an exact cost.
+     */
+    upperBoundUsd: number;
+};
+
+/**
  * Spend for one UTC day
  */
 export type LlmUsageByDay = {
     day: Date;
     /**
-     * Runs: job attempts and mentor turns. Rows of models for practice scripts are not runs.
+     * Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.
      */
     events: number;
     /**
@@ -2504,7 +2526,7 @@ export type LlmUsageByDay = {
      */
     ownProviderTotalCostUsd: number;
     /**
-     * Runs this day with at least one ledger row whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script row counts toward the run of its review. Those rows are excluded from both totals above.
+     * Runs this day with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script call counts toward the run of its review. Those calls are excluded from both totals above.
      */
     unpricedEventCount: number;
 };
@@ -2516,7 +2538,7 @@ export type LlmUsageByJobType = {
     cacheReadTokens: number;
     cacheWriteTokens: number;
     /**
-     * Runs: job attempts and mentor turns. Rows of models for practice scripts are not runs.
+     * Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.
      */
     events: number;
     inputTokens: number;
@@ -2531,28 +2553,28 @@ export type LlmUsageByJobType = {
      */
     ownProviderTotalCostUsd: number;
     /**
-     * LLM API calls, as reported by the runtime. Practice reviews and mentor turns both include every assistant call in an internal tool loop.
+     * LLM API calls that the proxy served. Practice reviews and mentor turns both include every assistant call in an internal tool loop.
      */
     totalCalls: number;
     /**
-     * Runs of this job type with at least one ledger row whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script row counts toward the run of its review. Those rows are excluded from both totals above.
+     * Runs of this job type with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script call counts toward the run of its review. Those calls are excluded from both totals above.
      */
     unpricedEventCount: number;
 };
 
 /**
- * The decision, embedding and reranking calls that one practice's script made in finished reviews this month. The cost of each review's calls is split between its practices by the priced tokens that each used.
+ * The decision, embedding and reranking calls that one practice's script made this month. Each call names the practice that made it.
  */
 export type LlmUsageByPractice = {
     calls: number;
     inputTokens: number;
     /**
-     * This practice's share of the spend on shared (instance) models, in USD.
+     * This practice's spend on shared (instance) models, in USD.
      */
     instanceTotalCostUsd: number;
     outputTokens: number;
     /**
-     * This practice's share of the spend on this workspace's own provider(s), in USD.
+     * This practice's spend on this workspace's own provider(s), in USD.
      */
     ownProviderTotalCostUsd: number;
     /**
@@ -2560,7 +2582,7 @@ export type LlmUsageByPractice = {
      */
     practiceName?: string;
     /**
-     * The practice slug. Null for calls that cannot be split by practice any more, such as those of a deleted review.
+     * The practice slug. Null for calls that name no practice: calls recorded before each call had its own row, and calls of a deleted practice.
      */
     practiceSlug?: string;
     /**
@@ -2572,13 +2594,13 @@ export type LlmUsageByPractice = {
      */
     reviews: number;
     /**
-     * Reviews with a practice script ledger row whose price is not yet known and that holds this practice's calls, each review counted once. Those rows are excluded from both totals above. A review with several practices counts for each of them.
+     * Reviews with a call of this practice whose price is not yet known, each review counted once. Those calls are excluded from both totals above. A review with several practices counts for each of them.
      */
     unpricedEventCount: number;
 };
 
 /**
- * The decision, embedding and reranking calls of finished reviews this month, in total. calls, inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and unpricedEventCount do not: one review can count for several practices there.
+ * The decision, embedding and reranking calls of this month, in total. calls, inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and unpricedEventCount do not: one review can count for several practices there.
  */
 export type LlmUsagePracticeScriptTotal = {
     calls: number;
@@ -2597,7 +2619,7 @@ export type LlmUsagePracticeScriptTotal = {
      */
     reviews: number;
     /**
-     * Distinct reviews with a practice script ledger row whose price is not yet known. Those rows are excluded from both totals above.
+     * Distinct reviews with a practice script call whose price is not yet known. Those rows are excluded from both totals above.
      */
     unpricedEventCount: number;
 };
@@ -5337,6 +5359,10 @@ export type ReviewUsage = {
     attempts: Array<ReviewUsageAttempt>;
     calls: number;
     costUsd: string | null;
+    /**
+     * Whether costUsd counts the upper bound of a call whose usage was not measured, so the review cost at most costUsd
+     */
+    includesUpperBound: boolean;
     inputTokens: number;
     outputTokens: number;
     priced: boolean;
@@ -5348,6 +5374,10 @@ export type ReviewUsageAttempt = {
     cacheWriteTokens: number;
     calls: number;
     costUsd: string | null;
+    /**
+     * Whether costUsd counts the upper bound of a call whose usage was not measured, so the attempt cost at most costUsd
+     */
+    includesUpperBound: boolean;
     inputTokens: number;
     jobId: string;
     outputTokens: number;
@@ -7232,9 +7262,13 @@ export type WorkspaceLlmUsageReport = {
      */
     instancePaused: boolean;
     /**
-     * This month's confirmed spend on shared (instance) models, in USD — the figure instanceMonthlyBudgetUsd compares against. A floor, not the full total, while unpricedEventCount is non-zero.
+     * This month's confirmed spend on shared (instance) models, in USD. instanceMonthlyBudgetUsd compares against it plus instanceUnmeasured.upperBoundUsd. A floor, not the full total, while unpricedEventCount is non-zero.
      */
     instanceTotalCostUsd: number;
+    /**
+     * Shared-model calls this month whose usage was not measured, and the most they can cost. Not part of instanceTotalCostUsd.
+     */
+    instanceUnmeasured: LlmUnmeasuredUsage;
     /**
      * Calendar month (UTC), ISO yyyy-MM
      */
@@ -7256,15 +7290,19 @@ export type WorkspaceLlmUsageReport = {
      */
     ownProviderPaused: boolean;
     /**
-     * This month's confirmed spend on this workspace's own connected provider(s), in USD — the figure ownProviderMonthlyBudgetUsd compares against. Different money from instanceTotalCostUsd: the two are never added together.
+     * This month's confirmed spend on this workspace's own connected provider(s), in USD. ownProviderMonthlyBudgetUsd compares against it plus ownProviderUnmeasured.upperBoundUsd. Different money from instanceTotalCostUsd: the two are never added together.
      */
     ownProviderTotalCostUsd: number;
+    /**
+     * Own-provider calls this month whose usage was not measured, and the most they can cost. Not part of ownProviderTotalCostUsd.
+     */
+    ownProviderUnmeasured: LlmUnmeasuredUsage;
     /**
      * The byPractice entries in total, read from the ledger.
      */
     practiceScriptTotal: LlmUsagePracticeScriptTotal;
     /**
-     * Runs this month (job attempts and mentor turns, either purse) with at least one ledger row whose cost is unavailable because a rate is missing or the measurement is unverified, each counted once. A practice script row counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.
+     * Runs this month (job attempts and mentor turn attempts, either purse) with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified, and that has no upper bound, each counted once. A practice script call counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.
      */
     unpricedEventCount: number;
 };
