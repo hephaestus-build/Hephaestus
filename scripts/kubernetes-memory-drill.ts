@@ -3,14 +3,18 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { RELEASE } from "./kubernetes-cluster.ts";
+import { NAMESPACE, RELEASE } from "./kubernetes-cluster.ts";
 import { asArray, asRecord, asString, at, parseJson } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
 
 const namespace = `memory-drill-${process.pid}`;
 const tiers = ["reviews", "conversations", "roles"];
-const label = "hephaestus.build/memory-drill";
+/** The chart's default priority resources, needed before a concurrent install is ready. */
+export const priorityClassResources = tiers.map(
+	(tier) => `priorityclass/${NAMESPACE}-${RELEASE}-${tier}`,
+);
+export const pressureNodeTaint = "hephaestus.build/memory-drill";
 const allocations = new Map([
 	["reviews", 32],
 	["conversations", 64],
@@ -108,6 +112,17 @@ export async function memoryDrill(imagesFile: string, cluster = "hephaestus"): P
 	// A high soft threshold exercises the real eviction manager while the host still has spare memory.
 	// Its grace period lets all three fixtures start before eviction; production soft eviction stays off.
 	try {
+		// The roll job may still be installing. A multi-name wait aggregates NotFound errors,
+		// which kubectl cannot treat as a resource that is still being created.
+		const prioritiesDeadline = Date.now() + 300_000;
+		for (const resource of priorityClassResources) {
+			await kubectl([
+				"wait",
+				"--for=create",
+				resource,
+				`--timeout=${Math.max(0, prioritiesDeadline - Date.now())}ms`,
+			]);
+		}
 		await run("k3d", [
 			"node",
 			"create",
@@ -117,9 +132,9 @@ export async function memoryDrill(imagesFile: string, cluster = "hephaestus"): P
 			"--role",
 			"agent",
 			"--k3s-node-label",
-			`${label}=true`,
+			`${pressureNodeTaint}=true`,
 			"--k3s-arg",
-			`--node-taint=${label}=true:NoSchedule`,
+			`--node-taint=${pressureNodeTaint}=true:NoSchedule`,
 			"--k3s-arg",
 			"--kubelet-arg=eviction-soft=memory.available<99.99%",
 			"--k3s-arg",
@@ -132,7 +147,7 @@ export async function memoryDrill(imagesFile: string, cluster = "hephaestus"): P
 		]);
 		const nodes = asArray(
 			asRecord(
-				parseJson(await kubectl(["get", "nodes", "-l", `${label}=true`, "-o", "json"])),
+				parseJson(await kubectl(["get", "nodes", "-l", `${pressureNodeTaint}=true`, "-o", "json"])),
 				"nodes",
 			).items,
 			"nodes.items",
@@ -178,7 +193,7 @@ export async function memoryDrill(imagesFile: string, cluster = "hephaestus"): P
 					automountServiceAccountToken: false,
 					restartPolicy: "Never",
 					terminationGracePeriodSeconds: 1,
-					tolerations: [{ key: label, operator: "Exists", effect: "NoSchedule" }],
+					tolerations: [{ key: pressureNodeTaint, operator: "Exists", effect: "NoSchedule" }],
 					securityContext: {
 						runAsNonRoot: true,
 						runAsUser: 1000,

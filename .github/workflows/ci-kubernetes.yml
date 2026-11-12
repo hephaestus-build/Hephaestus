@@ -13,7 +13,19 @@ on:
         type: string
         required: true
       queue:
-        description: Whether to add the lowest minor on amd64 and kind with Calico; a pull request runs the latest k3s alone
+        description: Add the roll job, the lowest minor on amd64 and kind with Calico
+        type: boolean
+        default: false
+      image-digests:
+        description: Captured release image digests as an object keyed by image name; empty resolves the commit tag
+        type: string
+        default: ""
+      eviction-drill:
+        description: Also run eviction on the drill cluster, outside the merge group
+        type: boolean
+        default: false
+      drills-only:
+        description: Run only the drill cluster when the release qualifies its captured images
         type: boolean
         default: false
       arm64:
@@ -36,6 +48,7 @@ on:
 permissions: {}
 
 env:
+  QUALIFY: "false"
   # The schema sources of kubeconform, at pinned commits.
   KUBERNETES_SCHEMAS: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/f7d855e49c34b039c9ef2196444910275e31e09e
   CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/501527ab9c40c827144c8f45945b25a023e344ce/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
@@ -50,6 +63,7 @@ env:
 jobs:
   k3d:
     name: k3s 1.37 amd64
+    if: ${{ !inputs.drills-only }}
     permissions:
       contents: read
       actions: read
@@ -61,29 +75,28 @@ jobs:
       KUBERNETES_ARCH: amd64
       PROFILES: --profile dev
       GVISOR: "true"
-      # The drills of the latest minor on amd64 run on the pull request's own head, which the
-      # `kubernetes` filter selects for every change they exercise, and each night on main. A
-      # merge group installs and upgrades the combined tree only; the release preflight refuses
-      # a release while the newest nightly run failed.
-      DRILLS: ${{ github.event_name != 'merge_group' }}
+      # Adapter qualification stays on the PR's own packaged classes. The queue tests its combined
+      # tree's install here and runs roll in the independent drill cluster below.
+      QUALIFY: ${{ github.event_name != 'merge_group' }}
+      DRILLS: "false"
     steps: &k3d-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
-        if: ${{ !(env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64') }}
+        if: ${{ !(env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' && env.DRILLS != 'true') }}
         with:
           install: "none"
       - uses: ./.github/actions/setup-toolchain
-        if: env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64'
+        if: env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' && env.DRILLS != 'true'
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-helm
       - uses: ./.github/actions/setup-kubernetes-tools
       # The render runs `helm lint --strict` on each set of values before it renders them.
       - name: Lint the chart and validate every rendered resource on the lowest and the latest Kubernetes
-        if: env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64'
+        if: env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' && env.DRILLS != 'true'
         run: |
           set -euo pipefail
           node scripts/kubernetes-cluster.ts render > manifests.yaml
@@ -101,15 +114,21 @@ jobs:
           done
 
       - uses: ./.github/actions/setup-caches
-        if: ${{ inputs.application-artifact != '' && env.DRILLS == 'true' }}
+        if: ${{ inputs.application-artifact != '' && env.QUALIFY == 'true' }}
       - uses: ./.github/actions/restore-server-build
-        if: ${{ inputs.application-artifact != '' && env.DRILLS == 'true' }}
+        if: ${{ inputs.application-artifact != '' && env.QUALIFY == 'true' }}
         with:
           artifact: ${{ inputs.application-artifact }}
       - name: Resolve this run's images
         env:
+          RELEASE_IMAGE_DIGESTS: ${{ inputs.image-digests }}
           COMMIT: ${{ inputs.commit }}
-        run: node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+        run: |
+          if [ -n "$RELEASE_IMAGE_DIGESTS" ]; then
+            node scripts/resolve-captured-release-images.ts release-images.tsv
+          else
+            node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+          fi
       - name: Free disk space for the cluster
         run: node scripts/prepare-kubernetes-runner.ts
       # k3s enforces NetworkPolicy with its embedded controller, so the isolation probe judges it.
@@ -131,7 +150,7 @@ jobs:
           fi
           k3d cluster create hephaestus --agents 1 --image "$NODE_IMAGE" --wait \
             --k3s-arg "--kubelet-arg=pod-max-pids=4096@all" --port "127.0.0.1:443:443@loadbalancer" "${runtime[@]}"
-      - name: Install, upgrade and verify
+      - name: Prepare the release
         env:
           GITHUB_TOKEN: ${{ github.token }}
           COMMIT: ${{ inputs.commit }}
@@ -141,6 +160,15 @@ jobs:
           # The release serves through the Gateway of k3s's Traefik, as in `vp run dev:kubernetes`.
           node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT" --gateway
           node scripts/kubernetes-cluster.ts gateway --work "$work"
+      # turn-roll installs its own release with the fake provider. Installing it first here would
+      # wait for the same application twice and extend the queue's critical path.
+      - name: Install, upgrade and verify
+        if: env.DRILLS != 'true'
+        env:
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/kubernetes-cluster"
           if [ "$GVISOR" = true ]; then PROFILES="$PROFILES --set sandbox.templates.runtimeClassName=gvisor"; fi
           # shellcheck disable=SC2086 # PROFILES is a list of flags.
           node scripts/kubernetes-cluster.ts install --work "$work" $PROFILES
@@ -155,14 +183,16 @@ jobs:
       # A conversation turn runs bash in its tools Pod through a server roll and then a loop roll.
       # The fake model provider runs in the Pod network, which k3s gives 10.42.0.0/16.
       - name: Keep a conversation turn through a server roll and a loop roll
+        background: true
         if: ${{ env.DRILLS == 'true' }}
         run: |
           set -euo pipefail
+          if [ "$GVISOR" = true ]; then PROFILES="$PROFILES --set sandbox.templates.runtimeClassName=gvisor"; fi
           # shellcheck disable=SC2086 # PROFILES is a list of flags.
           node scripts/kubernetes-cluster.ts turn-roll --work "$RUNNER_TEMP/kubernetes-cluster" $PROFILES \
             --set "release.version=v0.0.1-cluster" --pod-cidr 10.42.0.0/16
       - name: Qualify the sandbox adapters in the chart server Pod
-        if: ${{ inputs.application-artifact != '' && env.DRILLS == 'true' }}
+        if: ${{ inputs.application-artifact != '' && env.QUALIFY == 'true' }}
         run: |
           set -euo pipefail
           echo "Live sandbox kernel: $(uname -r)" >> "$GITHUB_STEP_SUMMARY"
@@ -170,18 +200,22 @@ jobs:
       # k3s gives Pods 10.42.0.0/16, where the drill's S3 server runs.
       # Nightly and relevant pull requests opt in; merge groups keep the destructive drill off their path.
       - name: Back up, then restore to a point in time
-        if: ${{ inputs.backup-drill && env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' }}
+        if: ${{ inputs.backup-drill && env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' && env.DRILLS != 'true' }}
         run: node scripts/kubernetes-cluster.ts backup-drill --work "$RUNNER_TEMP/kubernetes-cluster" --pod-cidr 10.42.0.0/16
       # A node that joins gets the agent image from the DaemonSet, and its first sandbox pulls nothing.
       - name: Start a sandbox on a new node without an image pull
-        if: ${{ env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' }}
+        if: ${{ env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' && env.DRILLS != 'true' }}
         run: |
           set -euo pipefail
           if [ "$GVISOR" = true ]; then set -- --gvisor "$RUNNER_TEMP/gvisor"; fi
           node scripts/sandbox-prepull-drill.ts "$@"
+      # Eviction fixtures use their own namespace and tainted node, so they can run alongside
+      # the turn on the release's untainted nodes. Both results join before this job can pass.
       - name: Verify kubelet memory eviction order on a disposable node
-        if: ${{ env.DRILLS == 'true' }}
+        background: true
+        if: ${{ env.DRILLS == 'true' && inputs.eviction-drill && github.event_name != 'merge_group' && github.event_name != 'pull_request' }}
         run: node scripts/kubernetes-memory-drill.ts release-images.tsv
+      - wait-all: true
       - name: Record the cluster state
         if: ${{ failure() }}
         run: |
@@ -206,9 +240,25 @@ jobs:
           fi
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
 
+  k3d-drills:
+    name: k3s 1.37 amd64 drills
+    if: inputs.queue
+    permissions:
+      contents: read
+      packages: read
+    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    env:
+      KUBERNETES_MINOR: "1.37"
+      KUBERNETES_ARCH: amd64
+      PROFILES: --profile dev
+      GVISOR: "true"
+      DRILLS: "true"
+    steps: *k3d-steps
+
   k3d-1-35-amd64:
     name: k3s 1.35 amd64
-    if: inputs.queue
+    if: inputs.queue && !inputs.drills-only
     permissions:
       contents: read
       actions: read
@@ -220,16 +270,12 @@ jobs:
       KUBERNETES_ARCH: amd64
       PROFILES: --profile small
       GVISOR: "false"
-      # The drills of the latest minor on amd64 run on the pull request's own head, which the
-      # `kubernetes` filter selects for every change they exercise, and each night on main. A
-      # merge group installs and upgrades the combined tree only; the release preflight refuses
-      # a release while the newest nightly run failed.
       DRILLS: "false"
     steps: *k3d-steps
 
   k3d-1-35-arm64:
     name: k3s 1.35 arm64
-    if: inputs.queue && inputs.arm64
+    if: inputs.queue && inputs.arm64 && !inputs.drills-only
     permissions:
       contents: read
       actions: read
@@ -241,16 +287,12 @@ jobs:
       KUBERNETES_ARCH: arm64
       PROFILES: --profile dev
       GVISOR: "false"
-      # The drills of the latest minor on amd64 run on the pull request's own head, which the
-      # `kubernetes` filter selects for every change they exercise, and each night on main. A
-      # merge group installs and upgrades the combined tree only; the release preflight refuses
-      # a release while the newest nightly run failed.
       DRILLS: "false"
     steps: *k3d-steps
 
   calico:
     name: "kind 1.35 Calico"
-    if: inputs.queue
+    if: inputs.queue && !inputs.drills-only
     permissions:
       contents: read
       packages: read
@@ -276,8 +318,14 @@ jobs:
           gateway-api: "true"
       - name: Resolve this run's images
         env:
+          RELEASE_IMAGE_DIGESTS: ${{ inputs.image-digests }}
           COMMIT: ${{ inputs.commit }}
-        run: node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+        run: |
+          if [ -n "$RELEASE_IMAGE_DIGESTS" ]; then
+            node scripts/resolve-captured-release-images.ts release-images.tsv
+          else
+            node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+          fi
       - name: Free disk space for the cluster
         run: node scripts/prepare-kubernetes-runner.ts
       - name: Create three nodes with Calico
@@ -345,6 +393,21 @@ jobs:
     name: Stop the merge group early
     needs: [k3d]
     if: ${{ always() && github.event_name == 'merge_group' && needs.k3d.result == 'failure' }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-k3d-drills:
+    name: Stop the merge group early
+    needs: [k3d-drills]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.k3d-drills.result == 'failure' }}
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:

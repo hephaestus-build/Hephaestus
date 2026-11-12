@@ -240,6 +240,7 @@ jobs:
     env:
       EXTENSION_PACKAGE: extension-package/hephaestus-chrome-extension-${{ needs.release.outputs.version }}.zip
     outputs:
+      webapp-digest: ${{ steps.retag.outputs.webapp-digest }}
       agent-pi-digest: ${{ steps.retag.outputs.agent-pi-digest }}
       application-server-digest: ${{ steps.retag.outputs.application-server-digest }}
       postgres-digest: ${{ steps.retag.outputs.postgres-digest }}
@@ -250,6 +251,9 @@ jobs:
           ref: ${{ needs.release.outputs.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Require the release drill verifier
+        run: test -f scripts/resolve-captured-release-images.ts
 
       - name: Download the rendered release notes
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -605,8 +609,30 @@ jobs:
       tag: ${{ needs.release.outputs.tag_name }}
       sha: ${{ needs.release.outputs.sha }}
 
+  kubernetes-eviction:
+    name: Kubernetes eviction
+    needs: [release, tag-images]
+    if: needs.release.outputs.released == 'true'
+    uses: ./.github/workflows/ci-kubernetes.yml
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+    with:
+      # The capture is the release's immutable image inventory, including stable RC promotion.
+      commit: ${{ needs.release.outputs.sha }}
+      image-digests: >-
+        {"application-server":"${{ needs.tag-images.outputs.application-server-digest }}",
+        "webapp":"${{ needs.tag-images.outputs.webapp-digest }}",
+        "agent-pi":"${{ needs.tag-images.outputs.agent-pi-digest }}",
+        "postgres":"${{ needs.tag-images.outputs.postgres-digest }}"}
+      ref: ${{ needs.release.outputs.sha }}
+      queue: true
+      drills-only: true
+      eviction-drill: true
+
   publish-release:
-    needs: [release, tag-images, upgrade-test, k3s-host-smoke]
+    needs: [release, tag-images, upgrade-test, k3s-host-smoke, kubernetes-eviction]
     if: needs.release.outputs.released == 'true'
     # Same lock as the tag moves: publication is the other half of that promotion.
     concurrency:

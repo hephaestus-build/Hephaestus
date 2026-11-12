@@ -773,17 +773,30 @@ Database tests, drills and browser suites have their own path conditions.
 
 Kubernetes qualification stays on same-repository pull requests, because it boots this run's own images. A draft does not select it.
 
-The drills of the latest-minor `amd64` Kubernetes leg run on the pull request's own head and each night on `main`, not in the merge group:
+The `kubernetes` path filter selects the cluster legs for chart, platform, sandbox, gateway and agent-image changes.
+A selected ordinary PR runs the latest-minor `amd64` install, upgrade, isolation probes and adapter qualification.
+It also runs the [replacement-storage recovery drill](#recovery-tests) when its inputs change.
 
-- The `kubernetes` path filter selects the leg for each change to the chart or the one-host platform.
-  It also selects it for each change to the sandbox runtime, the gateway or the agent image.
-  Thus, no such change enters the queue before the drills pass on its own head.
-- The merge group installs and upgrades the combined tree on each leg, but it runs no drill.
-  A break that only two merged changes cause together shows first in the nightly run.
-  A failed nightly run opens or updates the issue "The nightly Kubernetes run failed".
-- The release evidence preflight requires that the newest nightly run on `main` passed its cluster legs.
-  That run must have started at most 48 hours before (`scripts/check-nightly-kubernetes.ts`).
-  Thus, no release ships past a failed drill.
+The queue tier and nightly runs add **Kubernetes / k3s 1.37 amd64 drills** on a separate cluster.
+It starts alongside the install/qualification job after the images are ready.
+The caller needs only the image producer and change metadata. The image producer already waits for the packaged server.
+
+The merge group runs the conversation roll, which installs the release and rolls the server and loop.
+Eviction runs nightly, on release and on a CI dispatch with `eviction-drill=true`. It runs no eviction on a PR or merge group.
+The nightly and dispatch clusters run roll and eviction as native background steps, and `wait-all` requires both results.
+Eviction fixtures use their own namespace and a tainted disposable node.
+The qualification cluster owns chart lint, upgrade checks, adapter probes, recovery and new-node image prepull checks, so the drill cluster does not repeat them.
+
+If this split increases the measured merge-group verdict median or p90, revert the split or move the roll to nightly.
+A failed roll fails the Kubernetes stage and blocks the merge group through `CI Status Gate`.
+Use `ci:full` to reproduce the queue legs on a PR, including the separate roll job, lowest-minor k3s and Calico.
+
+The nightly run adds arm64 and eviction. A failed nightly eviction fails the Kubernetes stage.
+Its existing `Report a failure` job opens or updates the issue "The nightly Kubernetes run failed" and links the run.
+The release evidence preflight also requires that the newest nightly run on `main` passed its cluster legs within 48 hours (`scripts/check-nightly-kubernetes.ts`).
+
+The release also runs eviction against its captured candidate images before final publication.
+[Release qualification and recovery](release-management.mdx#release-qualification-and-recovery) defines its gate and failure recovery.
 
 The `review` shard holds `ReviewEndToEndIntegrationTest`: one review of a real pull request, from its request to its admitted results.
 Only the sandbox container and the model provider are stubbed.
@@ -791,7 +804,7 @@ It runs when the server suites are selected under the tier and path rules above.
 A change to capture, the gateway, the proxy or admission can stop every review while each unit test still passes.
 The stub fixes the model's judgement, its read receipts and its coverage, so the test does not check how the runner derives them.
 
-On a pull request and each night, the latest-minor `amd64` Kubernetes leg deliberately exceeds a review container's memory limit through the production sandbox adapter.
+On a selected PR, adapter qualification deliberately exceeds a review container's memory limit through the production sandbox adapter.
 It requires exit code 137 and the recorded `oom_killed` reason, with no `evicted` increment.
 
 Another drill uses a tainted, disposable node and a raised soft memory threshold to exercise the kubelet without exhausting the runner.
@@ -1144,7 +1157,7 @@ Right after a merge, that run is still building, so the pull request builds ever
   The kind leg removes kind's bind mounts over `/sys/devices/virtual/dmi/id` on each
   node, because with them no sandbox Pod with `hostUsers: false` can start. It tests the commit that `main` receives, so a pull request does not repeat
   them. A dispatch runs the same legs as the queue.
-  On the latest minor on amd64, outside a merge group, the k3s leg also runs `kubernetes-cluster.ts turn-roll`.
+  On the latest minor on amd64, the separate queue/nightly drill job runs `kubernetes-cluster.ts turn-roll`.
   In this drill, a conversation turn runs `bash` in its tools Pod while the servers roll, and then the loop.
   The turn must end DONE on its first attempt, with the same tools Pod.
   The fake model provider of the [capacity benchmark](./capacity-benchmark.md) scripts the turn.

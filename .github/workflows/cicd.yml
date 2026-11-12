@@ -3,6 +3,10 @@ name: CI/CD
 on:
   workflow_dispatch:
     inputs:
+      eviction-drill:
+        description: Add the nightly eviction drill to this explicit queue-tier reproduction
+        type: boolean
+        default: false
       release-preflight:
         description: "Generate and verify this ref's release evidence bundle, everything the release gate checks except the signatures that only exist at a release"
         type: boolean
@@ -565,6 +569,7 @@ jobs:
               - 'deploy/chart/**'
               - 'deploy/platform/**'
               - 'scripts/kubernetes-cluster.ts'
+              - 'scripts/kubernetes-memory-drill.ts'
               - 'scripts/sandbox-isolation.ts'
               - 'scripts/sandbox-prepull-drill.ts'
               - 'scripts/crd-schemas.ts'
@@ -1128,17 +1133,18 @@ jobs:
   # (kubernetes-nightly.yml) covers changes that the filter does not select. `Docker` puts every image
   # under the head commit's tag, by building it or, in a pull request, by aliasing the base image; a
   # fork publishes none, so there is nothing to install.
-  # `Docker` succeeds with the Dockerfile images alone when the server package failed, so this job
-  # waits for the package too: the run reports that failure once, not again as a cluster failure.
+  # A partial Docker result can omit the application image after packaging failed. Require that
+  # image's digest, rather than another direct edge to the package, before starting a cluster.
   Kubernetes:
     name: "Kubernetes"
-    needs: [detect-changes, server-package, Docker]
+    needs: [detect-changes, Docker]
     if: >-
-      !cancelled() && needs.Docker.result == 'success' && needs.server-package.result != 'failure' &&
+      !cancelled() && needs.Docker.result == 'success' && needs.Docker.outputs.application-server-digest != '' &&
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.publishable == 'true' &&
       (github.event_name == 'push' && needs.detect-changes.outputs.queue-run == '' ||
-        github.event_name != 'push' && needs.detect-changes.outputs.kubernetes == 'true')
+        github.event_name != 'push' && (needs.detect-changes.outputs.kubernetes == 'true' ||
+          github.event_name == 'workflow_dispatch' && inputs.eviction-drill))
     uses: ./.github/workflows/ci-kubernetes.yml
     permissions:
       actions: write
@@ -1147,9 +1153,11 @@ jobs:
     with:
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
       # A pull request runs the chart and latest k3s on amd64. The queue adds the floor on amd64 and
-      # kind, using the commit that main receives. Only the nightly run adds arm64.
-      queue: ${{ github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-      application-artifact: ${{ needs.server-package.result == 'success' && format('server-build-{0}', github.run_id) || '' }}
+      # kind and a parallel roll, using the commit that main receives. ci:full reproduces
+      # those legs on a PR too. Only the nightly run adds arm64.
+      queue: ${{ needs.detect-changes.outputs.queue-tier == 'true' }}
+      eviction-drill: ${{ github.event_name == 'workflow_dispatch' && inputs.eviction-drill }}
+      application-artifact: ${{ github.event_name != 'merge_group' && format('server-build-{0}', github.run_id) || '' }}
       backup-drill: ${{ needs.detect-changes.outputs.kubernetes-recovery == 'true' }}
 
   Database-upgrade:

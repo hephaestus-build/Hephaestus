@@ -119,14 +119,22 @@ The schema-migration notice stays in the description.
 
 An ordinary merge of an already-published version does not cut a release.
 
-The resume path covers failures *after* draft creation: seeded-upgrade, k3s host, or publication failures.
+### Release qualification and recovery
+
+Before final publication, `Kubernetes eviction` runs the roll and eviction cluster on the candidate source and the four captured image digests.
+It rebuilds no server or images and resolves no mutable image tag.
+Failure, cancellation or a skipped qualification job blocks `publish-release`.
+Before it writes release evidence, a chart or a draft, `tag-images` checks that the candidate source has the captured-image verifier.
+An older candidate without it fails before those writes and needs a new qualified candidate.
+
+The resume path covers failures *after* draft creation: seeded-upgrade, k3s host, eviction, or publication failures.
 While the release is a draft, a workflow rerun at the same commit regenerates evidence and replaces assets.
 
 A draft pins its version to its commit.
 A later commit refuses to recut over it.
 Each step that writes or publishes the release checks this again under the promotion lock.
 It stops at a draft or Git tag of another commit, even one that appeared after planning.
-If a draft can never pass, delete it manually.
+If a draft can never pass, delete it manually before cutting a new candidate from fixed source.
 The fixed source must have no pending changesets before it can cut a release.
 
 If image alias promotion fails after publication, select **Re-run failed jobs** on that release workflow run.
