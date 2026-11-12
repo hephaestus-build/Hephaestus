@@ -16,12 +16,28 @@ Do not copy it.
 1. Use one enum column for the state. Do not hide a state in a JSON key or in a combination of booleans.
 2. Add a CHECK for the closed set of values, in the same migration as the column.
 3. Add a CHECK for each column that a state implies, such as a reason or a completion time.
-4. Put the legal transitions in one table beside the enum. `IntegrationState` shows the form.
+4. Implement `Lifecycle<S>` and put the legal transitions in one table beside the enum. `IntegrationState` shows the form.
 5. Write each transition as a compare-and-set on the expected state, as `AgentActionRepository.claim` does.
 6. Refuse an illegal transition, and record the reason.
 7. Decide what a crash, a replay and a retry do to each state. State the answer in a test.
 
 Use a plain enum. Do not add a state machine framework.
+
+[`Lifecycle`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/core/Lifecycle.java)
+is the shared transition contract.
+`AgentRunState`, `ActionState`, `IntegrationState` and `ReviewStatus` implement it.
+`LifecycleContractTest` discovers every production enum that implements the contract.
+Each enum has explicit initial and terminal states in that test.
+The test checks that a terminal state has no exit and that each state is reachable from an initial state.
+
+`LifecycleSetterArchTest` refuses an entity method named `set*` that takes a `Lifecycle` value.
+Its remaining exceptions name one owner per field.
+The list includes lifecycle fields that do not yet use the contract, including the String state of `LlmCallPermit`.
+Remove an entry when its field uses the contract and its entity has no lifecycle setter.
+[ADR 0099 § Confirmation](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md#confirmation)
+owns the release gate for this list.
+[Promote the qualified candidate](./release-management.mdx#promote-the-qualified-candidate)
+gives the preflight command.
 
 ## Choose the rigor
 
@@ -67,22 +83,6 @@ It permits metadata updates that keep that status, such as freezing the report.
 A requeue keeps the first start time in `checks.startedAt`.
 Terminal reviews do not reopen, including when feedback repair resumes a composition run.
 
-```mermaid
-stateDiagram-v2
-    accTitle: Review status
-    accDescr: A queued review starts, can return to the queue, and ends complete, partial, failed or cancelled.
-    [*] --> QUEUED
-    QUEUED --> RUNNING: claim or inventory
-    RUNNING --> QUEUED: invocation waits
-    QUEUED --> COMPLETE: complete
-    RUNNING --> COMPLETE: complete
-    QUEUED --> PARTIAL: partial result or refused selection
-    RUNNING --> PARTIAL: partial result
-    QUEUED --> FAILED: fail
-    RUNNING --> FAILED: fail
-    QUEUED --> CANCELLED: cancel or replace
-    RUNNING --> CANCELLED: cancel
-```
 
 ## Scheduled review batches
 

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -8,7 +9,7 @@ import java.util.Set;
  * The lifecycle of one action. The trigger {@code guard_agent_action} refuses every transition that this table does
  * not list, and the CHECKs on {@code agent_action} tie the lease, the end time and the reason to the state.
  */
-public enum ActionState {
+public enum ActionState implements Lifecycle<ActionState> {
     /** An agent proposed it; the server has not admitted it yet. */
     PROPOSED,
     /** Admitted, and waiting for its lane and its next attempt time. */
@@ -34,6 +35,7 @@ public enum ActionState {
             FAILED, Set.of(),
             CANCELLED, Set.of());
 
+    @Override
     public boolean canTransitionTo(ActionState next) {
         return Objects.requireNonNull(LEGAL.get(this)).contains(next);
     }

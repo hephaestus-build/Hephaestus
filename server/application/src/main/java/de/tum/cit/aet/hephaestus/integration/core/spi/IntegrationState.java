@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.spi;
 
+import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -16,7 +17,7 @@ import java.util.Set;
  * Connection returns the current state with no audit row — protects against webhook
  * redelivery floods.
  */
-public enum IntegrationState {
+public enum IntegrationState implements Lifecycle<IntegrationState> {
     /** OAuth in flight, or pending vendor-side accept. */
     PENDING,
 
@@ -39,6 +40,7 @@ public enum IntegrationState {
             UNINSTALLED,
             Set.of());
 
+    @Override
     public boolean canTransitionTo(IntegrationState next) {
         return Objects.requireNonNull(LEGAL.get(this)).contains(next);
     }

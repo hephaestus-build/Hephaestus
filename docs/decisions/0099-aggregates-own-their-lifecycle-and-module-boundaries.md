@@ -84,7 +84,7 @@ Option 3.
 | 6 | `ModuleDeclarationTest`: every module declares `allowedDependencies` other than `ApplicationModule.OPEN_TOKEN`, and only listed modules are `Type.OPEN`. `ModulithVerificationTest` refuses an unlisted dependency. |
 | 7 | `AfterCommitRepairArchTest`: every after-commit `@TransactionalEventListener` is listed with its repair. |
 | 8 | `ContextMapCoverageTest`: every module of `ApplicationModules` is in the table of `system-design.mdx`. The architecture tier writes `build/spring-modulith-docs`. |
-| Ratchet | The allowlists of rules 1 and 5 name an owner per entry. The test fails when the root `package.json` version has no pre-release suffix and a list is not empty. |
+| Ratchet | The allowlists of rules 1 and 5 name an owner per entry. The test fails when the target version has no pre-release suffix and a list is not empty. The target is `hephaestus.releaseVersion`, or the root `package.json` version by default. |
 | 9 | Not enforced. Review refuses a new dependency (ADR 0072). |
 
 ## Revisit trigger

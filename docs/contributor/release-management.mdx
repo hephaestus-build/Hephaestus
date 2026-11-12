@@ -592,6 +592,7 @@ Record the decision with the release evidence. Do not change a check or label to
 ### Promote the qualified candidate
 
 Freeze `main` at the last qualified candidate's source commit.
+Before stable publication, run the architecture ratchets against the planned version with `-Phephaestus.releaseVersion=<version>`.
 Do not exit prerelease mode or merge a stable Version PR before promotion.
 If `main` advances, publish and qualify another candidate.
 
