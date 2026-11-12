@@ -266,9 +266,7 @@ public class ScanReportTestData {
     public void terminal(Review review, ReviewStatus status, @Nullable ReviewStopReason reason) {
         var stored = reviews.findByIdAndWorkspaceId(review.getId(), review.getWorkspaceId())
                 .orElseThrow();
-        stored.setStatus(status);
-        stored.setStopReason(reason);
-        stored.setCompletedAt(Instant.now());
+        stored.end(status, reason, Instant.now());
         reports.freeze(review.getWorkspaceId(), review.getId());
     }
 }

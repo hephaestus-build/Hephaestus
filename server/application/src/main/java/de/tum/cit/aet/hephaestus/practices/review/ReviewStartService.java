@@ -8,10 +8,8 @@ import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
@@ -21,21 +19,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.node.ObjectNode;
 
 @Service
 @ConditionalOnCaptureRole
 @RequiredArgsConstructor
 public class ReviewStartService implements ReviewStart {
     private final ReviewRepository reviews;
-    private final ReviewItemRepository memberships;
-    private final ReviewPracticeRepository assignments;
     private final ProductItemQuery items;
     private final PracticeItemOptions itemOptions;
     private final ItemEventService events;
     private final Clock clock;
     private final FeedbackRepair repairs;
     private final ReviewFreshness membership;
+    private final ReviewClosure closure;
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
@@ -45,24 +41,14 @@ public class ReviewStartService implements ReviewStart {
     }
 
     private boolean startLocked(Review review) {
-        if (review.getStatus().isTerminal() || review.isCancelRequested()) return false;
-        if (review.getStatus() == ReviewStatus.QUEUED) {
-            review.setStatus(ReviewStatus.RUNNING);
-            // A requeued review starts again; it keeps the time it first started.
-            if (!review.getChecks().has("startedAt")) {
-                var checks = (ObjectNode) review.getChecks().deepCopy();
-                checks.put("startedAt", clock.instant().toString());
-                review.setChecks(checks);
-            }
-        }
-        return true;
+        return review.start(clock.instant());
     }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void requeue(long workspaceId, UUID reviewId) {
         var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
-        if (review.getStatus() == ReviewStatus.RUNNING) review.setStatus(ReviewStatus.QUEUED);
+        review.requeue();
     }
 
     @Override
@@ -94,21 +80,7 @@ public class ReviewStartService implements ReviewStart {
                                 .occasion(kind.orElseThrow(), waiting.name())
                                 .joinsWindow());
         if (!moved || membership.capturedCurrentness(workspaceId, reviewId) != Currentness.STALE) return false;
-        var now = clock.instant();
-        String reason = ReviewStopReason.REPLACED.name();
-        for (var member :
-                memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspaceId, reviewId)) {
-            if (member.getState() != ReviewItemState.LISTED) continue;
-            member.withhold(reason, "A newer update of the work replaced this review before it started.", now);
-        }
-        for (var assignment : assignments.lockAssignments(workspaceId, reviewId)) {
-            if (assignment.getStatus() != ReviewPracticeStatus.QUEUED) continue;
-            assignment.setStatus(ReviewPracticeStatus.WITHHELD);
-            assignment.setReason(reason);
-        }
-        review.setStatus(ReviewStatus.CANCELLED);
-        review.setStopReason(ReviewStopReason.REPLACED);
-        review.setCompletedAt(now);
+        closure.close(review, ReviewStatus.CANCELLED, ReviewStopReason.REPLACED, clock.instant());
         return true;
     }
 }

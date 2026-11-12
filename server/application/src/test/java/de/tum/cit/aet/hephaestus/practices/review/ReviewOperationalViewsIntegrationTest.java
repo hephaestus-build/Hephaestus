@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueueJob;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueueSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingStage;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingSums;
@@ -180,12 +181,8 @@ class ReviewOperationalViewsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldExposeRealQueueReferencesAndTheEstablishedCompletionRate() {
-        var result = data.result(scenario, ResultOutcome.MET, FROM);
+        var result = data.result(scenario, ResultOutcome.MET, FROM, ReviewStatus.RUNNING);
         var jobId = data.job(result);
-        jdbc.sql("UPDATE review SET status='RUNNING',completed_at=NULL WHERE workspace_id=:ws AND id=:id")
-                .param("ws", result.getWorkspaceId())
-                .param("id", result.getReviewId())
-                .update();
         RuntimeJobTestData.moveJob(
                 jdbcTemplate,
                 jobId,

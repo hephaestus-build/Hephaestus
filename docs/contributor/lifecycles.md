@@ -53,7 +53,17 @@ Count them on staging and in production first. Then repair them in the same migr
 ## Review status
 
 The [review glossary](./practice-review-glossary.mdx) defines the statuses.
-`ReviewStart` owns the start and requeue transitions.
+[`ReviewStatus`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/spi/ReviewStatus.java)
+owns the executable transition table.
+`Review` changes its lifecycle through `start`, `requeue`, `requestCancel` and `end`.
+These methods refuse illegal moves.
+
+`ReviewClosure` closes the children, freezes a scan report, records the end and publishes its notifications in the caller's transaction.
+Every end path uses this closure, including selection refusal and replacement by a newer update.
+
+The database trigger `guard_review` also refuses a change to a terminal status.
+It permits metadata updates that keep that status, such as freezing the report.
+
 A requeue keeps the first start time in `checks.startedAt`.
 Terminal reviews do not reopen, including when feedback repair resumes a composition run.
 

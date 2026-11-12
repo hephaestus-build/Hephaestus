@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 
 /** Counts each review, and each of its items, once when the review's end commits. */
 @Component
-@ConditionalOnServerRole
+@ConditionalOnCaptureRole
 class ReviewOutcomeMeters {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewOutcomeMeters.class);
