@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
@@ -23,7 +24,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -51,7 +51,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -59,9 +58,6 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
     private static final AtomicLong HOOK_IDS = new AtomicLong(10_000_000);
     private final long firstId = HOOK_IDS.incrementAndGet();
     private final long secondId = HOOK_IDS.incrementAndGet();
-
-    @MockitoBean
-    private GitLabRouteCredential routeCredential;
 
     @Autowired
     private PublicApiUrls urls;
@@ -93,7 +89,7 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private FailedEventPublications failedPublications;
 
-    @MockitoBean
+    @Autowired
     private GitLabWebhookClient provider;
 
     private final ConcurrentHashMap<Long, String> upstreamHooks = new ConcurrentHashMap<>();
@@ -102,6 +98,7 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void providerRemovesOnlyOwnedHooks() {
+        reset(provider);
         doAnswer(call -> {
                     if (unavailable.get()) throw new IllegalStateException("provider echoed cleanup-test-token");
                     Predicate<WebhookInfo> owned = call.getArgument(3);
@@ -138,9 +135,6 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRepairARegistrationThatFinishesAfterSuspensionWithoutARecordedHookId() {
         Connection connection = connection(IntegrationState.ACTIVE, null);
-        when(routeCredential.isConfigured()).thenReturn(true);
-        when(routeCredential.issue(any()))
-                .thenReturn(new GitLabRouteCredential.Issued("route-test-token", "key", "route"));
         when(provider.listGroupWebhooks(workspace(connection), 42L))
                 .thenAnswer(call -> upstreamHooks.entrySet().stream()
                         .map(hook -> new WebhookInfo(hook.getKey(), hook.getValue()))
@@ -172,9 +166,6 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
         Connection connection = connection(IntegrationState.SUSPENDED, firstId);
         cleanup.remove(workspace(connection), connection.getId());
         state(connection, IntegrationState.ACTIVE);
-        when(routeCredential.isConfigured()).thenReturn(true);
-        when(routeCredential.issue(any()))
-                .thenReturn(new GitLabRouteCredential.Issued("route-test-token", "key", "route"));
         when(provider.listGroupWebhooks(workspace(connection), 42L))
                 .thenAnswer(call -> upstreamHooks.entrySet().stream()
                         .map(hook -> new WebhookInfo(hook.getKey(), hook.getValue()))
@@ -319,6 +310,11 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
         jdbc.update(
                 "UPDATE shedlock SET lock_until = TIMESTAMP '1970-01-01 00:00:00' WHERE name = ?",
                 GitLabSuspendedWebhookCleanup.LOCK_NAME);
+    }
+
+    @AfterEach
+    void resetProvider() {
+        reset(provider);
     }
 
     private String hookUrl(Connection connection) {

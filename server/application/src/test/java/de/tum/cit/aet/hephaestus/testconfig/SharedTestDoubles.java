@@ -8,13 +8,16 @@ import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineContentClient
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineTokenClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppUserAuthorizationClient;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -80,6 +83,14 @@ public class SharedTestDoubles {
     @Primary
     GitHubAppUserAuthorizationClient gitHubAppUserAuthorizationClient() {
         return mock(GitHubAppUserAuthorizationClient.class);
+    }
+
+    @Bean
+    @Primary
+    @Profile("!live")
+    @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true")
+    GitLabWebhookClient gitLabWebhookTransport() {
+        return mock(GitLabWebhookClient.class);
     }
 
     /** NATS is off in tests; this stands in for it so a verified webhook reaches the publish step. */
