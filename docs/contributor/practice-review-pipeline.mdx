@@ -824,7 +824,6 @@ Completed files in a partial scan can support comparison. The unreached remainde
 
 The [scan guide](/admin/practice-scans) owns user procedures, report counts and export availability.
 
-
 ## Temporary copy custody
 
 `FabricLayout.spool()` owns temporary code copies below the server's existing evidence home.
@@ -848,6 +847,8 @@ No second admission connection or database ledger is created.
 
 ```mermaid
 stateDiagram-v2
+    accTitle: Temporary evidence copy custody
+    accDescr: A copy retains its workspace and leases until physical removal succeeds. Failed removal keeps custody for reconciliation.
     [*] --> OPEN: Workspace and lease registered
     OPEN --> REMOVING: Close requested
     REMOVING --> REMOVING: Removal fails, retain custody

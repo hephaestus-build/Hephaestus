@@ -374,15 +374,21 @@ public final class EvidenceSpool {
                 capture.removed(this);
                 state = State.CLOSED;
                 COPIES.remove(path, this);
-            } catch (IOException | RuntimeException failure) {
-                log.atWarn()
-                        .addKeyValue("event.name", "evidence.spool.cleanup.failed")
-                        .addKeyValue("evidence.path", path.toString())
-                        .addKeyValue("error.type", failure.getClass().getName())
-                        .log("Evidence copy removal will be retried");
-                if (failure instanceof IOException io) throw io;
+            } catch (IOException failure) {
+                recordRemovalFailure(failure);
+                throw failure;
+            } catch (RuntimeException failure) {
+                recordRemovalFailure(failure);
                 throw new IOException("Could not release evidence-copy custody", failure);
             }
+        }
+
+        private void recordRemovalFailure(Exception failure) {
+            log.atWarn()
+                    .addKeyValue("event.name", "evidence.spool.cleanup.failed")
+                    .addKeyValue("evidence.path", path.toString())
+                    .addKeyValue("error.type", failure.getClass().getName())
+                    .log("Evidence copy removal will be retried");
         }
     }
 }
