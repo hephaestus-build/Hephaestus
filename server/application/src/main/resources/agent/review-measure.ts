@@ -7,7 +7,7 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, symlinkSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { KindRunner, RunContext, RunOutcome } from "./driver.ts";
@@ -15,6 +15,11 @@ import type { KindRunner, RunContext, RunOutcome } from "./driver.ts";
 /** Where the image keeps the review programs (docker/agents/pi). */
 const SDK = "/opt/pi-sdk";
 const SOCKETS = "/tmp/review-sides";
+/**
+ * The runner at /workspace/.run-pi.js resolves the Pi SDK through this link. /workspace is an empty volume over the
+ * image's read-only root, so the kind makes the link before the workspace fills.
+ */
+const SDK_LINK = "/workspace/node_modules";
 const SIDE_START_MS = 10_000;
 /** gateway-run.ts's exit after it could not upload the result. */
 const EXIT_UPLOAD_FAILED = 43;
@@ -158,6 +163,9 @@ export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	}
 	const context = parseMeasureContext(await answer.json());
 	const env = measureEnvironment(run, context);
+	if (!existsSync(SDK_LINK)) {
+		symlinkSync(`${SDK}/node_modules`, SDK_LINK);
+	}
 	if ((await runToEnd("node", [`${SDK}/gateway-init.js`], env, signal)) !== 0) {
 		throw new Error("the workspace could not be prepared");
 	}

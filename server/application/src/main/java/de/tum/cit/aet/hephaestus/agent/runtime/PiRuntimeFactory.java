@@ -43,6 +43,9 @@ public class PiRuntimeFactory {
 
     static final String AGENT_RESOURCE_PREFIX = "agent/";
 
+    /** {@code XDG_CONFIG_HOME}, where the runner's tools read their user configuration. The SandboxTemplate sets the same. */
+    private static final String AGENT_CONFIG = PiRunnerProfile.AGENT_HOME + "/.config";
+
     private final ObjectMapper objectMapper;
 
     public PiRuntimeFactory(ObjectMapper objectMapper) {
@@ -76,8 +79,8 @@ public class PiRuntimeFactory {
         long agentTimeoutMs = (spec.timeoutSeconds() - TIMEOUT_BUFFER_SECONDS) * 1000L;
         env.put("AGENT_BUDGET_MS", Long.toString(agentTimeoutMs));
 
-        env.put("HOME", "/home/agent");
-        env.put("XDG_CONFIG_HOME", "/home/agent/.local/config");
+        env.put("HOME", PiRunnerProfile.AGENT_HOME);
+        env.put("XDG_CONFIG_HOME", AGENT_CONFIG);
         env.put("TMPDIR", PiRunnerProfile.AGENT_TMPDIR);
         env.put("PI_CODING_AGENT_DIR", SandboxLayout.PI_AGENT_DIR);
 
@@ -96,7 +99,7 @@ public class PiRuntimeFactory {
             setup.append(setupCommand).append(" && ");
         }
         String command = "mkdir -p " + String.join(" ", PiRunnerProfile.WRITABLE_DIRECTORIES)
-                + " /home/agent/.local/config && "
+                + " " + AGENT_CONFIG + " && "
                 + setup
                 + runtimeEnvFragment
                 + "node "

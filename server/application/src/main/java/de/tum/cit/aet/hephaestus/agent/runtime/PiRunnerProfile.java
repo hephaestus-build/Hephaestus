@@ -10,8 +10,14 @@ import java.util.stream.Stream;
  * they MUST NOT capture spec-level state (provider, credentials, baseUrl).
  */
 public interface PiRunnerProfile {
-    /** Node's temporary directory in the agent image, which {@link PiRuntimeFactory} sets {@code TMPDIR} to. */
-    String AGENT_TMPDIR = "/home/agent/.local/tmp";
+    /**
+     * The runner's {@code HOME}. A sandbox's root filesystem is read-only, so its home is on the sandbox's {@code /tmp}
+     * volume, as the SandboxTemplate sets it ({@code deploy/chart/hephaestus/templates/sandbox-templates.yaml}).
+     */
+    String AGENT_HOME = "/tmp/home";
+
+    /** Node's temporary directory, which {@link PiRuntimeFactory} sets {@code TMPDIR} to. */
+    String AGENT_TMPDIR = AGENT_HOME + "/.local/tmp";
 
     /**
      * Directories the runner may write.
@@ -40,10 +46,10 @@ public interface PiRunnerProfile {
                             "--permission",
                             "--allow-fs-read=" + SandboxLayout.WORKSPACE_ROOT,
                             "--allow-fs-read=/opt/pi-sdk",
-                            // The SDK looks for user-level skills under $HOME (/home/agent in the image) on
-                            // every session; that directory holds nothing, and a read the permission model
-                            // denies is a thrown error, not an absence, so it must be readable.
-                            "--allow-fs-read=/home/agent"),
+                            // The SDK looks for user-level skills under $HOME on every session; that
+                            // directory holds nothing, and a read the permission model denies is a thrown
+                            // error, not an absence, so it must be readable.
+                            "--allow-fs-read=" + AGENT_HOME),
                     WRITABLE_DIRECTORIES.stream().map(directory -> "--allow-fs-write=" + directory))
             .toList();
     /** Runner script filename under {@code resources/agent/}. */
