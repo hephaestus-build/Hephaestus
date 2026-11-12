@@ -168,7 +168,7 @@ class LlmProxyService {
 
     /**
      * Serves one call on a routing: the AI-choice, budget, connection, deadline and usage rules.
-     * denotes a review or Hephaestus call. A null response serves a worker step in-process: the call must not stream, and a
+     * A null response serves a worker step in-process: the call must not stream, and a
      * provider that answers with a stream anyway is refused.
      */
     @SuppressWarnings("try") // The scope installs the current span and restores it on close.
