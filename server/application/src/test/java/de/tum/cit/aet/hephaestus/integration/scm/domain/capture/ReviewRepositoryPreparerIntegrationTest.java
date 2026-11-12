@@ -177,7 +177,8 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class));
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
 
         assertThatThrownBy(() -> realPreparer.prepare(context))
@@ -194,7 +195,8 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class));
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
         var content =
                 new PullRequestContentSource(new JsonMapper(), git, pullRequests, comments, realPreparer, delivered);

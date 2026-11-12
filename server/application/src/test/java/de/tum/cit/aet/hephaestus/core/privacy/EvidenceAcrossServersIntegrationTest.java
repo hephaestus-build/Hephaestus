@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.ErasedFolders;
@@ -21,14 +23,20 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
@@ -42,21 +50,36 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.PracticeModelTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.eclipse.jgit.api.Git;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,8 +91,10 @@ import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.FileSystemUtils;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -315,6 +340,316 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         assertThat(a.folder(job)).doesNotExist();
     }
 
+    @Test
+    void shouldWaitForSnapshotAdmissionBeforeHoldingTheMirrorReadLock() throws Exception {
+        var job = runningJob("checkout-lock-order");
+        var key = new RepositoryKey(job.getWorkspaceId(), 4242L);
+        var locks = new GitRepositoryLockManager();
+        var requested = new CountDownLatch(1);
+        var admission = mock(PersonDataCopyFence.class, invocation -> {
+            if (!invocation.getMethod().getName().equals("capture"))
+                throw new AssertionError("Only capture admission is needed for a checkout");
+            requested.countDown();
+            return fence.capture();
+        });
+        var manager = new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40),
+                locks,
+                new FabricLayout(temporary.resolve("checkout-lock-order").toString()),
+                GitTransportFixtures.guarded(),
+                mock(RepositoryRefState.class),
+                admission);
+        manager.ensureRepository(key, upstream.toUri().toString(), null);
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<GitRepositoryManager.GitTreeSnapshot> copy;
+            var erasure = fence.erase();
+            try (erasure) {
+                copy = executor.submit(() -> manager.readTreeSnapshot(key, head));
+                assertThat(requested.await(30, TimeUnit.SECONDS)).isTrue();
+                // A blocked database admission must not prevent a mirror writer from completing.
+                assertThat(executor.submit(() -> locks.withWriteLock(key, () -> true))
+                                .get(30, TimeUnit.SECONDS))
+                        .isTrue();
+            }
+            try (var snapshot = copy.get(30, TimeUnit.SECONDS)) {
+                assertThat(snapshot.stagingDir().resolve("src/App.java")).hasContent(SOURCE);
+            }
+        }
+    }
+
+    @Test
+    void shouldBuildRepositoryOwnedCheckoutsWhileErasureWaitsForTheAdmittingTransaction() throws Exception {
+        var job = runningJob("checkout-transaction-admission");
+        var key = new RepositoryKey(job.getWorkspaceId(), 4242L);
+        var postgres = PostgreSQLTestContainer.getInstance();
+        var guardedSource =
+                new DriverManagerDataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        var options = new Properties();
+        // A regression that requests another session must fail rather than hang this test indefinitely.
+        options.setProperty("options", "-c lock_timeout=5s");
+        guardedSource.setConnectionProperties(options);
+        var manager = new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40),
+                new GitRepositoryLockManager(),
+                new FabricLayout(temporary.resolve("checkout-transaction").toString()),
+                GitTransportFixtures.guarded(),
+                mock(RepositoryRefState.class),
+                new PostgresPersonDataCopyFence(guardedSource, new JdbcTemplate(guardedSource)));
+        manager.ensureRepository(key, upstream.toUri().toString(), null);
+        String tree;
+        try (var git = Git.open(upstream.toFile())) {
+            tree = Objects.requireNonNull(git.getRepository().resolve(head + "^{tree}"))
+                    .name();
+        }
+        Path target = temporary.resolve("transaction-checkout");
+        var eraserPid = new AtomicLong();
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var erasure = new AtomicReference<Future<?>>();
+            try {
+                new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                    fence.holdForCapture();
+                    erasure.set(executor.submit(() -> new TransactionTemplate(transactions)
+                            .executeWithoutResult(erase -> {
+                                eraserPid.set(Objects.requireNonNull(
+                                        jdbc.queryForObject("SELECT pg_backend_pid()", Long.class)));
+                                fence.holdForErasure();
+                            })));
+                    await().atMost(Duration.ofSeconds(30))
+                            .until(() -> Boolean.TRUE.equals(jdbc.queryForObject(
+                                    "SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=? AND locktype='advisory'"
+                                            + " AND classid=2165 AND objid=1 AND NOT granted)",
+                                    Boolean.class,
+                                    eraserPid.get())));
+                    assertThat(manager.copyCheckout(key, head, tree, null, target))
+                            .isTrue();
+                    assertThat(manager.copyCheckout(key, head, tree, null, temporary.resolve("cached-copy")))
+                            .isFalse();
+                    assertThat(manager.copyCheckout(
+                                    key, head, tree, List.of("src/App.java"), temporary.resolve("scan-copy")))
+                            .isTrue();
+                    assertThat(target.resolve("src/App.java")).hasContent(SOURCE);
+                    assertThat(temporary.resolve("scan-copy/src/App.java")).hasContent(SOURCE);
+                });
+            } finally {
+                Future<?> waitingErasure = erasure.get();
+                if (waitingErasure != null) waitingErasure.get(30, TimeUnit.SECONDS);
+            }
+        }
+    }
+
+    @Test
+    void shouldRetainRealErasureAdmissionAfterWorkerDetachAndFailedPhysicalCleanup() throws Exception {
+        var job = runningJob("failed-context-copy");
+        var spool = new FabricLayout(temporary.resolve("context-copy").toString()).spool();
+        EvidenceSpool.Copy copy;
+        var scope = spool.capture(job.getWorkspaceId(), fence::capture);
+        try (scope) {
+            copy = spool.directory(job.getWorkspaceId());
+            Files.writeString(copy.path().resolve("private.java"), SOURCE);
+        }
+        try (copy) {
+            var io = mockStatic(FileSystemUtils.class, invocation -> {
+                if (invocation.getMethod().getName().equals("deleteRecursively")
+                        && copy.path().equals(invocation.getArgument(0))) throw new IOException("volume unavailable");
+                return invocation.callRealMethod();
+            });
+            try (io) {
+                assertThatThrownBy(copy::close).isInstanceOf(IOException.class);
+                var acquired = new TransactionTemplate(transactions)
+                        .execute(status ->
+                                jdbc.queryForObject("SELECT pg_try_advisory_xact_lock(2165,1)", Boolean.class));
+                assertThat(acquired).isFalse();
+                assertThat(copy.path().resolve("private.java")).hasContent(SOURCE);
+            }
+            assertThat(spool.reconcile()).isZero();
+            assertThat(copy.path()).doesNotExist();
+            var acquired = new TransactionTemplate(transactions)
+                    .execute(status -> jdbc.queryForObject("SELECT pg_try_advisory_xact_lock(2165,1)", Boolean.class));
+            assertThat(acquired).isTrue();
+        }
+    }
+
+    @Test
+    void shouldRemoveGatewayArchivesAndSelectionsWithTheirReceiptOwnedAttempt() throws Exception {
+        var job = runningJob("receipt-owned-archives");
+        var server = new Server(temporary.resolve("archives"), job);
+        var sessions = new SandboxGatewaySessions();
+        Path archive;
+        Path selection;
+        try {
+            try (var captured = server.capture(job)) {
+                record(job, captured, null);
+                archive = new SandboxWorkspaceManager()
+                        .createInputTar(
+                                server.files.archiveDirectory(job),
+                                Map.of(),
+                                captured.filesOnDisk(),
+                                captured.directories());
+                assertThat(archive).startsWith(server.folder(job));
+                var session = sessions.register(job.getId(), "archive-token", archive, "results/");
+                try (var download = session.download("repo", "reviewed")) {
+                    assertThat(download.input().readAllBytes())
+                            .containsSequence(SOURCE.getBytes(StandardCharsets.UTF_8));
+                }
+                try (var paths = Files.list(Objects.requireNonNull(archive.getParent()))) {
+                    var selections = paths.filter(
+                                    path -> path.getFileName().toString().startsWith("workspace-selection-"))
+                            .toList();
+                    assertThat(selections).hasSize(1);
+                    selection = selections.getFirst();
+                }
+                server.catalog.eraseJobEvidence(Set.of(job.getId()));
+                assertThat(jdbc.queryForObject(
+                                "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
+                                String.class,
+                                job.getId(),
+                                job.getWorkspaceId()))
+                        .isEqualTo("ERASED");
+                assertThat(server.catalog.removeErasedFolders().remaining()).isPositive();
+                assertThat(archive).exists();
+                assertThat(selection).exists();
+            }
+            assertThat(server.catalog.removeErasedFolders().remaining()).isZero();
+            assertThat(archive).doesNotExist();
+            assertThat(selection).doesNotExist();
+        } finally {
+            sessions.closeJob(job.getId());
+        }
+    }
+
+    @Test
+    void shouldRemoveACrashedCaptureBeforeAdmittingWorkAndRetainItsErasureReceipt() throws Exception {
+        var job = runningJob("spool-crash");
+        String origin = "https://spool-" + job.getId() + ".example";
+        var provider = context.getBean(IdentityProviderRepository.class)
+                .saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, origin));
+        var administrator = new Account("Spool erasure administrator");
+        administrator.setAppRole(AppRole.APP_ADMIN);
+        long administratorId = Objects.requireNonNull(context.getBean(AccountRepository.class)
+                .saveAndFlush(administrator)
+                .getId());
+        var personData = context.getBean(PersonDataService.class);
+        Path home = temporary.resolve("crashed-server");
+        Path output = temporary.resolve("capture.log");
+        var postgres = PostgreSQLTestContainer.getInstance();
+        try (var signal = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            signal.setSoTimeout(30_000);
+            var builder = new ProcessBuilder(
+                            ProcessHandle.current().info().command().orElseThrow(),
+                            "-Xmx128m",
+                            "-cp",
+                            System.getProperty("java.class.path"),
+                            CrashedCapture.class.getName(),
+                            home.toString(),
+                            job.getId().toString(),
+                            Long.toString(job.getWorkspaceId()),
+                            Integer.toString(job.getAttempt()),
+                            origin,
+                            Integer.toString(signal.getLocalPort()))
+                    .redirectErrorStream(true)
+                    .redirectOutput(output.toFile());
+            builder.environment().put("SPOOL_TEST_JDBC_URL", postgres.getJdbcUrl());
+            builder.environment().put("SPOOL_TEST_JDBC_USER", postgres.getUsername());
+            builder.environment().put("SPOOL_TEST_JDBC_PASSWORD", postgres.getPassword());
+            Process capture = builder.start();
+            try (Socket ready = signal.accept()) {
+                ready.setSoTimeout(30_000);
+                Path copied = Path.of(new DataInputStream(ready.getInputStream()).readUTF());
+                assertThat(copied).startsWith(home.resolve(".evidence-spool/" + job.getWorkspaceId()));
+                assertThat(copied.resolve("private.java")).hasContent(SOURCE);
+                var receipt = jdbc.queryForMap(
+                        "SELECT state,payload::text AS payload FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
+                        job.getId(),
+                        job.getWorkspaceId());
+                assertThat(receipt.get("state")).isEqualTo("CAPTURING");
+                assertThat(String.valueOf(receipt.get("payload"))).contains(origin, "42");
+                var erasureAdmitted = new TransactionTemplate(transactions)
+                        .execute(status ->
+                                jdbc.queryForObject("SELECT pg_try_advisory_xact_lock(2165,1)", Boolean.class));
+                assertThat(erasureAdmitted).isFalse();
+                // Forced termination runs neither close nor finally, and leaves the receipt committed.
+                capture.destroyForcibly();
+                assertThat(capture.waitFor(30, TimeUnit.SECONDS)).isTrue();
+                var preview = personData.preview(
+                        administratorId,
+                        null,
+                        List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)));
+                personData.requestErasure(preview.request().getId(), administratorId, true);
+                personData.run(preview.request().getId());
+                assertThat(personData.get(preview.request().getId()).request().getState())
+                        .isEqualTo(PersonDataRequest.State.COMPLETE);
+                assertThat(jdbc.queryForObject(
+                                "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
+                                String.class,
+                                job.getId(),
+                                job.getWorkspaceId()))
+                        .isEqualTo("ERASED");
+                var restarted = new FabricLayout(home.toString());
+                assertThat(copied.getParent()).doesNotExist();
+                assertThat(restarted.spool().reconcile()).isZero();
+                assertThat(jdbc.queryForObject(
+                                "SELECT payload::text FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
+                                String.class,
+                                job.getId(),
+                                job.getWorkspaceId()))
+                        .doesNotContain(origin, "42");
+            } finally {
+                capture.destroyForcibly();
+                assertThat(capture.waitFor(30, TimeUnit.SECONDS))
+                        .as(Files.readString(output))
+                        .isTrue();
+            }
+        }
+    }
+
+    /** Runs the production capture fence and receipt writer, then dies while its owned copy is live. */
+    public static final class CrashedCapture {
+        public static void main(String[] args) throws Exception {
+            var source = new DriverManagerDataSource(
+                    Objects.requireNonNull(System.getenv("SPOOL_TEST_JDBC_URL")),
+                    Objects.requireNonNull(System.getenv("SPOOL_TEST_JDBC_USER")),
+                    Objects.requireNonNull(System.getenv("SPOOL_TEST_JDBC_PASSWORD")));
+            var jdbc = new JdbcTemplate(source);
+            long workspace = Long.parseLong(args[2]);
+            var job = Objects.requireNonNull(jdbc.queryForObject(
+                    "SELECT id,review_id,run_id FROM review_job WHERE id=? AND workspace_id=?",
+                    (row, number) -> {
+                        var found = new ReviewJob();
+                        found.setId(row.getObject("id", UUID.class));
+                        found.setReviewId(row.getObject("review_id", UUID.class));
+                        found.setRunId(row.getObject("run_id", UUID.class));
+                        found.setWorkspaceId(workspace);
+                        return RuntimeJobTestData.attempt(found, Integer.parseInt(args[3]));
+                    },
+                    UUID.fromString(args[1]),
+                    workspace));
+            var layout = new FabricLayout(args[0]);
+            var recorder = new ExactPersonDataCopyRecorder();
+            var beans = new DefaultListableBeanFactory();
+            var catalog = new EvidenceFolderPersonDataCatalog(
+                    layout,
+                    jdbc,
+                    new NamedParameterJdbcTemplate(jdbc),
+                    new ObjectMapper(),
+                    recorder,
+                    new PostgresPersonDataCopyFence(source, jdbc),
+                    beans.getBeanProvider(ReviewAttemptCustody.class),
+                    beans.getBeanProvider(AgentSandboxes.class),
+                    beans.getBeanProvider(SandboxGatewaySessions.class),
+                    beans.getBeanProvider(ReviewJobLifecycleService.class));
+            catalog.beginCapture(job);
+            recorder.recordIdentity(new PersonCopyIdentity("GITLAB", args[4], "42", null));
+            var copy = layout.spool().directory(workspace);
+            Files.writeString(copy.path().resolve("private.java"), SOURCE);
+            try (var signal = new Socket(InetAddress.getLoopbackAddress(), Integer.parseInt(args[5]))) {
+                var ready = new DataOutputStream(signal.getOutputStream());
+                ready.writeUTF(copy.path().toString());
+                ready.flush();
+                signal.getInputStream().read();
+            }
+        }
+    }
+
     /** What the executor records with the attempt's capture: its directories, checkout digests and checkout keys. */
     private ReviewJob record(ReviewJob job, PreparedJobInputs captured, @Nullable String digestOverride) {
         var capture = mapper.createObjectNode();
@@ -365,7 +700,8 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                     new GitRepositoryLockManager(),
                     new FabricLayout(root.toString()),
                     GitTransportFixtures.guarded(),
-                    mock(RepositoryRefState.class));
+                    mock(RepositoryRefState.class),
+                    fence);
             // The server's sync has mirrored the monitored repository.
             git.ensureRepository(key, upstream.toUri().toString(), null);
             catalog = new EvidenceFolderPersonDataCatalog(
@@ -397,24 +733,27 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         }
 
         PreparedJobInputs capture(ReviewJob job, Map<String, Path> filesOnDisk) {
-            var snapshot = git.readTreeSnapshot(key, head);
-            var directory = new EvidenceDirectory(
-                    "repos/reviewed/",
-                    snapshot.stagingDir(),
-                    new CheckoutKey(key.repositoryId(), head, snapshot.treeSha(), null, null));
-            var staged = new LinkedHashMap<>(filesOnDisk);
-            staged.put("repos/reviewed/.git/HEAD", snapshot.stagingDir().resolve(".git/HEAD"));
-            staged.put(
-                    "repos/reviewed/.git/" + GitRepositoryManager.CAPTURED_REFS,
-                    snapshot.stagingDir().resolve(".git/" + GitRepositoryManager.CAPTURED_REFS));
-            var evidence = new PreparedEvidence(
-                    Map.of("context/item.json", RECORD.getBytes(StandardCharsets.UTF_8)),
-                    staged,
-                    List.of(snapshot),
-                    null,
-                    List.of(directory));
             files.beginPersonCapture(job);
-            return files.prepare(job, evidence, null);
+            try (var snapshot = git.readTreeSnapshot(key, head)) {
+                var directory = new EvidenceDirectory(
+                        "repos/reviewed/",
+                        snapshot.stagingDir(),
+                        new CheckoutKey(key.repositoryId(), head, snapshot.treeSha(), null, null));
+                var staged = new LinkedHashMap<>(filesOnDisk);
+                staged.put("repos/reviewed/.git/HEAD", snapshot.stagingDir().resolve(".git/HEAD"));
+                staged.put(
+                        "repos/reviewed/.git/" + GitRepositoryManager.CAPTURED_REFS,
+                        snapshot.stagingDir().resolve(".git/" + GitRepositoryManager.CAPTURED_REFS));
+                var evidence = new PreparedEvidence(
+                        Map.of("context/item.json", RECORD.getBytes(StandardCharsets.UTF_8)),
+                        staged,
+                        List.of(),
+                        null,
+                        List.of(directory));
+                return files.prepare(job, evidence, null);
+            } finally {
+                files.abortPersonCapture(job);
+            }
         }
 
         Path folder(ReviewJob job) {

@@ -52,11 +52,11 @@ public class RepositoryTreeContentSource {
         if (absence != null) {
             return absent(absence);
         }
-        GitRepositoryManager.GitTreeSnapshot snapshot = snapshot(request);
         if (request.pullRequest()) {
             var metadata = Objects.requireNonNull(request.work());
             personCopies.recordRepository(metadata.repositoryId());
         }
+        GitRepositoryManager.GitTreeSnapshot snapshot = snapshot(request);
         Map<String, Path> onDisk = Map.of(
                 "repos/reviewed/.git/HEAD", snapshot.stagingDir().resolve(".git/HEAD"),
                 "repos/reviewed/.git/hephaestus-captured-refs",

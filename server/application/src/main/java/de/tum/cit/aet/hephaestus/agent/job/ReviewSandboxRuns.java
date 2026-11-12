@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
@@ -70,6 +71,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     private final ReviewJobTerminal terminal;
     private final ReviewJobRepository jobs;
     private final SandboxWorkspaceManager workspaces;
+    private final JobEvidenceFiles evidenceFiles;
     private final SandboxGatewaySessions sessions;
     private final TransactionTemplate transactions;
     private final ObjectMapper objectMapper;
@@ -92,7 +94,8 @@ public class ReviewSandboxRuns implements SandboxRunKind {
             DefaultReviewExecutionHandler handler,
             ReviewAttemptResults results,
             ReviewRunKind reviewRuns,
-            AgentRuns runs) {
+            AgentRuns runs,
+            JobEvidenceFiles evidenceFiles) {
         this.claims = claims;
         this.preparation = preparation;
         this.custody = custody;
@@ -106,6 +109,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         this.results = results;
         this.reviewRuns = reviewRuns;
         this.runs = runs;
+        this.evidenceFiles = evidenceFiles;
     }
 
     /**
@@ -289,7 +293,10 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                     }
                     try {
                         Path input = workspaces.createInputTar(
-                                spec.inputFiles(), spec.inputFilesOnDisk(), spec.inputDirectories());
+                                evidenceFiles.archiveDirectory(job),
+                                spec.inputFiles(),
+                                spec.inputFilesOnDisk(),
+                                spec.inputDirectories());
                         try {
                             var session = sessions.registerAttempt(
                                     job.getId(),

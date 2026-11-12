@@ -145,7 +145,8 @@ class GitMirrorRetentionTest extends BaseUnitTest {
                 locks,
                 new FabricLayout(fabric.toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class));
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
     }
 
     private static GitRepositoryProperties properties(long volume) {

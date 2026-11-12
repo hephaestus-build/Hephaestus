@@ -145,7 +145,8 @@ class ScmRepositoryCheckoutsIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class));
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
         // The provider URL has no Git server behind it: the mirror fetches from the local upstream instead.
         git = mock(GitRepositoryManager.class, AdditionalAnswers.delegatesTo(mirrors));
         doAnswer(invocation -> {

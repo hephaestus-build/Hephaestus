@@ -78,7 +78,8 @@ class ScmCapturedCheckoutsTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class));
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
         when(preparer.permittedRepositories(WORKSPACE)).thenReturn(List.of());
         when(preparer.activeTokenSource(WORKSPACE)).thenReturn(Optional.empty());
     }

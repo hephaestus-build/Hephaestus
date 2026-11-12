@@ -229,7 +229,8 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class));
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
     }
 
     private GitLabCommitBackfillService localBackfill(GitRepositoryManager git, CommitDetailsPersister persister) {

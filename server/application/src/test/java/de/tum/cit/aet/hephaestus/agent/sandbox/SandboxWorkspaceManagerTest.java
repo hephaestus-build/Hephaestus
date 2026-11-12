@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,23 +32,25 @@ class SandboxWorkspaceManagerTest {
 
     @BeforeEach
     void setUp() {
-        manager = new SandboxWorkspaceManager(temporary.resolve("spool"));
+        manager = new SandboxWorkspaceManager();
     }
 
-    /** The fixed `/tmp` does not grow with a worker's reviews, and a later process sweeps what this one leaves here. */
+    /** The archive shares the attempt's receipt and folder lease. */
     @Test
-    void shouldStageTheArchiveInTheSpoolUnderTheProcessPrefix() throws Exception {
-        Path archive = manager.createInputTar(Map.of("inputs/a.txt", new byte[] {1}), Map.of());
+    void shouldStageTheArchiveInItsReceiptOwnedFolder() throws Exception {
+        Path archive = manager.createInputTar(
+                temporary.resolve("receipt-archives"), Map.of("inputs/a.txt", new byte[] {1}), Map.of());
 
-        assertThat(archive.getParent()).isEqualTo(temporary.resolve("spool"));
-        assertThat(EvidenceSpool.isCurrentProcess(archive)).isTrue();
+        assertThat(archive).isRegularFile().hasParent(temporary.resolve("receipt-archives"));
     }
 
     @Test
     void shouldPreserveMemoryAndDiskInputsInOneArchive() throws Exception {
         var source = Files.writeString(temporary.resolve("App.java"), "class App {}");
         Path archive = manager.createInputTar(
-                Map.of("inputs/diff.patch", "diff".getBytes(UTF_8)), Map.of("inputs/repository/App.java", source));
+                temporary.resolve("receipt-archives"),
+                Map.of("inputs/diff.patch", "diff".getBytes(UTF_8)),
+                Map.of("inputs/repository/App.java", source));
         try {
             var captured = new HashMap<String, byte[]>();
             try (var tar = new TarArchiveInputStream(Files.newInputStream(archive))) {
@@ -69,6 +70,7 @@ class SandboxWorkspaceManagerTest {
     @Test
     void shouldKeepWritableRegionsWritableAndEvidenceReadOnly() throws Exception {
         Path archive = manager.createInputTar(
+                temporary.resolve("receipt-archives"),
                 Map.of(
                         "inputs/diff.patch",
                         new byte[0],
@@ -100,9 +102,11 @@ class SandboxWorkspaceManagerTest {
     @ParameterizedTest
     @ValueSource(strings = {"../../etc/passwd", "/etc/shadow", ""})
     void shouldRejectUnsafeArchivePaths(String path) {
-        assertThatThrownBy(() -> manager.createInputTar(Map.of(path, new byte[0]), Map.of()))
+        assertThatThrownBy(() -> manager.createInputTar(
+                        temporary.resolve("receipt-archives"), Map.of(path, new byte[0]), Map.of()))
                 .isInstanceOf(SandboxException.class);
-        assertThatThrownBy(() -> manager.createInputTar(Map.of(), Map.of(path, temporary.resolve("file"))))
+        assertThatThrownBy(() -> manager.createInputTar(
+                        temporary.resolve("receipt-archives"), Map.of(), Map.of(path, temporary.resolve("file"))))
                 .isInstanceOf(SandboxException.class);
     }
 
@@ -110,7 +114,8 @@ class SandboxWorkspaceManagerTest {
     void shouldRejectSymbolicLinkDiskInputs() throws Exception {
         var source = Files.writeString(temporary.resolve("source"), "private");
         var link = Files.createSymbolicLink(temporary.resolve("link"), source);
-        assertThatThrownBy(() -> manager.createInputTar(Map.of(), Map.of("input", link)))
+        assertThatThrownBy(() ->
+                        manager.createInputTar(temporary.resolve("receipt-archives"), Map.of(), Map.of("input", link)))
                 .isInstanceOf(SandboxException.class);
     }
 
@@ -122,7 +127,8 @@ class SandboxWorkspaceManagerTest {
         try (var output = Files.newOutputStream(source)) {
             for (int index = 0; index < 64; index++) output.write(chunk);
         }
-        Path archive = manager.createInputTar(Map.of(), Map.of("large.bin", source));
+        Path archive =
+                manager.createInputTar(temporary.resolve("receipt-archives"), Map.of(), Map.of("large.bin", source));
         try (var tar = new TarArchiveInputStream(Files.newInputStream(archive))) {
             assertThat(tar.getNextEntry().getSize()).isEqualTo(64L * 1024 * 1024);
             assertThat(tar.transferTo(OutputStream.nullOutputStream())).isEqualTo(Files.size(source));
@@ -134,7 +140,7 @@ class SandboxWorkspaceManagerTest {
 
     @Test
     void shouldProduceACompleteEmptyArchive() throws Exception {
-        Path archive = manager.createInputTar(Map.of(), Map.of());
+        Path archive = manager.createInputTar(temporary.resolve("receipt-archives"), Map.of(), Map.of());
         try (var tar = new TarArchiveInputStream(Files.newInputStream(archive))) {
             assertThat(tar.getNextEntry()).isNull();
             assertThat(Files.size(archive)).isGreaterThanOrEqualTo(1024);
@@ -150,8 +156,11 @@ class SandboxWorkspaceManagerTest {
         var head = Files.writeString(git.resolve("HEAD"), "captured-head");
         Files.writeString(source.resolve("App.java"), "source");
         var directory = new EvidenceDirectory("inputs/repository/", source);
-        Path archive =
-                manager.createInputTar(Map.of(), Map.of("inputs/repository/.git/HEAD", head), List.of(directory));
+        Path archive = manager.createInputTar(
+                temporary.resolve("receipt-archives"),
+                Map.of(),
+                Map.of("inputs/repository/.git/HEAD", head),
+                List.of(directory));
         try (var tar = new TarArchiveInputStream(Files.newInputStream(archive))) {
             var names = new ArrayList<String>();
             TarArchiveEntry entry;
@@ -170,13 +179,26 @@ class SandboxWorkspaceManagerTest {
         var other = Files.writeString(temporary.resolve("other"), "different");
         Files.writeString(source.resolve("file"), "captured");
         var directory = new EvidenceDirectory("repo/", source);
-        assertThatThrownBy(() -> manager.createInputTar(Map.of("repo/file", new byte[0]), Map.of(), List.of(directory)))
+        assertThatThrownBy(() -> manager.createInputTar(
+                        temporary.resolve("receipt-archives"),
+                        Map.of("repo/file", new byte[0]),
+                        Map.of(),
+                        List.of(directory)))
                 .isInstanceOf(SandboxException.class);
-        assertThatThrownBy(() -> manager.createInputTar(Map.of(), Map.of("repo/file", other), List.of(directory)))
+        assertThatThrownBy(() -> manager.createInputTar(
+                        temporary.resolve("receipt-archives"),
+                        Map.of(),
+                        Map.of("repo/file", other),
+                        List.of(directory)))
                 .isInstanceOf(SandboxException.class);
-        assertThatThrownBy(() -> manager.createInputTar(Map.of(), Map.of(), List.of(directory, directory)))
+        assertThatThrownBy(() -> manager.createInputTar(
+                        temporary.resolve("receipt-archives"), Map.of(), Map.of(), List.of(directory, directory)))
                 .isInstanceOf(SandboxException.class);
-        assertThatThrownBy(() -> manager.createInputTar(Map.of("repo", new byte[0]), Map.of(), List.of(directory)))
+        assertThatThrownBy(() -> manager.createInputTar(
+                        temporary.resolve("receipt-archives"),
+                        Map.of("repo", new byte[0]),
+                        Map.of(),
+                        List.of(directory)))
                 .isInstanceOf(SandboxException.class);
     }
 
@@ -185,7 +207,8 @@ class SandboxWorkspaceManagerTest {
         var source = Files.createDirectory(temporary.resolve("repository"));
         Files.createSymbolicLink(source.resolve("escape"), temporary);
         var directory = new EvidenceDirectory("repo/", source);
-        assertThatThrownBy(() -> manager.createInputTar(Map.of(), Map.of(), List.of(directory)))
+        assertThatThrownBy(() -> manager.createInputTar(
+                        temporary.resolve("receipt-archives"), Map.of(), Map.of(), List.of(directory)))
                 .isInstanceOf(SandboxException.class);
     }
 }

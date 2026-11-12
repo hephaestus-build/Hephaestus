@@ -535,7 +535,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                 new GitRepositoryLockManager(),
                 layout,
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class));
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
         manager.ensureRepository(key, source.toUri().toString(), null);
         Path staging;
         try (var snapshot = manager.readTreeSnapshot(key, sha)) {
@@ -552,7 +553,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSweepGitSnapshotsNobodyReleasedAfterTheGracePeriod() throws Exception {
+    void shouldSweepAbandonedGitSnapshotsWithoutWaitingForTheRetentionGrace() throws Exception {
         var layout = new FabricLayout(root.toString());
         Path snapshot = Files.createDirectories(layout.root().resolve("git-snapshot-abandoned"));
         Files.writeString(snapshot.resolve("README.md"), "left behind");
@@ -561,22 +562,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             Files.setLastModifiedTime(entry, FileTime.from(clock.instant()));
         }
 
-        new JobEvidenceFiles(
-                        layout,
-                        jobs,
-                        Clock.offset(clock, Duration.ofMinutes(59)),
-                        personCopies(),
-                        mock(AttemptInputs.class))
-                .cleanEndedAttempts();
-        assertThat(snapshot).exists();
-
-        new JobEvidenceFiles(
-                        layout,
-                        jobs,
-                        Clock.offset(clock, Duration.ofHours(1)),
-                        personCopies(),
-                        mock(AttemptInputs.class))
-                .cleanEndedAttempts();
+        new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class)).cleanEndedAttempts();
         assertThat(snapshot).doesNotExist();
         assertThat(unrelated).as("only the Git spool is swept").exists();
     }

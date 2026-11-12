@@ -112,7 +112,8 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class));
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
         var localTransport = spy(localGit);
         doAnswer(invocation -> {
                     localGit.ensureRepository(KEY, remote.toUri().toString(), null);

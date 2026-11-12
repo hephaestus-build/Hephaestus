@@ -209,6 +209,36 @@ PostgreSQL retains admitted results and their citation verification results.
 Delivery does not require the server's source files.
 [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion) defines the storage and cleanup contract.
 
+### Temporary evidence and restarts
+
+Temporary copies use the existing evidence home. The server records their workspace and takes a file lease before it writes source content.
+
+A capture keeps its existing PostgreSQL admission session until its last temporary copy is physically removed.
+Nested preparation uses that session. A returned snapshot retains it until close succeeds.
+
+A failed close leaves the copy registered for reconciliation. It does not release admission while the files remain.
+
+| Copy | Location below `HEPHAESTUS_FABRIC_ROOT` | Owner and removal |
+| --- | --- | --- |
+| Review capture spools and context-loader Git snapshots | `.evidence-spool/<workspaceId>/copy-*/content` | Workspace, file lease and capture admission. Close removes the copy. Failed removal is retried. |
+| Legacy tools context-transfer archive | JVM temporary directory, `heph-load-*.tar` | The tools response deletes this archive after transfer. It has no workspace receipt or restart reconciliation. This path remains a custody gap until the tools runtime retires the archive. |
+| Git mirrors and verified checkout caches, including unfinished cache builds | The workspace repository mirror and its `hephaestus-checkouts` directory | Repository ownership. Repository removal and mirror eviction remove the cache. These copies retain upstream Git history under the repository policy. |
+| Frozen attempt inputs and unfinished preparation | `jobs/<workspaceId>/<jobId>/...` | The existing `person_evidence_copy` receipt and attempt-folder lease. |
+| Review input archives and gateway selections | The attempt's `.archives` directory | The same receipt and folder lease, including when the gateway process is lost. |
+
+On startup, the server removes spool entries whose file leases have no live owner, and the former root-level `git-snapshot-*` copies.
+This cleanup runs before the evidence home admits new work. It does not wait for attempt retention.
+An unreadable directory or failed removal stops startup.
+An active file lease is preserved.
+
+A running server retries failed closes in the existing evidence reconcile pass.
+They count toward `evidence_reconcile_failures_total` and prevent the last-success signal from advancing.
+Follow [Evidence cleanup is stalled](./production-operations-runbook#alert-response).
+An offline volume still needs the access controls in [Data retention](./data-retention).
+
+The [temporary-copy contract](../contributor/practice-review-pipeline#temporary-copy-custody) defines admission and file-lock ownership.
+Spool cleanup failures log `event.name=evidence.spool.cleanup.failed` and `error.type`, without exception messages or copied file content.
+
 Source authorization is not a deployment switch.
 The active source contract fixes which governed sources each purpose can use.
 Integrations only determine which authorized sources are available.

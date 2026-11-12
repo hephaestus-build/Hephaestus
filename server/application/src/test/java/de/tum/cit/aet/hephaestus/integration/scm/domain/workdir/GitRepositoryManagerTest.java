@@ -4,8 +4,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 
-import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
@@ -36,6 +36,7 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 import org.assertj.core.groups.Tuple;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.JGitInternalException;
 import org.eclipse.jgit.internal.storage.file.GC;
 import org.eclipse.jgit.lib.CommitBuilder;
 import org.eclipse.jgit.lib.Constants;
@@ -84,7 +85,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(fabric.toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class));
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
     }
 
     @Test
@@ -106,6 +108,9 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                     .as("the second copy comes from the cache")
                     .isFalse();
 
+            assertThat(cachedCheckouts())
+                    .hasSize(1)
+                    .noneMatch(path -> path.getFileName().toString().startsWith(".preparing-"));
             assertThat(Files.readString(second.resolve("README.md"))).isEqualTo("Repository\n");
             assertThat(Files.readString(second.resolve(".git/HEAD")).trim()).isEqualTo(head);
             assertThat(second.resolve(".git/" + GitRepositoryManager.CAPTURED_REFS))
@@ -136,6 +141,30 @@ class GitRepositoryManagerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldClassifyRuntimeCacheBuildFailuresAndRemoveTheirStagingDirectory() throws Exception {
+        try (Git git = repository()) {
+            String head = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
+                    .name();
+            String tree = Objects.requireNonNull(git.getRepository().resolve(head + "^{tree}"))
+                    .name();
+            prepare();
+            var unavailable = mockStatic(Git.class, invocation -> {
+                if (invocation.getMethod().getName().equals("init"))
+                    throw new JGitInternalException("Snapshot initialization failed");
+                return invocation.callRealMethod();
+            });
+            try (unavailable) {
+                assertThatThrownBy(() -> manager.copyCheckout(KEY, head, tree, null, temporary.resolve("failed-copy")))
+                        .isInstanceOf(GitRepositoryManager.GitOperationException.class)
+                        .hasCauseInstanceOf(JGitInternalException.class);
+            }
+            assertThat(cachedCheckouts()).isEmpty();
+            assertThat(temporary.resolve("failed-copy")).doesNotExist();
+            assertThat(source.resolve("README.md")).hasContent("Repository\n");
+        }
+    }
+
+    @Test
     void shouldRefuseACapturedCheckoutWhoseCommitHasAnotherTree() throws Exception {
         try (Git git = repository()) {
             String head = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
@@ -146,7 +175,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             assertThatThrownBy(() -> manager.copyCheckout(KEY, head, "b".repeat(40), null, target))
                     .isInstanceOf(GitRepositoryManager.TreeMismatchException.class);
             assertThat(target).doesNotExist();
-            assertThat(stagingDirectories()).isEmpty();
+            assertThat(cachedCheckouts()).isEmpty();
         }
     }
 
@@ -339,8 +368,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             try (var snapshot = manager.readTreeSnapshot(KEY, sha)) {
                 staging = snapshot.stagingDir();
                 assertThat(staging).startsWith(fabric);
-                assertThat(staging.getFileName().toString()).startsWith(EvidenceSpool.PREFIX);
-                assertThat(EvidenceSpool.isCurrentProcess(staging)).isTrue();
+                assertThat(staging)
+                        .startsWith(fabric.resolve(".evidence-spool").resolve(Long.toString(KEY.workspaceId())));
                 assertThat(snapshot.complete()).isTrue();
                 assertThat(snapshot.commitSha()).isEqualTo(sha);
                 assertThat(snapshot.visitedFiles()).isEqualTo(4);
@@ -415,7 +444,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                     new GitRepositoryLockManager(),
                     new FabricLayout(fabric.resolve("other-role").toString()),
                     GitTransportFixtures.guarded(),
-                    mock(RepositoryRefState.class));
+                    mock(RepositoryRefState.class),
+                    GitTransportFixtures.copyFence());
             other.ensureRepository(KEY, source.toUri().toString(), null);
             try (var first = manager.readTreeSnapshot(KEY, main);
                     var second = other.readTreeSnapshot(KEY, main);
@@ -602,7 +632,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 }
             }
 
-            // An original commit the mirror does not hold is refused before anything is staged, not
+            // An original commit the mirror does not hold is refused before source content is written, not
             // replaced.
             assertThatThrownBy(() -> manager.readOriginalSnapshot(KEY, original, List.of("d".repeat(40))))
                     .isInstanceOf(GitRepositoryManager.GitOperationException.class);
@@ -1022,11 +1052,19 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         manager.ensureRepository(KEY, source.toUri().toString(), null);
     }
 
+    private List<Path> cachedCheckouts() throws IOException {
+        Path cache = fabric.resolve("mirrors/100/1.git/hephaestus-checkouts");
+        if (!Files.isDirectory(cache)) return List.of();
+        try (Stream<Path> entries = Files.list(cache)) {
+            return entries.toList();
+        }
+    }
+
     private List<Path> stagingDirectories() throws IOException {
-        if (!Files.isDirectory(fabric)) return List.of();
-        try (Stream<Path> entries = Files.list(fabric)) {
-            return entries.filter(path -> path.getFileName().toString().startsWith(EvidenceSpool.PREFIX))
-                    .toList();
+        Path workspace = fabric.resolve(".evidence-spool/100");
+        if (!Files.isDirectory(workspace)) return List.of();
+        try (Stream<Path> entries = Files.list(workspace)) {
+            return entries.toList();
         }
     }
 }

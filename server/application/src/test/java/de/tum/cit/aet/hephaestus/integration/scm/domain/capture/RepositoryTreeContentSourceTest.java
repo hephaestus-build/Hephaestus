@@ -13,6 +13,8 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpoolFixtures;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
@@ -50,12 +52,16 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        stagingDir = EvidenceSpoolFixtures.directory(new FabricLayout(root.toString()).spool(), 99)
+                .path();
         Git.init().setDirectory(stagingDir.toFile()).call().close();
         source = new RepositoryTreeContentSource(
                 gitRepositoryManager, preparer, Mockito.mock(PersonDataCopyRecorder.class));
     }
 
     @TempDir
+    Path root;
+
     Path stagingDir;
 
     @Test

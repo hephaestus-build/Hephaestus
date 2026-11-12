@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpoolFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -101,7 +102,9 @@ class ScmItemRecordTest extends BaseUnitTest {
         var key = new RepositoryKey(1, 3);
         var entry = new ScmFileVersions.Entry("src/a.ts", "100644", BLOB);
         byte[] bytes = "insecure();\n".getBytes(StandardCharsets.UTF_8);
-        var staging = Files.createDirectories(root.resolve("scan"));
+        var staging = EvidenceSpoolFixtures.directory(
+                        new FabricLayout(root.resolve("fabric").toString()).spool(), 1)
+                .path();
         Files.createDirectories(staging.resolve("src"));
         Files.write(staging.resolve("src/a.ts"), bytes);
         when(items.parent(pinned.item(), ScmItemEvents.REPOSITORY)).thenReturn(holder);
@@ -154,7 +157,8 @@ class ScmItemRecordTest extends BaseUnitTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(root.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class));
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
         var gitTree = new ScmGitTree(manager);
         var versions = new ScmFileVersions(mapper);
         ReflectionTestUtils.setField(service, "tree", gitTree);
