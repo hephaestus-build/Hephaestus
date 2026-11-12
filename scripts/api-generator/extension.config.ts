@@ -8,6 +8,15 @@ import { defineConfig } from "@hey-api/openapi-ts";
  */
 export default defineConfig({
 	input: "../../server/openapi.yaml",
-	output: "../../extension/src/api",
+	output: {
+		path: "../../extension/src/api",
+		entryFile: false,
+		postProcess: [
+			{
+				command: "oxfmt",
+				args: ["--config", "./oxfmt.generated.json", "--disable-nested-config", "{{path}}"],
+			},
+		],
+	},
 	plugins: ["@hey-api/typescript", "@hey-api/client-fetch", "@hey-api/sdk"],
 });
