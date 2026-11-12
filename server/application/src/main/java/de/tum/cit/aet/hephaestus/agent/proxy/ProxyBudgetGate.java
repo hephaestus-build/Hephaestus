@@ -4,11 +4,10 @@ import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
+import de.tum.cit.aet.hephaestus.core.CacheLoads;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -33,11 +32,7 @@ class ProxyBudgetGate {
     private static final long MAX_CACHED_WORKSPACES = 10_000;
 
     private final LlmBudgetService budgetService;
-    /**
-     * Holds each workspace's read as a future. Caffeine runs a synchronous loader inside {@code ConcurrentHashMap.compute},
-     * whose monitor pins a virtual thread to its carrier on Java 21; a ledger read there, and the calls of the same
-     * workspace that wait on the monitor, can hold every carrier while the pool waits for one to return a connection.
-     */
+    /** Each workspace's read, loaded outside the cache's lock ({@link CacheLoads}). */
     private final AsyncCache<Long, LlmBudgetHeadroom> headroomByWorkspace;
 
     ProxyBudgetGate(LlmBudgetService budgetService) {
@@ -82,28 +77,10 @@ class ProxyBudgetGate {
         headroomByWorkspace.synchronous().invalidate(workspaceId);
     }
 
-    /**
-     * The cached verdict, or one read now. The cache's lock only installs the future; the caller that installed it reads
-     * the ledger on its own thread, outside the lock, and the calls of the same workspace wait on that future. A verdict
-     * cleared by {@link #spent} while it is read is not put back.
-     */
+    /** The cached verdict, or one read now outside the cache's lock ({@link CacheLoads}). */
     private @Nullable LlmBudgetHeadroom headroom(long workspaceId) {
-        var read = new CompletableFuture<LlmBudgetHeadroom>();
-        var installed = new AtomicBoolean();
-        CompletableFuture<LlmBudgetHeadroom> verdict = headroomByWorkspace.get(workspaceId, (id, unused) -> {
-            installed.set(true);
-            return read;
-        });
-        if (installed.get()) {
-            try {
-                LlmBudgetHeadroom headroom = budgetService.headroom(workspaceId);
-                read.complete(headroom);
-                return headroom;
-            } catch (RuntimeException failure) {
-                read.completeExceptionally(failure);
-                throw failure;
-            }
-        }
-        return verdict.join();
+        @Nullable
+        LlmBudgetHeadroom headroom = CacheLoads.get(headroomByWorkspace, workspaceId, budgetService::headroom);
+        return headroom;
     }
 }
