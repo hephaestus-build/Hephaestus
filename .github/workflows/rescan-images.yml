@@ -182,12 +182,12 @@ jobs:
       # Security alerts are access-controlled. Do not copy detailed findings into public artifacts or issues.
       - name: Publish restricted security alerts
         if: ${{ !cancelled() && hashFiles('tmp/platform-rescan/linux-amd64/*.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: tmp/platform-rescan/linux-amd64
       - name: Publish restricted ARM64 security alerts
         if: ${{ !cancelled() && hashFiles('tmp/platform-rescan/linux-arm64/*.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: tmp/platform-rescan/linux-arm64
       - name: Notify maintainers when the rescan is unavailable
