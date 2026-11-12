@@ -21,10 +21,10 @@ import {
 } from "node:fs";
 import fs from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
-import { connect, createServer, type Server, type Socket } from "node:net";
+import { connect, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test, { after, before, beforeEach, mock, type TestContext } from "node:test";
+import test, { after, afterEach, before, beforeEach, mock, type TestContext } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
@@ -41,6 +41,7 @@ import {
 	checkAuthority,
 	roleOptions,
 	startToolsServer,
+	type ToolsServer,
 } from "../../../main/resources/agent/tools-server.ts";
 import { dialAddress, listenAddress, transport } from "./tool-transport.ts";
 
@@ -75,13 +76,11 @@ function trashDirectories(): string[] {
 }
 
 async function awaitTrashRemoval(): Promise<void> {
-	for (let attempt = 0; trashDirectories().length > 0 && attempt < 100; attempt += 1) {
-		await sleep(10);
-	}
-	assert.equal(trashDirectories().length, 0);
+	await server.waitForReclamation();
+	assert.deepEqual(trashDirectories(), []);
 }
 
-let server: Server;
+let server: ToolsServer;
 let client: ToolClient;
 /** The address of the suite's tools side on this run's transport. */
 let served: ToolAddress;
@@ -110,8 +109,7 @@ before(async () => {
 	openedAt = Date.now();
 });
 
-beforeEach(async () => {
-	await awaitTrashRemoval();
+beforeEach(() => {
 	mkdirSync(path.join(workspace, "repos"), { recursive: true });
 	mkdirSync(scratch, { recursive: true });
 	writeFileSync(path.join(workspace, "notes.txt"), "one\ntwo\nthree\nfour\n");
@@ -120,9 +118,14 @@ beforeEach(async () => {
 	}
 });
 
-after(() => {
+afterEach(awaitTrashRemoval);
+
+after(async () => {
 	client.close();
+	const closed = once(server, "close");
 	server.close();
+	await closed;
+	await awaitTrashRemoval();
 });
 
 async function run(
@@ -389,9 +392,11 @@ void test("reset provides a fresh writable workspace before trash deletion finis
 	const release = Promise.withResolvers<undefined>();
 	const { rm } = fs;
 	let held = false;
+	let retired: string | undefined;
 	const rmMock = t.mock.method(fs, "rm", async (...args: Parameters<typeof fs.rm>) => {
 		if (String(args[0]).includes(".tools-trash-") && !held) {
 			held = true;
+			retired = String(args[0]);
 			reached.resolve(undefined);
 			await release.promise;
 		}
@@ -402,16 +407,28 @@ void test("reset provides a fresh writable workspace before trash deletion finis
 		await client.reset();
 		assert.equal(existsSync(marker), false);
 		await reached.promise;
+		assert.equal(held, true);
+		assert.ok(retired !== undefined);
+		assert.equal(existsSync(retired), true);
+		await client.reset();
+		const ownedTrees = trashDirectories().map((name) => path.join(base, name));
+		assert.equal(ownedTrees.length, 2);
+		let completed = false;
+		const completion = (async () => {
+			await server.waitForReclamation();
+			completed = true;
+		})();
 		const written = await run("printf fresh > writable; cat writable");
 		assert.equal(written.output, "fresh");
-		assert.equal(held, true);
-		await client.reset();
+		assert.equal(completed, false);
+		release.resolve(undefined);
+		await completion;
+		assert.ok(ownedTrees.every((directory) => !existsSync(directory)));
 	} finally {
 		release.resolve(undefined);
 		rmMock.mock.restore();
 		syncBuiltinESMExports();
 	}
-	await awaitTrashRemoval();
 });
 
 void test("startup retries trash left by an earlier tools server", async () => {
@@ -433,9 +450,7 @@ void test("startup retries trash left by an earlier tools server", async () => {
 	});
 	try {
 		await once(restarted, "listening");
-		for (let attempt = 0; existsSync(oldTrash) && attempt < 100; attempt += 1) {
-			await sleep(10);
-		}
+		await restarted.waitForReclamation();
 		assert.equal(existsSync(oldTrash), false);
 	} finally {
 		const closed = once(restarted, "close");
@@ -464,21 +479,12 @@ void test("resets stop at the trash bound and recover when deletion works again"
 		}
 		assert.equal(trashDirectories().length, 4);
 		await assert.rejects(client.reset(), refusal("storage"));
+		await server.waitForReclamation();
 		assert.equal(trashDirectories().length, 4);
 		blocked = false;
-		let recovered = false;
-		for (let attempt = 0; !recovered && attempt < 100; attempt += 1) {
-			try {
-				await client.reset();
-				recovered = true;
-			} catch (error) {
-				if (!refusal("storage")(error)) {
-					throw error;
-				}
-				await sleep(10);
-			}
-		}
-		assert.equal(recovered, true);
+		await assert.rejects(client.reset(), refusal("storage"));
+		await awaitTrashRemoval();
+		await client.reset();
 		const written = await run("printf recovered > writable; cat writable");
 		assert.equal(written.output, "recovered");
 	} finally {
@@ -1427,9 +1433,14 @@ void test("a conversation's tools side nests puts under its workspace and replac
 		const closed = once(conversation, "close");
 		conversation.close();
 		await closed;
-		// Puts extract read-only, and the trash may still be draining.
+		await conversation.waitForReclamation();
+		assert.deepEqual(
+			readdirSync(home).filter((name) => name.startsWith(".tools-trash-")),
+			[],
+		);
+		// Puts extract read-only.
 		execFileSync("chmod", ["-R", "u+w", home]);
-		rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 });
+		rmSync(home, { recursive: true, force: true });
 		rmSync(source, { recursive: true, force: true });
 	}
 });

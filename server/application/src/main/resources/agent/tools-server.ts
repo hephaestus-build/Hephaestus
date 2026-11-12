@@ -496,7 +496,12 @@ export function roleOptions(
 	return { putRoots: [repos] };
 }
 
-export function startToolsServer(options: ToolsServerOptions): Server {
+export interface ToolsServer extends Server {
+	/** After calls stop, waits for the current pass and sweeps requested during it. Failed trees remain for a later sweep. */
+	waitForReclamation: () => Promise<void>;
+}
+
+export function startToolsServer(options: ToolsServerOptions): ToolsServer {
 	if (options.soleUser) {
 		checkAuthority();
 	}
@@ -563,12 +568,10 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		}
 	}
 	let reclaiming = false;
+	let reclamation = Promise.resolve();
 	let sweepRequested = false;
 
 	async function reclaimBatch(): Promise<void> {
-		if (reclaiming) {
-			return;
-		}
 		reclaiming = true;
 		try {
 			while (sweepRequested) {
@@ -597,7 +600,9 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			}
 		}
 		sweepRequested = true;
-		void reclaimBatch();
+		if (!reclaiming) {
+			reclamation = reclaimBatch();
+		}
 	}
 
 	function requireTrashRoom(): void {
@@ -1500,7 +1505,11 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 	if (options.programsOnly === true) {
 		server.maxConnections = 1;
 	}
-	return server.listen(options.address, () => {
+	return Object.assign(server, {
+		async waitForReclamation(): Promise<void> {
+			await reclamation;
+		},
+	}).listen(options.address, () => {
 		// The loop runs as another user of the Pod's group, and a Unix connect needs write access to the socket.
 		if ("path" in options.address) {
 			chmodSync(options.address.path, 0o660);
