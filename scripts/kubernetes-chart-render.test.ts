@@ -4936,8 +4936,7 @@ await test("the parallel pressure drill waits for the chart's priorities and exc
 		{
 			worker: {
 				enabled: true,
-				sandbox: { namespace: sandboxNamespace },
-				runtime: { runtimeClassName: "gvisor" },
+				sandbox: { namespace: sandboxNamespace, templates: { runtimeClassName: "gvisor" } },
 			},
 			networkPolicy: { kubernetesApi },
 		},
@@ -4947,11 +4946,14 @@ await test("the parallel pressure drill waits for the chart's priorities and exc
 		priorities.map((resource) => `priorityclass/${nameOf(resource)}`).toSorted(),
 		priorityClassResources.toSorted(),
 	);
+	const templates = resources.filter((resource) => kindOf(resource) === "SandboxTemplate");
+	assert.ok(templates.length > 0);
+	for (const template of templates) {
+		assert.equal(get(template, "spec", "podTemplate", "spec", "runtimeClassName"), "gvisor");
+	}
 	const pods = [
 		...workloads(resources).map(podSpec),
-		...resources
-			.filter((resource) => kindOf(resource) === "SandboxTemplate")
-			.map((resource) => get(resource, "spec", "podTemplate", "spec")),
+		...templates.map((resource) => get(resource, "spec", "podTemplate", "spec")),
 	];
 	assert.ok(pods.length > 0);
 	for (const pod of pods) {

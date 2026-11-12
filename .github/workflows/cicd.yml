@@ -1129,13 +1129,13 @@ jobs:
   # (kubernetes-nightly.yml) covers changes that the filter does not select. `Docker` puts every image
   # under the head commit's tag, by building it or, in a pull request, by aliasing the base image; a
   # fork publishes none, so there is nothing to install.
-  # `Docker` succeeds with the Dockerfile images alone when the server package failed, so this job
-  # waits for the package too: the run reports that failure once, not again as a cluster failure.
+  # A partial Docker result can omit the application image after packaging failed. Require that
+  # image's digest, rather than another direct edge to the package, before starting a cluster.
   Kubernetes:
     name: "Kubernetes"
-    needs: [detect-changes, server-package, Docker]
+    needs: [detect-changes, Docker]
     if: >-
-      !cancelled() && needs.Docker.result == 'success' && needs.server-package.result != 'failure' &&
+      !cancelled() && needs.Docker.result == 'success' && needs.Docker.outputs.application-server-digest != '' &&
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.publishable == 'true' &&
       (github.event_name == 'push' && needs.detect-changes.outputs.queue-run == '' ||
@@ -1151,7 +1151,7 @@ jobs:
       # kind and parallel roll/eviction, using the commit that main receives. ci:full reproduces
       # those legs on a PR too. Only the nightly run adds arm64.
       queue: ${{ needs.detect-changes.outputs.queue-tier == 'true' }}
-      application-artifact: ${{ needs.server-package.result == 'success' && format('server-build-{0}', github.run_id) || '' }}
+      application-artifact: ${{ github.event_name != 'merge_group' && format('server-build-{0}', github.run_id) || '' }}
       backup-drill: ${{ needs.detect-changes.outputs.kubernetes-recovery == 'true' }}
 
   Database-upgrade:

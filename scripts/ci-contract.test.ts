@@ -2993,20 +2993,40 @@ void describe("CI contract", () => {
 		assert.equal(workflow.getIn(["jobs", "Supported-host-smoke"]), undefined);
 		const cluster = job(source, "Kubernetes");
 		assert.match(cluster, /needs\.Docker\.result == 'success'/u);
-		assert.match(cluster, /needs\.server-package\.result != 'failure'/u);
+		assert.match(cluster, /needs\.Docker\.outputs\.application-server-digest != ''/u);
+		assert.doesNotMatch(cluster, /needs\.server-package/u);
 		assert.match(cluster, /outputs\.kubernetes == 'true'/u);
 		assert.match(
 			cluster,
 			/commit: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/u,
 		);
 		assertNeeds(source, "all-ci-passed", "Kubernetes");
-		assertNeeds(source, "all-ci-passed", "Kubernetes");
-		assertNeeds(source, "Kubernetes", "server-package");
-		assertNeeds(source, "Kubernetes", "Docker");
-		assert.match(
-			job(source, "Kubernetes"),
-			/application-artifact:.*needs\.server-package\.result == 'success'/u,
+		assert.deepEqual(needsOf(workflow, "Kubernetes"), ["detect-changes", "Docker"]);
+		assert.ok(
+			needsClosure(workflow, "Kubernetes").has("server-package"),
+			"Images already waits for the packaged JAR",
 		);
+		const artifact = workflow.getIn(["jobs", "Kubernetes", "with", "application-artifact"]);
+		for (const event of ["pull_request", "merge_group", "push", "workflow_dispatch"]) {
+			assert.equal(
+				expandExpressions(artifact, { github: { event_name: event, run_id: 123 } }),
+				event === "merge_group" ? "" : "server-build-123",
+				"PR qualification consumes this image producer's packaged artifact; queue drills need no JAR",
+			);
+		}
+		for (const digest of ["", `sha256:${"a".repeat(64)}`]) {
+			assert.equal(
+				jobRuns(workflow, "Kubernetes", "pull_request", {
+					"detect-changes": {
+						result: "success",
+						outputs: { should_skip: "false", publishable: "true", kubernetes: "true" },
+					},
+					Docker: { result: "success", outputs: { "application-server-digest": digest } },
+				}),
+				digest !== "",
+				"a partial image result without the application image cannot start a cluster",
+			);
+		}
 		const reusable = await readFile(".github/workflows/ci-kubernetes.yml", "utf8");
 		assert.match(reusable, /resolve-release-images\.ts "\$COMMIT"/u);
 		assert.match(reusable, /kubernetes-cluster\.ts verify/u);

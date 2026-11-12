@@ -777,11 +777,15 @@ The `kubernetes` path filter selects the cluster legs for chart, platform, sandb
 A selected ordinary PR runs the latest-minor `amd64` install, upgrade, isolation probes and adapter qualification.
 It also runs the [replacement-storage recovery drill](#recovery-tests) when its inputs change.
 
-Merge groups and nightly runs add **Kubernetes / k3s 1.37 amd64 roll and eviction** on a separate cluster.
+The queue tier and nightly runs add **Kubernetes / k3s 1.37 amd64 roll and eviction** on a separate cluster.
 It starts alongside the install/qualification job after the images are ready.
+The caller needs only the image producer and change metadata. The image producer already waits for the packaged server.
+
 Its conversation roll runs on the release nodes while eviction fixtures run in their own namespace on a tainted disposable node.
 Native background steps run both drills together. `wait-all` requires both results before the job passes.
 The qualification cluster owns chart lint, upgrade checks, adapter probes, recovery and new-node image prepull checks, so the drill cluster does not repeat them.
+
+If this split increases the measured merge-group verdict median or p90, revert the split or move roll and eviction to nightly.
 
 A failed roll or eviction fails the Kubernetes stage and blocks the merge group through `CI Status Gate`.
 Use `ci:full` to reproduce the queue legs on a PR, including the separate drill job, lowest-minor k3s and Calico.
