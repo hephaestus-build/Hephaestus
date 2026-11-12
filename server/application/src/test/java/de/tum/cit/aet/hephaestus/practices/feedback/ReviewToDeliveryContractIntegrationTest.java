@@ -114,6 +114,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackReadbackObservedEvent;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
@@ -130,6 +131,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
+import de.tum.cit.aet.hephaestus.testconfig.AfterCommitCheckpoint;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGitHub;
@@ -180,6 +182,8 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.modulith.events.FailedEventPublications;
+import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.test.context.BootstrapUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -243,6 +247,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private FailedEventPublications failedPublications;
 
     @Autowired
     private ReviewItemRepository reviewItems;
@@ -1931,6 +1938,83 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var expiredResume = transactions.execute(
                     status -> reviewRuns.resumeComposition(review.workspaceId(), review.reviewId()));
             assertThat(expiredResume).isFalse();
+        }
+    }
+
+    @Test
+    void shouldResumeCompletedReadbackWhenTheAfterCommitStageDidNotRun() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var admitted = admitStaged(review.identity(), request(review));
+            var publicationContext =
+                    admission.publicFeedbackHistory(review.identity()).publicationContext();
+            UUID feedbackId = admission
+                    .publishPackage(review.identity(), composition(admitted, SUMMARY, publicationContext))
+                    .pieces()
+                    .getFirst()
+                    .feedbackId();
+            ActionTestSupport.drain(executor, jdbc);
+            assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId())
+                            .orElseThrow()
+                            .getComposition()
+                            .path("readback")
+                            .isArray())
+                    .isTrue();
+            RuntimeJobTestData.updateJobs(
+                    jdbc,
+                    "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    review.identity().jobId());
+            var ended = jobs.findById(review.identity().jobId()).orElseThrow();
+            assertThat(compositionBases.findByWorkspaceIdAndJobId(review.workspaceId(), ended.getId()))
+                    .isPresent();
+            String readAt = Instant.now().toString();
+
+            AfterCommitCheckpoint.hold(
+                    context.getBean(PlatformTransactionManager.class),
+                    () -> {
+                        jdbc.update(
+                                "UPDATE feedback SET composition=jsonb_set(composition,'{readAt}',to_jsonb(?::text))"
+                                        + " WHERE workspace_id=? AND id=?",
+                                readAt,
+                                review.workspaceId(),
+                                feedbackId);
+                        events.publishEvent(new FeedbackReadbackObservedEvent(review.workspaceId(), review.reviewId()));
+                    },
+                    () -> {
+                        assertThat(jdbc.queryForObject(
+                                        "SELECT composition->>'readAt' FROM feedback WHERE workspace_id=? AND id=?",
+                                        String.class,
+                                        review.workspaceId(),
+                                        feedbackId))
+                                .isEqualTo(readAt);
+                        assertThat(jobs.findById(ended.getId()).orElseThrow().getStatus())
+                                .isEqualTo(ReviewJobStatus.COMPLETED);
+                        var publications = jdbc.queryForList(
+                                "SELECT id FROM event_publication WHERE event_type=?"
+                                        + " AND serialized_event::jsonb->>'reviewId'=?",
+                                UUID.class,
+                                FeedbackReadbackObservedEvent.class.getName(),
+                                review.reviewId().toString());
+                        assertThat(publications).hasSize(1);
+                        UUID publicationId = publications.getFirst();
+                        // The staleness monitor marks this committed publication failed after its process stops.
+                        jdbc.update(
+                                "UPDATE event_publication SET status='FAILED',publication_date=? WHERE id=?",
+                                Timestamp.from(Instant.EPOCH),
+                                publicationId);
+                        failedPublications.resubmit(ResubmissionOptions.defaults()
+                                .withBatchSize(1)
+                                .withFilter(publication ->
+                                        publication.getIdentifier().equals(publicationId)));
+                        var resumed = jobs.findById(ended.getId()).orElseThrow();
+                        assertThat(resumed.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+                        assertThat(resumed.getAttempt()).isEqualTo(ended.getAttempt() + 1);
+                        assertThat(jdbc.queryForList("SELECT id FROM event_publication WHERE id=?", publicationId))
+                                .isEmpty();
+                    });
+
+            // Releasing the held original dispatch delivers the same wake again; it cannot queue a second continuation.
+            assertThat(jobs.findById(ended.getId()).orElseThrow().getAttempt()).isEqualTo(ended.getAttempt() + 1);
         }
     }
 

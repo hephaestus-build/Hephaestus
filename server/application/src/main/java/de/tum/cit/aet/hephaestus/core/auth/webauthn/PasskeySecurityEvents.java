@@ -48,14 +48,17 @@ public class PasskeySecurityEvents {
 
     record PasskeyFailure(Long accountId, AuthEvent.EventType type, String reason) {}
 
-    // The account write lock must end before the audit writer opens its independent transaction.
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    // Join the passkey transaction: an independent audit transaction waits on its account write lock.
+    @Transactional(propagation = Propagation.MANDATORY)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void success(PasskeySuccess event) {
-        audit.event(event.type(), AuthEvent.Result.SUCCESS)
+        boolean recorded = audit.event(event.type(), AuthEvent.Result.SUCCESS)
                 .account(event.accountId())
                 .details("{\"passkey_operation\":\"" + event.operation() + "\"}")
-                .record();
+                .recordInCurrentTransaction();
+        if (!recorded) {
+            throw new IllegalStateException("The passkey audit could not be recorded");
+        }
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
