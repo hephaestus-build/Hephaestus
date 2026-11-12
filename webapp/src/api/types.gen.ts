@@ -2211,6 +2211,7 @@ export type IdentityView = {
 
 export type InapplicabilityWarrant = {
 	consulted?: Array<string>;
+	hits?: string;
 	prerequisite?: string;
 	ruledOutBy?: string;
 };
@@ -4788,6 +4789,10 @@ export type RateLimitSnapshot = {
 export type ReadReceipt = {
 	contentDigest?: string;
 	endLine?: number;
+	/**
+	 * how many matches a {@link ReadReceiptStatus#SEARCHED ReadReceiptStatus#SEARCHED} search found; null on every other receipt
+	 */
+	matches?: number;
 	path?: string;
 	/**
 	 * what a {@link ReadReceiptStatus#SEARCHED ReadReceiptStatus#SEARCHED} search looked for; null on every other receipt
@@ -6271,6 +6276,10 @@ export type ScanSummary = {
 export type SearchWarrant = {
 	boundary?: string;
 	consulted?: Array<string>;
+	/**
+	 * what the matches of the search are, and why they do not show what the result calls absent
+	 */
+	hits?: string;
 	lookedFor?: string;
 };
 

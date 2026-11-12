@@ -27,6 +27,7 @@ class ReviewScanReuseTrustTest extends BaseUnitTest {
                         digest,
                         null,
                         null,
+                        null,
                         null)));
     }
 

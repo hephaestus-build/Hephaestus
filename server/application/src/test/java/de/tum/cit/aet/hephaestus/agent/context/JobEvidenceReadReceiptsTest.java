@@ -96,7 +96,7 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
 
     private ReadReceipt receipt(String path, @Nullable String digest) {
         return new ReadReceipt(
-                SOURCE, WITNESS, path, "commit-one", ReadReceiptStatus.COMPLETE, digest, null, null, null);
+                SOURCE, WITNESS, path, "commit-one", ReadReceiptStatus.COMPLETE, digest, null, null, null, null);
     }
 
     @ParameterizedTest
@@ -170,7 +170,7 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
                 job, new PreparedEvidence(Map.of(recordPath, record, "repos/reviewed/file.txt", BYTES), index), null)) {
             assertThat(prepared.filesOnDisk()).doesNotContainKey("repos/reviewed/.git/HEAD");
             var read = new ReadReceipt(
-                    SOURCE, recordPath, "file.txt", commit, ReadReceiptStatus.COMPLETE, DIGEST, 1, 2, null);
+                    SOURCE, recordPath, "file.txt", commit, ReadReceiptStatus.COMPLETE, DIGEST, 1, 2, null, null);
             assertThat(files.registerReadReceipts(job, index, List.of(read), catalogs)
                             .citableTexts())
                     .containsExactlyElementsOf(texts);
@@ -251,7 +251,16 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
         var prepared = files.prepare(job, new PreparedEvidence(content, null), null);
         try {
             var read = new ReadReceipt(
-                    SOURCE, sourcePath, "file.txt", "commit-one", ReadReceiptStatus.COMPLETE, DIGEST, null, null, null);
+                    SOURCE,
+                    sourcePath,
+                    "file.txt",
+                    "commit-one",
+                    ReadReceiptStatus.COMPLETE,
+                    DIGEST,
+                    null,
+                    null,
+                    null,
+                    null);
             var message = switch (defect) {
                 case "absent-witness", "wrong-source", "missing-witness-file" ->
                     "The host read has no authenticated source witness";

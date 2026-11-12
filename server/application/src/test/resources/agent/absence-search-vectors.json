@@ -1,0 +1,894 @@
+[
+	{
+		"name": "a search for the word the claim names",
+		"patterns": [
+			"(?i)retry|retries"
+		],
+		"subject": "a retry of a failed call",
+		"texts": [
+			"Nothing in the repository retries a failed call."
+		],
+		"consulted": true,
+		"tied": true,
+		"patternsWithMatches": [
+			"(?i)retry|retries"
+		],
+		"owesHits": true
+	},
+	{
+		"name": "a search that cannot find the claim's word",
+		"patterns": [
+			"(?i)retries"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "one alternative is enough",
+		"patterns": [
+			"(?i)zzz|retry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": true,
+		"patternsWithMatches": [
+			"(?i)zzz"
+		],
+		"owesHits": false
+	},
+	{
+		"name": "a word boundary changes nothing",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retry logic",
+		"texts": [],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "an identifier split into the claim's words",
+		"patterns": [
+			"(?i)retryPolicy"
+		],
+		"subject": "a retry policy",
+		"texts": [],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a case-sensitive identifier as written",
+		"patterns": [
+			"RetryPolicy"
+		],
+		"subject": "a RetryPolicy class",
+		"texts": [],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a clause of generic words takes the subject",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"No other file references it."
+		],
+		"consulted": false,
+		"tied": true,
+		"patternsWithMatches": [
+			"(?i)retry"
+		],
+		"owesHits": true
+	},
+	{
+		"name": "several claims, each named",
+		"patterns": [
+			"(?i)retry|timeout"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic; the repository has no timeout setting."
+		],
+		"consulted": false,
+		"tied": true,
+		"patternsWithMatches": [
+			"(?i)timeout"
+		],
+		"owesHits": true
+	},
+	{
+		"name": "a limit of the review is no claim",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository was not searched for auth."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "nonsense proves nothing",
+		"patterns": [
+			"(?i)zzz_absent"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a word glued to nonsense names nothing",
+		"patterns": [
+			"(?i)retryzzz"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "each part of a term must be claimed",
+		"patterns": [
+			"(?i)retry_zzz"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a case-sensitive word in another case",
+		"patterns": [
+			"RETRY"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a pattern with any other syntax names nothing",
+		"patterns": [
+			"(?i)retry.*"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a pattern that matches anything names nothing",
+		"patterns": [
+			".*"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "an escaped literal is not an alternation",
+		"patterns": [
+			"(?i)retry\\|zzz"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a generic word names nothing",
+		"patterns": [
+			"(?i)logic|repository"
+		],
+		"subject": "retry logic in the code",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "another claim stays unnamed",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic.",
+			"The repository has no auth check."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "a consulted checkout needs its subject named",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "an auth check",
+		"texts": [],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "no search names nothing",
+		"patterns": [],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "a word that is a prefix finds the claim's word",
+		"patterns": [
+			"(?i)auth"
+		],
+		"subject": "authentication",
+		"texts": [
+			"The repository has no authentication."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a shorter form finds the longer word",
+		"patterns": [
+			"(?i)logger|log"
+		],
+		"subject": "logging",
+		"texts": [
+			"The repository has no logging."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "singular retry cannot find claimed retries",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "retries",
+		"texts": [
+			"The repository has no retries."
+		],
+		"consulted": true,
+		"tied": false,
+		"claimed": true,
+		"patternsWithMatches": [
+			"(?i)retry"
+		],
+		"owesHits": false
+	},
+	{
+		"name": "a joined identifier finds the claim's words",
+		"patterns": [
+			"(?i)controlleradvice"
+		],
+		"subject": "a ControllerAdvice",
+		"texts": [
+			"The repository has no ControllerAdvice."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a joined identifier runs into the last word",
+		"patterns": [
+			"(?i)ratelimit"
+		],
+		"subject": "a rate limiter",
+		"texts": [
+			"The repository has no rate limiter."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a trailing separator finds another word",
+		"patterns": [
+			"(?i)retry_"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "words out of order find another word",
+		"patterns": [
+			"(?i)logicRetry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a clause of its own marker words takes the subject",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "the retry helper",
+		"texts": [
+			"It is used by no other file."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "a named claim need not repeat in the subject",
+		"patterns": [
+			"ControllerAdvice"
+		],
+		"subject": "an error handler",
+		"texts": [
+			"The reviewed checkout contains no ControllerAdvice."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "the plain wording of a claim counts",
+		"patterns": [
+			"(?i)zzz_absent"
+		],
+		"subject": "auth",
+		"texts": [
+			"There is no auth check in this repository."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "a claim that something is missing from it counts",
+		"patterns": [
+			"(?i)zzz_absent"
+		],
+		"subject": "auth",
+		"texts": [
+			"Auth checks are missing from the repository."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "a separator inside a word finds another word",
+		"patterns": [
+			"(?i)re-try"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a boundary after a part of the word finds another word",
+		"patterns": [
+			"(?i)\\bretr\\b"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a boundary after the whole word finds it",
+		"patterns": [
+			"(?i)\\bauthentication\\b"
+		],
+		"subject": "authentication",
+		"texts": [
+			"The repository has no authentication."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a prefix of a generic word names nothing",
+		"patterns": [
+			"(?i)logi|repositor"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a term cannot start at a generic word",
+		"patterns": [
+			"(?i)noretry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a term cannot end at a generic word",
+		"patterns": [
+			"(?i)retrylog"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a separator at a word joint counts",
+		"patterns": [
+			"(?i)rate-limit"
+		],
+		"subject": "a rate limiter",
+		"texts": [
+			"The repository has no rate limiter."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a long identifier may cross generic words",
+		"patterns": [
+			"(?i)IndexOutOfBoundsException"
+		],
+		"subject": "an IndexOutOfBoundsException",
+		"texts": [
+			"The repository has no IndexOutOfBoundsException."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "an identifier that ends in a generic word counts as a whole token",
+		"patterns": [
+			"(?i)UserRepository"
+		],
+		"subject": "the UserRepository",
+		"texts": [
+			"No other file references UserRepository."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "an identifier that starts with a generic word counts as a whole token",
+		"patterns": [
+			"(?i)handleError"
+		],
+		"subject": "handleError",
+		"texts": [
+			"No other file calls handleError."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "the only test of a subject is a claim",
+		"patterns": [],
+		"subject": "tests of parseConfig",
+		"texts": [
+			"This is the only test of parseConfig."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "no other test is a claim",
+		"patterns": [],
+		"subject": "tests of the retry path",
+		"texts": [
+			"No other test covers the retry path."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "a search for the subject backs an only-test claim",
+		"patterns": [
+			"(?i)parseConfig"
+		],
+		"subject": "tests of parseConfig",
+		"texts": [
+			"This is the only test of parseConfig."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "the only test of the change is no claim",
+		"patterns": [],
+		"subject": "tests of parseConfig",
+		"texts": [
+			"It is the only test of parseConfig in this change."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "whole-word search does not split an underscore identifier",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retry_count",
+		"texts": [
+			"The repository has no retry_count."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "whole-word search does not split a camel-case identifier",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retryCount",
+		"texts": [
+			"The repository has no retryCount."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a leading boundary cannot start after an underscore",
+		"patterns": [
+			"(?i)\\bretry"
+		],
+		"subject": "foo_retry",
+		"texts": [
+			"The repository has no foo_retry."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a trailing boundary cannot end before a camel-case suffix",
+		"patterns": [
+			"(?i)retry\\b"
+		],
+		"subject": "retryCount",
+		"texts": [
+			"The repository has no retryCount."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a whole underscore identifier can carry both boundaries",
+		"patterns": [
+			"(?i)\\bretry_count\\b"
+		],
+		"subject": "retry_count",
+		"texts": [
+			"The repository has no retry_count."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a hyphen supplies a real word boundary",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retry-count",
+		"texts": [
+			"The repository has no retry-count."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a bounded search cannot substitute an inflected word",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retries",
+		"texts": [
+			"The repository has no retries."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a letter after the subject prevents the trailing boundary",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retryé",
+		"texts": [
+			"The repository has no retryé."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "an astral letter after the subject prevents the trailing boundary",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retry𐐀",
+		"texts": [
+			"The repository has no retry𐐀."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "case-insensitive boundary searches still match the full word",
+		"patterns": [
+			"(?i)\\bRetry\\b"
+		],
+		"subject": "retry",
+		"texts": [
+			"The repository has no retry."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "case-sensitive boundary searches retain case",
+		"patterns": [
+			"\\bRetry\\b"
+		],
+		"subject": "retry",
+		"texts": [
+			"The repository has no retry."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a boundary does not make a generic repository prefix a subject",
+		"patterns": [
+			"(?i)\\brepositor"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a boundary does not make a generic logic prefix a subject",
+		"patterns": [
+			"(?i)\\blogi"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "case folding cannot expand one pattern character into two subject positions",
+		"patterns": [
+			"(?i)\\bİdd\\b"
+		],
+		"subject": "i̇dd",
+		"texts": [
+			"The repository has no i̇dd."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "an identical Unicode word retains its boundaries",
+		"patterns": [
+			"(?i)\\bİdd\\b"
+		],
+		"subject": "İdd",
+		"texts": [
+			"The repository has no İdd."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "whole-word case folding retains Greek final sigma",
+		"patterns": [
+			"(?i)\\bοσος\\b"
+		],
+		"subject": "ΟΣΟΣ",
+		"texts": [
+			"The repository has no ΟΣΟΣ."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "no tests cover a named subject",
+		"patterns": [
+			"(?i)Foo"
+		],
+		"subject": "Foo tests",
+		"texts": [
+			"No tests cover Foo."
+		],
+		"consulted": false,
+		"tied": true,
+		"claimed": true
+	},
+	{
+		"name": "unsearched no tests cover a named subject",
+		"patterns": [],
+		"subject": "Foo tests",
+		"texts": [
+			"No tests cover Foo."
+		],
+		"consulted": false,
+		"tied": false,
+		"claimed": true
+	},
+	{
+		"name": "no other unit tests cover a named subject",
+		"patterns": [
+			"(?i)Foo"
+		],
+		"subject": "Foo tests",
+		"texts": [
+			"No other unit tests cover Foo."
+		],
+		"consulted": false,
+		"tied": true,
+		"claimed": true
+	},
+	{
+		"name": "unrelated search cannot support no other unit tests",
+		"patterns": [
+			"(?i)unrelated"
+		],
+		"subject": "Foo tests",
+		"texts": [
+			"No other unit tests cover Foo."
+		],
+		"consulted": false,
+		"tied": false,
+		"claimed": true
+	},
+	{
+		"name": "generic test search does not name AuthService",
+		"patterns": [
+			"(?i)test"
+		],
+		"subject": "AuthService tests",
+		"texts": [
+			"No other tests cover AuthService."
+		],
+		"consulted": false,
+		"tied": false,
+		"claimed": true,
+		"patternsWithMatches": [
+			"(?i)test"
+		],
+		"owesHits": false
+	},
+	{
+		"name": "AuthService search supports test absence",
+		"patterns": [
+			"(?i)AuthService"
+		],
+		"subject": "AuthService tests",
+		"texts": [
+			"No other tests cover AuthService."
+		],
+		"consulted": false,
+		"tied": true,
+		"claimed": true
+	},
+	{
+		"name": "explicit alternatives cover singular and plural retries",
+		"patterns": [
+			"(?i)retry|retries"
+		],
+		"subject": "retries",
+		"texts": [
+			"The repository has no retries."
+		],
+		"consulted": true,
+		"tied": true,
+		"claimed": true
+	},
+	{
+		"name": "generic unit search does not name AuthService",
+		"patterns": [
+			"(?i)unit"
+		],
+		"subject": "AuthService tests",
+		"texts": [
+			"No other unit tests cover AuthService."
+		],
+		"consulted": false,
+		"tied": false,
+		"claimed": true
+	},
+	{
+		"name": "generic coverage verb does not name AuthService",
+		"patterns": [
+			"(?i)cover"
+		],
+		"subject": "AuthService tests",
+		"texts": [
+			"No other tests cover AuthService."
+		],
+		"consulted": false,
+		"tied": false,
+		"claimed": true
+	},
+	{
+		"name": "no tests claim stays bounded to the change",
+		"patterns": [],
+		"subject": "Foo tests",
+		"texts": [
+			"No tests cover Foo in this change."
+		],
+		"consulted": false,
+		"tied": true,
+		"claimed": false
+	},
+	{
+		"name": "unit test claim stays bounded to the diff",
+		"patterns": [],
+		"subject": "Foo tests",
+		"texts": [
+			"No other unit tests in this diff cover Foo."
+		],
+		"consulted": false,
+		"tied": true,
+		"claimed": false
+	},
+	{
+		"name": "singular retry cannot find the verb retries",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "a retry of a failed call",
+		"texts": [
+			"Nothing in the repository retries a failed call."
+		],
+		"consulted": true,
+		"tied": false,
+		"claimed": true
+	}
+]

@@ -121,6 +121,7 @@ class ScanReportComparisonTest extends BaseUnitTest {
                         "a".repeat(64),
                         1,
                         1,
+                        null,
                         null)));
         var old = candidate("old", ResultOutcome.NOT_MET, host);
         var current = candidate("new", ResultOutcome.MET, host);

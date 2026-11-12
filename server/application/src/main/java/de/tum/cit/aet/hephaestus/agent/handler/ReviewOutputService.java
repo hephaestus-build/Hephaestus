@@ -231,7 +231,8 @@ public class ReviewOutputService {
                                             .distinct()
                                             .toList(),
                                     "At least one Applies when condition must match",
-                                    check.otherwise()),
+                                    check.otherwise(),
+                                    null),
                             List.of()),
                     null,
                     new HostCoverage(true, List.of(), 0, 0, 0, List.of()),
@@ -244,7 +245,8 @@ public class ReviewOutputService {
     /**
      * Refuses a result that says a checkout lacks something: it names the checkout as searched, or its words say the
      * repository beyond its citations lacks something ({@link AbsenceClaims}), and its receipts hold no search of the
-     * whole checkout that ran to the end, captured complete at the searched commit. A complete read of one file is a
+     * whole checkout that ran to the end, captured complete at the searched commit, or none that names what it says is
+     * absent. A complete read of one file is a
      * complete source of that file, not of the checkout (ADR 0064 § Absence). Every other source is staged as captured
      * in the job folder, so one whose capture names a gap cannot be named as consulted either. A checkout that the capture did not hold whole is a capture limit, so no search could support
      * the claim. A could-not-determine result says nothing about the work. A command in the sandbox can change the
@@ -284,10 +286,17 @@ public class ReviewOutputService {
                         && searchable.contains(receipt.sourceKind())
                         && captured.completeAt(receipt.sourceKind(), receipt.version()))
                 .toList();
-        if (searches.stream().anyMatch(searchedAsCaptured)) return;
+        var asCaptured = searches.stream()
+                .filter(searchedAsCaptured)
+                .filter(receipt -> receipt.pattern() != null)
+                .toList();
         String claim = named != null
                 ? "The result names " + named.value() + " as searched"
                 : "The result says the repository lacks something beyond its citations";
+        if (!asCaptured.isEmpty()) {
+            requireSearchFor(candidate, asCaptured, claim, named != null);
+            return;
+        }
         if (searchable.stream().noneMatch(captured::capturedWhole))
             throw new CandidateEvidenceVerifier.Unverified(
                     CandidateRefusal.SOURCE_UNAVAILABLE,
@@ -302,6 +311,34 @@ public class ReviewOutputService {
                 CandidateRefusal.CONSULTED_SOURCE_UNREAD,
                 claim + ", but its receipts hold no search of the whole checkout to the end",
                 null);
+    }
+
+    /**
+     * Refuses a claim that no search names, and one that a search with matches names when the result does not say what
+     * those are. A match need not refute an absence, but the result must face it. A ruled-out prerequisite accounts for
+     * its search in {@code ruledOutBy}.
+     */
+    private static void requireSearchFor(
+            Candidate candidate, List<ReadReceipt> searches, String claim, boolean consulted) {
+        var patterns = searches.stream().map(ReadReceipt::pattern).toList();
+        if (!AbsenceClaims.searchedFor(candidate, patterns, consulted))
+            throw new CandidateEvidenceVerifier.Unverified(
+                    CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                    claim + ", but no search of the whole checkout names what it says is absent",
+                    null);
+        var search = candidate.search();
+        var inapplicability = candidate.inapplicability();
+        var hits = search != null ? search.hits() : inapplicability != null ? inapplicability.hits() : null;
+        if (hits != null && !hits.isBlank()) return;
+        var withMatches = searches.stream()
+                .filter(receipt -> !Objects.equals(receipt.matches(), 0))
+                .map(ReadReceipt::pattern)
+                .toList();
+        if (AbsenceClaims.hitsOwed(candidate, withMatches, consulted))
+            throw new CandidateEvidenceVerifier.Unverified(
+                    CandidateRefusal.ABSENCE_HITS_UNEXPLAINED,
+                    claim + ", but a search that names it found matches, and the result does not say what they are",
+                    null);
     }
 
     /**

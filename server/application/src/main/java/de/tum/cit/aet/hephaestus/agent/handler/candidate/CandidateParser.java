@@ -91,6 +91,10 @@ public final class CandidateParser {
                 if ((receipt.status() == ReadReceiptStatus.SEARCHED) != (pattern != null)
                         || (pattern != null && (pattern.isEmpty() || pattern.length() > WARRANT_FIELD_CHARS)))
                     throw refuse(CandidateRefusal.MALFORMED_CANDIDATE, "Only a search receipt names its pattern");
+                var matches = receipt.matches();
+                if ((receipt.status() == ReadReceiptStatus.SEARCHED) != (matches != null)
+                        || (matches != null && matches < 0))
+                    throw refuse(CandidateRefusal.MALFORMED_CANDIDATE, "Only a search receipt counts its matches");
             }
         }
         return candidate;

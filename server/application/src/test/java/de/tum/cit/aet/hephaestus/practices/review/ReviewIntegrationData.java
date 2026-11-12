@@ -252,7 +252,8 @@ public class ReviewIntegrationData {
                         ? new InapplicabilityWarrant(
                                 List.of(baseEvidence.citations().getFirst().sourceKind()),
                                 "This practice requires a matching change.",
-                                "The captured work has no matching change.")
+                                "The captured work has no matching change.",
+                                null)
                         : null,
                 outcome == ResultOutcome.COULD_NOT_DETERMINE
                         ? List.of(new OpenQuestion(

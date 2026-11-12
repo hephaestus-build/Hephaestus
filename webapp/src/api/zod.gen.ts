@@ -1573,6 +1573,7 @@ export const zIdentityView = z.object({
 
 export const zInapplicabilityWarrant = z.object({
 	consulted: z.array(z.string()).optional(),
+	hits: z.string().optional(),
 	prerequisite: z.string().optional(),
 	ruledOutBy: z.string().optional(),
 });
@@ -3067,6 +3068,11 @@ export const zRateLimitSnapshot = z.object({
 export const zReadReceipt = z.object({
 	contentDigest: z.string().optional(),
 	endLine: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	matches: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
@@ -5034,6 +5040,7 @@ export const zScanReport = z.object({
 export const zSearchWarrant = z.object({
 	boundary: z.string().optional(),
 	consulted: z.array(z.string()).optional(),
+	hits: z.string().optional(),
 	lookedFor: z.string().optional(),
 });
 

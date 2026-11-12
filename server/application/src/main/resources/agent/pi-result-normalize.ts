@@ -533,6 +533,7 @@ const TRIMMED_FIELDS = new Set([
 	"openQuestion",
 	"wouldSettleIt",
 	"lookedFor",
+	"hits",
 	"boundary",
 	"prerequisite",
 	"ruledOutBy",

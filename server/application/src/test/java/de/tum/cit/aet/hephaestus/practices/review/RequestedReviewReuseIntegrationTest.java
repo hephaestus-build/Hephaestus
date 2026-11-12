@@ -142,6 +142,7 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
                                 SAME,
                                 null,
                                 null,
+                                null,
                                 null))));
         jdbc.update("UPDATE review_item SET job_id=? WHERE review_id=?", data.job(earlier), earlier.getReviewId());
         jdbc.update(

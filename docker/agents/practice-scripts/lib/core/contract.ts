@@ -226,6 +226,8 @@ export const readReceiptSchema = z
 		startLine: z.int().min(1).max(2_147_483_647).optional(),
 		endLine: z.int().min(1).max(2_147_483_647).optional(),
 		pattern: z.string().min(1).max(CANDIDATE_LIMITS.warrantFieldChars).optional(),
+		/** SEARCHED: how many matches the search found. A match need not refute an absence, so the result accounts for it. */
+		matches: z.int().min(0).max(2_147_483_647).optional(),
 	})
 	.refine(
 		(r) => r.endLine === undefined || (r.startLine !== undefined && r.endLine >= r.startLine),
@@ -234,8 +236,26 @@ export const readReceiptSchema = z
 	.refine(
 		(r) => (r.status === "SEARCHED") === (r.pattern !== undefined),
 		"only a search receipt names its pattern",
+	)
+	.refine(
+		(r) => (r.status === "SEARCHED") === (r.matches !== undefined),
+		"only a search receipt counts its matches",
 	);
 export type ReadReceipt = z.infer<typeof readReceiptSchema>;
+
+/** A search as a receipt states it: admission reads what ran, so a literal is escaped and ignored case is a flag. */
+export function searchedPattern({
+	pattern,
+	literal,
+	ignoreCase,
+}: {
+	pattern: string;
+	literal: boolean;
+	ignoreCase: boolean;
+}): string {
+	const read = literal ? pattern.replaceAll(/[\\^$.*+?()[\]{}|]/gu, String.raw`\$&`) : pattern;
+	return ignoreCase ? `(?i)${read}` : read;
+}
 
 export type Coverage = z.infer<typeof coverageShape> & Completeness;
 
@@ -298,11 +318,17 @@ const consulted = nonEmptyListOf(
 	CANDIDATE_LIMITS.consultedSources,
 );
 const warrantField = bounded(CANDIDATE_LIMITS.warrantFieldChars);
-const searchShape = z.strictObject({ consulted, lookedFor: warrantField, boundary: warrantField });
+const searchShape = z.strictObject({
+	consulted,
+	lookedFor: warrantField,
+	boundary: warrantField,
+	hits: warrantField.optional(),
+});
 const inapplicabilityShape = z.strictObject({
 	consulted,
 	prerequisite: warrantField,
 	ruledOutBy: warrantField,
+	hits: warrantField.optional(),
 });
 const openQuestionShape = z.strictObject({
 	openQuestion: bounded(CANDIDATE_LIMITS.openQuestionChars),

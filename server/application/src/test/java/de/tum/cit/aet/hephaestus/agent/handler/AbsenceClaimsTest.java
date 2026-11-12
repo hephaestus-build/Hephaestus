@@ -8,8 +8,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 class AbsenceClaimsTest extends BaseUnitTest {
@@ -41,6 +46,22 @@ class AbsenceClaimsTest extends BaseUnitTest {
                 .as("pi-session-reads.ts declares ABSENCE_CLAUSE_END")
                 .isTrue();
         assertThat(clauseEnd.group(1)).isEqualTo(AbsenceClaims.CLAUSE_END);
+        var plainSearch = Pattern.compile("export const ABSENCE_PLAIN_SEARCH = String\\.raw`([^`]*)`;")
+                .matcher(runner);
+        assertThat(plainSearch.find())
+                .as("pi-session-reads.ts declares ABSENCE_PLAIN_SEARCH")
+                .isTrue();
+        assertThat(plainSearch.group(1)).isEqualTo(AbsenceClaims.PLAIN_SEARCH);
+        var genericWords = Pattern.compile("export const ABSENCE_GENERIC_WORDS = \\[(.*?)\\n];", Pattern.DOTALL)
+                .matcher(runner);
+        assertThat(genericWords.find())
+                .as("pi-session-reads.ts declares ABSENCE_GENERIC_WORDS")
+                .isTrue();
+        assertThat(Pattern.compile("\"([^\"]+)\"")
+                        .matcher(genericWords.group(1))
+                        .results()
+                        .map(word -> word.group(1)))
+                .containsExactlyElementsOf(AbsenceClaims.GENERIC_WORDS);
     }
 
     @Test
@@ -140,5 +161,66 @@ class AbsenceClaimsTest extends BaseUnitTest {
                 .toList();
 
         assertThat(reasons).hasSizeGreaterThan(100).noneMatch(AbsenceClaims::claimed);
+    }
+
+    @Test
+    void shouldReadAPossessiveOfTheRepositoryAsAClaim() {
+        assertThat(List.of(
+                        "There is no auth check in the project's codebase.",
+                        "No handler exists in the repository's source tree.",
+                        "Auth checks are missing from the project's dependencies."))
+                .allMatch(AbsenceClaims::claimed);
+    }
+
+    @Test
+    void shouldLeaveASentenceBoundedToTheCodeItCites() {
+        assertThat(List.of(
+                        "No null check on the value returned from the repository.",
+                        "The new code calls get() without a check on the result from the repository.",
+                        "The controller has no timeout on the request from the application.",
+                        "No fallback is given for values from the project configuration.",
+                        "There is no null check in this repository method.",
+                        "The result from the repository has no null check.",
+                        "There is no check in the repository's method.",
+                        "The result has no null check in the repository implementation."))
+                .noneMatch(AbsenceClaims::claimed);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("absenceVectors")
+    void shouldTieASearchToAClaimAsTheRunnerDoes(String name, JsonNode vector) {
+        var texts = strings(vector.path("texts"));
+        if (vector.has("claimed"))
+            assertThat(texts.stream().anyMatch(AbsenceClaims::claimed))
+                    .as(name)
+                    .isEqualTo(vector.path("claimed").asBoolean());
+        assertThat(AbsenceClaims.searchedFor(
+                        vector.path("subject").asString(),
+                        texts,
+                        strings(vector.path("patterns")),
+                        vector.path("consulted").asBoolean()))
+                .as(name)
+                .isEqualTo(vector.path("tied").asBoolean());
+        if (vector.has("patternsWithMatches"))
+            assertThat(AbsenceClaims.hitsOwed(
+                            vector.path("subject").asString(),
+                            texts,
+                            strings(vector.path("patternsWithMatches")),
+                            vector.path("consulted").asBoolean()))
+                    .as(name)
+                    .isEqualTo(vector.path("owesHits").asBoolean());
+    }
+
+    private static Stream<Arguments> absenceVectors() throws IOException {
+        var vectors = new JsonMapper().readTree(Path.of("src/test/resources/agent/absence-search-vectors.json"));
+        assertThat(vectors).isNotEmpty();
+        return StreamSupport.stream(vectors.spliterator(), false)
+                .map(vector -> Arguments.of(vector.path("name").asString(), vector));
+    }
+
+    private static List<String> strings(JsonNode list) {
+        return StreamSupport.stream(list.spliterator(), false)
+                .map(JsonNode::asString)
+                .toList();
     }
 }

@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createReadTool, createBashTool } from "@earendil-works/pi-coding-agent";
-import { parseCandidate } from "../../../../../../docker/agents/practice-scripts/lib/core/contract.ts";
+import {
+	parseCandidate,
+	searchedPattern,
+} from "../../../../../../docker/agents/practice-scripts/lib/core/contract.ts";
 import { isJsonObject } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
 import { z } from "../../../../../../docker/agents/practice-scripts/lib/core/practice-script.ts";
 import { ReadRanges } from "../../../../../../docker/agents/practice-scripts/lib/core/read-ranges.ts";
@@ -16,7 +19,9 @@ import {
 import {
 	SessionReads,
 	claimsAbsence,
+	claimWithHits,
 	unreadCheckoutClaim,
+	unsearchedClaim,
 } from "../../../main/resources/agent/pi-session-reads.ts";
 
 function read(
@@ -991,6 +996,29 @@ void test("a search of a checkout captured only in part proves no search", () =>
 	}
 });
 
+const proveAll = async (_: string, claims: readonly unknown[]) => ({
+	proved: claims.map(() => true),
+	checkoutDigest: "c".repeat(64),
+});
+
+void test("the same word with ignoreCase is another search, so a repair earns its own receipt", async () => {
+	const root = checkout();
+	try {
+		const reads = new SessionReads(root, {}, undefined, [], TREE);
+		treeTool(reads, "first", "grep", { pattern: "Retry" });
+		await reads.proveSearches(proveAll);
+		treeTool(reads, "repair", "grep", { pattern: "Retry", ignoreCase: true });
+		await reads.proveSearches(proveAll);
+
+		assert.deepEqual(
+			reads.coverage().receipts.map((receipt) => receipt.pattern),
+			["Retry", "(?i)Retry"],
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 // The error-handling problem that #50's review recorded (review 2435ae89), with its stored basis.
 const PR50_ERROR_HANDLING = {
 	summary:
@@ -1007,7 +1035,12 @@ const PR50_VALIDATES_INPUTS = {
 };
 
 function hostCoverage(
-	receipts: { status: "COMPLETE" | "SEARCHED"; path: string; pattern?: string }[] = [],
+	receipts: {
+		status: "COMPLETE" | "SEARCHED";
+		path: string;
+		pattern?: string;
+		matches?: number;
+	}[] = [],
 ) {
 	return {
 		source: "host" as const,
@@ -1063,11 +1096,79 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 	assert.equal(
 		unreadCheckoutClaim(
 			stored,
-			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice" }]),
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice", matches: 0 }]),
 			ASK,
 		),
 		undefined,
 	);
+	// A search for something else leaves the claim unsearched, and the ask says what would count.
+	assert.match(
+		unreadCheckoutClaim(
+			stored,
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "zzz_absent", matches: 0 }]),
+			ASK,
+		)?.text ?? "",
+		/no search of the whole checkout names what this claim says is absent.*reword the claim.*ignoreCase/u,
+	);
+});
+
+void test("a search for something else has its own ask, once", () => {
+	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
+	const searched = hostCoverage([
+		{ status: "SEARCHED", path: ".", pattern: "zzz_absent", matches: 0 },
+	]);
+	assert.equal(
+		unreadCheckoutClaim(stored, searched, { ...ASK, ask: false, askUntied: true })?.kind,
+		"untied",
+	);
+	assert.equal(
+		unreadCheckoutClaim(stored, searched, { ...ASK, ask: false, askUntied: false }),
+		undefined,
+	);
+	// The first ask already names the claim and the rule, so a regex search does not spend it.
+	assert.match(
+		unreadCheckoutClaim(stored, hostCoverage(), ASK)?.text ?? "",
+		/: "[^"]+", but this session ran no search.*a plain word that the claim holds.*reword the claim/u,
+	);
+});
+
+void test("a claim whose search found matches must say what they are, and a clean search need not", () => {
+	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
+	const pattern = "(?i)ControllerAdvice|guard";
+	const found = hostCoverage([{ status: "SEARCHED", path: ".", pattern, matches: 3 }]);
+	const asked = unreadCheckoutClaim(stored, found, ASK);
+	assert.equal(asked?.kind, "hits");
+	assert.match(asked.text, /add evidence\.search with .* hits/u);
+	assert.equal(unreadCheckoutClaim(stored, found, { ...ASK, askHits: false }), undefined);
+	assert.equal(
+		unreadCheckoutClaim(
+			{
+				...stored,
+				evidence: {
+					search: { ...stored.evidence.search, hits: "Each match is in a comment, not in code." },
+				},
+			},
+			found,
+			ASK,
+		),
+		undefined,
+	);
+	assert.equal(
+		unreadCheckoutClaim(
+			stored,
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern, matches: 0 }]),
+			ASK,
+		),
+		undefined,
+	);
+});
+
+void test("a receipt states a search as it ran", () => {
+	assert.equal(
+		searchedPattern({ pattern: "a|b", literal: true, ignoreCase: false }),
+		String.raw`a\|b`,
+	);
+	assert.equal(searchedPattern({ pattern: "a|b", literal: false, ignoreCase: true }), "(?i)a|b");
 });
 
 void test("#50: leaving the tree out of the search does not hide words that say the repository lacks something, once", () => {
@@ -1213,4 +1314,74 @@ void test("a bounded Met that names the tree for its selected lines is told how 
 		unreadCheckoutClaim({ ...met, evidence: { search: diff } }, hostCoverage(), ASK),
 		undefined,
 	);
+});
+
+const absenceVectors = z
+	.array(
+		z.strictObject({
+			name: z.string(),
+			patterns: z.array(z.string()),
+			subject: z.string(),
+			texts: z.array(z.string()),
+			consulted: z.boolean(),
+			tied: z.boolean(),
+			claimed: z.boolean().optional(),
+			patternsWithMatches: z.array(z.string()).optional(),
+			owesHits: z.boolean().optional(),
+		}),
+	)
+	.parse(JSON.parse(readFileSync(new URL("absence-search-vectors.json", import.meta.url), "utf8")));
+for (const vector of absenceVectors) {
+	const { name, patterns, subject, texts, consulted, tied } = vector;
+	void test(`an absence and its search: ${name}`, () => {
+		if (vector.claimed !== undefined) {
+			assert.equal(texts.some(claimsAbsence), vector.claimed);
+		}
+		assert.equal(unsearchedClaim(subject, texts, patterns, consulted) === undefined, tied);
+		if (vector.patternsWithMatches !== undefined) {
+			assert.equal(
+				claimWithHits(subject, texts, vector.patternsWithMatches, consulted) !== undefined,
+				vector.owesHits,
+			);
+		}
+	});
+}
+
+void test("inapplicability matches need an explicit account", () => {
+	const candidate = {
+		outcome: "DOES_NOT_APPLY",
+		summary: "No handler",
+		explanation: "No ControllerAdvice exists in the checkout.",
+		evidence: {
+			inapplicability: {
+				consulted: ["scm.repository.tree"],
+				prerequisite: "ControllerAdvice",
+				ruledOutBy: "No ControllerAdvice exists in the checkout.",
+			},
+		},
+	};
+	const found = hostCoverage([
+		{ status: "SEARCHED", path: ".", pattern: "(?i)ControllerAdvice", matches: 2 },
+	]);
+	assert.equal(unreadCheckoutClaim(candidate, found, ASK)?.kind, "hits");
+	const accounted = {
+		...candidate,
+		evidence: {
+			inapplicability: {
+				...candidate.evidence.inapplicability,
+				hits: "Both matches are commented-out registrations.",
+			},
+		},
+	};
+	assert.equal(unreadCheckoutClaim(accounted, found, ASK), undefined);
+	const blank = {
+		...candidate,
+		evidence: {
+			inapplicability: {
+				...candidate.evidence.inapplicability,
+				hits: "   ",
+			},
+		},
+	};
+	assert.equal(unreadCheckoutClaim(blank, found, ASK)?.kind, "hits");
 });

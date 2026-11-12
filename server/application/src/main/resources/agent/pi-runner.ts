@@ -1239,9 +1239,11 @@ export async function runReviewJob(): Promise<void> {
 							}
 						: undefined,
 					ask: !askedAboutCheckout.has(slug),
+					askUntied: !askedAboutCheckout.has(`${slug}:untied`),
+					askHits: !askedAboutCheckout.has(`${slug}:hits`),
 				});
 		if (unread !== undefined) {
-			askedAboutCheckout.add(slug);
+			askedAboutCheckout.add(unread.kind === undefined ? slug : `${slug}:${unread.kind}`);
 			throw new UnreadEvidenceError(unread.text);
 		}
 		const parsed = parseCandidate({ ...submission, coverage });
@@ -1616,7 +1618,7 @@ export async function runReviewJob(): Promise<void> {
 	}
 
 	const refusals = new Map<string, number>();
-	// Practices already asked once about a claim that the checkout lacks something; admission withholds a repeat.
+	// Practices already asked about a claim that the checkout lacks something, once for each reason; admission withholds a repeat.
 	const askedAboutCheckout = new Set<string>();
 	// Per practice, across its review sessions: the execution report carries these.
 	const reviewSessions = new Map<

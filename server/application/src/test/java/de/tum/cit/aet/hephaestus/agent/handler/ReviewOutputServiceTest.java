@@ -300,17 +300,59 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 List.of());
     }
 
+    private ObjectNode absenceOutcome(ObjectNode candidate, ResultOutcome outcome) {
+        candidate.put("outcome", outcome.name());
+        if (outcome == ResultOutcome.NOT_MET) return candidate;
+        candidate.set(
+                "citations", candidate.path("problems").get(0).path("citations").deepCopy());
+        candidate.remove("problems");
+        var evidence = (ObjectNode) candidate.path("evidence");
+        if (outcome == ResultOutcome.DOES_NOT_APPLY) {
+            evidence.remove("search");
+            evidence.putObject("inapplicability")
+                    .put("prerequisite", "a ControllerAdvice exception handler")
+                    .put("ruledOutBy", "No @ControllerAdvice exists in the checkout.")
+                    .putArray("consulted")
+                    .add(TREE.value());
+        } else if (outcome == ResultOutcome.COULD_NOT_DETERMINE) {
+            candidate
+                    .put("summary", "Exception handling could not be determined")
+                    .put(
+                            "explanation",
+                            "The inspected change does not establish how exceptions are handled outside it.");
+            evidence.remove("search");
+            evidence.putArray("openQuestions")
+                    .addObject()
+                    .put("openQuestion", "Is an exception handler registered outside the captured change?")
+                    .put("wouldSettleIt", "Inspect the application's exception handler registration.");
+        }
+        return candidate;
+    }
+
     private static final String CHECKOUT_ROOT = "repos/reviewed/";
 
     /** The checkout digest that the capture recorded from the server's own copy. */
     private static final String CAPTURED_CHECKOUT = "5".repeat(64);
 
     private static ReadReceipt searched(String version) {
-        return searched(version, CAPTURED_CHECKOUT);
+        return searched(version, "ControllerAdvice|ExceptionHandler");
+    }
+
+    private static ReadReceipt searched(String version, String pattern) {
+        return searched(version, pattern, 0);
+    }
+
+    private static ReadReceipt searched(String version, String pattern, int matches) {
+        return searchedBytes(version, pattern, matches, CAPTURED_CHECKOUT);
     }
 
     /** A search of the whole checkout whose proof read bytes with this checkout digest. */
-    private static ReadReceipt searched(String version, @Nullable String checkoutDigest) {
+    private static ReadReceipt searchedBytes(String version, @Nullable String checkoutDigest) {
+        return searchedBytes(version, "ControllerAdvice|ExceptionHandler", 0, checkoutDigest);
+    }
+
+    private static ReadReceipt searchedBytes(
+            String version, String pattern, int matches, @Nullable String checkoutDigest) {
         return new ReadReceipt(
                 TREE,
                 CHECKOUT_ROOT + ".git/HEAD",
@@ -320,7 +362,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 checkoutDigest,
                 null,
                 null,
-                "ControllerAdvice|ExceptionHandler");
+                pattern,
+                matches);
     }
 
     /** The diff alone named as searched: the claim now rests on its words. */
@@ -479,11 +522,15 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 "The result cites scm.pull-request.comments, which the practice does not declare");
     }
 
-    @Test
-    void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionNeitherReadNorSearchedIt() {
+    @ParameterizedTest
+    @EnumSource(
+            value = ResultOutcome.class,
+            names = {"MET", "NOT_MET", "DOES_NOT_APPLY"})
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionNeitherReadNorSearchedIt(ResultOutcome outcome) {
         pr50Capture(SourceCompleteness.COMPLETE);
 
-        prepare(job, pr50ErrorHandling(List.of(), UnaryOperator.identity())).record(job);
+        prepare(job, pr50ErrorHandling(List.of(), candidate -> absenceOutcome(candidate, outcome)))
+                .record(job);
 
         assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
     }
@@ -501,6 +548,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 "f77392a044225e8fdda78f2e6da1b952472a1e70f854696c413a88c8ec8aeb67",
                 1,
                 41,
+                null,
                 null));
 
         prepare(job, pr50ErrorHandling(oneFile, UnaryOperator.identity())).record(job);
@@ -508,12 +556,17 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
     }
 
-    @Test
-    void shouldAdmitAClaimAboutTheCheckoutWhenItsSessionSearchedTheWholeCompleteCheckoutToTheEnd() {
+    @ParameterizedTest
+    @EnumSource(ResultOutcome.class)
+    void shouldAdmitEachOutcomeWithItsRequiredSearchEvidence(ResultOutcome outcome) {
         pr50Capture(SourceCompleteness.COMPLETE);
 
-        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()));
+        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), candidate -> absenceOutcome(candidate, outcome)))
+                .record(job);
 
+        assertThat(staged)
+                .singleElement()
+                .satisfies(result -> assertThat(result.outcome()).isEqualTo(outcome));
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
     }
 
@@ -525,7 +578,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         // One container: a command can change the sandbox's checkout before the loop searches it.
         pr50Capture(SourceCompleteness.COMPLETE);
 
-        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD, checkoutDigest)), UnaryOperator.identity()))
+        prepare(job, pr50ErrorHandling(List.of(searchedBytes(PR50_HEAD, checkoutDigest)), UnaryOperator.identity()))
                 .record(job);
 
         assertWithheld(
@@ -540,7 +593,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         prepare(
                 job,
                 pr50ErrorHandling(
-                        List.of(searched(PR50_HEAD, "6".repeat(64)), searched(PR50_HEAD)), UnaryOperator.identity()));
+                        List.of(searchedBytes(PR50_HEAD, "6".repeat(64)), searched(PR50_HEAD)),
+                        UnaryOperator.identity()));
 
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
     }
@@ -570,6 +624,177 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 CandidateRefusal.SOURCE_UNAVAILABLE,
                 "The result names " + DIFF.value() + " as consulted, but its capture left part of it out, "
                         + "so it cannot show that something is absent");
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ResultOutcome.class,
+            names = {"MET", "NOT_MET", "DOES_NOT_APPLY"})
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSearchNamesSomethingElse(ResultOutcome outcome) {
+        pr50Capture(SourceCompleteness.COMPLETE);
+
+        prepare(
+                        job,
+                        pr50ErrorHandling(
+                                List.of(searched(PR50_HEAD, "(?i)zzz_absent_marker")),
+                                candidate -> absenceOutcome(candidate, outcome)))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                NAMED + ", but no search of the whole checkout names what it says is absent");
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ResultOutcome.class,
+            names = {"MET", "NOT_MET"})
+    void shouldWithholdAClaimWhoseSearchFoundMatchesItDoesNotExplain(ResultOutcome outcome) {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var found = searched(PR50_HEAD, "ControllerAdvice|ExceptionHandler", 2);
+
+        prepare(job, pr50ErrorHandling(List.of(found), candidate -> absenceOutcome(candidate, outcome)))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.ABSENCE_HITS_UNEXPLAINED,
+                NAMED + ", but a search that names it found matches, and the result does not say what they are");
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ResultOutcome.class,
+            names = {"MET", "NOT_MET"})
+    void shouldAdmitAClaimThatExplainsTheMatchesOfItsSearch(ResultOutcome outcome) {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var found = searched(PR50_HEAD, "ControllerAdvice|ExceptionHandler", 2);
+
+        prepare(job, pr50ErrorHandling(List.of(found), candidate -> {
+                    candidate = absenceOutcome(candidate, outcome);
+                    ((ObjectNode) candidate.path("evidence").path("search")).put("hits", "Each match is a comment.");
+                    return candidate;
+                }))
+                .record(job);
+
+        assertThat(staged)
+                .singleElement()
+                .satisfies(result -> assertThat(result.outcome()).isEqualTo(outcome));
+        verify(membership, never()).withhold(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void shouldAdmitAnOpenQuestionWithoutInventingAnAbsenceProof() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+
+        prepare(
+                        job,
+                        pr50ErrorHandling(
+                                List.of(), candidate -> absenceOutcome(candidate, ResultOutcome.COULD_NOT_DETERMINE)))
+                .record(job);
+
+        assertThat(staged).singleElement().satisfies(result -> {
+            assertThat(result.outcome()).isEqualTo(ResultOutcome.COULD_NOT_DETERMINE);
+            assertThat(result.evidence().openQuestions()).hasSize(1);
+            assertThat(result.problems()).isEmpty();
+        });
+        verify(membership, never()).withhold(anyLong(), any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"   "})
+    void shouldWithholdInapplicabilityMatchesWithoutAnExplicitAccount(@Nullable String hits) {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        prepare(
+                        job,
+                        pr50ErrorHandling(
+                                List.of(searched(PR50_HEAD, "ControllerAdvice|ExceptionHandler", 2)), candidate -> {
+                                    candidate = absenceOutcome(candidate, ResultOutcome.DOES_NOT_APPLY);
+                                    if (hits != null)
+                                        ((ObjectNode) candidate.path("evidence").path("inapplicability"))
+                                                .put("hits", hits);
+                                    return candidate;
+                                }))
+                .record(job);
+        assertWithheld(
+                CandidateRefusal.ABSENCE_HITS_UNEXPLAINED,
+                NAMED + ", but a search that names it found matches, and the result does not say what they are");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"No tests cover Foo.", "No other unit tests cover Foo."})
+    void shouldWithholdTestAbsenceWithoutANamedCheckoutSearch(String claim) {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+                    candidate = testAbsence(candidate, claim);
+                    ((ObjectNode) candidate.path("evidence").path("search"))
+                            .set("consulted", mapper.valueToTree(List.of(DIFF.value())));
+                    return candidate;
+                }))
+                .record(job);
+        assertThat(staged).isEmpty();
+        verify(membership).withhold(eq(1L), any(), eq(CandidateRefusal.CONSULTED_SOURCE_UNREAD), any());
+    }
+
+    @Test
+    void shouldWithholdAnAuthServiceClaimAfterAGenericTestSearch() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        prepare(
+                        job,
+                        pr50ErrorHandling(
+                                List.of(searched(PR50_HEAD, "(?i)test")),
+                                candidate -> testAbsence(candidate, "No other tests cover AuthService.")))
+                .record(job);
+        assertWithheld(
+                CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                NAMED + ", but no search of the whole checkout names what it says is absent");
+    }
+
+    @Test
+    void shouldWithholdAnAbsenceWhoseClaimedInflectionWasNotSearched() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        prepare(
+                        job,
+                        pr50ErrorHandling(
+                                List.of(searched(PR50_HEAD, "(?i)retry")),
+                                candidate -> testAbsence(candidate, "The repository has no retries.")))
+                .record(job);
+        assertWithheld(
+                CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                NAMED + ", but no search of the whole checkout names what it says is absent");
+    }
+
+    private ObjectNode testAbsence(ObjectNode candidate, String claim) {
+        candidate.put("summary", "Test coverage").put("explanation", claim);
+        ((ObjectNode) candidate.path("problems").get(0))
+                .put("summary", "Test coverage")
+                .put("explanation", claim)
+                .put("nextStep", "Add coverage.");
+        ((ObjectNode) candidate.path("evidence").path("search"))
+                .put("lookedFor", "test coverage")
+                .put("boundary", "The complete checkout.");
+        return candidate;
+    }
+
+    @Test
+    void shouldAdmitAnInapplicabilityClaimThatAccountsForItsSearchMatches() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var found = searched(PR50_HEAD, "ControllerAdvice|ExceptionHandler", 2);
+
+        prepare(job, pr50ErrorHandling(List.of(found), candidate -> {
+                    candidate = absenceOutcome(candidate, ResultOutcome.DOES_NOT_APPLY);
+                    ((ObjectNode) candidate.path("evidence").path("inapplicability"))
+                            .put(
+                                    "hits",
+                                    "Both matches are comments. No active @ControllerAdvice exists in the checkout.");
+                    return candidate;
+                }))
+                .record(job);
+
+        assertThat(staged)
+                .singleElement()
+                .satisfies(result -> assertThat(result.outcome()).isEqualTo(ResultOutcome.DOES_NOT_APPLY));
+        verify(membership, never()).withhold(anyLong(), any(), any(), any());
     }
 
     @Test

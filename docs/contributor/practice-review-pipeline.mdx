@@ -416,6 +416,8 @@ A partial or unknown capture stays usable for what its cited lines show, and oth
 
 In an item review that reads a checkout, a result that says the repository lacks something needs a search of the whole checkout.
 Otherwise admission withholds it as `consulted_source_unread`.
+The search must also name what the result says is absent, or admission withholds it as `absence_not_searched`.
+When a search that names the claim found matches, the result must say what they are, or the reason is `absence_hits_unexplained`.
 [Workspace ABI § Claims that the repository lacks something](./agent/workspace-abi.mdx#claims-that-the-repository-lacks-something) has the rules.
 
 A result may cite, or name as consulted, only the sources that its practice declares, and the change and the checkout.

@@ -130,6 +130,7 @@ export function toEvidenceCheck(evidence: ResultEvidence | null): EvidenceCheck[
 			...writtenCheck("Looked for", search.lookedFor),
 			...consultedCheck(search.consulted),
 			...writtenCheck("How far it reached", search.boundary),
+			...writtenCheck("What it found", search.hits),
 		];
 	}
 	const inapplicability = evidence?.inapplicability;
@@ -138,6 +139,7 @@ export function toEvidenceCheck(evidence: ResultEvidence | null): EvidenceCheck[
 			...writtenCheck("Applies when", inapplicability.prerequisite),
 			...consultedCheck(inapplicability.consulted),
 			...writtenCheck("Nothing to judge because", inapplicability.ruledOutBy),
+			...writtenCheck("What it found", inapplicability.hits),
 		];
 	}
 	return [];
