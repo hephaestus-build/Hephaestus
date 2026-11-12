@@ -60,8 +60,14 @@ class UsageCallFailureMigrationTest {
                         DatabaseFactory.getInstance()
                                 .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
             var contexts = new Contexts(context);
+            var labels = new LabelExpression();
             liquibase.tag("before-call-failure");
-            liquibase.update(contexts);
+            // This rollback proves this migration, not later stopped upgrades that require backup recovery.
+            int changes = (int) liquibase.listUnrunChangeSets(contexts, labels).stream()
+                    .takeWhile(change -> change.getFilePath().endsWith(CHANGELOG))
+                    .count();
+            assertThat(changes).isPositive();
+            liquibase.update(changes, contexts, labels);
 
             assertThat(PracticeMigrationFixture.column(database, retained)).isEqualTo(before);
             assertThat(PracticeMigrationFixture.column(
@@ -104,7 +110,7 @@ class UsageCallFailureMigrationTest {
                 assertThat(PracticeMigrationFixture.column(database, retained)).isEqualTo(before);
             }
 
-            liquibase.rollback("before-call-failure", contexts, new LabelExpression());
+            liquibase.rollback("before-call-failure", contexts, labels);
             assertThat(PracticeMigrationFixture.column(database, retained)).isEqualTo(before);
             assertThat(PracticeMigrationFixture.column(
                             database,

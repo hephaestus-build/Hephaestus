@@ -59,7 +59,7 @@ public final class ModelSession {
         REFUSED,
         /** The provider failed or answered with something unreadable; another call may succeed. */
         PROVIDER,
-        CAPACITY
+        NO_CAPACITY
     }
 
     /** The model settings frozen on the attempt. */
@@ -107,6 +107,7 @@ public final class ModelSession {
         return probe.toString();
     }
 
+    /** A session without tools sends no tool field at all, so the model is offered none. */
     private ObjectNode request() {
         var body = JSON.objectNode();
         body.put("model", settings.modelId());
@@ -114,24 +115,28 @@ public final class ModelSession {
             body.put("system", system);
             body.set("messages", history.deepCopy());
             body.put("max_tokens", settings.maxOutputTokens());
-            body.putObject("tool_choice").put("type", "auto");
-            var list = body.putArray("tools");
-            for (var tool : tools)
-                list.add(JSON.objectNode()
-                        .put("name", tool.name())
-                        .put("description", tool.description())
-                        .set("input_schema", tool.parameters()));
+            if (!tools.isEmpty()) {
+                body.putObject("tool_choice").put("type", "auto");
+                var list = body.putArray("tools");
+                for (var tool : tools)
+                    list.add(JSON.objectNode()
+                            .put("name", tool.name())
+                            .put("description", tool.description())
+                            .set("input_schema", tool.parameters()));
+            }
             // An opaque native model id carries no thinking-mode or sampling contract. Composition
             // uses the provider defaults; the review runner resolves native options through its SDK.
         } else if (settings.protocol() == LlmApiProtocol.OPENAI_COMPLETIONS) {
             body.set("messages", history.deepCopy());
             body.put("store", false);
             body.put("max_completion_tokens", settings.maxOutputTokens());
-            var list = body.putArray("tools");
-            for (var tool : tools) {
-                var function = JSON.objectNode().put("name", tool.name()).put("description", tool.description());
-                function.set("parameters", tool.parameters());
-                list.add(JSON.objectNode().put("type", "function").set("function", function));
+            if (!tools.isEmpty()) {
+                var list = body.putArray("tools");
+                for (var tool : tools) {
+                    var function = JSON.objectNode().put("name", tool.name()).put("description", tool.description());
+                    function.set("parameters", tool.parameters());
+                    list.add(JSON.objectNode().put("type", "function").set("function", function));
+                }
             }
             if (settings.reasoningEffort() != null) body.put("reasoning_effort", effort(settings.reasoningEffort()));
         } else {
@@ -139,15 +144,17 @@ public final class ModelSession {
             body.set("input", history.deepCopy());
             body.put("store", false);
             body.put("max_output_tokens", Math.max(16, settings.maxOutputTokens()));
-            var list = body.putArray("tools");
-            for (var tool : tools) {
-                var function = JSON.objectNode()
-                        .put("type", "function")
-                        .put("name", tool.name())
-                        .put("description", tool.description());
-                function.set("parameters", tool.parameters());
-                function.put("strict", false);
-                list.add(function);
+            if (!tools.isEmpty()) {
+                var list = body.putArray("tools");
+                for (var tool : tools) {
+                    var function = JSON.objectNode()
+                            .put("type", "function")
+                            .put("name", tool.name())
+                            .put("description", tool.description());
+                    function.set("parameters", tool.parameters());
+                    function.put("strict", false);
+                    list.add(function);
+                }
             }
             if (settings.reasoningEffort() != null) {
                 body.putObject("reasoning").put("effort", effort(settings.reasoningEffort()));
@@ -179,7 +186,7 @@ public final class ModelSession {
                         case ATTEMPT_ENDED -> Failure.OWNERSHIP_LOST;
                         // Transient, as a provider's rate limit is.
                         case CALLS_IN_FLIGHT -> Failure.PROVIDER;
-                        case CAPACITY -> Failure.CAPACITY;
+                        case CAPACITY -> Failure.NO_CAPACITY;
                     });
         int status = answer.status();
         if (status == 408 || status == 429 || status >= 500) return new Reply(null, List.of(), Failure.PROVIDER);

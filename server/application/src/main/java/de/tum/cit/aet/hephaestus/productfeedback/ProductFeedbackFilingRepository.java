@@ -28,27 +28,16 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     @Query("SELECT f FROM ProductFeedbackFiling f WHERE f.feedbackId = :id")
     Optional<ProductFeedbackFiling> lock(@Param("id") UUID id);
 
-    /** A report waiting for a draft, or one whose drafting lease expired. */
-    @Query(value = """
-                    SELECT feedback_id FROM product_feedback_filing
-                    WHERE (state = 'DRAFT_QUEUED' AND next_attempt_at <= :now)
-                       OR (state = 'DRAFTING' AND lease_until < :now)
-                    ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED
-                    """, nativeQuery = true)
-    Optional<UUID> claimableDraft(@Param("now") Instant now);
-
     /**
-     * A report whose draft answer, or lack of one, waits for the server to route it. One that no server took or finished
-     * by {@code expired} routes without a draft, so a server without agent jobs cannot hold a report back.
+     * A report whose draft answer, or lack of one, waits for the server to route it. Its {@code draft_report} action's
+     * end put it there, whether the action drafted it, failed or expired.
      */
     @Query(value = """
                     SELECT feedback_id FROM product_feedback_filing
                     WHERE state = 'ANSWERED'
-                       OR (state = 'DRAFT_QUEUED' AND next_attempt_at < :expired)
-                       OR (state = 'DRAFTING' AND lease_until < :expired)
                     ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED
                     """, nativeQuery = true)
-    Optional<UUID> claimableAnswer(@Param("expired") Instant expired);
+    Optional<UUID> claimableAnswer();
 
     /** A routed report that goes to no repository, so the hourly GitHub limit does not hold it back. */
     @Query(value = """
@@ -85,14 +74,17 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
             nativeQuery = true)
     long countFiledSince(@Param("since") Instant since);
 
-    @Query(value = "SELECT count(*) FROM product_feedback_filing WHERE drafted_at >= :since", nativeQuery = true)
+    @Query(
+            value =
+                    "SELECT count(*) FROM product_feedback_filing WHERE drafted_at >= :since OR draft_admitted_at >= :since",
+            nativeQuery = true)
     long countDraftedSince(@Param("since") Instant since);
 
     @WorkspaceAgnostic(
             "Limits the product feedback reports one account drafts, across every workspace it sends feedback from")
     @Query(value = """
                     SELECT count(*) FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
-                    WHERE p.account_id = :accountId AND f.drafted_at >= :since
+                    WHERE p.account_id = :accountId AND (f.drafted_at >= :since OR f.draft_admitted_at >= :since)
                     """, nativeQuery = true)
     long countDraftedByAccountSince(@Param("accountId") long accountId, @Param("since") Instant since);
 
@@ -133,7 +125,7 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
 
     @Query(
             value =
-                    "SELECT * FROM product_feedback_filing WHERE state IN ('DRAFT_QUEUED','DRAFTING','ANSWERED','HELD','QUEUED','FILING')"
+                    "SELECT * FROM product_feedback_filing WHERE state IN ('DRAFT_QUEUED','DRAFTING','DRAFT_WAITING','ANSWERED','HELD','QUEUED','FILING')"
                             + " ORDER BY created_at LIMIT 1",
             nativeQuery = true)
     Optional<ProductFeedbackFiling> oldestWaiting();

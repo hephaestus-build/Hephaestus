@@ -112,5 +112,53 @@ class AgentPersonDataCatalogDatabaseTest {
                 .contains("00000000-0000-0000-0000-000000992112");
     }
 
+    @Test
+    void shouldExportAndDetachInstanceDraftCallsIncludingOneOpenedAfterThePreview() throws Exception {
+        var database = PracticeMigrationFixture.migratedDatabase("prod");
+        var jdbc = new NamedParameterJdbcTemplate(
+                new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password()));
+        var plain = jdbc.getJdbcTemplate();
+        var mapper = JsonMapper.builder().findAndAddModules().build();
+        var catalog = new AgentPersonDataCatalog(
+                jdbc, mapper, List.of(), mock(ReviewJobLifecycleService.class), mock(AgentRuns.class));
+        UUID report = UUID.randomUUID();
+        plain.update("""
+            INSERT INTO product_feedback(id,account_id,kind,message,submission_minute,created_at)
+            VALUES (?,992106,'BUG','Synthetic report',clock_timestamp(),clock_timestamp())
+            """, report);
+        var person = new PersonScope(992106L, List.of(), List.of());
+        var ledger = catalog.contributors().stream()
+                .filter(store -> store.store().equals("llm_usage_event"))
+                .findFirst()
+                .orElseThrow();
+        var preview = ledger.select(person);
+        assertThat(preview.rows())
+                .anySatisfy(row -> assertThat(row.columns()).containsEntry("source_id", report.toString()));
+        UUID call = UUID.randomUUID();
+        plain.update("""
+            INSERT INTO llm_usage_event(id,job_type,source_type,source_id,source_attempt,model_kind,funding_source,
+                action_id,settle_after,initial_pricing_state,pricing_state,call_state,occurred_at,started_at)
+            VALUES (?,'REPORT_DRAFT','PRODUCT_FEEDBACK_DRAFT',?,1,'CHAT','INSTANCE',gen_random_uuid(),clock_timestamp()+interval '2 minutes','UNPRICED','UNPRICED','OPEN',
+                clock_timestamp(),clock_timestamp())
+            """, call, report);
+        assertThat(ledger.export(preview, person)).anySatisfy(row -> {
+            assertThat(row.path("source_id").asString()).isEqualTo(report.toString());
+            assertThat(row.path("calls").get(0).path("id").asString()).isEqualTo(call.toString());
+        });
+        ledger.erase(preview, person);
+        assertThat(plain.queryForObject("SELECT call_state FROM llm_usage_event WHERE id=?", String.class, call))
+                .isEqualTo("SETTLED");
+        assertThat(plain.queryForObject(
+                        "SELECT measurement_verification FROM llm_usage_event WHERE id=?", String.class, call))
+                .isEqualTo("UNVERIFIABLE");
+        assertThat(plain.queryForObject("SELECT unreported_calls FROM llm_usage_event WHERE id=?", Integer.class, call))
+                .isEqualTo(1);
+        assertThat(plain.queryForObject("SELECT source_id FROM llm_usage_event WHERE id=?", UUID.class, call))
+                .isNotEqualTo(report);
+        plain.update("UPDATE llm_usage_event SET call_state='ENDED',input_tokens=11 WHERE id=?", call);
+        assertThat(plain.queryForObject("SELECT input_tokens FROM llm_usage_event WHERE id=?", Long.class, call))
+                .isEqualTo(11);
+    }
+
     private record Selected(PersonDataContributor store, PersonDataSelection selection) {}
 }

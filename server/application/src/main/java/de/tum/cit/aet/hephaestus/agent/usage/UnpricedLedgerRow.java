@@ -15,7 +15,7 @@ import org.jspecify.annotations.Nullable;
  */
 public record UnpricedLedgerRow(
         UUID id,
-        Long workspaceId,
+        @Nullable Long workspaceId,
         @Nullable String model,
         UsageFundingSource fundingSource,
         long inputTokens,

@@ -19,18 +19,17 @@ import org.springframework.test.util.ReflectionTestUtils;
 class FilingLifecycleTest {
     private static final Map<FilingState, Map<Event, FilingState>> EXPECTED = Map.of(
             FilingState.DRAFT_QUEUED,
-            Map.of(
-                    Event.DRAFT_CLAIMED, FilingState.DRAFTING,
-                    Event.DRAFT_ENDED, FilingState.ANSWERED,
-                    Event.ROUTED_TO_HOLD, FilingState.HELD,
-                    Event.ROUTED_TO_FILE, FilingState.QUEUED),
+            Map.of(Event.DRAFT_ENDED, FilingState.ANSWERED, Event.DRAFT_CLAIMED, FilingState.DRAFTING),
             FilingState.DRAFTING,
             Map.of(
-                    Event.DRAFT_CLAIMED, FilingState.DRAFTING,
-                    Event.DRAFT_ENDED, FilingState.ANSWERED,
-                    Event.DRAFT_RETRIED, FilingState.DRAFT_QUEUED,
-                    Event.ROUTED_TO_HOLD, FilingState.HELD,
-                    Event.ROUTED_TO_FILE, FilingState.QUEUED),
+                    Event.DRAFT_ENDED,
+                    FilingState.ANSWERED,
+                    Event.DRAFT_CLAIMED,
+                    FilingState.DRAFTING,
+                    Event.DRAFT_DEFERRED,
+                    FilingState.DRAFT_WAITING),
+            FilingState.DRAFT_WAITING,
+            Map.of(Event.DRAFT_ENDED, FilingState.ANSWERED, Event.DRAFT_CLAIMED, FilingState.DRAFTING),
             FilingState.ANSWERED,
             Map.of(Event.ROUTED_TO_HOLD, FilingState.HELD, Event.ROUTED_TO_FILE, FilingState.QUEUED),
             FilingState.HELD,
@@ -119,9 +118,9 @@ class FilingLifecycleTest {
     void shouldRefuseAnIllegalEventAndChangeNothing() {
         var filing = new ProductFeedbackFiling(UUID.randomUUID(), FilingState.FILED, false, Instant.EPOCH);
 
-        assertThatThrownBy(() -> filing.apply(Event.DRAFT_CLAIMED))
+        assertThatThrownBy(() -> filing.apply(Event.DRAFT_ENDED))
                 .isInstanceOf(FilingLifecycle.IllegalTransition.class)
-                .hasMessageContaining("DRAFT_CLAIMED")
+                .hasMessageContaining("DRAFT_ENDED")
                 .hasMessageContaining("FILED");
         assertThat(filing.getState()).isEqualTo(FilingState.FILED);
     }

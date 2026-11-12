@@ -171,7 +171,7 @@ erDiagram
 
     LlmUsageEvent {
         UUID id PK,UK
-        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT workspace_id FK,UK
         VARCHAR(40) job_type "NOT NULL"
         VARCHAR(32) source_type "NOT NULL"
         UUID source_id "NOT NULL"
@@ -208,6 +208,8 @@ erDiagram
         NUMERIC(18,6) cost_bound_usd
         JSONB call_failure
         TIMESTAMPTZ failed_at
+        UUID action_id
+        TIMESTAMPTZ settle_after
     }
 
     PersonEvidenceCopy {

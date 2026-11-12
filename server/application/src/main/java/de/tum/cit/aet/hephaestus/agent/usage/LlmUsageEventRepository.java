@@ -82,13 +82,13 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
     @Modifying(flushAutomatically = true)
     @Query(value = """
         INSERT INTO llm_usage_event (
-            id, workspace_id, run_id, lease_epoch, initial_pricing_state, call_state, job_type, source_type, source_id, source_attempt,
+            id, workspace_id, run_id, lease_epoch, action_id, settle_after, initial_pricing_state, call_state, job_type, source_type, source_id, source_attempt,
             review_id, model_kind, practice_id, model, cost_usd, pricing_state, funding_source, applied_price_id,
             applied_workspace_model_id, applied_per_1m_input_usd, applied_per_1m_output_usd,
             applied_per_1m_cache_read_usd, applied_per_1m_cache_write_usd, cost_bound_usd, total_calls, started_at,
             occurred_at
         ) VALUES (
-            :id, :#{#call.workspaceId()}, :#{#call.runId()}, :#{#call.leaseEpoch()}, :#{#call.price().pricingState().name()}, 'OPEN', :#{#call.jobType()},
+            :id, :#{#call.workspaceId()}, :#{#call.runId()}, :#{#call.leaseEpoch()}, :#{#call.actionId()}, :#{#call.settleAfter()}, :#{#call.price().pricingState().name()}, 'OPEN', :#{#call.jobType()},
             :#{#call.sourceType().name()}, :#{#call.sourceId()}, :#{#call.sourceAttempt()}, :#{#call.reviewId()},
             :#{#call.modelKind().name()}, :#{#call.practiceId()}, :#{#call.model()}, :costUsd,
             :#{#call.price().pricingState().name()}, :#{#call.price().fundingSource().name()},
@@ -103,10 +103,30 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             @Param("call") LlmUsageRecorder.OpenCall call,
             @Param("costUsd") @Nullable BigDecimal costUsd);
 
+    String SETTLE_INSTANCE =
+            "UPDATE llm_usage_event e SET call_state='SETTLED', measurement_verification='UNVERIFIABLE',"
+                    + " pricing_state='UNPRICED', cost_usd=NULL, unreported_calls=1"
+                    + " WHERE e.workspace_id IS NULL AND e.call_state='OPEN' AND e.source_type='PRODUCT_FEEDBACK_DRAFT'";
+
+    @WorkspaceAgnostic("Instance action completion settles only the calls owned by that action")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = SETTLE_INSTANCE + " AND e.action_id=:actionId", nativeQuery = true)
+    int settleAction(@Param("actionId") UUID actionId);
+
+    @WorkspaceAgnostic("Recovery settles abandoned instance calls; workspace calls remain run-owned")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+            value = SETTLE_INSTANCE + " AND (e.settle_after <= clock_timestamp() OR NOT EXISTS ("
+                    + " SELECT 1 FROM agent_action a WHERE a.id=e.action_id AND a.state='EXECUTING'"
+                    + " AND a.leased_until > clock_timestamp()))",
+            nativeQuery = true)
+    int settleAbandonedInstanceCalls();
+
     /** The call a measurement replaces, held until the measurement commits. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT e FROM LlmUsageEvent e WHERE e.id = :id AND e.workspaceId = :workspaceId")
-    Optional<LlmUsageEvent> lockCall(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
+    @Query(
+            "SELECT e FROM LlmUsageEvent e WHERE e.id = :id AND (e.workspaceId = :workspaceId OR (e.workspaceId IS NULL AND :workspaceId IS NULL))")
+    Optional<LlmUsageEvent> lockCall(@Param("id") UUID id, @Param("workspaceId") @Nullable Long workspaceId);
 
     /** Records the first failure only, including on a call whose usage was measured or settled already. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -114,11 +134,11 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
         UPDATE llm_usage_event
         SET call_failure = jsonb_build_object('kind', CAST(:kind AS text), 'status', CAST(:status AS integer)),
             failed_at = clock_timestamp()
-        WHERE id = :id AND workspace_id = :workspaceId AND call_failure IS NULL
+        WHERE id = :id AND workspace_id IS NOT DISTINCT FROM :workspaceId AND call_failure IS NULL
         """, nativeQuery = true)
     int recordFailure(
             @Param("id") UUID id,
-            @Param("workspaceId") long workspaceId,
+            @Param("workspaceId") @Nullable Long workspaceId,
             @Param("kind") String kind,
             @Param("status") @Nullable Integer status);
 
@@ -148,11 +168,11 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             measurement_verification = :#{#measurement.verification().name()},
             pricing_state = :#{#measurement.pricingState().name()},
             cost_usd = :#{#measurement.costUsd()}, cost_bound_usd = CASE WHEN :#{#measurement.keepBound()} THEN cost_bound_usd END
-        WHERE id = :id AND workspace_id = :workspaceId
+        WHERE id = :id AND workspace_id IS NOT DISTINCT FROM :workspaceId
         """, nativeQuery = true)
     int measure(
             @Param("id") UUID id,
-            @Param("workspaceId") long workspaceId,
+            @Param("workspaceId") @Nullable Long workspaceId,
             @Param("measurement") LlmUsageRecorder.Measurement measurement);
 
     /**

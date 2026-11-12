@@ -17,15 +17,18 @@ The model supplies structured data but has no tools and no authority to publish.
 
 The `productfeedback` module owns the lifecycle and trust decisions.
 It owns input stripping, redaction, the prompt, output validation, routing, rendering, and the durable filing state.
-The closed `agent` module supplies the model adapter in `agent.productfeedback`, which runs only on a server with the agent runtime.
-That adapter calls the named `productfeedback.drafting` API.
+
+The closed `agent` module supplies the draft adapter in `agent.productfeedback`.
+It is the outbox adapter of `DRAFT_REPORT`, and it runs on a server with the agent runtime.
+That adapter and the LLM proxy call the named `productfeedback.drafting` API.
 The dependency is `agent` → `productfeedback`. Product feedback never imports agent internals.
 
 ```mermaid
 flowchart LR
     accTitle: Product feedback module and role boundaries
-    accDescr: The model adapter of the agent runtime claims draft work from productfeedback. The server routes and files through the GitHub adapter.
-    A[agent.productfeedback in the agent runtime] --> D[productfeedback.drafting API]
+    accDescr: The draft adapter on the server reads the draft call from productfeedback and sends it through the LLM proxy. The server routes and files through the GitHub adapter.
+    A[agent.productfeedback on server] --> D[productfeedback.drafting API]
+    A --> L[LLM proxy in the server JVM]
     D --> DB[(Product feedback state)]
     S[productfeedback on server] --> DB
     S --> P[integration.scm.spi.ProductFeedbackIssues]
@@ -35,28 +38,62 @@ flowchart LR
 
 The drafting API and the other product feedback services load on every server. Only the model adapter needs the agent runtime.
 The server refreshes issue snapshots, files issues, polls follow-up, processes `/publish`, transfers issues, and performs external cleanup.
-It does not run the model call.
+It also makes the one model call of each draft, through the LLM proxy in its own JVM. No sandbox runs for a draft.
 
-The `productfeedback.drafting` contract has three operations:
+The `productfeedback.drafting` contract has these operations:
 
-- `claim(workerId)` returns optional `DraftWork` with its attempt, opaque `llmModelId`, messages, schema, token cap, deadline, and lease check.
-- `complete(feedbackId, attempt, rawText, usage)` submits the model output and usage.
-- `fail(feedbackId, attempt, reason)` records `MODEL_UNAVAILABLE`, `TIMEOUT`, or `PROVIDER_ERROR`.
+- `waiting(feedbackId, generation)` returns the `DraftCall` while the report waits for that generation: the opaque `llmModelId`, the two messages, and the token cap.
+- `waits(feedbackId, generation)` tells the proxy whether the report still waits for that generation.
+- `answered(attempt, feedbackId, generation, rawText)` keeps the model output while the attempt holds its action.
+- `claimed` and `deferred` apply filing lifecycle events while the action holds its fence.
+- `count(feedbackId, inputTokens, outputTokens)` adds the tokens of one measured call to the report.
+- `ended(ended)` moves the report on when its action ends.
 
-Completion checks the attempt before it changes the row.
+Each write checks the generation before it changes the row.
+
 The GitHub adapter (`integration.scm.github.app.productfeedback`) implements `integration.scm.spi.ProductFeedbackIssues` for repository lookup, snapshots, filing and reconciliation.
 It implements `integration.scm.spi.ProductFeedbackIssueUpdates` for transfers, edits, comments, permissions and follow-up.
 It files as the instance's GitHub App, so it carries an `EgressExempt(PRODUCT_FEEDBACK)` declaration and consults Silent Mode before each write.
 Each issue operation uses the numeric repository and installation IDs frozen during routing.
 GitLab, Slack, and Outline do not implement product feedback destinations.
 
+### The draft action
+
+A report enters `DRAFT_QUEUED` in four cases:
+
+- At submission.
+- After the reporter edits a held report.
+- When an admin selects **Retry** for a report without a draft.
+- When an admin files a saved report whose author was told about the model.
+
+In the same transaction, `FileIssueQueue.draft` makes three checks.
+The author was told about the model, the destination names a model, and the daily limits allow a draft.
+A report that fails a check goes to `ANSWERED` without a draft.
+Otherwise the report's generation rises by one, and one `DRAFT_REPORT` action is enqueued ([The outbox](./outbox.md#product-feedback-draft)).
+
+The model call offers the model no tools. This is a security property, not a limit of the current drafter ([OWASP LLM06](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/)).
+Before each call, the proxy checks that the destination still names the call's model.
+It also checks that the report still waits for this generation.
+It sends the call through its permits and its egress guard, as it does for a review call.
+
+After capacity is granted, admission locks the destination settings and reserves the daily allowance before provider work.
+A queued action reads the current limits.
+A reservation covers its retries. A limit of zero stops them.
+
+The action's end moves the report to `ANSWERED`.
+When the action is `DONE`, the report keeps the model's answer.
+When the action failed, expired or was cancelled, the report has no draft.
+
 ## State machine and leases
 
 The filing row belongs to one saved report.
-Sweepers claim rows with `FOR UPDATE SKIP LOCKED` in short transactions.
-They record the claimant, lease deadline, and attempt before network work starts.
+The outbox owns the claims, leases, retries, and expiry of model calls and GitHub writes.
 Network calls run outside the transaction.
-Compare-and-set transitions reject stale results after an attempt or state changes.
+Fenced action results apply filing lifecycle events in the transaction that records the result.
+
+A capacity refusal applies `DRAFT_DEFERRED` and enters `DRAFT_WAITING` without spending an attempt.
+The next claim applies `DRAFT_CLAIMED` and enters `DRAFTING`.
+The terminal event `DRAFT_ENDED` moves any draft state to `ANSWERED`.
 
 `FilingLifecycle` is the one definition of the machine.
 It names every state, every event, and every allowed move.
@@ -72,7 +109,11 @@ stateDiagram-v2
     [*] --> DRAFT_QUEUED
     [*] --> SAVED: No destination or paused
     DRAFT_QUEUED --> DRAFTING: DRAFT_CLAIMED
+    DRAFTING --> DRAFT_WAITING: DRAFT_DEFERRED
+    DRAFT_WAITING --> DRAFTING: DRAFT_CLAIMED
+    DRAFT_QUEUED --> ANSWERED: DRAFT_ENDED
     DRAFTING --> ANSWERED: DRAFT_ENDED
+    DRAFT_WAITING --> ANSWERED: DRAFT_ENDED
     ANSWERED --> HELD: ROUTED_TO_HOLD
     ANSWERED --> QUEUED: ROUTED_TO_FILE
     HELD --> DRAFT_QUEUED: EDITED
@@ -231,13 +272,28 @@ It cannot pass a queued practice-review call.
 A later request can wait for that one bounded transport. Calls are not preempted.
 Provider quota and cooldown remain shared.
 
-The adapter uses `Caller(null, feedbackId, filingAttempt, instanceModelRef)` through the existing permit lifecycle.
-The attempt identifies the report’s draft generation, not a review attempt.
+The proxy acquires the permit with `Caller(null, feedbackId, generation, instanceModelRef)`, as for every call it serves.
+The generation identifies the report’s draft, not a review attempt.
 Only product feedback omits the workspace. A model without a configured pool is unavailable.
 The permit remains held until the response body is consumed or the cancelled transport closes.
+The proxy allows one call in flight for each draft.
 
-Physical retries debit the same permit through `beforeRetry`.
-Draft attempts record tokens and enforce the instance and account limits without the workspace usage ledger or a synthetic workspace.
+The proxy opens each call in the shared per-call ledger as `UsageSourceType.PRODUCT_FEEDBACK_DRAFT` before provider work.
+The row has no workspace or run.
+It keeps its action ID and transport deadline for recovery.
+It freezes the current instance price under the model catalogue lock.
+
+Completion measures that row and adds its tokens to the report once, in one transaction.
+A call without reported usage stays unverifiable and retains its cost bound.
+The action end settles its open calls.
+A server pass also settles calls after their deadline or claim loss.
+
+Person export includes these calls.
+Erasure settles an open call and detaches its report identifier while it retains accounting facts.
+A late completion measures the same detached row and cannot restore the identifier.
+
+Workspace budget caps do not apply to instance report drafts.
+The daily draft limits still apply.
 
 ## Promotion, follow-up, and cleanup
 

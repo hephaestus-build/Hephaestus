@@ -51,7 +51,14 @@ public enum ActionKind {
      * Moves a reporter's public product-feedback issue to the private repository, for the instance. The moved issue
      * keeps its marker, so an attempt whose write may have started looks for it there first.
      */
-    TRANSFER_ISSUE(false, true);
+    TRANSFER_ISSUE(false, true),
+
+    /**
+     * One tool-less model call through the LLM proxy that drafts a product-feedback report, for the instance. It writes
+     * nothing outside, so a repeated call costs tokens only and needs no readback. It runs in the report's lane, before
+     * its filing.
+     */
+    DRAFT_REPORT(false, true);
 
     private final boolean atMostOnce;
     private final boolean instanceLevel;

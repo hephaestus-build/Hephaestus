@@ -28,7 +28,33 @@ public record ProxyRouting(
         @Nullable Long workspaceId,
         BilledAttempt attempt,
         @Nullable Instant workDeadline,
-        @Nullable Long outputLimit) {
+        @Nullable Long outputLimit,
+        @Nullable UUID actionId) {
+    public ProxyRouting(
+            String principalDescription,
+            String apiProtocol,
+            String baseUrl,
+            @Nullable UsageFundingSource connectionScope,
+            @Nullable Long connectionId,
+            @Nullable Long modelId,
+            @Nullable Long workspaceId,
+            BilledAttempt attempt,
+            @Nullable Instant workDeadline,
+            @Nullable Long outputLimit) {
+        this(
+                principalDescription,
+                apiProtocol,
+                baseUrl,
+                connectionScope,
+                connectionId,
+                modelId,
+                workspaceId,
+                attempt,
+                workDeadline,
+                outputLimit,
+                null);
+    }
+
     public ProxyRouting {
         if (attempt != null && attempt.sourceType() != UsageSourceType.MENTOR_TURN && workDeadline == null)
             throw new IllegalArgumentException("A job route needs its attempt's work deadline");

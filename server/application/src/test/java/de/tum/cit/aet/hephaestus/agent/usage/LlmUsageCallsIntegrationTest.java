@@ -480,6 +480,112 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat((BigDecimal) row(call).get("cost_bound_usd")).isEqualByComparingTo("0.25");
     }
 
+    @Test
+    void shouldMeasureAnInstanceDraftWithoutInventingAWorkspaceOrRun() {
+        UUID call = openInstance(UUID.randomUUID(), Instant.now().plusSeconds(30));
+        assertThat(row(call))
+                .containsEntry("workspace_id", null)
+                .containsEntry("run_id", null)
+                .containsEntry("call_state", "OPEN");
+        var usage = new LlmUsageRecorder.CallUsage(1_000_000, 100_000, 0, 0, 0, 0);
+        Boolean first = transactions.execute(tx -> recorder.complete(call, null, usage));
+        Boolean duplicate = transactions.execute(tx -> recorder.complete(call, null, usage));
+        assertThat(first).isTrue();
+        assertThat(duplicate).isFalse();
+        assertThat(row(call)).containsEntry("call_state", "ENDED").containsEntry("input_tokens", 1_000_000L);
+        assertThat((BigDecimal) row(call).get("cost_usd")).isEqualByComparingTo("2.80");
+        assertThatThrownBy(() -> jdbc.update("UPDATE llm_usage_event SET source_type='REVIEW_JOB' WHERE id=?", call))
+                .hasMessageContaining("ck_llm_usage_event_scope");
+    }
+
+    @Test
+    void shouldKeepTheBoundWhenAnInstanceDraftEndsWithoutUsage() {
+        UUID call = openInstance(UUID.randomUUID(), Instant.now().plusSeconds(30));
+        transactions.executeWithoutResult(tx -> recorder.complete(call, null, null));
+        assertThat(row(call))
+                .containsEntry("call_state", "ENDED")
+                .containsEntry("pricing_state", "UNPRICED")
+                .containsEntry("unreported_calls", 1)
+                .containsEntry("cost_usd", null);
+        assertThat((BigDecimal) row(call).get("cost_bound_usd")).isEqualByComparingTo("0.25");
+    }
+
+    @Test
+    void shouldSettleAbandonedInstanceCallsAndAcceptLateMeasurementAtTheFrozenPrice() {
+        UUID call = openInstance(UUID.randomUUID(), Instant.now().minusSeconds(1));
+        recorder.recoverInstanceCalls();
+        assertThat(row(call))
+                .containsEntry("call_state", "SETTLED")
+                .containsEntry("measurement_verification", "UNVERIFIABLE")
+                .containsEntry("pricing_state", "UNPRICED")
+                .containsEntry("cost_usd", null);
+        assertThat((BigDecimal) row(call).get("cost_bound_usd")).isEqualByComparingTo("0.25");
+        transactions.executeWithoutResult(
+                tx -> recorder.complete(call, null, new LlmUsageRecorder.CallUsage(1_000_000, 100_000, 0, 0, 0, 0)));
+        assertThat(row(call)).containsEntry("call_state", "ENDED").containsEntry("pricing_state", "PRICED");
+        assertThat((BigDecimal) row(call).get("cost_usd")).isEqualByComparingTo("2.80");
+    }
+
+    @Test
+    void shouldKeepAnInstanceCallsFirstFailureWhenItsSettledUsageArrivesLate() {
+        UUID call = openInstance(UUID.randomUUID(), Instant.now().minusSeconds(1));
+        var other = leasedRun("instance-failure-other");
+        var firstFailure = new MentorTurn.FailedCall("upstream_stalled", null);
+        Boolean wrongScope =
+                transactions.execute(tx -> recorder.complete(call, other.workspaceId(), null, firstFailure));
+        assertThat(wrongScope).isFalse();
+        assertThat(jdbc.queryForObject("SELECT failed_at FROM llm_usage_event WHERE id=?", Timestamp.class, call))
+                .isNull();
+        recorder.recoverInstanceCalls();
+        Boolean unmeasured = transactions.execute(tx -> recorder.complete(call, null, null, firstFailure));
+        assertThat(unmeasured).isFalse();
+        Instant firstTime = failedAt(call);
+        assertThat(failure(call)).isEqualTo(firstFailure);
+        var usage = new LlmUsageRecorder.CallUsage(1_000_000, 100_000, 0, 0, 0, 0);
+        var laterFailure = new MentorTurn.FailedCall("upstream_status", 503);
+        Boolean measured = transactions.execute(tx -> recorder.complete(call, null, usage, laterFailure));
+        Boolean duplicate = transactions.execute(tx -> recorder.complete(call, null, usage, laterFailure));
+        assertThat(measured).isTrue();
+        assertThat(duplicate).isFalse();
+        assertThat(failure(call)).isEqualTo(firstFailure);
+        assertThat(failedAt(call)).isEqualTo(firstTime);
+        assertThat(row(call))
+                .containsEntry("workspace_id", null)
+                .containsEntry("run_id", null)
+                .containsEntry("call_state", "ENDED")
+                .containsEntry("input_tokens", 1_000_000L);
+        assertThat((BigDecimal) row(call).get("cost_usd")).isEqualByComparingTo("2.80");
+    }
+
+    @Test
+    void shouldSettleOnlyTheCallsOwnedByTheEndingAction() {
+        UUID action = UUID.randomUUID();
+        UUID selected = openInstance(action, Instant.now().plusSeconds(30));
+        UUID other = openInstance(UUID.randomUUID(), Instant.now().plusSeconds(30));
+        transactions.executeWithoutResult(tx -> recorder.settleAction(action));
+        assertThat(row(selected)).containsEntry("call_state", "SETTLED");
+        assertThat(row(other)).containsEntry("call_state", "OPEN");
+    }
+
+    private UUID openInstance(UUID action, Instant deadline) {
+        return Objects.requireNonNull(transactions.execute(tx -> recorder.open(new LlmUsageRecorder.OpenCall(
+                null,
+                null,
+                null,
+                "REPORT_DRAFT",
+                UsageSourceType.PRODUCT_FEEDBACK_DRAFT,
+                UUID.randomUUID(),
+                1,
+                null,
+                ModelKind.CHAT,
+                null,
+                "draft-model",
+                PRICED,
+                new BigDecimal("0.25"),
+                action,
+                deadline))));
+    }
+
     /** A run of a new workspace, leased by its first claim. */
     private AgentRunLease leasedRun(String slug) {
         Workspace workspace =
@@ -543,7 +649,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private Map<String, @Nullable Object> row(UUID call) {
         return jdbc.queryForMap(
-                "SELECT call_state, run_id, input_tokens, output_tokens, total_calls, unreported_calls, usage_provenance,"
+                "SELECT workspace_id, source_id, call_state, run_id, input_tokens, output_tokens, total_calls, unreported_calls, usage_provenance,"
                         + " measurement_verification, pricing_state, cost_usd, cost_bound_usd FROM llm_usage_event"
                         + " WHERE id = ?",
                 call);

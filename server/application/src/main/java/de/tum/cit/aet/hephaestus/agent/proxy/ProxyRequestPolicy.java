@@ -5,8 +5,12 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnAgentRuntime
 @RequiredArgsConstructor
 class ProxyRequestPolicy {
+    private final ProductFeedbackDraftCalls drafts;
     private final EgressPolicy egress;
     private final ReviewJobRepository jobs;
     private final MentorTurnRepository turns;
@@ -30,6 +35,12 @@ class ProxyRequestPolicy {
     public boolean allows(ProxyRouting request) {
         Long workspaceId = request.workspaceId();
         var attempt = request.attempt();
+        if (attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT)
+            return workspaceId == null
+                    && request.connectionScope() == UsageFundingSource.INSTANCE
+                    && drafts.waiting(attempt.sourceId(), attempt.number())
+                            .filter(call -> Objects.equals(request.modelId(), call.llmModelId()))
+                            .isPresent();
         if (workspaceId == null) return false;
         var model = new LlmModelResolver.ConnectionRef(
                 request.connectionScope(), request.connectionId(), request.modelId(), workspaceId);
@@ -38,6 +49,7 @@ class ProxyRequestPolicy {
                 jobs.findByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
                         .filter(job -> reviews.allows(job, model))
                         .isPresent();
+            case PRODUCT_FEEDBACK_DRAFT -> false;
             case MENTOR_TURN ->
                 turns.findAccountIdByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
                         .filter(account -> routing.allows(workspaceId, account, model))

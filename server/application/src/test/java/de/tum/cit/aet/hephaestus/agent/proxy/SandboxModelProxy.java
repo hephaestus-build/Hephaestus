@@ -9,9 +9,11 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Tracer;
@@ -37,6 +39,8 @@ public final class SandboxModelProxy {
         var budgets = mock(ProxyBudgetGate.class);
         var meters = context.getBean(MeterRegistry.class);
         var ledger = new ProxyCallLedger(
+                mock(LlmAdmissionService.class),
+                mock(ProductFeedbackDraftCalls.class),
                 context.getBean(LlmUsageRecorder.class),
                 context.getBean(AgentRuns.class),
                 context.getBean(ReviewJobRepository.class),
@@ -58,7 +62,8 @@ public final class SandboxModelProxy {
                         context.getBean(MentorTurnRepository.class),
                         mapper,
                         context.getBean(ReviewSnapshotQuery.class),
-                        context.getBean(AgentRuns.class)),
+                        context.getBean(AgentRuns.class),
+                        mock(ProductFeedbackDraftCalls.class)),
                 new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 permits,

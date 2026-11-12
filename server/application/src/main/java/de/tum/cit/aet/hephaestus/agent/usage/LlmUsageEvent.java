@@ -26,7 +26,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One model call of an agent run, for spending totals and budget caps ({@link LlmUsageRecorder}). The proxy writes the
+ * One model call of an agent run or an instance report draft, for spending totals and budget caps ({@link LlmUsageRecorder}). The proxy writes the
  * row {@link UsageCallState#OPEN} before the call leaves, and the call's end measures it. Source identity, model,
  * funding source, rates and date stay frozen; an operator can price an unpriced row. Rows written before calls had
  * rows of their own hold one job attempt, practice script model kind or turn attempt each, have no run, and keep
@@ -45,7 +45,8 @@ import org.jspecify.annotations.Nullable;
             // leading column is absent from that predicate.
             @Index(name = "idx_llm_usage_occurred_at", columnList = "occurred_at"),
             // The end of a claim settles the open calls of that claim, and a deleted run clears its rows' reference.
-            @Index(name = "idx_llm_usage_run", columnList = "run_id, workspace_id, lease_epoch")
+            @Index(name = "idx_llm_usage_run", columnList = "run_id, workspace_id, lease_epoch"),
+            @Index(name = "idx_llm_usage_action", columnList = "action_id")
         },
         uniqueConstraints = {
             @UniqueConstraint(
@@ -64,8 +65,9 @@ public class LlmUsageEvent {
     @Column(nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "workspace_id", nullable = false)
-    private long workspaceId;
+    @Nullable
+    @Column(name = "workspace_id")
+    private Long workspaceId;
 
     @NonNull
     @Column(name = "job_type", nullable = false, length = 40)
@@ -87,6 +89,15 @@ public class LlmUsageEvent {
     @Nullable
     @Column(name = "review_id", updatable = false)
     private UUID reviewId;
+
+    /** Soft ownership: accounting survives outbox retention and report erasure. */
+    @Nullable
+    @Column(name = "action_id", updatable = false)
+    private UUID actionId;
+
+    @Nullable
+    @Column(name = "settle_after", updatable = false)
+    private Instant settleAfter;
 
     /** The run whose claim made the call; {@code null} for a row from before calls had rows, or a deleted run. */
     @Nullable

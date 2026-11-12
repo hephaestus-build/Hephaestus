@@ -155,6 +155,7 @@ public class LlmUsageRepricer {
             return priceRepository.findById(row.appliedPriceId()).map(Rates::of).orElse(null);
         }
         if (row.appliedWorkspaceModelId() != null) {
+            if (row.workspaceId() == null) return null;
             return workspaceModelRepository
                     .findByIdAndWorkspaceId(row.appliedWorkspaceModelId(), row.workspaceId())
                     .map(Rates::of)
@@ -180,6 +181,7 @@ public class LlmUsageRepricer {
     }
 
     private Optional<WorkspaceLlmModel> uniqueWorkspaceModel(UnpricedLedgerRow row) {
+        if (row.workspaceId() == null) return Optional.empty();
         String model = Objects.requireNonNull(row.model());
         List<WorkspaceLlmModel> candidates =
                 workspaceModelRepository.findByWorkspaceIdAndUpstreamModelId(row.workspaceId(), model);

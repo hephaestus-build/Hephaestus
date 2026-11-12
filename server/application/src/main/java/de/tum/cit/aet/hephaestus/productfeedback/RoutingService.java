@@ -90,10 +90,9 @@ class RoutingService {
 
     private boolean routeOne() {
         Instant now = clock.instant();
-        UUID id = filings.claimableAnswer(now.minus(DraftingService.EXPIRY)).orElse(null);
+        UUID id = filings.claimableAnswer().orElse(null);
         if (id == null) return false;
         ProductFeedbackFiling filing = filings.lock(id).orElseThrow();
-        if (filing.getState() != FilingState.ANSWERED) meters.draft("expired");
         ProductFeedback report = feedback.findById(id).orElseThrow();
         ProductFeedbackDestination destination = destinations.current();
         Draft draft = null;
@@ -143,8 +142,6 @@ class RoutingService {
         filing.setRemoved(outcome.counts().isEmpty() ? null : Redaction.describe(outcome.counts()));
         if (draft == null) filing.setDraftedAt(null);
         filing.setAnswer(null);
-        filing.setClaimedBy(null);
-        filing.setLeaseUntil(null);
         filing.setNextAttemptAt(now);
         filing.setUpdatedAt(now);
         meters.route(decision.route(), decision.reason());

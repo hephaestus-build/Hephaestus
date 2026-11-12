@@ -27,6 +27,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
@@ -191,7 +192,7 @@ class LlmProxyService {
                     .tag("gen_ai.operation.name", operation)
                     .tag("hephaestus.pi_request.sha256", ProvenanceDigest.sha256Hex(body))
                     .start();
-            if (routing.sourceId() != null)
+            if (routing.attempt().sourceType() != UsageSourceType.PRODUCT_FEEDBACK_DRAFT && routing.sourceId() != null)
                 span.tag("hephaestus.job.id", routing.sourceId().toString());
             if (routing.workspaceId() != null) span.tag("hephaestus.workspace.id", routing.workspaceId());
             long started = System.nanoTime();
@@ -401,9 +402,16 @@ class LlmProxyService {
             return refusal(spendingRefusal, ProxyRefusal.BUDGET, budgetReachedMessage(routing.connectionScope()));
         }
 
-        LlmModelResolver.ProxyCredential credential =
-                resolver.resolveProxyCredential(new LlmModelResolver.ConnectionRef(
-                        routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()));
+        LlmModelResolver.ProxyCredential credential;
+        if (attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT) {
+            var instance = resolver.resolveInstanceModel(Objects.requireNonNull(routing.modelId()));
+            credential = instance != null && Objects.equals(instance.ref().connectionId(), routing.connectionId())
+                    ? instance.credential()
+                    : null;
+        } else {
+            credential = resolver.resolveProxyCredential(new LlmModelResolver.ConnectionRef(
+                    routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()));
+        }
         if (credential == null) {
             accounting.recordError(routing.apiProtocol());
             return ResponseEntity.status(502).body("The configured model is not available");
@@ -432,20 +440,22 @@ class LlmProxyService {
             return ResponseEntity.status(502).body("Invalid upstream configuration");
         }
 
-        LlmCallPermits.Permit poolPermit = callPermits.acquire(
-                credential.callPoolId(),
-                routingService.band(routing),
-                new LlmCallPermits.Caller(
-                        Objects.requireNonNull(routing.workspaceId()),
-                        routing.sourceId(),
-                        attempt.number(),
-                        new LlmModelResolver.ConnectionRef(
-                                routing.connectionScope(),
-                                routing.connectionId(),
-                                routing.modelId(),
-                                routing.workspaceId())),
-                () -> call.isCancelled() || !routingService.ownsAttempt(routing),
-                routing.workDeadline());
+        var caller = new LlmCallPermits.Caller(
+                routing.workspaceId(),
+                routing.sourceId(),
+                attempt.number(),
+                new LlmModelResolver.ConnectionRef(
+                        routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()));
+        BooleanSupplier attemptEnded = () -> call.isCancelled() || !routingService.ownsAttempt(routing);
+        LlmCallPermits.Permit poolPermit = attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
+                ? callPermits.tryAcquireBackground(
+                        credential.callPoolId(), caller, attemptEnded, Objects.requireNonNull(routing.workDeadline()))
+                : callPermits.acquire(
+                        credential.callPoolId(),
+                        routingService.band(routing),
+                        caller,
+                        attemptEnded,
+                        routing.workDeadline());
         if (poolPermit == null) {
             return refusal(
                     HttpStatus.SERVICE_UNAVAILABLE,
@@ -500,8 +510,11 @@ class LlmProxyService {
                         HttpStatus.CONFLICT, ProxyRefusal.ATTEMPT_ENDED, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
             } catch (ProxyCallLedger.BudgetHeld held) {
                 permit.released();
-                accounting.budgetHeld(routing);
-                return refusal(spendingRefusal, ProxyRefusal.BUDGET, budgetReachedMessage(routing.connectionScope()));
+                if (attempt.sourceType() != UsageSourceType.PRODUCT_FEEDBACK_DRAFT) accounting.budgetHeld(routing);
+                String reason = attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
+                        ? "The report draft allowance is unavailable."
+                        : budgetReachedMessage(routing.connectionScope());
+                return refusal(spendingRefusal, ProxyRefusal.BUDGET, reason);
             } catch (RuntimeException failure) {
                 // The call never reached its provider, so the provider's health takes no failure from it.
                 permit.released();
@@ -622,7 +635,10 @@ class LlmProxyService {
             if (LlmCallPermits.throttles(upstream.status()) && !LlmCallPermits.spentAccount(upstream.body())) {
                 Duration asked =
                         callPermits.throttled(poolPermit, upstream.status(), upstream.headers(), instanceCredential);
-                if (asked != null && !call.isCancelled() && absorbs(upstream, asked, absorbUntil)) {
+                if (attempt.sourceType() != UsageSourceType.PRODUCT_FEEDBACK_DRAFT
+                        && asked != null
+                        && !call.isCancelled()
+                        && absorbs(upstream, asked, absorbUntil)) {
                     // This answer says the provider is busy, not that it fails, so the breaker hears nothing of it.
                     permit.released();
                     poolPermit.absorbed();

@@ -72,6 +72,8 @@ The test records each one in `MIXED_SCOPE_TABLES`, with its reason, and requires
   The installation repository queries use `@WorkspaceAgnostic`, with an explicit `workspace IS NULL` predicate.
 - `config_audit_event`: the column is NULL only for a curated practice change, which belongs to the instance.
 - `product_feedback`: the column is NULL only for product feedback sent outside a workspace.
+- `llm_usage_event`: the column is NULL only for an instance product feedback draft.
+  `ck_llm_usage_event_scope` enforces this source and funding scope.
 
 ## Native objects the JPA diff does not cover
 

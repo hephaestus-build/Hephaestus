@@ -23,7 +23,7 @@ class ProductFeedbackMetersTest {
     @Test
     void shouldCountARefusedMoveUnderTheTagsTheAlertReads() {
         meters.failed(new FilingLifecycle.IllegalTransition(
-                UUID.randomUUID(), FilingState.FILED, FilingLifecycle.Event.DRAFT_CLAIMED));
+                UUID.randomUUID(), FilingState.FILED, FilingLifecycle.Event.DRAFT_ENDED));
 
         assertThat(refused()).isEqualTo(1);
     }

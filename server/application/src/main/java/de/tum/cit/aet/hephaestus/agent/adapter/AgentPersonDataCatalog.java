@@ -92,8 +92,10 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                                 + SELECTED_JOBS
                                 + ")) OR (t.source_type='MENTOR_TURN' AND t.source_id IN (SELECT mt.id FROM"
                                 + " mentor_turn mt JOIN mentor_conversation mc ON mc.id=mt.conversation_id WHERE"
-                                + " mc.account_id=:account))",
-                        "id,workspace_id,job_type,source_type,source_id,source_attempt,review_id,run_id,lease_epoch,call_state,model_kind,practice_id,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,search_units,total_calls,unreported_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,started_at,occurred_at,usage_provenance",
+                                + " mc.account_id=:account)) OR (t.source_type='PRODUCT_FEEDBACK_DRAFT'"
+                                + " AND t.workspace_id IS NULL AND t.source_id IN"
+                                + " (SELECT p.id FROM product_feedback p WHERE p.account_id=:account))",
+                        "id,workspace_id,job_type,source_type,source_id,source_attempt,review_id,run_id,lease_epoch,action_id,settle_after,call_state,model_kind,practice_id,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,search_units,total_calls,unreported_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,started_at,occurred_at,usage_provenance",
                         "source_id,workspace_id",
                         "review_id=NULL",
                         -85),
@@ -259,13 +261,17 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                             + "SELECT t.source_id, t.workspace_id FROM llm_usage_event t WHERE " + predicate
                             + " UNION SELECT mt.id, mt.workspace_id FROM mentor_turn mt JOIN mentor_conversation mc"
                             + " ON mc.id = mt.conversation_id AND mc.workspace_id = mt.workspace_id"
-                            + " WHERE mc.account_id = :account) s ORDER BY 1, 2",
+                            + " WHERE mc.account_id = :account UNION SELECT p.id, NULL::bigint"
+                            + " FROM product_feedback p WHERE p.account_id = :account) s ORDER BY 1, 2",
                     parameters(scope, mapper),
-                    (rs, row) -> new PersonDataSelection.RowKey(Map.of(
-                            "source_id",
-                            Objects.requireNonNull(rs.getString("source_id")),
-                            "workspace_id",
-                            Objects.requireNonNull(rs.getString("workspace_id"))))));
+                    (rs, row) -> {
+                        String source = Objects.requireNonNull(rs.getString("source_id"));
+                        String workspace = rs.getString("workspace_id");
+                        return new PersonDataSelection.RowKey(
+                                workspace == null
+                                        ? Map.of("source_id", source)
+                                        : Map.of("source_id", source, "workspace_id", workspace));
+                    }));
         }
 
         /** One entry for each selected source, with the rows of its calls, also when it has none yet. */
@@ -276,7 +282,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                     """
                     SELECT jsonb_build_object('source_id', s.source_id, 'workspace_id', s.workspace_id, 'calls',
                         COALESCE((SELECT jsonb_agg(to_jsonb(t) ORDER BY t.started_at, t.id) FROM llm_usage_event t
-                                  WHERE t.workspace_id = s.workspace_id AND t.source_id = s.source_id), '[]'::jsonb))::text
+                                  WHERE t.workspace_id IS NOT DISTINCT FROM s.workspace_id AND t.source_id = s.source_id), '[]'::jsonb))::text
                     FROM jsonb_to_recordset(CAST(:keys AS jsonb)) AS s(source_id uuid, workspace_id bigint)
                     ORDER BY s.source_id
                     """,
@@ -298,9 +304,19 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                     WITH detached AS (
                         SELECT s.workspace_id, s.source_id, gen_random_uuid() AS detached
                         FROM jsonb_to_recordset(CAST(:keys AS jsonb)) AS s(source_id uuid, workspace_id bigint))
-                    UPDATE llm_usage_event e SET source_id = d.detached, review_id = NULL
+                    UPDATE llm_usage_event e SET source_id = d.detached, review_id = NULL,
+                        call_state = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                                          THEN 'SETTLED' ELSE e.call_state END,
+                        measurement_verification = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                                                        THEN 'UNVERIFIABLE' ELSE e.measurement_verification END,
+                        pricing_state = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                                             THEN 'UNPRICED' ELSE e.pricing_state END,
+                        cost_usd = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                                        THEN NULL ELSE e.cost_usd END,
+                        unreported_calls = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                                                THEN 1 ELSE e.unreported_calls END
                     FROM detached d
-                    WHERE e.workspace_id = d.workspace_id AND e.source_id = d.source_id
+                    WHERE e.workspace_id IS NOT DISTINCT FROM d.workspace_id AND e.source_id = d.source_id
                     """, Map.of("keys", keys(selection)));
             return selection.rows().size();
         }
