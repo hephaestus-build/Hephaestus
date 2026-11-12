@@ -108,31 +108,48 @@ public class ReviewAttemptCustody {
 
         private final ReentrantLock preparation = new ReentrantLock();
 
+        /**
+         * Guards {@link #inputs} and {@link #closed}. A lock, not a monitor: closing inputs removes their folder and
+         * records it, and on Java 21 a virtual thread that blocks under a monitor pins its carrier.
+         */
+        private final ReentrantLock state = new ReentrantLock();
+
         PreparedJobInputs get(Supplier<PreparedJobInputs> prepare) {
             preparation.lock();
             try {
-                synchronized (this) {
+                state.lock();
+                try {
                     if (closed) throw new IllegalStateException("The attempt's inputs were released");
                     if (inputs != null) return inputs;
+                } finally {
+                    state.unlock();
                 }
                 // Capture admission can wait for erasure. Release must never wait for that admission.
                 PreparedJobInputs prepared = prepare.get();
-                synchronized (this) {
+                state.lock();
+                try {
                     if (closed) {
                         prepared.close();
                         throw new IllegalStateException("The attempt's inputs were released");
                     }
                     inputs = prepared;
                     return prepared;
+                } finally {
+                    state.unlock();
                 }
             } finally {
                 preparation.unlock();
             }
         }
 
-        synchronized void close() {
-            closed = true;
-            if (inputs != null) inputs.close();
+        void close() {
+            state.lock();
+            try {
+                closed = true;
+                if (inputs != null) inputs.close();
+            } finally {
+                state.unlock();
+            }
         }
     }
 }

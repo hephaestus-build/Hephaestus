@@ -828,7 +828,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var entered = new CountDownLatch(1);
         var proceed = new CountDownLatch(1);
         var first = new AtomicBoolean(true);
-        // Retirement stops in its ownership query, which it makes under the runtime lease's monitor.
+        // Retirement stops in its ownership query, which it makes under the runtime lease's lock.
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenAnswer(query -> {
             if (first.getAndSet(false)) {
                 entered.countDown();
@@ -846,7 +846,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             var identity = new AdmissionIdentity(job.getId(), 1L, 0, LEASE);
             var admitting = new Thread(() -> files.discardAdmittedAttempt(identity));
             admitting.start();
-            await().atMost(Duration.ofSeconds(5)).until(() -> admitting.getState() == Thread.State.BLOCKED);
+            // Waiting for the lease's lock, a ReentrantLock: the thread parks.
+            await().atMost(Duration.ofSeconds(5)).until(() -> admitting.getState() == Thread.State.WAITING);
             assertThat(read(files, job, "context/quote", sha)).contains(bytes);
             proceed.countDown();
             retiring.join(10_000);

@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -18,7 +19,9 @@ import org.jspecify.annotations.Nullable;
  * deletion while another process can still write or read the attempt. Locks are outside the job folder
  * so removing a folder never replaces the inode on which another process holds its lease.
  * Erasure and the attempt-folder sweeps take it exclusively before they remove a job's folders. A runtime shares
- * its published capture's lease with admission and retirement only, which remove under its monitor one at a time.
+ * its published capture's lease with admission and retirement only, which remove under its lock one at a time. The
+ * lock is a {@link ReentrantLock}, not a monitor: a removal does I/O, and on Java 21 a virtual thread that blocks under
+ * a monitor pins its carrier.
  * https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/channels/FileLock.html
  */
 public final class EvidenceFolderLease implements AutoCloseable {
@@ -39,6 +42,7 @@ public final class EvidenceFolderLease implements AutoCloseable {
     private @Nullable FileLock lock;
     private boolean shared;
     private boolean closed;
+    private final ReentrantLock guard = new ReentrantLock();
 
     private EvidenceFolderLease(Path file) {
         this.file = file;
@@ -49,7 +53,8 @@ public final class EvidenceFolderLease implements AutoCloseable {
         Path file = lockFile(store, workspaceId, jobId);
         var lease = new EvidenceFolderLease(file);
         if (LOCAL.putIfAbsent(file, lease) != null) return Optional.empty();
-        synchronized (lease) {
+        lease.guard.lock();
+        try {
             boolean locked = false;
             try {
                 var opened = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -62,6 +67,8 @@ public final class EvidenceFolderLease implements AutoCloseable {
             } finally {
                 if (!locked) lease.close();
             }
+        } finally {
+            lease.guard.unlock();
         }
     }
 
@@ -92,15 +99,25 @@ public final class EvidenceFolderLease implements AutoCloseable {
     }
 
     /** Called once the capture's folder is published: admission and retirement may then remove it. */
-    public synchronized void shareWithRemovals() {
-        if (closed || lock == null) throw new IllegalStateException("Evidence folder lease is not held");
-        shared = true;
+    public void shareWithRemovals() {
+        guard.lock();
+        try {
+            if (closed || lock == null) throw new IllegalStateException("Evidence folder lease is not held");
+            shared = true;
+        } finally {
+            guard.unlock();
+        }
     }
 
-    private synchronized boolean removeIfShared(Removal removal) throws IOException {
-        if (!shared || closed || lock == null) return false;
-        removal.run();
-        return true;
+    private boolean removeIfShared(Removal removal) throws IOException {
+        guard.lock();
+        try {
+            if (!shared || closed || lock == null) return false;
+            removal.run();
+            return true;
+        } finally {
+            guard.unlock();
+        }
     }
 
     private static Path lockFile(Path store, long workspaceId, UUID jobId) {
@@ -113,19 +130,24 @@ public final class EvidenceFolderLease implements AutoCloseable {
     }
 
     @Override
-    public synchronized void close() {
-        if (closed) return;
-        closed = true;
+    public void close() {
+        guard.lock();
         try {
+            if (closed) return;
+            closed = true;
             try {
-                if (lock != null) lock.close();
+                try {
+                    if (lock != null) lock.close();
+                } finally {
+                    if (channel != null) channel.close();
+                }
+            } catch (IOException exception) {
+                throw new UncheckedIOException(exception);
             } finally {
-                if (channel != null) channel.close();
+                LOCAL.remove(file, this);
             }
-        } catch (IOException exception) {
-            throw new UncheckedIOException(exception);
         } finally {
-            LOCAL.remove(file, this);
+            guard.unlock();
         }
     }
 }

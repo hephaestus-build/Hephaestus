@@ -55,6 +55,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -1262,7 +1263,8 @@ public class IntegrationNatsConsumer {
         } catch (IOException failure) {
             throw new ConsumerFenceException("The broker did not answer", failure);
         }
-        Object pauses = new Object();
+        // A lock, not a monitor: the resume below calls the broker on the caller's virtual thread.
+        ReentrantLock pauses = new ReentrantLock();
         // Also true when a pause request failed: the broker may have applied it.
         boolean[] fenced = {true};
         try {
@@ -1276,16 +1278,17 @@ public class IntegrationNatsConsumer {
             try {
                 renewal = keepAlive.scheduleAtFixedRate(
                         () -> {
-                            synchronized (pauses) {
+                            pauses.lock();
+                            try {
                                 if (!fenced[0]) return;
-                                try {
-                                    pause(management, stream, consumerName);
-                                } catch (IOException | JetStreamApiException | RuntimeException failure) {
-                                    log.warn(
-                                            "Consumer fence renewal failed: consumerName={}, error.type={}",
-                                            consumerName,
-                                            failure.getClass().getName());
-                                }
+                                pause(management, stream, consumerName);
+                            } catch (IOException | JetStreamApiException | RuntimeException failure) {
+                                log.warn(
+                                        "Consumer fence renewal failed: consumerName={}, error.type={}",
+                                        consumerName,
+                                        failure.getClass().getName());
+                            } finally {
+                                pauses.unlock();
                             }
                         },
                         period,
@@ -1303,18 +1306,19 @@ public class IntegrationNatsConsumer {
             throw new ConsumerFenceException("The broker did not pause the consumer", failure);
         } finally {
             // A renewal that already runs finishes before the resume, and none pauses after it.
-            synchronized (pauses) {
+            pauses.lock();
+            try {
                 boolean paused = fenced[0];
                 fenced[0] = false;
-                try {
-                    if (paused) management.resumeConsumer(stream, consumerName);
-                } catch (IOException | JetStreamApiException failure) {
-                    // The pause ends on its own within FENCE_PAUSE.
-                    log.warn(
-                            "Consumer resume failed: consumerName={}, error.type={}",
-                            consumerName,
-                            failure.getClass().getName());
-                }
+                if (paused) management.resumeConsumer(stream, consumerName);
+            } catch (IOException | JetStreamApiException failure) {
+                // The pause ends on its own within FENCE_PAUSE.
+                log.warn(
+                        "Consumer resume failed: consumerName={}, error.type={}",
+                        consumerName,
+                        failure.getClass().getName());
+            } finally {
+                pauses.unlock();
             }
         }
     }
