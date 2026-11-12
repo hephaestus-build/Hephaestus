@@ -14,7 +14,7 @@ hephaestus:
   dev:
     trigger-enabled: true
   agent:
-    enabled: true
+    enabled: ${AGENT_ENABLED:true}
   sync:
     run-on-startup: false
     filters:
