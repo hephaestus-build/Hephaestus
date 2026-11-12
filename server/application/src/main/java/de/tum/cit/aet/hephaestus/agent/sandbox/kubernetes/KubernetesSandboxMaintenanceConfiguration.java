@@ -26,6 +26,7 @@ public class KubernetesSandboxMaintenanceConfiguration {
     }
 
     @Bean
+    @Profile("!test")
     ScheduledTaskRegistrar kubernetesIsolationReprobe(
             KubernetesIsolationProbe probe, KubernetesSandboxProperties properties) {
         var tasks = new ScheduledTaskRegistrar();

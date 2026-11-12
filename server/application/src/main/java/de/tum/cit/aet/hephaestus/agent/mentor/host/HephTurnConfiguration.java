@@ -123,6 +123,7 @@ public class HephTurnConfiguration {
 
     /** {@link ConversationToolsPods#reap} on a thread of its own: it lists and removes Pods, which can wait. */
     @Bean
+    @Profile("!test")
     ScheduledTaskRegistrar conversationToolsPodReaps(ConversationToolsPods toolsPods) {
         var tasks = new ScheduledTaskRegistrar();
         tasks.addFixedDelayTask(new FixedDelayTask(toolsPods::reap, SANDBOX_REAP, Duration.ZERO));

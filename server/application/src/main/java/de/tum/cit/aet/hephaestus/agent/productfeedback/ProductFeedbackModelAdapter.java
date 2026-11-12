@@ -10,23 +10,20 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafting;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafting.DraftWork;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafting.Failure;
-import jakarta.annotation.PreDestroy;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.scheduling.config.FixedDelayTask;
+import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -52,8 +49,6 @@ class ProductFeedbackModelAdapter {
     private final WebClient client;
     private final ObjectMapper mapper;
     private final String ownerId = UUID.randomUUID().toString();
-    private volatile @Nullable ScheduledExecutorService scheduler;
-    private volatile @Nullable ScheduledFuture<?> task;
 
     ProductFeedbackModelAdapter(
             ProductFeedbackDrafting drafting,
@@ -70,24 +65,19 @@ class ProductFeedbackModelAdapter {
 
     /**
      * Its own single thread, apart from annotation scheduling. One thread also means one drafting call per server at a
-     * time.
+     * time. Tests draft by calling {@link #draftNext}.
      */
-    @EventListener(ApplicationReadyEvent.class)
-    void start() {
-        var executor = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform()
-                .name("product-feedback-drafting")
-                .daemon(true)
-                .factory());
-        task = executor.scheduleWithFixedDelay(this::draftNext, 30, 5, TimeUnit.SECONDS);
-        scheduler = executor;
-    }
-
-    @PreDestroy
-    void stop() {
-        ScheduledFuture<?> running = task;
-        if (running != null) running.cancel(true);
-        ScheduledExecutorService executor = scheduler;
-        if (executor != null) executor.shutdownNow();
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnAgentRuntime
+    @Profile("!test & !specs & !cds-training")
+    static class ScheduleConfiguration {
+        @Bean
+        ScheduledTaskRegistrar productFeedbackDraftingTasks(ProductFeedbackModelAdapter adapter) {
+            var tasks = new ScheduledTaskRegistrar();
+            tasks.addFixedDelayTask(
+                    new FixedDelayTask(adapter::draftNext, Duration.ofSeconds(5), Duration.ofSeconds(30)));
+            return tasks;
+        }
     }
 
     void draftNext() {
@@ -95,7 +85,7 @@ class ProductFeedbackModelAdapter {
             DraftWork work = drafting.claim(ownerId).orElse(null);
             if (work != null) draft(work);
         } catch (RuntimeException failed) {
-            // An exception that left this method would end the scheduled task for good.
+            // Logged here with what failed; the scheduler would log it without the drafting context.
             log.warn(
                     "Product feedback drafting failed: error={}",
                     failed.getClass().getSimpleName());
