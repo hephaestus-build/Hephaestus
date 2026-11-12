@@ -5,9 +5,8 @@ import de.tum.cit.aet.hephaestus.agent.composer.ModelSession;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.proxy.UpstreamHeaders;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafting;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafting.DraftWork;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafting.Failure;
@@ -15,6 +14,7 @@ import jakarta.annotation.PreDestroy;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -39,7 +39,7 @@ import tools.jackson.databind.ObjectMapper;
  * closed. Product feedback validates and routes the answer; this adapter only carries it.
  */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @WorkspaceAgnostic("Product feedback drafting uses the instance's model; it belongs to no workspace")
 class ProductFeedbackModelAdapter {
     private static final Logger log = LoggerFactory.getLogger(ProductFeedbackModelAdapter.class);
@@ -51,7 +51,7 @@ class ProductFeedbackModelAdapter {
     private final LlmCallPermits permits;
     private final WebClient client;
     private final ObjectMapper mapper;
-    private final String workerId;
+    private final String ownerId = UUID.randomUUID().toString();
     private volatile @Nullable ScheduledExecutorService scheduler;
     private volatile @Nullable ScheduledFuture<?> task;
 
@@ -60,19 +60,17 @@ class ProductFeedbackModelAdapter {
             LlmModelResolver models,
             LlmCallPermits permits,
             WebClient.Builder clients,
-            ObjectMapper mapper,
-            WorkerProperties worker) {
+            ObjectMapper mapper) {
         this.drafting = drafting;
         this.models = models;
         this.permits = permits;
         this.client = clients.build();
         this.mapper = mapper;
-        this.workerId = worker.resolvedWorkerId();
     }
 
     /**
-     * Annotation scheduling runs only in the server role, so a worker-only process starts its own single thread. One
-     * thread also means one drafting call per worker at a time.
+     * Its own single thread, apart from annotation scheduling. One thread also means one drafting call per server at a
+     * time.
      */
     @EventListener(ApplicationReadyEvent.class)
     void start() {
@@ -94,7 +92,7 @@ class ProductFeedbackModelAdapter {
 
     void draftNext() {
         try {
-            DraftWork work = drafting.claim(workerId).orElse(null);
+            DraftWork work = drafting.claim(ownerId).orElse(null);
             if (work != null) draft(work);
         } catch (RuntimeException failed) {
             // An exception that left this method would end the scheduled task for good.
@@ -165,7 +163,7 @@ class ProductFeedbackModelAdapter {
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(byte[].class)
-                    // A permit that a worker can no longer renew must end its transport, or the capacity counts twice.
+                    // A permit that a server can no longer renew must end its transport, or the capacity counts twice.
                     .takeUntilOther(permit.revoked())
                     .block(CALL_TIMEOUT);
             if (response == null && permit.isRevoked()) return new ModelSession.Answer(0, new byte[0], false, null);

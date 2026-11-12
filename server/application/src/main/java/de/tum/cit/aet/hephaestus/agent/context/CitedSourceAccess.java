@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultProofAccess;
 import java.util.Collection;
@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 
 /** Current result visibility is owned by practices; a captured quote alone grants no access. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class CitedSourceAccess {
     private final ResultProofAccess results;

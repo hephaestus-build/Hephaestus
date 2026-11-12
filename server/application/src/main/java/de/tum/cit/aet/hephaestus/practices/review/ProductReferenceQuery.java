@@ -3,10 +3,10 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
 import de.tum.cit.aet.hephaestus.core.auth.dto.ProviderIdentityRefDTO;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDeveloperDTO;
@@ -18,17 +18,16 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ProductReferenceQuery {
 
     private final ProductItemRepository rows;
-    private final ObjectProvider<AccountReferenceService> accountReferences;
+    private final AccountReferenceService accountReferences;
     private final RegisteredItemLabels labels;
     private final ItemDescriptorRegistry catalog;
 
@@ -105,6 +104,6 @@ public class ProductReferenceQuery {
 
     public Map<Long, AccountRefDTO> accounts(long workspaceId, Collection<Long> ids) {
         if (ids.isEmpty()) return Map.of();
-        return accountReferences.getObject().references(workspaceId, ids);
+        return accountReferences.references(workspaceId, ids);
     }
 }

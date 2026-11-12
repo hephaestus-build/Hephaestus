@@ -15,7 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
@@ -61,7 +61,7 @@ import tools.jackson.databind.node.ObjectNode;
  * write is fenced on the attempt's run, so a claim that lost its run writes nothing.
  */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 public class ReviewAttemptResults {
 

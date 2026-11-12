@@ -80,7 +80,7 @@ await test("application variables join placeholder and relaxed names to rendered
 		]),
 		containers: [
 			{
-				name: "worker",
+				name: "server",
 				image: applicationImage,
 				environment: new Map([
 					["FEATURE_ENABLED", "true"],
@@ -97,8 +97,8 @@ await test("application variables join placeholder and relaxed names to rendered
 	assert.deepEqual(
 		result.rows.map((row) => [row.variable, row.settings, row.services]),
 		[
-			["FEATURE_ENABLED", ["hephaestus.enabled"], ["worker"]],
-			["HEPHAESTUS_POLL", ["hephaestus.poll"], ["worker"]],
+			["FEATURE_ENABLED", ["hephaestus.enabled"], ["server"]],
+			["HEPHAESTUS_POLL", ["hephaestus.poll"], ["server"]],
 		],
 	);
 	assert.deepEqual(judge(requiredVariables(sources), reference(result.rows, [])), {
@@ -116,7 +116,7 @@ await test("an unknown Java container variable is an unbound error", () => {
 				values: [],
 				containers: [
 					{
-						name: "worker",
+						name: "server",
 						image: applicationImage,
 						environment: new Map([["UNKNOWN", "x"]]),
 						mounts: [],
@@ -125,7 +125,7 @@ await test("an unknown Java container variable is an unbound error", () => {
 			},
 			new Metadata([]),
 		).unbound,
-		["worker: UNKNOWN"],
+		["server: UNKNOWN"],
 	);
 });
 await test("reference checks find missing, stale and undescribed settings", () => {
@@ -141,7 +141,7 @@ await test("the deploy inputs include chart values and no host Compose keys", as
 	const sources = await readSources();
 	const required = requiredVariables(sources);
 	assert.ok(required.has("values.postgresql.backup.restore.time"));
-	assert.ok(required.has("values.worker.enabled"));
+	assert.ok(required.has("values.sandbox.enabled"));
 	assert.ok(required.has("DATABASE_PASSWORD"));
 	assert.ok(!required.has("APP_HOSTNAME"));
 	assert.ok(!required.has("SERVER_MEM"));

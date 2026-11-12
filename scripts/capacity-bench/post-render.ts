@@ -80,7 +80,7 @@ for (const resource of resources) {
 		const templateMetadata = asRecord(template.metadata, "template.metadata");
 		const labels = asRecord(templateMetadata.labels, "labels");
 		const role = labels["app.kubernetes.io/component"];
-		if (role === "server" || role === "worker") {
+		if (role === "server") {
 			const pod = asRecord(template.spec, "pod");
 			const container = asRecord(asArray(pod.containers, "containers")[0], "container");
 			const env = asArray(container.env, "env").map((value) => asRecord(value, "env"));
@@ -88,7 +88,7 @@ for (const resource of resources) {
 			if (!profile) {
 				throw new Error("Chart profile missing");
 			}
-			profile.value = role === "server" ? "e2e" : "e2e,worker";
+			profile.value = "e2e";
 			// JSON has higher precedence than packaged profiles. All prod settings remain exact,
 			// except the explicitly authorized synthetic auth/cookie/origin differences.
 			const explicit = structuredClone(production);
@@ -103,8 +103,6 @@ for (const resource of resources) {
 				"credential-encryption-key": `\${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY}`,
 			};
 			asRecord(hephaestus.agent, "agent").enabled = `\${AGENT_ENABLED:false}`;
-			// The prod profile turns NATS on for the server role; the worker role has no broker.
-			asRecord(asRecord(hephaestus.sync, "sync").nats, "nats").enabled = role === "server";
 			asRecord(hephaestus.integration, "integration").gitlab = {
 				enabled: `\${GITLAB_ENABLED:false}`,
 			};
@@ -114,38 +112,34 @@ for (const resource of resources) {
 			auth["dev-login-enabled"] = true;
 			auth["cookie-secure"] = false;
 			auth["cookie-name"] = "HEPHAESTUS_AT";
-			if (role === "server") {
-				asRecord(explicit.server, "server").address = "127.0.0.1";
-			}
+			asRecord(explicit.server, "server").address = "127.0.0.1";
 			env.push({ name: "SPRING_APPLICATION_JSON", value: JSON.stringify(explicit) });
 			container.env = env;
-			if (role === "server") {
-				pod.containers = [
-					...asArray(pod.containers, "containers"),
-					{
-						name: "driver",
-						image:
-							"node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d",
-						command: ["node", "-e", "setInterval(() => {}, 2147483647)"],
-						securityContext: {
-							runAsUser: 1000,
-							runAsNonRoot: true,
-							allowPrivilegeEscalation: false,
-							readOnlyRootFilesystem: true,
-							capabilities: { drop: ["ALL"] },
-						},
-						resources: {
-							requests: { cpu: "100m", memory: "64Mi" },
-							limits: { cpu: "1", memory: "512Mi" },
-						},
-						volumeMounts: [{ name: "driver", mountPath: "/bench" }],
+			pod.containers = [
+				...asArray(pod.containers, "containers"),
+				{
+					name: "driver",
+					image:
+						"node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d",
+					command: ["node", "-e", "setInterval(() => {}, 2147483647)"],
+					securityContext: {
+						runAsUser: 1000,
+						runAsNonRoot: true,
+						allowPrivilegeEscalation: false,
+						readOnlyRootFilesystem: true,
+						capabilities: { drop: ["ALL"] },
 					},
-				];
-				pod.volumes = [
-					...asArray(pod.volumes ?? [], "volumes"),
-					{ name: "driver", emptyDir: { sizeLimit: "128Mi" } },
-				];
-			}
+					resources: {
+						requests: { cpu: "100m", memory: "64Mi" },
+						limits: { cpu: "1", memory: "512Mi" },
+					},
+					volumeMounts: [{ name: "driver", mountPath: "/bench" }],
+				},
+			];
+			pod.volumes = [
+				...asArray(pod.volumes ?? [], "volumes"),
+				{ name: "driver", emptyDir: { sizeLimit: "128Mi" } },
+			];
 		}
 	}
 	if (resource.kind === "NetworkPolicy") {

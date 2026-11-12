@@ -47,7 +47,7 @@ public final class ModelSession {
             @Nullable Failure failure) {}
 
     public enum Failure {
-        /** The attempt no longer runs on this worker; nothing more may be sent or stored. */
+        /** The attempt no longer runs on this server; nothing more may be sent or stored. */
         OWNERSHIP_LOST,
         /** The workspace's AI choice no longer permits the model. */
         AI_CHOICE,

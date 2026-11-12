@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
  * preparation, approval and write fences compare it with the current rows.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class FeedbackPublicationContext {
     private static final Pattern TOKEN = Pattern.compile("v1:([1-9][0-9]*(?:,[1-9][0-9]*)*):([0-9a-f]{64})");

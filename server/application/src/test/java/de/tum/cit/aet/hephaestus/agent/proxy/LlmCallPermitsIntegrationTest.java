@@ -930,7 +930,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                 worker.acquire(pool, band, caller, () -> false, Instant.now().plusSeconds(10)));
     }
 
-    /** Another worker's call that has waited this long; its own worker is not in the test. */
+    /** Another server's call that has waited this long; its own server is not in the test. */
     private UUID waitingCall(long pool, AgentRunBand band, long workspace, UUID source, Duration waited) {
         UUID id = UUID.randomUUID();
         transactions.executeWithoutResult(status -> rows.enqueue(

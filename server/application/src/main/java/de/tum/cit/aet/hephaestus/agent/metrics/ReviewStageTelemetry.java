@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
  * span per stage, a child of the span that is current when the stage starts.
  *
  * <p>The stages do not add up to the attempt. Composition includes its wait for a composition slot, and a resumed
- * attempt has no capture and no sandbox stage. Admission is the runner's requests to the worker, which
+ * attempt has no capture and no sandbox stage. Admission is the runner's requests to the server, which
  * {@code http.server.requests} already times by route. Each owner builds its own instance from the shared registry,
  * which hands both the same timers.
  */

@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Loads on every runtime role, because the workspace BYO gate consumes it. {@link LlmSettingsAudit} is
  * therefore taken as an {@link ObjectProvider} — a hard dependency on its server-role-only
- * implementation would fail the context on worker and webhook.
+ * implementation would fail the context on the webhook role.
  */
 @Service
 @RequiredArgsConstructor

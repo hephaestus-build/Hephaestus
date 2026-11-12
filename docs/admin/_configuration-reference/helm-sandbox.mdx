@@ -1,0 +1,37 @@
+### `sandbox`
+
+| Key | Type | Default | Required in object | Constraints |
+| --- | --- | --- | --- | --- |
+| `sandbox.controller.enabled` | boolean | `false` | yes | — |
+| `sandbox.controller.image` | string | `"registry.k8s.io/agent-sandbox/agent-sandbox-controller:v1.0.10@sha256:594f4853913bca2b336d0267fe0978445f1aaa5837ed23797e48e745c8d6b610"` | yes | The controller image of k3s-agent-sandbox.yaml, by digest. A chart test keeps the two equal.<br />`pattern: "^registry\\.k8s\\.io/agent-sandbox/agent-sandbox-controller:[^@]+@sha256:[a-f0-9]{64}$"` |
+| `sandbox.controller.resources.limits.cpu` | string | `"1"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.controller.resources.limits.ephemeral-storage` | string | `"128Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.controller.resources.limits.memory` | string | `"256Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.controller.resources.requests.cpu` | string | `"10m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.controller.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.controller.resources.requests.memory` | string | `"64Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.enabled` | boolean | `false` | yes | — |
+| `sandbox.gateway.maxConnections` | integer | `4096` | yes | Connections that the sandbox gateway holds open at most.<br />`minimum: 1` |
+| `sandbox.namespace` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `sandbox.quota.enabled` | boolean | `true` | yes | — |
+| `sandbox.reviewMemory` | string | `"3840Mi"` | yes | Memory for review Pods, in whole Mi or Gi, parsed by chart memory conversion and Kubernetes Quantity. Concurrent reviews are this over one review Pod request and its RuntimeClass overhead.<br />`pattern: "^[1-9][0-9]*(?:Mi\|Gi)$"` |
+| `sandbox.runtime.nodeSelector` | object | `{}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
+| `sandbox.runtime.podOverhead.cpuMillis` | integer | `0` | yes | Whole millicores, read as an integer by chart arithmetic. 1000 millicores is one CPU.<br />`minimum: 0` |
+| `sandbox.runtime.podOverhead.memoryMi` | integer | `0` | yes | Whole mebibytes, read as an integer by chart arithmetic. One mebibyte is 1048576 bytes.<br />`minimum: 0` |
+| `sandbox.runtime.probeInterval` | string | `"15m"` | yes | Time parsed by Spring Boot Duration. Use a positive integer followed by m for minutes or h for hours.<br />`pattern: "^[1-9][0-9]*(?:m\|h)$"` |
+| `sandbox.runtime.runtimeClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)?$"` |
+| `sandbox.runtime.seccompProfile` | string | `""` | yes | `pattern: "^(?:[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*)?$"` |
+| `sandbox.runtime.tolerations` | array | `[]` | yes | — |
+| `sandbox.templates.conversation.resources.limits.cpu` | string | `"2"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.conversation.resources.limits.ephemeral-storage` | string | `"2Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.conversation.resources.limits.memory` | string | `"1Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.conversation.resources.requests.cpu` | string | `"100m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.conversation.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.conversation.resources.requests.memory` | string | `"384Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.review.resources.limits.cpu` | string | `"2"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.review.resources.limits.ephemeral-storage` | string | `"4Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.review.resources.limits.memory` | string | `"2Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.review.resources.requests.cpu` | string | `"100m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.review.resources.requests.ephemeral-storage` | string | `"1Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.review.resources.requests.memory` | string | `"512Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `sandbox.templates.runtimeClassName` | string | `""` | yes | — |

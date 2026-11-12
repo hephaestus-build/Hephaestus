@@ -15,7 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -41,7 +41,7 @@ import tools.jackson.databind.ObjectMapper;
  * lost leases keep every admitted and staged result and bill the attempt's measured spend before the job moves on.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @WorkspaceAgnostic("Each call names a run, which carries its workspace")
 public class ReviewRunKind implements AgentRunHandler {
 

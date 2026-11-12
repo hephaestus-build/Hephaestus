@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.BOUNDED;
 import static de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.SPEND;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -22,7 +22,7 @@ import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @Transactional(readOnly = true)
 public interface ReviewRuntimeRepository extends Repository<ReviewJob, UUID> {
     // Runtime reads must not hydrate the capture, input, config snapshot, or output JSON.

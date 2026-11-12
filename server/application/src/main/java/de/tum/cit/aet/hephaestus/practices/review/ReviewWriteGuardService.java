@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +9,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ReviewWriteGuardService implements ReviewWriteGuard {
     private final ReviewRepository reviews;

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
+import de.tum.cit.aet.hephaestus.agent.gateway.AgentShutdownConfiguration;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.ConversationToolsPods;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
@@ -9,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerPropertiesConfiguration;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
@@ -55,8 +55,8 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
     static final String MODEL_STOPPED_ANSWERING =
             "Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.";
 
-    /** The phase of the worker drain: this worker stops handing out turns as it drains. */
-    static final int PHASE = WorkerPropertiesConfiguration.DRAIN_PHASE;
+    /** Stops handing out turns before the gateway closes. */
+    static final int PHASE = AgentShutdownConfiguration.DRAIN_PHASE;
 
     /** How long an assignment pull waits for a turn before it answers that none waits. */
     static final Duration PULL_WAIT = Duration.ofSeconds(20);

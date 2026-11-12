@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.attempt;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.HashMap;
@@ -16,15 +16,15 @@ import org.springframework.scheduling.config.FixedDelayTask;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 public class AttemptTokenConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(AttemptTokenConfiguration.class);
 
-    /** How long a published key takes at most to reach the other workers. */
+    /** How long a published key takes at most to reach the other servers. */
     private static final Duration REFRESH = Duration.ofSeconds(5);
 
-    /** Far below {@link AttemptKeyring#KEPT_FOR}, so that a live worker's key never expires. */
+    /** Far below {@link AttemptKeyring#KEPT_FOR}, so that a live server's key never expires. */
     private static final Duration PUBLISH = Duration.ofMinutes(1);
 
     @Bean
@@ -69,9 +69,9 @@ public class AttemptTokenConfiguration {
         return new AttemptTokenIssuer(keyring);
     }
 
-    /** Its own scheduler thread: the worker role does not enable {@code @Scheduled}. */
+    /** Its own scheduler thread, so the key never waits behind a {@code @Scheduled} task. */
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnWorkerRole
+    @ConditionalOnAgentRuntime
     @Profile("!test & !specs & !cds-training")
     static class ScheduleConfiguration {
 
@@ -102,7 +102,7 @@ public class AttemptTokenConfiguration {
             return tasks;
         }
 
-        /** A worker keeps its known keys through a store outage, so only this counter shows the outage. */
+        /** A server keeps its known keys through a store outage, so only this counter shows the outage. */
         private static void counted(String task, Runnable run, MeterRegistry meterRegistry) {
             try {
                 run.run();

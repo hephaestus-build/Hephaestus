@@ -760,7 +760,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     /**
-     * The loop makes each change of its partial answer, so any worker forwards it: here a whole snapshot, then a change
+     * The loop makes each change of its partial answer, so any server forwards it: here a whole snapshot, then a change
      * made from it, rebuild the answer for every reader.
      */
     @Test

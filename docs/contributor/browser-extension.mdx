@@ -414,7 +414,7 @@ JAR. Read `SERVER_PORT` and `WEBAPP_PORT` from `server/.env`. The defaults are `
    ```
 
    `e2e` enables dev sign-in and accepts the development extension id. `playwright` disables the
-   worker, webhook receiver and NATS consumers: this suite exercises API behavior without pulling
+   agent runtime, webhook receiver and NATS consumers: this suite exercises API behavior without pulling
    a review-runtime image or running review containers. The environment override keeps the GitLab
    adapter available for the seeded connection. Wait until
    `http://localhost:<SERVER_PORT>/readyz` answers.

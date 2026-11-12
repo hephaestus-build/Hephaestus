@@ -85,8 +85,8 @@ hephaestus:
     # is derived from WEBHOOK_ROUTING_SECRET and the subscription's route (ADR 0066), so there is
     # NO Outline signing secret env var.
     # HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED gates every Outline bean (matchIfMissing=false) and
-    # must be set on application-server, application-worker (the agent context is assembled
-    # there) and webhook-server (which otherwise has no Outline endpoint).
+    # must be set on application-server (which also assembles the agent context) and
+    # webhook-server (which otherwise has no Outline endpoint).
     # OUTLINE_OAUTH_* additionally seeds the link-only login provider; OUTLINE_OAUTH_BASE_URL is
     # required whenever OUTLINE_OAUTH_CLIENT_ID is set (a blank base URL logs an ERROR and skips the seed).
     # Everything binds from env in the base application.yml — Outline needs no prod-only override.
@@ -110,7 +110,7 @@ hephaestus:
             rate-limit-threshold: ${SYNC_BACKFILL_RATE_LIMIT_THRESHOLD:500}
             interval-seconds: ${SYNC_BACKFILL_INTERVAL_SECONDS:60}
         nats:
-            # The server role consumes provider events; the worker profile turns this off.
+            # The server role consumes provider events.
             enabled: true
             server: ${NATS_SERVER:}
             durable-consumer-name: ${NATS_DURABLE_CONSUMER_NAME:hephaestus}
@@ -120,8 +120,8 @@ hephaestus:
     # ═══════════════════════════════════════════════════════════════════════════
     auth:
         # Default keeps the URI valid when HEPHAESTUS_AUTH_ISSUER is unset. The auth web layer is
-        # server-only (gated off worker/webhook), but the CDS build binds this @ConfigurationProperties
-        # record eagerly on every role — without a default the worker/webhook crash on the bare
+        # server-only (gated off the webhook role), but the CDS build binds this @ConfigurationProperties
+        # record eagerly on every role — without a default the webhook role crashes on the bare
         # ${...} placeholder. The server always sets the env var, so it gets the real issuer.
         issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:${SERVER_PORT:8080}}
         state-cookie-key: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY}

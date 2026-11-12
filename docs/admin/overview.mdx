@@ -18,12 +18,12 @@ People who change the code need the [Contributor guide](/contributor/overview).
 
 ## What a deployment consists of
 
-One application image starts in three runtime roles: `server`, `worker`, and `webhook`.
+One application image starts in two runtime roles: `server` and `webhook`.
 A deployment also has PostgreSQL and a NATS event buffer.
 On [Helm chart reference](./helm-chart#what-the-chart-runs), the Helm chart runs them on a cluster or on one host with k3s, and a Gateway API controller handles TLS.
 
 Sign-in uses a GitHub or GitLab OAuth app that you register during installation.
-The worker starts a sandboxed container for each practice review.
+The server starts a sandboxed container for each practice review.
 It does not keep that container active between reviews.
 [Runtime roles](./runtime-roles) explains each role and why the webhook role has its own container.
 
@@ -31,7 +31,7 @@ It does not keep that container active between reviews.
 
 The [chart topology](./helm-chart#what-the-chart-runs) describes the roles, persistent storage and network policies.
 The Gateway API controller routes public traffic to the webapp, server and webhook role.
-The worker runs sandboxes in a separate namespace with Restricted Pod Security and an isolation probe.
+The server runs sandboxes in a separate namespace with Restricted Pod Security and an isolation probe.
 
 ## Two kinds of admin
 

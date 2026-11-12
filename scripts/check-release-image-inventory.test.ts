@@ -62,8 +62,8 @@ await test("rendered chart consumers reject unlocked images and include the sand
 		() =>
 			deployedImageConsumers([
 				{
-					name: "worker",
-					image: "example.invalid/worker:latest",
+					name: "server",
+					image: "example.invalid/server:latest",
 					environment: new Map(),
 					mounts: [],
 				},
@@ -74,7 +74,7 @@ await test("rendered chart consumers reject unlocked images and include the sand
 	assert.deepEqual(
 		deployedImageConsumers([
 			{
-				name: "worker",
+				name: "server",
 				image: topologyImage("application-server"),
 				environment: new Map([["HEPHAESTUS_AGENT_IMAGE_REFERENCE", topologyImage("agent-pi")]]),
 				mounts: [],

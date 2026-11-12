@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings;
 import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings.Standing;
 import java.util.Comparator;
@@ -23,7 +23,7 @@ import tools.jackson.databind.node.ObjectNode;
  * result; {@code results_history.json} holds those.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class PracticeProfileContentSource implements ContentSource {
 

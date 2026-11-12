@@ -772,7 +772,7 @@ const hasSides = await stat(path.join(stage, "tool-client.ts")).then(
 	() => false,
 );
 
-/** Whether the stage holds a custom program: a review then gets a program side, as the worker's Pod does. */
+/** Whether the stage holds a custom program: a review then gets a program side, as the review Pod that the server builds does. */
 async function stagesPrograms(): Promise<boolean> {
 	const staged = await readdir(path.join(stage, "work/practice-scripts/practices")).catch(() => []);
 	return staged.some((name) => name.endsWith(".ts"));

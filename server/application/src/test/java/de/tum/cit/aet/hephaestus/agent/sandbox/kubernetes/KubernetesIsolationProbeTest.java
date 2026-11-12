@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -184,7 +184,7 @@ class KubernetesIsolationProbeTest {
         doAnswer(call -> {
                     String name = call.getArgument(0);
                     return "{\"reached\":{\"gateway\":" + name.contains("-review-")
-                            + ",\"worker management port\":false,\"Kubernetes API\":false,\"DNS server\":false},"
+                            + ",\"server management port\":false,\"Kubernetes API\":false,\"DNS server\":false},"
                             + "\"token\":false,\"rootWritable\":false,\"uid\":1000,\"uidMap\":\""
                             + (privateMapping ? "0 1879048192 65536" : "0 0 4294967295")
                             + "\"}";
@@ -201,16 +201,15 @@ class KubernetesIsolationProbeTest {
                         .build());
         var probe = new KubernetesIsolationProbe(api, pods, jobs, worker, "agent", 9090);
 
+        assertThatCode(probe::proveAtStart).doesNotThrowAnyException();
         if (imagePull) {
-            assertThat(probe.prove()).isSameAs(previous);
+            assertThat(worker.proof()).isSameAs(previous);
             assertThat(worker.isolated()).isTrue();
         } else if (privateMapping) {
-            assertThat(probe.prove().passed()).isTrue();
+            assertThat(Objects.requireNonNull(worker.proof()).passed()).isTrue();
             assertThat(worker.isolated()).isTrue();
         } else {
-            assertThatThrownBy(probe::prove)
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("must support user namespaces");
+            // A failed proof at the start is logged; the server serves its API and starts no sandbox.
             assertThat(worker.isolated()).isFalse();
             assertThat(Objects.requireNonNull(worker.proof()).failures())
                     .hasSize(3)
@@ -356,7 +355,7 @@ class KubernetesIsolationProbeTest {
     }
 
     @Test
-    void shouldStopTheWorkerAtItsStartWhenAGateThatRanFailed() {
+    void shouldStartNoSandboxButKeepTheServerWhenAGateThatRanFailedAtItsStart() {
         KubernetesMockServer api = Objects.requireNonNull(server);
         // The dry run admits a Pod that Restricted Pod Security refuses: a gate that ran and failed.
         api.expect().post().withPath(PODS).andReturn(201, "{}").always();
@@ -366,14 +365,21 @@ class KubernetesIsolationProbeTest {
                 .andReturn(503, new StatusBuilder().withCode(503).build())
                 .always();
 
-        assertThatThrownBy(() -> probe().prove())
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("admits a Pod");
+        var worker = KubernetesFixtures.worker(SANDBOXES);
+
+        assertThatCode(() -> probe(worker).proveAtStart()).doesNotThrowAnyException();
+
+        assertThat(worker.isolated()).isFalse();
+        assertThat(Objects.requireNonNull(worker.proof()).failures())
+                .anySatisfy(failure -> assertThat(failure).contains("admits a Pod"));
     }
 
     private KubernetesIsolationProbe probe() {
+        return probe(KubernetesFixtures.worker(SANDBOXES));
+    }
+
+    private KubernetesIsolationProbe probe(KubernetesWorker worker) {
         KubernetesClient api = Objects.requireNonNull(client);
-        var worker = KubernetesFixtures.worker(SANDBOXES);
         return new KubernetesIsolationProbe(
                 api,
                 new KubernetesPods(api, worker, 10, ImagePullPolicy.IF_NOT_PRESENT),

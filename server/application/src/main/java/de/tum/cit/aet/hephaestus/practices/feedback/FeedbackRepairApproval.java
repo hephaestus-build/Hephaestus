@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** A structural repair can retain a real approval only while its visible words still match. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class FeedbackRepairApproval {

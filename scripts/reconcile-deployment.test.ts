@@ -1270,7 +1270,7 @@ console.log(JSON.stringify({ info: { status: process.env.HELM_STATUS } }));
 }
 if (args[0] === "history") console.log(process.env.HELM_HISTORY ?? "[]");
 if (args[0] === "list") console.log(process.env.HELM_RELEASES ?? "[]");
-if (args[0] === "get") console.log(process.env.HELM_VALUES ?? '{"server":{"replicas":0},"worker":{"replicas":0,"sandbox":{"namespace":"sandboxes"}}}');
+if (args[0] === "get") console.log(process.env.HELM_VALUES ?? '{"server":{"replicas":0},"sandbox":{"namespace":"sandboxes"}}');
 process.exit(args[0] === "upgrade" && process.env.FAIL_HELM === "1" ? 1 : 0);
 `,
 		{ mode: 0o755 },
@@ -1358,7 +1358,7 @@ await test(
 					"--values",
 					imagesFile,
 					// A chart host waits longer than a new Pod's 10 minutes for the schema.
-					"--rollback-on-failure --wait=watcher --wait-for-jobs --timeout 1200s",
+					"--rollback-on-failure --wait=watcher --wait-for-jobs --timeout 2700s",
 				].join(" "),
 			);
 			// A comment line, then JSON, which Helm reads as YAML.
@@ -1554,7 +1554,7 @@ await test(
 				path.join(source, "values.yaml"),
 				JSON.stringify({
 					server: { replicas: 0 },
-					worker: { replicas: 0, sandbox: { namespace: `${namespace}-sandboxes` } },
+					sandbox: { namespace: `${namespace}-sandboxes` },
 				}),
 			);
 			await writeFile(
@@ -1567,7 +1567,7 @@ await test(
 			);
 			kubectl("create", "namespace", namespace);
 			kubectl("create", "namespace", `${namespace}-sandboxes`);
-			// A tools Pod that a stopped worker left: no worker reaps it, so the stop removes it.
+			// A tools Pod that the stopped server left: no server reaps it, so the stop removes it.
 			kubectl(
 				"create",
 				"job",
@@ -1701,10 +1701,10 @@ for (const mode of [
 for (const failure of [
 	"none",
 	"completed before record",
-	"completed with workers",
+	"completed with every role",
 	"failed migration",
 	"installed major downgrade",
-	"workers disabled",
+	"sandboxes disabled",
 	"verification",
 	"apply",
 	"pending",
@@ -1728,10 +1728,10 @@ for (const failure of [
 						release: { version: "v1.0.0", commit: fixture.releaseCommit },
 						images: {},
 						server: { replicas: 1 },
-						worker: { replicas: 0 },
+						webhook: { replicas: 0 },
 					}),
 				},
-				"completed with workers": {
+				"completed with every role": {
 					HELM_RELEASES: JSON.stringify([
 						{ name: "hephaestus", app_version: "1.0.0", status: "deployed" },
 					]),
@@ -1739,7 +1739,7 @@ for (const failure of [
 						release: { version: "v1.0.0", commit: fixture.releaseCommit },
 						images: {},
 						server: { replicas: 1 },
-						worker: { replicas: 2 },
+						webhook: { replicas: 2 },
 					}),
 				},
 				"failed migration": {
@@ -1752,15 +1752,14 @@ for (const failure of [
 						{ name: "hephaestus", app_version: "2.0.0", status: "deployed" },
 					]),
 				},
-				"workers disabled": {
-					HELM_VALUES:
-						'{"server":{"replicas":0},"worker":{"enabled":false,"replicas":0,"sandbox":{"namespace":""}}}',
+				"sandboxes disabled": {
+					HELM_VALUES: '{"server":{"replicas":0},"sandbox":{"enabled":false,"namespace":""}}',
 				},
 				verification: { FAIL_CHART_VERIFY: "1" },
 				apply: { FAIL_HELM: "1" },
 				pending: { HELM_STATUS: "pending-upgrade" },
 				reload: { FAIL_RELOAD: "1" },
-				writers: { HELM_VALUES: '{"server":{"replicas":1},"worker":{"replicas":1}}' },
+				writers: { HELM_VALUES: '{"server":{"replicas":1},"sandbox":{"namespace":"sandboxes"}}' },
 				sandbox: {
 					CHART_WORKLOADS:
 						'{"items":[{"metadata":{"labels":{"hephaestus.build/sandbox-kind":"review"}}}]}',
@@ -1783,20 +1782,21 @@ for (const failure of [
 			const record = await readApplied(path.join(directory, "applied.json"));
 			if (
 				failure === "none" ||
-				failure === "workers disabled" ||
+				failure === "sandboxes disabled" ||
 				failure === "completed before record" ||
-				failure === "completed with workers" ||
+				failure === "completed with every role" ||
 				failure === "reload" ||
 				failure === "unitcopy"
 			) {
 				assert.equal(record?.release, "v1.0.0");
 				const calls = await log();
 				const upgrade = calls.find((call) => call.startsWith("upgrade ")) ?? "";
-				if (failure === "completed before record" || failure === "completed with workers") {
+				if (failure === "completed before record" || failure === "completed with every role") {
 					assert.equal(upgrade, "", "a completed cutover does not run migration hooks again");
 				} else {
 					assert.match(upgrade, /chart\/hephaestus-1\.0\.0\.tgz/u);
-					assert.match(upgrade, /--set server.replicas=1 --set worker.replicas=0/u);
+					assert.match(upgrade, /--set server.replicas=1/u);
+					assert.doesNotMatch(upgrade, /--set worker/u);
 					assert.doesNotMatch(upgrade, /rollback-on-failure/u);
 				}
 				if (failure === "reload" || failure === "unitcopy") {

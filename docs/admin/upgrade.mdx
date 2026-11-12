@@ -27,7 +27,7 @@ The update must use that exact release's changelog, contexts, PostgreSQL image/e
 2. Check the [database prerequisites](./compatibility-policy#database-baseline-prerequisites) before candidate startup.
 3. If an intermediate release is required, rehearse that upgrade on the same isolated copy.
 4. Run Liquibase **update**, not just `validate` or SQL generation.
-5. Keep ingress, workers, and sandbox execution disabled.
+5. Keep ingress and sandbox execution disabled.
 6. Keep external destinations denied.
 7. Do not use a test/specs profile, Hibernate `ddl-auto`, or an empty database as this proof.
 8. Record migration duration, errors, free disk/WAL growth, and locks.
@@ -90,7 +90,7 @@ Then apply the new chart, its profile, and your own values:
 ```bash
 helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
   -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml \
-  --rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
+  --rollback-on-failure --wait=watcher --wait-for-jobs --timeout 45m
 ```
 
 The migration Job of the new revision and the new Pods start together.
@@ -98,17 +98,18 @@ The new Pods wait for the migrated schema, and the previous release serves until
 `--wait-for-jobs` fails the upgrade when the migration fails, and `--rollback-on-failure` then returns the Deployments to the previous revision.
 The timeout is longer than the 10 minutes that a new Pod waits for the schema.
 
-The server stops before its new version starts (`Recreate`).
-The webhook role rolls. In the single-node profile, the worker drains and stops before its replacement starts.
+The server uses `Recreate` and stops before its new version starts.
+The webhook role rolls. In the single-node profile, the server drains and stops before its replacement starts.
 The replacement proves the cluster with the isolation probe before it claims work.
 
-An old worker drains for up to `worker.drainTimeoutSeconds`, and Kubernetes no longer counts it while it stops.
+An old server drains for up to `server.drainTimeoutSeconds`, and Kubernetes no longer counts it while it stops.
 The value is 30 minutes by default and 10 minutes in the single-node profile.
+Existing review runs keep their gateway during this interval. New claims wait for the replacement.
 
-With `Recreate`, the Helm `--timeout` must cover the drain, 2 minutes of shutdown and up to 5 minutes of start.
+With `Recreate`, the Helm `--timeout` must cover the drain, 2 minutes of shutdown and up to 10 minutes of start.
 Past the timeout, Helm rolls the release back. If you set a longer drain, set a longer timeout.
-Start the next upgrade only after the old worker is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=worker` shows no `Terminating` Pod.
-A review runs in its own sandbox, not in a worker ([Agent runs](/contributor/agent-runs#a-review-in-its-sandbox)).
+Start the next upgrade only after the old server is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=server` shows no `Terminating` Pod.
+A review runs in its own sandbox, not in a server ([Agent runs](/contributor/agent-runs#a-review-in-its-sandbox)).
 
 For other database maintenance, use [Database maintenance](./maintenance#database-maintenance).
 
@@ -128,24 +129,24 @@ After phase 1, take and verify the final restore point while all roles are stopp
 Verify the new release's chart before you use it.
 Each phase is a separate `helm upgrade` with that phase's chart, profile and site values:
 
-| Phase | Chart | `migration.enabled` | `server.replicas` | `worker.replicas` | `webhook.replicas` | Before the next phase |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1. Stop every role | Current release | `false` | 0 | 0 | 0 | Every old role Pod, including terminating Pods, and its sandbox Pods and Jobs are gone. |
-| 2. Migrate | New release | `true` | 0 | 0 | 0 | The migration Job of this revision completed successfully. |
-| 3. Start the new roles | New release | `true` | Recorded count | Recorded count | Recorded count | Readiness, authenticated reads, a practice review and a conversation pass. |
+| Phase | Chart | `migration.enabled` | `server.replicas` | `webhook.replicas` | Before the next phase |
+| --- | --- | --- | --- | --- | --- |
+| 1. Stop every role | Current release | `false` | 0 | 0 | Every old role Pod, including terminating Pods, and its sandbox Pods and Jobs are gone. |
+| 2. Migrate | New release | `true` | 0 | 0 | The migration Job of this revision completed successfully. |
+| 3. Start the new roles | New release | `true` | Recorded count | Recorded count | Readiness, authenticated reads, a practice review and a conversation pass. |
 
 Keep PostgreSQL and NATS running throughout these phases.
-Use `worker.replicas=0`, not `worker.enabled=false`, to stop the worker.
+Use `server.replicas=0`, not `sandbox.enabled=false`, to stop the server.
 
-The conversation loop keeps its replicas in every phase. It uses no database, and it gets no turn while no worker runs.
+The conversation loop keeps its replicas in every phase. It uses no database, and it gets no turn while no server runs.
 
-While no worker runs, no worker removes the conversation's tools Pods. After phase 1, remove them so that the sandbox namespace empties:
+While no server runs, no server removes the conversation's tools Pods. After phase 1, remove them so that the sandbox namespace empties:
 `kubectl --namespace <sandbox namespace> delete jobs --selector hephaestus.build/sandbox-kind=tools --cascade=foreground`.
 They hold nothing that outlives their turn. The pull-based reconciler does this step itself.
 
 Apply each row's values after your profile and site values, so that they take precedence.
-Use `--wait=watcher --wait-for-jobs --timeout 20m`, without automatic rollback.
-A worker can drain for up to its configured timeout. If the first phase times out, keep all counts at zero and wait for every old Pod and sandbox to stop before phase 2.
+Use `--wait=watcher --wait-for-jobs --timeout 45m`, without automatic rollback.
+A server can drain for up to its configured timeout. If the first phase times out, keep all counts at zero and wait for every old Pod and sandbox to stop before phase 2.
 
 In phase 2, identify the migration Job of the new Helm revision.
 Its default name is `hephaestus-migration-<revision>` for release `hephaestus`.
@@ -320,7 +321,7 @@ A rollback adds the older release again.
 
 The time is when the server first started that release, not when its images were pulled.
 The history names no person.
-Each worker and webhook server reports its own identity in `/actuator/info` only.
+Each server and webhook server reports its own identity in `/actuator/info` only.
 
 ## Release-specific procedures
 

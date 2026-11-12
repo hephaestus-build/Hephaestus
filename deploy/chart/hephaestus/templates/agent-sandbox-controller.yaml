@@ -6,7 +6,7 @@ cluster's admins grant one read-only ClusterRole to its ServiceAccount: the admi
 deploy/platform/hephaestus-cluster-admin.yaml, names it. Elsewhere the cluster runs the controller of
 deploy/platform/k3s-agent-sandbox.yaml, and this stays off.
 */}}
-{{- if and .Values.worker.enabled .Values.worker.sandbox.controller.enabled }}
+{{- if and .Values.sandbox.enabled .Values.sandbox.controller.enabled }}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "agent-sandbox-controller") }}
 {{- $sandboxes := include "hephaestus.sandboxNamespace" (dict "root" .) }}
 {{- $api := .Values.networkPolicy.kubernetesApi }}
@@ -144,7 +144,7 @@ spec:
         {{- include "hephaestus.podSecurityContext" (dict "user" 65532 "group" 65532) | nindent 8 }}
       containers:
         - name: agent-sandbox-controller
-          image: {{ .Values.worker.sandbox.controller.image | quote }}
+          image: {{ .Values.sandbox.controller.image | quote }}
           imagePullPolicy: IfNotPresent
           args:
             - --leader-elect=true
@@ -159,7 +159,7 @@ spec:
           livenessProbe:
             httpGet: { path: /healthz, port: healthz }
           resources:
-            {{- toYaml .Values.worker.sandbox.controller.resources | nindent 12 }}
+            {{- toYaml .Values.sandbox.controller.resources | nindent 12 }}
           securityContext:
             {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
 {{- end }}

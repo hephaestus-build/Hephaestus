@@ -45,10 +45,10 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * The worker's half of Heph's context folder for one turn attempt. It serves {@code INDEX.md}, {@code FIELDS.md} and
+ * The server's half of Heph's context folder for one turn attempt. It serves {@code INDEX.md}, {@code FIELDS.md} and
  * the context documents from the attempt's memory, binds the attempt's tools Pod ({@link ConversationToolsPods}), and
  * prepares what {@code load_context} loads. The conversation loop puts the documents and each load into the tools Pod
- * and runs every command there itself: this worker runs none. A refusal is an answer with {@code ok: false}, never an
+ * and runs every command there itself: this server runs none. A refusal is an answer with {@code ok: false}, never an
  * HTTP error, so the loop passes its {@code detail} to the model.
  */
 @WorkspaceAgnostic("The turn credential binds the workspace and the developer of every call")
@@ -84,7 +84,7 @@ public class TurnContextFolder {
         this.clock = clock;
     }
 
-    /** Whether this worker serves the folder now. */
+    /** Whether this server serves the folder now. */
     public boolean available() {
         return sandboxes.available();
     }
@@ -191,7 +191,7 @@ public class TurnContextFolder {
                     "Could not bind a tools Pod: turnId={}, failure={}",
                     turn.turnId(),
                     failed.getClass().getSimpleName());
-            return refusal("UNAVAILABLE", "This worker cannot run the context folder now. Do not retry.");
+            return refusal("UNAVAILABLE", "This server cannot run the context folder now. Do not retry.");
         }
         return NODES.objectNode()
                 .put("ok", true)

@@ -81,6 +81,31 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldCountOnlyInFlightReviewWorkForTheServerDrain() {
+        var measuring = enqueue(workspace, AgentRunBand.BATCH, "review:drain");
+        var queued = enqueue(other, AgentRunBand.BATCH, "review:waiting");
+        var composition = Objects.requireNonNull(transactions.execute(status ->
+                runs.enqueue(other, AgentRunKind.REVIEW_COMPOSE, AgentRunBand.BATCH, "review:composing", null)));
+        enqueueTurn(workspace, "conversation:drain");
+        var measureLease = claimSubject(workspace, "review:drain").orElseThrow();
+        transactions.executeWithoutResult(status -> {
+            assertThat(runs.claimSubject(other, "review:composing", Set.of(AgentRunKind.REVIEW_COMPOSE)))
+                    .isPresent();
+            assertThat(runs.claimSubject(workspace, "conversation:drain", Set.of(AgentRunKind.TURN)))
+                    .isPresent();
+        });
+        assertThat(runs.leasedReviews()).isEqualTo(2);
+        assertThat(state(queued.id())).isEqualTo("QUEUED");
+        assertThat(state(composition.id())).isEqualTo("LEASED");
+        transactions.executeWithoutResult(status -> {
+            assertThat(runs.renew(measureLease.fence())).isPresent();
+            assertThat(runs.end(measureLease.fence())).isEqualTo(AgentRuns.EndOutcome.ENDED);
+        });
+        assertThat(state(measuring.id())).isEqualTo("ENDED");
+        assertThat(runs.leasedReviews()).isEqualTo(1);
+    }
+
+    @Test
     void shouldOfferEveryRunOfABandBeforeAnyRunOfTheNextBand() {
         AgentRunRef background = enqueue(workspace, AgentRunBand.BACKGROUND, "review:a");
         AgentRunRef batch = enqueue(workspace, AgentRunBand.BATCH, "review:b");

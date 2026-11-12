@@ -19,7 +19,7 @@ import org.springframework.boot.health.contributor.Status;
 class PracticeReviewHealthIndicatorTest extends BaseUnitTest {
 
     @Test
-    void shouldRefuseReadinessWhenReviewWorkerHasNoCheckout() {
+    void shouldRefuseReadinessWhenReviewsHaveNoCheckout() {
         var health = indicator(true, false, Optional.empty()).health();
 
         assertThat(health.getStatus()).isEqualTo(Status.OUT_OF_SERVICE);
@@ -29,12 +29,6 @@ class PracticeReviewHealthIndicatorTest extends BaseUnitTest {
     @Test
     void shouldStayHealthyWhenReviewsAreDisabled() {
         assertThat(indicator(false, false, Optional.empty()).health().getStatus())
-                .isEqualTo(Status.UP);
-    }
-
-    @Test
-    void shouldStayHealthyOnANonWorkerRole() {
-        assertThat(indicator(true, false, Optional.empty(), false).health().getStatus())
                 .isEqualTo(Status.UP);
     }
 
@@ -49,11 +43,6 @@ class PracticeReviewHealthIndicatorTest extends BaseUnitTest {
 
     private static PracticeReviewHealthIndicator indicator(
             boolean agentEnabled, boolean gitEnabled, Optional<Instant> expiry) {
-        return indicator(agentEnabled, gitEnabled, expiry, true);
-    }
-
-    private static PracticeReviewHealthIndicator indicator(
-            boolean agentEnabled, boolean gitEnabled, Optional<Instant> expiry, boolean workerRole) {
         ClasspathSourceCatalogRegistry sourceCatalog = mock(ClasspathSourceCatalogRegistry.class);
         expiry.ifPresent(
                 value -> when(sourceCatalog.earliestUseDecisionExpiry(SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
@@ -62,11 +51,10 @@ class PracticeReviewHealthIndicatorTest extends BaseUnitTest {
                 agent(agentEnabled),
                 gitEnabled,
                 sourceCatalog,
-                Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC),
-                workerRole);
+                Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC));
     }
 
     private static AgentProperties agent(boolean enabled) {
-        return new AgentProperties(enabled, Duration.ofDays(14), Duration.ofDays(90));
+        return new AgentProperties(enabled, Duration.ZERO, Duration.ofDays(14), Duration.ofDays(90));
     }
 }

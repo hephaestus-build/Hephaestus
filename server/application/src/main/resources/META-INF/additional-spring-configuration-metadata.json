@@ -113,13 +113,7 @@
     {
       "name": "hephaestus.runtime.server.enabled",
       "type": "java.lang.Boolean",
-      "description": "Runs the server role, which serves the API, syncs provider work and delivers feedback. Turn it off in a worker-only or webhook-only container.",
-      "sourceType": "de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole"
-    },
-    {
-      "name": "hephaestus.runtime.worker.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Runs the worker role, which runs sandboxed practice reviews and conversation turns. Only a container with this role may mount the Docker socket.",
+      "description": "Runs the server role, which serves the API, syncs provider work, runs the agent sandboxes and delivers feedback. Turn it off in a webhook-only container.",
       "sourceType": "de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole"
     },
     {
@@ -218,7 +212,7 @@
     {
       "name": "spring.datasource.hikari.maximum-pool-size",
       "type": "java.lang.Integer",
-      "description": "Most PostgreSQL connections that one process holds in its pool. A worker can hold two connections per running review. Keep the sum over all processes below the PostgreSQL connection limit.",
+      "description": "Most PostgreSQL connections that one process holds in its pool. A server can hold two connections per running review. Keep the sum over all processes below the PostgreSQL connection limit.",
       "sourceType": "com.zaxxer.hikari.HikariDataSource"
     },
     {

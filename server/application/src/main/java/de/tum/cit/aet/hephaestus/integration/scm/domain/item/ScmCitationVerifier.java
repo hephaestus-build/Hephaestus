@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BasisToCheck;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
@@ -7,7 +8,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CitationCheck;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CitationRefusal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CitationToCheck;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CitationVerifier;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
@@ -35,7 +35,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /** Checks SCM reference semantics against the pinned item and captured range, never live work. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class ScmCitationVerifier implements CitationVerifier {
     /** A string inside one check run of a record: the record path, then the run's index. */
     private static final Pattern CHECK_RUN_POINTER = Pattern.compile("([^#]+)#/head_check_runs/runs/(\\d+)(?:/.*)?");

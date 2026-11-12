@@ -4,7 +4,7 @@ import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/** Worker-local Git operation spool and active attempt folders; neither is durable application state. */
+/** Server-local Git operation spool and active attempt folders; neither is durable application state. */
 @Component
 public class FabricLayout {
 

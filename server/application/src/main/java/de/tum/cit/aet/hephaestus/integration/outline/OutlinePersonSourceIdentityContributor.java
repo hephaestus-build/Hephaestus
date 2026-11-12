@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceScope;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentEvents;
 import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentPermission;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
@@ -18,7 +18,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 @WorkspaceAgnostic("Instance person scope and explicitly workspace-bound Outline attribution")
 public class OutlinePersonSourceIdentityContributor implements PersonSourceIdentityContributor {

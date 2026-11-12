@@ -13,7 +13,7 @@ export function promotionCoverage(outcome: string) {
 		"## Promotion verification scope",
 		observation(outcome),
 		"",
-		"**Not verified by this workflow:** server, worker, webhook, database, NATS, and integration runtime health or version convergence.",
+		"**Not verified by this workflow:** server, webhook, database, NATS, and integration runtime health or version convergence.",
 		"The signed channel authorizes hosts to apply the deployment; a matching public webapp version is not a full-stack health verdict.",
 		"",
 		"Use host reconciliation metrics and logs to confirm the apply and each supported service's readiness. Keep management endpoints private.",

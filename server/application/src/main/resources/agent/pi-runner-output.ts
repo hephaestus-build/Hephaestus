@@ -1,5 +1,5 @@
-// The worker accepts USTAR only. Enforce its path limits before gateway-run.ts packages out/.
-// PAX/GNU extensions are rejected by the worker's bounded archive reader.
+// The server accepts USTAR only. Enforce its path limits before gateway-run.ts packages out/.
+// PAX/GNU extensions are rejected by the server's bounded archive reader.
 
 /** Archive members are `out/<name>`, and USTAR stores a member name in 100 bytes. */
 const MAX_MEMBER_BYTES = 100;

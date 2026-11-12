@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Frozen product facts needed to prepare a review on the server or worker. */
+/** Frozen product facts needed to prepare a review on the server. */
 public interface ReviewSnapshotQuery {
     Optional<ReviewSnapshot> find(long workspaceId, UUID reviewId);
 

@@ -29,17 +29,17 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Proves that the cluster enforces what the sandbox boundary needs and a Pod spec cannot state (ADR 0041 § Verification
- * gates), at the worker's start and then every {@link KubernetesSandboxProperties#probeInterval}. The worker starts no
- * sandbox while its latest run failed. A failed run at the start stops the worker: an operator sees the reason in its
- * log, and Kubernetes starts it again.
+ * gates), at the server's start and then every {@link KubernetesSandboxProperties#probeInterval}. The server starts no
+ * sandbox until a run passed, and none while its latest run failed. An operator sees the reason in its log, its
+ * {@code kubernetesSandbox} health and the {@code sandbox.isolation.passed} gauge; the API keeps serving.
  *
  * <p>The gates, each of which must hold:
  *
  * <ul>
  *   <li><b>Restricted Pod Security.</b> The API server refuses, in a dry run, a Pod that the Baseline standard admits
  *       and the Restricted one does not.
- *   <li><b>Egress to the gateway only.</b> A Pod with a review sandbox's labels reaches this worker's gateway, directly
- *       and through a Service, which is the control, and none of: this worker's management port, the Kubernetes API, the
+ *   <li><b>Egress to the gateway only.</b> A Pod with a review sandbox's labels reaches this server's gateway, directly
+ *       and through a Service, which is the control, and none of: this server's management port, the Kubernetes API, the
  *       cluster DNS server. A Pod of no sandbox kind, which the policies treat as a tools Pod, reaches the gateway by
  *       neither route.
  *   <li><b>No service account token, a read-only root and a non-root user</b> inside these Pods.
@@ -50,9 +50,9 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>The process limit is recorded, not required: how many processes a Pod can start before the node refuses one.
  *
  * <p>The probe Pods have the sandbox's own configuration and image. Each is the Pod of a Job of its own
- * ({@link KubernetesSandboxJobs}), which the probe deletes when it ends. A worker that stops during a run leaves its
+ * ({@link KubernetesSandboxJobs}), which the probe deletes when it ends. A server that stops during a run leaves its
  * Jobs to the control plane: the deadline ends a Pod that still waits for a node, and the TTL controller removes the
- * Job with its Pod. Each Pod prints one line of booleans and counts, which is all the worker reads of them.
+ * Job with its Pod. Each Pod prints one line of booleans and counts, which is all the server reads of them.
  */
 public class KubernetesIsolationProbe {
 
@@ -60,7 +60,7 @@ public class KubernetesIsolationProbe {
 
     /** Scheduling, the pull of the agent image and the script. */
     static final Duration PROBE_TIME = Duration.ofMinutes(5);
-    /** How long a worker that starts waits before it tries again a probe whose Pods could not run. */
+    /** How long a server that starts waits before it tries again a probe whose Pods could not run. */
     static final Duration START_RETRY = Duration.ofSeconds(15);
 
     /** How many processes the review probe Pod tries to start. A Pod that starts them all has no process limit. */
@@ -84,7 +84,7 @@ public class KubernetesIsolationProbe {
     /**
      * The probe's script, which runs after the Pod's isolation init container. Argument: what to reach and how many
      * processes to start. A target counts as reached once a TCP connection opens; every target is meant to have a listener, so a
-     * refused or silent one is a denied one. A target that must be reached gets ten seconds: the worker's ingress
+     * refused or silent one is a denied one. A target that must be reached gets ten seconds: the server's ingress
      * policy can admit a new Pod a moment after the Pod's own policy is in force.
      */
     static final String SCRIPT = """
@@ -209,7 +209,7 @@ public class KubernetesIsolationProbe {
     /**
      * Runs the probe, records what it proved and returns it. A run that failed is logged with every gate. A run whose
      * Pods could not run, because the sandbox quota was full or the nodes had no room, proves nothing: a passing proof
-     * before it stands until a later run, and the worker keeps starting sandboxes. A Job whose Pod the quota refuses
+     * before it stands until a later run, and the server keeps starting sandboxes. A Job whose Pod the quota refuses
      * creates none, so such a run waits up to {@link KubernetesSandboxJobs#CHILD_START} for it.
      */
     public Proof run() {
@@ -217,8 +217,8 @@ public class KubernetesIsolationProbe {
     }
 
     /**
-     * One run of the probe. At the worker's start, a run whose Pods could not run proves nothing either way and returns
-     * null: the worker has no proof yet, so it stays not ready and starts no sandbox.
+     * One run of the probe. At the server's start, a run whose Pods could not run proves nothing either way and returns
+     * null: the server has no proof yet, so it starts no sandbox.
      */
     @Nullable
     Proof probe(boolean firstStart) {
@@ -267,8 +267,8 @@ public class KubernetesIsolationProbe {
         }
         if (inconclusive && firstStart) {
             log.warn(
-                    "The sandbox isolation probe proved nothing in this run, so this worker is not ready and tries"
-                            + " again in {}: {}",
+                    "The sandbox isolation probe proved nothing in this run, so this server starts no sandbox and"
+                            + " tries again in {}: {}",
                     START_RETRY,
                     String.join("; ", failures));
             return null;
@@ -293,29 +293,22 @@ public class KubernetesIsolationProbe {
     }
 
     /**
-     * Runs the probe at the worker's start, until its Pods run. During a rolling update the sandbox quota holds the probe
-     * of the worker that drains, and this worker's probe Pods wait for that room; exiting would only restart it.
-     *
-     * @throws IllegalStateException naming each gate that did not hold
+     * Runs the probe at the server's start, until its Pods run. During a rolling update the sandbox quota holds the probe
+     * of the server that drains, and this server's probe Pods wait for that room. The server serves its API meanwhile,
+     * and starts no sandbox until a probe passes; a failed probe is logged and leaves the next one to the schedule.
      */
-    public Proof prove() {
-        Proof proof;
-        while ((proof = probe(true)) == null) {
-            try {
+    public void proveAtStart() {
+        try {
+            while (probe(true) == null) {
                 Thread.sleep(START_RETRY);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("The worker stopped before its sandbox isolation probe ran", e);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
-        if (!proof.passed()) {
-            throw new IllegalStateException(failureMessage(proof));
-        }
-        return proof;
     }
 
     private static String failureMessage(Proof proof) {
-        return "The cluster does not hold the sandbox boundary, so this worker runs no sandbox: "
+        return "The cluster does not hold the sandbox boundary, so this server runs no sandbox: "
                 + String.join("; ", proof.failures())
                 + ". docs/admin/kubernetes.mdx § Sandbox prerequisites";
     }
@@ -356,7 +349,7 @@ public class KubernetesIsolationProbe {
     }
 
     /**
-     * Every route to this worker's gateway. Policy behind a Service's address translation differs by network plugin, so
+     * Every route to this server's gateway. Policy behind a Service's address translation differs by network plugin, so
      * the probe proves it rather than a document.
      */
     List<Target> gateways(Optional<String> serviceAddress, boolean reachable) {
@@ -367,7 +360,7 @@ public class KubernetesIsolationProbe {
         return routes;
     }
 
-    /** A worker that cannot resolve the name has proved nothing about the boundary, so this keeps the last proof. */
+    /** A server that cannot resolve the name has proved nothing about the boundary, so this keeps the last proof. */
     static List<String> unresolvedRoute(String service, Optional<String> address) {
         return service.isEmpty() || address.isPresent()
                 ? List.of()
@@ -375,13 +368,13 @@ public class KubernetesIsolationProbe {
     }
 
     /**
-     * What a sandbox must not reach: this worker's management port, the API server, the DNS server. The worker's
+     * What a sandbox must not reach: this server's management port, the API server, the DNS server. The server's
      * application port listens on loopback only, so the management port is the listener on its Pod address that only
      * the policy keeps from a sandbox.
      */
     private List<Target> denied() {
         List<Target> targets = new ArrayList<>();
-        targets.add(new Target("worker management port", worker.properties().podIp(), managementPort, false));
+        targets.add(new Target("server management port", worker.properties().podIp(), managementPort, false));
         URI api = URI.create(client.getMasterUrl().toString());
         int apiPort = api.getPort() > 0 ? api.getPort() : 443;
         address(api.getHost()).ifPresent(host -> targets.add(new Target("Kubernetes API", host, apiPort, false)));
@@ -401,7 +394,7 @@ public class KubernetesIsolationProbe {
         }
     }
 
-    /** This worker's first DNS server, as its Pod has it. */
+    /** This server's first DNS server, as its Pod has it. */
     private static Optional<String> nameserver() {
         try {
             return Files.readAllLines(Path.of("/etc/resolv.conf")).stream()

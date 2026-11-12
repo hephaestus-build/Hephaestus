@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Duration;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
@@ -13,12 +13,13 @@ import org.springframework.scheduling.config.FixedDelayTask;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
 /**
- * Worker-owned maintenance of the mounted evidence store, without enabling server-wide {@code @Scheduled} methods.
- * The worker role alone holds this store, so a worker-only pod must run it as well.
+ * Maintenance of the server's evidence store, without enabling server-wide {@code @Scheduled} methods. Every server
+ * holds the store, also with agent jobs off: person erasure waits for its acknowledgement.
+ * Test and build profiles invoke maintenance explicitly.
  */
 @Configuration(proxyBeanMethods = false)
-@WorkspaceAgnostic("Worker-local cleanup rechecks each workspace-scoped job and attempt owner before removal")
-@ConditionalOnWorkerRole
+@WorkspaceAgnostic("Server-local cleanup rechecks each workspace-scoped job and attempt owner before removal")
+@ConditionalOnServerRole
 class JobEvidenceMaintenanceConfiguration {
     private final JobEvidenceFiles evidenceFiles;
     private final EvidenceFolderPersonDataCatalog personCopies;
@@ -34,7 +35,7 @@ class JobEvidenceMaintenanceConfiguration {
     }
 
     @Bean
-    @Profile("!specs & !cds-training")
+    @Profile("!test & !specs & !cds-training")
     ScheduledTaskRegistrar evidenceErasureTasks() {
         var tasks = new ScheduledTaskRegistrar();
         // Person erasure waits for this acknowledgement; a long folder sweep must not hold its thread.
@@ -44,7 +45,7 @@ class JobEvidenceMaintenanceConfiguration {
     }
 
     @Bean
-    @Profile("!specs & !cds-training")
+    @Profile("!test & !specs & !cds-training")
     ScheduledTaskRegistrar endedAttemptCleanupTasks() {
         var tasks = new ScheduledTaskRegistrar();
         tasks.addFixedDelayTask(

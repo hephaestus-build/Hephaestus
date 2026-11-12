@@ -64,16 +64,13 @@ hephaestus:
             enabled: false
         # The development extension key's id: installed-client sign-in and its CORS origin under test.
         browser-extension-ids: ijkajblcbajjpjbknfgdiiiljipafiko
-    # Tests without a sandbox keep the worker role off. Role-graph tests supply test Pod metadata and mock the
-    # Kubernetes client and isolation probe; the live suite uses the chart worker's actual authority.
-    runtime:
-        worker:
-            enabled: false
     # Agent off in tests, pinned here rather than left to application.yml's AGENT_ENABLED default: the
     # tests that need a resubmitter or the job event listener build it by hand, and some register a
     # bean of the same type, so a leaked AGENT_ENABLED=true from server/.env would make the production
     # bean a second candidate and let it settle signals before the test does.
     agent:
+        # Context pausing does not wait for deliberately leased fixture runs. Drain tests set their own bound.
+        drain-timeout: 0s
         enabled: false
         capacity:
             # One Heph slot, as a deployment with one worker that runs one turn: a question that a worker may start

@@ -12,7 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import io.micrometer.tracing.Span;
@@ -54,7 +54,7 @@ import tools.jackson.databind.ObjectMapper;
 
 // The authenticated token chooses the model and upstream; callers cannot supply hosts, paths, or credentials.
 @Service
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 class LlmProxyService {
 
     private static final Logger log = LoggerFactory.getLogger(LlmProxyService.class);
@@ -168,7 +168,7 @@ class LlmProxyService {
 
     /**
      * Serves one call on a routing: the AI-choice, budget, connection, deadline and usage rules.
-     * A null response serves a worker step in-process: the call must not stream, and a
+     * A null response serves a server step in-process: the call must not stream, and a
      * provider that answers with a stream anyway is refused.
      */
     @SuppressWarnings("try") // The scope installs the current span and restores it on close.

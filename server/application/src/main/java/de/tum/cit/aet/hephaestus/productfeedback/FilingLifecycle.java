@@ -17,11 +17,11 @@ final class FilingLifecycle {
     private FilingLifecycle() {}
 
     enum Event {
-        /** A worker takes the report, or takes over one whose lease ended. */
+        /** A server takes the report, or takes over one whose lease ended. */
         DRAFT_CLAIMED,
-        /** The worker handed back an answer, or that none came. */
+        /** The server handed back an answer, or that none came. */
         DRAFT_ENDED,
-        /** A draft call failed and has attempts left, so the report waits for a worker again. */
+        /** A draft call failed and has attempts left, so the report waits for a server again. */
         DRAFT_RETRIED,
         /** Routing decided: the report waits out its hold. */
         ROUTED_TO_HOLD,
@@ -100,7 +100,7 @@ final class FilingLifecycle {
         allow(FilingState.DRAFT_QUEUED, Event.DRAFT_ENDED, FilingState.ANSWERED);
         allow(FilingState.DRAFTING, Event.DRAFT_ENDED, FilingState.ANSWERED);
         allow(FilingState.DRAFTING, Event.DRAFT_RETRIED, FilingState.DRAFT_QUEUED);
-        // An expired report routes straight from a draft state, so a stopped worker role cannot hold it back.
+        // An expired report routes straight from a draft state, so a server without agent jobs cannot hold it back.
         for (FilingState from : EnumSet.of(FilingState.ANSWERED, FilingState.DRAFT_QUEUED, FilingState.DRAFTING)) {
             allow(from, Event.ROUTED_TO_HOLD, FilingState.HELD);
             allow(from, Event.ROUTED_TO_FILE, FilingState.QUEUED);

@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
 import io.micrometer.core.instrument.Counter;
@@ -20,8 +20,8 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import org.springframework.stereotype.Component;
 
 /**
- * Removes the mirrors under this process's root that their workspace no longer keeps. The server and each worker
- * hold their own root, so each one reconciles its own; a role that was offline catches up on its next pass. A
+ * Removes the mirrors under this process's root that their workspace no longer keeps. Each server holds its own
+ * root, so each one reconciles its own; a server that was offline catches up on its next pass. A
  * workspace keeps a mirror while it monitors the repository or still indexes it, as a stopped GitLab project is kept
  * until its work is removed. Repository removal and workspace purge therefore reach every role's mirrors.
  *
@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
  * mirrors again. Its next capture fetches it again, as after a restart.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @WorkspaceAgnostic("Walks every workspace's mirrors; each check filters on the mirror's own workspace")
 public class GitMirrorRetention {
     private static final Logger log = LoggerFactory.getLogger(GitMirrorRetention.class);
@@ -137,9 +137,9 @@ public class GitMirrorRetention {
                 || repositories.isIndexedByWorkspace(repository.workspaceId(), repository.repositoryId());
     }
 
-    /** Its own scheduler thread: the worker role does not enable {@code @Scheduled}, and a sweep must not wait on it. */
+    /** Its own scheduler thread: a sweep must not wait on a {@code @Scheduled} task. */
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnCaptureRole
+    @ConditionalOnServerRole
     @Profile("!test & !specs & !cds-training")
     static class ScheduleConfiguration {
         @Bean

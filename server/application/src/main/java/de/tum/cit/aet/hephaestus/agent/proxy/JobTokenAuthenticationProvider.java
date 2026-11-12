@@ -142,7 +142,7 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
 
     /**
      * Answered {@code 409} with {@link JobTokenAuthenticationFilter#ATTEMPT_ENDED}: the credential is valid, but the
-     * attempt ended, or another worker or a later attempt now owns the work.
+     * attempt ended, or another server or a later attempt now owns the work.
      */
     static final class AttemptLeaseConflict extends BadCredentialsException {
         @Serial

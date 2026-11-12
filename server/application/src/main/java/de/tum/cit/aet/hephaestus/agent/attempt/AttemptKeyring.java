@@ -20,10 +20,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This worker's signing key, and every worker's public key. A token that one worker signed verifies on any worker, so
- * an attempt does not depend on the worker that started it.
+ * This server's signing key, and every server's public key. A token that one server signed verifies on any server, so
+ * an attempt does not depend on the server that started it.
  *
- * <p>Verification reads memory: {@link #refresh()} loads the keys on a timer. A worker publishes its key and loads the
+ * <p>Verification reads memory: {@link #refresh()} loads the keys on a timer. A server publishes its key and loads the
  * others before its gateway opens, but the others load it only at their next refresh. A sandbox's call can reach any
  * replica, so an unknown {@code kid} loads the keys again, at most once per {@link #UNKNOWN_KID_RELOAD}: a token of a
  * replica that has just started verifies at once, and a flood of forged kids costs the store one read per interval.
@@ -32,7 +32,7 @@ public class AttemptKeyring {
 
     private static final Logger log = LoggerFactory.getLogger(AttemptKeyring.class);
 
-    /** The longest token life and a margin of 10 minutes; {@link #publish()} extends it while its worker lives. */
+    /** The longest token life and a margin of 10 minutes; {@link #publish()} extends it while its server lives. */
     static final Duration KEPT_FOR = Duration.ofSeconds(AgentBindingLimits.MAX_TIMEOUT_SECONDS)
             .plus(SandboxLayout.RESULT_UPLOAD_GRACE)
             .plus(Duration.ofMinutes(10));
@@ -66,7 +66,7 @@ public class AttemptKeyring {
         return key;
     }
 
-    /** @return the verifier of this {@code kid}; {@code null} for a key that no live worker published */
+    /** @return the verifier of this {@code kid}; {@code null} for a key that no live server published */
     @Nullable
     JWTVerifier verifierFor(String kid) {
         JWTVerifier known = verifiers.get(kid);
@@ -86,11 +86,11 @@ public class AttemptKeyring {
         return !now.isBefore(last.plus(UNKNOWN_KID_RELOAD)) && lastUnknownKidReload.compareAndSet(last, now);
     }
 
-    /** Publishes this worker's key, and extends it for as long as this worker lives. */
+    /** Publishes this server's key, and extends it for as long as this server lives. */
     public void publish() {
         store.publish(key.kid(), key.publicKey().getEncoded(), KEPT_FOR);
-        // Names the row to delete when this worker's key is revoked.
-        if (!published) log.info("Published this worker's attempt key: kid={}", key.kid());
+        // Names the row to delete when this server's key is revoked.
+        if (!published) log.info("Published this server's attempt key: kid={}", key.kid());
         published = true;
     }
 

@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
@@ -69,7 +69,7 @@ import tools.jackson.databind.node.ObjectNode;
  * calls, so the loop's memory decides no guardrail.
  */
 @Service
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 public class CompositionSessions {
     private static final Logger log = LoggerFactory.getLogger(CompositionSessions.class);
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;

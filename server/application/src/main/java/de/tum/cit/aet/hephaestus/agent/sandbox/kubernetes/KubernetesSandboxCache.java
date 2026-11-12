@@ -14,7 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The sandbox namespace as the worker's informers see it: its Pods, Jobs and ResourceQuotas. A claim poll, a room
+ * The sandbox namespace as the server's informers see it: its Pods, Jobs and ResourceQuotas. A claim poll, a room
  * check and the readiness probe read here, so they send nothing to the API server, and a slow API server does not slow
  * them. The namespace holds this release's sandboxes alone, so the caches stay small. Writes, and the waits for one
  * Pod, still go to the API server.
@@ -49,7 +49,7 @@ public class KubernetesSandboxCache implements AutoCloseable {
 
     private <T extends HasMetadata> SharedIndexInformer<T> start(SharedIndexInformer<T> informer) {
         // The client's default stops an informer for good when its first list fails, or on some watch errors: an API
-        // server that is down at start, or a missing verb, would then leave the worker unready until a restart.
+        // server that is down at start, or a missing verb, would then leave the server unready until a restart.
         informer.exceptionHandler((started, failure) -> {
             log.warn(
                     "A sandbox namespace informer failed and retries: namespace={}, status={}, error={}",

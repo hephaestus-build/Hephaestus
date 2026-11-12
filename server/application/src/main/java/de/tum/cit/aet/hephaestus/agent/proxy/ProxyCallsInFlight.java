@@ -5,7 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -21,7 +21,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 /**
- * The model calls this worker's proxy has in flight for each billed attempt. The proxy records a call's usage after it
+ * The model calls this server's proxy has in flight for each billed attempt. The proxy records a call's usage after it
  * relayed the whole response, but a Heph host reads the end of an answer from the stream and can end its turn first.
  * The fence on the turn row then drops the call as late. Thus, a turn's end seals its attempt and waits here for its
  * calls. A turn that ends without its answer also cancels them: a provider that sends nothing would otherwise hold the
@@ -29,10 +29,10 @@ import reactor.core.publisher.Sinks;
  * fails.
  *
  * <p>It also caps the calls one attempt has in flight. A call past the cap is refused before it reaches the provider,
- * so a runaway sandbox cannot fill this worker's memory with waiting calls.
+ * so a runaway sandbox cannot fill this server's memory with waiting calls.
  */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 public class ProxyCallsInFlight {
 
     /**
@@ -46,7 +46,7 @@ public class ProxyCallsInFlight {
 
     /**
      * How long an attempt's last failed call is remembered. Its end reads and forgets it; this bounds an attempt that
-     * ends on another worker and so is longer than the longest turn.
+     * ends on another server and so is longer than the longest turn.
      */
     private static final Duration FAILURE_KEPT_FOR =
             Duration.ofSeconds(AgentBindingLimits.MAX_TIMEOUT_SECONDS).plus(SEALED_FOR);
@@ -61,7 +61,7 @@ public class ProxyCallsInFlight {
      * The most calls one review attempt has in flight. The runner starts a session only while its heap has room for
      * it, so it never runs more sessions than its heap holds. Each has one call open and one that an abort left
      * closing. Only a sandbox that the runner no longer controls reaches
-     * this. The cap protects this worker's memory, because a call that waits for a grant keeps its body here. A call
+     * this. The cap protects this server's memory, because a call that waits for a grant keeps its body here. A call
      * pool's fair grants share the provider.
      */
     public static final int REVIEW_CALLS = 2 * (PracticeRunnerProfile.HEAP_MIB / SESSION_HEAP_MIB);
@@ -229,7 +229,7 @@ public class ProxyCallsInFlight {
      * The attempt's last model call that failed. The attempt's end reads it after {@link #settle}, and forgets it
      * once the end commits: an end that rolls back is repeated and must read it again.
      *
-     * @return {@code null} when no call of the attempt failed on this worker
+     * @return {@code null} when no call of the attempt failed on this server
      */
     public MentorTurn.@Nullable FailedCall lastFailed(UUID sourceId, int number) {
         return lastFailed.getIfPresent(new Attempt(sourceId, number));

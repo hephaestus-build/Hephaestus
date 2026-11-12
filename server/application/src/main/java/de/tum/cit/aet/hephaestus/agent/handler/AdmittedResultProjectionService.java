@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedProblemDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.ProjectedCitationDTO;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
@@ -32,7 +32,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /** Projects admitted evidence and its independently checked feedback placement. */
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class AdmittedResultProjectionService {
     private final ReviewJobAssignments assignments;

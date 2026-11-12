@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecksSource;
@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  * read. Only GitHub's runs are read, so a GitLab merge request reports none: its pipeline is no review evidence yet.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 class PullRequestChecksSource implements ItemChecksSource {
     private final PullRequestRepository pulls;

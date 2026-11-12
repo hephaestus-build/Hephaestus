@@ -20,7 +20,7 @@ import tools.jackson.databind.JsonNode;
 /**
  * A mounted copy outlives its source job or workspace until its owner acknowledges removal. These
  * stable coordinates deliberately have no cascading foreign keys: a deleted parent is not proof
- * that its worker volume was erased. Content and exact identities are cleared after acknowledgement.
+ * that its server volume was erased. Content and exact identities are cleared after acknowledgement.
  */
 @Entity
 @Table(

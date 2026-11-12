@@ -104,7 +104,7 @@ public class AgentSandboxes {
             throw new IllegalStateException(
                     "A sandbox is requested outside a transaction, before its claim is created");
         if (!shutdownAt.isAfter(Instant.now())) throw new IllegalArgumentException("shutdownAt must be in the future");
-        // A token that outlived its signing key would fail on every gateway call after its worker restarted.
+        // A token that outlived its signing key would fail on every gateway call after its server restarted.
         if (shutdownAt.isAfter(Instant.now().plus(tokens.longestSandboxToken())))
             throw new IllegalArgumentException("shutdownAt must not be later than the longest sandbox token");
         UUID id = UUID.randomUUID();

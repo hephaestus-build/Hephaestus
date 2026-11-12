@@ -124,7 +124,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldApplyServerRoleChecksAndExcludeWorkerChecks() {
+    void shouldApplyServerChecksAndExcludeAgentChecksWithoutAgentJobs() {
         Map<String, Object> properties = role(false, false);
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
         assertStatus(facts, "auth.login-provider", ConfigurationStatus.SATISFIED);
@@ -133,19 +133,16 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldApplyWorkerRoleChecksAndExcludeServerChecks() {
-        Map<String, Object> properties = role(true, false);
-        properties.put("hephaestus.sync.nats.enabled", false);
-        properties.put("hephaestus.auth.issuer", "http://localhost:8080/api");
-        List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
+    void shouldApplyAgentChecksOnAServerWithAgentJobs() {
+        List<ConfigurationFactDTO> facts = evaluateReadiness(role(true, false), true);
         assertStatus(facts, "llm.proxy-egress", ConfigurationStatus.SATISFIED);
-        assertStatus(facts, "auth.login-provider", ConfigurationStatus.NOT_APPLICABLE);
-        assertStatus(facts, "nats.server", ConfigurationStatus.NOT_APPLICABLE);
-        assertStatus(facts, "external.api-origin", ConfigurationStatus.NOT_APPLICABLE);
+        assertStatus(facts, "agent.image-contract", ConfigurationStatus.SATISFIED);
+        assertStatus(facts, "auth.login-provider", ConfigurationStatus.SATISFIED);
+        assertStatus(facts, "external.api-origin", ConfigurationStatus.SATISFIED);
     }
 
     @Test
-    void shouldApplyWebhookRoleChecksAndExcludeLoginAndWorkerChecks() {
+    void shouldApplyWebhookRoleChecksAndExcludeLoginAndAgentChecks() {
         Map<String, Object> properties = role(false, true);
         properties.put("hephaestus.runtime.server.enabled", false);
         properties.put("hephaestus.auth.issuer", "http://localhost:8080/api");
@@ -197,18 +194,18 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
 
     @Test
     void shouldRejectRoleSpecificNegativeCases() {
-        Map<String, Object> worker = role(true, false);
-        worker.put("hephaestus.sync.nats.enabled", true);
-        worker.put("hephaestus.llm.egress.allow-loopback", true);
-        worker.put("hephaestus.agent.image.reference", "moving-tag");
-        List<ConfigurationFactDTO> facts = evaluateReadiness(worker, true);
+        Map<String, Object> agents = role(true, false);
+        agents.put("hephaestus.sync.nats.enabled", false);
+        agents.put("hephaestus.llm.egress.allow-loopback", true);
+        agents.put("hephaestus.agent.image.reference", "moving-tag");
+        List<ConfigurationFactDTO> facts = evaluateReadiness(agents, true);
         assertStatus(facts, "nats.role-contract", ConfigurationStatus.ACTION_REQUIRED);
         assertStatus(facts, "llm.proxy-egress", ConfigurationStatus.ACTION_REQUIRED);
         assertStatus(facts, "agent.image-contract", ConfigurationStatus.ACTION_REQUIRED);
 
-        worker.put("hephaestus.agent.image.reference", "ghcr.io/example/agent@sha256:" + "a".repeat(64));
-        worker.put("hephaestus.agent.image.require-digest", false);
-        facts = evaluateReadiness(worker, true);
+        agents.put("hephaestus.agent.image.reference", "ghcr.io/example/agent@sha256:" + "a".repeat(64));
+        agents.put("hephaestus.agent.image.require-digest", false);
+        facts = evaluateReadiness(agents, true);
         assertStatus(facts, "agent.image-contract", ConfigurationStatus.ACTION_REQUIRED);
     }
 
@@ -349,10 +346,11 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         return anchors;
     }
 
-    private static Map<String, Object> role(boolean worker, boolean webhook) {
+    /** One role: the server, with or without agent jobs, or the webhook receiver. */
+    private static Map<String, Object> role(boolean agentJobs, boolean webhook) {
         Map<String, Object> properties = validProperties();
-        properties.put("hephaestus.runtime.server.enabled", !worker && !webhook);
-        properties.put("hephaestus.runtime.worker.enabled", worker);
+        properties.put("hephaestus.runtime.server.enabled", !webhook);
+        properties.put("hephaestus.agent.enabled", agentJobs);
         properties.put("hephaestus.runtime.webhook.enabled", webhook);
         return properties;
     }
@@ -360,7 +358,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     private static Map<String, Object> validProperties() {
         Map<String, Object> properties = new HashMap<>();
         properties.put("hephaestus.runtime.server.enabled", true);
-        properties.put("hephaestus.runtime.worker.enabled", true);
+        properties.put("hephaestus.agent.enabled", true);
         properties.put("hephaestus.runtime.webhook.enabled", true);
         properties.put("spring.datasource.url", "jdbc:postgresql://database/hephaestus");
         properties.put("spring.datasource.username", "hephaestus");

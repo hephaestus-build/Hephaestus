@@ -1,6 +1,21 @@
 {{- include "hephaestus.databaseSecretCheck" . }}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "server") }}
 {{- $config := .Values.config }}
+{{- $sandbox := .Values.sandbox }}
+{{- $drain := int .Values.server.drainTimeoutSeconds }}
+{{- $recreate := eq .Values.server.rolloutStrategy "Recreate" }}
+{{- $grace := ternary (add $drain 120) 45 $sandbox.enabled }}
+{{- $startupFailures := 60 }}
+{{- if $sandbox.enabled }}
+{{- $api := .Values.networkPolicy.kubernetesApi }}
+{{- $_ := required "networkPolicy.kubernetesApi.cidr is required: state the API endpoint that the network plugin sees" $api.cidr }}
+{{- if eq (int $api.port) 0 }}
+{{- fail "networkPolicy.kubernetesApi.port is required: state the API endpoint port that the network plugin sees" }}
+{{- end }}
+{{- end }}
+{{- if not $recreate }}
+{{- fail "server.rolloutStrategy must be Recreate until provider events have cross-replica ordering" }}
+{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -30,10 +45,14 @@ metadata:
   labels:
     {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
 spec:
-  # One replica: servers do not yet process provider events in order across replicas.
-  # Recreate: two server versions would consume the same provider event streams out of order. The
-  # migration Job owns the schema; the server waits for it. 0 stops it for database maintenance.
+  # The migration Job owns the schema; the server waits for it. 0 stops it for database maintenance.
   replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" .Values.server.replicas) }}
+  {{- if $recreate }}
+  # At least the shutdown and the start: with an earlier rollout unfinished, a shorter deadline fails the
+  # upgrade while the old server stops.
+  progressDeadlineSeconds: {{ add $grace (mul 10 $startupFailures) }}
+  {{- end }}
+  # One version serves the schema at a time, including while it drains reviews.
   strategy:
     type: Recreate
   selector:
@@ -45,14 +64,28 @@ spec:
         {{- include "hephaestus.podLabels" (dict "root" . "component" "server") | nindent 8 }}
     spec:
       serviceAccountName: {{ $name }}
-      automountServiceAccountToken: false
+      # The sandboxes need the Kubernetes API, with the Role in sandbox.yaml; nothing else does.
+      automountServiceAccountToken: {{ $sandbox.enabled }}
       priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
       enableServiceLinks: false
       securityContext:
         {{- include "hephaestus.podSecurityContext" (dict "user" 1002 "group" 1001) | nindent 8 }}
       # The preStop pause, the HTTP phase (SHUTDOWN_TIMEOUT, 20 s), the NATS consumers' wait (10 s) and
-      # headroom. ShutdownFitsGraceTest checks the sum.
-      terminationGracePeriodSeconds: 45
+      # headroom. ShutdownFitsGraceTest checks the sum. With sandboxes, the review drain comes first, then two
+      # minutes for the shutdown phases and the sandboxes' stop calls.
+      terminationGracePeriodSeconds: {{ $grace }}
+      {{- if $sandbox.enabled }}
+      # A server on a lost node leaves its claims to their leases; a replacement starts soon.
+      tolerations:
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 60
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 60
+      {{- end }}
       containers:
         - name: server
           image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
@@ -71,27 +104,28 @@ spec:
             {{- include "hephaestus.env.scm" . | nindent 12 }}
             - name: SPRING_PROFILES_ACTIVE
               value: prod
-            # Webhook reception runs in its own Deployment (ADR 0008). The worker role needs a
-            # sandbox runtime and never runs in the server.
+            # Webhook reception runs in its own Deployment (ADR 0008).
             - name: HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED
               value: "false"
-            - name: HEPHAESTUS_RUNTIME_WORKER_ENABLED
-              value: "false"
             # The buildpack's 10M direct-memory default sits below this role's NATS and HTTP footprint.
+            {{- if $sandbox.enabled }}
+            # A blocked socket call pins its carrier on Java 21, so the scheduler needs a carrier for each
+            # gateway connection.
+            - name: JAVA_TOOL_OPTIONS
+              value: -XX:MaxDirectMemorySize=128M -Djdk.virtualThreadScheduler.maxPoolSize={{ add (int $sandbox.gateway.maxConnections) 256 }}
+            {{- else }}
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxDirectMemorySize=128M
+            {{- end }}
             - name: GIT_MAX_CACHE_BYTES
               value: {{ include "hephaestus.gitCacheBytes" (dict "gitCache" .Values.server.gitCache "role" "server") | quote }}
             - name: NATS_SERVER
               value: {{ include "hephaestus.natsUrl" . | quote }}
-            # The server submits practice review jobs only when a worker can run them.
+            # Practice reviews and conversation turns run only with their sandboxes.
             - name: AGENT_ENABLED
-              value: {{ .Values.worker.enabled | quote }}
-            {{- $hephSlots := int (include "hephaestus.conversationTurns" .) }}
-            {{- if and .Values.worker.enabled (gt (int .Values.worker.replicas) 0) (gt $hephSlots 0) }}
-            # The installation's conversation turns. A question says that Hephaestus answers other questions only while all of them run.
-            - name: HEPHAESTUS_MENTOR_TURN_CAPACITY
-              value: {{ $hephSlots | quote }}
+              value: {{ $sandbox.enabled | quote }}
+            {{- if $sandbox.enabled }}
+            {{- include "hephaestus.env.sandbox" . | nindent 12 }}
             {{- end }}
             - name: HEPHAESTUS_RESEARCH_ORGANIZATION
               value: {{ $config.researchOrganization | quote }}
@@ -197,10 +231,14 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            {{- if $sandbox.enabled }}
+            - name: sandbox-gateway
+              containerPort: {{ include "hephaestus.gatewayPort" . }}
+            {{- end }}
             - name: management
               containerPort: 9090
           {{- /* The schema wait (HEPHAESTUS_DATABASE_MIGRATION_WAIT, 10 minutes) runs before readiness. */}}
-          {{- include "hephaestus.probes" (dict "startupFailures" 60) | nindent 10 }}
+          {{- include "hephaestus.probes" (dict "startupFailures" $startupFailures) | nindent 10 }}
           {{- include "hephaestus.preStop" . | nindent 10 }}
           resources:
             {{- toYaml .Values.server.resources | nindent 12 }}
@@ -214,7 +252,7 @@ spec:
             {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
             {{- include "hephaestus.privateCaMount" . | nindent 12 }}
       volumes:
-        # Commit ingestion mirrors: a cache that the server fills again after a restart.
+        # Commit ingestion mirrors and review clones: a cache that the server fills again after a restart.
         - name: git-cache
           emptyDir:
             sizeLimit: {{ .Values.server.gitCache.sizeLimit }}

@@ -4794,7 +4794,7 @@ export const listReviewedPractices = <ThrowOnError extends boolean = false>(
 /**
  * List practice reviews with result and feedback outcomes
  *
- * Reviews are ordered by when they were created, newest first unless sort is OLDEST. queueState keeps the reviews whose job waits for a worker, is on hold for budget or runs now, as the queue counts them.
+ * Reviews are ordered by when they were created, newest first unless sort is OLDEST. queueState keeps the reviews whose job waits for a server, is on hold for budget or runs now, as the queue counts them.
  */
 export const listReviews = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewsData, ThrowOnError>,

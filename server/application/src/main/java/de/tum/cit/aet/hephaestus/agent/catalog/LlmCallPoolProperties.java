@@ -10,7 +10,7 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Renewal and cancellation bounds. Admission reclaims permits whose owner has not renewed within the lease.
  *
- * @param permitLease Permit renewal window. A live worker cancels calls after three quarters of this window
+ * @param permitLease Permit renewal window. A live server cancels calls after three quarters of this window
  *                    without renewal, and stops renewing a call past its deadline. Admission and administration reclaim expired grants. Provider debits remain charged after closure or expiry.
  * @param maxCooldown Longest shared provider pause accepted from an instance-funded HTTP 429 response.
  */
@@ -33,12 +33,12 @@ public record LlmCallPoolProperties(
                         + " at least 1 second")
         Duration maxCooldown) {
 
-    /** How often a worker renews its permits. */
+    /** How often a server renews its permits. */
     public Duration renewEvery() {
         return permitLease.dividedBy(4);
     }
 
-    /** How long a worker holds its calls without a successful renewal before it cancels them. */
+    /** How long a server holds its calls without a successful renewal before it cancels them. */
     public Duration selfFenceAfter() {
         return permitLease.minus(renewEvery());
     }

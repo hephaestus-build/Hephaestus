@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component;
  * a review's occasion to its first posted copy, once the transaction commits.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class FeedbackOutcomes {
 
     private static final Logger log = LoggerFactory.getLogger(FeedbackOutcomes.class);

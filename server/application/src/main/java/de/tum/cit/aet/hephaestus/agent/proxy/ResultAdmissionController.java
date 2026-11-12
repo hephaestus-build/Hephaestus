@@ -11,7 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import jakarta.validation.Valid;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @RequestMapping("/internal/llm")
 public class ResultAdmissionController {
     private final ResultAdmissionService admission;
@@ -33,14 +33,14 @@ public class ResultAdmissionController {
     }
 
     @PostMapping("/start-practice")
-    @WorkspaceAgnostic("The worker credential supplies the workspace and exact job attempt")
+    @WorkspaceAgnostic("The attempt credential supplies the workspace and exact job attempt")
     public PracticeStartResponseDTO startPractice(
             @Valid @RequestBody PracticeStartRequestDTO request, Authentication authentication) {
         return checked(() -> admission.start(attemptOf(authentication), request));
     }
 
     @PostMapping("/admit-results")
-    @WorkspaceAgnostic("The worker credential supplies the workspace and exact job attempt")
+    @WorkspaceAgnostic("The attempt credential supplies the workspace and exact job attempt")
     public AdmissionResponseDTO admitResults(
             @Valid @RequestBody SealResultsRequestDTO request, Authentication authentication) {
         var identity = attemptOf(authentication);
@@ -48,7 +48,7 @@ public class ResultAdmissionController {
     }
 
     @PostMapping("/stage-result")
-    @WorkspaceAgnostic("The worker credential supplies the workspace and exact job attempt")
+    @WorkspaceAgnostic("The attempt credential supplies the workspace and exact job attempt")
     public StageResponseDTO stageResult(
             @Valid @RequestBody AdmissionRequestDTO request, Authentication authentication) {
         return checked(() -> admission.stage(attemptOf(authentication), request));

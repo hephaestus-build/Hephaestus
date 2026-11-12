@@ -20,9 +20,8 @@ import tools.jackson.databind.ObjectMapper;
  * <p>The store is a Bucket4j {@code ProxyManager} (SELECT … FOR UPDATE on the
  * {@code auth_rate_limit_bucket} table created by the consolidated auth Liquibase changelog). Buckets
  * are persisted, so the limits are shared across all server replicas with no extra infrastructure: the
- * store reuses the existing DataSource (no Redis; ADR 0017 constraint). Worker-only pods exclude this
- * configuration; their gateway resolver lives in
- * {@link de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration}.
+ * store reuses the existing DataSource (no Redis; ADR 0017 constraint). The sandbox gateway's
+ * resolver lives in {@link de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration}.
  */
 @ConditionalOnServerRole
 @Configuration

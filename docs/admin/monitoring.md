@@ -380,7 +380,6 @@ config:
     filelog:
       include:
         - /var/log/pods/hephaestus_hephaestus-server-*/*/*.log
-        - /var/log/pods/hephaestus_hephaestus-worker-*/*/*.log
         - /var/log/pods/hephaestus_hephaestus-webhook-*/*/*.log
         - /var/log/pods/hephaestus_hephaestus-migration-*/*/*.log
         - /var/log/pods/hephaestus_hephaestus-nats-*/*/*.log

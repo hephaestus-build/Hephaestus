@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.profile;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.FeedbackClosure;
@@ -44,7 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
  * changes come from Practice page feedback. A change about a practice that is no longer shown is dropped.
  */
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ProfileChangeQuery {

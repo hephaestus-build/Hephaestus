@@ -4,7 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import java.math.BigDecimal;
 import java.time.Duration;
 import org.jspecify.annotations.Nullable;
@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  * The bound: {@code docs/decisions/0026-per-purpose-agent-bindings-and-llm-governance.md}.
  */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 class ProxyBudgetGate {
 
     /**

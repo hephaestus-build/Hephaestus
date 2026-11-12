@@ -1,53 +1,44 @@
 ---
 title: Runtime roles
-description: The three roles one Hephaestus image boots into, and why the webhook role runs in its own container.
+description: The two roles one Hephaestus image boots into, and why the webhook role runs in its own container.
 page_type: reference
 ---
 
-Hephaestus ships **one JAR** that boots in any of three runtime roles.
-The same artifact can run as an application server, worker pod, or webhook receiver.
-It can also run all three together as a monolith.
-Three boolean properties control the roles:
+Hephaestus ships **one JAR** that boots in either runtime role.
+The same artifact can run as an application server or webhook receiver.
+It can also run both together as a monolith.
+Two boolean properties control the roles:
 
 | Role    | Property                             | Default |
 | ------- | ------------------------------------ | ------- |
 | Server  | `hephaestus.runtime.server.enabled`  | `true`  |
-| Worker  | `hephaestus.runtime.worker.enabled`  | `true`  |
 | Webhook | `hephaestus.runtime.webhook.enabled` | `true`  |
 
-All three properties default to on, which starts the monolith role set.
-Conversation turns need at least one process with the worker role, even when the server and worker roles share that JVM.
-The server role never runs a conversation turn itself.
+Both properties default to on, which starts the monolith role set.
+The server serves the API, syncs provider work, delivers feedback, and runs the agent sandboxes and their gateway.
+There is no separate worker role: practice reviews and conversation turns need a server with agent jobs on (`AGENT_ENABLED`).
+With agent jobs on, the server runs the agent runtime: the sandboxes, their gateway, the LLM proxy, the review executor and the conversation turns.
+The chart's `sandbox.enabled` sets `AGENT_ENABLED`.
 
 ## Boot log
 
 On startup, the JVM logs the enabled roles:
 
 ```text
-INFO  RuntimeRoleStartupLogger : Runtime roles enabled: [SERVER, WORKER, WEBHOOK]
+INFO  RuntimeRoleStartupLogger : Runtime roles enabled: [SERVER, WEBHOOK]
 ```
 
 Under `prod`, disabling all roles prevents startup. Disabling NATS for a server or webhook role
-also prevents startup. A worker-only process must disable NATS. The warning for a JVM with no roles
-is a non-production diagnostic, not a production recovery mode. The startup event also records
-`event.name=runtime.roles.configured` and the three `runtime.*.enabled` booleans.
+also prevents startup. The warning for a JVM with no roles is a non-production diagnostic, not a
+production recovery mode. The startup event also records `event.name=runtime.roles.configured` and
+the two `runtime.*.enabled` booleans.
 
 ## Monolith vs split-pod
 
-Use the monolith when:
+Use the monolith when you are a single contributor who runs locally.
 
-- You are a single contributor who runs locally.
-- You have one app server and no horizontal scale yet.
-- Model-call capacity limits your worker.
-
-Split the worker out when:
-
-- LLM reviews and HTTP traffic compete for the same JVM heap / sandbox quota.
-- You want to scale practice-review throughput independently of webhook ingestion.
-
-The [Helm chart](./kubernetes) runs the server, worker and webhook roles in separate Pods.
-The server disables the worker role.
-The worker creates sandbox Pods through its Kubernetes service account.
+The [Helm chart](./kubernetes) runs the server and the webhook role in separate Pods.
+The server creates sandbox Pods and sandbox claims through its Kubernetes service account, when `sandbox.enabled` is on.
 No application role needs a Docker socket.
 
 Split the webhook receiver out when:
@@ -56,15 +47,9 @@ Split the webhook receiver out when:
 
 ## Per-role overlays
 
-Each role has a Spring profile YAML that turns off the other two flags and removes their beans:
+The webhook role has a Spring profile YAML that turns off the server flag and removes its beans:
 
-- `application-worker.yml`: `runtime.server=false` and `runtime.webhook=false`.
-  It excludes OAuth2 autoconfigure but keeps JPA enabled.
-  Its HTTP connector also serves management endpoints.
-  It binds to loopback for in-container health checks.
-  A separate sandbox gateway listens on `SANDBOX_API_PORT` (default `8081`).
-  Kubernetes requires a fixed gateway port that matches the chart NetworkPolicy.
-- `application-webhook.yml`: `runtime.server=false` and `runtime.worker=false`.
+- `application-webhook.yml`: `runtime.server=false`.
   It enables sync NATS and disables the agent job queue.
   Webhook pods never claim jobs.
   The webhook role has no database.
@@ -77,14 +62,19 @@ Each role has a Spring profile YAML that turns off the other two flags and remov
 - No `application-server.yml` exists.
   The monolith default *is* the server profile.
 
-The worker gateway's connector-specific security chain accepts only job-token-authenticated sandbox capabilities.
+## Sandbox gateway
+
+With agent jobs on, the server opens a second connector for sandboxes: the sandbox gateway on `SANDBOX_API_PORT` (default `8081`).
+Kubernetes requires a fixed gateway port that matches the chart NetworkPolicy.
+The public API on port 8080 serves no gateway path, and the gateway port serves no API path.
+The gateway's connector-specific security chain accepts only job-token-authenticated sandbox capabilities.
 Other paths on that port return an empty `404`.
 Capability calls receive these responses:
 
 - Over `SANDBOX_API_MAX_REQUEST_BYTES`: `413`.
 - No declared body length: `411`.
 - Past `SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE` from one connection peer: `429` with a `Retry-After`, before the gateway reads a credential.
-- When the request bodies in flight would pass a quarter of the worker's heap: `429` with a `Retry-After`.
+- When the request bodies in flight would pass a quarter of the server's heap: `429` with a `Retry-After`.
 - Past `SANDBOX_API_REQUESTS_PER_MINUTE`: `429` with a `Retry-After`.
 
 If the gateway cannot reach the store for rate-limit counts, it serves the call without a limit.
@@ -94,29 +84,22 @@ The Gateway never routes to this port.
 
 The source limit reads the address of the connection, so a forwarded header does not change it.
 
-The gateway holds at most `worker.sandboxGateway.maxConnections` connections open.
+The gateway holds at most `sandbox.gateway.maxConnections` connections open.
 Up to 100 further connections wait in the operating system's queue, and the rest fail.
 A model call holds its connection until its stream ends, and it runs on a virtual thread.
 Thus, this limit and the body limit above bound the calls in flight at this connector.
 The model call pool can still make a call wait.
 A caller that stays silent for 30 seconds loses its connection.
 
-The Service `<release>-sandbox-gateway` selects every ready worker on this port.
-The Service `<release>-sandbox-gateway-probe` also selects a worker that is not ready, and only the isolation probe calls it.
+The Service `<release>-sandbox-gateway` selects every server on this port.
+The Service `<release>-sandbox-gateway-probe` also selects a server that is not ready, and only the isolation probe calls it.
 Through it, the probe checks that a review sandbox reaches the gateway and that a Pod of another kind does not.
 
 A review loop renews its own attempt lease through this Service during execution and result upload.
-Any ready worker can renew it. The worker that launched the Pod is not required for renewal.
+Any server can renew it. The server that launched the Pod is not required for renewal.
 If renewal fails, the loop stops when its last confirmed lease expires.
-The worker renews the lease before the loop starts and after it exits.
+The server renews the lease before the loop starts and after it exits.
 The feedback is composed in a later run of the review's sandbox, which renews its own lease through the same Service.
-
-To deploy a worker pod:
-
-1. Set `SPRING_PROFILES_ACTIVE=prod,worker`.
-2. Give it the app pod's database. Workers and the app pod coordinate only through PostgreSQL.
-
-The chart owns the worker Deployment and its role configuration.
 
 ## Build-only profiles
 
@@ -138,11 +121,11 @@ It exits with status 0 when the schema is current, and with a non-zero status wh
 
 The run mode needs `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`.
 Give it the login of `hephaestus_owner`, which owns the schema.
-Give the server and worker roles the login of `hephaestus_app`, which reads and writes rows only.
+Give the server roles the login of `hephaestus_app`, which reads and writes rows only.
 [Database roles](./helm-chart#database-roles) describes both roles.
 
 Under the `prod` profile, no role migrates at start.
-The server and worker roles wait until the database holds every change set of their release.
+The server waits until the database holds every change set of its release.
 The webhook role reads no database and does not wait.
 The wait reads the migration history and writes nothing.
 A schema that is ahead of the role is correct: during a rollout, the previous release runs against the new schema.
@@ -154,7 +137,7 @@ Its error names the first change set that has not run.
 Run the migration once for each release, before the new roles start:
 
 The [Helm chart](./upgrade#upgrade-a-schema-compatible-release) runs a migration Job for each revision.
-The server and worker also check that the schema is current before they become ready.
+The server also checks that the schema is current before it becomes ready.
 For a major cutover, [pull-based deployment](./pull-based-deployment#stopped-major-upgrades) stops every application writer before the migration.
 
 ### One migration at a time
@@ -195,7 +178,7 @@ A release whose migration guide entry starts with **Stop every role** is the exc
 The previous release cannot run on its schema, and also not on a partly migrated one.
 For that release, do these steps:
 
-1. Stop every role, including remote workers.
+1. Stop every role.
 2. Make a database backup with the matching signed release lock, as the [silent deployment checklist](./production-operations-runbook#silent-deployment-checklist) describes.
 3. Run the migration.
    Do not let a deployment tool return the roles to the previous release when the migration fails.
@@ -227,39 +210,28 @@ Each cell shows the value a pod uses when the operator sets **no** environment v
 It uses the profile overlay's value if the overlay specifies one.
 Otherwise, it uses the base default.
 
-| Property                                         | Server  | Worker    | Webhook   | Set by                                          |
-| ------------------------------------------------ | ------- | --------- | --------- | ----------------------------------------------- |
-| `hephaestus.runtime.server.enabled`              | true    | **false** | **false** | profile overlay                                 |
-| `hephaestus.runtime.worker.enabled`              | true    | true      | **false** | profile overlay                                 |
-| `hephaestus.runtime.webhook.enabled`             | true    | **false** | true      | profile overlay                                 |
-| `hephaestus.workspace.init-default`              | false   | false     | false     | `prod` profile                                  |
-| `hephaestus.git.enabled`                         | false   | false     | false     | env default                                     |
-| `hephaestus.sync.nats.enabled`                   | true    | **false** | **true**  | `prod` profile / profile overlay                |
-| `hephaestus.agent.enabled`                       | false   | false     | false     | env default                                     |
-| `hephaestus.integration.outline.allowed-origins` | empty   | empty     | empty     | env default                                     |
-| `hephaestus.sandbox.gateway.port`                | 8081    | 8081      | —         | env default (`SANDBOX_API_PORT`)                |
-| `hephaestus.sandbox.gateway.requests-per-minute` | 680     | 680       | —         | env default (`SANDBOX_API_REQUESTS_PER_MINUTE`) |
-| `hephaestus.sandbox.gateway.max-request-bytes`   | 4194304 | 4194304   | —         | env default (`SANDBOX_API_MAX_REQUEST_BYTES`)   |
-| `hephaestus.sandbox.gateway.source-requests-per-minute` | 12000 | 12000 | — | env default (`SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE`) |
-| `hephaestus.sandbox.gateway.max-connections`     | 4096    | 4096      | —         | env default (`SANDBOX_API_MAX_CONNECTIONS`)     |
-| Needs user-auth wiring                           | yes     | no        | no        | role gating                                     |
+| Property                                                | Server  | Webhook   | Set by                                                 |
+| ------------------------------------------------------- | ------- | --------- | ------------------------------------------------------ |
+| `hephaestus.runtime.server.enabled`                     | true    | **false** | profile overlay                                        |
+| `hephaestus.runtime.webhook.enabled`                    | true    | true      | profile overlay                                        |
+| `hephaestus.workspace.init-default`                     | false   | false     | `prod` profile                                         |
+| `hephaestus.git.enabled`                                | false   | false     | env default                                            |
+| `hephaestus.sync.nats.enabled`                          | true    | **true**  | `prod` profile / profile overlay                       |
+| `hephaestus.agent.enabled`                              | false   | false     | env default                                            |
+| `hephaestus.integration.outline.allowed-origins`        | empty   | empty     | env default                                            |
+| `hephaestus.sandbox.gateway.port`                       | 8081    | —         | env default (`SANDBOX_API_PORT`)                       |
+| `hephaestus.sandbox.gateway.requests-per-minute`        | 680     | —         | env default (`SANDBOX_API_REQUESTS_PER_MINUTE`)        |
+| `hephaestus.sandbox.gateway.max-request-bytes`          | 4194304 | —         | env default (`SANDBOX_API_MAX_REQUEST_BYTES`)          |
+| `hephaestus.sandbox.gateway.source-requests-per-minute` | 12000   | —         | env default (`SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE`) |
+| `hephaestus.sandbox.gateway.max-connections`            | 4096    | —         | env default (`SANDBOX_API_MAX_CONNECTIONS`)            |
+| Needs user-auth wiring                                  | yes     | no        | role gating                                            |
 
 Bold cells show values that the role's profile overlay specifies, not the base defaults.
-The three `runtime.*` rows in a column show the pod's role set:
+The `webhook` overlay turns off the server role. The monolith, with no overlay, runs both.
 
-- The `worker` overlay turns off the server and webhook roles.
-- The `webhook` overlay turns off the server and worker roles.
-- The monolith, with no overlay, runs all three.
-
-The server and the worker enforce Outline origin approval.
-The server controls connections, sync and the change events it consumes.
-The worker projects evidence.
-The webhook role reads no connection, so it does not need the allowlist.
-
-1. Supply the same allowlist to the server and the worker.
-2. After a change, restart both roles.
-
-The chart gives both roles the configured allowlist.
+The server enforces Outline origin approval: it controls connections, sync, the change events it consumes, and the
+evidence it projects. The webhook role reads no connection, so it does not need the allowlist.
+The chart gives the server the configured allowlist. After a change, restart the server.
 
 Identical rows across the columns are **not** role-specific.
 They are instance-wide defaults, shown per role because operators ask per role.
@@ -274,52 +246,37 @@ The two environment-variable flags default to `false` on **all** roles until the
 No profile turns on work automatically.
 
 `Needs user-auth wiring` is **not** in that group.
-Its cells show `yes | no | no` because it differs by role.
 User authentication exists only with the server role.
 `hephaestus.runtime.server.enabled=false` removes it.
-The `worker` overlay also excludes Spring's OAuth2 resource-server autoconfiguration.
-A worker-only pod therefore never depends on user-auth wiring at boot.
 
-The `webhook` overlay has no such exclusion.
-It uses only the role gate.
-
-No `hephaestus.sandbox.enabled` exists, and an architecture test forbids one.
-Kubernetes sandbox work is the worker capability, controlled by `hephaestus.runtime.worker.enabled`.
-A server pod that keeps the worker role, such as a monolith, opens the sandbox gateway on the same port.
-It needs the same firewall controls as a separate worker.
-The webhook role turns off the worker role and opens no gateway.
-Its five `sandbox.gateway` cells therefore show `—`.
+No Spring property `hephaestus.sandbox.enabled` exists, and an architecture test forbids one.
+Kubernetes sandbox work belongs to the server role with agent jobs on.
+The chart's `sandbox.enabled` sets `AGENT_ENABLED` and the sandbox settings of the server.
+The webhook role opens no gateway. Its five `sandbox.gateway` cells therefore show `—`.
 
 Git needs no such row.
-It runs in-process through JGit in the role that does the work.
-It uses that container's mirrors under `hephaestus.fabric.root`.
-The server role handles commit ingestion.
-The worker role handles review preparation.
-A server pod with the worker role enabled uses one root for both.
-
+It runs in-process through JGit in the server.
+It uses the server's mirrors under `hephaestus.fabric.root`, one root for commit ingestion and review preparation.
 The webhook role has no Git.
 
 A review's sandbox also writes the review's feedback, in a later run of the same sandbox.
 These model calls take the same proxy path and rules as the review's other calls, so they need no new egress.
 
-Sandbox maintenance follows the worker role in both split-out and single-container deployments.
-The worker removes orphaned sandbox resources at startup and then at a fixed interval.
-This maintenance does not enable server-wide scheduled jobs on the worker.
+The server removes orphaned sandbox resources at startup and then at a fixed interval.
 API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or startup sync-job recovery.
 
-The worker application HTTP endpoint binds to loopback. Every role has a separate private
+The server serves the API on port 8080. Every role has a separate private
 management listener on port **9090**, including a single-JVM topology. Management does not run on
 `SERVER_PORT`. See [Set up monitoring](./monitoring#scrape-metrics) for network restrictions.
 
 The runtime role decides `sync.nats.enabled`. No setting changes it.
 The server role consumes from NATS, and the webhook role publishes to it.
-The worker uses the PostgreSQL job queue and does not connect to NATS (ADR 0025).
 
 `hephaestus.agent.enabled` (`AGENT_ENABLED`) controls submission and execution.
 Server maintenance runs independently of this flag:
 
 - **Submission** (turning pull request, issue and bot-command events into queued jobs) needs
-  this flag **and** the server role. A worker-only container executes jobs. It does not submit these reviews.
+  this flag **and** the server role.
 - **Lease recovery** takes back the reviews of a sandbox that stopped.
   Each review job runs under an agent run.
   The review's sandbox claims the run and holds its lease, on the database clock, for `hephaestus.agent.capacity.lease-ttl` (5 minutes).
@@ -327,26 +284,18 @@ Server maintenance runs independently of this flag:
   At the same interval, each server replica takes back the runs whose lease expired.
   It queues the review again, or fails it at the retry limit (`AGENT_MAX_RETRIES`, `hephaestus.agent.capacity.review-retries`).
   - Every server replica does this at the same time, without a leader. Each takes back a run with one conditional write, so one replica wins and the others change nothing.
-  - The upgrade to 1.0 queues again every job that a worker held. The job keeps its admitted and staged results and spends no retry.
-  - Lease recovery needs the server role, including when `AGENT_ENABLED=false`.
+  - The upgrade to 1.0 queues again every job that a server held. The job keeps its admitted and staged results and spends no retry.
+  - Lease recovery runs also when `AGENT_ENABLED=false`.
 - **Completion** closes the parent review of a terminal job and records its stop reason.
   This server maintenance also runs when `AGENT_ENABLED=false`.
-- **Execution** needs this flag **and** the worker role.
-  The worker requests a sandbox for each queued review. The sandbox claims and runs the review ([Agent runs § A review in its sandbox](/contributor/agent-runs#a-review-in-its-sandbox)).
-  Worker admission and server preparation read the same practice-page feedback support, so that read exists in every role.
+- **Execution** needs this flag **and** the server role.
+  The server requests a sandbox for each queued review. The sandbox claims and runs the review ([Agent runs § A review in its sandbox](/contributor/agent-runs#a-review-in-its-sandbox)).
+  Admission and preparation read the same practice-page feedback support.
   A review attempt that was cancelled, requeued or taken back writes nothing more.
   The gateway refuses each of its calls, and the practice review stops at its next refused call.
 
-`AGENT_ENABLED` is `false` on all roles until you set it, regardless of how the pod starts.
-
-1. Set it to `true` on **each** pod that needs submission or execution.
-
-In a split-pod topology, both pods need it:
-
-- `application-server`: submission. Recovery runs independently of the flag.
-- `application-worker`: execution.
-
-A worker with this flag set to `false` claims no practice reviews.
+`AGENT_ENABLED` is `false` until you set it, regardless of how the pod starts.
+A server with this flag set to `false` submits and claims no practice reviews, and runs no conversation turn.
 Server maintenance still records the spend of attempts that already ran.
 
 ## Conversation turns
@@ -357,25 +306,25 @@ The [glossary](/contributor/practice-review-glossary#runtime-terms) defines both
 The application server keeps these functions:
 
 - The web API, the live answer stream, and Slack delivery.
-- A first admission check when a question arrives. The worker admits the turn again, with the budget check, when it claims it.
+- A first admission check when a question arrives. The server admits the turn again, with the budget check, when it claims it.
 - The conversation store in PostgreSQL.
 
 The server role needs no sandbox client and never connects to the conversation loop.
-`AGENT_ENABLED` controls queued practice reviews, not Hephaestus.
+`AGENT_ENABLED` turns conversation turns on and off together with the practice reviews.
 
 ### Dispatch
 
 When a developer asks a question, the server stores it in PostgreSQL with a queued turn.
-The conversation loop pulls turns from the workers through the Service `<release>-sandbox-gateway`.
-A worker answers a pull with the next turn that may start, and the turn gets a lease.
+The conversation loop pulls turns from the servers through the Service `<release>-sandbox-gateway`.
+A server answers a pull with the next turn that may start, and the turn gets a lease.
 A pull waits up to 20 seconds for a turn. PostgreSQL `LISTEN/NOTIFY` wakes it when a turn changes.
 
-The loop runs the turn, and the workers write the answer to PostgreSQL while Hephaestus writes it.
-Each call of the turn can reach any worker.
+The loop runs the turn, and the servers write the answer to PostgreSQL while Hephaestus writes it.
+Each call of the turn can reach any server.
 
 The server then sends the answer to the webapp or posts it to Slack.
 
-A turn that finds no free capacity waits in the queue until a worker can hand it out.
+A turn that finds no free capacity waits in the queue until a server can hand it out.
 Each conversation runs one turn at a time.
 A thread is a separate conversation, so a thread turn can run at the same time as a turn in the main conversation.
 Questions that arrive during a turn wait in their conversation.
@@ -384,10 +333,10 @@ When `hephaestus.mentor.turn.max-follow-ups` questions wait, Hephaestus refuses 
 ### Conversation turn capacity
 
 `conversationLoop.turns` sets how many conversation turns the whole installation runs at once.
-The chart gives the one value to the server, to each worker and to each loop replica as `HEPHAESTUS_MENTOR_TURN_CAPACITY`.
-Each worker hands out a turn only while fewer turns than that hold a live lease in the installation.
+The chart gives the one value to each server and to each loop replica as `HEPHAESTUS_MENTOR_TURN_CAPACITY`.
+Each server hands out a turn only while fewer turns than that hold a live lease in the installation.
 Each loop replica runs at most that many turns.
-More workers or loop replicas do not add turns.
+More servers or loop replicas do not add turns.
 
 The chart resolves `conversationLoop.turns: auto` from the declared CPU budget.
 It subtracts the role requests, the conversation loop with one surge replica, the tools Pods and the review reservation.
@@ -412,7 +361,7 @@ A queued turn has a separate wait of three minutes to start, counted from when i
 The server's run reaper then ends the question with a message that asks the developer to try again.
 
 A follow-up stays queued while an answer holds its conversation, and its wait starts when that answer ends.
-The wait survives worker restarts. A retry after a lost loop gets a new wait.
+The wait survives server restarts. A retry after a lost loop gets a new wait.
 
 Within that limit, size the capacity from the expected load.
 Concurrent turns are about the questions each second multiplied by the seconds for each answer.
@@ -420,10 +369,10 @@ For example, 1.8 questions each second with 4.5-second answers need 8 concurrent
 `mentor_turn_queue_wait_seconds` and `mentor_turn_queued` show how long and how many questions wait ([Metrics](./metrics.md#conversation-turn-metrics)).
 
 The server reads the same value, `hephaestus.agent.capacity.turns`.
-While that many turns run, a question that a worker can start next says that Hephaestus is answering other questions.
-If you run the roles without the chart, set the same value on the server, on each worker and on each loop replica.
+While that many turns run, a question that a server can start next says that Hephaestus is answering other questions.
+If you run the roles without the chart, set the same value on the server, on each server and on each loop replica.
 If it is not set on the server, no question says why it waits.
-A worker without it hands out turns without a limit.
+A server without it hands out turns without a limit.
 
 A turn whose loop stopped holds its slot until its run's lease expires.
 Thus, for a short time, a question can say that Hephaestus is busy while a loop has room.
@@ -431,10 +380,10 @@ The question starts at the next pull.
 
 ### Lease, retry, and deadline
 
-The conversation loop renews the lease of each running turn's run every 5 seconds, through any worker.
+The conversation loop renews the lease of each running turn's run every 5 seconds, through any server.
 The lease is `hephaestus.agent.capacity.turn-lease-ttl`, 60 seconds by default.
-If the loop that runs the turn stops, or no worker answers for that long, the lease expires.
-The server's run reaper then returns the turn to the queue once, and any worker can claim it.
+If the loop that runs the turn stops, or no server answers for that long, the lease expires.
+The server's run reaper then returns the turn to the queue once, and any server can claim it.
 If the lease of the second attempt also expires, the turn fails with **Hephaestus could not finish this reply. Try again.**
 
 A stopped turn, and a turn past its time limit, gets 30 seconds in which its loop can end it with what it wrote.
@@ -442,7 +391,7 @@ The run's lease is not renewed past that.
 Then the run reaper ends the turn: stopped, or failed with **Hephaestus took too long to reply and stopped. Try again.**
 
 The lease end and its expiry both use the database clock.
-Thus, a clock difference between the server and the worker does not take back a running turn.
+Thus, a clock difference between servers does not take back a running turn.
 
 The timeout of the workspace's conversation model binding is the deadline of each attempt, at most 900 seconds.
 A binding accepts no longer Hephaestus timeout, and an older binding with a longer one acts as 900 seconds.
@@ -460,7 +409,7 @@ At the call limit, the turn fails with **Hephaestus could not finish this reply.
 The next lease renewal ends a turn that the loop did not end in time.
 The loop has 30 seconds after a stop, and 30 seconds after the deadline.
 
-The worker's LLM proxy cuts a conversation model call, or a streamed model call of a practice review, whose provider stays silent too long.
+The server's LLM proxy cuts a conversation model call, or a streamed model call of a practice review, whose provider stays silent too long.
 Two bounds apply:
 
 - `hephaestus.mentor.turn.model-first-byte-timeout` (default 5 minutes) bounds the wait for the response headers.
@@ -470,7 +419,7 @@ Two bounds apply:
 Any byte counts, also an SSE comment that a gateway sends to keep the connection alive.
 The turn's deadline also bounds both, because the stop at the deadline cancels the call.
 The turn fails with **Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.**
-The worker logs the cut call and the failure with the reason `STALLED` and the bound that was passed.
+The server logs the cut call and the failure with the reason `STALLED` and the bound that was passed.
 
 For a practice review, the review runner retries the cut call up to 5 times.
 When two sessions in a row end with their calls unanswered, the review starts no new session.
@@ -486,11 +435,11 @@ Otherwise, set the timeout above your longest answer.
 
 ### Provider breaker
 
-Each worker keeps a circuit breaker for each provider connection.
+Each server keeps a circuit breaker for each provider connection.
 A call that stalls, that cannot connect, or that ends with a server error counts as a failure.
 When at least 3 calls in 5 minutes ended, and half of them failed, the breaker opens for 60 seconds.
 
-While it is open, the worker starts no conversation turn on that connection.
+While it is open, the server starts no conversation turn on that connection.
 Each such turn fails at once with **Hephaestus's AI model is not responding right now, so Hephaestus did not start this reply. Try again in a few minutes.**
 Model calls of turns that already run, and of practice reviews, get an error at once.
 
@@ -503,12 +452,12 @@ A rate limit, a request error, or a client that went away does not count.
 
 ### Model calls in flight for each attempt
 
-The worker limits the model calls that one attempt has in flight at the same time, on every model:
+The server limits the model calls that one attempt has in flight at the same time, on every model:
 
 - A conversation turn has at most 2: one call, and one that a stop left open.
 - A practice review has at most 170.
 
-The review limit protects the worker's memory, because a call that waits for a grant keeps its body in the worker.
+The review limit protects the server's memory, because a call that waits for a grant keeps its body in the server.
 The limit does not share the provider. A [call pool](#call-pools) does that with its fair grants.
 
 A review's runner does not reach this limit. It starts a session only while its 256 MiB heap has room for that session.
@@ -531,7 +480,7 @@ A refused call is not lost:
 
 ### Call pools
 
-A call pool represents one provider quota boundary across workers, models, and workspaces.
+A call pool represents one provider quota boundary across servers, models, and workspaces.
 Every model is in a pool. The database gives each model a pool of its own.
 An instance admin can move models into a shared pool.
 A shared host name alone does not establish a shared quota.
@@ -550,8 +499,8 @@ Both the total limit and the limit outside the reserve apply independently.
 
 #### The learned limit
 
-The pool row holds the limit, so all workers share it and a restart keeps it.
-No worker holds a database connection while its call waits for a grant or for the provider.
+The pool row holds the limit, so all servers share it and a restart keeps it.
+No server holds a database connection while its call waits for a grant or for the provider.
 
 | Event | Effect |
 | --- | --- |
@@ -593,8 +542,8 @@ The limit does not rise while calls do not fill it.
 An instance admin's maximum is a ceiling on the limit.
 
 A release grants waiting calls immediately.
-Workers send a pool-id hint through PostgreSQL after a release or grant.
-Each worker keeps one dedicated database connection for these notifications.
+Servers send a pool-id hint through PostgreSQL after a release or grant.
+Each server keeps one dedicated database connection for these notifications.
 The database owns admission.
 A hint does not grant capacity.
 If a hint is lost, a two-second check recovers it and checks rate refills, cooldowns and expired permits.
@@ -643,8 +592,8 @@ A batch or background call that waits rises one band for each `hephaestus.agent.
 It never rises into the interactive band.
 Thus, the call of a scheduled review waits behind a steady stream of other reviews' calls for a limited time only.
 
-Each worker runs one admission round per pool for each 250 milliseconds while calls wait, and a new call starts one at once.
-A round can grant any worker's call, in queue order, up to the limit. The call's own worker finds the grant in its next round.
+Each server runs one admission round per pool for each 250 milliseconds while calls wait, and a new call starts one at once.
+A round can grant any server's call, in queue order, up to the limit. The call's own server finds the grant in its next round.
 Thus, the database load does not grow with the number of waiting calls.
 One database statement grants all the calls of a round. Interactive calls are granted first in each round.
 
@@ -661,7 +610,7 @@ The Kubernetes readiness check also fails while a namespace informer cannot list
 This check takes no provider grant and adds no pool waiter.
 A pool whose calls are all active can admit a review when it has no review call waiting.
 The review's actual calls join the pool queue when they run.
-A new waiter or another worker can use room after the observation.
+A new waiter or another server can use room after the observation.
 The Kubernetes quota and the pool enforce capacity when the Pod and call start.
 
 After a backlog refusal, the same poll scans other endpoint pools before it sleeps.
@@ -671,7 +620,7 @@ Each batch also counts the positions already offered to a workspace.
 Within that order, requested reviews precede event, scheduled, and backfill reviews.
 Each ten minutes of waiting offsets one origin priority step, so old backfill can pass new requests.
 
-The pool also accounts for request and token rates across workers.
+The pool also accounts for request and token rates across servers.
 Each physical request, including a protocol retry, consumes a rate debit.
 
 A configured per-call token bound reserves the provider's maximum input-plus-output charge on the pool's combined and input token rates.
@@ -681,7 +630,7 @@ The reservation remains conservative when usage is absent or the call is cancell
 Closed calls retain their debit for a full minute after closure.
 Background calls keep their share of the limit in the rate account too, and at least one call.
 
-A live worker cancels a call after three quarters of the permit lease without renewal.
+A live server cancels a call after three quarters of the permit lease without renewal.
 The proxy also checks that local lease before it starts or retries a provider call, without waiting for the next periodic check.
 
 The proxy releases capacity only after the response completes or the cancelled transport closes.
@@ -690,19 +639,19 @@ The request UUID fences renewal and release.
 A late release cannot affect another call.
 An ended attempt cannot start a provider call after a capacity wait.
 
-Admission and administration reclaim grants that the worker has not renewed within `hephaestus.llm.call-pools.permit-lease` (one minute by default).
+Admission and administration reclaim grants that the server has not renewed within `hephaestus.llm.call-pools.permit-lease` (one minute by default).
 This lease is the bound on a provider connection that nobody can see anymore:
 
-- When a worker process ends, its sockets close.
-- A worker that loses its database cancels its calls after three quarters of the lease. Their connections close before the grant expires.
-- A worker cancels a call within two renewal intervals after its hard end and stops renewing it. Its grant then expires.
+- When a server process ends, its sockets close.
+- A server that loses its database cancels its calls after three quarters of the lease. Their connections close before the grant expires.
+- A server cancels a call within two renewal intervals after its hard end and stops renewing it. Its grant then expires.
 
 The hard end is the deadline of the work, such as a review attempt's work deadline.
 A conversation call has no such deadline, so its hard end comes 32 minutes after its grant.
 
-A suspended worker is the one exception.
+A suspended server is the one exception.
 It can keep a provider connection open after its grant expires.
-The connection closes when the worker resumes and cancels the call, or when its liveness probe restarts the container.
+The connection closes when the server resumes and cancels the call, or when its liveness probe restarts the container.
 A cancellation that cannot close the transport can do the same.
 The pool limit can then be exceeded until those connections close.
 
@@ -716,16 +665,16 @@ A workspace-controlled connection can lower the limit and pause only a pool that
 ### The conversation loop
 
 The chart runs the conversation loop as the Deployment `<release>-conversation-loop`, in the release namespace.
-It runs only with workers, and only when `conversationLoop.turns` is above 0.
-It runs the compiled loop from the release's agent image. No worker stages it.
+It runs only with servers, and only when `conversationLoop.turns` is above 0.
+It runs the compiled loop from the release's agent image. No server stages it.
 [Helm chart reference § Conversation loop](./helm-chart#conversation-loop) gives its values, its Pod settings and its network policy.
 
-The loop pulls each turn from a worker and presents `HEPHAESTUS_CONVERSATION_LOOP_SECRET`.
+The loop pulls each turn from a server and presents `HEPHAESTUS_CONVERSATION_LOOP_SECRET`.
 It gets a credential for each turn attempt, valid only for that turn.
-The workers resolve provider keys and never send them to the loop.
+The servers resolve provider keys and never send them to the loop.
 PostgreSQL remains the billing record of conversation turns.
-A worker that stops hands out no more turns, and the loop pulls from another worker.
-If no worker answers, the loop waits up to 4 seconds and pulls again.
+A server that stops hands out no more turns, and the loop pulls from another server.
+If no server answers, the loop waits up to 4 seconds and pulls again.
 
 On SIGTERM, the loop pulls no more turns and ends its running turns.
 Its grace period is 960 seconds: the longest turn, the 30 seconds to end it, and 30 seconds to stop.
@@ -739,19 +688,19 @@ It writes each failure as a kind from a closed set.
 
 ### Abnormal sandbox ends
 
-When a sandbox ends abnormally, the worker logs why from the Pod's status: the container, its exit code and the Kubernetes reason (`sandbox.exited`).
+When a sandbox ends abnormally, the server logs why from the Pod's status: the container, its exit code and the Kubernetes reason (`sandbox.exited`).
 Only for a practice review does that line also carry the review runtime's own last diagnostic lines, as `sandbox.stderr.tail`.
 Each kept line names one runtime event with counts, flags and closed codes, such as `[pi-runner] tool.failed phase=review turn=1 practice=0 tool=bash reason_chars=42`.
 A turn and a practice are named by their positions in the review's practice index, not by their names.
 The line never holds a tool result, a provider's error message, model output, reviewed code, a name, a path or an identifier.
 
-The worker keeps a line only when its event, fields and values are in the runtime's diagnostic vocabulary.
+The server keeps a line only when its event, fields and values are in the runtime's diagnostic vocabulary.
 This rule also applies to a line from an older runtime image.
 It counts every other line in `sandbox.stderr.dropped`.
 
 A practice review can stop with some practices still without a result, for example when a practice reaches its deadline.
 The runtime then keeps the results that it staged and exits with code 78.
-The worker logs this end at `INFO` as `partial`, not as an error.
+The server logs this end at `INFO` as `partial`, not as an error.
 The field `sandbox.review.without_result` names each practice without a result by its position and stop code.
 An example is `practice=9 program_stop=deadline`.
 
@@ -761,16 +710,16 @@ It runs only the open practices and spends no retry.
 ### Conversation tools Pods
 
 Hephaestus reads its context documents, code, and Git history with the tools `read`, `bash` and `load_context`.
-The worker serves `INDEX.md`, `FIELDS.md` and the context documents from the memory of the turn attempt.
+The server serves `INDEX.md`, `FIELDS.md` and the context documents from the memory of the turn attempt.
 A command, a load, and a read of another file run in a [tools Pod](/contributor/practice-review-glossary#runtime-terms) in the sandbox namespace, not in the conversation loop.
 An attempt takes one tools Pod at its first `bash` or `load_context`, or at its first `read` of another file.
 The conversation loop then puts the context documents under `inputs/` in the tools Pod.
 The loop connects to the tools Pod itself.
 
-PostgreSQL records which attempt holds each tools Pod, so any worker serves the attempt's tools calls.
-A worker removes the tools Pod when the attempt ends.
+PostgreSQL records which attempt holds each tools Pod, so any server serves the attempt's tools calls.
+A server removes the tools Pod when the attempt ends.
 The installation keeps a pool of 2 empty tools Pods, so that a turn does not wait for a Pod start.
-Any worker fills the pool.
+Any server fills the pool.
 
 [Sandboxes § Sandbox sizes](./sandboxes#sandbox-sizes) owns each tools Pod's requests and limits.
 The [conversation admission budget](./sizing#conversation-turn-admission) counts tools Pods separately from resident turns.
@@ -778,7 +727,7 @@ The [conversation admission budget](./sizing#conversation-turn-admission) counts
 A tools Pod is a Kubernetes Job with one container, `tools`, from the release's agent image.
 The container runs only the tools program, with no service account token and no credential.
 Its Pod has the label `hephaestus.build/sandbox-kind=tools`.
-Only the conversation loop can connect to it, on TCP port 7100 ([Sandboxes § Worker](./sandboxes#worker)).
+Only the conversation loop can connect to it, on TCP port 7100 ([Sandboxes § Server](./sandboxes#server)).
 A tools Pod has no egress.
 
 - One tools Pod for each running turn attempt that needs one, within the conversations quota.
@@ -792,27 +741,27 @@ Each tools Pod has these fixed limits:
 - No egress.
 
 The limits are bounds, not reservations. An idle tools Pod runs only its tools program.
-`SANDBOX_MAX_CONCURRENT` and the review capacity of the worker do not count tools Pods.
+`SANDBOX_MAX_CONCURRENT` and the review capacity of the server do not count tools Pods.
 
-Tools Pods need the qualified Kubernetes worker and the pinned agent image of the release.
-If the worker cannot start a tools Pod, Hephaestus cannot read the developer's work and says so.
-The worker logs `Could not fill the tools Pod pool` at `WARN` and tries again every 60 seconds.
-If the conversations quota cannot hold one tools Pod, the worker logs `The tools quota cannot hold one tools Pod` at `WARN`.
+Tools Pods need the qualified Kubernetes sandboxes and the pinned agent image of the release.
+If the server cannot start a tools Pod, Hephaestus cannot read the developer's work and says so.
+The server logs `Could not fill the tools Pod pool` at `WARN` and tries again every 60 seconds.
+If the conversations quota cannot hold one tools Pod, the server logs `The tools quota cannot hold one tools Pod` at `WARN`.
 
-Hephaestus reads repositories only where the worker has Git mirrors (`GIT_CHECKOUT_ENABLED`).
+Hephaestus reads repositories only where the server has Git mirrors (`GIT_CHECKOUT_ENABLED`).
 Without Git mirrors, Hephaestus tells the developer that it cannot read the code.
 No setting turns tools Pods on or off.
 
-A worker also removes a tools Pod when the data of its workspace changes, or when the conversation loop reports it broken.
-Each worker applies one cleanup rule at startup and every 60 seconds:
+A server also removes a tools Pod when the data of its workspace changes, or when the conversation loop reports it broken.
+Each server applies one cleanup rule at startup and every 60 seconds:
 
 - A tools Pod whose turn attempt holds no live lease goes.
 - A pooled tools Pod older than 1 hour goes.
 - A tools Pod that did not start within 3 minutes goes.
 - A tools Job that PostgreSQL does not record goes.
 
-A worker that stops removes no tools Pod, and a worker rollout keeps the tools Pods of running turns.
-To remove a tools Pod, the worker deletes its Job.
+A server that stops removes no tools Pod, and a server rollout keeps the tools Pods of running turns.
+To remove a tools Pod, the server deletes its Job.
 
 The [Conversation runtime](/contributor/unified-pi-runtime#context-folder) gives the other limits and the measured times.
 
@@ -845,7 +794,7 @@ Its `auto` setting uses the chart's CPU budget.
 | `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M`  | How long one model call of a turn, or one streamed model call of a review, may wait for the provider's response headers |
 | `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn or of a review may send nothing |
 | `hephaestus.mentor.turn.max-follow-ups`     | `3`           | The number of questions that can wait in one conversation or thread |
-| `hephaestus.agent.capacity.turns`           | Not set       | The conversation turns that the whole installation runs at once. The server, each worker and each loop replica read it ([Conversation turn capacity](#conversation-turn-capacity)) |
+| `hephaestus.agent.capacity.turns`           | Not set       | The conversation turns that the whole installation runs at once. The server, each server and each loop replica read it ([Conversation turn capacity](#conversation-turn-capacity)) |
 | `hephaestus.mentor.agent.max-prompt-chars`  | `100000`      | The maximum length of a question sent in the webapp, in characters      |
 
 Give all roles the same values.
@@ -853,23 +802,22 @@ Use the [configuration reference](./configuration-reference) for the chart-owned
 
 [Metrics](./metrics.md#conversation-turn-metrics) lists the conversation turn metrics.
 
-## Worker pod env vars
+## Agent settings
 
-The bare minimum to boot a worker, beside the database settings:
+The bare minimum to run reviews and conversation turns on a server, beside the database settings:
 
 ```sh
-SPRING_PROFILES_ACTIVE=prod,worker
-HEPHAESTUS_WORKER_DRAIN_TIMEOUT=5m
+SPRING_PROFILES_ACTIVE=prod
+HEPHAESTUS_AGENT_DRAIN_TIMEOUT=30m
 AGENT_ENABLED=true
 ```
 
-Without the last line, the worker boots but claims no practice-review jobs.
-It can still run conversation turns: `AGENT_ENABLED` does not gate them.
+Without the last line, the server runs no agent runtime: no practice review, no conversation turn and no sandbox.
 
 No LLM environment variables are necessary.
-The LLM proxy runs in-process on each pod with the worker role, whatever `AGENT_ENABLED` says.
+The LLM proxy runs in-process on each server with agent jobs on.
 It serves queued practice reviews and conversation turns.
-It reads providers from the same instance/workspace catalog as the app pod.
+It reads providers from the same instance/workspace catalog as the API.
 
 1. Register providers at runtime under Instance administration → AI models, or under the workspace's AI models page.
 2. Never register providers through an environment variable.
@@ -877,49 +825,60 @@ It reads providers from the same instance/workspace catalog as the app pod.
 [Tunables](#tunables) gives the Conversation turn capacity.
 
 The JVM binds `HEPHAESTUS_MENTOR_TURN_CAPACITY`, `HEPHAESTUS_CONVERSATION_LOOP_SECRET` and `SANDBOX_MAX_CONCURRENT`.
-A worker without `HEPHAESTUS_CONVERSATION_LOOP_SECRET` does not start.
-Set `conversationLoop.turns` and `worker.sandbox.reviewMemory` through the chart. The chart derives `SANDBOX_MAX_CONCURRENT` from the review memory and the worker's memory limit ([Kubernetes](./kubernetes)).
+A conversation loop is refused without `HEPHAESTUS_CONVERSATION_LOOP_SECRET`.
+Set `conversationLoop.turns` and `sandbox.reviewMemory` through the chart. The chart derives `SANDBOX_MAX_CONCURRENT` from the review memory ([Kubernetes](./kubernetes)).
 
 `SANDBOX_MAX_CONCURRENT` is the review capacity.
-The worker requests no review sandbox while that many review sandboxes are live in the installation ([Agent runs § Sandbox dispatch](/contributor/agent-runs#sandbox-dispatch)).
+The server requests no review sandbox while that many review sandboxes are live in the installation ([Agent runs § Sandbox dispatch](/contributor/agent-runs#sandbox-dispatch)).
 The selected chart profile owns this limit.
 A higher review capacity there has no effect until you also raise the sandbox limit.
 
 1. Raise the sandbox limit only with sufficient RAM, as [Sizing](./sizing) describes.
 
-Each worker signs the attempt tokens and sandbox tokens of its sandboxes with a key that it generates at start and keeps in memory.
-It stores the public key in the table `attempt_public_key`, so any worker can verify those tokens.
+Each server signs the attempt tokens and sandbox tokens of its sandboxes with a key that it generates at start and keeps in memory.
+It stores the public key in the table `attempt_public_key`, so any server can verify those tokens.
 The key needs no configuration.
 
 [Sizing](./sizing#database-connections) owns the connection pool budget of each role and the JVM [memory headroom](./sizing#memory-headroom).
 
 ### Sandbox runtime
 
-Workers run sandboxes only on Kubernetes.
+The server runs sandboxes only on Kubernetes.
 The runtime reads the `HEPHAESTUS_SANDBOX_KUBERNETES_*` variables of the [configuration reference](./configuration-reference).
-The [Helm chart](./sandboxes#worker) sets each of them, including the worker Pod metadata from the Downward API.
-Missing metadata prevents worker startup.
+The [Helm chart](./sandboxes#server) sets each of them, including the server Pod metadata from the Downward API.
+Missing metadata prevents server startup.
 The [host development launcher](/contributor/local-development#kubernetes) supplies these values for the shared dev cluster.
 
 A subject's sandbox is an agent-sandbox claim from the warm pool of its kind (`HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_*`).
-The claim passes the address of the gateway Service (`HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL`), which the worker resolves, to the sandbox.
-Each worker deletes the claims that no work needs, without a leader ([Agent runs](/contributor/agent-runs#sandbox-reaper)).
+The claim passes the address of the gateway Service (`HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL`), which the server resolves, to the sandbox.
+Each server deletes the claims that no work needs, without a leader ([Agent runs](/contributor/agent-runs#sandbox-reaper)).
 
 ## Graceful drain
 
-On SIGTERM, the worker stops handing out conversation turns. Its running turns go on through the other workers.
-A practice review does not run in the worker, so the drain does not wait for reviews ([Agent runs § A review in its sandbox](/contributor/agent-runs#a-review-in-its-sandbox)).
+On SIGTERM, the server stops new review and conversation claims before the web server closes.
+It keeps the private gateway and the database open while leased measurement and composition runs finish.
+The drain reads `agent_run`. It adds no second count of active work.
+Completed measurement and queued composition stay recorded for the replacement server.
 
-The drain phase may take `hephaestus.worker.drain.timeout` (default 5 min) plus 55 seconds.
+`hephaestus.agent.drain-timeout` bounds the wait, 30 minutes by default.
+The chart sets it from `server.drainTimeoutSeconds`: 1800 by default, 600 in the small profile.
+It gives the Pod that interval plus two minutes for the other shutdown phases.
+The server uses `Recreate`, so the replacement starts after the old Pod finishes its drain and stops.
+
+The private gateway Service includes a terminating server so existing runs can renew their leases and finish.
+New claims require startup readiness and the isolation proof, and are refused while the server drains.
+Public routing does not use this Service.
+If the deadline expires, `agent.review.drain.expired` records the remaining count.
+The server then closes. The run reaper recovers work whose lease expires under its existing retry policy.
+
+A server with agent jobs enabled requires a valid conversation-loop secret and refuses startup without it.
 Every other shutdown phase keeps `spring.lifecycle.timeout-per-shutdown-phase` (`SHUTDOWN_TIMEOUT`, 20 seconds).
-Give the worker a stop grace period of at least the drain timeout plus 2 minutes.
-The Helm chart sets the drain timeout from `worker.drainTimeoutSeconds`, 1800 by default, and the grace period to that value plus two minutes.
 
 ## Cancellation
 
 A cancel ends a review on its row at once.
 The sandbox gateway then refuses the review's next model call.
-The worker that runs the review stops its sandbox at its next lease renewal (`hephaestus.agent.capacity.lease-renewal`).
+The server that runs the review stops its sandbox at its next lease renewal (`hephaestus.agent.capacity.lease-renewal`).
 A requeue or a reap of the review ends it in the same way.
 
 ## Decision records
@@ -929,5 +888,5 @@ repository rather than on this site:
 
 - [**ADR 0005**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0005-two-role-runtime-via-conditional-on-property.md) — original two-role design.
 - [**ADR 0008**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) — webhook role rationale.
-- [**ADR 0009**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — worker substrate. Its WSS control channel is superseded by ADR 0068.
+- [**ADR 0009**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — server substrate. Its WSS control channel is superseded by ADR 0068.
 - [**ADR 0025**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md) — agent job queue moved off NATS onto PostgreSQL.

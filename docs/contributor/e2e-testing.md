@@ -110,8 +110,8 @@ The agent runs in a Kubernetes sandbox (`ghcr.io/hephaestus-build/agent-pi`) and
 the in-app proxy, so provider keys never enter the sandbox.
 
 A practice review always runs on an internal Docker network.
-Only the worker that started it joins this network.
-Thus, practice reviews need the worker role in a Docker container under its default hostname, as `application-worker` does.
+Only the server that started it joins this network.
+Thus, practice reviews need the server in a Docker container under its default hostname.
 A host-run server refuses them.
 
 Hephaestus posts feedback back to the MR.

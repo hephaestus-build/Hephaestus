@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
@@ -35,7 +35,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
     private final ReviewRepository reviews;
@@ -140,7 +140,7 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 assignment.setReason(decision.reason());
             } else if (assignment.getStatus() == ReviewPracticeStatus.QUEUED
                     || assignment.getStatus() == ReviewPracticeStatus.READY) {
-                // A scan records capture per file; its practice runs from the first file a worker captures.
+                // A scan records capture per file; its practice runs from the first file a server captures.
                 assignment.setStatus(ReviewPracticeStatus.RUNNING);
             }
             boolean refused = decision.status() == ReviewPracticeStatus.WITHHELD

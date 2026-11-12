@@ -16,10 +16,10 @@ The namespace's policies apply: no ingress, and egress to the gateway port only,
 passes the gateway's address. The controller manages no policy of its own (`Unmanaged`), because its
 default policy allows the internet.
 */}}
-{{- if .Values.worker.enabled }}
+{{- if .Values.sandbox.enabled }}
 {{- $sandboxes := include "hephaestus.sandboxNamespace" (dict "root" .) }}
-{{- $runtime := .Values.worker.runtime }}
-{{- $templates := .Values.worker.sandbox.templates }}
+{{- $runtime := .Values.sandbox.runtime }}
+{{- $templates := .Values.sandbox.templates }}
 {{- $class := $templates.runtimeClassName }}
 {{- range $kind, $tier := dict "review" "reviews" "conversation" "conversations" }}
 {{- $name := include "hephaestus.name" (dict "root" $ "component" (printf "sandbox-%s" $kind)) }}

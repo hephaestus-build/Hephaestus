@@ -34,7 +34,7 @@ Spring: "self-invocation (in effect, a method within the target object calling a
   That row must not be a row that the caller has locked.
   Write the reason in one comment line.
 - Two pooled connections for one thread on a frequent path are a defect.
-  The pool has 20 connections on the server role and 32 on the worker role.
+  The pool has 20 connections by default. The chart gives the server 48.
 
 ## 3. Do not call a network service inside a transaction
 

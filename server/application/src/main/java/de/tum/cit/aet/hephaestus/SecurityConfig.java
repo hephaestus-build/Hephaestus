@@ -189,7 +189,7 @@ public class SecurityConfig {
      * token at the controller layer for webhooks, or no auth at all for health and info — and must NOT be processed by
      * the user-facing OAuth2 resource server.
      *
-     * <p>Always present, so a dev / worker-only pod can
+     * <p>Always present, so a dev / webhook pod can
      * boot without the resource-server JWT decoder configured.
      */
     @Bean
@@ -227,7 +227,7 @@ public class SecurityConfig {
      *
      * <p>Decoder present (the native-auth {@link de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder},
      * ADR 0017) → wire the OAuth2 resource server with the full native-auth rules (security headers,
-     * auth rate limiting, the public auth-discovery permit list). Absent (worker-only pod that excludes
+     * auth rate limiting, the public auth-discovery permit list). Absent (webhook pod that excludes
      * the OAuth2 autoconfig, or the {@code specs} profile that boots without a decoder) → deny everything.
      * The {@code hephaestus.dev.trigger-enabled} carve-out applies in both modes.
      */

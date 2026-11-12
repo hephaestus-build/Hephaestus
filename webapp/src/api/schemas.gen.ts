@@ -1867,7 +1867,7 @@ export const ConfigurationFactSchema = {
 			type: "array",
 			items: {
 				type: "string",
-				enum: ["SERVER", "WORKER", "WEBHOOK"],
+				enum: ["SERVER", "WEBHOOK"],
 			},
 		},
 		status: {
@@ -6189,7 +6189,7 @@ export const MentorTurnSchema = {
 		waitingFor: {
 			type: "string",
 			description:
-				"Why a queued turn has not started. FREE_HEPH: a worker may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.",
+				"Why a queued turn has not started. FREE_HEPH: a server may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.",
 			enum: ["FREE_HEPH"],
 		},
 	},
@@ -13831,7 +13831,7 @@ export const RunningReleaseSchema = {
 			description: "the runtime roles this process booted with",
 			items: {
 				type: "string",
-				enum: ["SERVER", "WORKER", "WEBHOOK"],
+				enum: ["SERVER", "WEBHOOK"],
 			},
 		},
 		version: {

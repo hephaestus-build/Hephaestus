@@ -15,8 +15,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Samples how many conversation turns wait for a worker, on a timer and never on a scrape. Gated to the server role, so a
- * worker or webhook pod does not publish a permanent 0 into the same series.
+ * Samples how many conversation turns wait to start, on a timer and never on a scrape. Gated to the server role, so
+ * a webhook pod does not publish a permanent 0 into the same series.
  */
 @ConditionalOnServerRole
 @Component
@@ -31,7 +31,7 @@ public class MentorTurnQueueSampler {
     public MentorTurnQueueSampler(MentorTurnRepository turns, MeterRegistry meters) {
         this.turns = turns;
         Gauge.builder(AgentMetrics.MENTOR_TURN_QUEUED, queued, AtomicLong::get)
-                .description("conversation turns that wait for a worker; last-good when a sample fails")
+                .description("conversation turns that wait to start; last-good when a sample fails")
                 .register(meters);
     }
 

@@ -2,10 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.outline.documentation;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentProjection;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Resolve authors through {@link OutlineIdentityResolver}; unlinked authors retain names without account ids.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.outline.enabled", havingValue = "true", matchIfMissing = false)
 @Transactional(readOnly = true)
 public class OutlineDocumentProjector implements DocumentProjection {

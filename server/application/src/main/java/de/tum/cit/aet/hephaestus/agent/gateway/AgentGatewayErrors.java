@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @RestControllerAdvice(basePackageClasses = AgentRunController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 class AgentGatewayErrors {
 
     @ExceptionHandler(StaleRunException.class)

@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Drafting work for the worker's model adapter. The adapter sends the two messages to the named instance model and
+ * Drafting work for the server's model adapter. The adapter sends the two messages to the named instance model and
  * reports the answer; product feedback validates it, redacts it and decides the route. Every result names the attempt
  * it was claimed under and is dropped when that attempt is no longer current.
  */

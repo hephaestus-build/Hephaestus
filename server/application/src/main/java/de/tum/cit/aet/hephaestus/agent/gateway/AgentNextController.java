@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -27,17 +27,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/internal/agent")
 @PreAuthorize("isAuthenticated()")
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @Profile("!specs & !cds-training")
 @WorkspaceAgnostic("The sandbox token names the workspace, and the gateway checked it against the sandbox's live row")
 public class AgentNextController {
 
     private final AgentSandboxes sandboxes;
     private final Map<AgentRunKind, SandboxRunKind> kinds;
+    private final AgentReviewDrain drain;
 
-    public AgentNextController(AgentSandboxes sandboxes, List<SandboxRunKind> kinds) {
+    public AgentNextController(AgentSandboxes sandboxes, List<SandboxRunKind> kinds, AgentReviewDrain drain) {
         this.sandboxes = sandboxes;
         this.kinds = SandboxRunKind.byKind(kinds);
+        this.drain = drain;
     }
 
     /**
@@ -50,12 +52,11 @@ public class AgentNextController {
                 .filter(kind -> kind.sandbox() == sandbox.kind())
                 .map(SandboxRunKind::kind)
                 .collect(Collectors.toUnmodifiableSet());
-        return sandboxes
-                .lease(
+        return drain.claim(() -> sandboxes.lease(
                         sandbox,
                         offered,
                         lease -> Objects.requireNonNull(kinds.get(lease.kind()))
-                                .claimed(new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt())))
+                                .claimed(new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()))))
                 .map(lease -> ResponseEntity.ok(new Assignment(
                         lease.runId(), lease.epoch(), lease.kind(), lease.leasedUntil(), lease.deadline())))
                 .orElseGet(() -> ResponseEntity.noContent().build());

@@ -138,8 +138,8 @@ actor must carry that identity separately.
 
 A conversation turn needs no request identity.
 Its attempt token (`AttemptJwt`) names the turn.
-The worker that claimed the turn knows its conversation and the account that owns the conversation.
-The worker builds the turn's context for that account.
+The server that claimed the turn knows its conversation and the account that owns the conversation.
+It builds the turn's context for that account.
 The server finds a conversation by account, never by an SCM identity
 ([Conversation runtime](./unified-pi-runtime.mdx#owner-and-tenancy)).
 

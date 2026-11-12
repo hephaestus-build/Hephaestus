@@ -18,7 +18,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The partial answers of running attempts, kept in memory only. The conversation loop, an attempt's one writer, sends
- * each partial answer as a change to the one before it, with a whole snapshot at least every two seconds; any worker
+ * each partial answer as a change to the one before it, with a whole snapshot at least every two seconds; any server
  * forwards it in {@link MentorLedgerEvents.ProgressChanged} frames. Each process that listens to the ledger rebuilds
  * the snapshots here.
  *
@@ -104,7 +104,7 @@ public class MentorTurnProgress {
         if (snapshot == null) {
             return null;
         }
-        // Parsed when read, so a process that only listens, such as a worker, keeps text and parses nothing.
+        // Parsed when read, so a process that only listens keeps text and parses nothing.
         try {
             JsonNode json = mapper.readTree(snapshot.text());
             return json.isObject() ? json : null;
@@ -208,7 +208,7 @@ public class MentorTurnProgress {
     }
 
     /**
-     * Forgets the turn's partial answers once it no longer runs. A stopped turn keeps them: its end, on any worker,
+     * Forgets the turn's partial answers once it no longer runs. A stopped turn keeps them: its end, on any server,
      * reads what readers may have seen. Its end changes nothing that a later change could tell, so they go when they
      * expire.
      */

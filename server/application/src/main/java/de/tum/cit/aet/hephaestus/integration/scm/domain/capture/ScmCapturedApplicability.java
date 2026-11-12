@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.CapturedSource;
 import de.tum.cit.aet.hephaestus.evidence.EvidenceCollection;
@@ -9,7 +10,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CapturedApplicability;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,7 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
  * {@link AppliesWhenCheck.Result#UNDECIDABLE} and keeps the practice eligible.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class ScmCapturedApplicability implements CapturedApplicability {
     private static final AntPathMatcher PATHS = new AntPathMatcher("/");
 

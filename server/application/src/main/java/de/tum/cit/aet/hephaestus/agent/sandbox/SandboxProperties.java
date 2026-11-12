@@ -11,10 +11,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Worker sandbox capacity and lifecycle settings under {@code hephaestus.sandbox}.
+ * Server sandbox capacity and lifecycle settings under {@code hephaestus.sandbox}.
  * Kubernetes Pod kinds own their memory, disk, and process-isolation bounds.
  *
- * @param maxConcurrentContainers the most review sandboxes this worker runs at once
+ * @param maxConcurrentContainers the most review sandboxes this server runs at once
  * @param containerStopTimeoutSeconds the grace period before a stopped sandbox is killed
  * @param reconciliationIntervalSeconds the interval between abandoned sandbox sweeps
  * @param defaultResourceLimits the CPU limit of each review sandbox

@@ -6328,8 +6328,8 @@ void test("a merge group runs no Kubernetes drill, and no release ships past a f
 	assert.ok(isSeq(steps));
 	const drillSteps = steps.items.filter(isMap);
 	for (const drill of [
-		"Keep a conversation turn through a worker roll and a loop roll",
-		"Qualify the sandbox adapters in the chart worker Pod",
+		"Keep a conversation turn through a server roll and a loop roll",
+		"Qualify the sandbox adapters in the chart server Pod",
 		"Verify kubelet memory eviction order on a disposable node",
 	]) {
 		const drillStep = drillSteps.find((item) => item.get("name") === drill);

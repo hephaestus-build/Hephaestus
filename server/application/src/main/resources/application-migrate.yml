@@ -10,7 +10,5 @@ hephaestus:
     runtime:
         server:
             enabled: false
-        worker:
-            enabled: false
         webhook:
             enabled: false

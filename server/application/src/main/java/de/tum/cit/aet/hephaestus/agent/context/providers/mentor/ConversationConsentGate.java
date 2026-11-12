@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationSourceLiveness;
 import java.util.Collection;
 import java.util.Set;
@@ -9,7 +9,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /** Derived conversation content requires live source consent through {@link ConversationSourceLiveness}, including during erasure. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class ConversationConsentGate {
 
     /** Trust tag stamped on any payload that carries a surviving chat.conversation_thread-derived row. Matches the projector. */

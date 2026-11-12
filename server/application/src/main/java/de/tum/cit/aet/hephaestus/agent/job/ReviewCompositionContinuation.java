@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import java.io.Serial;
@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /** Restores the original composition inputs of an admitted review without asking an item source to capture again. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class ReviewCompositionContinuation {
     private final ReviewCompositionBasisRepository bases;
     private final JobEvidenceFiles files;

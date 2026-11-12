@@ -318,11 +318,11 @@ The annotations use `Execution(SAME_THREAD)`. Gradle also runs one test JVM at a
 
 ### Kubernetes sandbox live suite
 
-`KubernetesSandboxLiveTest` runs in a Pod copied from the chart worker Deployment.
+`KubernetesSandboxLiveTest` runs in a Pod copied from the chart server Deployment.
 It uses that service account, namespace, Pod metadata, NetworkPolicy labels, security context and mounts.
 The image adds the package job's test classpath to its server image.
 The Pod runs once instead of restarting.
-The harness drains the worker replicas, runs the suite, and restores the observed replica count even after failure.
+The harness drains the server replicas, runs the suite, and restores the observed replica count even after failure.
 
 Reserve the shared qualification release, start it with `vp run dev:kubernetes`, then run:
 
@@ -382,7 +382,7 @@ The [labelling guide](./label-feedback-quality.md) gives the independent human r
 ### Hephaestus voice eval
 
 The eval in `server/application/src/test/resources/agent/heph-voice/` sends questions to a real model through the conversation loop's code.
-The eval composes the prompt as `HephTurnContexts` does, from `system.md` and the writing guide, and a fake worker serves a small context folder.
+The eval composes the prompt as `HephTurnContexts` does, from `system.md` and the writing guide, and a fake server serves a small context folder.
 Each case asserts what an answer must never do and prints one line: `eval <case> outputTokens=<n> words=<n> fieldsRead=<true|false>`.
 
 The case file names do not match `*.spec.ts`, so `vp run test:agents` and `vp run check` do not run them.

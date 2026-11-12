@@ -33,7 +33,7 @@ import tools.jackson.databind.ObjectMapper;
  * {@code "outline-"} vendor prefix guarantees cross-vendor uniqueness on the shared window.
  *
  * <p>Webhook-role only: subjects are derived on ingest. The consumer side parses them back with
- * {@link OutlineSubjectParser}, which stays ungated because the app-server/worker roles need it.
+ * {@link OutlineSubjectParser}, which stays ungated because the server role needs it.
  */
 @Component
 @ConditionalOnWebhookRole

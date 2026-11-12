@@ -42,7 +42,7 @@ public class LlmCallPermit {
     @Column(name = "acquired_at", nullable = false)
     private Instant acquiredAt;
 
-    /** Database time of the last renewal by the worker. */
+    /** Database time of the last renewal by the server. */
     @ColumnDefault("now()")
     @Column(name = "renewed_at", nullable = false)
     private Instant renewedAt;

@@ -10,7 +10,7 @@ import type { FileEntry } from "@earendil-works/pi-coding-agent";
 
 import { claimHeaders, present } from "./gateway-capabilities.ts";
 
-// The worker follows SIGTERM with SIGKILL after its stop timeout; the child gets this much of it and
+// The server follows SIGTERM with SIGKILL after its stop timeout; the child gets this much of it and
 // the upload of whatever out/ holds by then gets the rest.
 const CHILD_STOP_GRACE_MS = 3000;
 const UPLOAD_BACKOFF_MS = 500;
@@ -149,7 +149,7 @@ const TOOL_NAMES = new Set([
 ]);
 
 /**
- * What one session did, as enums, numbers and bounded numeric identifiers. The worker keeps this alone when it
+ * What one session did, as enums, numbers and bounded numeric identifiers. The server keeps this alone when it
  * cannot index every person a transcript may name: no arguments, results, prose, paths or error text.
  */
 export interface SessionSummary {

@@ -7,13 +7,13 @@ Follow it with:
 
 Then open https://{{ .Values.host }}.
 
-{{ if .Values.worker.enabled -}}
-Each worker runs the sandbox isolation probe before it becomes ready. A worker that stays unready logs
-each check that the cluster failed:
+{{ if .Values.sandbox.enabled -}}
+Each server runs the sandbox isolation probe before it starts a sandbox. A server whose probe failed logs
+each check that the cluster failed, and its health shows it under kubernetesSandbox:
 
-  kubectl --namespace {{ .Release.Namespace }} logs deployment/{{ include "hephaestus.name" (dict "root" . "component" "worker") }}
+  kubectl --namespace {{ .Release.Namespace }} logs deployment/{{ include "hephaestus.name" (dict "root" . "component" "server") }}
 {{ else -}}
-No worker is enabled, so practice reviews and conversation turns do not run.
+The sandboxes are off (sandbox.enabled=false), so practice reviews and conversation turns do not run.
 {{ end -}}
 {{ if and .Values.postgresql.bundled (not .Values.postgresql.backup.enabled) }}
 WARNING: the bundled PostgreSQL has no backup. postgresql.backup.enabled is false, so the chart does

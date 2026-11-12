@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
@@ -8,7 +9,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component;
  * credentials. Excluded worktree entries make the reported capture partial.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @Order(1_000)
 @RequiredArgsConstructor
 public class RepositoryTreeContentSource {

@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -22,7 +22,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 /** Authorizes the exact provider repository before Git credentials cross its boundary. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ReviewRepositoryPreparer {
     private final GitRepositoryManager git;

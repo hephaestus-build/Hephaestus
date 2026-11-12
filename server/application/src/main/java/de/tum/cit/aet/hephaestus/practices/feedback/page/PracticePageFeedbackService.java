@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.page;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackGate;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -49,10 +49,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
-/** The weekly digest that Heph reads on a worker counts waiting Practice page feedback, so this lives on both. */
+/** The weekly digest that Heph reads counts waiting Practice page feedback. */
 @Service
 @RequiredArgsConstructor
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class PracticePageFeedbackService {
 
     static final Duration CLOSED_CARD_STAYS = Duration.ofDays(30);

@@ -9,12 +9,12 @@
  *   install  `helm upgrade --install` with the dev profile, or each --profile in order, and the
  *            prepared values, until ready
  *   upgrade  install, and check that PostgreSQL and NATS kept their Pods
- *   verify   every workload ready, each worker's isolation probe passed, and a sandbox of each
+ *   verify   every workload ready, each server's isolation probe passed, and a sandbox of each
  *            SandboxTemplate passed the sandbox isolation gate (scripts/sandbox-isolation.ts)
  *   request  one HTTPS request to the webapp and the API through that Gateway
  *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore on a fresh node
  *   turn-roll  a conversation turn that runs `bash` in its tools Pod through a rollout restart of
- *            the workers and then of the conversation loop, with the capacity bench's fake model
+ *            the server and then of the conversation loop, with the capacity bench's fake model
  *            provider. --pod-cidr opens the provider to the release
  *   gvisor   the pinned gVisor of k3s-containerd.toml.tmpl, unpacked into --work, for k3s nodes to mount
  *   render   the manifests of those values for synthetic images, with backups on and with an external
@@ -24,7 +24,7 @@
  *            shutdown budget, requests through the Gateway, a second run and an upgrade
  *   dev      a local k3d cluster with a registry, this checkout's images built and pushed, the three
  *            steps above, and a Gateway on https://hephaestus.localhost; a second run reuses the cluster
- *   live     runs the credential-free sandbox suite in a Pod from the chart worker template
+ *   live     runs the credential-free sandbox suite in a Pod from the chart server template
  *   down     removes the qualification release and keeps its data and the shared cluster
  *   reset    deletes the dev cluster, its data, its registry and the work directory
  *
@@ -78,7 +78,7 @@ export const NAMESPACE = "hephaestus";
 export const SANDBOXES = "hephaestus-sandboxes";
 /** The kinds of the chart's SandboxTemplates (templates/sandbox-templates.yaml). */
 const SANDBOX_KINDS = ["review", "conversation"] as const;
-/** The port of the application API on the server's and the workers' Pods. */
+/** The port of the application API on the server's Pods. */
 const APPLICATION_PORT = 8080;
 const GATEWAY_NAMESPACE = "gateway";
 const EXTERNAL_POSTGRESQL = "external-postgresql";
@@ -88,8 +88,10 @@ export const DEV_CLUSTER = "hephaestus";
 export const DEV_HOST = "hephaestus.localhost";
 const DEV_WORK = path.join(homedir(), ".hephaestus", "kubernetes-cluster");
 
-/** What `verify` reads in a worker's log once its probe passed (KubernetesIsolationProbe). */
+/** What `verify` reads in a server's log once its probe passed (KubernetesIsolationProbe). */
 export const PROBE_PASSED = "The sandbox isolation probe passed";
+const PROBE_FAILED = "The cluster does not hold the sandbox boundary";
+const PROBE_WAIT_MS = 10 * 60_000;
 
 export type ChartImages = Record<ChartImage, string>;
 
@@ -183,7 +185,7 @@ export interface Gateway {
 	podLabels: Record<string, string>;
 }
 
-/** The operator's values for a test install: every required value, and the worker enabled. */
+/** The operator's values for a test install: every required value, and the sandboxes enabled. */
 export function operatorValues(options: ValuesOptions): Record<string, unknown> {
 	const cidr = options.api.address.includes(":")
 		? `${options.api.address}/128`
@@ -208,16 +210,7 @@ export function operatorValues(options: ValuesOptions): Record<string, unknown> 
 				? {}
 				: { bundled: false, external: options.externalPostgresql }),
 		},
-		worker: {
-			enabled: true,
-			sandbox: { namespace: SANDBOXES },
-			// A CI runner has four CPUs: two workers fit beside the other roles at this request.
-			resources: {
-				requests: { cpu: "250m", memory: "2Gi", "ephemeral-storage": "256Mi" },
-				limits: { cpu: "2", memory: "2Gi", "ephemeral-storage": "4Gi" },
-			},
-			gitCache: { sizeLimit: "2Gi" },
-		},
+		sandbox: { enabled: true, namespace: SANDBOXES },
 		...(options.signIn === undefined
 			? {}
 			: {
@@ -835,31 +828,31 @@ export async function install(
 	]);
 }
 
-/** A one-shot worker Pod: retain its authority and networking; replace only its image and restart policy. */
+/** A one-shot server Pod: retain its authority and networking; replace only its image and restart policy. */
 export function livePod(deployment: unknown, image: string, name: string): Record<string, unknown> {
-	const root = asRecord(deployment, "worker Deployment");
-	const metadata = asRecord(root.metadata, "worker metadata");
-	const template = asRecord(asRecord(root.spec, "worker spec").template, "worker template");
-	const spec = asRecord(template.spec, "worker Pod spec");
-	const containers = asArray(spec.containers, "worker containers");
+	const root = asRecord(deployment, "server Deployment");
+	const metadata = asRecord(root.metadata, "server metadata");
+	const template = asRecord(asRecord(root.spec, "server spec").template, "server template");
+	const spec = asRecord(template.spec, "server Pod spec");
+	const containers = asArray(spec.containers, "server containers");
 	if (containers.length !== 1) {
-		throw new Error("the qualification needs the chart's single-container worker template");
+		throw new Error("the qualification needs the chart's single-container server template");
 	}
-	const container = asRecord(containers[0], "worker container");
+	const container = asRecord(containers[0], "server container");
 	if (
 		container.command !== undefined ||
 		container.args !== undefined ||
 		container.imagePullPolicy === "Always"
 	) {
 		throw new Error(
-			"the qualification needs the chart worker's image entrypoint and IfNotPresent pull policy",
+			"the qualification needs the chart server's image entrypoint and IfNotPresent pull policy",
 		);
 	}
 	return {
 		apiVersion: "v1",
 		kind: "Pod",
 		metadata: {
-			...asRecord(template.metadata, "worker template metadata"),
+			...asRecord(template.metadata, "server template metadata"),
 			name,
 			namespace: metadata.namespace,
 		},
@@ -868,7 +861,7 @@ export function livePod(deployment: unknown, image: string, name: string): Recor
 }
 
 /**
- * Run the package job's compiled main/test classpath on the installed server image and chart worker authority.
+ * Run the package job's compiled main/test classpath on the installed server image and chart server authority.
  * This adapter suite has its own health listener; install/verify separately qualifies application readiness.
  */
 export async function qualifySandboxes(
@@ -915,24 +908,24 @@ export async function qualifySandboxes(
 
 async function runSandboxQualification(packaged: boolean, namespaceName: string): Promise<void> {
 	const started = performance.now();
-	const worker = `${RELEASE}-worker`;
+	const server = `${RELEASE}-server`;
 	const deployment = asRecord(
-		parseJson(await kubectl(["-n", namespaceName, "get", "deployment", worker, "-o", "json"])),
-		"worker Deployment",
+		parseJson(await kubectl(["-n", namespaceName, "get", "deployment", server, "-o", "json"])),
+		"server Deployment",
 	);
-	const deploymentSpec = asRecord(deployment.spec, "worker spec");
+	const deploymentSpec = asRecord(deployment.spec, "server spec");
 	const { replicas } = deploymentSpec;
 	if (typeof replicas !== "number" || !Number.isSafeInteger(replicas) || replicas < 0) {
-		throw new Error("the worker Deployment has no replica count");
+		throw new Error("the server Deployment has no replica count");
 	}
-	const template = asRecord(deploymentSpec.template, "worker template");
+	const template = asRecord(deploymentSpec.template, "server template");
 	const containers = asArray(
-		asRecord(template.spec, "worker Pod spec").containers,
-		"worker containers",
+		asRecord(template.spec, "server Pod spec").containers,
+		"server containers",
 	);
-	const base = asString(asRecord(containers[0], "worker container").image, "worker image");
+	const base = asString(asRecord(containers[0], "server container").image, "server image");
 	if (!/@sha256:[a-f0-9]{64}$/u.test(base)) {
-		throw new Error("the qualification requires the installed worker image by digest");
+		throw new Error("the qualification requires the installed server image by digest");
 	}
 	await run(
 		path.join(ROOT, "server", process.platform === "win32" ? "gradlew.bat" : "gradlew"),
@@ -959,14 +952,14 @@ async function runSandboxQualification(packaged: boolean, namespaceName: string)
 	const suffix = randomBytes(5).toString("hex");
 	const image = `hephaestus-sandbox-live:${suffix}`;
 	const name = `${RELEASE}-sandbox-live-${suffix}`;
-	// Validate the worker template before any scale or image mutation.
+	// Validate the server template before any scale or image mutation.
 	const pod = livePod(deployment, image, name);
 	await run("docker", ["build", "--tag", image, bundle]);
 	let scaled = false;
 	let created = false;
 	try {
 		await run("k3d", ["image", "import", "--mode", "direct", "--cluster", DEV_CLUSTER, image]);
-		await kubectl(["-n", namespaceName, "scale", `deployment/${worker}`, "--replicas=0"]);
+		await kubectl(["-n", namespaceName, "scale", `deployment/${server}`, "--replicas=0"]);
 		scaled = true;
 		await kubectl([
 			"-n",
@@ -975,7 +968,7 @@ async function runSandboxQualification(packaged: boolean, namespaceName: string)
 			"--for=delete",
 			"pod",
 			"-l",
-			`app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/component=worker`,
+			`app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/component=server`,
 			"--timeout=9m",
 		]);
 		await apply(pod);
@@ -1037,7 +1030,7 @@ async function runSandboxQualification(packaged: boolean, namespaceName: string)
 						"-n",
 						namespaceName,
 						"scale",
-						`deployment/${worker}`,
+						`deployment/${server}`,
 						`--replicas=${replicas}`,
 					]);
 					await kubectl([
@@ -1045,7 +1038,7 @@ async function runSandboxQualification(packaged: boolean, namespaceName: string)
 						namespaceName,
 						"rollout",
 						"status",
-						`deployment/${worker}`,
+						`deployment/${server}`,
 						"--timeout=10m",
 					]);
 				}
@@ -1105,7 +1098,64 @@ export async function keepsStatefulPods(upgrade: () => Promise<void>): Promise<v
 	process.stdout.write(`the upgrade kept ${[...before.keys()].join(", ")}\n`);
 }
 
-/** Every workload ready and each worker's isolation probe passed; the number of those workers. */
+/** A stopped server can leave a finished probe to the Job TTL; an active or failed probe is still a leftover. */
+export function remainingProbeResources(listed: unknown): string[] {
+	const resources = asArray(asRecord(listed, "Probe resources").items, "Probe resources").map(
+		(entry) => {
+			const resource = asRecord(entry, "Probe resource");
+			const metadata = asRecord(resource.metadata, "Probe metadata");
+			return {
+				kind: asString(resource.kind, "Probe kind"),
+				name: asString(metadata.name, "Probe name"),
+				uid: metadata.uid,
+				owners: metadata.ownerReferences,
+				probe:
+					isRecord(metadata.labels) &&
+					metadata.labels["hephaestus.build/isolation-probe"] === "true",
+				status: isRecord(resource.status) ? resource.status : {},
+			};
+		},
+	);
+	const completed = new Set(
+		resources
+			.filter(
+				(resource) =>
+					resource.probe &&
+					resource.kind === "Job" &&
+					Array.isArray(resource.status.conditions) &&
+					resource.status.conditions.some(
+						(condition: unknown) =>
+							isRecord(condition) && condition.type === "Complete" && condition.status === "True",
+					),
+			)
+			.map((resource) => asString(resource.uid, "Completed probe Job UID")),
+	);
+	return resources
+		.filter((resource) => {
+			if (!resource.probe) {
+				return true;
+			}
+			if (resource.kind === "Job") {
+				return !completed.has(asString(resource.uid, "Probe Job UID"));
+			}
+			return !(
+				resource.kind === "Pod" &&
+				resource.status.phase === "Succeeded" &&
+				Array.isArray(resource.owners) &&
+				resource.owners.some(
+					(owner: unknown) =>
+						isRecord(owner) &&
+						owner.kind === "Job" &&
+						owner.controller === true &&
+						typeof owner.uid === "string" &&
+						completed.has(owner.uid),
+				)
+			);
+		})
+		.map((resource) => `${resource.kind.toLowerCase()}/${resource.name}`);
+}
+
+/** Every workload ready and each server's isolation probe passed; the number of those servers. */
 export async function verify(): Promise<number> {
 	for (const kind of ["deployment", "statefulset", "daemonset"]) {
 		const listed = await kubectl(["-n", NAMESPACE, "get", kind, "-o", "name"]);
@@ -1114,7 +1164,7 @@ export async function verify(): Promise<number> {
 			await kubectl(["-n", NAMESPACE, "rollout", "status", name, "--timeout=15m"]);
 		}
 	}
-	// The Pods of the current workers: a rollout's old Pods can still be terminating.
+	// The Pods of the current servers: a rollout's old Pods can still be terminating.
 	const listed = asRecord(
 		parseJson(
 			await kubectl([
@@ -1123,27 +1173,43 @@ export async function verify(): Promise<number> {
 				"get",
 				"pods",
 				"-l",
-				"app.kubernetes.io/component=worker",
+				"app.kubernetes.io/component=server",
 				"-o",
 				"json",
 			]),
 		),
 		"Pod list",
 	).items;
-	const workers = (Array.isArray(listed) ? listed : [])
+	const servers = (Array.isArray(listed) ? listed : [])
 		.map((pod) => asRecord(asRecord(pod, "Pod").metadata, "Pod metadata"))
 		.filter((metadata) => metadata.deletionTimestamp === undefined)
 		.map((metadata) => `pod/${asString(metadata.name, "Pod name")}`);
-	if (workers.length === 0) {
-		throw new Error("no worker pod runs");
+	if (servers.length === 0) {
+		throw new Error("no server pod runs");
 	}
-	for (const worker of workers) {
-		const log = await kubectl(["-n", NAMESPACE, "logs", worker, "--tail=-1"]);
-		if (!log.includes(PROBE_PASSED)) {
-			throw new Error(`${worker} logged no passed isolation probe`);
+	// Readiness does not wait for the probe: the server serves its API while the probe runs, and starts no
+	// sandbox until it passes. A failed probe is final for this check; the server tries again on its schedule.
+	const probeDeadline = Date.now() + PROBE_WAIT_MS;
+	for (const pod of servers) {
+		for (;;) {
+			const log = await kubectl(["-n", NAMESPACE, "logs", pod, "--tail=-1"]);
+			if (log.includes(PROBE_PASSED)) {
+				break;
+			}
+			const failed = log.split("\n").find((line) => line.includes(PROBE_FAILED));
+			if (failed !== undefined) {
+				throw new Error(`${pod} failed its isolation probe: ${failed}`);
+			}
+			if (Date.now() > probeDeadline) {
+				throw new Error(
+					`${pod} logged no passed isolation probe within ${PROBE_WAIT_MS / 60_000} minutes`,
+				);
+			}
+			await sleep(5000);
 		}
 	}
-	// The probe deletes each of its Jobs when it ends; the garbage collector then deletes the Pod.
+	// The probe deletes each Job after reading its result. A stopped server can leave a completed Job
+	// to the TTL controller; only that Job and its succeeded Pod may remain after an upgrade.
 	let leftovers = "";
 	for (let tries = 0; tries < 30; tries += 1) {
 		const probes = await kubectl([
@@ -1154,9 +1220,9 @@ export async function verify(): Promise<number> {
 			"-l",
 			"hephaestus.build/isolation-probe=true",
 			"-o",
-			"name",
+			"json",
 		]);
-		leftovers = probes.trim();
+		leftovers = remainingProbeResources(parseJson(probes)).join("\n");
 		if (leftovers === "") {
 			break;
 		}
@@ -1165,8 +1231,8 @@ export async function verify(): Promise<number> {
 	if (leftovers !== "") {
 		throw new Error(`isolation probe Jobs or Pods stayed: ${leftovers}`);
 	}
-	// A sandbox of each template kind reaches the workers' gateway and nothing else: not the
-	// management port of the worker that serves it.
+	// A sandbox of each template kind reaches the server's gateway and nothing else: not the
+	// management port of the server that serves it.
 	const service = asRecord(
 		parseJson(
 			await kubectl([
@@ -1185,15 +1251,15 @@ export async function verify(): Promise<number> {
 		host: asString(asRecord(service.spec, "spec").clusterIP, "gateway"),
 		port: 8081,
 	};
-	const worker = asRecord(
-		parseJson(await kubectl(["-n", NAMESPACE, "get", workers[0] ?? "", "-o", "json"])),
-		"worker Pod",
+	const serverPod = asRecord(
+		parseJson(await kubectl(["-n", NAMESPACE, "get", servers[0] ?? "", "-o", "json"])),
+		"server Pod",
 	);
-	const management = asArray(asRecord(worker.spec, "spec").containers, "containers")
+	const management = asArray(asRecord(serverPod.spec, "spec").containers, "containers")
 		.flatMap((container) => asArray(asRecord(container, "container").ports ?? [], "ports"))
 		.map((port) => asRecord(port, "port"))
 		.find((port) => port.name === "management")?.containerPort;
-	const workerIp = asString(asRecord(worker.status, "status").podIP, "worker address");
+	const serverIp = asString(asRecord(serverPod.status, "status").podIP, "server address");
 	// The gateway port is the only port of the server's Pods that a sandbox reaches: never the
 	// application port, by its Service or by any Pod.
 	const server = asRecord(
@@ -1211,23 +1277,19 @@ export async function verify(): Promise<number> {
 		},
 	];
 	const gatewayPorts: Target[] = [];
-	for (const component of ["server", "worker"]) {
-		for (const pod of await runningPods(component)) {
-			applicationPorts.push({
-				name: `the application port of ${component} ${pod.name}`,
-				host: pod.ip,
-				port: APPLICATION_PORT,
-				reachable: false,
-			});
-			if (component === "worker") {
-				gatewayPorts.push({
-					name: `the gateway port of worker ${pod.name}`,
-					host: pod.ip,
-					port: sandboxGateway.port,
-					reachable: true,
-				});
-			}
-		}
+	for (const pod of await runningPods("server")) {
+		applicationPorts.push({
+			name: `the application port of server ${pod.name}`,
+			host: pod.ip,
+			port: APPLICATION_PORT,
+			reachable: false,
+		});
+		gatewayPorts.push({
+			name: `the gateway port of server ${pod.name}`,
+			host: pod.ip,
+			port: sandboxGateway.port,
+			reachable: true,
+		});
 	}
 	for (const kind of SANDBOX_KINDS) {
 		await isolationGate({
@@ -1237,8 +1299,8 @@ export async function verify(): Promise<number> {
 			reach: gatewayPorts,
 			forbid: [
 				{
-					name: "the worker's management port",
-					host: workerIp,
+					name: "the server's management port",
+					host: serverIp,
 					port: Number(management),
 					reachable: false,
 				},
@@ -1252,9 +1314,9 @@ export async function verify(): Promise<number> {
 		await negativeControl(sandboxGateway);
 	}
 	process.stdout.write(
-		`${workers.length} workers passed the isolation probe; the ${SANDBOX_KINDS.join(", ")} templates passed the sandbox isolation gate${controlled ? ", and failed it without the sandbox namespace's policies" : ""}; every workload is ready\n`,
+		`${servers.length} servers passed the isolation probe; the ${SANDBOX_KINDS.join(", ")} templates passed the sandbox isolation gate${controlled ? ", and failed it without the sandbox namespace's policies" : ""}; every workload is ready\n`,
 	);
-	return workers.length;
+	return servers.length;
 }
 
 /** The name and address of each running, not terminating Pod of one component of the release. */
@@ -1719,10 +1781,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		"check",
 	]);
 
-	const paused = [
-		"--set",
-		"migration.enabled=false,server.replicas=0,webhook.replicas=0,worker.replicas=0",
-	];
+	const paused = ["--set", "migration.enabled=false,server.replicas=0,webhook.replicas=0"];
 	await install(work, [...backupOn, ...paused]);
 	await kubectl(["-n", NAMESPACE, "scale", `statefulset/${RELEASE}-postgresql`, "--replicas=0"]);
 	await kubectl([
@@ -1732,7 +1791,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		"--for=delete",
 		"pod",
 		"-l",
-		"app.kubernetes.io/component in (postgresql,server,webhook,worker)",
+		"app.kubernetes.io/component in (postgresql,server,webhook)",
 		"--timeout=5m",
 	]);
 	const claim = `data-${RELEASE}-postgresql-0`;
@@ -2174,7 +2233,7 @@ async function rollRestart(deployment: string): Promise<void> {
 
 /**
  * The roll drill of docs/admin/runtime-roles.mdx § The conversation loop: a conversation turn that runs
- * `bash` in its tools Pod outlives a rollout restart of the workers and then of the loop. The fake
+ * `bash` in its tools Pod outlives a rollout restart of the server and then of the loop. The fake
  * model provider of the capacity bench scripts the turn: a 30 s command after each result, until
  * the drill releases it after both rollouts, then an answer with each command's output.
  */
@@ -2311,11 +2370,11 @@ export async function turnRoll(
 			},
 		]);
 
-		await rollRestart(`${RELEASE}-worker`);
+		await rollRestart(`${RELEASE}-server`);
 		report([
-			...heldChecks("after the worker roll", recorded, await state()),
+			...heldChecks("after the server roll", recorded, await state()),
 			{
-				claim: `after the worker roll, the tools Job ${pod} exists`,
+				claim: `after the server roll, the tools Job ${pod} exists`,
 				failure: (await toolsJob(pod)) ? undefined : "it is gone",
 			},
 		]);
@@ -2345,7 +2404,7 @@ export async function turnRoll(
 			),
 		);
 		report(outcomeChecks(outcome));
-		// A worker removes the tools Pod when the attempt ends.
+		// The server removes the tools Pod when the attempt ends.
 		await until(
 			"the tools Job stayed",
 			5,
@@ -2637,7 +2696,7 @@ async function secretDigest(): Promise<string> {
 	return createHash("sha256").update(JSON.stringify(sorted)).digest("hex");
 }
 
-/** Every current worker is Ready and runs reviews with repository checkouts. */
+/** Every current server is Ready and runs reviews with repository checkouts. */
 async function reviewsOn(): Promise<void> {
 	const pods = asArray(
 		asRecord(
@@ -2648,7 +2707,7 @@ async function reviewsOn(): Promise<void> {
 					"get",
 					"pods",
 					"-l",
-					"app.kubernetes.io/component=worker",
+					"app.kubernetes.io/component=server",
 					"-o",
 					"json",
 				]),
@@ -2674,11 +2733,11 @@ async function reviewsOn(): Promise<void> {
 		const checkout = env.find((variable) => variable.name === "GIT_CHECKOUT_ENABLED")?.value;
 		if (!ready || checkout !== "true") {
 			throw new Error(
-				`worker ${name}: Ready ${String(ready)}, GIT_CHECKOUT_ENABLED ${String(checkout)}`,
+				`server ${name}: Ready ${String(ready)}, GIT_CHECKOUT_ENABLED ${String(checkout)}`,
 			);
 		}
 	}
-	process.stdout.write(`${pods.length} workers are Ready and check out repositories for reviews\n`);
+	process.stdout.write(`${pods.length} servers are Ready and check out repositories for reviews\n`);
 }
 
 /**
@@ -2733,7 +2792,7 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 		stdin: "ignore",
 	});
 	process.env.KUBECONFIG = path.join(options.assets, "kubeconfig");
-	const workers = await verify();
+	const servers = await verify();
 	await reviewsOn();
 
 	const node = asRecord(
@@ -2771,8 +2830,8 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 	await verify();
 	process.stdout.write("a second run of k3s-install.sh kept the Secret and every workload\n");
 
-	// An upgrade that rolls every role but PostgreSQL and NATS, with a new migration Job: new workers
-	// prove the cluster with the isolation probe before an old worker drains.
+	// An upgrade that rolls every role but PostgreSQL and NATS, with a new migration Job: the new server
+	// proves the cluster with the isolation probe.
 	await keepsStatefulPods(async () =>
 		run("helm", [
 			"upgrade",
@@ -2799,7 +2858,7 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 			options.receipt,
 			`${JSON.stringify(
 				{
-					schemaVersion: 1,
+					schemaVersion: 2,
 					release: options.release,
 					commit,
 					testedAt: new Date().toISOString(),
@@ -2809,7 +2868,7 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 						kernel: asString(info.kernelVersion, "node kernel"),
 						kubeletVersion: asString(info.kubeletVersion, "kubelet version"),
 					},
-					workers,
+					servers,
 					checks: {
 						install: true,
 						secondInstall: true,
@@ -2829,7 +2888,7 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 		);
 	}
 	process.stdout.write(
-		`k3s ${asString(info.kubeletVersion, "kubelet version")} on ${architecture}: the release ${options.release} serves through the Gateway after an install, a second run and an upgrade; ${workers} workers passed the isolation probe\n`,
+		`k3s ${asString(info.kubeletVersion, "kubelet version")} on ${architecture}: the release ${options.release} serves through the Gateway after an install, a second run and an upgrade; ${servers} servers passed the isolation probe\n`,
 	);
 }
 
@@ -3015,7 +3074,7 @@ const DEV_TOOLS: readonly (readonly [string, readonly string[], string])[] = [
 ];
 
 /**
- * The Docker memory that `dev` needs: the roles and two workers peak at about 6 GiB, a review
+ * The Docker memory that `dev` needs: the roles peak at less than 6 GiB, a review
  * sandbox adds 3. Docker Desktop reports about 97 % of its memory setting, so a setting of 10 GiB
  * passes.
  */
@@ -3660,26 +3719,26 @@ if (import.meta.main) {
 			if (!(await ownsDevNamespace(process.env.KUBECONFIG, NAMESPACE, ROOT))) {
 				break;
 			}
-			// Keep the database available until the worker's drain has ended.
-			const worker = await kubectl([
+			// Keep the database available until the server's drain has ended.
+			const server = await kubectl([
 				"-n",
 				NAMESPACE,
 				"get",
 				"deployment",
-				`${RELEASE}-worker`,
+				`${RELEASE}-server`,
 				"--ignore-not-found",
 				"-o",
 				"name",
 			]);
-			if (worker.trim() !== "") {
-				await kubectl(["-n", NAMESPACE, "scale", `deployment/${RELEASE}-worker`, "--replicas=0"]);
+			if (server.trim() !== "") {
+				await kubectl(["-n", NAMESPACE, "scale", `deployment/${RELEASE}-server`, "--replicas=0"]);
 				const listed = await kubectl([
 					"-n",
 					NAMESPACE,
 					"get",
 					"pods",
 					"-l",
-					`app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/component=worker`,
+					`app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/component=server`,
 					"-o",
 					"name",
 				]);

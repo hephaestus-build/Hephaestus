@@ -16,7 +16,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const APPLICATION_YML = "server/application/src/main/resources/application.yml";
 
 /** The runtime roles a container can be given. A scope claiming any other name does not compile. */
-const ROLES = ["server", "worker", "webhook"] as const;
+const ROLES = ["server", "webhook"] as const;
 type Role = (typeof ROLES)[number];
 
 interface RoleScope {
@@ -38,28 +38,28 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 	},
 	{
 		path: "hephaestus.sandbox.gateway.port",
-		role: "worker",
-		why: "SandboxGatewayConfiguration opens the connector and LlmProxySecurityConfig matches its chains on that port; both are gated on hephaestus.runtime.worker.enabled",
+		role: "server",
+		why: "SandboxGatewayConfiguration opens the connector and LlmProxySecurityConfig matches its chains on that port; both are gated on @ConditionalOnAgentRuntime: the server role with hephaestus.agent.enabled",
 	},
 	{
 		path: "hephaestus.sandbox.gateway.source-requests-per-minute",
-		role: "worker",
-		why: "SandboxGatewaySourceLimitFilter enforces it on the gateway chain, which LlmProxySecurityConfig installs gated on the worker role",
+		role: "server",
+		why: "SandboxGatewaySourceLimitFilter enforces it on the gateway chain, which LlmProxySecurityConfig installs gated on @ConditionalOnAgentRuntime: the server role with hephaestus.agent.enabled",
 	},
 	{
 		path: "hephaestus.sandbox.gateway.max-connections",
-		role: "worker",
-		why: "SandboxGatewayConfiguration opens the connector that it bounds, gated on the worker role",
+		role: "server",
+		why: "SandboxGatewayConfiguration opens the connector that it bounds, gated on @ConditionalOnAgentRuntime: the server role with hephaestus.agent.enabled",
 	},
 	{
 		path: "hephaestus.sandbox.gateway.max-request-bytes",
-		role: "worker",
-		why: "SandboxGatewayPayloadSizeFilter enforces it on the gateway chain, which LlmProxySecurityConfig installs gated on hephaestus.runtime.worker.enabled",
+		role: "server",
+		why: "SandboxGatewayPayloadSizeFilter enforces it on the gateway chain, which LlmProxySecurityConfig installs gated on @ConditionalOnAgentRuntime: the server role with hephaestus.agent.enabled",
 	},
 	{
 		path: "hephaestus.sandbox.gateway.requests-per-minute",
-		role: "worker",
-		why: "SandboxGatewayRateLimitFilter is installed by LlmProxySecurityConfig, which is gated on hephaestus.runtime.worker.enabled",
+		role: "server",
+		why: "SandboxGatewayRateLimitFilter is installed by LlmProxySecurityConfig, which is gated on @ConditionalOnAgentRuntime: the server role with hephaestus.agent.enabled",
 	},
 	{
 		path: "hephaestus.webhook.stream",
@@ -89,7 +89,7 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 	{
 		path: "spring.mail",
 		role: "server",
-		why: "EmailAdapter, the outbox executor and every notification listener are @ConditionalOnServerRole; the worker and webhook roles never open the relay",
+		why: "EmailAdapter, the outbox executor and every notification listener are @ConditionalOnServerRole; the webhook role never opens the relay",
 	},
 	{
 		path: "hephaestus.email",
@@ -101,7 +101,6 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 /** Every role has a flag, so a new role cannot be scoped without saying which variable turns it off. */
 const ROLE_FLAGS: Record<Role, string> = {
 	server: "HEPHAESTUS_RUNTIME_SERVER_ENABLED",
-	worker: "HEPHAESTUS_RUNTIME_WORKER_ENABLED",
 	webhook: "HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED",
 };
 
@@ -119,12 +118,7 @@ const APPLICATION_IMAGE = applicationImage;
  */
 const PER_CONTAINER = new Map<string, string>([
 	["SPRING_PROFILES_ACTIVE", "the profile list is how a container selects the slice it boots"],
-	[
-		"GIT_MAX_CACHE_BYTES",
-		"the server and each worker have their own Git cache volume, with its own size",
-	],
 	[ROLE_FLAGS.server, "the role flags are the split itself"],
-	[ROLE_FLAGS.worker, "the role flags are the split itself"],
 	[ROLE_FLAGS.webhook, "the role flags are the split itself"],
 	[
 		"SPRING_LIQUIBASE_ENABLED",
@@ -132,11 +126,11 @@ const PER_CONTAINER = new Map<string, string>([
 	],
 	[
 		"DATABASE_USERNAME",
-		"the migrate run mode logs in as the schema owner, the server and the worker as the application role",
+		"the migrate run mode logs in as the schema owner, the other roles as the application role",
 	],
 	[
 		"DATABASE_PASSWORD",
-		"the migrate run mode logs in as the schema owner, the server and the worker as the application role",
+		"the migrate run mode logs in as the schema owner, the other roles as the application role",
 	],
 	[
 		"SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE",
@@ -181,25 +175,25 @@ const REQUIRED_SETTINGS: readonly RequiredSetting[] = [
 		path: "hephaestus.agent.image.reference",
 		why:
 			"AgentImageReferenceGuard and AgentImagePinGuard are plain @Components that ADR 0031 keeps " +
-			"ungated on purpose, so no pod can boot on an agent image the workers cannot run; a container " +
+			"ungated on purpose, so no pod can boot on an agent image the servers cannot run; a container " +
 			"left without the reference derives one from its own version, which is a tag, and refuses to start",
 	},
 	{
 		variable: "GITLAB_ENABLED",
 		path: "hephaestus.integration.gitlab.enabled",
-		readBy: ["server", "worker"],
+		readBy: ["server"],
 		why:
 			"GitLabTokenService, and GitLabScmTokenSource with it, exist only when it is true; the server " +
-			"syncs GitLab through them and the worker checks out merge requests through them, so a worker " +
-			"without it cannot prepare a GitLab practice review",
+			"syncs GitLab and checks out merge requests through them, so a server without it cannot " +
+			"prepare a GitLab practice review",
 	},
 	{
 		variable: "GITLAB_DEFAULT_SERVER_URL",
 		path: "hephaestus.integration.gitlab.default-server-url",
-		readBy: ["server", "worker"],
+		readBy: ["server"],
 		why:
 			"GitLabTokenService.resolveServerUrl falls back to it for a workspace whose GitLab connection " +
-			"stores no server URL, on the server to sync and on the worker to check out the merge request",
+			"stores no server URL, to sync and to check out the merge request",
 	},
 	{
 		variable: "WEBHOOK_ROUTING_SECRET",
@@ -215,7 +209,7 @@ const REQUIRED_SETTINGS: readonly RequiredSetting[] = [
 /** `application-<profile>.yml` turns roles off too, so a service's profiles decide as much as its env. */
 const PROFILE_YML = (profile: string): string =>
 	`server/application/src/main/resources/application-${profile}.yml`;
-const PROFILES = ["prod", "worker", "webhook", "migrate", "local", "e2e"];
+const PROFILES = ["prod", "webhook", "migrate", "local", "e2e"];
 
 /**
  * Profile name to the roles that profile's overlay switches off. The names are whatever the overlays

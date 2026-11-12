@@ -1,8 +1,8 @@
-// heph-host-protocol.ts — what the conversation loop and the workers exchange.
+// heph-host-protocol.ts — what the conversation loop and the servers exchange.
 //
 // The loop pulls each turn attempt from `${LLM_PROXY_URL}/turn-assignments` with its own credential. Everything a
 // turn reads or writes goes over HTTP to `${LLM_PROXY_URL}/turn/<turnId>/...` with the attempt's own credential, on
-// whichever worker the gateway Service picks. The Java counterparts:
+// whichever server the gateway Service picks. The Java counterparts:
 //   assignments          → HephTurnAssignmentController, HephTurns
 //   turn endpoints       → HephTurnController
 //   tools Pod endpoints  → HephTurnSandboxController
@@ -19,7 +19,7 @@ export const HEPH_TOOL_NAMES = [
 ] as const;
 
 /**
- * The tools that show the developer feedback, each with the worker endpoint that admits its id and the field that
+ * The tools that show the developer feedback, each with the server endpoint that admits its id and the field that
  * carries the id both ways. A tool shows its `text` only after a `200` that echoes the id.
  */
 export const LINK_TOOLS = {
@@ -34,7 +34,7 @@ export function isLinkTool(name: string): name is LinkToolName {
 	return Object.hasOwn(LINK_TOOLS, name);
 }
 
-/** Pi's `read`: one page of a document from the worker (`POST turn/<id>/sandbox/document`) or of a file in the tools Pod. */
+/** Pi's `read`: one page of a document from the server (`POST turn/<id>/sandbox/document`) or of a file in the tools Pod. */
 export interface SandboxReadRequest {
 	path: string;
 	offset?: number;
@@ -47,7 +47,7 @@ export interface SandboxExecRequest {
 	timeoutMs?: number;
 }
 
-/** `POST turn/<id>/sandbox/load`: one item the worker prepares for the context folder, such as `repos/github.com/acme/api@pull/42`. */
+/** `POST turn/<id>/sandbox/load`: one item the server prepares for the context folder, such as `repos/github.com/acme/api@pull/42`. */
 export interface SandboxLoadRequest {
 	path: string;
 }
@@ -92,7 +92,7 @@ function asRefusal(value: Record<string, unknown>): SandboxRefusal | null {
 		: null;
 }
 
-/** The worker's answer to a read, or `null` when it is malformed. */
+/** The server's answer to a read, or `null` when it is malformed. */
 export function asReadAnswer(value: unknown): SandboxReadAnswer | null {
 	if (!isRecord(value)) {
 		return null;
@@ -102,7 +102,7 @@ export function asReadAnswer(value: unknown): SandboxReadAnswer | null {
 		: asRefusal(value);
 }
 
-/** The worker's answer to a load, or `null` when it is malformed. */
+/** The server's answer to a load, or `null` when it is malformed. */
 export function asLoadAnswer(value: unknown): SandboxLoadAnswer | null {
 	if (!isRecord(value)) {
 		return null;
@@ -133,7 +133,7 @@ export function asLoadAnswer(value: unknown): SandboxLoadAnswer | null {
 export type StopReason = "developer" | "deadline" | "lease";
 
 /**
- * A turn attempt that a worker hands the loop, with the attempt's credential. A turn whose lease expired runs again as
+ * A turn attempt that a server hands the loop, with the attempt's credential. A turn whose lease expired runs again as
  * a later attempt, with a credential of its own.
  */
 export interface Assignment {
@@ -164,7 +164,7 @@ export function asAssignment(value: unknown): Assignment | null {
 	return { turnId: value.turnId, attempt: value.attempt, token: value.token };
 }
 
-/** The model a turn runs with, as the worker admitted it. */
+/** The model a turn runs with, as the server admitted it. */
 export interface TurnModel {
 	apiProtocol: string;
 	modelId: string;
@@ -184,7 +184,7 @@ export interface TurnContext {
 	model: TurnModel;
 	/** The transient message appended after the path on every model request; never stored. */
 	situation: string;
-	/** The worker serves `read`, `bash` and `load_context` for this turn. The loop reads a missing field as `false`. */
+	/** The server serves `read`, `bash` and `load_context` for this turn. The loop reads a missing field as `false`. */
 	contextFolder: boolean;
 	/** Heph's system prompt for the turn's session. */
 	systemPrompt: string;
@@ -213,7 +213,7 @@ export interface PartialSnapshot {
  * `PUT turn/<id>/partial`: one change of the partial answer's JSON text, as `MentorTurnProgress.Update` reads it. A
  * change puts `text` between the first `prefix` and the last `suffix` UTF-16 code units of the snapshot whose sequence
  * is `baseSequence`; a `baseSequence` of 0 makes `text` the whole snapshot. The loop is the attempt's one writer, so it
- * makes each change, and any worker forwards it.
+ * makes each change, and any server forwards it.
  */
 export interface PartialUpdate {
 	sequence: number;
@@ -228,7 +228,7 @@ export const MAX_PARTIAL_CHARS = 256 * 1024;
 
 /**
  * What kind of failure ended a failed attempt, for the operator. The set is closed, so an end never carries the words
- * of the model provider, a tool or the worker into a log; the worker logs no other detail
+ * of the model provider, a tool or the server into a log; the server logs no other detail
  * (`HephTurnController.FAILURE_DETAILS`). The two proxy codes are those of `PROVIDER_UNAVAILABLE`.
  */
 export const FAILURE_DETAILS = [
@@ -252,7 +252,7 @@ export type FailureDetail = (typeof FAILURE_DETAILS)[number];
 
 /**
  * `POST turn/<id>/end`, the only write of the turn's entries. A failed attempt's reason is worded for the developer by
- * the worker.
+ * the server.
  */
 export interface TurnEnd {
 	outcome: "DONE" | "STOPPED" | "FAILED";
@@ -261,7 +261,7 @@ export interface TurnEnd {
 	 * written before its question, so the next turn starts from them.
 	 */
 	entries: unknown[];
-	/** `STALLED`: the worker's LLM proxy found the model provider silent or paused (`LlmProxyService`). */
+	/** `STALLED`: the server's LLM proxy found the model provider silent or paused (`LlmProxyService`). */
 	reason: "ERROR" | "DEADLINE" | "STALLED" | null;
 	/** For the operator: the kind of failure of a failed attempt. */
 	detail: FailureDetail | null;
@@ -272,7 +272,7 @@ export type SandboxBindAnswer =
 	| { ok: true; id: string; host: string; port: number; nonce: string }
 	| SandboxRefusal;
 
-/** The worker's answer to a bind, or `null` when it is malformed. */
+/** The server's answer to a bind, or `null` when it is malformed. */
 export function asBindAnswer(value: unknown): SandboxBindAnswer | null {
 	if (!isRecord(value)) {
 		return null;
@@ -290,7 +290,7 @@ export function asBindAnswer(value: unknown): SandboxBindAnswer | null {
 		: null;
 }
 
-/** What the worker says of a load's archive, in its `Hephaestus-Load` header: the answer and the summary command. */
+/** What the server says of a load's archive, in its `Hephaestus-Load` header: the answer and the summary command. */
 export interface SandboxLoadAbout {
 	path: string;
 	resolved: { ref: string; sha: string; cite: string };

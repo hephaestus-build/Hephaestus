@@ -402,7 +402,7 @@ The `pin: gvisor` line of `k3s-containerd.toml.tmpl` sets the gVisor release and
 The installer downloads that archive from `storage.googleapis.com` and checks it, so the host must reach that address.
 It installs `runsc`, its containerd shim and the `gvisor-bin` directory in `/usr/local/bin`.
 It restarts k3s when `k3s-containerd.toml.tmpl` changes: at the first install with gVisor, and at each new gVisor pin.
-`k3s-values.yaml` sets `worker.sandbox.templates.runtimeClassName: gvisor`.
+`k3s-values.yaml` sets `sandbox.templates.runtimeClassName: gvisor`.
 
 `k3s-config.yaml` becomes `/etc/rancher/k3s/config.yaml`.
 k3s then reads each `*.yaml` and `*.yml` file in `/etc/rancher/k3s/config.yaml.d/`, and such a file overrides `config.yaml`.

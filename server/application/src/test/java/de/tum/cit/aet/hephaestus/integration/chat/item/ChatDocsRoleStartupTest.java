@@ -53,7 +53,6 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                         SlackPersonErasureService.class)
                 .withPropertyValues(
                         "hephaestus.runtime.server.enabled=false",
-                        "hephaestus.runtime.worker.enabled=false",
                         "hephaestus.runtime.webhook.enabled=true",
                         "hephaestus.integration.slack.enabled=true",
                         "hephaestus.integration.outline.enabled=true")
@@ -77,13 +76,8 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldPublishCaptureAndMentorContextWithoutServerErasureWhenOnlyTheWorkerRoleStarts() {
-        verifyCaptureRole(false);
-    }
-
-    @Test
     void shouldPublishCaptureAndErasureWhenTheServerRoleStarts() {
-        verifyCaptureRole(true);
+        verifyCaptureRole();
     }
 
     @Test
@@ -112,7 +106,7 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                 });
     }
 
-    private static void verifyCaptureRole(boolean server) {
+    private static void verifyCaptureRole() {
         var runner = new ApplicationContextRunner()
                 .withUserConfiguration(
                         ThreadItemDescriptor.class,
@@ -125,8 +119,7 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                         ConversationCaptureSource.class,
                         SlackPersonErasureService.class)
                 .withPropertyValues(
-                        "hephaestus.runtime.server.enabled=" + server,
-                        "hephaestus.runtime.worker.enabled=" + !server,
+                        "hephaestus.runtime.server.enabled=true",
                         "hephaestus.runtime.webhook.enabled=false",
                         "hephaestus.integration.slack.enabled=true",
                         "hephaestus.integration.outline.enabled=true")
@@ -146,19 +139,17 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                 .withBean(
                         DocumentContentSource.class,
                         () -> new DocumentContentSource(JsonMapper.builder().build(), Clock.systemUTC()));
-        if (server)
-            runner = runner.withBean(ConversationFeedbackErasure.class, () -> mock(ConversationFeedbackErasure.class));
-        runner.run(context -> {
-            assertThat(context).hasNotFailed();
-            assertThat(context)
-                    .hasSingleBean(ThreadItemSource.class)
-                    .hasSingleBean(DocumentItemSource.class)
-                    .hasSingleBean(OutlineDocumentPermission.class)
-                    .hasSingleBean(OutlinePersonSourceIdentityContributor.class)
-                    .hasSingleBean(ThreadCaptureSource.class)
-                    .hasSingleBean(ConversationCaptureSource.class);
-            if (server) assertThat(context).hasSingleBean(SlackPersonErasureService.class);
-            else assertThat(context).doesNotHaveBean(SlackPersonErasureService.class);
-        });
+        runner.withBean(ConversationFeedbackErasure.class, () -> mock(ConversationFeedbackErasure.class))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context)
+                            .hasSingleBean(ThreadItemSource.class)
+                            .hasSingleBean(DocumentItemSource.class)
+                            .hasSingleBean(OutlineDocumentPermission.class)
+                            .hasSingleBean(OutlinePersonSourceIdentityContributor.class)
+                            .hasSingleBean(ThreadCaptureSource.class)
+                            .hasSingleBean(ConversationCaptureSource.class);
+                    assertThat(context).hasSingleBean(SlackPersonErasureService.class);
+                });
     }
 }

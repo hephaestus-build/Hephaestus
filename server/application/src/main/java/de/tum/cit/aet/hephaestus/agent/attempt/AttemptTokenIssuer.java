@@ -11,8 +11,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Issues the attempt tokens and sandbox tokens of this worker's sandboxes; {@link AttemptTokenVerifier} checks them on
- * any worker.
+ * Issues the attempt tokens and sandbox tokens of this server's sandboxes; {@link AttemptTokenVerifier} checks them on
+ * any server.
  */
 public class AttemptTokenIssuer {
 

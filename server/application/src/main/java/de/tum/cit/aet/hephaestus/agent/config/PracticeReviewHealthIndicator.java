@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import java.time.Clock;
@@ -17,24 +16,21 @@ public class PracticeReviewHealthIndicator implements HealthIndicator {
     private final boolean gitEnabled;
     private final ClasspathSourceCatalogRegistry sourceCatalog;
     private final Clock clock;
-    private final boolean workerRole;
 
     public PracticeReviewHealthIndicator(
             AgentProperties agentProperties,
             @Value("${hephaestus.git.enabled:false}") boolean gitEnabled,
             ClasspathSourceCatalogRegistry sourceCatalog,
-            Clock clock,
-            @Value("${" + RuntimeRole.WORKER_PROPERTY + ":true}") boolean workerRole) {
+            Clock clock) {
         this.agentProperties = agentProperties;
         this.gitEnabled = gitEnabled;
         this.sourceCatalog = sourceCatalog;
         this.clock = clock;
-        this.workerRole = workerRole;
     }
 
     @Override
     public Health health() {
-        if (!workerRole || !agentProperties.enabled()) {
+        if (!agentProperties.enabled()) {
             return Health.up().withDetail("reviewsEnabled", false).build();
         }
         if (!gitEnabled) {

@@ -7,7 +7,7 @@ import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import jakarta.validation.constraints.NotNull;
 import java.util.Arrays;
 import java.util.Set;
@@ -357,7 +357,7 @@ public final class HephaestusConditions {
     }
 
     private static boolean usesWorkerGatewaySecurity(JavaClass owner) {
-        if (!owner.isAnnotatedWith(ConditionalOnWorkerRole.class) || !owner.isAnnotatedWith(RequestMapping.class))
+        if (!owner.isAnnotatedWith(ConditionalOnAgentRuntime.class) || !owner.isAnnotatedWith(RequestMapping.class))
             return false;
         var mapping = owner.getAnnotationOfType(RequestMapping.class);
         var paths = Stream.concat(Arrays.stream(mapping.value()), Arrays.stream(mapping.path()))

@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.fabric8.kubernetes.api.model.Toleration;
 import io.fabric8.kubernetes.client.utils.KubernetesSerialization;
 import jakarta.validation.constraints.AssertTrue;
@@ -19,14 +19,14 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * The worker's Kubernetes sandbox runtime. A missing or invalid value
- * stops the worker's start. The chart supplies its Pod metadata through the Downward API. Host development supplies the worktree's
+ * The server's Kubernetes sandbox runtime. A missing or invalid value
+ * stops the server's start. The chart supplies its Pod metadata through the Downward API. Host development supplies the worktree's
  * identity and the k3d host address through the dev launcher.
  *
  * @param namespace the namespace of every sandbox Pod and Job. The installation owns it alone, so everything in it of
  *     the sandbox kinds is this installation's
- * @param podName this worker's Pod name, or its worktree identity during host development
- * @param podIp the address where sandboxes reach this worker: its Pod IP, or the k3d host address during development
+ * @param podName this server's Pod name, or its worktree identity during host development
+ * @param podIp the address where sandboxes reach this server: its Pod IP, or the k3d host address during development
  * @param runtimeClassName the RuntimeClass of every sandbox Pod. Blank selects the cluster's default.
  *     It must support user namespaces. A missing or incompatible class fails the isolation probe
  * @param seccompProfile the shipped {@code sandbox/agent-seccomp-profile.json} as a Localhost profile, relative to the
@@ -36,13 +36,13 @@ import org.springframework.validation.annotation.Validated;
  * @param conversationPriorityClass the PriorityClass of the conversation tools Pods. Blank gives none
  * @param reviewPriorityClass the PriorityClass of review and probe Pods, below the conversations': a review is an
  *     attempt that runs again, a conversation is a person waiting. Blank gives none
- * @param probeInterval how often the isolation probe runs again after the worker's start
+ * @param probeInterval how often the isolation probe runs again after the server's start
  * @param gatewayProbeService DNS name of the Service that the isolation probe proves a sandbox's route through. Empty
- *     where no such Service exists, as with a worker outside the cluster.
+ *     where no such Service exists, as with a server outside the cluster.
  */
 @Validated
 @Profile("!specs & !cds-training")
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @ConfigurationProperties(prefix = "hephaestus.sandbox.kubernetes", ignoreUnknownFields = false)
 public record KubernetesSandboxProperties(
         @DefaultValue("") @NotBlank @Pattern(regexp = DNS_LABEL)
@@ -141,7 +141,7 @@ public record KubernetesSandboxProperties(
     /**
      * The JDK's own IPv6 literal parser. A value that starts with a hexadecimal digit or a colon and contains a colon is
      * only ever parsed as a literal by {@link InetAddress#getByName}, never looked up: a name could resolve to another
-     * worker. A zone ({@code %}) is not an address a Pod has.
+     * server. A zone ({@code %}) is not an address a Pod has.
      */
     private static boolean isIpv6(String value) {
         if (!value.matches("[0-9A-Fa-f:][0-9A-Fa-f:.]{1,44}") || value.indexOf(':') < 0) {
@@ -155,7 +155,7 @@ public record KubernetesSandboxProperties(
         }
     }
 
-    /** The host of this worker's gateway in a URL: the address itself, an IPv6 address in brackets. */
+    /** The host of this server's gateway in a URL: the address itself, an IPv6 address in brackets. */
     String gatewayHost() {
         return podIp.indexOf(':') >= 0 ? "[" + podIp + "]" : podIp;
     }

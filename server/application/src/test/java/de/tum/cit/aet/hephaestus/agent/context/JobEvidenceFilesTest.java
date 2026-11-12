@@ -21,7 +21,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
@@ -501,7 +500,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRemoveExpiredEndedAttemptsOnAWorkerWithoutServerScheduling() {
+    void shouldRemoveExpiredEndedAttemptsWithoutServerScheduling() {
         var layout = new FabricLayout(root.toString());
         var preparing = new JobEvidenceFiles(layout, jobs, clock, personCopies());
         byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
@@ -542,11 +541,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "hephaestus.runtime.worker.enabled=false",
+                "hephaestus.runtime.server.enabled=false",
                 "spring.profiles.active=specs",
                 "spring.profiles.active=cds-training"
             })
-    void shouldNotMaintainEvidenceWithoutTheWorkerRoleOrInBuildOnlyProfiles(String setting) {
+    void shouldNotMaintainEvidenceWithoutTheServerRoleOrInBuildOnlyProfiles(String setting) {
         var layout = new FabricLayout(root.toString());
         byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
         var preparing = new JobEvidenceFiles(layout, jobs, clock, personCopies());
@@ -567,11 +566,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     private static ApplicationContextRunner maintenance(
             JobEvidenceFiles files, EvidenceFolderPersonDataCatalog personCopies) {
         return new ApplicationContextRunner()
-                .withUserConfiguration(JobEvidenceMaintenanceConfiguration.class, ServerSchedulingConfig.class)
+                .withPropertyValues("spring.profiles.active=default")
+                .withUserConfiguration(JobEvidenceMaintenanceConfiguration.class)
                 .withBean(JobEvidenceFiles.class, () -> files)
                 .withBean(EvidenceFolderPersonDataCatalog.class, () -> personCopies)
-                .withPropertyValues(
-                        "hephaestus.runtime.worker.enabled=true", "hephaestus.runtime.server.enabled=false");
+                .withPropertyValues("hephaestus.runtime.server.enabled=true");
     }
 
     private ReviewJob endedAttempt(JobEvidenceFiles files, byte[] bytes) {

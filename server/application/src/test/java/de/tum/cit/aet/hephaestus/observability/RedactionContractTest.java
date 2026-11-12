@@ -223,13 +223,13 @@ class RedactionContractTest {
         String line = encode(event -> {
             event.setMDCPropertyMap(Map.of("job.id", "7"));
             event.addKeyValuePair(new KeyValuePair("job.type", "review"));
-            event.addKeyValuePair(new KeyValuePair("runtime.worker.enabled", true));
+            event.addKeyValuePair(new KeyValuePair("runtime.server.enabled", true));
             event.addKeyValuePair(new KeyValuePair("error.type", "caller-supplied"));
             event.setThrowableProxy(new ThrowableProxy(new IllegalStateException("x")));
         });
         JsonNode json = new ObjectMapper().readTree(line);
         assertEquals("server", text(json, "runtime.role"));
-        assertTrue(node(json, "context.runtime.worker.enabled") != null, line);
+        assertTrue(node(json, "context.runtime.server.enabled") != null, line);
         assertEquals("caller-supplied", text(json, "context.error.type"));
         assertEquals(IllegalStateException.class.getName(), text(json, "error.type"));
         assertEquals("7", text(json, "context.job.id"));
@@ -295,12 +295,7 @@ class RedactionContractTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-        "application.yml, -1, server",
-        "application.yml, 1, all",
-        "application-worker.yml, 0, worker",
-        "application-webhook.yml, 0, webhook"
-    })
+    @CsvSource({"application.yml, -1, server", "application.yml, 1, all", "application-webhook.yml, 0, webhook"})
     void shouldNameTheRuntimeRoleOfEveryProfile(String file, int document, String role) throws IOException {
         JsonNode json = new ObjectMapper()
                 .readTree(encode(shippedEnvironment(file, document), event -> event.setMessage("ready")));
@@ -405,7 +400,7 @@ class RedactionContractTest {
                     Map.of("traceId", "0123456789abcdef0123456789abcdef", "spanId", "0123456789abcdef"));
             event.addKeyValuePair(new KeyValuePair("event.name", "logging.contract"));
             event.addKeyValuePair(new KeyValuePair("duration.ms", 123L));
-            event.addKeyValuePair(new KeyValuePair("runtime.worker.enabled", true));
+            event.addKeyValuePair(new KeyValuePair("runtime.server.enabled", true));
         });
         JsonNode json = new ObjectMapper().readTree(line);
         assertEquals(message, text(json, "message"));
@@ -413,7 +408,7 @@ class RedactionContractTest {
         assertEquals("logging.contract", text(json, "context.event.name"));
         JsonNode duration = node(json, "context.duration.ms");
         assertTrue(duration != null && duration.isNumber(), line);
-        JsonNode enabled = node(json, "context.runtime.worker.enabled");
+        JsonNode enabled = node(json, "context.runtime.server.enabled");
         assertTrue(enabled != null && enabled.isBoolean() && enabled.asBoolean(), line);
         assertEquals("0123456789abcdef0123456789abcdef", text(json, "context.traceId"));
         assertEquals("0123456789abcdef", text(json, "context.spanId"));

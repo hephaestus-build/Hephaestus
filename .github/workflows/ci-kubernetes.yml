@@ -1,7 +1,7 @@
 name: CI / Kubernetes
 
 # The chart on real clusters, with this run's images: an install, an upgrade that rolls every role
-# but PostgreSQL and NATS, each worker's isolation probe, and the sandbox isolation gate of each
+# but PostgreSQL and NATS, each server's isolation probe, and the sandbox isolation gate of each
 # SandboxTemplate. docs/admin/kubernetes.mdx § Supported clusters states what these
 # jobs show. They share scripts/kubernetes-cluster.ts with `vp run dev:kubernetes`.
 
@@ -141,7 +141,7 @@ jobs:
           # The release serves through the Gateway of k3s's Traefik, as in `vp run dev:kubernetes`.
           node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT" --gateway
           node scripts/kubernetes-cluster.ts gateway --work "$work"
-          if [ "$GVISOR" = true ]; then PROFILES="$PROFILES --set worker.sandbox.templates.runtimeClassName=gvisor"; fi
+          if [ "$GVISOR" = true ]; then PROFILES="$PROFILES --set sandbox.templates.runtimeClassName=gvisor"; fi
           # shellcheck disable=SC2086 # PROFILES is a list of flags.
           node scripts/kubernetes-cluster.ts install --work "$work" $PROFILES
           node scripts/kubernetes-cluster.ts verify
@@ -152,16 +152,16 @@ jobs:
           node scripts/kubernetes-cluster.ts upgrade --work "$work" $PROFILES --set "release.version=v0.0.1-cluster"
           node scripts/kubernetes-cluster.ts verify
           node scripts/kubernetes-cluster.ts request --work "$work"
-      # A conversation turn runs bash in its tools Pod through a worker roll and then a loop roll.
+      # A conversation turn runs bash in its tools Pod through a server roll and then a loop roll.
       # The fake model provider runs in the Pod network, which k3s gives 10.42.0.0/16.
-      - name: Keep a conversation turn through a worker roll and a loop roll
+      - name: Keep a conversation turn through a server roll and a loop roll
         if: ${{ env.DRILLS == 'true' }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2086 # PROFILES is a list of flags.
           node scripts/kubernetes-cluster.ts turn-roll --work "$RUNNER_TEMP/kubernetes-cluster" $PROFILES \
             --set "release.version=v0.0.1-cluster" --pod-cidr 10.42.0.0/16
-      - name: Qualify the sandbox adapters in the chart worker Pod
+      - name: Qualify the sandbox adapters in the chart server Pod
         if: ${{ inputs.application-artifact != '' && env.DRILLS == 'true' }}
         run: |
           set -euo pipefail
@@ -190,7 +190,6 @@ jobs:
           # A failed migration Job blocks every role; its own log names the cause.
           kubectl -n hephaestus logs -l app.kubernetes.io/component=migration --all-containers --tail=400 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql --all-containers --tail=200 --prefix || true
-          kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --tail=300 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=conversation-loop --tail=300 --prefix || true
           kubectl -n hephaestus get jobs,cronjobs -o wide || true
@@ -334,7 +333,6 @@ jobs:
           # A failed migration Job blocks every role; its own log names the cause.
           kubectl -n hephaestus logs -l app.kubernetes.io/component=migration --all-containers --tail=400 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql --all-containers --tail=200 --prefix || true
-          kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --tail=300 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
           kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
           kubectl -n hephaestus-sandboxes get sandboxtemplates,sandboxwarmpools,sandboxclaims,sandboxes -o wide || true

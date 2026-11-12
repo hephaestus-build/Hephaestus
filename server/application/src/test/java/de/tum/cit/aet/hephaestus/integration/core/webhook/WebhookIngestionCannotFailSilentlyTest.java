@@ -11,13 +11,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.availability.ApplicationAvailabilityAutoConfiguration;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -75,12 +76,10 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
             "hephTurnDispatcher",
             "hephTurnDispatcher");
 
-    /** What a webhook-only container has: the server role is off, so most of the group is absent. */
-    private static final Set<String> WEBHOOK_ROLE_ONLY =
-            Set.of("webhookHealthIndicator", "practiceReviewHealthIndicator");
-
     @Test
     void readinessAsksOnlyWhetherThisPodCanServe() {
+        // A broker outage would unready every Pod at once and leave no Pod to serve or receive; a failed sandbox
+        // proof stops sandboxes, not the API.
         healthContext(CONTRIBUTOR_BEANS.keySet())
                 .run(context -> assertThat(
                                 context.getBean(HealthEndpointGroups.class).get("readiness"))
@@ -88,19 +87,10 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
                                 "the shipped keys must produce a configured readiness group, not the auto-configured probe group")
                         .isNotNull()
                         .satisfies(group -> {
-                            // A broker outage unready every Pod at once and leaves no Pod to serve or receive.
-                            assertThat(group.isMember("webhook"))
-                                    .as("JetStream is a remote dependency")
-                                    .isFalse();
-                            assertThat(group.isMember("integrationConsumer"))
-                                    .as("the NATS connection is a remote dependency")
-                                    .isFalse();
-                            assertThat(group.isMember("kubernetesSandbox"))
-                                    .as("the worker's own isolation proof")
-                                    .isTrue();
-                            assertThat(group.isMember("practiceReview"))
-                                    .as("the worker's own configuration")
-                                    .isTrue();
+                            assertThat(group.isMember("readinessState")).isTrue();
+                            assertThat(CONTRIBUTOR_BEANS.values())
+                                    .as("no contributor of any role belongs in readiness")
+                                    .noneMatch(group::isMember);
                         }));
     }
 
@@ -129,15 +119,21 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
                 }));
     }
 
-    @Test
-    void aJetStreamFailureLeavesReadinessUpAndHealthDown() {
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "webhookHealthIndicator",
+                "integrationConsumerHealthIndicator",
+                "practiceReviewHealthIndicator",
+                "kubernetesSandboxHealthIndicator",
+                "hephTurnDispatcher"
+            })
+    void aFailingContributorLeavesReadinessUpAndHealthDown(String contributor) {
         healthContext(
                         CONTRIBUTOR_BEANS.keySet(),
                         Map.of(
-                                "webhookHealthIndicator",
-                                Health.down()
-                                        .withDetail("reason", "JetStream unreachable")
-                                        .build()))
+                                contributor,
+                                Health.down().withDetail("reason", "down").build()))
                 .run(context -> {
                     var endpoint = context.getBean(HealthEndpoint.class);
                     var readiness = endpoint.healthForPath("readiness");
@@ -146,52 +142,6 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
                     // ADR 0008's webhook-server-down alert reads the whole health endpoint, which still knows.
                     assertThat(endpoint.health().getStatus()).isEqualTo(Status.DOWN);
                 });
-    }
-
-    @Test
-    void aWorkerWithoutAReadyHephHostKeepsReadinessDown() {
-        healthContext(
-                        CONTRIBUTOR_BEANS.keySet(),
-                        Map.of("hephTurnDispatcher", Health.down().build()))
-                .run(context -> {
-                    var readiness = context.getBean(HealthEndpoint.class).healthForPath("readiness");
-                    assertNotNull(readiness);
-                    assertThat(readiness.getStatus()).isEqualTo(Status.DOWN);
-                });
-    }
-
-    @Test
-    void readinessFormsOnAContainerMissingMostOfItsContributors() {
-        healthContext(WEBHOOK_ROLE_ONLY).run(context -> {
-            assertThat(context).hasNotFailed();
-            var readiness = context.getBean(HealthEndpointGroups.class).get("readiness");
-            assertNotNull(readiness);
-            assertThat(readiness.isMember("webhook")).isFalse();
-        });
-    }
-
-    @Test
-    void membershipValidationIsWhatTheReadinessGroupIsExemptedFrom() {
-        // The control for the test above. Every named contributor is role-gated, so with validation
-        // on — its default — the split deployment this branch exists to protect cannot boot at all.
-        healthContext(WEBHOOK_ROLE_ONLY)
-                .withPropertyValues("management.endpoint.health.validate-group-membership=true")
-                .run(context -> assertThat(context).hasFailed());
-    }
-
-    @Test
-    void everyNameInTheReadinessGroupIsAContributorThatCanExist() {
-        // Turning validation off is what lets a container form the group without its absent
-        // contributors; it also means a misspelled name is silently ignored forever. This is that
-        // check, moved to where it can run against every role at once instead of one at a time.
-        List<String> configured =
-                List.of(binder().bind("management.endpoint.health.group.readiness.include", String.class)
-                        .get()
-                        .split(","));
-
-        assertThat(configured)
-                .as("a name no contributor answers to is a member the probe silently never evaluates")
-                .isSubsetOf(union(Set.of("readinessState"), CONTRIBUTOR_BEANS.values()));
     }
 
     @Test
@@ -357,12 +307,6 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
             }
         }
         return values.toArray(String[]::new);
-    }
-
-    private static List<String> union(Set<String> first, Collection<String> second) {
-        List<String> all = new ArrayList<>(first);
-        all.addAll(second);
-        return all;
     }
 
     private static WebhookProperties.Stream shippedStream() {

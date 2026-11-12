@@ -84,7 +84,7 @@ public class ReviewJobCompletionService {
                         : job.getExecutionStartedAt() == null
                                 ? ReviewStopReason.PREPARATION_FAILED
                                 : ReviewStopReason.EXECUTION_FAILED;
-        // A cancel for room ends the practices whether or not a worker claimed the job, so a scan stops binding them.
+        // A cancel for room ends the practices whether or not a server claimed the job, so a scan stops binding them.
         if (!admitted
                 && (job.getStatus() != ReviewJobStatus.CANCELLED
                         || job.getStartedAt() != null

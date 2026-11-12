@@ -554,7 +554,7 @@ function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
 	}
 	const stateDirectory = environment.STATE_DIRECTORY ?? "/var/lib/hephaestus";
 	// A new chart Pod waits up to 10 minutes for the migrated schema, so Helm needs more than that.
-	const waitTimeoutSeconds = Number(environment.HEPHAESTUS_WAIT_TIMEOUT ?? 1200);
+	const waitTimeoutSeconds = Number(environment.HEPHAESTUS_WAIT_TIMEOUT ?? 2700);
 	if (!Number.isSafeInteger(waitTimeoutSeconds) || waitTimeoutSeconds <= 0) {
 		throw new Error("HEPHAESTUS_WAIT_TIMEOUT must be a positive integer");
 	}
@@ -973,8 +973,8 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		applied,
 	);
 
-	// After Helm finished a cutover in an earlier tick, this adopts the current file. Phase 4 applies its
-	// counts by hand before the timer resumes, and an older digest would start the workers mid-cutover.
+	// After Helm finished a cutover in an earlier tick, this adopts the current file. The last phase applies its
+	// counts by hand before the timer resumes, and an older digest would start the roles mid-cutover.
 	const finishedAt = new Date();
 	await writeAtomic(
 		appliedFile,
@@ -1100,28 +1100,24 @@ async function checkStoppedUpgrade(
 		);
 	}
 	// Helm can finish before applied.json is renamed. Resume only the verified target, already
-	// deployed; an operator can already have restored worker replicas before this tick.
+	// deployed; an operator can already have restored replicas before this tick.
 	if (status === "deployed" && matchesChartValues(values, expected)) {
 		return "applied";
 	}
-	if (
-		asRecord(values.server, "server values").replicas !== 0 ||
-		asRecord(values.worker, "worker values").replicas !== 0
-	) {
+	if (asRecord(values.server, "server values").replicas !== 0) {
 		throw new OperatorActionRequiredError(
 			"A major upgrade requires stopped writers. Pause reconciliation and complete phase 1 of Database maintenance before promoting the next chart.",
 		);
 	}
-	const worker = asRecord(values.worker, "worker values");
-	const sandbox = asRecord(worker.sandbox, "sandbox values");
+	const sandbox = asRecord(values.sandbox, "sandbox values");
 	const sandboxNamespace = asString(sandbox.namespace, "sandbox namespace");
 	if (
 		!KUBERNETES_NAME.test(sandboxNamespace) &&
-		!(worker.enabled === false && sandboxNamespace === "")
+		!(sandbox.enabled === false && sandboxNamespace === "")
 	) {
 		throw new Error("installed chart has no valid sandbox namespace");
 	}
-	// Tools Pods hold nothing that outlives their turn, and with every worker stopped no turn goes on. No worker
+	// Tools Pods hold nothing that outlives their turn, and with the server stopped no turn goes on. No server
 	// reaps them now, so the stop removes them instead of waiting for their Job deadline.
 	if (sandboxNamespace !== "") {
 		await output(
@@ -1161,10 +1157,10 @@ async function checkStoppedUpgrade(
 			if (
 				namespace === sandboxNamespace ||
 				(labels["app.kubernetes.io/instance"] === settings.release &&
-					["server", "worker"].includes(String(labels["app.kubernetes.io/component"])))
+					labels["app.kubernetes.io/component"] === "server")
 			) {
 				throw new OperatorActionRequiredError(
-					"Wait for the server, worker, and sandbox Pods and Jobs to be removed before the major upgrade.",
+					"Wait for the server and sandbox Pods and Jobs to be removed before the major upgrade.",
 				);
 			}
 		}
@@ -1338,7 +1334,7 @@ async function applyChart(
 				packaged,
 				!stopped,
 			),
-			...(stopped ? ["--set", "server.replicas=1", "--set", "worker.replicas=0"] : []),
+			...(stopped ? ["--set", "server.replicas=1"] : []),
 		],
 		{
 			cwd: releaseTree,

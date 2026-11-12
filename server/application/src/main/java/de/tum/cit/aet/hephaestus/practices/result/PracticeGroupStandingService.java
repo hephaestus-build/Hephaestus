@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.dto.FeedbackSourceCountDTO;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
@@ -36,9 +36,9 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The weekly digest that Heph reads on a worker compares standings, so this lives on both. */
+/** The weekly digest that Heph reads compares standings. */
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class PracticeGroupStandingService {
 

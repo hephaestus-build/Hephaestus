@@ -17,15 +17,15 @@ The model supplies structured data but has no tools and no authority to publish.
 
 The `productfeedback` module owns the lifecycle and trust decisions.
 It owns input stripping, redaction, the prompt, output validation, routing, rendering, and the durable filing state.
-The closed `agent` module supplies the worker-only model adapter in `agent.productfeedback`.
+The closed `agent` module supplies the model adapter in `agent.productfeedback`, which runs only on a server with the agent runtime.
 That adapter calls the named `productfeedback.drafting` API.
 The dependency is `agent` → `productfeedback`. Product feedback never imports agent internals.
 
 ```mermaid
 flowchart LR
     accTitle: Product feedback module and role boundaries
-    accDescr: The worker model adapter claims draft work from productfeedback. The server routes and files through the GitHub adapter.
-    A[agent.productfeedback on worker] --> D[productfeedback.drafting API]
+    accDescr: The model adapter of the agent runtime claims draft work from productfeedback. The server routes and files through the GitHub adapter.
+    A[agent.productfeedback in the agent runtime] --> D[productfeedback.drafting API]
     D --> DB[(Product feedback state)]
     S[productfeedback on server] --> DB
     S --> P[integration.scm.spi.ProductFeedbackIssues]
@@ -33,7 +33,7 @@ flowchart LR
     G --> GH[GitHub]
 ```
 
-The drafting API loads in the worker role. Other product feedback services remain server-only.
+The drafting API and the other product feedback services load on every server. Only the model adapter needs the agent runtime.
 The webhook role has no product feedback task.
 The server refreshes issue snapshots, files issues, polls follow-up, processes `/publish`, transfers issues, and performs external cleanup.
 It does not run the model call.

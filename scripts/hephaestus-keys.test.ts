@@ -58,8 +58,13 @@ if (has("rollout")) {
 	process.exit(has("status") && unready ? 1 : 0);
 }
 if (has("deployment")) {
-	const role = /component=(\\w+)/.exec(args.join(" "))[1];
-	for (const name of (state.deployments ?? { server: ["server"], webhook: ["webhook"] })[role] ?? []) {
+	const role = /component=([\\w-]+)/.exec(args.join(" "))[1];
+	const deployments = state.deployments ?? {
+		server: ["server"],
+		webhook: ["webhook"],
+		"conversation-loop": ["conversation-loop"],
+	};
+	for (const name of deployments[role] ?? []) {
 		console.log("deployment.apps/hephaestus-" + name);
 	}
 	process.exit(0);
@@ -669,7 +674,7 @@ const restarts = (argv: string) =>
 	argv
 		.split("\n")
 		.filter((line) => line.includes('"rollout"') && line.includes('"restart"'))
-		.map((line) => /deployment\.apps\/hephaestus-(?<role>\w+)/u.exec(line)?.groups?.role ?? "");
+		.map((line) => /deployment\.apps\/hephaestus-(?<role>[\w-]+)/u.exec(line)?.groups?.role ?? "");
 
 /** Each rollout command in order, as "restart webhook" or "status webhook". */
 const rollouts = (argv: string) =>
@@ -677,7 +682,8 @@ const rollouts = (argv: string) =>
 		.split("\n")
 		.map(
 			(line) =>
-				/"rollout","(?<verb>\w+)","deployment\.apps\/hephaestus-(?<role>\w+)"/u.exec(line)?.groups,
+				/"rollout","(?<verb>\w+)","deployment\.apps\/hephaestus-(?<role>[\w-]+)"/u.exec(line)
+					?.groups,
 		)
 		.filter((groups) => groups !== undefined)
 		.map((groups) => `${groups.verb ?? ""} ${groups.role ?? ""}`);
@@ -703,6 +709,36 @@ await test(
 		assert.deepEqual(rest, before, "no other key changed");
 		assert.deepEqual(restarts(result.argv), ["server"]);
 		assert.ok(!result.output.includes(result.secret.HEPHAESTUS_AUTH_STATE_COOKIE_KEY ?? "-"));
+	},
+);
+
+await test(
+	"--rotate replaces the conversation-loop secret alone, and restarts the server and then the loop",
+	{ skip },
+	() => {
+		const first = run();
+		const result = run({
+			cluster: { secret: encoded(first.secret) },
+			args: ["--rotate", "HEPHAESTUS_CONVERSATION_LOOP_SECRET"],
+			tools: { openssl: windowsTool("openssl") },
+		});
+		assert.equal(result.status, 0, result.output);
+		assert.match(result.secret.HEPHAESTUS_CONVERSATION_LOOP_SECRET ?? "", /^[0-9a-f]{64}$/u);
+		assert.notEqual(
+			result.secret.HEPHAESTUS_CONVERSATION_LOOP_SECRET,
+			first.secret.HEPHAESTUS_CONVERSATION_LOOP_SECRET,
+		);
+		const { HEPHAESTUS_CONVERSATION_LOOP_SECRET: _new, ...rest } = result.secret;
+		const { HEPHAESTUS_CONVERSATION_LOOP_SECRET: _old, ...before } = first.secret;
+		assert.deepEqual(rest, before, "no other key changed");
+		// The server checks the credential that the loop presents, so both restart.
+		assert.deepEqual(rollouts(result.argv), [
+			"restart server",
+			"status server",
+			"restart conversation-loop",
+			"status conversation-loop",
+		]);
+		assert.ok(!result.output.includes(result.secret.HEPHAESTUS_CONVERSATION_LOOP_SECRET ?? "-"));
 	},
 );
 

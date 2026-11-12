@@ -160,22 +160,22 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
 
 **Check:** On the workspace's **AI models** page, the **Practice reviews** row shows the model and does not read **Not ready**.
 
-## A worker stays unready
+## A server stays unready
 
-**Cause:** The worker cannot watch its sandbox namespace, or its isolation probe failed.
+**Cause:** The server cannot watch its sandbox namespace, or its isolation probe failed.
 
 **Fix:**
 
-1. Read the probe result and the isolation tier in the worker log:
+1. Read the probe result and the isolation tier in the server log:
 
    ```bash
-   kubectl --namespace <release namespace> logs deployment/<release>-worker
+   kubectl --namespace <release namespace> logs deployment/<release>-server
    ```
 
 2. Find the row of [Other symptoms](./kubernetes#other-symptoms) that matches the log, and do its fix.
 3. Check the chart service account, the namespace, the quota, and NetworkPolicy, as [Sandbox prerequisites](./sandboxes#sandbox-prerequisites) describes.
 
-**Check:** The worker Pod becomes ready.
+**Check:** The server Pod becomes ready.
 
 ## A sandbox Pod is refused or cannot start
 
@@ -184,12 +184,12 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
 **Fix:**
 
 1. Read the events of the sandbox Pod.
-2. Read the worker log.
+2. Read the server log.
 3. Correct the admission policy, the quota, the image pull, or the prerequisite that the events name.
 
 **Check:** New sandbox Pods start, and reviews leave the queue.
 
-## A worker or sandbox ends with `OOMKilled`
+## A server or sandbox ends with `OOMKilled`
 
 **Cause:** Its memory limit is lower than its peak memory under the workload.
 
@@ -208,7 +208,7 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
 
 1. Read queue depth and oldest age, as [Queue health](./practice-review-operations#queue-health) describes.
 2. Check the model provider.
-3. Check `worker.sandbox.reviewMemory` against [Sizing and scaling](./sizing).
+3. Check `sandbox.reviewMemory` against [Sizing and scaling](./sizing).
 
 **Check:** Queue depth and oldest age go down.
 

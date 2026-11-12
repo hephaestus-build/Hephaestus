@@ -12,7 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
@@ -22,8 +22,6 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,11 +36,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Artifact generation and the image's training run hand out no turn.
  */
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @Profile(HephTurnConfiguration.PROFILES)
 public class HephTurnConfiguration {
-
-    private static final Logger log = LoggerFactory.getLogger(HephTurnConfiguration.class);
 
     static final String PROFILES = "!specs & !cds-training";
 
@@ -107,8 +103,7 @@ public class HephTurnConfiguration {
             MeterRegistry meters) {
         loop.requireFormat();
         if (!loop.configured()) {
-            // The worker profile requires it; a local worker without it serves no conversation.
-            log.warn("hephaestus.conversation-loop.secret is not set: this worker hands out no conversation turn");
+            throw new IllegalStateException("Agent jobs require hephaestus.conversation-loop.secret");
         }
         return new HephTurns(
                 starter,

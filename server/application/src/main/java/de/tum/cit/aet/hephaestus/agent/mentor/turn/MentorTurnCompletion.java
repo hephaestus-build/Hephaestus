@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
@@ -47,7 +47,7 @@ import tools.jackson.databind.JsonNode;
  * ({@code docs/contributor/unified-pi-runtime.mdx} § Delivery of shown feedback).
  */
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 @NamedInterface(name = "mentor-turn")
 public class MentorTurnCompletion {
@@ -93,16 +93,16 @@ public class MentorTurnCompletion {
     }
 
     /**
-     * How an attempt ended: as its host reported, or as the worker decided when the host could not report.
+     * How an attempt ended: as its host reported, or as the server decided when the host could not report.
      *
-     * @param entries every Pi entry the attempt appended; none when the worker ends it
+     * @param entries every Pi entry the attempt appended; none when the server ends it
      * @param error what the developer reads about a failed turn
-     * @param cause what the operator reads about it in the worker log and on the turn: the host's reason and kind of
-     *     failure, or why the worker ended the attempt itself. It is logged and stored as given, so it names closed
+     * @param cause what the operator reads about it in the server log and on the turn: the host's reason and kind of
+     *     failure, or why the server ended the attempt itself. It is logged and stored as given, so it names closed
      *     kinds and classes, never a host's, a provider's or an exception's text.
-     * @param lastFailedCall the attempt's last model call that failed, as the worker's LLM proxy saw it; {@code null}
+     * @param lastFailedCall the attempt's last model call that failed, as the server's LLM proxy saw it; {@code null}
      *     when none did
-     * @param lastPartial the partial answer this worker sent last, which readers may have seen; {@code null} before
+     * @param lastPartial the partial answer this server sent last, which readers may have seen; {@code null} before
      *     the first
      */
     public record Ending(

@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * The tools Pods of conversation turns: each runs only the tools program of tool protocol v1, on TCP, and its host
- * dials it. The worker never runs a command in one; it starts, lists and removes them.
+ * dials it. The server never runs a command in one; it starts, lists and removes them.
  */
 public interface ToolsPods {
 

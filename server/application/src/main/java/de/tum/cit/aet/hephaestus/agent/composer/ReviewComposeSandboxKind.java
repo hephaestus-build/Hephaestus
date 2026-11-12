@@ -20,7 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -49,7 +49,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
  * without spending an attempt, and its next claim decides again: the run never composes on a decision it lost.
  */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @WorkspaceAgnostic("Each call names a run, which carries its workspace, and the gateway checked it")
 public class ReviewComposeSandboxKind implements SandboxRunKind {

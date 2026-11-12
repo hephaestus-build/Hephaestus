@@ -8,9 +8,9 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.ConversationEligibilityDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticePageSupportDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateFeedbackHistoryDTO;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
@@ -47,7 +47,7 @@ import org.springframework.stereotype.Service;
 
 /** Checks historical copy authority and prepares one feedback package from the permitted composition. */
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class FeedbackCompositionService {
     /** The newest matching pieces of earlier private feedback one composition reads. */

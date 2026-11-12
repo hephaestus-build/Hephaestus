@@ -241,18 +241,11 @@ management:
             # `integrationConsumer` (NATS) stay in /actuator/health and the metrics, which ADR 0008's
             # webhook-server-down alert reads.
             #
-            # `practiceReview` is the worker's own configuration. `kubernetesSandbox` holds a Kubernetes
-            # worker unready until its isolation probe passed, so a rollout drains an old worker only after
-            # the new one proved the cluster. `hephTurnDispatcher` also requires its conversation host's command channel.
+            # `practiceReview` and `kubernetesSandbox` (the sandbox isolation probe) stay out too: the server
+            # serves its API whether or not it may start sandboxes, and no sandbox starts without the proof.
             group:
                 readiness:
-                    include: readinessState,practiceReview,kubernetesSandbox,hephTurnDispatcher
-            # Most of the group is role-gated, and the default (true) aborts the refresh wherever a
-            # named contributor is absent — so every container that is not a Kubernetes worker, plus the
-            # specs and test profiles. What it removes is a spelling check, and
-            # WebhookIngestionCannotFailSilentlyTest runs that against every role at once rather than
-            # each container against only its own.
-            validate-group-membership: false
+                    include: readinessState
         # Disable potentially sensitive endpoints
         env:
             enabled: false
@@ -413,23 +406,20 @@ hephaestus:
     # ═══════════════════════════════════════════════════════════════════════════
     # RUNTIME ROLES (single JAR, deploy-config-selected mode)
     # ═══════════════════════════════════════════════════════════════════════════
-    # Three property keys (see ADR 0005 baseline + ADR 0008 webhook role):
+    # Two property keys (see ADR 0005 baseline + ADR 0008 webhook role):
     #   server  — WIRED. Gates ServerSchedulingConfig (@EnableScheduling),
-    #     IntegrationNatsConsumer (the unified NATS pull consumer), and WorkspaceStartupListener.
+    #     IntegrationNatsConsumer (the unified NATS pull consumer), WorkspaceStartupListener,
+    #     the agent sandboxes, their gateway and the review executor.
     #     Setting false silences all @Scheduled methods and prevents workspace bootstrap.
-    #   worker  — Runs Kubernetes sandboxes and the poll-based review executor.
-    #     Setting false removes the Kubernetes sandbox runtime and the agent job poller.
     #   webhook — WIRED. Gates the integration.webhook receiver (controllers, HMAC
     #     verifier, JetStream publisher, stream bootstrap, health, lifecycle).
-    #     The webhook-server production container deploys with server=false + worker=false
-    #     + webhook=true so it runs webhook reception in isolation — restart-independent
-    #     from application-server. See ADR 0008.
-    # All three default true → single-JVM monolith (the dev topology; the Helm chart splits them).
+    #     The webhook-server production container deploys with server=false + webhook=true
+    #     so it runs webhook reception in isolation — restart-independent from
+    #     application-server. See ADR 0008.
+    # Both default true → single-JVM monolith (the dev topology; the Helm chart runs the webhook role apart).
     runtime:
         server:
             enabled: ${HEPHAESTUS_RUNTIME_SERVER_ENABLED:true}
-        worker:
-            enabled: ${HEPHAESTUS_RUNTIME_WORKER_ENABLED:true}
         webhook:
             enabled: ${HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED:true}
 
@@ -582,7 +572,7 @@ hephaestus:
         # the whole run.
         practice-model-calls: ${PRACTICE_REVIEW_PRACTICE_MODEL_CALLS:36}
         practice-output-tokens: ${PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS:48000}
-        # How long the worker may compose a review's feedback after its sandbox ends. The stale-job sweep
+        # How long the server may compose a review's feedback after its sandbox ends. The stale-job sweep
         # bounds it as well.
         composition-timeout: ${PRACTICE_REVIEW_COMPOSITION_TIMEOUT:10m}
         # Fleet-wide limits on review batches (ReviewBatchProperties). max-window and
@@ -638,7 +628,8 @@ hephaestus:
         default-resource-limits:
             cpus: ${SANDBOX_CPUS:1.0}
 
-    # The conversation loop's credential for its turn pulls (ConversationLoopProperties). The worker profile requires it.
+    # The conversation loop's credential for its turn pulls (ConversationLoopProperties). The chart sets it on the server
+    # when agent jobs run.
     conversation-loop:
         secret: ${HEPHAESTUS_CONVERSATION_LOOP_SECRET:}
 
@@ -696,7 +687,7 @@ hephaestus:
         # instance cannot convert to is a deploy-time typo, not something to start up and warn about.
         display-currency: ${HEPHAESTUS_LLM_DISPLAY_CURRENCY:}
         call-pools:
-            # Permit renewal window. Live workers cancel before expiry; admission and administration
+            # Permit renewal window. Live servers cancel before expiry; admission and administration
             # reclaim expired grants, keeping the provider rate debit for a minute after expiry.
             permit-lease: ${HEPHAESTUS_LLM_CALL_POOLS_PERMIT_LEASE:PT1M}
             # The longest pause of a call pool after a provider's refusal, whatever its Retry-After asks for.
@@ -709,8 +700,7 @@ hephaestus:
             allow-loopback: ${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:false}
             # Model endpoints on the operator's own network, comma-separated host names, IP addresses or
             # CIDR ranges (vllm.lab.example,10.20.0.0/16). Only the operator sets this: the guard exists
-            # because admins who configure providers must not reach the private network. Set the same
-            # value on the server and the worker.
+            # because admins who configure providers must not reach the private network.
             private-hosts: ${HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS:}
             private-hosts-allow-http: ${HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP:false}
         fx:
@@ -956,7 +946,7 @@ logging:
                 node-name: ${HOSTNAME:}
         json:
             add:
-                # The worker and webhook profiles and the all-roles local profile override this.
+                # The webhook profile and the all-roles local profile override this.
                 "[runtime.role]": server
             # MDC and key-value pairs share one `context` object of their own, so `runtime.*` or an
             # `error.*` pair cannot collide with these members. LogContextCustomizer writes it: Boot's

@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponse;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponseRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
@@ -38,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {

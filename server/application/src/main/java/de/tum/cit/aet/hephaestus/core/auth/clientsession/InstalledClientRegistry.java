@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
  * {@code https://<id>.chromiumapp.org/callback}, and exactly one origin, {@code chrome-extension://<id>},
  * so the callback allowlist and the CORS allowlist cannot drift apart. Redirects are matched by exact
  * string equality, never by prefix or pattern (RFC 8252 §8.10). Server role only: the root security
- * configuration reads its origins when present, and the worker and webhook roles serve no client.
+ * configuration reads its origins when present, and the webhook role serves no client.
  */
 @ConditionalOnServerRole
 @Component

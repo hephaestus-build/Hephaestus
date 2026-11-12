@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The workers' public keys, on the database clock, so that worker clocks never decide which keys are live. */
+/** The servers' public keys, on the database clock, so that server clocks never decide which keys are live. */
 @Repository
 @WorkspaceAgnostic("Fleet-wide verification keys; a token's workspace is a signed claim.")
 interface AttemptPublicKeyRepository extends JpaRepository<AttemptPublicKey, String> {

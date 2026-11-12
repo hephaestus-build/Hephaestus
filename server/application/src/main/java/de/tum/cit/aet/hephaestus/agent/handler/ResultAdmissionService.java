@@ -23,7 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
@@ -57,9 +57,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Admission is fenced by workspace, review, job, worker and exact execution attempt. */
+/** Admission is fenced by workspace, review, job, server and exact execution attempt. */
 @Service
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class ResultAdmissionService {
     public static final String INADMISSIBLE_REASON_CODE = "inadmissible_results";
     public static final String INTERRUPTED_AFTER_ADMISSION =

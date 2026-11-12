@@ -32,7 +32,7 @@ public class SandboxWorkspaceManager {
 
     /**
      * @param spool where archives wait for their sandbox: the volume that holds the evidence they are made from, whose
-     *     size follows the worker's work. The name of an archive lets a later process remove what this one left.
+     *     size follows the server's work. The name of an archive lets a later process remove what this one left.
      */
     public SandboxWorkspaceManager(Path spool) {
         this.spool = spool;

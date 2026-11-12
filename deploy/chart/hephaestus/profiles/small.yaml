@@ -1,10 +1,10 @@
 # One small cluster: a single k3s node of 4 vCPU, at least 16 GiB of memory (32 GiB gives more
-# headroom) and 150 GiB of disk. Bundled PostgreSQL and NATS, one worker that runs five reviews at a
+# headroom) and 150 GiB of disk. Bundled PostgreSQL and NATS, one server that runs five reviews at a
 # time, and bounded caches; the chart derives the sandbox quotas.
 # docs/admin/helm-chart.md § Profiles gives the arithmetic; a chart test checks that the requests,
 # one upgrade beside them, and the quota fit.
 #
-# The worker is on: reviews are the product. The operator states worker.sandbox.namespace and
+# The sandboxes are on: reviews are the product. The operator states sandbox.namespace and
 # networkPolicy.kubernetesApi, and the chart refuses to render without them
 # (docs/admin/kubernetes.mdx § Install).
 postgresql:
@@ -38,29 +38,20 @@ webhook:
       github: 6442450944B
     maxBytes: 536870912B
 server:
-  databasePool: { maximumPoolSize: 16, minimumIdle: 2 }
-  gitCache:
-    sizeLimit: 10Gi
-  resources:
-    limits: { ephemeral-storage: 12Gi }
-worker:
-  databasePool: { maximumPoolSize: 24, minimumIdle: 2 }
-  enabled: true
-  replicas: 1
-  # Drain the old worker before its replacement starts.
-  # Reviews and conversations pause during the drain and replacement.
+  databasePool: { maximumPoolSize: 40, minimumIdle: 2 }
+  # One node holds one server: the old server stops before its replacement starts. Each upgrade is an
+  # outage of the API. The gateway stays available while in-flight reviews finish.
   rolloutStrategy: Recreate
-  # The upgrade's Helm timeout must cover this drain, the shutdown and the new worker's start: past
-  # it, Helm rolls the release back. A chart test compares the three with the documented 20 minutes.
   drainTimeoutSeconds: 600
-  sandbox:
-    # Five reviews of 384 MiB. Each review beyond them takes 50m of CPU from the 29 resident turns
-    # while a backup runs.
-    reviewMemory: 1920Mi
   gitCache:
-    sizeLimit: 10Gi
+    sizeLimit: 20Gi
   resources:
-    limits: { ephemeral-storage: 12Gi }
+    limits: { ephemeral-storage: 22Gi }
+sandbox:
+  enabled: true
+  # Five reviews of 384 MiB. Each review beyond them takes 50m of CPU from the 29 resident turns
+  # while a backup runs.
+  reviewMemory: 1920Mi
 # One node: one loop, and a second one only while it rolls out.
 conversationLoop:
   replicas: 1

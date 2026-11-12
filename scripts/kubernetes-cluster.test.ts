@@ -10,6 +10,7 @@ import { parseAllDocuments } from "yaml";
 
 import {
 	restoreFailures,
+	remainingProbeResources,
 	soleManager,
 	apiEndpoint,
 	applicationSecret,
@@ -152,16 +153,17 @@ function render(values: object) {
 	}
 }
 
-await test("the prepared values install two workers on the dev profile, with the bundled or an external PostgreSQL", () => {
+await test("the prepared values run the sandboxes on the dev profile's server, with the bundled or an external PostgreSQL", () => {
 	const api = { address: "172.18.0.3", port: 6443 };
 	const bundled = render(operatorValues({ images, commit: "c".repeat(40), api }));
-	const worker = bundled.find(
+	const server = bundled.find(
 		(resource) =>
 			resource.kind === "Deployment" &&
 			isRecord(resource.metadata) &&
-			resource.metadata.name === `${RELEASE}-worker`,
+			resource.metadata.name === `${RELEASE}-server`,
 	);
-	assert.ok(worker, "a worker Deployment");
+	assert.ok(server, "a server Deployment");
+	assert.match(JSON.stringify(server), /"name":"AGENT_ENABLED","value":"true"/u);
 	assert.ok(
 		bundled.some(
 			(resource) =>
@@ -416,13 +418,13 @@ await test("an upgrade check names each PostgreSQL or NATS Pod that it replaced 
 	assert.deepEqual(restartedPods(before, after), ["heph-postgresql-0", "heph-nats-0"]);
 });
 
-await test("the live Pod keeps the chart worker's UID, groups, capabilities, mounts, metadata and network labels", () => {
+await test("the live Pod keeps the chart server's UID, groups, capabilities, mounts, metadata and network labels", () => {
 	const template = {
 		metadata: {
-			labels: { "app.kubernetes.io/component": "worker", "app.kubernetes.io/instance": "heph" },
+			labels: { "app.kubernetes.io/component": "server", "app.kubernetes.io/instance": "heph" },
 		},
 		spec: {
-			serviceAccountName: "heph-worker",
+			serviceAccountName: "heph-server",
 			securityContext: {
 				runAsUser: 1000,
 				runAsGroup: 1000,
@@ -431,7 +433,7 @@ await test("the live Pod keeps the chart worker's UID, groups, capabilities, mou
 			},
 			containers: [
 				{
-					name: "worker",
+					name: "server",
 					image: "server@sha256:original",
 					imagePullPolicy: "IfNotPresent",
 					securityContext: {
@@ -463,7 +465,7 @@ await test("the live Pod keeps the chart worker's UID, groups, capabilities, mou
 	assert.deepEqual(deployment, before);
 });
 
-await test("live qualification refuses a worker shape that would bypass the image entrypoint", () => {
+await test("live qualification refuses a server shape that would bypass the image entrypoint", () => {
 	for (const containers of [
 		[],
 		[{ command: ["unexpected"] }],
@@ -691,5 +693,100 @@ void test("a policy that names no field manager fails the control, as a read wit
 	assert.throws(
 		() => soleManager([policy(["helm", "Update"]), stripped]),
 		/heph-sandbox-gateway name no field manager/u,
+	);
+});
+
+await test("verification accepts a completed probe and its succeeded Pod left by a stopped server", () => {
+	assert.deepEqual(
+		remainingProbeResources({
+			items: [
+				{
+					kind: "Job",
+					metadata: {
+						name: "old-probe",
+						uid: "job-uid",
+						labels: { "hephaestus.build/isolation-probe": "true" },
+					},
+					status: { conditions: [{ type: "Complete", status: "True" }] },
+				},
+				{
+					kind: "Pod",
+					metadata: {
+						name: "old-probe-pod",
+						labels: { "hephaestus.build/isolation-probe": "true" },
+						ownerReferences: [{ kind: "Job", uid: "job-uid", controller: true }],
+					},
+					status: { phase: "Succeeded" },
+				},
+			],
+		}),
+		[],
+	);
+});
+
+await test("verification still rejects active, failed, unlabelled and unrelated probe resources", () => {
+	const label = { "hephaestus.build/isolation-probe": "true" };
+	const complete = { conditions: [{ type: "Complete", status: "True" }] };
+	const owner = [{ kind: "Job", uid: "complete", controller: true }];
+	assert.deepEqual(
+		remainingProbeResources({
+			items: [
+				{
+					kind: "Job",
+					metadata: { name: "complete", uid: "complete", labels: label },
+					status: complete,
+				},
+				{
+					kind: "Job",
+					metadata: { name: "active", uid: "active", labels: label },
+					status: { active: 1 },
+				},
+				{
+					kind: "Job",
+					metadata: { name: "failed", uid: "failed", labels: label },
+					status: { conditions: [{ type: "Failed", status: "True" }] },
+				},
+				{ kind: "Job", metadata: { name: "unlabelled", uid: "unlabelled" }, status: complete },
+				{
+					kind: "Job",
+					metadata: { name: "incomplete", uid: "incomplete", labels: label },
+					status: { conditions: [{ type: "Complete", status: "False" }] },
+				},
+				{
+					kind: "Pod",
+					metadata: { name: "running", labels: label, ownerReferences: owner },
+					status: { phase: "Running" },
+				},
+				{
+					kind: "Pod",
+					metadata: { name: "failed-pod", labels: label, ownerReferences: owner },
+					status: { phase: "Failed" },
+				},
+				{
+					kind: "Pod",
+					metadata: { name: "unlabelled-pod", ownerReferences: owner },
+					status: { phase: "Succeeded" },
+				},
+				{
+					kind: "Pod",
+					metadata: {
+						name: "unrelated",
+						labels: label,
+						ownerReferences: [{ kind: "Job", uid: "other", controller: true }],
+					},
+					status: { phase: "Succeeded" },
+				},
+			],
+		}),
+		[
+			"job/active",
+			"job/failed",
+			"job/unlabelled",
+			"job/incomplete",
+			"pod/running",
+			"pod/failed-pod",
+			"pod/unlabelled-pod",
+			"pod/unrelated",
+		],
 	);
 });

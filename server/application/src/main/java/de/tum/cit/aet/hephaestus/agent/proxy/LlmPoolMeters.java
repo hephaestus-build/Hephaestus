@@ -85,7 +85,7 @@ final class LlmPoolMeters {
     static final List<String> TOKEN_TYPES = List.of("input", "output", "cache_read", "cache_write");
 
     /**
-     * Why a worker cancelled a call: it could not renew the permit, the database no longer had it, the attempt ended, or
+     * Why a server cancelled a call: it could not renew the permit, the database no longer had it, the attempt ended, or
      * the call outlived its hard end.
      */
     static final List<String> CANCEL_REASONS = List.of("no_renewal", "lease_lost", "attempt_ended", "past_deadline");
@@ -102,7 +102,7 @@ final class LlmPoolMeters {
     LlmPoolMeters(MeterRegistry registry) {
         this.registry = registry;
         this.renewalFailures = Counter.builder(AgentMetrics.LLM_POOL_LEASE_RENEWAL_FAILURES)
-                .description("Failed renewals of a worker's model call permits")
+                .description("Failed renewals of a server's model call permits")
                 .register(registry);
     }
 
@@ -154,7 +154,7 @@ final class LlmPoolMeters {
         for (AgentRunBand band : AgentRunBand.values()) {
             AtomicInteger count = new AtomicInteger();
             Gauge.builder(AgentMetrics.LLM_POOL_PERMITS_ACTIVE, count, AtomicInteger::get)
-                    .description("Permits this worker holds")
+                    .description("Permits this server holds")
                     .tag("pool", slug)
                     .tag("band", tag(band))
                     .strongReference(true)
@@ -175,7 +175,7 @@ final class LlmPoolMeters {
                         AgentMetrics.LLM_POOL_COOLDOWN_ACTIVE,
                         coolingUntil,
                         until -> System.nanoTime() - until.get() < 0 ? 1 : 0)
-                .description("1 while this worker knows its pool to be in a cooldown")
+                .description("1 while this server knows its pool to be in a cooldown")
                 .tag("pool", slug)
                 .strongReference(true)
                 .register(registry);
@@ -310,7 +310,7 @@ final class LlmPoolMeters {
 
     private Counter expiredCounter(String slug) {
         return Counter.builder(AgentMetrics.LLM_POOL_PERMITS_EXPIRED)
-                .description("Permits whose worker stopped renewing them while their call was in flight")
+                .description("Permits whose server stopped renewing them while their call was in flight")
                 .tag("pool", slug)
                 .register(registry);
     }
@@ -326,7 +326,7 @@ final class LlmPoolMeters {
 
     private Counter cancelledCounter(String slug, String reason) {
         return Counter.builder(AgentMetrics.LLM_POOL_SELF_FENCE_CANCELLED)
-                .description("Model calls a worker cancelled because it no longer held their permit")
+                .description("Model calls a server cancelled because it no longer held their permit")
                 .tag("pool", slug)
                 .tag("reason", reason)
                 .register(registry);
@@ -416,7 +416,7 @@ final class LlmPoolMeters {
             bucketReachedCounter(slug, bucket).increment();
         }
 
-        /** Records that the pool is in a cooldown for {@code millis} from now, as this worker knows it. */
+        /** Records that the pool is in a cooldown for {@code millis} from now, as this server knows it. */
         void coolingFor(long millis) {
             long until = System.nanoTime() + millis * 1_000_000;
             coolingUntil.accumulateAndGet(until, (current, next) -> current - next > 0 ? current : next);

@@ -42,18 +42,18 @@ networkPolicy:
   gateway:
     namespace: ""
     podLabels: {}
-  # Optional. The container ports of the `gateway` Pods that the worker may reach, for a model
+  # Optional. The container ports of the `gateway` Pods that the server may reach, for a model
   # endpoint that this cluster's own Gateway serves. Empty allows none.
-  workerGatewayPorts: []
+  modelGatewayPorts: []
   # Optional. Model endpoints on a private network outside the cluster, such as a vLLM server on the
-  # LAN: each item opens `ports` on `cidr` for the server and the worker. The `cidr` must be private
+  # LAN: each item opens `ports` on `cidr` for the server. The `cidr` must be private
   # (10/8, 172.16/12, 192.168/16, 100.64/10 or fc00::/7). Also list the endpoint in
-  # `config.llmPrivateHosts`. An endpoint in this cluster uses `workerGatewayPorts` instead.
+  # `config.llmPrivateHosts`. An endpoint in this cluster uses `modelGatewayPorts` instead.
   #   - cidr: 10.20.0.0/16
   #     ports: [8000]
   modelEndpoints: []
   # Optional. A Git provider on a private network outside the cluster: each item opens `ports` on
-  # `cidr` for the server and the worker. The `cidr` must be private. Also list the host in
+  # `cidr` for the server. The `cidr` must be private. Also list the host in
   # `config.scmPrivateHosts`.
   #   - cidr: 10.30.0.0/16
   #     ports: [443]
@@ -63,14 +63,14 @@ networkPolicy:
   metrics:
     namespace: ""
     podLabels: {}
-  # The OTLP trace collector in this cluster that the server, worker and webhook send to when
+  # The OTLP trace collector in this cluster that the server and webhook send to when
   # `config.tracing.otlpEnabled` is on, on the port of `config.tracing.otlpEndpoint`. An empty
-  # namespace opens no path. Outside the cluster, only the server and the worker reach a collector,
+  # namespace opens no path. Outside the cluster, only the server reaches a collector,
   # and only on 443 (externalEgress), so run the collector in the cluster.
   traceCollector:
     namespace: ""
     podLabels: {}
-  # Internet egress for the server and the worker: Git providers, OAuth, AI providers.
+  # Internet egress for the server: Git providers, OAuth, AI providers.
   externalEgress:
     cidr: 0.0.0.0/0
     except:
@@ -79,7 +79,7 @@ networkPolicy:
       - 192.168.0.0/16
       - 169.254.0.0/16
       - 100.64.0.0/10
-  # The Kubernetes API endpoint that the worker calls, as the network plugin sees it after any
+  # The Kubernetes API endpoint that the server calls, as the network plugin sees it after any
   # address translation. The operator states it for the qualified plugin. There is no default.
   kubernetesApi:
     cidr: ""
@@ -126,8 +126,8 @@ postgresql:
       # true when the endpoint's certificate comes from a CA of your own: put that CA in the
       # PostgreSQL TLS Secret as s3-ca.crt.
       privateCa: false
-    # A restore replaces the database with the backup. While it is enabled, the server, webhook,
-    # worker and PostgreSQL Pods stop, and a Job restores the PostgreSQL volume. Upgrade again with
+    # A restore replaces the database with the backup. While it is enabled, the server, webhook
+    # and PostgreSQL Pods stop, and a Job restores the PostgreSQL volume. Upgrade again with
     # restore.enabled=false to start them. docs/admin/backup-restore.mdx § Back up the database.
     restore:
       enabled: false
@@ -184,24 +184,35 @@ nats:
     cidr: ""
     port: 4222
 
-# server.replicas, webhook.replicas and worker.replicas set 0 only to stop the database roles for
-# maintenance. docs/admin/upgrade.mdx and docs/admin/maintenance.md.
+# server.replicas and webhook.replicas set 0 only to stop the database roles for maintenance.
+# docs/admin/upgrade.mdx and docs/admin/maintenance.md.
 #
-# The JVM roles (server, webhook, worker) request all of their memory limit: the buildpack sizes the
+# The JVM roles (server, webhook) request all of their memory limit: the buildpack sizes the
 # heap from the limit, so a node that has only the request cannot hold what the JVM grows to. Each
 # size is a measured resident set plus headroom (docs/admin/helm-chart.md § Profiles).
 server:
+  # The API, sync, delivery, and with sandbox.enabled the sandboxes' reviews and their gateway. Preparing code
+  # evidence can hold two connections per review.
   databasePool:
-    maximumPoolSize: 20
+    maximumPoolSize: 48
     minimumIdle: 5
-  # 1, or 0 to stop it. Never more until servers process provider events in order across replicas.
+  # 1, or 0 to stop it.
   replicas: 1
-  # Commit ingestion mirrors under the fabric root, on node storage. A cache: the server rebuilds it.
+  # One version at a time: JetStream replay fences are local to each server.
+  # The PostgreSQL inbox must provide per-item ordering before a rolling update is safe.
+  rolloutStrategy: Recreate
+  # How long a stopping server finishes its running reviews and claims none. A practice review's median run is
+  # 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review that still runs stops and is tried
+  # again, within its separate limit on drains.
+  drainTimeoutSeconds: 1800
+  # Commit ingestion mirrors and review clones under the fabric root, on node storage. A cache: the server
+  # rebuilds it.
   gitCache:
-    sizeLimit: 20Gi
+    sizeLimit: 70Gi
+  # The server's API and sync part, and about 18 MiB for each review that it runs at once (estimated).
   resources:
-    requests: { cpu: 250m, memory: 2560Mi, ephemeral-storage: 512Mi }
-    limits: { cpu: "4", memory: 2560Mi, ephemeral-storage: 22Gi }
+    requests: { cpu: 500m, memory: 3Gi, ephemeral-storage: 512Mi }
+    limits: { cpu: "4", memory: 3Gi, ephemeral-storage: 72Gi }
 
 # The release's migration Job: the server image in its migrate run mode, once per revision. Its
 # context holds the data source and Liquibase only.
@@ -249,11 +260,6 @@ webapp:
     requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 64Mi }
     limits: { cpu: 500m, memory: 256Mi, ephemeral-storage: 256Mi }
 
-# The worker role runs practice reviews and conversation turns in sandboxes. worker.enabled=true needs
-# worker.sandbox.namespace and networkPolicy.kubernetesApi. At its start, and then every
-# runtime.probeInterval, each worker proves that the cluster enforces the sandbox boundary; it stops
-# at its start, and runs no new sandbox later, if it does not.
-# docs/admin/sandboxes.md § Sandbox prerequisites.
 # The PriorityClasses of the Pods, highest first: roles, conversations, reviews
 # (docs/admin/sandboxes.md § Priorities). The chart creates them, which needs permission to create
 # cluster-wide objects. Where that is not allowed, set create to false and name three classes that
@@ -295,32 +301,36 @@ priorityClasses:
   conversations: ""
   reviews: ""
 
-worker:
-  databasePool:
-    maximumPoolSize: 32
-    minimumIdle: 5
+# The agent sandboxes: practice reviews and conversation turns, which the server starts in their own namespace.
+# sandbox.enabled=true needs sandbox.namespace and networkPolicy.kubernetesApi. At its start, and then every
+# runtime.probeInterval, each server proves that the cluster enforces the sandbox boundary; it runs no sandbox
+# while it does not. docs/admin/sandboxes.md § Sandbox prerequisites.
+sandbox:
   enabled: false
-  # Two workers on different nodes where the cluster has them: one keeps claiming while the other
-  # drains. 0 stops every worker and keeps its objects.
-  replicas: 2
-  sandboxGateway:
-    # Connections that the sandbox gateway holds open. A review holds about 54, and 170 at most.
+  # Required. The namespace that the operator created for this release's sandboxes alone, with the
+  # Restricted Pod Security level. Not the release namespace, and no other release's.
+  namespace: ""
+  # The memory that the sandbox nodes give review Pods. The reviews that run at once are this over one
+  # review Pod's request, 384 MiB (docs/admin/sandboxes.md § Sandbox sizes), and its RuntimeClass
+  # overhead. The reviews tier's quota and the compositions follow. 3840Mi holds 10 reviews.
+  reviewMemory: 3840Mi
+  # One quota for each tier of sandboxes, reviews and conversations, derived from reviewMemory, the
+  # server's replicas, conversationLoop.turns and sandbox-pod-requests.json. Conversation sandboxes
+  # can never take a review's room.
+  quota:
+    enabled: true
+  # The server's sandbox gateway, the port that sandboxes call.
+  gateway:
+    # Connections that the gateway holds open. A review holds about 54, and 170 at most.
     maxConnections: 4096
-  # How long a stopping worker serves its running attempts and claims nothing new. A practice
-  # review's median run is 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review
-  # that is still running stops and is tried again, within its separate limit on drains.
-  drainTimeoutSeconds: 1800
-  # RollingUpdate starts the new workers before the old ones drain. Recreate stops the old workers
-  # first, for a node that cannot hold both: each upgrade is then a planned outage of reviews and conversations.
-  rolloutStrategy: RollingUpdate
-  # The sandbox nodes. The chart passes each value to the worker as it is.
+  # The sandbox nodes. The chart passes each value to the server as it is.
   runtime:
-    # Optional. The RuntimeClass of every sandbox Pod that the worker starts. It must support user
+    # Optional. The RuntimeClass of every sandbox Pod that the server starts. It must support user
     # namespaces. Empty uses the cluster's default runtime.
     runtimeClassName: ""
     # The RuntimeClass's overhead.podFixed, which the quotas count with each sandbox Pod's requests.
     # Set it for a compatible class with an overhead.
-    # Only the chart reads it: the worker reads the overhead from its Pods.
+    # Only the chart reads it: the server reads the overhead from its Pods.
     podOverhead:
       cpuMillis: 0
       memoryMi: 0
@@ -330,61 +340,42 @@ worker:
     # Optional. The node labels and tolerations of every sandbox pod.
     nodeSelector: {}
     tolerations: []
-    # How often each worker runs the isolation probe again. At least 1m.
+    # How often each server runs the isolation probe again. At least 1m.
     probeInterval: 15m
-  gitCache:
-    sizeLimit: 50Gi
-  resources:
-    requests: { cpu: 250m, memory: 2Gi, ephemeral-storage: 512Mi }
-    limits: { cpu: "4", memory: 2Gi, ephemeral-storage: 52Gi }
-  sandbox:
-    # Required. The namespace that the operator created for this release's sandboxes alone, with the
-    # Restricted Pod Security level. Not the release namespace, and no other release's.
-    namespace: ""
-    # The memory that the sandbox nodes give review Pods. The reviews that run at once are this over one
-    # review Pod's request, 384 MiB (docs/admin/sandboxes.md § Sandbox sizes), and its RuntimeClass
-    # overhead. Each worker runs as many of them as its memory limit holds. The reviews tier's quota and the
-    # worker's threads follow. 3840Mi holds 10 reviews.
-    reviewMemory: 3840Mi
-    # One quota for each tier of sandboxes, reviews and conversations, derived from reviewMemory, the
-    # workers' replicas, conversationLoop.turns and sandbox-pod-requests.json. Conversation sandboxes
-    # can never take a review's room.
-    quota:
-      enabled: true
-    # The agent-sandbox controller in the release namespace, for a cluster whose admins grant it the
-    # read-only ClusterRole of the admin bundle (docs/admin/managed-cluster.mdx). Off: the cluster runs
-    # the controller of k3s-agent-sandbox.yaml.
-    controller:
-      enabled: false
-      # A platform pin, like the controller of k3s-agent-sandbox.yaml, which it equals: a chart test
-      # compares them, and scan-platform-images.ts checks that file's pin.
-      image: registry.k8s.io/agent-sandbox/agent-sandbox-controller:v1.0.10@sha256:594f4853913bca2b336d0267fe0978445f1aaa5837ed23797e48e745c8d6b610
+  # The agent-sandbox controller in the release namespace, for a cluster whose admins grant it the
+  # read-only ClusterRole of the admin bundle (docs/admin/managed-cluster.mdx). Off: the cluster runs
+  # the controller of k3s-agent-sandbox.yaml.
+  controller:
+    enabled: false
+    # A platform pin, like the controller of k3s-agent-sandbox.yaml, which it equals: a chart test
+    # compares them, and scan-platform-images.ts checks that file's pin.
+    image: registry.k8s.io/agent-sandbox/agent-sandbox-controller:v1.0.10@sha256:594f4853913bca2b336d0267fe0978445f1aaa5837ed23797e48e745c8d6b610
+    resources:
+      requests: { cpu: 10m, memory: 64Mi, ephemeral-storage: 64Mi }
+      limits: { cpu: "1", memory: 256Mi, ephemeral-storage: 128Mi }
+  # The Pod of each sandbox kind (docs/admin/sandboxes.md § Sandbox templates): the agent loop,
+  # its tools and the workspace in one container. The workspace counts as ephemeral storage, and the
+  # loop starts faster with at least one CPU as its limit.
+  templates:
+    # Optional. The RuntimeClass of the template Pods, and of the Pods that keep the agent image on
+    # their nodes. `gvisor` Pods keep host users (google/gvisor#13303); any other runs with
+    # hostUsers: false. Empty uses the cluster's default runtime.
+    runtimeClassName: ""
+    review:
       resources:
-        requests: { cpu: 10m, memory: 64Mi, ephemeral-storage: 64Mi }
-        limits: { cpu: "1", memory: 256Mi, ephemeral-storage: 128Mi }
-    # The Pod of each sandbox kind (docs/admin/sandboxes.md § Sandbox templates): the agent loop,
-    # its tools and the workspace in one container. The workspace counts as ephemeral storage, and the
-    # loop starts faster with at least one CPU as its limit.
-    templates:
-      # Optional. The RuntimeClass of the template Pods, and of the Pods that keep the agent image on
-      # their nodes. `gvisor` Pods keep host users (google/gvisor#13303); any other runs with
-      # hostUsers: false. Empty uses the cluster's default runtime.
-      runtimeClassName: ""
-      review:
-        resources:
-          requests: { cpu: 100m, memory: 512Mi, ephemeral-storage: 1Gi }
-          limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 4Gi }
-      conversation:
-        resources:
-          requests: { cpu: 100m, memory: 384Mi, ephemeral-storage: 256Mi }
-          limits: { cpu: "2", memory: 1Gi, ephemeral-storage: 2Gi }
+        requests: { cpu: 100m, memory: 512Mi, ephemeral-storage: 1Gi }
+        limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 4Gi }
+    conversation:
+      resources:
+        requests: { cpu: 100m, memory: 384Mi, ephemeral-storage: 256Mi }
+        limits: { cpu: "2", memory: 1Gi, ephemeral-storage: 2Gi }
 
-# The conversation loop runs every conversation turn of the installation. It runs with the workers,
+# The conversation loop runs every conversation turn of the installation. It runs with the sandboxes,
 # when turns is above 0. docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md § The Heph loop.
 conversationLoop:
   # Two loops on different nodes where the cluster has them. The single-node profile runs one.
   replicas: 2
-  # The turns that the whole installation runs at once. Each loop replica and each worker gets this cap.
+  # The turns that the whole installation runs at once. Each loop replica and each server gets this cap.
   # Unprofiled clusters keep eight; the single-node profile selects auto. Auto takes the declared CPU
   # budget, less the resident role requests, the loops, the tools Pods and the review reservations.
   # It gives 50m to each turn, up to 32. An explicit count overrides auto. A node larger than the

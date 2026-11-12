@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService.StandingSnapshot.PracticeStandingSnapshot;
 import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings;
@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Processing-qualified standings of one developer, using the Practice profile's selection and words. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 class DeveloperPracticeStandingsAdapter implements DeveloperPracticeStandings {
 

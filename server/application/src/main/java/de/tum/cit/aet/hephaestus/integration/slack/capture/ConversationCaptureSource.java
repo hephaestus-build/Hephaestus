@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.slack.capture;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ConversationThreadProjection;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -13,11 +13,11 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * The Slack threads the developer took part in, for a Heph turn. The worker builds the context of a turn, so this
+ * The Slack threads the developer took part in, for a Heph turn. The server builds the context of a turn, so this
  * source exists wherever capture runs. {@code SlackConversationProjector} bounds the document.
  */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
 public class ConversationCaptureSource implements ContentSource {
 

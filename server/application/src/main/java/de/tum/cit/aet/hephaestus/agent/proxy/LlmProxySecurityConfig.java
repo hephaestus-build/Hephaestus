@@ -14,7 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.RateLimitResponse;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.web.PayloadSizeFilter;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import jakarta.servlet.DispatcherType;
@@ -68,11 +68,11 @@ import tools.jackson.databind.ObjectMapper;
  *       them.
  * </ol>
  *
- * <p>Gated on the worker role rather than the practice-review feature flag, because disabling practice reviews must not
+ * <p>Gated on the agent runtime rather than the practice-review feature flag, because disabling practice reviews must not
  * break Heph turns.
  */
 @Configuration
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 class LlmProxySecurityConfig {
 
     /** The routes of a sandbox's own token: its pull, and later its run's context, lease and proposals. */

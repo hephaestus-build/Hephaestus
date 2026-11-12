@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Queues item execution before the request transaction commits. The parent starts when a worker claims its job. */
+/** Queues item execution before the request transaction commits. The parent starts when a server claims its job. */
 @Component
 @ConditionalOnServerRole
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)

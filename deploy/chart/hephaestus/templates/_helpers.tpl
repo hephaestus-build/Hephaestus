@@ -86,18 +86,18 @@ capabilities:
 {{/*
 The sandbox namespace, of review sandboxes and tools Pods. The operator creates
 it with the Restricted Pod Security level and names it here; the chart writes into it and never
-creates it. The worker receives the same string, and the runtime derives no name of its own.
+creates it. The server receives the same string, and the runtime derives no name of its own.
 */}}
 {{- define "hephaestus.sandboxNamespace" -}}
-{{- $namespace := required "worker.sandbox.namespace is required: name the namespace that the operator created for sandboxes" .root.Values.worker.sandbox.namespace -}}
+{{- $namespace := required "sandbox.namespace is required: name the namespace that the operator created for sandboxes" .root.Values.sandbox.namespace -}}
 {{- if eq $namespace .root.Release.Namespace -}}
-{{- fail "worker.sandbox.namespace must not be the release namespace: sandboxes need a namespace of their own" -}}
+{{- fail "sandbox.namespace must not be the release namespace: sandboxes need a namespace of their own" -}}
 {{- end -}}
 {{- $namespace -}}
 {{- end -}}
 
 {{/*
-The existing Sandbox Gateway port (SANDBOX_API_PORT, default 8081). The worker setting, the container
+The Sandbox Gateway port (SANDBOX_API_PORT, default 8081). The server setting, the container
 port and both gateway policies use this one value.
 */}}
 {{- define "hephaestus.gatewayPort" -}}
@@ -296,7 +296,7 @@ container names this version, commit and environment.
   value: {{ printf "https://%s" .Values.host | quote }}
 - name: HEPHAESTUS_TRUSTED_PROXIES
   value: {{ .Values.trustedProxies | quote }}
-{{- /* Both agent image guards load in every role (ADR 0031): a reference the workers cannot run
+{{- /* Both agent image guards load in every role (ADR 0031): a reference the server cannot run
 fails every pod, so each role is owed the lock's digest. */}}
 - name: HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST
   value: "true"
@@ -311,7 +311,7 @@ fails every pod, so each role is owed the lock's digest. */}}
   value: {{ .Values.config.slack.enabled | quote }}
 {{- end -}}
 
-{{/* The server and worker roles read the database and what it seals. The webhook role has neither (ADR 0066). */}}
+{{/* The server reads the database and what it seals. The webhook role has neither (ADR 0066). */}}
 {{- define "hephaestus.env.storedData" -}}
 - name: DATABASE_URL
   value: {{ include "hephaestus.databaseUrl" . | quote }}
@@ -333,7 +333,7 @@ fails every pod, so each role is owed the lock's digest. */}}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET" "optional" true) }}
 {{- end -}}
 
-{{/* The server and worker roles both reach the SCM. */}}
+{{/* The server reaches the SCM. */}}
 {{- define "hephaestus.env.scm" -}}
 # JGit writes its own configuration (jgit/config and its lock) under XDG_CONFIG_HOME, which defaults to
 # $HOME/.config on the read-only root: a repository preparation then fails. /tmp is an emptyDir.
@@ -357,8 +357,7 @@ fails every pod, so each role is owed the lock's digest. */}}
 
 {{/*
 Probes read the management listener's health groups, the same groups that /livez and /readyz serve
-on the application port. The worker binds its application port to loopback, so only the management
-port is reachable on every role.
+on the application port. Only the management port is reachable for probes on every role.
 */}}
 {{/*
 A pause before the container stops, so that the Gateway and the Service stop sending it requests
@@ -464,7 +463,7 @@ readinessProbe:
 {{- end -}}
 {{- end -}}
 
-{{/* Model calls go out from the server (connection test) and the worker (LLM proxy); both must agree. */}}
+{{/* Model calls go out from the server: the connection test and the LLM proxy. */}}
 {{- define "hephaestus.env.modelEgress" -}}
 - name: HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS
   value: {{ join "," .Values.config.llmPrivateHosts | quote }}
@@ -508,7 +507,7 @@ readinessProbe:
 {{- end -}}
 
 {{/*
-The sandbox pods that may reach the workers' gateway, by their kind: review sandboxes and the sandboxes of
+The sandbox pods that may reach the servers' gateway, by their kind: review sandboxes and the sandboxes of
 every SandboxTemplate kind. A sandbox's credential, not this selector, binds it to its own subject. Tools
 Pods never match.
 */}}
@@ -727,44 +726,35 @@ RuntimeClass overhead. A smaller request in sandbox-pod-requests.json runs more 
 */}}
 {{- define "hephaestus.clusterReviews" -}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
-{{- $memory := include "hephaestus.memoryMi" (dict "value" .Values.worker.sandbox.reviewMemory "name" "worker.sandbox.reviewMemory") | int -}}
-{{- $review := add (int $table.review.memoryMi) (int .Values.worker.runtime.podOverhead.memoryMi) -}}
+{{- $memory := include "hephaestus.memoryMi" (dict "value" .Values.sandbox.reviewMemory "name" "sandbox.reviewMemory") | int -}}
+{{- $review := add (int $table.review.memoryMi) (int .Values.sandbox.runtime.podOverhead.memoryMi) -}}
 {{- if lt $memory $review -}}
-{{- fail (printf "worker.sandbox.reviewMemory holds no review: one review Pod requests %dMi" $review) -}}
+{{- fail (printf "sandbox.reviewMemory holds no review: one review Pod requests %dMi" $review) -}}
 {{- end -}}
 {{- div $memory $review -}}
 {{- end -}}
 
 {{/*
-The reviews that one worker runs at once: the sandbox nodes' reviews, up to what the worker's memory limit holds. The
-buildpack reserves 240 MiB of code cache, 261 MiB of metaspace, the worker's 128 MiB of direct memory
-(JAVA_TOOL_OPTIONS) and 1 MiB of stack per thread, and gives the heap the rest.
-The worker runs 120 threads at rest and 8 more per review; its heap holds 256 MiB at rest and 10 MiB per review. A limit
-below one review fails the render: the JVM would stop at its start, or run out of heap.
+The reviews that one server runs at once: the sandbox nodes' reviews. Each costs the server about 18 MiB of threads
+and heap (estimated), which server.resources holds.
 */}}
-{{- define "hephaestus.workerReviews" -}}
-{{- $mi := include "hephaestus.memoryMi" (dict "value" .Values.worker.resources.limits.memory "name" "worker.resources.limits.memory") | int -}}
-{{- $atRest := add 501 128 120 256 -}}
-{{- $perReview := add 8 10 -}}
-{{- if lt $mi (add $atRest $perReview) -}}
-{{- fail (printf "worker.resources.limits.memory must be at least %dMi for one review's threads and heap" (add $atRest $perReview)) -}}
-{{- end -}}
-{{- min (int (include "hephaestus.clusterReviews" .)) (div (sub $mi $atRest) $perReview) -}}
+{{- define "hephaestus.serverReviews" -}}
+{{- include "hephaestus.clusterReviews" . -}}
 {{- end -}}
 
-{{/* The reviews that all workers run at once, which the reviews tier's quota holds. */}}
+{{/* The reviews that all servers run at once, which the reviews tier's quota holds. */}}
 {{- define "hephaestus.reviews" -}}
-{{- min (int (include "hephaestus.clusterReviews" .)) (mul (int .Values.worker.replicas) (int (include "hephaestus.workerReviews" .))) -}}
+{{- include "hephaestus.clusterReviews" . -}}
 {{- end -}}
 
-{{/* The existing review tier CPU reservation, including each running worker's probe and Pod overhead. */}}
+{{/* The existing review tier CPU reservation, including each running server's probe and Pod overhead. */}}
 {{- define "hephaestus.reviewCpuMillis" -}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
-{{- $replicas := int .Values.worker.replicas -}}
-{{- $running := ternary $replicas (mul $replicas 2) (eq .Values.worker.rolloutStrategy "Recreate") -}}
+{{- $replicas := int .Values.server.replicas -}}
+{{- $running := ternary $replicas (mul $replicas 2) (eq .Values.server.rolloutStrategy "Recreate") -}}
 {{- $reviews := int (include "hephaestus.reviews" .) -}}
 {{- $pods := add (mul $reviews (int $table.review.pods)) (mul $running (int $table.isolationProbe.pods)) -}}
-{{- add (mul $reviews (int $table.review.cpuMillis)) (mul $running (int $table.isolationProbe.cpuMillis)) (mul $pods (int .Values.worker.runtime.podOverhead.cpuMillis)) -}}
+{{- add (mul $reviews (int $table.review.cpuMillis)) (mul $running (int $table.isolationProbe.cpuMillis)) (mul $pods (int .Values.sandbox.runtime.podOverhead.cpuMillis)) -}}
 {{- end -}}
 
 {{/*
@@ -779,11 +769,9 @@ qualified model-only replay, not provider capacity.
 {{- if eq (toString $loop.turns) "auto" -}}
 {{- $budget := .Files.Get "turn-admission.json" | fromJson -}}
 {{- $roles := 0 -}}
-{{- range $component := list "server" "webhook" "webapp" "worker" -}}
+{{- range $component := list "server" "webhook" "webapp" -}}
 {{- $role := get $.Values $component -}}
-{{- if or (ne $component "worker") $role.enabled -}}
 {{- $roles = add $roles (mul (int $role.replicas) (int (include "hephaestus.cpuMillis" $role.resources.requests.cpu))) -}}
-{{- end -}}
 {{- end -}}
 {{- range $component := list "postgresql" "nats" -}}
 {{- $role := get $.Values $component -}}
@@ -794,16 +782,16 @@ qualified model-only replay, not provider capacity.
 {{- if and .Values.postgresql.bundled .Values.postgresql.backup.enabled -}}
 {{- $roles = add $roles (int (include "hephaestus.cpuMillis" .Values.postgresql.backup.resources.requests.cpu)) -}}
 {{- end -}}
-{{- if .Values.worker.enabled -}}
+{{- if .Values.sandbox.enabled -}}
 {{- $roles = add $roles (mul (add (int $loop.replicas) 1) (int (include "hephaestus.cpuMillis" $loop.resources.requests.cpu))) -}}
 {{- end -}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
 {{- $tools := add (int $table.activeToolsPods) (int $table.pooledToolsPods) -}}
-{{- $roles = add $roles (mul $tools (add (int $table.toolsPod.cpuMillis) (int .Values.worker.runtime.podOverhead.cpuMillis))) -}}
+{{- $roles = add $roles (mul $tools (add (int $table.toolsPod.cpuMillis) (int .Values.sandbox.runtime.podOverhead.cpuMillis))) -}}
 {{- $reviews := int (include "hephaestus.reviewCpuMillis" .) -}}
 {{- $available := max 0 (sub (int $budget.allocatableCpuMillis) (add $roles $reviews)) -}}
 {{- $turns := min (int $budget.maximumTurns) (div $available (int $budget.cpuMillisPerTurn)) -}}
-{{- if and .Values.worker.enabled (gt (int .Values.worker.replicas) 0) (lt $turns 1) -}}
+{{- if and .Values.sandbox.enabled (gt (int .Values.server.replicas) 0) (lt $turns 1) -}}
 {{- fail "Automatic turn admission has no CPU room in its budget of one small node; set conversationLoop.turns to a count, or to 0 to disable turns" -}}
 {{- end -}}
 {{- $turns -}}
@@ -840,16 +828,12 @@ qualified model-only replay, not provider capacity.
   value: {{ .minimumIdle | quote }}
 {{- end -}}
 
-{{/* All worker replicas can surge once; another overlapping rollout is outside this budget. */}}
+{{/* All server replicas can surge once; another overlapping rollout is outside this budget. */}}
 {{- define "hephaestus.databaseConnectionsRequired" -}}
 {{- $servers := int .Values.server.replicas -}}
-{{- $workers := 0 -}}
-{{- if .Values.worker.enabled -}}
-{{- $workers = int .Values.worker.replicas -}}
-{{- if eq .Values.worker.rolloutStrategy "RollingUpdate" -}}{{- $workers = mul 2 $workers -}}{{- end -}}
-{{- end -}}
-{{- $pooled := add (mul $servers (int .Values.server.databasePool.maximumPoolSize)) (mul $workers (int .Values.worker.databasePool.maximumPoolSize)) -}}
-{{- $listeners := add $servers $workers -}}
+{{- if eq .Values.server.rolloutStrategy "RollingUpdate" -}}{{- $servers = mul 2 $servers -}}{{- end -}}
+{{- $pooled := mul $servers (int .Values.server.databasePool.maximumPoolSize) -}}
+{{- $listeners := $servers -}}
 {{- /* One listener per role replica, migration pool, two backup sessions, four operator sessions, three superuser slots. */ -}}
 {{- add $pooled $listeners (int .Values.migration.databasePool.maximumPoolSize) 2 4 3 -}}
 {{- end -}}
@@ -859,7 +843,7 @@ qualified model-only replay, not provider capacity.
 {{- if hasKey .Values.postgresql.parameters "max_connections" -}}
 {{- $required := int (include "hephaestus.databaseConnectionsRequired" .) -}}
 {{- if gt $required (int .Values.postgresql.parameters.max_connections) -}}
-{{- fail (printf "PostgreSQL max_connections needs at least %d for role pools, one worker surge, listeners and maintenance/admin reserves" $required) -}}
+{{- fail (printf "PostgreSQL max_connections needs at least %d for role pools, one server surge, listeners and maintenance/admin reserves" $required) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -877,4 +861,68 @@ qualified model-only replay, not provider capacity.
 - name: database-setup
   configMap:
     name: {{ include "hephaestus.name" (dict "root" . "component" "database-setup") }}
+{{- end -}}
+
+{{/*
+The server's sandbox settings, with sandbox.enabled: the sandbox namespace, the gateway, the review capacity and the
+drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
+*/}}
+{{- define "hephaestus.env.sandbox" -}}
+{{- $sandbox := .Values.sandbox -}}
+{{- $runtime := $sandbox.runtime -}}
+{{- $port := include "hephaestus.gatewayPort" . -}}
+- name: SANDBOX_API_PORT
+  value: {{ $port | quote }}
+- name: SANDBOX_API_MAX_CONNECTIONS
+  value: {{ $sandbox.gateway.maxConnections | quote }}
+{{- $capacity := int (include "hephaestus.conversationTurns" .) }}
+{{- if gt $capacity 0 }}
+# The installation's conversation turns. Each server's claim checks this cap across all servers.
+- name: HEPHAESTUS_MENTOR_TURN_CAPACITY
+  value: {{ $capacity | quote }}
+{{- end }}
+# The conversation loop presents it when it pulls a turn.
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_CONVERSATION_LOOP_SECRET") }}
+# Also the review capacity: a server claims no more reviews than it may run sandboxes.
+- name: SANDBOX_MAX_CONCURRENT
+  value: {{ include "hephaestus.serverReviews" . | quote }}
+# The buildpack sizes the heap from this count: its default of 250 for the server, and 8 more per review.
+- name: BPL_JVM_THREAD_COUNT
+  value: {{ add 250 (mul 8 (int (include "hephaestus.serverReviews" .))) | quote }}
+- name: HEPHAESTUS_AGENT_DRAIN_TIMEOUT
+  value: {{ printf "%ds" (int .Values.server.drainTimeoutSeconds) | quote }}
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE
+  value: {{ include "hephaestus.sandboxNamespace" (dict "root" .) | quote }}
+# A sandbox claim names its kind's warm pool (sandbox-templates.yaml) and the gateway Service, whose address the
+# server resolves for the sandbox: a sandbox has no DNS.
+{{- range $kind := list "review" "conversation" }}
+- name: {{ printf "HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_%s" (upper $kind) }}
+  value: {{ include "hephaestus.name" (dict "root" $ "component" (printf "sandbox-%s" $kind)) | quote }}
+{{- end }}
+- name: HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL
+  value: {{ printf "http://%s.%s.svc:%v" (include "hephaestus.name" (dict "root" . "component" "sandbox-gateway")) .Release.Namespace $port | quote }}
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_POD_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.name
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_POD_IP
+  valueFrom:
+    fieldRef:
+      fieldPath: status.podIP
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_GATEWAY_PROBE_SERVICE
+  value: {{ printf "%s.%s.svc" (include "hephaestus.name" (dict "root" . "component" "sandbox-gateway-probe")) .Release.Namespace | quote }}
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_RUNTIME_CLASS_NAME
+  value: {{ $runtime.runtimeClassName | quote }}
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_SECCOMP_PROFILE
+  value: {{ $runtime.seccompProfile | quote }}
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_NODE_SELECTOR
+  value: {{ $runtime.nodeSelector | toJson | quote }}
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_TOLERATIONS
+  value: {{ $runtime.tolerations | toJson | quote }}
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_CONVERSATION_PRIORITY_CLASS
+  value: {{ include "hephaestus.priorityClass" (dict "root" . "tier" "conversations") | quote }}
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_REVIEW_PRIORITY_CLASS
+  value: {{ include "hephaestus.priorityClass" (dict "root" . "tier" "reviews") | quote }}
+- name: HEPHAESTUS_SANDBOX_KUBERNETES_PROBE_INTERVAL
+  value: {{ $runtime.probeInterval | quote }}
 {{- end -}}

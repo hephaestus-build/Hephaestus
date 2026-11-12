@@ -139,7 +139,7 @@ final class ReviewJobTelemetry {
     }
 
     Span startExecution(ReviewJob job, AgentRunFence run) {
-        // A persisted job can run long after its submitting request, or on another worker. Start
+        // A persisted job can run long after its submitting request, or on another server. Start
         // a real execution trace and retain the submission correlation separately, not a fake parent.
         return tracer.spanBuilder()
                 .setNoParent()

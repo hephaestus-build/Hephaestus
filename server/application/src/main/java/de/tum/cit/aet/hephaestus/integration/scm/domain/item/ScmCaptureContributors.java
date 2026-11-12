@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.GeneralReviewCommentContentSource;
@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
 
 /** Enforces consent for every known human whose selected SCM content can be exported. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ScmCaptureContributors {
     private final UserRepository users;

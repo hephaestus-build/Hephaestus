@@ -62,25 +62,27 @@ function changeEnvironment(
 	}
 	return documents.map((document) => stringify(document)).join("---\n");
 }
-await test("the Helm topology supplies four application containers and every scoped setting to its role", () => {
+await test("the Helm topology supplies three application containers and every scoped setting to its role", () => {
 	const result = check(rendered);
 	assert.deepEqual(result.failures, []);
-	assert.equal(result.applicationContainers.length, 4);
-	for (const role of ["server", "webhook", "worker", "migration"]) {
+	assert.equal(result.applicationContainers.length, 3);
+	for (const role of ["server", "webhook", "migration"]) {
 		assert.ok(result.applicationContainers.some((name) => name.endsWith(`:${role}`)));
 	}
 });
-await test("a worker cannot receive the server-only mail setting", () => {
+await test("a webhook receiver cannot receive the server-only mail setting", () => {
 	assert.ok(
-		check(changeEnvironment("worker", "SPRING_MAIL_HOST", "relay.example.com")).failures.some(
+		check(changeEnvironment("webhook", "SPRING_MAIL_HOST", "relay.example.com")).failures.some(
 			(failure) => failure.includes("disables the server role"),
 		),
 	);
 });
-await test("an omitted GitLab switch is rejected on the worker", () => {
+await test("an omitted GitLab switch is rejected on the server", () => {
 	assert.ok(
-		check(changeEnvironment("worker", "GITLAB_ENABLED")).failures.some(
-			(failure) => failure.includes("GITLAB_ENABLED") && failure.includes(":worker"),
+		check(changeEnvironment("server", "GITLAB_ENABLED")).failures.some(
+			(failure) =>
+				failure.includes("GITLAB_ENABLED") &&
+				failure.includes("no application container running the server role"),
 		),
 	);
 });
@@ -169,22 +171,22 @@ await test("profiles disable only their named roles and malformed overlays fail 
 	assert.deepEqual(
 		[
 			...readDisabledRoles(
-				"hephaestus:\n  runtime:\n    worker: {enabled: false}\n    server: {enabled: true}\n",
+				"hephaestus:\n  runtime:\n    webhook: {enabled: false}\n    server: {enabled: true}\n",
 			),
 		],
-		["worker"],
+		["webhook"],
 	);
 	const root = await mkdtemp(path.join(tmpdir(), "helm-role-profile-"));
 	try {
 		const resources = path.join(root, "server/application/src/main/resources");
 		await mkdir(resources, { recursive: true });
-		await writeFile(path.join(resources, "application-worker.yml"), "hephaestus: [broken");
+		await writeFile(path.join(resources, "application-webhook.yml"), "hephaestus: [broken");
 		await assert.rejects(readProfileRoles(root));
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
 });
-await test("a non-worker application container cannot mount the Docker socket", () => {
+await test("an application container cannot mount the Docker socket", () => {
 	const workload = `kind: Pod
 metadata: {name: unsafe}
 spec:
@@ -192,8 +194,6 @@ spec:
   containers:
     - name: server
       image: ${applicationImage}
-      env:
-        - {name: HEPHAESTUS_RUNTIME_WORKER_ENABLED, value: "false"}
 `;
 	assert.ok(
 		check(workload).failures.some((failure) => failure.includes("mounts /var/run/docker.sock")),
@@ -221,10 +221,12 @@ await test("nested defaults assign ownership to both variables", () => {
 		["OUTER", "INNER"],
 	);
 });
-await test("the disabled-worker render still checks every remaining role", () => {
+await test("the render without sandboxes still checks every role", () => {
 	const result = check(renderDeployTopology(REPO_ROOT, false));
 	assert.deepEqual(result.failures, []);
-	assert.ok(!result.applicationContainers.some((name) => name.endsWith(":worker")));
+	assert.equal(result.applicationContainers.length, 3);
+	// The server keeps its role and only loses the agent runtime: no gateway setting reaches it.
+	assert.equal(result.delivered.has("SANDBOX_API_PORT"), false);
 });
 await test("unnamed workloads and non-array environment lists are refused", () => {
 	for (const text of [

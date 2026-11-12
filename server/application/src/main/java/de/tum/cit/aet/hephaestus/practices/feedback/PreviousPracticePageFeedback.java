@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.FeedbackClosure;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackBasis;
@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @RequiredArgsConstructor
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class PreviousPracticePageFeedback {
 
     private final FeedbackRepository feedbackRepository;

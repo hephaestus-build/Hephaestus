@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler.composition;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.Base64;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -11,7 +11,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 @RequiredArgsConstructor
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class PinnedInlineAnchorQuery {
     private final ReviewCompositionBasisRepository bases;
     private final ObjectMapper mapper;

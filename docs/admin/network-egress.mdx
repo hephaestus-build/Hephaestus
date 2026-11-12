@@ -9,8 +9,8 @@ Use it to build a firewall allowlist.
 The [architecture diagram](./overview#architecture-and-network) shows where the main connections start and which ports the stack publishes.
 
 Sandboxes have no internet access.
-A review sandbox reaches only the sandbox gateway of its worker.
-The conversation loop, in the release namespace, reaches the workers' gateway and the conversation's tools Pods on TCP port 7100.
+A review sandbox reaches only the sandbox gateway of its server.
+The conversation loop, in the release namespace, reaches the servers' gateway and the conversation's tools Pods on TCP port 7100.
 A tools Pod has no egress.
 The [threat model](./threat-model#boundary-3-outbound-egress) gives the controls that limit the destinations below.
 
@@ -37,7 +37,7 @@ A [one-host install on k3s](./k3s) also needs these destinations:
 | `docker.io` | Pull the Traefik image by digest, and the images that k3s ships. |
 | The `Let's Encrypt` ACME API | Issue and renew the Gateway certificate through cert-manager. |
 
-A worker reaches a model endpoint through `networkPolicy.externalEgress`, which leaves out private addresses.
+A server reaches a model endpoint through `networkPolicy.externalEgress`, which leaves out private addresses.
 If this host's own Gateway serves the model endpoint, the connection ends at the Traefik Pod, a private address.
 Then set `networkPolicy.workerGatewayPorts: [8443, 8000]` in `site.yaml` ([Network policy](./helm-chart#network-policy)).
 
@@ -47,11 +47,11 @@ Then set `networkPolicy.workerGatewayPorts: [8443, 8000]` in `site.yaml` ([Netwo
 | --- | --- | --- | --- |
 | The `Let's Encrypt` ACME API                                                  | Issue and renew the TLS certificate.                                                                                                                                                                                                                                                                                                | cert-manager                                                 | When issuing or renewing an ACME certificate.                                                                                                |
 | The API of your DNS provider                                                  | Answer the DNS-01 challenge.                                                                                                                                                                                                                                                                                                        | cert-manager                                                 | When the selected ClusterIssuer uses DNS-01.                                                                                                 |
-| `github.com` and `api.github.com` | Sign-in, repository sync, feedback delivery, and Git fetches. | `application-server`, `application-worker` | When GitHub sign-in or a GitHub workspace is configured. |
-| The GitLab instance (`GITLAB_DEFAULT_SERVER_URL`, `GITLAB_OAUTH_BASE_URL`) | Sign-in, sync, group hook registration, feedback delivery, and Git fetches. | `application-server`, `application-worker` | When GitLab is configured. A private address also needs `HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS`. |
-| `slack.com`, the Slack API base | Slack API calls and Slack account linking. | `application-server`, `application-worker` | When `HEPHAESTUS_INTEGRATION_SLACK_ENABLED` is `true`. |
+| `github.com` and `api.github.com` | Sign-in, repository sync, feedback delivery, and Git fetches. | `application-server` | When GitHub sign-in or a GitHub workspace is configured. |
+| The GitLab instance (`GITLAB_DEFAULT_SERVER_URL`, `GITLAB_OAUTH_BASE_URL`) | Sign-in, sync, group hook registration, feedback delivery, and Git fetches. | `application-server` | When GitLab is configured. A private address also needs `HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS`. |
+| `slack.com`, the Slack API base | Slack API calls and Slack account linking. | `application-server` | When `HEPHAESTUS_INTEGRATION_SLACK_ENABLED` is `true`. |
 | The Outline origins in `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | Document sync and Outline account linking. | `application-server` | When `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` is `true`. |
-| The base URL of each AI provider connection | Model calls of practice reviews and conversations go through the LLM proxy of the worker. The server tests a connection when an admin selects **Test and fetch models**. A private address needs `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` ([Model endpoints on your own network](./ai-providers#model-endpoints-on-your-own-network)). | `application-worker`, `application-server` | When an admin registers a provider connection ([Connect an AI Provider](./ai-providers)). |
+| The base URL of each AI provider connection | Model calls of practice reviews and conversations go through the LLM proxy of the server. The server tests a connection when an admin selects **Test and fetch models**. A private address needs `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` ([Model endpoints on your own network](./ai-providers#model-endpoints-on-your-own-network)). | `application-server` | When an admin registers a provider connection ([Connect an AI Provider](./ai-providers)). |
 | `api.github.com` | The [update check](./upgrade#update-checks). | `application-server` | By default, on a release. A commit channel or a local build is never checked. `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` turns it off. |
 | `www.ecb.europa.eu` | Daily currency rates for the second display currency. | `application-server` | Only when `HEPHAESTUS_LLM_DISPLAY_CURRENCY` is set. `HEPHAESTUS_LLM_FX_DAILY_URL` points it at a mirror. |
 | Your SMTP relay (`SPRING_MAIL_HOST`) | Email. | `application-server` | Only when `SPRING_MAIL_HOST` is set. |

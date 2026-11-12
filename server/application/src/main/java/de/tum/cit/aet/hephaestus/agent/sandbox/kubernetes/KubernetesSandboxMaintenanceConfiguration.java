@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
@@ -10,19 +10,19 @@ import org.springframework.scheduling.config.FixedDelayTask;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
 /**
- * The isolation probe of a worker on Kubernetes ({@link KubernetesIsolationProbe}): once the gateway listens at the
- * start, where a probe that fails stops the worker, and then every {@link KubernetesSandboxProperties#probeInterval},
- * where a probe that fails stops new sandboxes until one passes again. The registrar has a thread of its own, so a probe
- * delays no other maintenance.
+ * The isolation probe of a server on Kubernetes ({@link KubernetesIsolationProbe}): once the gateway listens at the
+ * start, on a thread of its own so that the API never waits for it, and then every
+ * {@link KubernetesSandboxProperties#probeInterval}. Until a probe passes, and after one fails, the server starts no
+ * sandbox. The registrar has a thread of its own, so a probe delays no other maintenance.
  */
 @Configuration(proxyBeanMethods = false)
 @Profile("!specs & !cds-training")
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 public class KubernetesSandboxMaintenanceConfiguration {
 
     @Bean
     ApplicationListener<ApplicationReadyEvent> kubernetesIsolationProof(KubernetesIsolationProbe probe) {
-        return event -> probe.prove();
+        return event -> Thread.ofVirtual().name("sandbox-isolation-proof").start(probe::proveAtStart);
     }
 
     @Bean

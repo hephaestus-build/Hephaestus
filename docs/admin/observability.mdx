@@ -31,9 +31,9 @@ The alert or the objective tells the operator when the answer needs work.
 | Which statements take the most database time, and do tables collect dead rows? | `pg_stat_statements_seconds_total` by `queryid`, `pg_stat_user_tables_n_dead_tup`, `pg_long_running_transactions_oldest_timestamp_seconds`, with the [database metrics](./monitoring#turn-on-database-metrics) on | `HephaestusDatabaseDeadlocks`, `HephaestusDatabaseTransactionOpenLong`, `HephaestusDatabaseDeadRowsHigh`, `HephaestusDatabaseTransactionIdAgeHigh` |
 | How long does a provider event wait for its handling, and how long does the handling take? | `integration_message_lag_seconds`, `integration_message_process_duration_seconds`, by `kind`, with retries in `integration_consumer_nak_total` and dead letters in `integration_consumer_poison_total` | `HephaestusEventsDelayed` |
 | Does feedback earn trust? | `practice_result_recorded_total`, `practice_result_marked_total`, `practice_feedback_response_total`, and the [query by practice](./metrics#feedback-trust) | `HephaestusResultsMarkedIncorrect` |
-| Does work wait for a worker? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
+| Does work wait for a server? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | `HephaestusConversationModelWaitLong`, `HephaestusReviewModelWaitLong` |
-| Did a worker lose its model calls in flight? | `llm_pool_permits_expired_total`, `llm_pool_lease_renewal_failures_total` | `HephaestusModelPermitsExpired`, `HephaestusModelPermitRenewalFailing` |
+| Did a server lose its model calls in flight? | `llm_pool_permits_expired_total`, `llm_pool_lease_renewal_failures_total` | `HephaestusModelPermitsExpired`, `HephaestusModelPermitRenewalFailing` |
 | Do erasure and retention run, and do they finish? | `privacy_job_completed_total`, by `exported_job` and `outcome` | `HephaestusPrivacyJobFailing`, `HephaestusPrivacyJobNotRunning` |
 | Did the kernel kill a container for its memory? | kube-state-metrics | `HephaestusContainerOomKilled` |
 | How long does a model call take, how many tokens does it use, and how does it end? | `gen_ai_client_operation_duration_seconds`, `gen_ai_client_tokens_total`, `gen_ai_client_calls_total` by `outcome` | None |
@@ -108,9 +108,10 @@ A slow or missing dependency therefore never restarts a Pod, and never takes eve
 | Group | Members | Question |
 | --- | --- | --- |
 | Liveness (`/actuator/health/liveness`, `/livez`) | `livenessState` | Does the process run? |
-| Readiness (`/actuator/health/readiness`, `/readyz`) | `readinessState`, and on a worker `practiceReview` and `kubernetesSandbox` | Can this Pod serve now? |
+| Readiness (`/actuator/health/readiness`, `/readyz`) | `readinessState` | Can this Pod serve now? |
 
-NATS (`integrationConsumer`, `natsBroker`) and JetStream (`webhook`) are in neither group.
+NATS (`integrationConsumer`, `natsBroker`), JetStream (`webhook`), `practiceReview` and `kubernetesSandbox` are in neither group.
+A server serves its API whether or not it may start sandboxes, and it starts no sandbox before its isolation probe passes.
 They stay in `/actuator/health` and the metrics, which the alerts read.
 While the broker is slow, the receiver stays ready and answers deliveries with `503`.
 `natsBroker` is `DOWN` while the broker runs a NATS version older than 2.11. Live delivery works, but every webhook replay fails.

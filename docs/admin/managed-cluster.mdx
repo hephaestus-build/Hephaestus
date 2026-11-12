@@ -151,9 +151,8 @@ The admins repeat step 3 for each release.
      kubernetesApi:
        cidr: 192.168.10.11/32
        port: 6443
-   worker:
-     sandbox:
-       namespace: hephaestus-sandboxes
+   sandbox:
+     namespace: hephaestus-sandboxes
    ```
 
    `kubernetesApi` is an address from the EndpointSlice, a server node on port 6443, not the address of the `kubernetes` Service.
@@ -182,10 +181,10 @@ The admins repeat step 3 for each release.
    ```bash
    helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
      -f "chart-$VERSION/hephaestus/profiles/cluster.yaml" -f site.yaml \
-     --wait=watcher --wait-for-jobs --timeout 20m
+     --wait=watcher --wait-for-jobs --timeout 45m
    ```
 
-   The profile runs two workers with 16 reviews at a time across the sandbox nodes, and the agent-sandbox controller in the release namespace.
+   The profile runs the server with room for 16 reviews across the sandbox nodes, and the agent-sandbox controller in the release namespace.
    It names the PriorityClasses of the admin bundle, so the chart creates no cluster-scoped object.
    It gives the server 3 GiB of memory, for the peak that a staging bench measured.
 
@@ -197,8 +196,8 @@ The admins repeat step 3 for each release.
    node scripts/cluster-preflight.ts --namespace hephaestus --values site.yaml --installed
    ```
 
-   The workers are ready only when their isolation probe passes on the real nodes: user namespaces, NetworkPolicy enforcement and the gateway path.
-   If a worker is not ready, its log names the probe item that failed.
+   The server is ready only when its isolation probe passes on the real nodes: user namespaces, NetworkPolicy enforcement and the gateway path.
+   If the server is not ready, its log names the probe item that failed.
 
 2. Run the sandbox isolation gate against the review template, with the cluster's DNS Service:
 

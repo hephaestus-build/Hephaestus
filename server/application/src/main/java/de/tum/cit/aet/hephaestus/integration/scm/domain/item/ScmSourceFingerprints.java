@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemFingerprintReader;
@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /** Git freshness reads the shared source observation; record freshness uses the capture renderer. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ScmSourceFingerprints implements ItemFingerprintReader {
     private final ScmItemService source;

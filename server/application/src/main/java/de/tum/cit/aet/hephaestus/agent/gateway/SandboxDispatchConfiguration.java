@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.List;
@@ -25,11 +25,11 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 /** The dispatch of sandboxes, where the sandbox owner is. */
 @Configuration(proxyBeanMethods = false)
 @Profile("!specs & !cds-training")
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 class SandboxDispatchConfiguration {
 
     /**
-     * Review sandboxes are limited by the review count that the chart gives each worker today. RUN-6 moves the count
+     * Review sandboxes are limited by the review count that the chart gives each server today. RUN-6 moves the count
      * into the capacity home, as one count for every replica.
      */
     @Bean
@@ -50,8 +50,8 @@ class SandboxDispatchConfiguration {
     }
 
     /**
-     * A pass when a run is queued, and one every lease renewal for runs that became due without a notification: its own
-     * scheduler thread, since the worker role does not enable {@code @Scheduled}.
+     * A pass when a run is queued, and one every lease renewal for runs that became due without a notification, on its
+     * own scheduler thread.
      */
     @Bean
     @Profile("!test")
@@ -62,7 +62,7 @@ class SandboxDispatchConfiguration {
 
     /**
      * Starts the passes when the application is ready, not while its context starts: no sandbox starts before the
-     * worker serves its gateway, and the run listener's connection opens only then.
+     * server serves its gateway, and the run listener's connection opens only then.
      */
     static final class DispatchPasses implements ApplicationListener<ApplicationReadyEvent>, DisposableBean {
 

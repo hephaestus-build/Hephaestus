@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.CallUsage;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.OpenCall;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -37,7 +37,7 @@ import tools.jackson.databind.ObjectMapper;
  * passthrough does.
  */
 @Component
-@ConditionalOnWorkerRole
+@ConditionalOnAgentRuntime
 class ProxyCallLedger {
 
     private static final Logger log = LoggerFactory.getLogger(ProxyCallLedger.class);

@@ -134,9 +134,9 @@ Never write cleanup that another test depends on having run.
 - **`EntityManager` is injected as a `@PersistenceContext` field**, not through the constructor
   (`WorkspaceMembershipService`, `GitHubUserProcessor`). Everything else is constructor injection through
   `@RequiredArgsConstructor`.
-- **A bean that exists in one runtime role only is gated on that role** (`@ConditionalOnServerRole`, `@ConditionalOnWorkerRole` or `@ConditionalOnWebhookRole`).
-  If a consumer must survive its absence, it takes `ObjectProvider` (`WorkspaceSyncTargetProvider`). An ungated consumer crash-loops the
-  `worker` and `webhook` runtimes, which start a different slice of the context.
+- **Gate a bean of one runtime role on it** (`@ConditionalOnServerRole`, `@ConditionalOnWebhookRole`, and
+  `@ConditionalOnAgentRuntime` for agent jobs). A consumer that must survive its absence takes `ObjectProvider`
+  (`WorkspaceSyncTargetProvider`), or it crash-loops the webhook role or a server without sandboxes.
 - **A test-tree `package-info.java` shadows the main one.** Test classes sit first on the classpath.
   Thus, a `@NullMarked`-only `package-info` under `src/test` hides a main package's `@NamedInterface` from Modulith.
   The architecture tier reports the package as non-exposed. Main's annotation already

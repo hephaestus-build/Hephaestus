@@ -1,6 +1,6 @@
 #### 🔴 Stop every role for the conversation loop
 
-Every conversation turn now runs in the conversation loop, a Deployment beside the workers.
+Every conversation turn now runs in the conversation loop, a Deployment beside the server.
 A worker of an earlier release cannot serve the turns of this release.
 
 **Operators:**
@@ -10,7 +10,7 @@ A worker of an earlier release cannot serve the turns of this release.
    Run `hephaestus-keys.sh` from this release with your usual options. It adds only the keys that the Secret lacks.
    Or set the key yourself to 64 lowercase hexadecimal characters, the output of `openssl rand -hex 32`.
 3. In your values, move `worker.conversationTurns` to `conversationLoop.turns`. The chart refuses `worker.conversationTurns`.
-   The count is now the turns of the whole installation, not of each worker.
-4. If you run a worker outside the chart, remove `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`.
-   Set `HEPHAESTUS_CONVERSATION_LOOP_SECRET` and `HEPHAESTUS_MENTOR_TURN_CAPACITY` on each worker. A worker without the key does not start.
+   The count is now the turns of the whole installation, not of each worker or server.
+4. If you run the image outside the chart, remove `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`.
+   Set `HEPHAESTUS_CONVERSATION_LOOP_SECRET` and `HEPHAESTUS_MENTOR_TURN_CAPACITY` on each server with `AGENT_ENABLED=true`. A server without the key hands out no conversation turn.
 5. Continue with phase 2 of the procedure.

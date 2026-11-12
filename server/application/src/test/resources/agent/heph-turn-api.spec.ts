@@ -172,7 +172,7 @@ void test("the host sends its partial answer, searches, document reads and end i
 		const read = recordOf(contract("sandbox-document.request.json"));
 		const end = recordOf(contract("end.request.json"));
 		const deadline = recordOf(contract("end-deadline.request.json"));
-		// The worker binds the update; its text is the whole snapshot, as the loop's encoder writes it.
+		// The server binds the update; its text is the whole snapshot, as the loop's encoder writes it.
 		const snapshot = recordOf(JSON.parse(String(partial.text)));
 		assert.ok(isPartialMessages(snapshot.messages));
 		assert.ok(isList(end.entries));
@@ -427,10 +427,10 @@ void test("a sandbox refusal is an answer, and an answer of another shape fails 
 			detail: "No tools can start now.",
 		});
 		await assert.rejects(worker.api.read({ path: "INDEX.md" }, signal), {
-			message: "the worker sent a malformed sandbox/document answer",
+			message: "the server sent a malformed sandbox/document answer",
 		});
 		await assert.rejects(worker.api.exec({ command: "true" }, signal), {
-			message: "the worker sent a malformed sandbox/bind answer",
+			message: "the server sent a malformed sandbox/bind answer",
 		});
 		assert.deepEqual(worker.received[0]?.body, { path: "inputs/context/nothing.json" });
 	} finally {

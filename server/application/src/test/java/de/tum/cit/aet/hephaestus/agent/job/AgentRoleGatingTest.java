@@ -32,13 +32,11 @@ class AgentRoleGatingTest extends BaseUnitTest {
     private static final String AGENT_ON = RuntimeRole.AGENT_ENABLED_PROPERTY + "=true";
 
     @Test
-    void shouldPollJobsOnlyWhenAgentJobsAndTheWorkerRoleAreOn() {
+    void shouldPollJobsOnlyWithTheAgentRuntime() {
         assertThat(registers(ReviewSandboxRuns.class)).isFalse();
         assertThat(registers(ReviewSandboxRuns.class, AGENT_ON)).isTrue();
-        assertThat(registers(ReviewSandboxRuns.class, AGENT_ON, RuntimeRole.WORKER_PROPERTY + "=false"))
-                .isFalse();
         assertThat(registers(ReviewSandboxRuns.class, AGENT_ON, RuntimeRole.SERVER_PROPERTY + "=false"))
-                .isTrue();
+                .isFalse();
     }
 
     @ParameterizedTest
@@ -73,21 +71,8 @@ class AgentRoleGatingTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldBuildWorkerAdmissionWithoutServerControllers() {
-        roleContext(false, true, false).run(context -> {
-            assertThat(context)
-                    .hasNotFailed()
-                    .hasSingleBean(ResultAdmissionService.class)
-                    .hasSingleBean(PublicReviewEligibility.class)
-                    .hasSingleBean(ReviewCompositionContinuation.class)
-                    .doesNotHaveBean(MentorConversationController.class)
-                    .doesNotHaveBean(MentorLiveController.class);
-        });
-    }
-
-    @Test
     void shouldBuildWebhookWithoutCaptureOrConversationBeans() {
-        roleContext(false, false, true)
+        roleContext(false, true)
                 .run(context -> assertThat(context)
                         .hasNotFailed()
                         .doesNotHaveBean(ResultAdmissionService.class)
@@ -97,7 +82,7 @@ class AgentRoleGatingTest extends BaseUnitTest {
                         .doesNotHaveBean(MentorLiveController.class));
     }
 
-    private static ApplicationContextRunner roleContext(boolean server, boolean worker, boolean webhook) {
+    private static ApplicationContextRunner roleContext(boolean server, boolean webhook) {
         var actual = List.of(
                 ResultAdmissionService.class,
                 PublicReviewEligibility.class,
@@ -106,9 +91,7 @@ class AgentRoleGatingTest extends BaseUnitTest {
                 MentorLiveController.class);
         return new ApplicationContextRunner()
                 .withPropertyValues(
-                        RuntimeRole.SERVER_PROPERTY + "=" + server,
-                        RuntimeRole.WORKER_PROPERTY + "=" + worker,
-                        RuntimeRole.WEBHOOK_PROPERTY + "=" + webhook)
+                        RuntimeRole.SERVER_PROPERTY + "=" + server, RuntimeRole.WEBHOOK_PROPERTY + "=" + webhook)
                 .withUserConfiguration(actual.toArray(Class<?>[]::new))
                 .withInitializer(context -> {
                     var supplied = new HashSet<Class<?>>();

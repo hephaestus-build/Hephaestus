@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
+import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
@@ -24,7 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
+import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
@@ -60,6 +61,7 @@ import org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebSer
 import org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -96,10 +98,17 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private ReviewJobRepository jobs;
 
+    @Autowired
+    private BucketResolver buckets;
+
     private final FakeSandboxClaims claims = new FakeSandboxClaims();
     private final HttpClient http = HttpClient.newHttpClient();
     private AgentSandboxes sandboxes;
     private ConfigurableApplicationContext gateway;
+
+    @Autowired
+    private ApplicationContext beans;
+
     private int gatewayPort;
     private long workspace;
 
@@ -145,15 +154,17 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
             factory.registerSingleton(
                     "conversationLoopProperties", new ConversationLoopProperties("0123456789abcdef".repeat(4)));
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
-            factory.registerSingleton("workerProperties", WorkerPropertiesFixtures.withDrain(Duration.ofMinutes(1)));
+            // The server's shared buckets, which the gateway's rate limit draws from.
+            factory.registerSingleton("bucketResolver", buckets);
+            factory.registerSingleton("agentReviewDrain", AgentReviewDrainFixtures.started(beans));
             factory.registerSingleton("globalControllerAdvice", new GlobalControllerAdvice());
         });
         gateway = application.run(
                 "--server.port=0",
                 "--spring.main.banner-mode=off",
                 "--spring.mvc.problemdetails.enabled=true",
-                "--" + RuntimeRole.WORKER_PROPERTY + "=true",
-                "--" + RuntimeRole.SERVER_PROPERTY + "=false",
+                // The test profile turns agent jobs off; the gateway belongs to the agent runtime.
+                "--" + RuntimeRole.AGENT_ENABLED_PROPERTY + "=true",
                 "--hephaestus.sandbox.gateway.port=0");
         gatewayPort = gateway.getBean(SandboxGatewayConnector.class).port();
     }

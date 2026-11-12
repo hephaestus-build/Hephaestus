@@ -18,8 +18,8 @@
  * Each finding is one line that the operator can forward to the cluster's admins. A `missing:` line
  * fails the preflight. An `unverified:` line names a fact that the operator's access cannot read.
  *
- * Isolation (user namespaces, NetworkPolicy enforcement) is not checked here: the worker's isolation
- * probe checks it on the real nodes, and the worker is not ready until the probe passes. `--installed`
+ * Isolation (user namespaces, NetworkPolicy enforcement) is not checked here: the server's isolation
+ * probe checks it on the real nodes, and the server is not ready until the probe passes. `--installed`
  * reads that result after the install.
  *
  *   node scripts/cluster-preflight.ts --namespace <app> --values <operator values.yaml> \
@@ -390,7 +390,7 @@ async function compareGrant(
 
 /** Both namespaces exist, at the Restricted Pod Security level. */
 async function namespaceChecks(inputs: Inputs, cluster: Cluster) {
-	const sandboxes = text(field(inputs.values, "worker", "sandbox", "namespace"));
+	const sandboxes = text(field(inputs.values, "sandbox", "namespace"));
 	const findings: Finding[] = [];
 	for (const namespace of [inputs.namespace, sandboxes].filter((name) => name !== "")) {
 		const read = await cluster.read("namespaces", namespace, null);
@@ -672,7 +672,7 @@ async function probeChecks(
 	context: string | undefined,
 ): Promise<Finding[]> {
 	const base = context === undefined ? [] : ["--context", context];
-	const deployment = `deployment/${release}-worker`;
+	const deployment = `deployment/${release}-server`;
 	try {
 		await output("kubectl", [
 			...base,
@@ -693,7 +693,7 @@ async function probeChecks(
 	const log = await output("kubectl", [...base, "-n", namespace, "logs", deployment]);
 	return log.includes(PROBE_PASSED)
 		? []
-		: [missing(`The worker ${namespace}/${release} reports no passed isolation probe.`)];
+		: [missing(`The server ${namespace}/${release} reports no passed isolation probe.`)];
 }
 
 /** Helm's merge of values files: later maps override earlier keys, everything else replaces. */

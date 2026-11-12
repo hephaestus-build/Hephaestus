@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafting;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -50,10 +49,7 @@ class ProductFeedbackModelAdapterTest extends BaseUnitTest {
     @BeforeEach
     void setUp() throws Exception {
         provider.start();
-        var worker = mock(WorkerProperties.class);
-        when(worker.resolvedWorkerId()).thenReturn("worker");
-        adapter = new ProductFeedbackModelAdapter(
-                drafting, models, permits, WebClient.builder(), new ObjectMapper(), worker);
+        adapter = new ProductFeedbackModelAdapter(drafting, models, permits, WebClient.builder(), new ObjectMapper());
         var ref = new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 1L, MODEL, null);
         var credential = new LlmModelResolver.ProxyCredential(
                 provider.url("/v1").toString(),

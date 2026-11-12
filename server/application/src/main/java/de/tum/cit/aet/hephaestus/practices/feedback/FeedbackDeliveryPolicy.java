@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendStateMachine;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 @RequiredArgsConstructor
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 public class FeedbackDeliveryPolicy {
     private final FeedbackRepository feedback;
     private final FeedbackOutcomes outcomes;

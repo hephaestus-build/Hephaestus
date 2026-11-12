@@ -54,7 +54,6 @@ class SlackSignatureVerifierTest extends BaseUnitTest {
                 .withPropertyValues(
                         "hephaestus.integration.slack.enabled=true",
                         RuntimeRole.SERVER_PROPERTY + "=" + server,
-                        RuntimeRole.WORKER_PROPERTY + "=" + !(server || webhook),
                         RuntimeRole.WEBHOOK_PROPERTY + "=" + webhook);
     }
 
@@ -76,13 +75,6 @@ class SlackSignatureVerifierTest extends BaseUnitTest {
                         .rootCause()
                         .isInstanceOf(IllegalStateException.class)
                         .hasMessageContaining("signing-secret is blank"));
-    }
-
-    @Test
-    @DisplayName("a worker-only process can enable Slack without the signing secret")
-    void workerOnlyDoesNotCreateVerifierOrRequireSigningSecret() {
-        slackEnabledWithRoles(false, false)
-                .run(context -> assertThat(context).hasNotFailed().doesNotHaveBean(SlackSignatureVerifier.class));
     }
 
     private static Stream<Arguments> rejectedSignatures() {

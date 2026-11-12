@@ -324,14 +324,14 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Workers stopped renewing at least three of a model's calls in flight in one hour
+          summary: Servers stopped renewing at least three of a model's calls in flight in one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusModelPermitRenewalFailing
         expr: sum(increase(llm_pool_lease_renewal_failures_total{job="hephaestus"}[15m])) >= 3
         labels:
           severity: warning
         annotations:
-          summary: Workers failed at least three renewals of their model call permits in 15 minutes
+          summary: Servers failed at least three renewals of their model call permits in 15 minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusAgentJobsFailing
         expr: sum(increase(agent_job_total{job="hephaestus",outcome=~"failed|timed_out"}[1h])) >= 3
@@ -413,7 +413,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: A worker failed five times in 15 minutes to publish or load the keys that verify sandbox credentials
+          summary: A server failed five times in 15 minutes to publish or load the keys that verify sandbox credentials
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewUnreachable
         expr: >-
@@ -460,7 +460,7 @@ groups:
         annotations:
           summary: One stage of review attempts ran past its bound at least three times in six hours
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusReviewWorkerLost
+      - alert: HephaestusReviewHolderLost
         expr: sum(increase(agent_run_reaped_total{job="hephaestus",kind="review",outcome="attempts_exhausted"}[1h])) > 0
         labels:
           severity: warning
@@ -511,7 +511,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: An agent job that can run has waited for a worker for more than one hour
+          summary: An agent job that can run has waited for a server with sandboxes for more than one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusOutboxStalled
         expr: max by (kind) (action_oldest_due_seconds{job="hephaestus"}) > 900
@@ -529,12 +529,12 @@ groups:
           summary: An outbox action ended uncertain, so its write may have reached the provider and nothing confirms it
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusSandboxIsolationFailed
-        expr: sandbox_isolation_passed{job="hephaestus",runtime_role="worker"} == 0
+        expr: sandbox_isolation_passed{job="hephaestus",runtime_role="server"} == 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: A worker's sandbox isolation probe failed, so the worker starts no sandbox
+          summary: A server's sandbox isolation probe failed, so the server starts no sandbox
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWalArchiveFailing
         expr: >-
@@ -729,7 +729,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: More than a fifth of the conversation turns of the last hour failed or lost their worker
+          summary: More than a fifth of the conversation turns of the last hour failed or lost their server
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusPageExperiencePoor
         expr: >-

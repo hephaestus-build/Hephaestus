@@ -61,6 +61,26 @@ spec:
       ports:
         - port: http
           protocol: TCP
+    {{- if .Values.sandbox.enabled }}
+    # The gateway port admits only the sandboxes of the release's sandbox namespace and the conversation loop.
+    # No route of the Gateway reaches it.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ include "hephaestus.sandboxNamespace" (dict "root" .) }}
+          podSelector:
+            {{- include "hephaestus.policy.gatewaySources" . | nindent 12 }}
+      ports:
+        - port: {{ include "hephaestus.gatewayPort" . }}
+          protocol: TCP
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 14 }}
+      ports:
+        - port: {{ include "hephaestus.gatewayPort" . }}
+          protocol: TCP
+    {{- end }}
     {{- include "hephaestus.policy.metricsIngress" (dict "root" . "port" "management") | nindent 4 }}
   egress:
     {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
@@ -68,6 +88,26 @@ spec:
     {{- include "hephaestus.policy.externalEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.traceEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.modelEgress" . | nindent 4 }}
+    {{- with .Values.networkPolicy.modelGatewayPorts }}
+    # A model endpoint that this cluster's own Gateway serves: its public address translates to the
+    # Gateway Pods, a private address that the external egress rule leaves out.
+    - to:
+        {{- include "hephaestus.peer" $.Values.networkPolicy.gateway | nindent 8 }}
+      ports:
+        {{- range . }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
+    {{- end }}
+    {{- if .Values.sandbox.enabled }}
+    # The Kubernetes API, at the address and port that the operator qualified for the network plugin.
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.kubernetesApi.cidr }}
+      ports:
+        - port: {{ .Values.networkPolicy.kubernetesApi.port }}
+          protocol: TCP
+    {{- end }}
     {{- if .Values.config.email.host }}
     # Mail submission, only when email is configured. Notifications are sent from this role.
     - to:
@@ -192,7 +232,7 @@ spec:
   {{- end }}
   ingress:
     - from:
-        {{- range $component := list "server" "worker" "migration" }}
+        {{- range $component := list "server" "migration" }}
         {{- include "hephaestus.componentPeer" (dict "root" $root "component" $component) | nindent 8 }}
         {{- end }}
         {{- if .Values.postgresql.metrics.enabled }}
@@ -228,7 +268,6 @@ spec:
     matchLabels:
       {{- include "hephaestus.selectorLabels" (dict "root" . "component" "nats") | nindent 6 }}
   policyTypes: ["Ingress"]
-  # The worker role runs no NATS client.
   ingress:
     - from:
         {{- range $component := list "server" "webhook" }}
@@ -238,4 +277,4 @@ spec:
         - port: 4222
           protocol: TCP
 {{- end }}
-{{- /* The worker's own policies sit in worker.yaml with the sandbox namespaces they pair with. */}}
+{{- /* The policies of the sandbox namespace sit in sandbox.yaml. */}}

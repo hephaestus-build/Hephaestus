@@ -9,7 +9,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Revokes a workspace's tools Pods in the transaction that changes what its turns may read, on whichever process makes
- * the change. The revocation is a row, so a worker that misses the change's notification, as one that starts does,
+ * the change. The revocation is a row, so a server that misses the change's notification, as one that starts does,
  * misses nothing: its listener only deletes the revoked Pods' Jobs sooner than the reaper ({@link
  * TurnContextRevocations}).
  */
@@ -24,7 +24,7 @@ public class ConversationToolsPodRevocations {
         this.transactions = new TransactionTemplate(transactions);
     }
 
-    // Before the commit, as the notification: a Pod bound after the change keeps serving, and every worker that hears
+    // Before the commit, as the notification: a Pod bound after the change keeps serving, and every server that hears
     // the change finds its rows revoked.
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
     public void contextChanged(MentorLedgerEvents.ContextChanged change) {

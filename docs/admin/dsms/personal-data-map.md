@@ -74,7 +74,7 @@ The self-service account export is a separate, narrower operation. Self-service 
 | PostgreSQL outbox — `agent_action` | One effect that Hephaestus sends to the outside world, such as an email or a feedback copy on the reviewed work. It names the addressed account: for feedback, the developer. While it waits, an email's payload holds the identifiers of the notification, not its text. An admin's test email also holds the test address. A product-feedback issue's payload holds the issue title and body that routing rendered from the report. A feedback send's payload holds only the feedback id. A Slack post's payload holds only the ids of its entry and turn. Instance-admin person export includes the actions that address the account | A workspace's actions are removed with it. An action of the instance, such as a product-feedback issue, stays until it ends. A pending issue of a removed report is not filed | Account purge and the instance-admin person job delete the account's actions in every state, sent ones included. A pending action is not sent. A send that already started still reaches the provider. A sent email stays with its recipient. The domain row, not the outbox, keeps the reference to a provider copy that erasure removes | The payload is cleared when the action ends. The ended row keeps the kind, outcome, reason and provider reference, such as the email Message-ID, for 30 days |
 | PostgreSQL durable work — `event_publication` | The Spring Modulith event publication registry has one row per pending or failed durable listener, including activity recording. It holds the serialized event and its delivery attempts. The event holds source and recipient ids, bounded lifecycle information and timestamps, never an address or work text. Activity facts contain ids, event types, timestamps and an optional source key. Instance-admin person export | Instance-scoped: workspace purge does not directly reach it. Delivery rechecks source and membership. Activity recording ends without a row when the workspace or its monitored repository is gone | The row holds ids only. Person erasure deletes matching queued activity facts through `ActivityPersonDataCatalog`. Notification delivery resolves the address at send time from `account.primary_email`. Account purge clears that field. A resubmitted notification for a purged account therefore has no recipient and completes as withheld | Completed publications are deleted. Notification kinds use their bounded lifecycle window ([Data retention](../data-retention.mdx)). Source erasure, opt-out or lost eligibility completes queued mail without sending on the next attempt. Activity facts remain retryable while their source is eligible. A missing or unmonitored repository or an inactive provider connection ends them on the next attempt. `server/application/src/main/java/de/tum/cit/aet/hephaestus/notification/NotificationRedeliveryJob.java`. |
 | NATS JetStream | Buffered webhook, message and document payloads. Not directly included in self-service export | No selective deletion | No selective deletion | Streams expire by age and byte ceiling ([Data retention](../data-retention.mdx)). Stream configuration tests enforce these bounds. |
-| Worker-local repository mirrors and attempt folders | Person export lists exact-linked repository history and safe mounted-copy facts, not raw Git objects or other profiles | Each server and worker removes a workspace's mirror when the workspace stops monitoring or keeping the repository. Workspace purge durably queues attempt-folder removal before deleting job rows, and the mounted worker confirms removal after commit | Person erasure cancels affected attempts and waits for mounted-store acknowledgement through `EvidenceFolderPersonDataCatalog`. Repository owners erase Git authorship at the source, not by rewriting Hephaestus mirrors | Attempt-input lifetime follows [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion). [`item-source-governance.md`](./item-source-governance.md) owns erasure requirements. Offline mounts retain a removal receipt until acknowledgement. |
+| Server-local repository mirrors and attempt folders | Person export lists exact-linked repository history and safe mounted-copy facts, not raw Git objects or other profiles | Each server removes a workspace's mirror when the workspace stops monitoring or keeping the repository. Workspace purge durably queues attempt-folder removal before deleting job rows, and the mounted server confirms removal after commit | Person erasure cancels affected attempts and waits for mounted-store acknowledgement through `EvidenceFolderPersonDataCatalog`. Repository owners erase Git authorship at the source, not by rewriting Hephaestus mirrors | Attempt-input lifetime follows [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion). [`item-source-governance.md`](./item-source-governance.md) owns erasure requirements. Offline mounts retain a removal receipt until acknowledgement. |
 | Research datasets outside the instance database, held by the research team at `[location]` | Pseudonymized copies of data that a participant allowed for research, and the key that links codes to people, stored apart from the data | Workspace purge does not reach them | The person-erasure job does not reach them. The operator removes the account's data from datasets that are not yet anonymized | Kept while the research continues, then deleted or anonymized. Anonymized datasets cannot be reached and can remain. See "Research use of existing stores". |
 | Configured LLM provider | Prompts and responses for enabled purposes. Provider/operator access process | A completed request cannot be retracted | Provider process | Deployment-specific provider terms must define the bound before processing starts. See the [processor checklist](./processor-checklist.md). |
 | Product feedback model provider | Code-redacted report text and public issue titles for the instance-level draft. Personal data can remain after redaction | A completed request cannot be retracted | Provider process under the operator’s agreement | Separate processor assessment for drafts, including retention, training terms, and transfers. The workspace AI choice does not select this instance-level model. |
@@ -206,7 +206,7 @@ and native write locks use that same type, origin and native subject, including 
 registered after erasure. Adding an equivalent provider row cannot reset a processing control.
 
 Slack workspace keys still distinguish suppression decisions. Sharing a lock does not merge teams.
-Hephaestus checks these exact processing controls when a question arrives and again when a worker starts its turn.
+Hephaestus checks these exact processing controls when a question arrives and again when a server starts its turn.
 An eligible model or a recreated mirrored profile cannot bypass an erased developer identity.
 This entry-point check does not itself remove copies that a running turn already holds.
 
@@ -367,11 +367,11 @@ Each workspace has its own mirror.
 To remove the objects, remove the repository from each workspace that monitors it.
 Wait for the mirror removal below, and then add the repository again.
 
-The server and each worker keep their own mirrors, one for each workspace and repository.
+Each server keeps its own mirrors, one for each workspace and repository.
 Each process checks its mirrors every minute.
 It removes a workspace's mirror when that workspace no longer monitors the repository and no longer keeps its synced work.
 A stopped GitLab project keeps its synced work, so its mirror stays.
-Thus, repository removal and workspace purge remove the mirrors on every server and worker.
+Thus, repository removal and workspace purge remove the mirrors on every server.
 A process that is offline removes them within a minute after it starts again.
 
 Other workspaces keep their own mirrors of the same repository.
@@ -414,7 +414,7 @@ folders, and cleanup retries a job that another owner holds on its next pass. Re
 exported as an unfiltered Git object archive.
 
 Workspace purge queues removal of all mounted attempt copies before deleting job rows. The request
-commits with the workspace purge. It does not wait for a worker inside that database transaction.
+commits with the workspace purge. It does not wait for a server inside that database transaction.
 An offline mounted store keeps its receipt and exact identity keys until it returns and confirms
 folder deletion. After that confirmation, the next review job retention run deletes the receipts of the
 purged workspace. Person erasure still waits for every selected store to acknowledge deletion.
@@ -565,7 +565,7 @@ Person erasure clears copying tool results, later Hephaestus answers in those co
 It also clears summaries and search results that could copy those words.
 The ledger reports each changed message to open conversations.
 A running turn drops its partial answer and sandbox when the context changes.
-A reconnected worker checks the durable erasure receipts before keeping an older attempt.
+A reconnected server checks the durable erasure receipts before keeping an older attempt.
 
 Partial-answer writes and attempt completion share the erasure fence, so a late callback cannot restore copied content.
 This includes an answer that used earlier context without another tool call.

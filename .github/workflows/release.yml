@@ -661,12 +661,12 @@ jobs:
             length == 2 and
             ([.[].host.architecture] | sort) == ["amd64", "arm64"] and
             all(.[];
-              .schemaVersion == 1 and .release == $release and .commit == $commit and
+              .schemaVersion == 2 and .release == $release and .commit == $commit and
               (.testedAt | sub("\\.[0-9]{3}Z$"; "Z") | fromdateiso8601) and
               .host.os == "Ubuntu 24.04" and
               (.host.kernel | type) == "string" and (.host.kernel | length) > 0 and
               (.host.kubeletVersion | startswith("v")) and
-              (.workers | type) == "number" and .workers > 0 and .workers == (.workers | floor) and
+              (.servers | type) == "number" and .servers > 0 and .servers == (.servers | floor) and
               .checks == {install: true, secondInstall: true, upgrade: true,
                 workloadsReady: true, isolation: true, reviewsEnabled: true,
                 gateway: true, shutdownBudget: true, statefulPodsPreserved: true,

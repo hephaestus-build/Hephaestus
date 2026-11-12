@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CapturedApplicability;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.AppliesWhen;
 import java.util.List;
@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 
 /** Records adapter decisions; only complete captured evidence can prove absence. */
 @Component
-@ConditionalOnCaptureRole
+@ConditionalOnServerRole
 @RequiredArgsConstructor
 public class AppliesWhenEvaluator {
     private final List<CapturedApplicability> evaluators;

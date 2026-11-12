@@ -90,7 +90,7 @@ use requires its own unexpired decision for exactly that source and purpose.
 
 `AGENT_EVIDENCE_RETENTION` separates persisted results from temporary review inputs. Diagnostic job output uses
 `hephaestus.agent.payload-retention` (14 days by default). The job row and its manifest/readiness snapshot use
-`hephaestus.agent.row-retention` (90 days). Worker input lifetime and deletion are defined by
+`hephaestus.agent.row-retention` (90 days). Attempt input lifetime and deletion are defined by
 [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion). Verification results do
 not authorize retaining complete inputs or replaying a review.
 
@@ -193,7 +193,7 @@ Before enabling a source or increasing retention, tests must prove:
 - Person erasure covers account-linked and source-only identities, conversations, assessments, feedback, exports,
   and retained cases.
 - Shared upstream objects remain only while another authorized workspace reference exists.
-- Disposable attempt folders and repository mirrors follow the worker cleanup and erasure contract.
+- Disposable attempt folders and repository mirrors follow the server cleanup and erasure contract.
 - Broker and backup expiry are documented when selective deletion is impossible.
 - Externally delivered content has a documented deletion or manual-remediation path.
 - Completed request receipts contain no erased content or subject keys. Minimal exact native identity

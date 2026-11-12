@@ -5,9 +5,9 @@
  * <ul>
  *   <li>{@code turn/}: admission ({@link de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission}), billing and
  *       conversational feedback delivery when a turn ends
- *       ({@link de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion}), and the lease reaper
- *       ({@link de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnLeaseReaper}).</li>
- *   <li>{@code host/}: what every worker serves the conversation loop: the turn assignments, and the endpoints the
+ *       ({@link de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion}), and the run reaper
+ *       ({@link de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper}).</li>
+ *   <li>{@code host/}: what every server serves the conversation loop: the turn assignments, and the endpoints the
  *       loop calls with each turn's credential ({@link de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurns}).</li>
  * </ul>
  *

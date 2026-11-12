@@ -27,7 +27,7 @@ tests:
     input_series:
       - series: 'up{job="hephaestus",instance="server:9090",runtime_role="server"}'
         values: "0x5"
-      - series: 'up{job="hephaestus",instance="worker:9090",runtime_role="worker"}'
+      - series: 'up{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
         values: "1x5"
     alert_rule_test:
       - eval_time: 1m
@@ -50,7 +50,7 @@ tests:
     input_series:
       - series: 'up{job="hephaestus",instance="server:9090",runtime_role="server"}'
         values: "1x5 0x5"
-      - series: 'up{job="hephaestus",instance="worker:9090",runtime_role="worker"}'
+      - series: 'up{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
         values: "0x10"
     alert_rule_test:
       - eval_time: 3m
@@ -485,7 +485,7 @@ tests:
   - name: a crossed budget cap fires, an unchanged count does not
     interval: 1m
     input_series:
-      - series: 'llm_budget_exhausted_total{job="hephaestus",instance="worker:9090"}'
+      - series: 'llm_budget_exhausted_total{job="hephaestus",instance="server-b:9090"}'
         values: "0 0 0 1 1"
     alert_rule_test:
       - eval_time: 2m
@@ -628,9 +628,9 @@ tests:
   - name: three failed or timed-out jobs in one hour fire, fewer do not
     interval: 1m
     input_series:
-      - series: 'agent_job_total{job="hephaestus",instance="worker-a:9090",outcome="failed"}'
+      - series: 'agent_job_total{job="hephaestus",instance="server-a:9090",outcome="failed"}'
         values: "0 1 2 2x30"
-      - series: 'agent_job_total{job="hephaestus",instance="worker-b:9090",outcome="timed_out"}'
+      - series: 'agent_job_total{job="hephaestus",instance="server-b:9090",outcome="timed_out"}'
         values: "0 0 0 0 1x30"
     alert_rule_test:
       - eval_time: 8m
@@ -648,9 +648,9 @@ tests:
   - name: cancelled jobs and two failures do not fire
     interval: 1m
     input_series:
-      - series: 'agent_job_total{job="hephaestus",instance="worker:9090",outcome="failed"}'
+      - series: 'agent_job_total{job="hephaestus",instance="server-b:9090",outcome="failed"}'
         values: "0 1 2 2x30"
-      - series: 'agent_job_total{job="hephaestus",instance="worker:9090",outcome="cancelled"}'
+      - series: 'agent_job_total{job="hephaestus",instance="server-b:9090",outcome="cancelled"}'
         values: "0+5x30"
     alert_rule_test:
       - eval_time: 30m
@@ -660,9 +660,9 @@ tests:
   - name: three sandbox failures in one hour fire, preparation retries and two failures do not
     interval: 1m
     input_series:
-      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="worker:9090",cause="sandbox"}'
+      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="server-b:9090",cause="sandbox"}'
         values: "0 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3x20"
-      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="worker:9090",cause="preparation"}'
+      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="server-b:9090",cause="preparation"}'
         values: "0+1x40"
     alert_rule_test:
       - eval_time: 15m
@@ -680,11 +680,11 @@ tests:
   - name: a steady refusal fires with its reason, ended attempts and a few refusals do not
     interval: 1m
     input_series:
-      - series: 'sandbox_gateway_refused_total{job="hephaestus",instance="worker:9090",reason="unauthenticated"}'
+      - series: 'sandbox_gateway_refused_total{job="hephaestus",instance="server-b:9090",reason="unauthenticated"}'
         values: "0+10x30"
-      - series: 'sandbox_gateway_refused_total{job="hephaestus",instance="worker:9090",reason="principal_limit"}'
+      - series: 'sandbox_gateway_refused_total{job="hephaestus",instance="server-b:9090",reason="principal_limit"}'
         values: "0+1x30"
-      - series: 'sandbox_gateway_refused_total{job="hephaestus",instance="worker:9090",reason="attempt_ended"}'
+      - series: 'sandbox_gateway_refused_total{job="hephaestus",instance="server-b:9090",reason="attempt_ended"}'
         values: "0+50x30"
     alert_rule_test:
       - eval_time: 2m
@@ -703,9 +703,9 @@ tests:
   - name: a gateway near its connection limit fires, one with room does not
     interval: 1m
     input_series:
-      - series: 'sandbox_gateway_connections{job="hephaestus",instance="worker:9090"}'
+      - series: 'sandbox_gateway_connections{job="hephaestus",instance="server-b:9090"}'
         values: "100x6 3500x10"
-      - series: 'sandbox_gateway_connections_limit{job="hephaestus",instance="worker:9090"}'
+      - series: 'sandbox_gateway_connections_limit{job="hephaestus",instance="server-b:9090"}'
         values: "4096x16"
     alert_rule_test:
       - eval_time: 5m
@@ -717,7 +717,7 @@ tests:
           - exp_labels:
               severity: warning
               job: hephaestus
-              instance: worker:9090
+              instance: server-b:9090
             exp_annotations:
               summary: A sandbox gateway holds more than 80 percent of the connections it allows
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -725,9 +725,9 @@ tests:
   - name: a Git cache that stays nearly full fires, one with room does not
     interval: 1m
     input_series:
-      - series: 'git_cache_bytes{job="hephaestus",instance="worker:9090"}'
+      - series: 'git_cache_bytes{job="hephaestus",instance="server-b:9090"}'
         values: "1000x6 950x15"
-      - series: 'git_cache_limit_bytes{job="hephaestus",instance="worker:9090"}'
+      - series: 'git_cache_limit_bytes{job="hephaestus",instance="server-b:9090"}'
         values: "1000x21"
       - series: 'git_cache_bytes{job="hephaestus",instance="server:9090"}'
         values: "100x21"
@@ -743,7 +743,7 @@ tests:
           - exp_labels:
               severity: warning
               job: hephaestus
-              instance: worker:9090
+              instance: server-b:9090
             exp_annotations:
               summary: A role's Git cache volume stayed above 90 percent, and eviction cannot free it
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -751,7 +751,7 @@ tests:
   - name: five evictions in one hour fire, a few do not
     interval: 1m
     input_series:
-      - series: 'git_mirror_evictions_total{job="hephaestus",instance="worker:9090"}'
+      - series: 'git_mirror_evictions_total{job="hephaestus",instance="server-b:9090"}'
         values: "0x10 2x10 6x20"
     alert_rule_test:
       - eval_time: 15m
@@ -769,9 +769,9 @@ tests:
   - name: repeated failures to sync attempt keys fire with their task, a few do not
     interval: 1m
     input_series:
-      - series: 'attempt_key_sync_failures_total{job="hephaestus",instance="worker:9090",task="refresh"}'
+      - series: 'attempt_key_sync_failures_total{job="hephaestus",instance="server-b:9090",task="refresh"}'
         values: "0x5 0+1x20"
-      - series: 'attempt_key_sync_failures_total{job="hephaestus",instance="worker:9090",task="publish"}'
+      - series: 'attempt_key_sync_failures_total{job="hephaestus",instance="server-b:9090",task="publish"}'
         values: "0x25"
     alert_rule_test:
       - eval_time: 7m
@@ -784,15 +784,15 @@ tests:
               severity: warning
               task: refresh
             exp_annotations:
-              summary: A worker failed five times in 15 minutes to publish or load the keys that verify sandbox credentials
+              summary: A server failed five times in 15 minutes to publish or load the keys that verify sandbox credentials
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: an unreachable provider fires with its cause, a reachable server does not
     interval: 1m
     input_series:
-      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="worker:9090",cause="provider_unreachable"}'
+      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="server-b:9090",cause="provider_unreachable"}'
         values: "0 1 2 3x30"
-      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="worker:9090",cause="server_unreachable"}'
+      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="server-b:9090",cause="server_unreachable"}'
         values: "0 1 2 2x30"
     alert_rule_test:
       - eval_time: 1m
@@ -811,7 +811,7 @@ tests:
   - name: one server error on a review's results fires
     interval: 1m
     input_series:
-      - series: 'agent_job_server_error_total{job="hephaestus",instance="worker-a:9090"}'
+      - series: 'agent_job_server_error_total{job="hephaestus",instance="server-a:9090"}'
         values: "0 0 1 1x30"
     alert_rule_test:
       - eval_time: 1m
@@ -829,9 +829,9 @@ tests:
   - name: preparation retries that continue fire, a few retries do not
     interval: 1m
     input_series:
-      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="worker-a:9090",cause="preparation"}'
+      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="server-a:9090",cause="preparation"}'
         values: "0+1x60"
-      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="worker-b:9090",cause="sandbox"}'
+      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="server-b:9090",cause="sandbox"}'
         values: "0x60"
     alert_rule_test:
       - eval_time: 15m
@@ -849,7 +849,7 @@ tests:
   - name: three preparation retries do not fire
     interval: 1m
     input_series:
-      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="worker:9090",cause="preparation"}'
+      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="server-b:9090",cause="preparation"}'
         values: "0 0 0 1 2 3 3x60"
     alert_rule_test:
       - eval_time: 40m
@@ -876,7 +876,7 @@ tests:
               summary: A review closed as partial because every attempt ended before it confirmed where its feedback went
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  - name: a review failed by lost workers fires, a constant count does not
+  - name: a review failed by lost lease holders fires, a constant count does not
     interval: 1m
     input_series:
       - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="review",outcome="attempts_exhausted"}'
@@ -887,10 +887,10 @@ tests:
         values: "0 5 10x10"
     alert_rule_test:
       - eval_time: 1m
-        alertname: HephaestusReviewWorkerLost
+        alertname: HephaestusReviewHolderLost
         exp_alerts: []
       - eval_time: 3m
-        alertname: HephaestusReviewWorkerLost
+        alertname: HephaestusReviewHolderLost
         exp_alerts:
           - exp_labels:
               severity: warning
@@ -931,9 +931,9 @@ tests:
   - name: a sandbox reaper that keeps failing fires, a short failure does not
     interval: 1m
     input_series:
-      - series: 'agent_sandbox_reaper_failure_total{job="hephaestus",instance="worker:9090"}'
+      - series: 'agent_sandbox_reaper_failure_total{job="hephaestus",instance="server-a:9090"}'
         values: "0+2x40"
-      - series: 'agent_sandbox_reaper_failure_total{job="hephaestus",instance="worker-b:9090"}'
+      - series: 'agent_sandbox_reaper_failure_total{job="hephaestus",instance="server-b:9090"}'
         values: "0 4 4x38"
     alert_rule_test:
       - eval_time: 12m
@@ -951,7 +951,7 @@ tests:
   - name: a short sandbox reaper failure does not fire
     interval: 1m
     input_series:
-      - series: 'agent_sandbox_reaper_failure_total{job="hephaestus",instance="worker:9090"}'
+      - series: 'agent_sandbox_reaper_failure_total{job="hephaestus",instance="server-b:9090"}'
         values: "0 6 6x38"
     alert_rule_test:
       - eval_time: 25m
@@ -961,9 +961,9 @@ tests:
   - name: a sandbox dispatch that keeps failing fires, a short failure does not
     interval: 1m
     input_series:
-      - series: 'agent_sandbox_dispatch_failure_total{job="hephaestus",instance="worker:9090"}'
+      - series: 'agent_sandbox_dispatch_failure_total{job="hephaestus",instance="server-a:9090"}'
         values: "0+2x40"
-      - series: 'agent_sandbox_dispatch_failure_total{job="hephaestus",instance="worker-b:9090"}'
+      - series: 'agent_sandbox_dispatch_failure_total{job="hephaestus",instance="server-b:9090"}'
         values: "0 4 4x38"
     alert_rule_test:
       - eval_time: 12m
@@ -981,9 +981,9 @@ tests:
   - name: one sandbox whose network policy did not hold fires, revocations of another reason do not
     interval: 1m
     input_series:
-      - series: 'agent_sandbox_revoked_total{job="hephaestus",instance="worker:9090",reason="unisolated"}'
+      - series: 'agent_sandbox_revoked_total{job="hephaestus",instance="server:9090",reason="unisolated"}'
         values: "0x5 1x20"
-      - series: 'agent_sandbox_revoked_total{job="hephaestus",instance="worker:9090",reason="other"}'
+      - series: 'agent_sandbox_revoked_total{job="hephaestus",instance="server:9090",reason="other"}'
         values: "0 5x20"
     alert_rule_test:
       - eval_time: 4m
@@ -1013,7 +1013,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: An agent job that can run has waited for a worker for more than one hour
+              summary: An agent job that can run has waited for a server with sandboxes for more than one hour
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: an empty queue does not fire
@@ -1026,12 +1026,12 @@ tests:
         alertname: HephaestusAgentQueueStalled
         exp_alerts: []
 
-  - name: a failed isolation probe fires, a worker whose probe passes does not
+  - name: a failed isolation probe fires, a server whose probe passes does not
     interval: 1m
     input_series:
-      - series: 'sandbox_isolation_passed{job="hephaestus",instance="worker-a:9090",runtime_role="worker"}'
+      - series: 'sandbox_isolation_passed{job="hephaestus",instance="server-a:9090",runtime_role="server"}'
         values: "1 1 0x8"
-      - series: 'sandbox_isolation_passed{job="hephaestus",instance="worker-b:9090",runtime_role="worker"}'
+      - series: 'sandbox_isolation_passed{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
         values: "0 1x9"
     alert_rule_test:
       - eval_time: 5m
@@ -1043,10 +1043,10 @@ tests:
           - exp_labels:
               severity: warning
               job: hephaestus
-              instance: worker-a:9090
-              runtime_role: worker
+              instance: server-a:9090
+              runtime_role: server
             exp_annotations:
-              summary: A worker's sandbox isolation probe failed, so the worker starts no sandbox
+              summary: A server's sandbox isolation probe failed, so the server starts no sandbox
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: an archive that keeps failing fires, a recovered or unread archive does not
@@ -1074,7 +1074,7 @@ tests:
     input_series:
       - series: 'hikaricp_connections_timeout_total{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1"}'
         values: "0x5 1x20"
-      - series: 'hikaricp_connections_timeout_total{job="hephaestus",instance="worker:9090",runtime_role="worker",pool="HikariPool-1"}'
+      - series: 'hikaricp_connections_timeout_total{job="hephaestus",instance="server-b:9090",runtime_role="server",pool="HikariPool-1"}'
         values: "0x25"
     alert_rule_test:
       - eval_time: 4m
@@ -1094,17 +1094,12 @@ tests:
         exp_alerts: []
 
   # 100 acquires a minute. From minute 5, 10 of them take longer than 50 ms on the server: 10 % slow.
-  - name: sustained slow connection acquires fire, a brief burst and a quiet process do not
+  - name: sustained slow connection acquires fire, a quiet process does not
     interval: 1m
     input_series:
       - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1",le="0.05"}'
         values: "0+100x5 500+90x60"
       - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1"}'
-        values: "0+100x65"
-      # A restart: every acquire of two minutes is slow, then the pool recovers.
-      - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="worker:9090",runtime_role="worker",pool="HikariPool-1",le="0.05"}'
-        values: "0+100x5 500x2 500+100x58"
-      - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="worker:9090",runtime_role="worker",pool="HikariPool-1"}'
         values: "0+100x65"
       # A quiet process: 5 acquires a minute, all slow.
       - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="webhook:9090",runtime_role="webhook",pool="HikariPool-1",le="0.05"}'
@@ -1124,6 +1119,22 @@ tests:
             exp_annotations:
               summary: More than 5 % of the server role's database connections took longer than 50 ms to get
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  # A restart: every acquire of two minutes is slow, then the pool recovers.
+  - name: a brief burst of slow connection acquires does not fire
+    interval: 1m
+    input_series:
+      - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1",le="0.05"}'
+        values: "0+100x5 500x2 500+100x58"
+      - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1"}'
+        values: "0+100x65"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusDatabasePoolSlow
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: HephaestusDatabasePoolSlow
+        exp_alerts: []
 
   # A failed read makes the gauge NaN, and the read-failure counter increases on each read, every 30 seconds.
   - name: a failing archive alert stays firing through a long read outage
@@ -2159,13 +2170,13 @@ tests:
   - name: refusals that keep reaching callers fire, refusals that callers only waited out do not
     interval: 1m
     input_series:
-      - series: 'llm_pool_upstream_throttled_total{job="hephaestus",instance="worker:9090",pool="own-model-1",status="429"}'
+      - series: 'llm_pool_upstream_throttled_total{job="hephaestus",instance="server-b:9090",pool="own-model-1",status="429"}'
         values: "0+2x40"
-      - series: 'llm_pool_upstream_absorbed_total{job="hephaestus",instance="worker:9090",pool="own-model-1"}'
+      - series: 'llm_pool_upstream_absorbed_total{job="hephaestus",instance="server-b:9090",pool="own-model-1"}'
         values: "0+1x40"
-      - series: 'llm_pool_upstream_throttled_total{job="hephaestus",instance="worker:9090",pool="own-model-2",status="429"}'
+      - series: 'llm_pool_upstream_throttled_total{job="hephaestus",instance="server-b:9090",pool="own-model-2",status="429"}'
         values: "0+2x40"
-      - series: 'llm_pool_upstream_absorbed_total{job="hephaestus",instance="worker:9090",pool="own-model-2"}'
+      - series: 'llm_pool_upstream_absorbed_total{job="hephaestus",instance="server-b:9090",pool="own-model-2"}'
         values: "0+2x40"
     alert_rule_test:
       - eval_time: 10m
@@ -2184,23 +2195,23 @@ tests:
   - name: a limit held at the floor by a queue fires, a ceiling of two or a recovered limit does not
     interval: 1m
     input_series:
-      - series: 'llm_pool_limit{job="hephaestus",instance="worker:9090",pool="own-model-1"}'
+      - series: 'llm_pool_limit{job="hephaestus",instance="server-b:9090",pool="own-model-1"}'
         values: "2x80"
-      - series: 'llm_pool_limit_decreases_total{job="hephaestus",instance="worker:9090",pool="own-model-1",cause="delay"}'
+      - series: 'llm_pool_limit_decreases_total{job="hephaestus",instance="server-b:9090",pool="own-model-1",cause="delay"}'
         values: "0x80"
-      - series: 'llm_pool_first_token_baseline_resets_total{job="hephaestus",instance="worker:9090",pool="own-model-1"}'
+      - series: 'llm_pool_first_token_baseline_resets_total{job="hephaestus",instance="server-b:9090",pool="own-model-1"}'
         values: "0+1x80"
-      - series: 'llm_pool_limit{job="hephaestus",instance="worker:9090",pool="capped"}'
+      - series: 'llm_pool_limit{job="hephaestus",instance="server-b:9090",pool="capped"}'
         values: "2x80"
-      - series: 'llm_pool_limit_decreases_total{job="hephaestus",instance="worker:9090",pool="capped",cause="delay"}'
+      - series: 'llm_pool_limit_decreases_total{job="hephaestus",instance="server-b:9090",pool="capped",cause="delay"}'
         values: "0x80"
-      - series: 'llm_pool_first_token_baseline_resets_total{job="hephaestus",instance="worker:9090",pool="capped"}'
+      - series: 'llm_pool_first_token_baseline_resets_total{job="hephaestus",instance="server-b:9090",pool="capped"}'
         values: "0x80"
-      - series: 'llm_pool_limit{job="hephaestus",instance="worker:9090",pool="own-model-3"}'
+      - series: 'llm_pool_limit{job="hephaestus",instance="server-b:9090",pool="own-model-3"}'
         values: "2x10 12x70"
-      - series: 'llm_pool_limit_decreases_total{job="hephaestus",instance="worker:9090",pool="own-model-3",cause="refusal"}'
+      - series: 'llm_pool_limit_decreases_total{job="hephaestus",instance="server-b:9090",pool="own-model-3",cause="refusal"}'
         values: "0+1x10 10x70"
-      - series: 'llm_pool_first_token_baseline_resets_total{job="hephaestus",instance="worker:9090",pool="own-model-3"}'
+      - series: 'llm_pool_first_token_baseline_resets_total{job="hephaestus",instance="server-b:9090",pool="own-model-3"}'
         values: "0x80"
     alert_rule_test:
       - eval_time: 20m
@@ -2221,7 +2232,7 @@ tests:
     input_series:
       - series: 'practice_feedback_settled_total{job="hephaestus",instance="server:9090",destination="on_work",state="failed",reason="none"}'
         values: "0 1 2 2 3x30"
-      - series: 'practice_feedback_settled_total{job="hephaestus",instance="worker:9090",destination="conversation",state="failed",reason="none"}'
+      - series: 'practice_feedback_settled_total{job="hephaestus",instance="server-b:9090",destination="conversation",state="failed",reason="none"}'
         values: "0 1 2x30"
       - series: 'practice_feedback_settled_total{job="hephaestus",instance="server:9090",destination="on_work",state="withheld",reason="composer_withheld"}'
         values: "0+1x30"
@@ -2357,9 +2368,9 @@ tests:
   - name: slow first tokens of conversation turns burn the budget fast and slow
     interval: 1m
     input_series:
-      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="worker:9090",runtime_role="worker",le="10.0"}'
+      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="server-b:9090",runtime_role="server",le="10.0"}'
         values: "0x420"
-      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="worker:9090",runtime_role="worker"}'
+      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
         values: "0+1x420"
     alert_rule_test:
       - eval_time: 3m
@@ -2388,9 +2399,9 @@ tests:
   - name: fast first tokens do not burn the conversation budget
     interval: 1m
     input_series:
-      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="worker:9090",runtime_role="worker",le="10.0"}'
+      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="server-b:9090",runtime_role="server",le="10.0"}'
         values: "0+1x420"
-      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="worker:9090",runtime_role="worker"}'
+      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
         values: "0+1x420"
     alert_rule_test:
       - eval_time: 60m
@@ -2404,9 +2415,9 @@ tests:
   - name: one slow turn in a quiet hour does not burn the conversation budget
     interval: 1m
     input_series:
-      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="worker:9090",runtime_role="worker",le="10.0"}'
+      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="server-b:9090",runtime_role="server",le="10.0"}'
         values: "0x420"
-      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="worker:9090",runtime_role="worker"}'
+      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
         values: "0x30 1x390"
     alert_rule_test:
       - eval_time: 60m
@@ -2420,9 +2431,9 @@ tests:
   - name: failing conversation turns fire, stopped turns do not
     interval: 1m
     input_series:
-      - series: 'mentor_turn_completed_total{job="hephaestus",instance="worker:9090",runtime_role="worker",outcome="failed"}'
+      - series: 'mentor_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="failed"}'
         values: "0+1x60"
-      - series: 'mentor_turn_completed_total{job="hephaestus",instance="worker:9090",runtime_role="worker",outcome="success"}'
+      - series: 'mentor_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="success"}'
         values: "0+1x60"
     alert_rule_test:
       - eval_time: 5m
@@ -2434,15 +2445,15 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: More than a fifth of the conversation turns of the last hour failed or lost their worker
+              summary: More than a fifth of the conversation turns of the last hour failed or lost their server
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: turns that the developer stopped do not fire
     interval: 1m
     input_series:
-      - series: 'mentor_turn_completed_total{job="hephaestus",instance="worker:9090",runtime_role="worker",outcome="stopped"}'
+      - series: 'mentor_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="stopped"}'
         values: "0+1x60"
-      - series: 'mentor_turn_completed_total{job="hephaestus",instance="worker:9090",runtime_role="worker",outcome="success"}'
+      - series: 'mentor_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="success"}'
         values: "0+1x60"
     alert_rule_test:
       - eval_time: 50m
@@ -2452,7 +2463,7 @@ tests:
   - name: one failed turn in a quiet hour does not fire
     interval: 1m
     input_series:
-      - series: 'mentor_turn_completed_total{job="hephaestus",instance="worker:9090",runtime_role="worker",outcome="failed"}'
+      - series: 'mentor_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="failed"}'
         values: "0x30 1x30"
     alert_rule_test:
       - eval_time: 50m
@@ -2734,9 +2745,9 @@ tests:
   - name: conversation calls that wait over 5 seconds fire once at least ten calls ended
     interval: 1m
     input_series:
-      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",band="interactive",reason="capacity",le="5.0"}'
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="server-b:9090",pool="own",band="interactive",reason="capacity",le="5.0"}'
         values: "0+1x30"
-      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",band="interactive",reason="capacity"}'
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="server-b:9090",pool="own",band="interactive",reason="capacity"}'
         values: "0+2x30"
     alert_rule_test:
       - eval_time: 3m
@@ -2755,9 +2766,9 @@ tests:
   - name: conversation calls that wait a short time do not fire
     interval: 1m
     input_series:
-      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",band="interactive",reason="capacity",le="5.0"}'
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="server-b:9090",pool="own",band="interactive",reason="capacity",le="5.0"}'
         values: "0+2x30"
-      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",band="interactive",reason="capacity"}'
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="server-b:9090",pool="own",band="interactive",reason="capacity"}'
         values: "0+2x30"
     alert_rule_test:
       - eval_time: 20m
@@ -2767,9 +2778,9 @@ tests:
   - name: review calls that wait over two minutes fire after 15 minutes
     interval: 1m
     input_series:
-      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",band="batch",reason="capacity",le="120.0"}'
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="server-b:9090",pool="own",band="batch",reason="capacity",le="120.0"}'
         values: "0+1x60"
-      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",band="batch",reason="capacity"}'
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="server-b:9090",pool="own",band="batch",reason="capacity"}'
         values: "0+2x60"
     alert_rule_test:
       - eval_time: 20m
@@ -2788,9 +2799,9 @@ tests:
   - name: review calls that queue for less than two minutes do not fire
     interval: 1m
     input_series:
-      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",band="batch",reason="capacity",le="120.0"}'
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="server-b:9090",pool="own",band="batch",reason="capacity",le="120.0"}'
         values: "0+2x60"
-      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",band="batch",reason="capacity"}'
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="server-b:9090",pool="own",band="batch",reason="capacity"}'
         values: "0+2x60"
     alert_rule_test:
       - eval_time: 40m
@@ -2800,7 +2811,7 @@ tests:
   - name: three expired model permits in one hour fire, two do not
     interval: 1m
     input_series:
-      - series: 'llm_pool_permits_expired_total{job="hephaestus",instance="worker:9090",pool="own"}'
+      - series: 'llm_pool_permits_expired_total{job="hephaestus",instance="server-b:9090",pool="own"}'
         values: "0 1 2 2 2 2 2 3x20"
     alert_rule_test:
       - eval_time: 5m
@@ -2813,13 +2824,13 @@ tests:
               severity: warning
               pool: own
             exp_annotations:
-              summary: Workers stopped renewing at least three of a model's calls in flight in one hour
+              summary: Servers stopped renewing at least three of a model's calls in flight in one hour
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: three failed permit renewals in 15 minutes fire, two do not
     interval: 1m
     input_series:
-      - series: 'llm_pool_lease_renewal_failures_total{job="hephaestus",instance="worker:9090"}'
+      - series: 'llm_pool_lease_renewal_failures_total{job="hephaestus",instance="server-b:9090"}'
         values: "0 1 2 2 2 2 2 3x20"
     alert_rule_test:
       - eval_time: 5m
@@ -2831,19 +2842,19 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: Workers failed at least three renewals of their model call permits in 15 minutes
+              summary: Servers failed at least three renewals of their model call permits in 15 minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a capture over 10 minutes fires, a sandbox of the same length does not
     interval: 1m
     input_series:
-      - series: 'agent_job_stage_duration_seconds_count{job="hephaestus",instance="worker:9090",stage="capture",outcome="ok"}'
+      - series: 'agent_job_stage_duration_seconds_count{job="hephaestus",instance="server-b:9090",stage="capture",outcome="ok"}'
         values: "0 1 2 3x20"
-      - series: 'agent_job_stage_duration_seconds_bucket{job="hephaestus",instance="worker:9090",stage="capture",outcome="ok",le="600.0"}'
+      - series: 'agent_job_stage_duration_seconds_bucket{job="hephaestus",instance="server-b:9090",stage="capture",outcome="ok",le="600.0"}'
         values: "0x22"
-      - series: 'agent_job_stage_duration_seconds_count{job="hephaestus",instance="worker:9090",stage="sandbox",outcome="ok"}'
+      - series: 'agent_job_stage_duration_seconds_count{job="hephaestus",instance="server-b:9090",stage="sandbox",outcome="ok"}'
         values: "0 1 2 3x20"
-      - series: 'agent_job_stage_duration_seconds_bucket{job="hephaestus",instance="worker:9090",stage="sandbox",outcome="ok",le="1800.0"}'
+      - series: 'agent_job_stage_duration_seconds_bucket{job="hephaestus",instance="server-b:9090",stage="sandbox",outcome="ok",le="1800.0"}'
         values: "0 1 2 3x20"
     alert_rule_test:
       - eval_time: 1m
@@ -2862,9 +2873,9 @@ tests:
   - name: a sandbox over 30 minutes fires
     interval: 1m
     input_series:
-      - series: 'agent_job_stage_duration_seconds_count{job="hephaestus",instance="worker:9090",stage="sandbox",outcome="ok"}'
+      - series: 'agent_job_stage_duration_seconds_count{job="hephaestus",instance="server-b:9090",stage="sandbox",outcome="ok"}'
         values: "0 1 2 3x20"
-      - series: 'agent_job_stage_duration_seconds_bucket{job="hephaestus",instance="worker:9090",stage="sandbox",outcome="ok",le="1800.0"}'
+      - series: 'agent_job_stage_duration_seconds_bucket{job="hephaestus",instance="server-b:9090",stage="sandbox",outcome="ok",le="1800.0"}'
         values: "0x22"
     alert_rule_test:
       - eval_time: 10m
@@ -2942,9 +2953,9 @@ tests:
   - name: a restart after an out-of-memory kill fires, a restart for another reason does not
     interval: 1m
     input_series:
-      - series: 'kube_pod_container_status_last_terminated_reason{namespace="hephaestus",pod="hephaestus-worker-0",container="worker",reason="OOMKilled"}'
+      - series: 'kube_pod_container_status_last_terminated_reason{namespace="hephaestus",pod="hephaestus-server-1",container="server",reason="OOMKilled"}'
         values: "1x30"
-      - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-worker-0",container="worker"}'
+      - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-server-1",container="server"}'
         values: "0x4 1x25"
       - series: 'kube_pod_container_status_last_terminated_reason{namespace="hephaestus",pod="hephaestus-server-0",container="server",reason="Error"}'
         values: "1x30"
@@ -2960,8 +2971,8 @@ tests:
           - exp_labels:
               severity: warning
               namespace: hephaestus
-              pod: hephaestus-worker-0
-              container: worker
+              pod: hephaestus-server-1
+              container: server
             exp_annotations:
               summary: The kernel killed a container for its memory
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response

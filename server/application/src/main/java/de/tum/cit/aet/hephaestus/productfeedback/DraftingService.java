@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The worker's side of drafting. It claims a report, hands over the text the server already redacted, and stores the
+ * The server's side of drafting. It claims a report, hands over the text the server already redacted, and stores the
  * model's raw answer. It loads in every role and decides nothing: the server's {@link RoutingService} validates the
  * answer, redacts it again and routes it.
  */
@@ -27,7 +27,7 @@ class DraftingService implements ProductFeedbackDrafting {
 
     private static final Duration RETRY_DELAY = Duration.ofSeconds(30);
     static final Duration HOLD = Duration.ofMinutes(5);
-    /** How long a report waits for a worker before the server routes it without a draft. */
+    /** How long a report waits for a server before the server routes it without a draft. */
     static final Duration EXPIRY = Duration.ofMinutes(10);
 
     static final int ACCOUNT_DAILY_DRAFTS = 5;
@@ -130,7 +130,7 @@ class DraftingService implements ProductFeedbackDrafting {
         }));
     }
 
-    /** The worker's adapter sees only a failed call, so the refusal is counted here, where the report is known. */
+    /** The server's adapter sees only a failed call, so the refusal is counted here, where the report is known. */
     private void reportingRefusals(Runnable work) {
         try {
             work.run();

@@ -62,7 +62,7 @@ No deploy-outage measurement or error-budget qualification is available from the
 
 Select a [chart profile](./helm-chart#profiles) for the host.
 Check the rendered requests against the node's allocatable resources before installation.
-A sandbox quota bounds the installation's sandbox requests independently of the worker JVM.
+A sandbox quota bounds the installation's sandbox requests independently of the server JVM.
 
 ## PostgreSQL memory
 
@@ -117,7 +117,7 @@ Compare total charge with inactive file cache, memory pressure and OOM counters 
 Keep the existing ceilings until a controlled workload qualifies a lower limit.
 The [stateful observations](/contributor/capacity-benchmark#stateful-resource-observations) record the available evidence and its limits.
 
-Before lowering the process limit, run the reference load with the representative database, vacuum work, WAL archiving, and the permitted worker surge.
+Before lowering the process limit, run the reference load with the representative database, vacuum work, WAL archiving, and the permitted server surge.
 Read `pg_settings` to verify the effective values and their command-line source.
 Require process charge within 1536 MiB, no OOM, no Hikari timeouts, and connection-acquire p95 below 50 ms.
 For the initial trial, require WAL archive lag below 60 seconds during steady load and below five minutes during recovery.
@@ -131,18 +131,18 @@ Keep the larger limit and lower concurrency if the trial fails.
 The [Pod-kind table](./sandboxes#sandbox-sizes) owns each sandbox's memory, CPU request and disk sizes.
 The review CPU ceiling is 1 CPU. The Helm chart exposes no value to change it.
 The retired `SANDBOX_MEMORY_BYTES` and `SANDBOX_PIDS_LIMIT` settings do not configure Kubernetes.
-The kubelet enforces the per-Pod process limit, which the worker's isolation probe verifies.
+The kubelet enforces the per-Pod process limit, which the server's isolation probe verifies.
 
 ## CPU and processes
 
 CPU requests determine scheduling and CPU limits bound use.
-Keep the node's process limit configured as the [Sandboxes](./sandboxes#worker) requires.
-A worker that cannot prove isolation starts no sandbox work.
+Keep the node's process limit configured as the [Sandboxes](./sandboxes#server) requires.
+A server that cannot prove isolation starts no sandbox work.
 
 ## What you can scale
 
-The chart controls worker replicas, review capacity and conversation capacity.
-Each worker replica also needs its JVM and database connections. The conversation loop has its own replicas and resources.
+The chart controls server replicas, review capacity and conversation capacity.
+Each server replica also needs its JVM and database connections. The conversation loop has its own replicas and resources.
 Before raising capacity, qualify the workload on the target host shape.
 Keep the workload, logs and before/after measurements with the qualification result.
 
@@ -154,29 +154,29 @@ The small profile uses:
 
 | Client | Maximum / minimum idle |
 | --- | --- |
-| Server | 16 / 2 |
-| Each worker | 24 / 2 |
+| Server | 40 / 2 |
 | Migration Job | 2 / 1 |
 | Webhook receiver | 0 / 0: no DataSource |
 | Sandboxes | 0 / 0: use their gateway |
 
 Preparing code evidence can hold two connections.
 Bound capture concurrency separately. A larger pool does not authorize more simultaneous captures.
-The server's four scheduled workspace syncs can hold eight connections, leaving eight for foreground and control work.
+The server's four scheduled workspace syncs can hold eight connections. The rest serve reviews, foreground and control work.
 Do not hold a database transaction while waiting for a model grant or provider response.
 
-With one replacement worker beside one old worker, pooled sessions use `16 + 24 + 24 = 64` connections.
-During that worker surge, budget three dedicated listeners outside Hikari, four migration/backup sessions, four operator/monitor sessions, and three superuser-reserved slots.
-The total is 78 of 80.
-The server retains `Recreate`. Do not double the whole release or overlap another worker rollout.
+The small profile updates the server with `Recreate`, so one server pool of 40 connections is open at a time.
+Budget one dedicated listener outside Hikari, four migration/backup sessions, four operator/monitor sessions, and three superuser-reserved slots.
+The total is 52 of 80.
+With `RollingUpdate`, a replacement server runs beside each old one, and the chart budgets both pools and both listeners.
+Do not overlap another server rollout.
 
-Without an explicit `max_connections`, the chart sets what the role pools, worker surge, listeners, and maintenance reserves need on a bundled database.
+Without an explicit `max_connections`, the chart sets what the role pools, server surge, listeners, and maintenance reserves need on a bundled database.
 It rejects an explicit value that cannot hold them.
 Inventory dedicated listeners after runtime changes and recompute this budget if more exist.
 
 The independent mentor loop and tool Pods must use the gateway without a database pool.
 
-The chart defaults outside the small profile keep server/worker pools of 20/32 with minimum idle five.
+The chart defaults outside the small profile keep a server pool of 48 with minimum idle five.
 For more replicas, change the role pools and PostgreSQL budget together.
 Measure pool waits at the actual workload. A rendered connection count does not prove query latency or memory use.
 
@@ -185,16 +185,16 @@ Measure pool waits at the actual workload. A rendered connection count does not 
 When the JVM starts, the buildpack's memory calculator sets the Java memory from the container's memory limit.
 `BPL_JVM_HEAD_ROOM` is an optional percentage of that limit.
 The calculator keeps this percentage out of the Java memory that it calculates.
-The heap must also leave room for the worker's file cache and for other memory that the container uses outside the JVM.
+The heap must also leave room for the server's file cache and for other memory that the container uses outside the JVM.
 
 The default headroom is 0 %.
 Thus, if you increase the container memory limit, the heap can also increase at the next start.
-Measure the worker's total memory use before changing its memory limit.
+Measure the server's total memory use before changing its memory limit.
 
 The Helm chart exposes no value for JVM headroom.
 The release uses the buildpack's default behavior.
 The value applies only when the JVM starts.
-To apply a change, drain and restart the worker, as [Graceful drain](./runtime-roles#graceful-drain) describes.
+To apply a change, drain and restart the server, as [Graceful drain](./runtime-roles#graceful-drain) describes.
 For the calculation, see the [Paketo memory calculator](https://paketo.io/docs/reference/java-reference/#memory-calculator).
 
 ## Disk
@@ -223,7 +223,7 @@ The approved model-only sweep supports the 50m planning coefficient and the 32-t
 Tool-heavy and 80-user qualification precede any increase to 48.
 [ADR 0068 G](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md#g-review-pod-admission-checks-quota-and-provider-demand) owns the evidence and its limits.
 
-The single-node workers use `Recreate`: the old worker drains before its replacement starts.
-Reviews and conversation turns pause during that drain and start.
-The server remains one replica with `Recreate`. Measure this deployment outage against the 99.5% availability budget.
+The single-node server uses `Recreate` with no drain: the old server stops before its replacement starts.
+The API, reviews and conversation turns pause during that stop and start. A review that ran is tried again.
+The server remains one replica. Measure this deployment outage against the 99.5% availability budget.
 A 32-turn admission is not a zero-downtime upgrade claim.

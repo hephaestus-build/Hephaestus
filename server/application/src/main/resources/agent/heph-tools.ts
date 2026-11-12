@@ -1,6 +1,6 @@
 // heph-tools.ts — a conversation turn's tools Pod, as the host reaches it.
 //
-// The worker binds the turn attempt's tools Pod and serves the turn's documents. The host dials the Pod over tool
+// The server binds the turn attempt's tools Pod and serves the turn's documents. The host dials the Pod over tool
 // protocol v1 on TCP, puts the documents and each loaded repository into it, and runs `read` and `bash` there. The
 // answers keep the shapes of Pi's own `read` and `bash`, which the model knows.
 
@@ -52,7 +52,7 @@ async function openPod(
 	}
 }
 
-/** The worker's side of a turn's tools: bind, discard, the documents and the loads. */
+/** The server's side of a turn's tools: bind, discard, the documents and the loads. */
 export interface ToolsWorker {
 	bind: (signal: AbortSignal) => Promise<BindAnswer>;
 	discard: (id: string) => Promise<void>;
@@ -68,7 +68,7 @@ export type BindAnswer =
 	| { ok: true; id: string; host: string; port: number; nonce: string }
 	| SandboxRefusal;
 
-/** A load the worker prepared: what the model reads about it, the command to summarize it, and its archive. */
+/** A load the server prepared: what the model reads about it, the command to summarize it, and its archive. */
 export interface LoadedArchive {
 	ok: true;
 	path: string;
@@ -353,7 +353,7 @@ function refusal(error: string, detail: string): SandboxRefusal {
 
 /**
  * One turn attempt's tools Pod, as the host reaches it. It binds the Pod at the first call that needs one, and binds a
- * new one after the old one or its connection failed. Its calls keep the answer shapes of the worker's earlier ones.
+ * new one after the old one or its connection failed. Its calls keep the answer shapes of the server's earlier ones.
  */
 export class TurnTools {
 	readonly #worker: ToolsWorker;
@@ -378,7 +378,7 @@ export class TurnTools {
 		this.#folder = folder;
 	}
 
-	/** Ends the connection to the current Pod; the worker removes the Pod with the attempt. */
+	/** Ends the connection to the current Pod; the server removes the Pod with the attempt. */
 	async close(): Promise<void> {
 		const pod = this.#pod;
 		this.#pod = undefined;
@@ -437,7 +437,7 @@ export class TurnTools {
 		return this.#current;
 	}
 
-	/** Drops a Pod whose call failed: what it holds may be partial, so the worker removes it. */
+	/** Drops a Pod whose call failed: what it holds may be partial, so the server removes it. */
 	async #lost(pod: { id: string; client: ToolClient }): Promise<void> {
 		if (this.#current === pod) {
 			this.#pod = undefined;
@@ -448,7 +448,7 @@ export class TurnTools {
 	}
 
 	/**
-	 * The answer of a call whose Pod failed. The worker removes an attempt's Pod when the workspace's data changes, and
+	 * The answer of a call whose Pod failed. The server removes an attempt's Pod when the workspace's data changes, and
 	 * its refusal of the next bind says so: the model reads that, not a failure to retry.
 	 */
 	async #failed(
@@ -558,7 +558,7 @@ export class TurnTools {
 		};
 	}
 
-	/** `load_context`: the worker prepares the item, and the host puts it into the Pod and runs its summary. */
+	/** `load_context`: the server prepares the item, and the host puts it into the Pod and runs its summary. */
 	async load(request: { path: string }, signal: AbortSignal): Promise<SandboxLoadAnswer> {
 		const previous = this.#loading;
 		const done = Promise.withResolvers<undefined>();
@@ -572,7 +572,7 @@ export class TurnTools {
 	}
 
 	async #loadOne(request: { path: string }, signal: AbortSignal): Promise<SandboxLoadAnswer> {
-		// The worker refuses a load before any Pod is bound for it.
+		// The server refuses a load before any Pod is bound for it.
 		const loaded = await this.#worker.load(request.path, signal);
 		if (!loaded.ok) {
 			return loaded;

@@ -65,7 +65,7 @@ import org.slf4j.LoggerFactory;
  *       and a Pod has a private IPC namespace of its own. ADR 0041 records why Kubernetes does without them.
  * </ul>
  *
- * <p>Network isolation is the chart's NetworkPolicies. The isolation probe proves at the worker's start that the
+ * <p>Network isolation is the chart's NetworkPolicies. The isolation probe proves at the server's start that the
  * cluster enforces them, the Pod Security Standard and the process limit ({@link KubernetesIsolationProbe}). A network
  * plugin may filter a new Pod only some time after it started, so the first init container of every sandbox Pod waits
  * for its policy ({@link #ISOLATION_SCRIPT}).
@@ -246,7 +246,7 @@ public class KubernetesPods {
     /**
      * A conversation's tools Pod: the review sidecar's tools program as its only container, serving its host on TCP. It
      * gets the nonce and Git's settings and no credential; the isolation init container holds it until the network
-     * policy that leaves it no egress is in force. It ends itself at the latest at its limits' runtime, so no worker needs
+     * policy that leaves it no egress is in force. It ends itself at the latest at its limits' runtime, so no server needs
      * to be alive to bound it.
      */
     public Pod toolsPod(Workload workload, ResourceLimits limits, String nonce, Map<String, String> gitSettings) {
@@ -449,7 +449,7 @@ public class KubernetesPods {
 
     /**
      * A tenth of a CPU limit. A request equal to the limit made each idle tools Pod hold a core, and an upgrade's
-     * probe Pods then found no room beside the old workers' tools Pods, so the new workers never became ready.
+     * probe Pods then found no room beside the old servers' tools Pods, so the new servers never became ready.
      */
     static Quantity cpuRequest(long limitMillicores) {
         return new Quantity(Math.max(1, limitMillicores / 10) + "m");

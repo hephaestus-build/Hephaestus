@@ -4,7 +4,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Worker-owned evidence copies must be removed before their PostgreSQL job rows. The job-folder
+ * Server-owned evidence copies must be removed before their PostgreSQL job rows. The job-folder
  * implementation supplies a contributor for its own export/selection and implements this hook.
  * Implementations must await deletion of every attempt, including failed attempts, and prevent a
  * running attempt from recreating evidence. A failed acknowledgement stops erasure.
