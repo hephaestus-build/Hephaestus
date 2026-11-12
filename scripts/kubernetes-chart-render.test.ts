@@ -3029,8 +3029,8 @@ await test("quotas admit schema-supported template quantities and round fraction
 		get(review, "spec", "podTemplate", "spec", "containers", 0, "resources", "requests"),
 		requests,
 	);
-	const disk = (resources: Resource[]) =>
-		amount(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage"));
+	const disk = (renderedResources: Resource[]) =>
+		amount(get(sandboxQuota(renderedResources), "spec", "hard", "requests.ephemeral-storage"));
 	assert.equal(disk(resources) - disk(rendered(base)), 2420 * 2 ** 20);
 });
 
