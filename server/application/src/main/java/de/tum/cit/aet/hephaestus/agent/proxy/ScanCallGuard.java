@@ -80,7 +80,7 @@ public class ScanCallGuard {
         }
         try {
             job = jobs.findByIdAndWorkspaceId(job.getId(), workspace).orElseThrow(ScanCallGuard::refused);
-            UUID runId = attempt.leaseId();
+            UUID runId = attempt.runId();
             if (runId == null
                     || !job.getRunId().equals(runId)
                     || !runs.isCurrent(new AgentRunRef(runId, workspace), ReviewRunKind.epoch(attempt.number())))

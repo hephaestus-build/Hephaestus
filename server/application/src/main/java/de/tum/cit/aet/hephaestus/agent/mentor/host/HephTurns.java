@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.ConversationToolsPods;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerPropertiesConfiguration;
@@ -25,7 +26,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -38,28 +38,25 @@ import tools.jackson.databind.JsonNode;
  * The conversation turns of the installation, as every worker serves them to the conversation loop. A loop pulls each
  * assignment ({@link #assign}) from whichever worker its gateway Service picks, and every later call of the attempt may
  * reach another worker. So nothing here is held per worker: each call reads its attempt's row ({@link #held}), and the
- * row's lease is the only claim on a turn.
+ * turn's run is the only claim on a turn ({@link TurnRunsAdapter}).
  *
  * <p>Control has no channel. A stop, a lost lease and an erasure seal the attempt's model calls in flight on every
- * worker ({@link #turnChanged}), and the attempt's next call answers {@code 409}. The loop renews the lease
- * ({@link #lease}); a lease call also ends an attempt that its loop did not end within {@link #STOP_GRACE} of a stop or
- * of its deadline. A loop that is gone renews nothing, and the lease reaper takes the turn back.
+ * worker ({@link #turnChanged}), and the attempt's next call answers {@code 409}. The loop renews the run's lease
+ * ({@link #lease}) until the run's deadline: {@link TurnRunsAdapter#GRACE} after a stop or after the work deadline. Then
+ * the run reaper ends a turn its loop did not end, and it takes back the turn of a loop that is gone
+ * ({@code TurnRunKind}).
  * {@code docs/contributor/unified-pi-runtime.mdx} § Turn lifecycle has the protocol.
  */
 public final class HephTurns implements MentorLedgerNotifications.Listener, SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(HephTurns.class);
 
-    static final String TOOK_TOO_LONG = "Hephaestus took too long to reply and stopped. Try again.";
     static final String COULD_NOT_FINISH = "Hephaestus could not finish this reply. Try again.";
     static final String MODEL_STOPPED_ANSWERING =
             "Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.";
 
     /** The phase of the worker drain: this worker stops handing out turns as it drains. */
     static final int PHASE = WorkerPropertiesConfiguration.DRAIN_PHASE;
-
-    /** How long a loop has to end a turn after a stop or its deadline. */
-    static final Duration STOP_GRACE = Duration.ofSeconds(30);
 
     /** How long an assignment pull waits for a turn before it answers that none waits. */
     static final Duration PULL_WAIT = Duration.ofSeconds(20);
@@ -109,9 +106,8 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
     private final ProxyCallsInFlight callsInFlight;
     private final ConversationToolsPods toolsPods;
     private final AttemptTokenIssuer issuer;
+    private final TurnRunsAdapter turnRuns;
     private final Clock clock;
-    private final int cap;
-    private final Duration lease;
     private final Duration pullWait;
     private final Counter claimFailures;
 
@@ -132,10 +128,9 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
             ProxyCallsInFlight callsInFlight,
             ConversationToolsPods toolsPods,
             AttemptTokenIssuer issuer,
+            TurnRunsAdapter turnRuns,
             Clock clock,
-            MeterRegistry meters,
-            int cap,
-            Duration lease) {
+            MeterRegistry meters) {
         this(
                 starter,
                 turns,
@@ -147,10 +142,9 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
                 callsInFlight,
                 toolsPods,
                 issuer,
+                turnRuns,
                 clock,
                 meters,
-                cap,
-                lease,
                 PULL_WAIT);
     }
 
@@ -166,10 +160,9 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
             ProxyCallsInFlight callsInFlight,
             ConversationToolsPods toolsPods,
             AttemptTokenIssuer issuer,
+            TurnRunsAdapter turnRuns,
             Clock clock,
             MeterRegistry meters,
-            int cap,
-            Duration lease,
             Duration pullWait) {
         this.starter = starter;
         this.turns = turns;
@@ -180,9 +173,8 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
         this.callsInFlight = callsInFlight;
         this.toolsPods = toolsPods;
         this.issuer = issuer;
+        this.turnRuns = turnRuns;
         this.clock = clock;
-        this.cap = cap;
-        this.lease = lease;
         this.pullWait = pullWait;
         this.claimFailures = Counter.builder(AgentMetrics.MENTOR_TURN_CLAIM_FAILURE)
                 .description("conversation turns this worker could not claim or start because of an error")
@@ -237,7 +229,7 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
             }
             Optional<MentorTurnStarter.StartedTurn> started;
             try {
-                started = starter.startNext(lease, cap);
+                started = starter.startNext();
             } catch (RuntimeException e) {
                 claimFailures.increment();
                 log.warn("Could not claim a conversation turn: {}", e.getClass().getSimpleName(), e);
@@ -266,7 +258,7 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
 
     private Optional<Assignment> begin(MentorTurnStarter.StartedTurn started) {
         MentorTurn turn = started.turn();
-        UUID leaseId = Objects.requireNonNull(turn.getLeaseId());
+        UUID runId = turn.getRunId();
         try {
             // A stop before the claim committed sent no notification that this pull heard.
             if (turns.require(turn.getWorkspaceId(), turn.getId()).getStatus() == MentorTurn.Status.STOPPED) {
@@ -274,20 +266,21 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
                         turn.getWorkspaceId(),
                         turn.getId(),
                         turn.getAttempt(),
-                        leaseId,
+                        runId,
                         MentorTurn.Status.STOPPED,
                         null,
                         null);
                 return Optional.empty();
             }
             Instant deadline = clock.instant().plusSeconds(started.llm().timeoutSeconds());
+            turnRuns.limit(turn.getWorkspaceId(), turn.getId(), runId, turn.getAttempt(), deadline);
             String token = issuer.issueForTurn(
                     turn.getId(),
                     turn.getWorkspaceId(),
                     turn.getAttempt(),
-                    leaseId,
+                    runId,
                     deadline,
-                    deadline.plus(STOP_GRACE).plus(STOP_GRACE));
+                    deadline.plus(TurnRunsAdapter.GRACE).plus(TurnRunsAdapter.GRACE));
             return Optional.of(new Assignment(turn.getId(), turn.getAttempt(), token, deadline));
         } catch (RuntimeException e) {
             claimFailures.increment();
@@ -300,7 +293,7 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
                     turn.getWorkspaceId(),
                     turn.getId(),
                     turn.getAttempt(),
-                    leaseId,
+                    runId,
                     MentorTurn.Status.FAILED,
                     MentorTurnCompletion.COULD_NOT_START,
                     "starting it failed: " + e.getClass().getSimpleName());
@@ -325,8 +318,8 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
     }
 
     private MentorTurnRepository.HeldAttempt read(AttemptJwt token) {
-        return rows.findHeldAttempt(token.workspaceId(), token.id(), token.attempt(), token.leaseId())
-                .orElseThrow(() -> new MentorLeaseLostException(token.id(), token.attempt()));
+        return rows.findHeldAttempt(token.workspaceId(), token.id(), token.epoch(), token.runId())
+                .orElseThrow(() -> new MentorLeaseLostException(token.id(), token.epoch()));
     }
 
     private static boolean stopped(MentorTurnRepository.HeldAttempt held) {
@@ -339,45 +332,31 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
                 token.workspaceId(),
                 held.getAccountId(),
                 held.getConversationId(),
-                token.attempt(),
-                token.leaseId());
+                token.epoch(),
+                token.runId());
     }
 
     /**
-     * Renews the attempt's lease. It ends an attempt that its loop did not end within {@link #STOP_GRACE} after a stop
-     * or after its deadline.
+     * Renews the attempt's claim of its turn's run, until the run's deadline: {@link TurnRunsAdapter#GRACE} after a stop
+     * or after the work deadline. Then the run reaper ends the turn, if the loop did not.
      *
-     * @throws MentorLeaseLostException when the attempt lost its lease, ended, or ends now
-     * @throws StopException when the attempt must stop; its lease is renewed, so that its loop can end it
+     * @throws MentorLeaseLostException when the attempt lost its run, ended, or passed its run's deadline
+     * @throws StopException when the attempt must stop; its claim is renewed, so that its loop can end it
      */
     public void lease(AttemptJwt token) {
         MentorTurnRepository.HeldAttempt held = read(token);
         TurnAttempt turn = attempt(token, held);
-        Instant now = clock.instant();
         Instant startedAt = held.getStartedAt();
         // Every worker ends such an attempt when it hears of the erasure; this is the end if none of them could.
         if (startedAt != null && redaction.personErasedSince(startedAt)) {
             callsInFlight.seal(turn.turnId(), turn.attempt(), true);
             finish(turn, MentorTurn.Status.FAILED, COULD_NOT_FINISH, "context_changed");
-            throw new MentorLeaseLostException(token.id(), token.attempt());
+            throw new MentorLeaseLostException(token.id(), token.epoch());
         }
-        boolean stopped = stopped(held);
-        Instant stoppedAt = held.getFinishedAt();
-        if (stopped && stoppedAt != null && now.isAfter(stoppedAt.plus(STOP_GRACE))) {
-            finish(turn, MentorTurn.Status.STOPPED, null, null);
-            throw new MentorLeaseLostException(token.id(), token.attempt());
-        }
-        if (!stopped && now.isAfter(token.workDeadline().plus(STOP_GRACE))) {
-            finish(
-                    turn,
-                    MentorTurn.Status.FAILED,
-                    TOOK_TOO_LONG,
-                    "its conversation loop did not end it within " + STOP_GRACE + " after its deadline");
-            throw new MentorLeaseLostException(token.id(), token.attempt());
-        }
-        turns.renewLease(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.leaseId(), lease);
-        if (stopped) throw new StopException(Stop.DEVELOPER);
-        if (now.isAfter(token.workDeadline())) throw new StopException(Stop.DEADLINE);
+        if (!turnRuns.renew(turn.workspaceId(), turn.runId(), turn.attempt()))
+            throw new MentorLeaseLostException(token.id(), token.epoch());
+        if (stopped(held)) throw new StopException(Stop.DEVELOPER);
+        if (clock.instant().isAfter(token.workDeadline())) throw new StopException(Stop.DEADLINE);
     }
 
     /** The partial answer of the attempt that this process last heard, for its end: readers may have seen it. */
@@ -439,7 +418,7 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
                     attempt.getWorkspaceId(),
                     attempt.getId(),
                     attempt.getAttempt(),
-                    attempt.getLeaseId(),
+                    attempt.getRunId(),
                     MentorTurn.Status.FAILED,
                     COULD_NOT_FINISH,
                     "context_changed");
@@ -447,7 +426,7 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
     }
 
     private void finish(TurnAttempt turn, MentorTurn.Status outcome, @Nullable String error, @Nullable String cause) {
-        finish(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.leaseId(), outcome, error, cause);
+        finish(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId(), outcome, error, cause);
     }
 
     /**
@@ -460,7 +439,7 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
             long workspaceId,
             UUID turnId,
             int attempt,
-            UUID leaseId,
+            UUID runId,
             MentorTurn.Status outcome,
             @Nullable String error,
             @Nullable String cause) {
@@ -475,7 +454,7 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
                     workspaceId,
                     turnId,
                     attempt,
-                    leaseId,
+                    runId,
                     new MentorTurnCompletion.Ending(
                             outcome,
                             List.of(),
@@ -495,15 +474,15 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
             long workspaceId,
             UUID turnId,
             int attempt,
-            UUID leaseId,
+            UUID runId,
             MentorTurn.Status outcome,
             @Nullable String error,
             @Nullable String cause) {
         try {
-            finish(workspaceId, turnId, attempt, leaseId, outcome, error, cause);
+            finish(workspaceId, turnId, attempt, runId, outcome, error, cause);
         } catch (RuntimeException e) {
             log.warn(
-                    "Could not end conversation turn {}; its next lease call or the lease reaper ends it: {}",
+                    "Could not end conversation turn {}; the run reaper ends it: {}",
                     turnId,
                     e.getClass().getSimpleName());
         }

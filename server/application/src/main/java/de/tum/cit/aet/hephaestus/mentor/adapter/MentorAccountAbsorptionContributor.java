@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.mentor.adapter;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAbsorptionContributor;
 import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.TurnRuns;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +24,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>A conversation runs one turn at a time, and each main may run one. So the absorbed main's running turn returns to
  * the queue before the merge, as after a lost lease: its host's later writes are refused, and the turn starts again
- * from the merged conversation.
+ * from the merged conversation. The absorbed main's queued runs move to the claiming main's subject, so they wait
+ * behind its turns.
  */
 @Order(30)
 @Component
@@ -32,6 +34,7 @@ public class MentorAccountAbsorptionContributor implements AccountAbsorptionCont
     private final NamedParameterJdbcTemplate jdbc;
     private final MentorRedaction redaction;
     private final MentorTurnService turns;
+    private final TurnRuns turnRuns;
 
     private record Clash(long workspaceId, UUID absorbed, UUID kept) {}
 
@@ -71,6 +74,7 @@ public class MentorAccountAbsorptionContributor implements AccountAbsorptionCont
                 WHERE e.id = moved.id
                 """, ids);
         turns.requeueRunning(clash.workspaceId(), clash.absorbed());
+        turnRuns.moveQueued(clash.workspaceId(), clash.absorbed(), clash.kept());
         jdbc.update("UPDATE mentor_turn SET conversation_id = :kept WHERE conversation_id = :absorbed", ids);
         jdbc.update(
                 "UPDATE mentor_conversation SET parent_conversation_id = :kept WHERE parent_conversation_id = :absorbed",

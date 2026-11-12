@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.job.WorkerRegistryRepository;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerPropertiesConfiguration;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
@@ -67,7 +66,6 @@ class SandboxRuntimeSelectionTest {
             .withBean(FabricLayout.class, () -> new FabricLayout("/tmp/hephaestus-fabric"))
             .withBean(SandboxGatewaySessions.class, SandboxGatewaySessions::new)
             .withBean(ReviewJobRepository.class, () -> mock(ReviewJobRepository.class))
-            .withBean(WorkerRegistryRepository.class, () -> mock(WorkerRegistryRepository.class))
             .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
             .withBean(Clock.class, Clock::systemUTC)
             .withBean(

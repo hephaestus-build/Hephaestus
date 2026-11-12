@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -15,12 +16,14 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import jakarta.servlet.ServletException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
@@ -33,6 +36,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.MDC;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.Authentication;
@@ -58,6 +62,40 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @AfterEach
     void clearContext() {
         SecurityContextHolder.clearContext();
+        MDC.clear();
+    }
+
+    @Test
+    void shouldScopeGatewayLogsToTheClaimAndRestoreTheCallerEvenWhenTheRequestFails() {
+        var job = running();
+        var jwt = jwt(job);
+        var ref = new AgentRunRef(jwt.runId(), job.getWorkspaceId());
+        var run = mock(AgentRun.class);
+        String subject = "review:" + job.getReviewId();
+        when(run.getConcurrencyKey()).thenReturn(subject);
+        when(verifier.verify("valid-token")).thenReturn(jwt);
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(runs.isCurrent(ref, jwt.epoch())).thenReturn(true);
+        when(runs.find(ref)).thenReturn(Optional.of(run));
+        var previous = Map.of("run.id", "parent", "review.id", "parent-review", "custom", "kept");
+        MDC.setContextMap(previous);
+
+        assertThatThrownBy(() -> filter.doFilter(
+                        request("/internal/llm/responses", "Bearer valid-token"),
+                        new MockHttpServletResponse(),
+                        (incoming, outgoing) -> {
+                            assertThat(MDC.get("run.id")).isEqualTo(jwt.runId().toString());
+                            assertThat(MDC.get("job.id")).isEqualTo(job.getId().toString());
+                            assertThat(MDC.get("run.epoch")).isEqualTo(Integer.toString(jwt.epoch()));
+                            assertThat(MDC.get("job.attempt"))
+                                    .isEqualTo(Integer.toString(ReviewRunKind.attempt(jwt.epoch())));
+                            assertThat(MDC.get("subject.key")).isEqualTo(subject);
+                            assertThat(MDC.get("review.id"))
+                                    .isEqualTo(job.getReviewId().toString());
+                            throw new ServletException("Request failed");
+                        }))
+                .isInstanceOf(ServletException.class);
+        assertThat(MDC.getCopyOfContextMap()).isEqualTo(previous);
     }
 
     @Test
@@ -66,8 +104,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var jwt = jwt(job);
         when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        when(runs.isCurrent(
-                        new AgentRunRef(jwt.leaseId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
+        when(runs.isCurrent(new AgentRunRef(jwt.runId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
                 .thenReturn(true);
         var request = request("/internal/llm/admit-results", "Bearer valid-token");
         var response = new MockHttpServletResponse();
@@ -84,7 +121,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         assertThat(job.getConfigSnapshot()).isNull();
         verify(jobs).findById(job.getId());
         verify(runs)
-                .isCurrent(new AgentRunRef(jwt.leaseId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt()));
+                .isCurrent(new AgentRunRef(jwt.runId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt()));
         verifyNoMoreInteractions(jobs);
     }
 
@@ -93,7 +130,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
         when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(mock(MentorTurn.class)));
-        when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+        when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.epoch(), jwt.runId()))
                 .thenReturn(true);
         var principal = new AtomicReference<Authentication>();
         var response = new MockHttpServletResponse();
@@ -116,7 +153,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
         when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(mock(MentorTurn.class)));
-        when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+        when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.epoch(), jwt.runId()))
                 .thenReturn(false);
         var response = new MockHttpServletResponse();
         filter.doFilter(request("/internal/llm/responses", "Bearer turn-token"), response, (incoming, outgoing) -> {
@@ -305,8 +342,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var jwt = jwt(job);
         when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        when(runs.isCurrent(
-                        new AgentRunRef(jwt.leaseId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
+        when(runs.isCurrent(new AgentRunRef(jwt.runId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
                 .thenReturn(false);
         var response = new MockHttpServletResponse();
         filter.doFilter(request("/internal/llm/responses", "Bearer valid-token"), response, (incoming, outgoing) -> {
@@ -366,8 +402,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var jwt = jwt(job);
         when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        when(runs.isCurrent(
-                        new AgentRunRef(jwt.leaseId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
+        when(runs.isCurrent(new AgentRunRef(jwt.runId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
                 .thenReturn(true);
         var request = request("/internal/llm/admit-results", "Bearer valid-token");
         request.setRemoteAddr(address);
@@ -401,7 +436,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 AttemptJwt.Kind.REVIEW,
                 id,
                 workspace,
-                attempt,
+                ReviewRunKind.epoch(attempt),
                 runId,
                 Set.of("llm_proxy"),
                 UUID.randomUUID().toString(),

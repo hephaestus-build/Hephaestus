@@ -46,6 +46,9 @@ import tools.jackson.databind.json.JsonMapper;
  */
 class MentorLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
+    @Autowired
+    private MentorTurnClaims claims;
+
     private static final String MEMBER = "mock-jwt-token-for-mentor-user";
     private static final Duration WAIT = Duration.ofSeconds(20);
     private static final String SNAPSHOT = "snapshot";
@@ -220,8 +223,7 @@ class MentorLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
             awaitListening();
             // The suite's deployment has one Hephaestus slot (application-test.yml), and a started turn takes it.
             submit(colleague, "A colleague's question");
-            assertThat(turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE))
-                    .isPresent();
+            assertThat(claims.claimNext()).isPresent();
 
             MentorTurnService.Submission waiting = submit(developer, "Is Hephaestus free?");
             MentorTurnService.Submission followUp = submit(developer, "And after that?");

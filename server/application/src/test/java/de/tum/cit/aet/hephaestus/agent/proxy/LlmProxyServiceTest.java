@@ -2708,7 +2708,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 AttemptJwt.Kind.REVIEW,
                 routing.sourceId(),
                 9L,
-                0,
+                1,
                 UUID.randomUUID(),
                 Set.of(),
                 "test",

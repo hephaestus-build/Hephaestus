@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRun;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRunRepository;
@@ -343,7 +344,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         String jobToken = jwtIssuer.issueForReview(
                 job.getId(),
                 context.id(),
-                job.getAttempt(),
+                ReviewRunKind.epoch(job.getAttempt()),
                 Objects.requireNonNull(job.getRunId()),
                 workDeadline,
                 workDeadline.plus(Duration.ofMinutes(10)));

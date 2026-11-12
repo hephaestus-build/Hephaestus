@@ -1,0 +1,3 @@
+# #4072: the review queue no longer counts live workers; the worker registry is gone, and a run's lease shows whether
+# its worker lives. No released web app or extension reads the field.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/queue removed the required property `activeWorkers` from the response with the `200` status

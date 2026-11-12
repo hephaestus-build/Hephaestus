@@ -717,7 +717,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .when(turnRepository.findByIdAndWorkspaceId(turn.id(), turn.workspaceId()))
                 .thenReturn(Optional.of(Mockito.mock(MentorTurn.class)));
         Mockito.lenient()
-                .when(turnRepository.hasLiveLease(turn.id(), turn.workspaceId(), turn.attempt(), turn.leaseId()))
+                .when(turnRepository.hasLiveLease(turn.id(), turn.workspaceId(), turn.epoch(), turn.runId()))
                 .thenReturn(live);
     }
 
@@ -821,7 +821,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 AttemptJwt.Kind.REVIEW,
                 job.getId(),
                 job.getWorkspaceId(),
-                attempt,
+                ReviewRunKind.epoch(attempt),
                 Objects.requireNonNull(job.getRunId()),
                 Set.of(scope),
                 UUID.randomUUID().toString(),

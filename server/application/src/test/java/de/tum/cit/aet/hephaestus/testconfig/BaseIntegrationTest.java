@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
 import de.tum.cit.aet.hephaestus.agent.handler.AgentHandlerTestDoubles;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewLookupData;
@@ -35,6 +36,7 @@ import org.springframework.test.context.TestPropertySource;
     ReviewLookupData.class,
     ReviewAdmissionData.class,
     ScanReportTestData.class,
+    MentorTurnClaims.class,
 })
 @Tag("integration")
 @TestPropertySource(

@@ -50,6 +50,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorPartialUpdates;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackReplies;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
@@ -112,13 +113,15 @@ import tools.jackson.databind.node.ObjectNode;
  */
 class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
+    @Autowired
+    private MentorTurnClaims claims;
+
     private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
     private static final String TEAM = "T1";
     private static final String CHANNEL = "D9";
     private static final String SLACK_USER = "U1";
     private static final String BOT_USER = "UBOT";
     private static final String BOT_ID = "BHEPH";
-    private static final Duration LEASE = Duration.ofMinutes(5);
     private static final String FEEDBACK = "Your pull request names the decision but not why it beat the other option.";
 
     @Autowired
@@ -274,7 +277,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 MentorPartialUpdates.whole(snapshot));
         Awaitility.await()
                 .atMost(10, TimeUnit.SECONDS)
@@ -310,7 +313,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 new MentorTurnCompletion.Ending(outcome, entries, error.isEmpty() ? null : error, null, null, null));
     }
 
@@ -424,8 +427,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorConversation thread =
                 conversations.openThread(workspace.getId(), parent.question().getId());
         MentorTurnService.Submission asked = ask(thread, "Tell me more", "100.5");
-        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE)).isPresent(); // the main conversation's turn
-        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE).map(MentorTurn::getId))
+        assertThat(claims.claimNext()).isPresent(); // the main conversation's turn
+        assertThat(claims.claimNext().map(MentorTurn::getId))
                 .contains(asked.turn().getId());
         return asked;
     }
@@ -572,7 +575,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                         eq(SlackMentorProjector.WAITING_NOTICE),
                         any());
 
-        changed(turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow());
+        changed(claims.claimNext().orElseThrow());
 
         verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.1");
     }
@@ -592,8 +595,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                                 null,
                                 null))
                 .turn();
-        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE).map(MentorTurn::getId))
-                .contains(colleaguesTurn.getId());
+        assertThat(claims.claimNext().map(MentorTurn::getId)).contains(colleaguesTurn.getId());
         MentorTurn queued = ask(main, "Why is this not met?", "100.1").turn();
         // Every Hephaestus slot is taken: the deployment has as many as turns hold now.
         projector = projector(new MentorTurnWaits(turnRepository, events, Math.toIntExact(turnRepository.countHeld())));
@@ -636,15 +638,9 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldNotSayThatATurnHasNotStartedWhenItRanAndWaitsAgain() {
         MentorTurn asked = ask(main, "Why is this not met?", "100.1").turn();
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
-        turns.renewLease(
-                running.getWorkspaceId(),
-                running.getId(),
-                running.getAttempt(),
-                Objects.requireNonNull(running.getLeaseId()),
-                Duration.ofSeconds(-1));
-        assertThat(turns.expireLease(running.getId())).isPresent();
+        claims.takeBack(running);
         assertThat(turns.require(workspace.getId(), asked.getId()).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
 
         clock.advance(SlackMentorProjector.WAITING_NOTICE_AFTER.plusMinutes(1));
@@ -724,7 +720,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         projector = timedProjector();
         progressPostsAt("Reading your pull requests…", "500.1");
         ask(main, "Is anything of mine waiting for a review?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         sendPartial(running, staged("Reading your pull requests…"));
         changed(running);
 
@@ -769,7 +765,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn queued = ask(main, "How are my reviews?", "100.1").turn();
         changed(queued);
         advance(Duration.ofSeconds(1));
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         sendPartial(running, staged("Thinking…"));
         changed(running);
 
@@ -784,23 +780,17 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         progressPostsAt("Reading your pull requests…", "500.1");
         MentorTurn asked =
                 ask(main, "Is anything of mine waiting for a review?", "100.1").turn();
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         sendPartial(running, staged("Reading your pull requests…"));
         changed(running);
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
 
-        turns.renewLease(
-                running.getWorkspaceId(),
-                running.getId(),
-                running.getAttempt(),
-                Objects.requireNonNull(running.getLeaseId()),
-                Duration.ofSeconds(-1));
-        assertThat(turns.expireLease(running.getId())).isPresent();
+        claims.takeBack(running);
         changed(turns.require(workspace.getId(), asked.getId()));
         verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.1");
 
         progressPostsAt("Reading your pull requests…", "500.2");
-        MentorTurn retried = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn retried = claims.claimNext().orElseThrow();
         sendPartial(retried, staged("Reading your pull requests…"));
         changed(retried);
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
@@ -816,7 +806,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                         anyLong(), eq(CHANNEL), isNull(), eq(List.of()), eq("Reading your pull requests…"), any()))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
         ask(main, "Is anything of mine waiting for a review?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         sendPartial(running, staged("Reading your pull requests…"));
         changed(running);
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
@@ -845,7 +835,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any()))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "invalid_receipt"));
         ask(main, "Is anything of mine waiting for a review?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         sendPartial(running, staged("Reading your pull requests…"));
         changed(running);
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
@@ -867,7 +857,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .when(slack)
                 .postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
         ask(main, "Is anything of mine waiting for a review?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         sendPartial(running, staged("Reading your pull requests…"));
         changed(running);
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
@@ -884,15 +874,9 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldFindTheProgressOfAnEarlierAttemptAfterARestartWhenTheRetryWasShort() {
         MentorTurn asked =
                 ask(main, "Is anything of mine waiting for a review?", "100.1").turn();
-        MentorTurn first = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
-        turns.renewLease(
-                first.getWorkspaceId(),
-                first.getId(),
-                first.getAttempt(),
-                Objects.requireNonNull(first.getLeaseId()),
-                Duration.ofSeconds(-1));
-        assertThat(turns.expireLease(first.getId())).isPresent();
-        MentorTurn retried = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn first = claims.claimNext().orElseThrow();
+        claims.takeBack(first);
+        MentorTurn retried = claims.claimNext().orElseThrow();
         // A new process: it holds no receipt of the notice that the first attempt's server posted.
         projector = timedProjector();
         changed(retried);
@@ -915,7 +899,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldPostEveryMessageAndTheFeedbackHephShowedOnceWhenATopLevelTurnEnds() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
 
         verify(slack).setReaction(workspace.getId(), CHANNEL, "100.1", "eyes", true);
@@ -954,9 +938,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldDiscloseAiUntilAnAnswerReachedTheSameSlackConversation(
             boolean inThread, MentorEntry.SlackDelivery outcome, boolean showsAnswer, boolean nextIsFirst) {
         MentorTurnService.Submission first = inThread ? askInThread() : ask(main, "First question", "100.1");
-        MentorTurn running = inThread
-                ? running(first)
-                : turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = inThread ? running(first) : claims.claimNext().orElseThrow();
         assertThat(delivery.slackTurn(workspace.getId(), running.getId())
                         .orElseThrow()
                         .firstAnswer())
@@ -978,7 +960,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
             String prefix = nextIsFirst ? SlackMentorPosts.AI_LABEL + "\n\n" : "";
             when(slack.startStream(workspace.getId(), CHANNEL, "100.1", prefix + "Second answer"))
                     .thenReturn("200.2");
-            MentorTurn next = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+            MentorTurn next = claims.claimNext().orElseThrow();
             assertThat(next.getId()).isEqualTo(second.turn().getId());
             changed(next);
             writes(next, "Second answer");
@@ -990,7 +972,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldDeliverNoFeedbackWhoseTextSlackCannotShowWhenTheReplyIsCut() {
         MentorTurnService.Submission asked = ask(main, "Tell me everything", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         postsAt("200.1");
 
@@ -1010,7 +992,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldLeaveFeedbackUnconfirmedWhenSlackCutsInsideItsOnlyQuote() {
         MentorTurnService.Submission asked = ask(main, "Tell me everything", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         postsAt("200.1");
         UUID feedback = ConversationFeedbackRows.claimedBy(
@@ -1043,7 +1025,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldLeaveFeedbackUnconfirmedWhenSlackCutsTheSecondOfTheTwoQuotesThatShowIt() {
         MentorTurnService.Submission asked = ask(main, "Tell me everything", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         postsAt("200.1");
         UUID feedback = ConversationFeedbackRows.claimedBy(
@@ -1358,7 +1340,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         changed(running);
         writes(running, "Let me look");
 
-        turns.stopRunning(workspace.getId(), running.getConversationId());
+        turns.stopRunning(workspace.getId(), running.getConversationId(), any -> true);
         changed(running);
         end(running, MentorTurn.Status.STOPPED, "Let me look again.", "");
         changed(running);
@@ -1467,7 +1449,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 conversations.openThread(workspace.getId(), issues.question().getId());
         MentorTurnService.Submission first = ask(reviewsThread, "Tell me more", "100.5");
         MentorTurnService.Submission second = ask(issuesThread, "Tell me more", "100.6");
-        List<UUID> claimed = Stream.generate(() -> turns.claimNext(LEASE, Integer.MAX_VALUE))
+        List<UUID> claimed = Stream.generate(() -> claims.claimNext())
                 .limit(3)
                 .flatMap(Optional::stream)
                 .map(MentorTurn::getId)
@@ -1544,8 +1526,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
             MentorTurn.Status outcome, boolean reverseReceipts, String path) {
         boolean topLevel = path.equals("POST");
         MentorTurnService.Submission asked = topLevel ? ask(main, "How are my reviews?", "100.1") : askInThread();
-        MentorTurn running =
-                topLevel ? turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow() : running(asked);
+        MentorTurn running = topLevel ? claims.claimNext().orElseThrow() : running(asked);
         if (topLevel) {
             postsAt("300.1");
         }
@@ -1693,7 +1674,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         sendPartial(first, partial("Your reviews"));
         changed(first);
         end(first, MentorTurn.Status.DONE, "Your reviews are quick.", "");
-        MentorTurn second = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn second = claims.claimNext().orElseThrow();
         assertThat(second.getId()).isEqualTo(next.turn().getId());
         changed(second);
 
@@ -1741,7 +1722,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         try {
             assertThat(inSlack.await(20, TimeUnit.SECONDS)).isTrue();
 
-            MentorTurn second = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+            MentorTurn second = claims.claimNext().orElseThrow();
             assertThat(second.getId()).isEqualTo(next.turn().getId());
             starting = CompletableFuture.runAsync(() -> changed(second));
             Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> blocksAnother(endingPid.get()));
@@ -1908,7 +1889,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldNeverSetASessionStatusForATopLevelTurn() {
         postsAt("400.1");
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
         changed(running);
@@ -1986,7 +1967,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         changed(running);
         stopStreamFails("message_not_in_streaming_state");
 
-        turns.stopRunning(workspace.getId(), running.getConversationId());
+        turns.stopRunning(workspace.getId(), running.getConversationId(), any -> true);
         changed(running);
         end(running, MentorTurn.Status.STOPPED, "Your reviews are quick", "");
         changed(running);
@@ -2069,8 +2050,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorConversation thread =
                 conversations.openThread(workspace.getId(), parent.question().getId());
         MentorTurnService.Submission asked = ask(thread, "Tell me more", "100.5");
-        turns.claimNext(LEASE, Integer.MAX_VALUE);
-        MentorTurn first = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        claims.claimNext();
+        MentorTurn first = claims.claimNext().orElseThrow();
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "First try"))
                 .thenReturn("300.1");
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Second try"))
@@ -2078,11 +2059,9 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         sendPartial(first, partial("First try"));
         changed(first);
         // The first attempt's lease then runs out, so the take-back below is the lease reaper's.
-        jdbc.update("UPDATE mentor_turn SET leased_until = now() - interval '1 second' WHERE id = ?", first.getId());
-
-        completion.billLostAttempt(turns.expireLease(first.getId()).orElseThrow());
+        claims.takeBack(first);
         changed(first);
-        MentorTurn retried = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn retried = claims.claimNext().orElseThrow();
         writes(retried, "Second try");
 
         assertThat(retried.getAttempt()).isEqualTo(2);
@@ -2103,8 +2082,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorConversation thread =
                 conversations.openThread(workspace.getId(), parent.question().getId());
         MentorTurnService.Submission asked = ask(thread, "Tell me more", "100.5");
-        turns.claimNext(LEASE, Integer.MAX_VALUE);
-        MentorTurn first = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        claims.claimNext();
+        MentorTurn first = claims.claimNext().orElseThrow();
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "First try"))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", SlackMentorPosts.AI_LABEL + "\n\n" + "Second try"))
@@ -2112,11 +2091,9 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         sendPartial(first, partial("First try"));
         changed(first);
         // The first attempt's lease then runs out, so the take-back below is the lease reaper's.
-        jdbc.update("UPDATE mentor_turn SET leased_until = now() - interval '1 second' WHERE id = ?", first.getId());
-
-        completion.billLostAttempt(turns.expireLease(first.getId()).orElseThrow());
+        claims.takeBack(first);
         changed(first);
-        MentorTurn retried = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn retried = claims.claimNext().orElseThrow();
         writes(retried, "Second try");
 
         verify(slack)
@@ -2127,7 +2104,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldReplyWithTheReasonAndDeliverNoFeedbackWhenTheTurnFails() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         postsAt("200.9");
         end(
@@ -2153,10 +2130,10 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldPostNothingAndCountNoReplyWhenTheDeveloperStoppedATopLevelTurnBeforeHephWrote() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
 
-        turns.stopRunning(workspace.getId(), main.getId());
+        turns.stopRunning(workspace.getId(), main.getId(), any -> true);
         end(running, MentorTurn.Status.STOPPED, "", "");
         changed(running);
 
@@ -2169,7 +2146,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldDeliverNoFeedbackWhenSlackRefusesTheAnswer() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "channel_not_found"));
@@ -2183,7 +2160,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldLeaveThePostToReadBackWhenSlackDoesNotAnswer() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
@@ -2197,7 +2174,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldSettleAnUncertainPostFromTheSlackHistoryWhenAnotherServerFindsIt() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running); // claimed and reacted, then the server died
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(CHANNEL), isNull(), eq("100.1"), any()))
@@ -2215,7 +2192,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldFailTheAnswerAndItsFeedbackAndNeverPostItAgainWhenTheSlackHistoryDoesNotHoldIt() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         when(slack.readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any()))
@@ -2234,7 +2211,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldFailTheAnswerAndLeaveItsFeedbackUnconfirmedWhenSlackIsDisconnectedBeforeTheReconcilerLooks() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         when(slack.isConnected(workspace.getId())).thenReturn(false);
@@ -2256,7 +2233,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldLeaveTheAnswerUncertainAndItsFeedbackUnconfirmedWhenTheSlackHistoryCannotBeRead() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         when(slack.readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any()))
@@ -2276,7 +2253,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldSendAReplyThatNoServerTookWhenTheReconcilerFindsIt() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         // No server projected the turn: the question was never taken.
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         postsAt("201.1");
@@ -2301,7 +2278,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         end(running, MentorTurn.Status.DONE, "An answer in the app.", "");
         changed(running);
@@ -2312,7 +2289,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldLeaveTheAnswerUncertainAndItsFeedbackUnconfirmedWhenTheSlackHistoryHoldsMoreThanThePageWithoutIt() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         // The developer wrote more messages after the answer than one page holds.
@@ -2335,7 +2312,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldSendAReplyThatNoServerOwnedAtOnceWhenAServerSeesItsTurnEnd() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         // No server saw the turn run.
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         postsAt("201.1");
@@ -2352,7 +2329,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldPostATopLevelReplyWhoseServerDiedBeforeItsTurnEnded() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running); // took the reply, then the server died: a top-level reply was not posted yet
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
         postsAt("201.1");
@@ -2367,7 +2344,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldNotPostWhenAnotherServerTookTheReplyBeforeItsOwner() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
         String key = MentorSlackReplies.replyKey(asked.question().getId());
@@ -2386,7 +2363,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldLeaveNothingForAnotherServerOnceTheOwnerPostedTheReply() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
-        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn running = claims.claimNext().orElseThrow();
         changed(running);
         end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
         postsAt("201.1");
@@ -2396,6 +2373,34 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+    }
+
+    @Test
+    void shouldQueueTheStoppedReplyOnlyAfterItsRunHolderIsGone() {
+        MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
+        MentorTurn running = claims.claim(asked.turn());
+
+        turns.stop(workspace.getId(), running.getId());
+
+        assertThat(delivery(asked)).isNull();
+        claims.takeBack(running);
+        assertThat(turns.require(workspace.getId(), running.getId()).getStatus())
+                .isEqualTo(MentorTurn.Status.STOPPED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.PENDING);
+    }
+
+    @Test
+    void shouldQueueTheFailedReplyWhenTheRunReaperExhaustsItsRetry() {
+        MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
+        MentorTurn first = claims.claim(asked.turn());
+        claims.takeBack(first);
+        assertThat(delivery(asked)).isNull();
+        MentorTurn last = claims.claim(turns.require(workspace.getId(), first.getId()));
+
+        claims.takeBack(last);
+
+        assertThat(turns.require(workspace.getId(), last.getId()).getStatus()).isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(delivery(asked)).isEqualTo(MentorEntry.SlackDelivery.PENDING);
     }
 
     /** The owner's attempt started to post and then its server died: Slack may hold the post. */

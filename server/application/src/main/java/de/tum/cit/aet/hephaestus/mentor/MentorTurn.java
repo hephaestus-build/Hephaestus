@@ -28,8 +28,9 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * One question to Hephaestus and the work to answer it. {@link MentorTurnService} owns execution and
- * {@link MentorTurnWaits} owns the queue wait. {@code attempt} counts
- * claims.
+ * {@link MentorTurnWaits} owns the queue wait. The turn's run ({@code run_id}) leases its work: who may drive it, under
+ * which claim, and until when ({@link de.tum.cit.aet.hephaestus.mentor.spi.TurnRuns}). {@code attempt} is the claim
+ * of the run that the turn's current or last attempt ran under.
  *
  * <p>The token columns hold the current attempt's usage, which the LLM proxy adds call by call. {@code admission}
  * freezes the model and rates, so a lost attempt can still be billed. Every state change locks the row first, so it
@@ -43,6 +44,10 @@ import tools.jackson.databind.JsonNode;
             @UniqueConstraint(
                     name = "uk_mentor_turn_tenant",
                     columnNames = {"id", "workspace_id"}),
+            // A run belongs to one workspace, so this keeps one turn per run; it also indexes the run's foreign key.
+            @UniqueConstraint(
+                    name = "uk_mentor_turn_run",
+                    columnNames = {"run_id", "workspace_id"}),
         },
         indexes = {
             @Index(name = "idx_mentor_turn_conversation_status", columnList = "conversation_id, status"),
@@ -123,13 +128,9 @@ public class MentorTurn implements Persistable<UUID> {
     @ColumnDefault("0")
     private int attempt;
 
-    @Nullable
-    @Column(name = "lease_id")
-    private UUID leaseId;
-
-    @Nullable
-    @Column(name = "leased_until")
-    private Instant leasedUntil;
+    /** The run that leases the turn's work. A database trigger keeps the turn's status and its run's state together. */
+    @Column(name = "run_id", nullable = false, updatable = false)
+    private UUID runId;
 
     /** Prompt tokens that were neither cache reads nor cache writes; those have their own columns. */
     @Column(name = "input_tokens", nullable = false)
@@ -224,8 +225,10 @@ public class MentorTurn implements Persistable<UUID> {
             String requestId,
             Surface surface,
             @Nullable String pageContext,
+            UUID runId,
             Instant now) {
         this.id = TimeOrderedIds.next();
+        this.runId = runId;
         this.workspaceId = conversation.getWorkspaceId();
         this.conversationId = conversation.getId();
         this.requestId = requestId;
@@ -237,16 +240,10 @@ public class MentorTurn implements Persistable<UUID> {
         this.fresh = true;
     }
 
-    /** A host still holds this turn: it is running, or stopped while its host commits the aborted answer. */
-    public boolean isLeased() {
-        return leasedUntil != null && (status == Status.RUNNING || status == Status.STOPPED);
-    }
-
-    void start(Instant now, Instant leaseEnd) {
+    /** Starts the attempt that runs under the run's claim {@code epoch}. */
+    void start(Instant now, int epoch) {
         this.status = Status.RUNNING;
-        this.attempt++;
-        this.leaseId = UUID.randomUUID();
-        this.leasedUntil = leaseEnd;
+        this.attempt = epoch;
         this.startedAt = now;
         this.toolsLoads = 0;
         this.admission = null;
@@ -255,10 +252,6 @@ public class MentorTurn implements Persistable<UUID> {
         this.failedCall = null;
         this.failedCallStatus = null;
         resetUsage();
-    }
-
-    void renew(Instant leaseEnd) {
-        this.leasedUntil = leaseEnd;
     }
 
     void admit(JsonNode admittedWith) {
@@ -296,8 +289,6 @@ public class MentorTurn implements Persistable<UUID> {
             this.finishedAt = now;
         }
         this.error = status == Status.FAILED ? reason : null;
-        this.leasedUntil = null;
-        this.leaseId = null;
     }
 
     /** Records why a {@code FAILED} turn failed, for the operator; a turn in any other state records nothing. */
@@ -317,8 +308,6 @@ public class MentorTurn implements Persistable<UUID> {
     void requeue(Instant now) {
         this.status = Status.QUEUED;
         this.queuedAt = now;
-        this.leaseId = null;
-        this.leasedUntil = null;
         this.startedAt = null;
         this.admission = null;
         resetUsage();

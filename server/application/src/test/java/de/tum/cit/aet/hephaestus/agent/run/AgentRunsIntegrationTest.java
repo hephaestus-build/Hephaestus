@@ -8,8 +8,10 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -155,7 +157,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
 
         transactions.executeWithoutResult(
-                status -> assertThat(runs.end(lease.fence())).isTrue());
+                status -> assertThat(runs.end(lease.fence())).isEqualTo(AgentRuns.EndOutcome.ENDED));
         assertThat(claim()).map(AgentRunLease::runId).contains(second.id());
     }
 
@@ -253,7 +255,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
             assertThat(runs.renew(stale)).isEmpty();
             assertThat(runs.requeue(stale, AgentRuns.Charge.FREE, Duration.ZERO, null))
                     .isFalse();
-            assertThat(runs.end(stale)).isFalse();
+            assertThat(runs.end(stale)).isEqualTo(AgentRuns.EndOutcome.STALE);
             assertThat(runs.renew(new AgentRunFence(current.runId(), other, current.epoch())))
                     .as("another workspace")
                     .isEmpty();
@@ -510,29 +512,151 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldEndAQueuedRunWhoseDeadlinePassed() {
+    void shouldEndARunThatWaitedForRoomPastItsStartWindowButKeepOneThatWaitsBehindItsSubject() {
         var handler = new RecordingHandler(5);
         var reaper = reaper(handler);
-        AgentRunRef run = Objects.requireNonNull(transactions.execute(status -> runs.enqueue(
-                workspace,
-                AgentRunKind.REVIEW,
-                AgentRunBand.INTERACTIVE,
-                "conversation:late",
-                Instant.now().minusSeconds(1))));
+        enqueue(workspace, AgentRunBand.BATCH, "review:window-held");
+        assertThat(claimSubject(workspace, "review:window-held")).isPresent();
+        AgentRunRef behind = enqueueWithin(workspace, "review:window-held", Duration.ofSeconds(1));
+        AgentRunRef waited = enqueueWithin(workspace, "review:window-free", Duration.ofSeconds(1));
+        sleep(Duration.ofMillis(1100));
 
         try (var logs = new LogCapture(AgentRunReaper.class)) {
             reaper.reap();
 
             assertThat(logs.events("agent.run.ended"))
-                    .singleElement()
-                    .satisfies(fields -> assertThat(fields)
-                            .containsEntry("run.id", run.id().toString())
-                            .containsEntry("subject.key", "conversation:late")
-                            .containsEntry("run.stop_reason", "DEADLINE"));
+                    .anySatisfy(fields -> assertThat(fields)
+                            .containsEntry("run.id", waited.id().toString())
+                            .containsEntry("run.stop_reason", "NOT_STARTED"));
         }
-        assertThat(state(run.id())).isEqualTo("ENDED");
+        assertThat(stopReason(waited.id())).isEqualTo("NOT_STARTED");
+        assertThat(handler.ended).contains(waited.id() + ":0:NOT_STARTED");
+        assertThat(state(behind.id()))
+                .as("it waits for its subject, not for room")
+                .isEqualTo("QUEUED");
+    }
+
+    @Test
+    void shouldGiveARequeuedRunItsStartWindowAgain() {
+        var reaper = reaper(new RecordingHandler(5));
+        AgentRunRef run = enqueueWithin(workspace, "review:window-again", Duration.ofSeconds(2));
+        AgentRunLease lease = claimSubject(workspace, "review:window-again").orElseThrow();
+        sleep(Duration.ofMillis(2100));
+        transactions.executeWithoutResult(
+                status -> assertThat(runs.requeue(lease.fence(), AgentRuns.Charge.FREE, Duration.ZERO, null))
+                        .isTrue());
+
+        reaper.reap();
+
+        assertThat(state(run.id())).as("due again just now").isEqualTo("QUEUED");
+    }
+
+    @Test
+    void shouldLeaseNoRunOfACappedKindBeyondItsCap() {
+        String conversation = "conversation:" + UUID.randomUUID();
+        AgentRunRef first = enqueueTurn(workspace, conversation + "-a");
+        AgentRunRef second = enqueueTurn(workspace, conversation + "-b");
+        int leased = countLeasedTurns();
+
+        AgentRunLease taken = claimCapped(leased + 1).orElseThrow();
+        assertThat(List.of(first.id(), second.id())).contains(taken.runId());
+        assertThat(claimCapped(leased + 1)).as("the cap is taken").isEmpty();
+        transactions.executeWithoutResult(
+                status -> assertThat(runs.end(taken.fence())).isEqualTo(AgentRuns.EndOutcome.ENDED));
+        assertThat(claimCapped(leased + 1)).isPresent();
+    }
+
+    @Test
+    void shouldLeaseATurnForTheShorterTurnLease() {
+        String subject = "conversation:" + UUID.randomUUID();
+        enqueueTurn(workspace, subject);
+
+        AgentRunLease lease = Objects.requireNonNull(transactions.execute(
+                        status -> runs.claimSubject(workspace, subject, Set.of(AgentRunKind.TURN))))
+                .orElseThrow();
+
+        assertThat(Duration.between(Instant.now(), lease.leasedUntil()))
+                .isLessThanOrEqualTo(runs.capacity().turnLeaseTtl())
+                .isLessThan(runs.capacity().leaseTtl());
+    }
+
+    @Test
+    void shouldMoveADeadlineOnlyEarlierAndClearItWhenTheRunIsRequeued() {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:deadline-moves");
+        AgentRunLease lease = claimSubject(workspace, "review:deadline-moves").orElseThrow();
+        Instant early = Instant.now().plusSeconds(60).truncatedTo(ChronoUnit.MICROS);
+
+        transactions.executeWithoutResult(status -> {
+            assertThat(runs.endBy(run, early)).isTrue();
+            assertThat(runs.endBy(run, early.plusSeconds(60))).isTrue();
+        });
+        assertThat(deadline(run.id())).as("a later deadline keeps the earlier").isEqualTo(early);
+        assertThatThrownBy(() -> jdbc.update(
+                        "UPDATE agent_run SET deadline = deadline + interval '1 hour' WHERE id = ?", run.id()))
+                .hasMessageContaining("only moves earlier");
+        transactions.executeWithoutResult(
+                status -> assertThat(runs.requeue(lease.fence(), AgentRuns.Charge.FREE, Duration.ZERO, null))
+                        .isTrue());
+        assertThat(deadline(run.id())).as("the next claim sets its own").isNull();
+    }
+
+    @Test
+    void shouldEndALeasedRunAtItsDeadlineAlthoughItsLeaseIsLive() {
+        var handler = new RecordingHandler(5);
+        var reaper = reaper(handler);
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:overran");
+        AgentRunLease lease = claimSubject(workspace, "review:overran").orElseThrow();
+        transactions.executeWithoutResult(
+                status -> runs.endBy(run, Instant.now().minusSeconds(1)));
+
+        transactions.executeWithoutResult(status -> assertThat(runs.renew(lease.fence()))
+                .as("no renewal past the deadline")
+                .isEmpty());
+        reaper.reap();
+
         assertThat(stopReason(run.id())).isEqualTo("DEADLINE");
-        assertThat(handler.ended).containsExactly(run.id() + ":0:DEADLINE");
+        assertThat(handler.ended).containsExactly(run.id() + ":" + lease.epoch() + ":DEADLINE");
+    }
+
+    @Test
+    void shouldTellAHolderWhetherItsEndEndedTheRunRepeatedAnEndOrCameTooLate() {
+        enqueue(workspace, AgentRunBand.BATCH, "review:ends");
+        AgentRunLease lease = claimSubject(workspace, "review:ends").orElseThrow();
+
+        transactions.executeWithoutResult(status -> {
+            assertThat(runs.end(lease.fence())).isEqualTo(AgentRuns.EndOutcome.ENDED);
+            assertThat(runs.end(lease.fence())).isEqualTo(AgentRuns.EndOutcome.ALREADY_ENDED);
+            assertThat(runs.end(new AgentRunFence(lease.runId(), lease.workspaceId(), lease.epoch() + 1)))
+                    .isEqualTo(AgentRuns.EndOutcome.STALE);
+        });
+    }
+
+    private AgentRunRef enqueueWithin(long workspaceId, String subject, Duration startWithin) {
+        AgentRunRef run = Objects.requireNonNull(transactions.execute(
+                status -> runs.enqueue(workspaceId, AgentRunKind.REVIEW, AgentRunBand.BATCH, subject, startWithin)));
+        sleep();
+        return run;
+    }
+
+    private AgentRunRef enqueueTurn(long workspaceId, String subject) {
+        AgentRunRef run = Objects.requireNonNull(transactions.execute(
+                status -> runs.enqueue(workspaceId, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, null)));
+        sleep();
+        return run;
+    }
+
+    private Optional<AgentRunLease> claimCapped(int cap) {
+        return Objects.requireNonNull(transactions.execute(status -> runs.claimCapped(AgentRunKind.TURN, cap)));
+    }
+
+    private int countLeasedTurns() {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM agent_run WHERE kind = 'TURN' AND state = 'LEASED'", Integer.class));
+    }
+
+    private @Nullable Instant deadline(UUID runId) {
+        Timestamp at = jdbc.queryForObject("SELECT deadline FROM agent_run WHERE id = ?", Timestamp.class, runId);
+        return at == null ? null : at.toInstant();
     }
 
     private Optional<AgentRunLease> claim() {
@@ -554,8 +678,12 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     }
 
     private static void sleep() {
+        sleep(Duration.ofMillis(2));
+    }
+
+    private static void sleep(Duration wait) {
         try {
-            Thread.sleep(2);
+            Thread.sleep(wait);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }

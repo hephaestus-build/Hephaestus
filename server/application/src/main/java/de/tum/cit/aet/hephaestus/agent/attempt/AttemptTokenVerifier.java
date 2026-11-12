@@ -140,10 +140,10 @@ public class AttemptTokenVerifier {
                 .findFirst()
                 .orElseThrow(() -> new AttemptTokenInvalidException("missing or invalid attempt_kind claim", "claim"));
         UUID id = uuidClaim(verified, AttemptTokenIssuer.ID_CLAIM);
-        UUID leaseId = uuidClaim(verified, AttemptTokenIssuer.LEASE_CLAIM);
+        UUID runId = uuidClaim(verified, AttemptTokenIssuer.RUN_CLAIM);
         Long workspaceId = longClaim(verified, "workspace_id");
-        Integer attempt = intClaim(verified, "attempt");
-        if (id == null || workspaceId == null || attempt == null || leaseId == null) {
+        Integer epoch = intClaim(verified, AttemptTokenIssuer.EPOCH_CLAIM);
+        if (id == null || workspaceId == null || epoch == null || runId == null) {
             throw new AttemptTokenInvalidException("missing or invalid attempt binding claim", "claim");
         }
         // A credential without its signed work deadline has no defined work time. The JWT leeway applies to the
@@ -154,16 +154,7 @@ public class AttemptTokenVerifier {
         }
         try {
             return new AttemptJwt(
-                    kind,
-                    id,
-                    workspaceId,
-                    attempt,
-                    leaseId,
-                    scopeClaim(verified),
-                    jti,
-                    issuedAt,
-                    expiresAt,
-                    workDeadline);
+                    kind, id, workspaceId, epoch, runId, scopeClaim(verified), jti, issuedAt, expiresAt, workDeadline);
         } catch (IllegalArgumentException invalid) {
             throw new AttemptTokenInvalidException("invalid attempt claims: " + invalid.getMessage(), "claim", invalid);
         }

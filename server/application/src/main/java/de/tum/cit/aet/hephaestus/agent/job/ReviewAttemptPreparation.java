@@ -136,7 +136,7 @@ public class ReviewAttemptPreparation {
                     Instant.now().plusSeconds(snapshot.timeoutSeconds()).truncatedTo(ChronoUnit.SECONDS);
             Instant tokenExpiry = workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE);
             String jobToken = attemptTokenIssuer.issueForReview(
-                    jobId, job.getWorkspaceId(), job.getAttempt(), fence.runId(), workDeadline, tokenExpiry);
+                    jobId, job.getWorkspaceId(), fence.epoch(), fence.runId(), workDeadline, tokenExpiry);
             stage.set(PreparationFailure.Stage.SPEC);
             PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
                     snapshot.model().apiProtocol().wire(),

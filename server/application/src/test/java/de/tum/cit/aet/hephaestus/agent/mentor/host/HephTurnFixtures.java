@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
@@ -97,7 +98,7 @@ final class HephTurnFixtures {
             Duration pullWait) {
         MentorTurnService turns = beans.getBean(MentorTurnService.class);
         return new HephTurns(
-                MentorTurnStarts.admitting(turns, beans.getBean(MeterRegistry.class)),
+                MentorTurnStarts.admitting(beans, beans.getBean(MeterRegistry.class), cap),
                 turns,
                 beans.getBean(MentorTurnRepository.class),
                 beans.getBean(MentorRedaction.class),
@@ -107,10 +108,9 @@ final class HephTurnFixtures {
                 callsInFlight,
                 toolsPods,
                 issuer,
+                beans.getBean(TurnRunsAdapter.class),
                 clock,
                 meters,
-                cap,
-                Duration.ofMinutes(1),
                 pullWait);
     }
 
@@ -175,11 +175,11 @@ final class HephTurnFixtures {
                 turn.turnId(),
                 turn.workspaceId(),
                 turn.attempt(),
-                turn.leaseId(),
+                turn.runId(),
                 Set.of(AttemptTokenIssuer.LLM_PROXY_SCOPE),
                 "jti",
                 issued,
-                deadline.plus(HephTurns.STOP_GRACE).plus(HephTurns.STOP_GRACE),
+                deadline.plus(TurnRunsAdapter.GRACE).plus(TurnRunsAdapter.GRACE),
                 deadline);
     }
 

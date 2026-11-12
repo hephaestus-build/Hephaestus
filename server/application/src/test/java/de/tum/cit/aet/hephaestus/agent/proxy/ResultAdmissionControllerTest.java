@@ -49,7 +49,7 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
                 AttemptJwt.Kind.REVIEW,
                 id,
                 1L,
-                0,
+                1,
                 LEASE,
                 Set.of("llm_proxy"),
                 "test",

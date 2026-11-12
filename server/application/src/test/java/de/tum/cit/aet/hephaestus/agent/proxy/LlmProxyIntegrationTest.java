@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLlmUsageDelta;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.job.TerminalUsageTestFixtures;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -315,7 +316,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         .issueForReview(
                                 job.getId(),
                                 job.getWorkspaceId(),
-                                job.getAttempt(),
+                                ReviewRunKind.epoch(job.getAttempt()),
                                 Objects.requireNonNull(job.getRunId()),
                                 work,
                                 work.plus(Duration.ofMinutes(10))));
@@ -332,7 +333,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         AuthenticationResult result = authenticate(jwtIssuer.issueForReview(
                 job.getId(),
                 workspace.getId() + 1,
-                job.getAttempt(),
+                ReviewRunKind.epoch(job.getAttempt()),
                 Objects.requireNonNull(job.getRunId()),
                 work,
                 work.plus(Duration.ofMinutes(10))));
@@ -988,7 +989,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             String token = jwtIssuer.issueForReview(
                     job.getId(),
                     workspace.getId(),
-                    job.getAttempt(),
+                    ReviewRunKind.epoch(job.getAttempt()),
                     Objects.requireNonNull(job.getRunId()),
                     work,
                     work.plus(Duration.ofMinutes(10)));
@@ -1708,7 +1709,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return jwtIssuer.issueForReview(
                 job.getId(),
                 workspace.getId(),
-                job.getAttempt(),
+                ReviewRunKind.epoch(job.getAttempt()),
                 Objects.requireNonNull(job.getRunId()),
                 work,
                 work.plus(Duration.ofMinutes(10)));

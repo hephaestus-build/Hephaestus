@@ -239,7 +239,7 @@ public class ReviewRunKind implements AgentRunHandler {
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return Optional.empty();
         settle(job);
-        if (!runs.end(fence)) return Optional.empty();
+        if (runs.end(fence) != AgentRuns.EndOutcome.ENDED) return Optional.empty();
         AgentRunRef ended = new AgentRunRef(fence.runId(), fence.workspaceId());
         AgentRunRef composing = runs.continueAs(ended, fence.epoch(), AgentRunKind.REVIEW_COMPOSE);
         if (jobs.queueOnNextRun(jobId, fence.runId(), attempt(fence.epoch()), composing.id()) == 0)

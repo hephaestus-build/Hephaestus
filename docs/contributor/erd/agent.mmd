@@ -26,6 +26,7 @@ erDiagram
         TIMESTAMPTZ started_at
         TIMESTAMPTZ ended_at
         VARCHAR(16) hold_reason
+        INTEGER start_within_seconds
     }
 
     AgentSandbox {
@@ -342,12 +343,6 @@ erDiagram
         BIGINT cache_read_tokens "NOT NULL"
         BIGINT cache_write_tokens "NOT NULL"
         BIGINT search_units "NOT NULL"
-    }
-
-    WorkerRegistry {
-        VARCHAR(255) worker_id PK
-        TIMESTAMPTZ last_heartbeat "NOT NULL"
-        TIMESTAMPTZ registered_at "NOT NULL"
     }
 
     WorkspaceAgentBinding {

@@ -89,7 +89,6 @@ public final class AgentMetrics {
     public static final String MENTOR_TURN_QUEUED = "mentor.turn.queued";
     public static final String MENTOR_TURN_TOOLS_WAIT = "mentor.turn.tools.wait";
     public static final String MENTOR_TURN_QUEUE_WAIT = "mentor.turn.queue_wait";
-    public static final String MENTOR_TURN_LEASE_REAPER_FAILURE = "mentor.turn.lease_reaper.failure";
     public static final String MENTOR_TURN_CLAIM_FAILURE = "mentor.turn.claim.failure";
     public static final String MENTOR_LIVE_STREAMS = "mentor.live.streams";
     public static final String SANDBOX_GATEWAY_CONNECTIONS = "sandbox.gateway.connections";
@@ -106,7 +105,6 @@ public final class AgentMetrics {
     public static final String SANDBOX_ISOLATION_PASSED = "sandbox.isolation.passed";
     public static final String SANDBOX_ISOLATION_PROCESS_LIMIT = "sandbox.isolation.process_limit";
     public static final String SANDBOX_ISOLATION_USER_NAMESPACES = "sandbox.isolation.user_namespaces";
-    public static final String WORKER_LIVENESS_HEARTBEAT_FAILURES = "worker.liveness.heartbeat.failures";
 
     private AgentMetrics() {}
 }

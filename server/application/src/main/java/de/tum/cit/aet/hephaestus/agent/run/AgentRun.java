@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -89,6 +90,19 @@ public class AgentRun {
     @Column(name = "hold_reason", length = 16)
     private @Nullable AgentRunHold holdReason;
 
+    /**
+     * How long the run may wait to start once it is due ({@code available_at}) and nothing of its subject is ahead of
+     * it; past that it ends as {@link AgentRunStopReason#NOT_STARTED}. A requeue makes it due again, so a retry gets
+     * the same wait.
+     */
+    @Column(name = "start_within_seconds", updatable = false)
+    private @Nullable Integer startWithinSeconds;
+
+    /**
+     * Bounds the current claim: a leased run is not renewed past it, and the reaper ends it there as {@link
+     * AgentRunStopReason#DEADLINE}. Within a claim it only moves earlier ({@link AgentRuns#endBy}); a requeue clears it,
+     * so the next claim sets its own.
+     */
     @Column(name = "deadline", updatable = false)
     private @Nullable Instant deadline;
 
@@ -115,7 +129,7 @@ public class AgentRun {
             int leaseEpoch,
             int attempt,
             Instant now,
-            @Nullable Instant deadline) {
+            @Nullable Duration startWithin) {
         if (workspaceId <= 0) throw new IllegalArgumentException("A run belongs to a workspace");
         if (concurrencyKey.isBlank() || concurrencyKey.length() > 96)
             throw new IllegalArgumentException("A run names its subject in at most 96 characters");
@@ -129,7 +143,7 @@ public class AgentRun {
         this.attempt = attempt;
         this.availableAt = now;
         this.createdAt = now;
-        this.deadline = deadline;
+        this.startWithinSeconds = startWithin == null ? null : Math.toIntExact(startWithin.toSeconds());
     }
 
     public AgentRunRef ref() {

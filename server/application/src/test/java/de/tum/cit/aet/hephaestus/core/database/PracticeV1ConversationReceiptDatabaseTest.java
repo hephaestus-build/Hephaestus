@@ -210,9 +210,16 @@ class PracticeV1ConversationReceiptDatabaseTest {
                 '',NULL,'00000000-0000-0000-0000-000000978053','2026-02-01T00:00:00Z');
             INSERT INTO mentor_conversation(id,workspace_id,account_id,created_at,last_activity_at)
             VALUES('00000000-0000-0000-0000-000000998193',978001,978007,'2026-02-01T00:00:00Z','2026-02-01T00:00:00Z');
-            INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,started_at,created_at)
+            INSERT INTO agent_run(id,workspace_id,kind,band,concurrency_key,state,attempt,lease_epoch,leased_until,
+                available_at,start_within_seconds,created_at,started_at)
+            VALUES('00000000-0000-0000-0000-000000998196',978001,'TURN','INTERACTIVE',
+                'conversation:00000000-0000-0000-0000-000000998193','LEASED',0,1,now()+interval '5 minutes',
+                '2026-02-01T00:00:00Z',180,'2026-02-01T00:00:00Z','2026-02-01T00:00:00Z');
+            INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,started_at,
+                created_at)
             VALUES('00000000-0000-0000-0000-000000998195',978001,'00000000-0000-0000-0000-000000998193',
-                'foreign-turn','RUNNING','APP',1,'2026-02-01T00:00:00Z','2026-02-01T00:00:00Z');
+                'foreign-turn','RUNNING','APP',1,'00000000-0000-0000-0000-000000998196','2026-02-01T00:00:00Z',
+                '2026-02-01T00:00:00Z');
             INSERT INTO mentor_entry(id,workspace_id,conversation_id,seq,kind,surface,text,turn_id,created_at)
             VALUES('00000000-0000-0000-0000-000000998194',978001,'00000000-0000-0000-0000-000000998193',1,'HEPH','APP',
                 'Another developer.','00000000-0000-0000-0000-000000998195','2026-02-01T00:00:00Z');
@@ -253,7 +260,10 @@ class PracticeV1ConversationReceiptDatabaseTest {
     private static void complete(TestDatabase database) {
         PracticeMigrationFixture.execute(
                 database,
-                "UPDATE mentor_turn SET status='DONE',finished_at='2026-02-01T00:00:50Z' WHERE id='" + TURN + "'");
+                "UPDATE agent_run SET state='ENDED',leased_until=NULL,stop_reason='COMPLETED',ended_at=now()"
+                        + " WHERE id=(SELECT run_id FROM mentor_turn WHERE id='" + TURN + "');"
+                        + " UPDATE mentor_turn SET status='DONE',finished_at='2026-02-01T00:00:50Z' WHERE id='" + TURN
+                        + "'");
     }
 
     private static String receipt(String body) {

@@ -82,6 +82,8 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
                 claims,
                 new AgentCapacityProperties(
                         Duration.ofMinutes(5),
+                        Duration.ofSeconds(60),
+                        null,
                         Duration.ofSeconds(25),
                         5,
                         Duration.ofMinutes(10),
@@ -247,7 +249,10 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThat(runState(subject)).isEqualTo("QUEUED");
 
         // A kind that finds its work gone ends the run in the transaction of the lease, and the sandbox gets none.
-        assertThat(sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW), lease -> !runs.end(lease.fence())))
+        assertThat(sandboxes.lease(
+                        sandbox,
+                        Set.of(AgentRunKind.REVIEW),
+                        lease -> runs.end(lease.fence()) != AgentRuns.EndOutcome.ENDED))
                 .isEmpty();
         assertThat(runState(subject)).isEqualTo("ENDED");
 

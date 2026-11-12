@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemSourceAccess;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRunRows;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
@@ -638,13 +639,16 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 conversation,
                 feedback.getWorkspaceId(),
                 feedback.getDeveloperId());
+        UUID run = UUID.randomUUID();
+        jdbc.update(MentorTurnRunRows.insert(run, feedback.getWorkspaceId(), conversation, "DONE", 1));
         jdbc.update(
-                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,created_at,"
-                        + "finished_at) VALUES (?,?,?,?,'DONE','APP',1,now(),now())",
+                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
+                        + "created_at,finished_at) VALUES (?,?,?,?,'DONE','APP',1,?,now(),now())",
                 turn,
                 feedback.getWorkspaceId(),
                 conversation,
-                turn.toString());
+                turn.toString(),
+                run);
         var call = Map.of(
                 "type",
                 "toolCall",

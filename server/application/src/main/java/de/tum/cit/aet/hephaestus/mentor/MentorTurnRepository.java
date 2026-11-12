@@ -26,15 +26,24 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     List<MentorTurn> findByWorkspaceIdAndConversationIdAndStatus(
             Long workspaceId, UUID conversationId, MentorTurn.Status status);
 
-    /** The turns of a workspace that the ledger does not show yet: a stopped turn still holds its lease until it ends. */
+    /**
+     * The turn's run is leased: a host holds the turn, running, or stopped while it commits its answer. The turn's run
+     * ({@code agent_run}) holds the lease; the ledger only reads whether it is held.
+     */
+    String HELD_RUN = """
+            (EXISTS (SELECT 1 FROM AgentRun held WHERE held.id = t.runId
+                       AND held.state = de.tum.cit.aet.hephaestus.agent.run.AgentRunState.LEASED))
+            """;
+
+    /** The turns of a workspace that the ledger does not show yet: a stopped turn is held until its holder ends it. */
     @Query("""
             SELECT new de.tum.cit.aet.hephaestus.mentor.RunningTurnUsage(
               t.admission, t.inputTokens, t.outputTokens, t.cachedTokens, t.cacheWriteTokens)
             FROM MentorTurn t
             WHERE t.workspaceId = :workspaceId
               AND (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING
-                OR (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED
-                  AND t.leasedUntil IS NOT NULL))
+                OR (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED AND""" + HELD_RUN + """
+                ))
             """)
     List<RunningTurnUsage> findRunningUsage(@Param("workspaceId") long workspaceId);
 
@@ -89,19 +98,29 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     List<MentorTurn> findActiveByWorkspaceIdAndSurface(
             @Param("workspaceId") Long workspaceId, @Param("surface") MentorTurn.Surface surface);
 
+    /**
+     * The attempt's claim of the turn's run, live on the database clock: the run is leased under {@code epoch} and
+     * its lease has not run out. Every fenced read of a turn credential joins it.
+     */
+    String LIVE_CLAIM = """
+            JOIN agent_run r ON r.id = t.run_id AND r.workspace_id = t.workspace_id AND r.state = 'LEASED'
+                             AND r.lease_epoch = :epoch AND r.leased_until > clock_timestamp()
+            """;
+
     /** One database-clock read of the token's complete live attempt fence. */
     @Query(value = """
             SELECT EXISTS (
-                SELECT 1 FROM mentor_turn
-                WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt
-                  AND lease_id = :leaseId AND status = 'RUNNING' AND leased_until > clock_timestamp()
+                SELECT 1 FROM mentor_turn t
+            """ + LIVE_CLAIM + """
+                WHERE t.id = :id AND t.workspace_id = :workspaceId AND t.attempt = :epoch AND t.run_id = :runId
+                  AND t.status = 'RUNNING'
             )
             """, nativeQuery = true)
     boolean hasLiveLease(
             @Param("id") UUID id,
             @Param("workspaceId") long workspaceId,
-            @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId);
+            @Param("epoch") int epoch,
+            @Param("runId") UUID runId);
 
     /** An attempt that holds its live lease, as any worker reads it for a call of its turn credential. */
     interface HeldAttempt {
@@ -130,14 +149,15 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
                    t.started_at AS startedAt, t.finished_at AS finishedAt
               FROM mentor_turn t
               JOIN mentor_conversation c ON c.id = t.conversation_id AND c.workspace_id = t.workspace_id
-             WHERE t.workspace_id = :workspaceId AND t.id = :id AND t.attempt = :attempt AND t.lease_id = :leaseId
-               AND t.status IN ('RUNNING', 'STOPPED') AND t.leased_until > clock_timestamp()
+            """ + LIVE_CLAIM + """
+             WHERE t.workspace_id = :workspaceId AND t.id = :id AND t.attempt = :epoch AND t.run_id = :runId
+               AND t.status IN ('RUNNING', 'STOPPED')
             """, nativeQuery = true)
     Optional<HeldAttempt> findHeldAttempt(
             @Param("workspaceId") long workspaceId,
             @Param("id") UUID id,
-            @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId);
+            @Param("epoch") int epoch,
+            @Param("runId") UUID runId);
 
     /** An attempt that holds its lease, so an erasure can end it. */
     interface LeasedAttempt {
@@ -147,36 +167,23 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
 
         int getAttempt();
 
-        UUID getLeaseId();
+        UUID getRunId();
 
         @Nullable
         Instant getStartedAt();
     }
 
-    /** The attempts that hold a live lease, in one workspace, or in every workspace when it is {@code null}. */
+    /** The attempts whose run is leased now, in one workspace, or in every workspace when it is {@code null}. */
     @WorkspaceAgnostic("Erasure ends the leased attempts of the workspace it names, or of all after a reconnect")
     @Query(value = """
-            SELECT id, workspace_id AS workspaceId, attempt, lease_id AS leaseId, started_at AS startedAt
-              FROM mentor_turn
-             WHERE (CAST(:workspaceId AS bigint) IS NULL OR workspace_id = :workspaceId)
-               AND status IN ('RUNNING', 'STOPPED') AND leased_until > clock_timestamp()
+            SELECT t.id, t.workspace_id AS workspaceId, t.attempt, t.run_id AS runId, t.started_at AS startedAt
+              FROM mentor_turn t
+              JOIN agent_run r ON r.id = t.run_id AND r.workspace_id = t.workspace_id AND r.state = 'LEASED'
+                               AND r.lease_epoch = t.attempt AND r.leased_until > clock_timestamp()
+             WHERE (CAST(:workspaceId AS bigint) IS NULL OR t.workspace_id = :workspaceId)
+               AND t.status IN ('RUNNING', 'STOPPED')
             """, nativeQuery = true)
     List<LeasedAttempt> findLeasedAttempts(@Param("workspaceId") @Nullable Long workspaceId);
-
-    /** The turns that hold a lease in the installation: a claim admits one more only below the cap. */
-    @WorkspaceAgnostic("The cap bounds the turns of every workspace at once")
-    @Query(value = """
-            SELECT count(*) FROM mentor_turn
-             WHERE status IN ('RUNNING', 'STOPPED') AND leased_until > clock_timestamp()
-            """, nativeQuery = true)
-    long countLeased();
-
-    /** One claim at a time in the installation, so two claims cannot both pass the cap. */
-    @WorkspaceAgnostic("A lock of the installation's claims; it reads no row")
-    @Query(
-            value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended('mentor-turn-claim', 0))) locked",
-            nativeQuery = true)
-    int lockClaims();
 
     /**
      * Counts one load of the attempt's context folder, on the database clock, while the attempt holds its live lease
@@ -187,15 +194,17 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     @Modifying
     @Transactional
     @Query(value = """
-            UPDATE mentor_turn SET tools_loads = tools_loads + 1
-             WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt AND lease_id = :leaseId
-               AND status = 'RUNNING' AND leased_until > clock_timestamp() AND tools_loads < :max
+            UPDATE mentor_turn t SET tools_loads = t.tools_loads + 1
+             WHERE t.id = :id AND t.workspace_id = :workspaceId AND t.attempt = :epoch AND t.run_id = :runId
+               AND t.status = 'RUNNING' AND t.tools_loads < :max
+               AND EXISTS (SELECT 1 FROM agent_run r WHERE r.id = t.run_id AND r.workspace_id = t.workspace_id
+                             AND r.state = 'LEASED' AND r.lease_epoch = :epoch AND r.leased_until > clock_timestamp())
             """, nativeQuery = true)
     int countToolsLoad(
             @Param("id") UUID id,
             @Param("workspaceId") long workspaceId,
-            @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId,
+            @Param("epoch") int epoch,
+            @Param("runId") UUID runId,
             @Param("max") int max);
 
     /** Locks the row, so a state change reads the proxy's latest totals and the proxy waits for it. */
@@ -208,6 +217,21 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     @Query("SELECT t FROM MentorTurn t WHERE t.id = :id AND t.workspaceId = :workspaceId")
     Optional<MentorTurn> lockByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
+    /** Locks the turn of a run, as the run's handler does before it moves the run. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM MentorTurn t WHERE t.runId = :runId AND t.workspaceId = :workspaceId")
+    Optional<MentorTurn> lockByRun(@Param("runId") UUID runId, @Param("workspaceId") Long workspaceId);
+
+    /**
+     * Locks the turn of a run that a claim just leased, unless a stop holds it: the claim then rolls back, so the stop,
+     * which locks the turn before the run, never waits for the claim's lock on the run.
+     */
+    @Query(
+            value = "SELECT t.* FROM mentor_turn t WHERE t.run_id = :runId AND t.workspace_id = :workspaceId"
+                    + " FOR UPDATE SKIP LOCKED",
+            nativeQuery = true)
+    Optional<MentorTurn> lockClaimedByRun(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
+
     @Query("""
             SELECT COUNT(t) FROM MentorTurn t
             WHERE t.workspaceId = :workspaceId AND t.conversationId = :conversationId
@@ -217,15 +241,17 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
             @Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
 
     /**
-     * Locks the queued and running turns of a conversation. A claim skips a locked row, so no turn of the conversation
+     * Locks queued turns and held turns, including stopped holders. A claim skips a locked row, so no turn of the conversation
      * starts while the caller holds them.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT t FROM MentorTurn t
             WHERE t.workspaceId = :workspaceId AND t.conversationId = :conversationId
-              AND t.status IN (de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.QUEUED,
-                               de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING)
+              AND (t.status IN (de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.QUEUED,
+                                de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING)
+                   OR (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED AND""" + HELD_RUN + """
+                   ))
             ORDER BY t.id
             """)
     List<MentorTurn> lockActiveByWorkspaceIdAndConversationId(
@@ -247,32 +273,9 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
                     AND asked.seq < question.seq)
               AND NOT EXISTS (
                   SELECT 1 FROM mentor_turn held
-                  WHERE held.conversation_id = t.conversation_id
-                    AND (held.status = 'RUNNING' OR (held.status = 'STOPPED' AND held.leased_until IS NOT NULL)))
+                  JOIN agent_run held_run ON held_run.id = held.run_id AND held_run.state = 'LEASED'
+                  WHERE held.conversation_id = t.conversation_id)
             """;
-
-    /**
-     * The oldest turn a worker may start ({@link #CLAIMABLE}), locked. Skips rows another claim has locked, so
-     * concurrent workers never start the same turn, and the head rule keeps them from starting two turns of one
-     * conversation. The creation time comes from the clock of the server that took the question, so it orders only
-     * the turns of different conversations.
-     */
-    @WorkspaceAgnostic("Workers claim queued turns across tenants")
-    @Query(value = "SELECT t.* " + CLAIMABLE + """
-            ORDER BY t.created_at, t.id
-            LIMIT 1
-            FOR UPDATE OF t SKIP LOCKED
-            """, nativeQuery = true)
-    Optional<MentorTurn> lockClaimable();
-
-    /** Queued questions past their start budget; held conversations stay with their running turn. */
-    @WorkspaceAgnostic("Server maintenance ends overdue queued questions across tenants")
-    @Query(value = "SELECT t.id " + CLAIMABLE + """
-            AND t.queued_at <= :cutoff
-            ORDER BY t.queued_at, t.id
-            LIMIT 100
-            """, nativeQuery = true)
-    List<UUID> findOverdueQueued(@Param("cutoff") Instant cutoff);
 
     /** Of {@code ids}, the turns of the workspace that a worker may start now ({@link #CLAIMABLE}). Locks nothing. */
     @Query(
@@ -285,12 +288,13 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
      * Every workspace counts, because every workspace shares the workers' Hephaestus slots.
      */
     @WorkspaceAgnostic("Every workspace shares the workers' Hephaestus slots")
-    @Query("""
-            SELECT COUNT(t) FROM MentorTurn t
-            WHERE t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING
-               OR (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED AND t.leaseId IS NOT NULL)
-            """)
+    @Query("SELECT COUNT(t) FROM MentorTurn t WHERE " + HELD_RUN)
     long countHeld();
+
+    /** Whether a host holds the turn ({@link #HELD_RUN}). */
+    @WorkspaceAgnostic("Reads one turn by its id, which the caller read in its workspace")
+    @Query("SELECT COUNT(t) > 0 FROM MentorTurn t WHERE t.id = :id AND " + HELD_RUN)
+    boolean isHeld(@Param("id") UUID id);
 
     /** A queued turn, with what {@link MentorLedgerEvents.TurnChanged} names. */
     interface QueuedTurn {
@@ -337,20 +341,6 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     long countByStatus(MentorTurn.Status status);
 
     /**
-     * Expired leases. The lease id finds the leased turns: no index covers the lease end, so that a renewal rewrites
-     * the row in place.
-     */
-    @WorkspaceAgnostic("The lease reaper sweeps expired leases across tenants")
-    @Query("""
-            SELECT t.id FROM MentorTurn t
-            WHERE t.leaseId IS NOT NULL AND t.leasedUntil < :now
-              AND t.status IN (de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING,
-                               de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED)
-            ORDER BY t.leasedUntil
-            """)
-    List<UUID> findExpiredLeases(@Param("now") Instant now);
-
-    /**
      * Lets this transaction commit without waiting for its WAL flush. PostgreSQL serialises the commits of every
      * transaction that sent a notification, flush included, so with one flush per partial answer the database
      * commits only about one partial answer per flush interval across all turns. A partial answer is replaced by the
@@ -373,29 +363,31 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     }
 
     /**
-     * The running attempt that holds this live lease, read without a lock or a write: a partial answer only checks the
-     * lease, because memory alone keeps it ({@link MentorTurnProgress}).
+     * The running attempt that holds this live claim, read without a lock or a write: a partial answer only checks the
+     * claim, because memory alone keeps it ({@link MentorTurnProgress}).
      *
-     * @return the attempt, or empty when the attempt no longer holds its live lease
+     * @return the attempt, or empty when the attempt no longer holds its live claim
      */
-    @WorkspaceAgnostic("The worker holds the attempt's lease; the statement returns the turn's workspace")
+    @WorkspaceAgnostic("The worker holds the attempt's claim; the statement returns the turn's workspace")
     @Query(value = """
-            SELECT workspace_id AS workspaceId, conversation_id AS conversationId, surface AS surface, started_at AS startedAt
-              FROM mentor_turn
-             WHERE workspace_id = :workspaceId AND id = :id AND attempt = :attempt AND lease_id = :leaseId
-               AND status = 'RUNNING' AND leased_until > clock_timestamp()
+            SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.surface AS surface,
+                   t.started_at AS startedAt
+              FROM mentor_turn t
+            """ + LIVE_CLAIM + """
+             WHERE t.workspace_id = :workspaceId AND t.id = :id AND t.attempt = :epoch AND t.run_id = :runId
+               AND t.status = 'RUNNING'
             """, nativeQuery = true)
     Optional<RunningAttempt> findRunningAttempt(
             @Param("workspaceId") long workspaceId,
             @Param("id") UUID id,
-            @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId);
+            @Param("epoch") int epoch,
+            @Param("runId") UUID runId);
 
     /**
      * Adds one proxied call to the attempt that made it. The fence drops a call that arrives after the attempt
      * ended: that attempt is already billed, and a later attempt must not pay for it.
      *
-     * @return 1 if the attempt still holds its lease, 0 otherwise
+     * @return 1 if the attempt still holds its run's claim, 0 otherwise
      */
     @WorkspaceAgnostic("The proxy credential already resolved the turn and its workspace")
     @Modifying
@@ -407,9 +399,12 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
                    t.reasoningTokens = t.reasoningTokens + :#{#call.reasoningTokens()},
                    t.cachedTokens = t.cachedTokens + :#{#call.cacheReadTokens()},
                    t.cacheWriteTokens = t.cacheWriteTokens + :#{#call.cacheWriteTokens()}
-             WHERE t.id = :id AND t.attempt = :attempt AND t.leasedUntil > CURRENT_TIMESTAMP
+             WHERE t.id = :id AND t.attempt = :attempt
                AND t.status IN (de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING,
                                 de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED)
+               AND EXISTS (SELECT 1 FROM AgentRun r WHERE r.id = t.runId AND r.leaseEpoch = :attempt
+                             AND r.state = de.tum.cit.aet.hephaestus.agent.run.AgentRunState.LEASED
+                             AND r.leasedUntil > CURRENT_TIMESTAMP)
             """)
     int accumulateUsage(@Param("id") UUID id, @Param("attempt") int attempt, @Param("call") MentorTurnUsage call);
 

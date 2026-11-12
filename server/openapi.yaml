@@ -23445,9 +23445,6 @@ components:
     ReviewQueue:
       type: object
       properties:
-        activeWorkers:
-          type: integer
-          format: int64
         asOf:
           type: string
           format: date-time
@@ -23479,7 +23476,6 @@ components:
           type: integer
           format: int64
       required:
-      - activeWorkers
       - asOf
       - finishedLastDay
       - finishedLastHour

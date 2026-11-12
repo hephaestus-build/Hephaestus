@@ -1,14 +1,18 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.turn;
 
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetExhaustedException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUnpricedUsageBlockedException;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
@@ -19,13 +23,16 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.modulith.NamedInterface;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Starts the next queued turn for a worker: claims it, then admits it. Admission runs at the start, not at
+ * Starts the next queued turn for a worker: claims its run, then admits it. Admission runs at the start, not at
  * submission, because a follow-up can wait while the member's AI choice or the budget changes. A turn admission
- * declines ends {@code FAILED} with the reason the developer reads.
+ * declines ends {@code FAILED} with the reason the developer reads. The claim keeps the installation's turn cap
+ * ({@code hephaestus.agent.capacity.turns}).
  */
 @Service
 @RequiredArgsConstructor
@@ -48,6 +55,9 @@ public class MentorTurnStarter {
     private final MentorAttemptUsageService attemptUsage;
     private final MeterRegistry meters;
     private final LlmConnectionHealth connections;
+    private final AgentRuns runs;
+    private final AgentCapacityProperties capacity;
+    private final TransactionTemplate transactions;
 
     /** A claimed and admitted turn attempt: what its host runs, for whom, with which model. */
     public record StartedTurn(MentorTurn turn, long accountId, MentorLlmConfig llm) {}
@@ -56,16 +66,41 @@ public class MentorTurnStarter {
      * Claims and admits the next turn. Each step commits on its own, so a declined admission is recorded even
      * though the claim already committed.
      *
-     * @param cap the most turns that may hold a lease in the installation, this one included
-     * @return empty when no turn is waiting, the installation runs {@code cap} turns, or admission declined the
-     *     claimed one
+     * @return empty when no turn is waiting, the installation runs its cap of turns, or admission declined the claimed
+     *     one
      */
-    public Optional<StartedTurn> startNext(Duration lease, int cap) {
-        Optional<MentorTurn> claimed = turns.claimNext(lease, cap);
+    public Optional<StartedTurn> startNext() {
+        var previous = MDC.getCopyOfContextMap();
+        try {
+            return startInContext();
+        } finally {
+            if (previous == null) MDC.clear();
+            else MDC.setContextMap(previous);
+        }
+    }
+
+    private Optional<StartedTurn> startInContext() {
+        Integer turnCap = capacity.turns();
+        int cap = turnCap == null ? Integer.MAX_VALUE : turnCap;
+        Optional<MentorTurn> claimed = Objects.requireNonNull(transactions.execute(status -> runs.claimCapped(
+                        AgentRunKind.TURN, cap)
+                .flatMap(lease -> {
+                    Optional<MentorTurn> started = turns.start(lease.workspaceId(), lease.runId(), lease.epoch());
+                    // A stop holds the turn: the claim rolls back, and the stop ends the run.
+                    if (started.isEmpty()) status.setRollbackOnly();
+                    return started;
+                })));
         if (claimed.isEmpty()) {
             return Optional.empty();
         }
         MentorTurn turn = claimed.get();
+        MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(turn.getWorkspaceId()));
+        MDC.put(StructuredLogKeys.RUN_ID, turn.getRunId().toString());
+        MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(turn.getAttempt()));
+        MDC.put(StructuredLogKeys.SUBJECT_KEY, "conversation:" + turn.getConversationId());
+        MDC.remove(StructuredLogKeys.REVIEW_ID);
+        MDC.remove(StructuredLogKeys.JOB_ATTEMPT);
+        MDC.remove(StructuredLogKeys.JOB_ID);
         long accountId = turns.accountId(turn);
         meters.counter(AgentMetrics.MENTOR_TURN_STARTED).increment();
         Instant startedAt = turn.getStartedAt();
@@ -102,7 +137,7 @@ public class MentorTurnStarter {
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                turn.getRunId(),
                 MentorTurnAdmission.of(
                         llm,
                         Objects.requireNonNull(llm.priceSnapshot(), "A conversation turn needs an admitted price")));
@@ -117,7 +152,7 @@ public class MentorTurnStarter {
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                turn.getRunId(),
                 new MentorTurnService.Ending(MentorTurn.Status.FAILED, List.of(), null, reason));
         log.info(
                 "conversation turn {} attempt {} was declined at its start: {}",

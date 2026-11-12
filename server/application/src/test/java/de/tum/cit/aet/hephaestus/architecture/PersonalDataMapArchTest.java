@@ -100,7 +100,6 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "installation_inbox_step", // Delivery ids and step names contain no person data.
             "consumer_inbox_step", // Delivery ids and step names contain no person data.
             "repository_to_monitor",
-            "worker_registry",
             "attempt_public_key",
             "workspace",
             "workspace_agent_binding",

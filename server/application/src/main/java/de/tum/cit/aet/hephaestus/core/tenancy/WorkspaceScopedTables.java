@@ -68,8 +68,6 @@ public class WorkspaceScopedTables {
             "identity_restriction",
             // Account-scoped consent evidence; spans workspaces
             "consent_decision",
-            // Fleet-wide worker liveness/capacity registry; not workspace-scoped
-            "worker_registry",
             // Fleet-wide public keys that verify attempt tokens; a token's workspace is a signed claim
             "attempt_public_key",
             // Installation-wide tools Pods; a bound row names its turn's workspace and is fenced on the turn's lease

@@ -41,16 +41,6 @@ class AgentRoleGatingTest extends BaseUnitTest {
                 .isTrue();
     }
 
-    /** A worker that runs no practice reviews still runs Heph hosts, which other workers keep while it beats. */
-    @Test
-    void shouldBeatWheneverTheWorkerRoleIsOn() {
-        assertThat(registers(WorkerLivenessReporter.class)).isTrue();
-        assertThat(registers(WorkerLivenessReporter.class, RuntimeRole.SERVER_PROPERTY + "=false"))
-                .isTrue();
-        assertThat(registers(WorkerLivenessReporter.class, RuntimeRole.WORKER_PROPERTY + "=false"))
-                .isFalse();
-    }
-
     @ParameterizedTest
     @ValueSource(classes = {ReviewJobEventListener.class, ScanDriver.class})
     void shouldSubmitJobsOnlyWhenAgentJobsAreOn(Class<?> submitter) {

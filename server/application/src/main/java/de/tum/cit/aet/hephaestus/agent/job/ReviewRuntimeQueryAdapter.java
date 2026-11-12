@@ -108,7 +108,6 @@ public class ReviewRuntimeQueryAdapter implements ReviewRuntimeQuery {
     public ReviewQueueSnapshot queue(long workspaceId, Instant asOf, int headLimit) {
         if (headLimit < 0 || headLimit > 100) throw new IllegalArgumentException("Invalid queue head limit");
         var totals = runtime.queueCounts(workspaceId, asOf);
-        long workers = runtime.liveWorkers(asOf);
         var queued = headLimit == 0
                 ? List.<ReviewJob>of()
                 : jobs.findByWorkspaceIdAndStatusInOrderByAvailableAtAscIdAsc(
@@ -135,7 +134,6 @@ public class ReviewRuntimeQueryAdapter implements ReviewRuntimeQuery {
         return new ReviewQueueSnapshot(
                 asOf,
                 totals.running(),
-                workers,
                 totals.waiting(),
                 totals.oldest(),
                 totals.held(),

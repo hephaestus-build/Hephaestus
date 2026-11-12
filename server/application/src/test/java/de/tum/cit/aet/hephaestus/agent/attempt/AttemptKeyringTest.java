@@ -215,6 +215,6 @@ class AttemptKeyringTest extends BaseUnitTest {
 
     private String reviewToken(UUID review) {
         Instant work = Instant.now().plusSeconds(300);
-        return issuerA.issueForReview(review, 42L, 0, LEASE, work, work.plusSeconds(600));
+        return issuerA.issueForReview(review, 42L, 1, LEASE, work, work.plusSeconds(600));
     }
 }

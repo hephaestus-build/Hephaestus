@@ -30,7 +30,6 @@ import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -88,9 +87,6 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private MentorConversationService conversations;
 
     @Autowired
-    private MentorTurnService turns;
-
-    @Autowired
     private ReviewJobRepository jobRepository;
 
     @Autowired
@@ -131,7 +127,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         developer = accountId(developerUser);
         conversation = conversations.findOrCreateMain(workspace.getId(), developer);
         turn = MentorTurnStarts.askAndStart(
-                turns, metrics, workspace.getId(), conversation.getId(), "How should I pin the image?");
+                beans, metrics, workspace.getId(), conversation.getId(), "How should I pin the image?");
 
         var callsInFlight = new ProxyCallsInFlight(12);
         var toolsPods = HephTurnFixtures.toolsPods(beans, new FakeToolsPods());
@@ -280,7 +276,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 turn.getId(),
                 workspace.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 deadline,
                 deadline.plus(Duration.ofMinutes(1)));
     }

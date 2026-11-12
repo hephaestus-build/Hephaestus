@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
@@ -34,6 +35,9 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.MDC;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
@@ -126,5 +130,63 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         assertThat(archive).doesNotExist();
         assertThat(copiedPerson).doesNotExist();
         assertThatThrownBy(session::download).isInstanceOf(ResponseStatusException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldCorrelateRunCompletionAndRestoreItsCallersContext(boolean fail) {
+        var jobs = mock(ReviewJobRepository.class);
+        var reviewRuns = mock(ReviewRunKind.class);
+        var fence = new AgentRunFence(UUID.randomUUID(), 7, 1);
+        var job = new ReviewJob();
+        job.setId(UUID.randomUUID());
+        job.setWorkspaceId(7);
+        job.setRunId(fence.runId());
+        job.setReviewId(UUID.randomUUID());
+        when(jobs.findByRunIdAndWorkspaceId(fence.runId(), 7)).thenReturn(Optional.of(job));
+        when(reviewRuns.requeue(any(), any(), any(), any(), any())).thenAnswer(call -> {
+            assertThat(MDC.getCopyOfContextMap())
+                    .containsEntry("workspace.id", "7")
+                    .containsEntry("job.id", job.getId().toString())
+                    .containsEntry("job.attempt", "0")
+                    .containsEntry("review.id", job.getReviewId().toString())
+                    .containsEntry("run.id", fence.runId().toString())
+                    .containsEntry("run.epoch", "1")
+                    .containsEntry("subject.key", ReviewRunKind.subject(job.getReviewId()));
+            if (fail) throw new IllegalStateException("Run completion failed");
+            return true;
+        });
+        var runtime = new ReviewSandboxRuns(
+                mock(ReviewJobClaimService.class),
+                mock(ReviewAttemptPreparation.class),
+                mock(ReviewAttemptCustody.class),
+                mock(ReviewJobTerminal.class),
+                jobs,
+                mock(SandboxWorkspaceManager.class),
+                new SandboxGatewaySessions(),
+                mock(TransactionTemplate.class),
+                JsonMapper.builder().build(),
+                mock(DefaultReviewExecutionHandler.class),
+                mock(ReviewAttemptResults.class),
+                reviewRuns,
+                mock(AgentRuns.class));
+        var sandbox = new AgentSandboxes.LiveSandbox(
+                UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
+        var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
+        var previous = MDC.getCopyOfContextMap();
+        var parent = Map.of("run.id", "parent-run", "review.id", "parent-review", "job.attempt", "parent-attempt");
+        MDC.setContextMap(parent);
+        try {
+            if (fail) {
+                assertThatThrownBy(() -> runtime.end(run, SandboxRunKind.Outcome.HANDED_ON))
+                        .isInstanceOf(IllegalStateException.class);
+            } else {
+                assertThat(runtime.end(run, SandboxRunKind.Outcome.HANDED_ON)).isTrue();
+            }
+            assertThat(MDC.getCopyOfContextMap()).isEqualTo(parent);
+        } finally {
+            if (previous == null) MDC.clear();
+            else MDC.setContextMap(previous);
+        }
     }
 }

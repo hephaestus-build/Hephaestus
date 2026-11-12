@@ -10,7 +10,7 @@ page_type: reference
 An agent run (`agent_run`) is the lease of one piece of agent work on one subject.
 A subject is the review, conversation or action that the work belongs to, such as `review:<id>`.
 Each kind's domain row points to its run and keeps its own lifecycle.
-Review jobs are on runs. `AgentRuns` in `agent.run` is the only writer of a run.
+Review jobs and conversation turns are on runs. `AgentRuns` in `agent.run` is the only writer of a run.
 
 ## States
 
@@ -21,6 +21,7 @@ Review jobs are on runs. `AgentRuns` in `agent.run` is the only writer of a run.
 | `ENDED` | Final. Work that must go on gets a new run (`AgentRuns.continueAfter`). | none |
 
 `AgentRunState` holds this table. The trigger `guard_agent_run` refuses every other transition, and every change of a run's identity.
+Only a queued run may move to another subject (`AgentRuns.moveQueued`), as when an account absorption merges two conversations.
 A claim takes the next epoch. No other write changes the epoch.
 `attempt` counts only the claims that spent the kind's retry budget: a lost lease, or a requeue that the holder charges.
 
@@ -48,6 +49,24 @@ It never rises into `INTERACTIVE`. Thus scheduled work waits a bounded time behi
 A run of a workspace that is not active is not offered.
 A queued run sends a PostgreSQL notification on the channel `agent_run`, which wakes an idle claimer.
 
+`AgentRuns.claimCapped` leases no run of a kind beyond a cap, such as the installation's turns (`hephaestus.agent.capacity.turns`).
+The capped claims of one kind take an advisory lock in turn, so the cap holds across workers.
+
+A claim leases a turn for `hephaestus.agent.capacity.turn-lease-ttl` (60 seconds), and any other run for `lease-ttl`.
+A person waits for a turn, so a lost turn is taken back sooner.
+
+## Clocks
+
+A run has two clocks, and the reaper enforces both:
+
+- **Start window** (`start_within_seconds`): how long a run may wait for room once it is due.
+  A queued run past it ends as `NOT_STARTED`, unless it waits behind a leased or older run of its subject: then it waits for its subject, not for room.
+  A requeue makes the run due again, so a retry gets the same window.
+- **Deadline** (`deadline`): it bounds the current claim.
+  A leased run is not renewed past it, and the reaper ends it there, even while its lease is live.
+  Within a claim it only moves earlier (`AgentRuns.endBy`). A requeue clears it, so the next claim sets its own.
+  The trigger `guard_agent_run` refuses any other change.
+
 ## Model call permits
 
 A model call takes a permit of its call pool (`llm_call_permit`) in the band of its work, with the same aging rule.
@@ -71,7 +90,7 @@ Then the handler moves the domain row, while the run still reads as its lost hol
 Last, one conditional write takes the run back. When another replica or a renewal won meanwhile, the transaction rolls back.
 
 A run with retries left is queued again, after a backoff. At the kind's limit, or past its deadline, it ends.
-A queued run past its deadline also ends.
+A queued run past its start window also ends.
 A run whose take-back fails is skipped until the next tick, so it cannot hold back the runs behind it.
 
 Each take-back writes one event that names `run.id`, `run.epoch` and `subject.key` ([Log records](/admin/log-records#agent-run-and-outbox-events)).
@@ -96,6 +115,20 @@ A review's `REVIEW` run is measured in the review's own sandbox (`ReviewSandboxR
 3. The first request of the run prepares the attempt (`ReviewAttemptPreparation`): it captures the work, records its provenance and marks the execution started. The attempt's inputs are held until the run ends (`ReviewAttemptCustody`).
 4. The driver's `REVIEW` kind (`agent/review-measure.ts`) downloads the workspace from `…/runs/{runId}/runtime/workspace` and runs the image's review programs in one container. Its model and review calls carry the sandbox token and the run's claim.
 5. The runner's result arrives at `…/runs/{runId}/runtime/result`, with the runner's exit. `ReviewAttemptResults` then ends the attempt, requeues it, or hands an admitted review on to its `REVIEW_COMPOSE` run (`ReviewRunKind.continueToCompose`), which the same sandbox pulls next.
+
+## Turns
+
+`TurnRunKind` is the handler of conversation turns. The subject of a turn's run is its conversation, `conversation:<id>`, which is also the subject of the conversation's sandbox.
+So one turn of a conversation runs at a time, and the conversation's questions start in order.
+A turn's attempt number is its run's epoch.
+The constraint trigger `mentor_turn_run_agrees` refuses a commit where a turn and its run disagree:
+a queued turn needs a queued run, a running turn a leased run, a stopped turn a leased or an ended run, and an ended turn an ended run.
+
+- **End.** The holder's end ends the turn and its run in one transaction. A repeated end reads `EndOutcome.ALREADY_ENDED`.
+- **Stop.** A queued turn's run ends at once. A running turn's run stays leased, and its deadline moves to 30 seconds later, so the holder can still end the turn with what it wrote.
+- **Deadline.** A claim's deadline is the turn's work deadline plus the same 30 seconds. Past it, the reaper ends the turn: stopped, or failed for taking too long.
+- **Lost holder.** A running turn returns to the queue for one retry, then fails.
+- **Start window.** A turn waits at most 3 minutes for a free Hephaestus.
 
 ## Sandboxes
 

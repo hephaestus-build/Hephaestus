@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -42,6 +44,12 @@ import org.springframework.transaction.support.TransactionTemplate;
  * one worker; two instances on the same database are two workers.
  */
 class ConversationToolsPodsIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private MentorTurnClaims claims;
+
+    @Autowired
+    private ApplicationContext beans;
 
     private static final Duration SOON = Duration.ofSeconds(5);
 
@@ -107,7 +115,7 @@ class ConversationToolsPodsIntegrationTest extends AbstractWorkspaceIntegrationT
                         workspace.getId(),
                         turns.question(workspace.getId(), before.getId()).getId());
         MentorTurn turn = MentorTurnStarts.askAndStart(
-                turns, metrics, workspace.getId(), conversation.getId(), "Read my repository " + UUID.randomUUID());
+                beans, metrics, workspace.getId(), conversation.getId(), "Read my repository " + UUID.randomUUID());
         last = turn;
         return new TurnAttempt(
                 turn.getId(),
@@ -115,7 +123,7 @@ class ConversationToolsPodsIntegrationTest extends AbstractWorkspaceIntegrationT
                 developer,
                 conversation.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()));
+                Objects.requireNonNull(turn.getRunId()));
     }
 
     /** The attempt with a lease it does not hold. */
@@ -129,9 +137,9 @@ class ConversationToolsPodsIntegrationTest extends AbstractWorkspaceIntegrationT
                 UUID.randomUUID());
     }
 
-    /** Takes the attempt's lease back as the lease reaper does once it expires. */
+    /** Lets the attempt's run's lease run out, as a holder that is gone does. */
     private void expire(TurnAttempt turn) {
-        turns.renewLease(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.leaseId(), Duration.ofSeconds(-1));
+        claims.expireLease(turns.require(turn.workspaceId(), turn.turnId()));
     }
 
     private static ToolsPods.Started bind(ConversationToolsPods pods, TurnAttempt turn) {

@@ -4002,7 +4002,6 @@ export const zReviewQueueItem = z.object({
 });
 
 export const zReviewQueue = z.object({
-    activeWorkers: z.int(),
     asOf: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
     finishedLastDay: z.int(),
     finishedLastHour: z.int(),

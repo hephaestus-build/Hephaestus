@@ -89,7 +89,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 AttemptJwt.Kind.REVIEW,
                 job.getId(),
                 7L,
-                2,
+                ReviewRunKind.epoch(2),
                 LEASE,
                 Set.of("llm_proxy"),
                 "id",
@@ -99,7 +99,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         lenient().when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         lenient()
                 .when(runs.isCurrent(
-                        new AgentRunRef(Objects.requireNonNull(identity.job()).leaseId(), 7L), ReviewRunKind.epoch(2)))
+                        new AgentRunRef(Objects.requireNonNull(identity.job()).runId(), 7L), ReviewRunKind.epoch(2)))
                 .thenReturn(true);
     }
 
@@ -122,7 +122,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         verify(jobs).findById(job.getId());
         verify(runs)
                 .isCurrent(
-                        new AgentRunRef(Objects.requireNonNull(identity.job()).leaseId(), 7L), ReviewRunKind.epoch(2));
+                        new AgentRunRef(Objects.requireNonNull(identity.job()).runId(), 7L), ReviewRunKind.epoch(2));
         verifyNoMoreInteractions(jobs);
     }
 
@@ -143,7 +143,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     @Test
     void refusesAnAttemptThatLostItsLeaseSinceAuthentication() {
         when(runs.isCurrent(
-                        new AgentRunRef(Objects.requireNonNull(identity.job()).leaseId(), 7L), ReviewRunKind.epoch(2)))
+                        new AgentRunRef(Objects.requireNonNull(identity.job()).runId(), 7L), ReviewRunKind.epoch(2)))
                 .thenReturn(false);
         assertThatThrownBy(() -> routing.resolve(identity, request("/internal/llm/responses")))
                 .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
@@ -172,7 +172,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         verify(jobs).findById(job.getId());
         verify(runs)
                 .isCurrent(
-                        new AgentRunRef(Objects.requireNonNull(identity.job()).leaseId(), 7L), ReviewRunKind.epoch(2));
+                        new AgentRunRef(Objects.requireNonNull(identity.job()).runId(), 7L), ReviewRunKind.epoch(2));
         verifyNoMoreInteractions(jobs);
     }
 
@@ -199,7 +199,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         assertThat(route.attempt().sourceType()).isEqualTo(UsageSourceType.MENTOR_TURN);
         assertThat(route.attempt().sourceId()).isEqualTo(jwt.id());
         assertThat(route.attempt().number()).isEqualTo(3);
-        assertThat(route.attempt().leaseId()).isEqualTo(jwt.leaseId());
+        assertThat(route.attempt().runId()).isEqualTo(jwt.runId());
         verifyNoInteractions(jobs, attemptUsage);
     }
 
@@ -233,9 +233,9 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         // A turn that lost its lease is refused before its rates are read.
         lenient().when(row.getId()).thenReturn(jwt.id());
         lenient().when(row.getWorkspaceId()).thenReturn(jwt.workspaceId());
-        lenient().when(row.getAttempt()).thenReturn(jwt.attempt());
+        lenient().when(row.getAttempt()).thenReturn(jwt.epoch());
         lenient()
-                .when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+                .when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.epoch(), jwt.runId()))
                 .thenReturn(live);
         var price = new LlmPriceSnapshot(
                 UsageFundingSource.WORKSPACE,

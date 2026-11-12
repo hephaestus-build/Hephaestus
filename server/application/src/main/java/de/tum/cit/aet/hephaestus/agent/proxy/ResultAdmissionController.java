@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartRequestDTO;
@@ -68,6 +69,7 @@ public class ResultAdmissionController {
         if (!(authentication.getPrincipal() instanceof ProxyIdentity identity) || identity.job() == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Review job credential required");
         var job = identity.job();
-        return new ResultAdmissionService.AdmissionIdentity(job.id(), job.workspaceId(), job.attempt(), job.leaseId());
+        return new ResultAdmissionService.AdmissionIdentity(
+                job.id(), job.workspaceId(), ReviewRunKind.attempt(job.epoch()), job.runId());
     }
 }

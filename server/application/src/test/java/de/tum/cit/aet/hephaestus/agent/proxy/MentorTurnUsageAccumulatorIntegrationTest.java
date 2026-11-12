@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -53,6 +54,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Tag("integration")
 class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private MentorTurnClaims claims;
 
     /** $10 per 1M input tokens, nothing for output: the fixture's admitted rates. */
     private static final MentorTurnAdmission ADMITTED = MentorTurnAdmission.of(
@@ -111,9 +115,9 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
         return runningTurn(Duration.ofMinutes(5));
     }
 
-    /** The admitted attempt's lease runs out, so the take-back that follows is the lease reaper's. */
+    /** The admitted attempt's run's lease runs out, so the take-back that follows is the run reaper's. */
     private void leaseRanOut(MentorTurn turn) {
-        jdbc.update("UPDATE mentor_turn SET leased_until = now() - interval '1 second' WHERE id = ?", turn.getId());
+        claims.expireLease(turn);
     }
 
     private MentorTurn runningTurn(Duration lease) {
@@ -126,7 +130,9 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        return turns.claimNext(lease, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn claimed = claims.claimNext().orElseThrow();
+        if (lease.isNegative()) claims.expireLease(claimed);
+        return claimed;
     }
 
     private Instant measuredDate(MentorTurn turn, int attempt) {
@@ -146,14 +152,13 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 ADMITTED);
         leaseRanOut(turn);
         var first = attempt(turn);
         accumulate(first, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
         // The take-back commits; its billing has not run yet.
-        MentorTurnService.LostAttempt lost = Objects.requireNonNull(transactionTemplate.execute(
-                tx -> turns.expireLease(turn.getId()).orElseThrow()));
+        MentorTurnService.LostAttempt lost = Objects.requireNonNull(claims.takeBackUnbilled(turn));
         assertThat(measuredDate(turn, first.number()))
                 .as("dated in the take-back's transaction, before the requeue reset the turn")
                 .isEqualTo(lost.lostAt());
@@ -165,13 +170,12 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 Timestamp.from(earlierMonth),
                 turn.getId(),
                 first.number());
-        MentorTurn retried =
-                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+        MentorTurn retried = claims.claimNext().orElseThrow();
         attemptUsage.admit(
                 retried.getWorkspaceId(),
                 retried.getId(),
                 retried.getAttempt(),
-                Objects.requireNonNull(retried.getLeaseId()),
+                Objects.requireNonNull(retried.getRunId()),
                 ADMITTED);
 
         // The already-dispatched call returns now, in the current month, and projects the attempt first.
@@ -198,16 +202,12 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 ADMITTED);
         leaseRanOut(turn);
         var first = attempt(turn);
-        MentorTurnService.LostAttempt lost = Objects.requireNonNull(transactionTemplate.execute(tx -> {
-            MentorTurnService.LostAttempt taken =
-                    turns.expireLease(turn.getId()).orElseThrow();
-            completion.billLostAttempt(taken);
-            return taken;
-        }));
+        MentorTurnService.LostAttempt lost = claims.takeBackUnbilled(turn);
+        transactionTemplate.executeWithoutResult(tx -> completion.billLostAttempt(lost));
         assertThat(ledger(first)).as("no call, no row").isEmpty();
 
         accumulate(first, new ProxyTokenUsage(20_000, 0, 0, 0, 0));
@@ -225,7 +225,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 admitted);
         return turn;
     }
@@ -250,7 +250,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
 
     private ProxyRouting.BilledAttempt attempt(MentorTurn turn) {
         return new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getRunId());
     }
 
     private void accumulate(ProxyRouting.BilledAttempt attempt, ProxyTokenUsage usage) {
@@ -262,7 +262,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null, null));
     }
 
@@ -309,7 +309,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
         accumulate(attempt(turn), new ProxyTokenUsage(999, 999, 0, 0, 0));
 
@@ -352,7 +352,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 ADMITTED);
         // The proxy keeps this identity from dispatch until its observed usage is settled.
         var owningAttempt = attempt(turn);
@@ -361,12 +361,12 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null, null));
 
         MentorTurn ended = stored(turn);
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.DONE);
-        assertThat(ended.getLeasedUntil()).isNull();
+        assertThat(turns.isHeld(ended)).isFalse();
         Instant finished = Objects.requireNonNull(ended.getFinishedAt());
         Billed original = ledger(owningAttempt).getFirst();
         assertThat(original.inputTokens()).isEqualTo(100_000);
@@ -399,8 +399,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
         transactionTemplate.executeWithoutResult(
                 tx -> assertThat(turns.requeueRunning(workspace.getId(), conversation.getId()))
                         .isPresent());
-        MentorTurn retried =
-                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
+        MentorTurn retried = claims.claimNext().orElseThrow();
         assertThat(retried.getAttempt()).isEqualTo(first.number() + 1);
         // The retry runs on other rates and another purse.
         var otherPrice = new LlmPriceSnapshot(
@@ -416,7 +415,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 retried.getWorkspaceId(),
                 retried.getId(),
                 retried.getAttempt(),
-                Objects.requireNonNull(retried.getLeaseId()),
+                Objects.requireNonNull(retried.getRunId()),
                 new MentorTurnAdmission(
                         ADMITTED.model(),
                         otherPrice,
@@ -455,7 +454,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     void shouldDropACallWhenItsAttemptNumberIsNotTheRunningOne() {
         MentorTurn turn = admittedTurn(ADMITTED);
         var stale = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt() + 1, turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt() + 1, turn.getRunId());
 
         accumulate(stale, new ProxyTokenUsage(500, 5, 0, 0, 0));
 
@@ -474,7 +473,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 ADMITTED.toJson());
 
         accumulate(attempt(turn), new ProxyTokenUsage(500, 5, 0, 0, 0));

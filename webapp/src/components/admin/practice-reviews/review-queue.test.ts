@@ -16,7 +16,6 @@ const AS_OF = new Date("2026-10-07T12:00:00Z");
 const queue = (patch: Partial<ReviewQueue> = {}): ReviewQueue => ({
 	asOf: AS_OF,
 	running: 0,
-	activeWorkers: 0,
 	waiting: 0,
 	heldForBudget: 0,
 	oldestWaitingSince: null,

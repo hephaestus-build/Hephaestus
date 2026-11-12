@@ -359,6 +359,8 @@ final class ComposerReplay {
         });
         final AgentCapacityProperties capacity = new AgentCapacityProperties(
                 Duration.ofMinutes(5),
+                Duration.ofSeconds(60),
+                null,
                 Duration.ofSeconds(25),
                 5,
                 Duration.ofMinutes(10),

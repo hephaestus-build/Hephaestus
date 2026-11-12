@@ -5131,7 +5131,6 @@ export type ReviewProgress = {
 };
 
 export type ReviewQueue = {
-    activeWorkers: number;
     asOf: string;
     finishedLastDay: number;
     finishedLastHour: number;

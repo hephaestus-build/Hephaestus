@@ -20,13 +20,14 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorPartialUpdates;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -48,6 +49,9 @@ import tools.jackson.databind.node.JsonNodeFactory;
 class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
+    private MentorTurnClaims claims;
+
+    @Autowired
     private ApplicationEvents events;
 
     @Autowired
@@ -66,6 +70,9 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     private WorkspaceRepository workspaces;
 
     @Autowired
+    private WorkspaceLifecycleService lifecycle;
+
+    @Autowired
     private MentorConversationService conversations;
 
     @Autowired
@@ -79,8 +86,6 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
-
-    private static final Duration LEASE = Duration.ofMinutes(5);
 
     private Workspace workspace(String name) {
         return workspaces.save(WorkspaceTestFixtures.activeWorkspace(
@@ -193,6 +198,12 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                         asked.turn().getId()))
                 .isEqualTo(kept.getId());
         assertThat(jdbc.queryForObject(
+                        "SELECT r.concurrency_key FROM mentor_turn t JOIN agent_run r ON r.id = t.run_id WHERE t.id = ?",
+                        String.class,
+                        asked.turn().getId()))
+                .as("its queued run waits behind the kept conversation's turns")
+                .isEqualTo("conversation:" + kept.getId());
+        assertThat(jdbc.queryForObject(
                         "SELECT account_id FROM mentor_conversation WHERE id = ?", Long.class, elsewhere.getId()))
                 .as("a main without a clash moves")
                 .isEqualTo(claimed);
@@ -215,7 +226,7 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
         UUID slackTurn = inSlack.turn().getId();
         MentorTurn slackClaim = start(slackTurn);
         int slackAttempt = slackClaim.getAttempt();
-        UUID slackLease = Objects.requireNonNull(slackClaim.getLeaseId());
+        UUID slackLease = Objects.requireNonNull(slackClaim.getRunId());
         turnRepository.flush();
 
         contributor.absorb(claimed, unclaimed);
@@ -265,6 +276,88 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                 });
     }
 
+    @Test
+    void shouldStartMergedQuestionsInLedgerOrderRatherThanTheirOriginalRunOrder() {
+        Workspace shared = workspace("absorb-order");
+        long claimed = account("Claimed developer", Account.Status.ACTIVE);
+        long unclaimed = account("Slack developer", Account.Status.UNCLAIMED);
+        MentorConversation kept = conversations.findOrCreateMain(shared.getId(), claimed);
+        MentorConversation absorbed = conversations.findOrCreateMain(shared.getId(), unclaimed);
+        var firstSubmitted = ask(shared, absorbed, MentorTurn.Surface.SLACK, "Asked first", "17.01");
+        var keptQuestion = ask(shared, kept, MentorTurn.Surface.APP, "Kept first in the merged ledger", null);
+        turnRepository.flush();
+
+        contributor.absorb(claimed, unclaimed);
+
+        MentorTurn next = claims.claim(keptQuestion.turn());
+        assertThat(next.getId()).isEqualTo(keptQuestion.turn().getId());
+        turns.end(
+                shared.getId(),
+                next.getId(),
+                next.getAttempt(),
+                next.getRunId(),
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
+        assertThat(claims.claim(keptQuestion.turn()).getId())
+                .isEqualTo(firstSubmitted.turn().getId());
+    }
+
+    @Test
+    void shouldFenceAStoppedHolderBeforeMovingItsConversation() {
+        Workspace shared = workspace("absorb-stopped");
+        long claimed = account("Claimed developer", Account.Status.ACTIVE);
+        long unclaimed = account("Slack developer", Account.Status.UNCLAIMED);
+        MentorConversation kept = conversations.findOrCreateMain(shared.getId(), claimed);
+        MentorConversation absorbed = conversations.findOrCreateMain(shared.getId(), unclaimed);
+        var stoppedQuestion = ask(shared, absorbed, MentorTurn.Surface.SLACK, "Stop this answer", "17.01");
+        MentorTurn holder = claims.claim(stoppedQuestion.turn());
+        UUID run = holder.getRunId();
+        int epoch = holder.getAttempt();
+        turns.stop(shared.getId(), holder.getId());
+        var keptQuestion = ask(shared, kept, MentorTurn.Surface.APP, "Next answer", null);
+        turnRepository.flush();
+
+        contributor.absorb(claimed, unclaimed);
+
+        assertThat(claims.claim(keptQuestion.turn()).getId())
+                .isEqualTo(keptQuestion.turn().getId());
+        assertThatThrownBy(() -> turns.updatePartial(
+                        shared.getId(),
+                        holder.getId(),
+                        epoch,
+                        run,
+                        MentorPartialUpdates.whole(JsonNodeFactory.instance.objectNode())))
+                .isInstanceOf(MentorLeaseLostException.class);
+        assertThat(jdbc.queryForObject("SELECT status FROM mentor_turn WHERE id = ?", String.class, holder.getId()))
+                .isEqualTo("STOPPED");
+    }
+
+    @Test
+    void shouldPurgeTurnsBeforeTheirRunsAndKeepAnotherWorkspacesConversation() {
+        Workspace purged = workspace("purge-turn");
+        Workspace kept = workspace("keep-turn");
+        long developer = account("Developer", Account.Status.ACTIVE);
+        var purgedConversation = conversations.findOrCreateMain(purged.getId(), developer);
+        var keptConversation = conversations.findOrCreateMain(kept.getId(), developer);
+        var deletedTurn = ask(purged, purgedConversation, MentorTurn.Surface.APP, "Remove this", null)
+                .turn();
+        var keptTurn = ask(kept, keptConversation, MentorTurn.Surface.APP, "Keep this", null)
+                .turn();
+        turns.stop(purged.getId(), deletedTurn.getId());
+        UUID deletedRun = deletedTurn.getRunId();
+        turnRepository.flush();
+
+        lifecycle.purgeWorkspace(purged.getWorkspaceSlug());
+
+        assertThat(jdbc.queryForList("SELECT id FROM mentor_turn WHERE id = ?", UUID.class, deletedTurn.getId()))
+                .isEmpty();
+        assertThat(jdbc.queryForList("SELECT id FROM agent_run WHERE id = ?", UUID.class, deletedRun))
+                .isEmpty();
+        assertThat(jdbc.queryForList("SELECT id FROM mentor_turn WHERE id = ?", UUID.class, keptTurn.getId()))
+                .containsExactly(keptTurn.getId());
+        assertThat(jdbc.queryForList("SELECT id FROM agent_run WHERE id = ?", UUID.class, keptTurn.getRunId()))
+                .containsExactly(keptTurn.getRunId());
+    }
+
     private MentorTurnService.Submission ask(
             Workspace workspace,
             MentorConversation conversation,
@@ -280,7 +373,7 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     /** Claims turns until this one starts. A turn of another test that starts first rolls back with this test. */
     private MentorTurn start(UUID turnId) {
         while (true) {
-            MentorTurn claimed = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+            MentorTurn claimed = claims.claimNext().orElseThrow();
             if (claimed.getId().equals(turnId)) {
                 return claimed;
             }

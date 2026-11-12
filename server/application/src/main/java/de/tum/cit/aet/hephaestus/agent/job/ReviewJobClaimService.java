@@ -143,28 +143,33 @@ public class ReviewJobClaimService {
             return Optional.empty();
         }
         ReviewJob job = locked.get();
-        ClaimAttempt claimed;
+        var logScope = new ReviewJobLogScope(job, fence);
         try {
-            claimed = claimLocked(job, fence);
-        } catch (JobPreparationException failure) {
-            failPreparation(job, fence, failure);
-            return Optional.empty();
+            ClaimAttempt claimed;
+            try {
+                claimed = claimLocked(job, fence);
+            } catch (JobPreparationException failure) {
+                failPreparation(job, fence, failure);
+                return Optional.empty();
+            }
+            return switch (claimed) {
+                case ClaimResult started -> Optional.of(started);
+                case TerminalClaim ended -> {
+                    runs.end(fence);
+                    yield Optional.empty();
+                }
+                case PoolWait waiting -> {
+                    runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY, null);
+                    yield Optional.empty();
+                }
+                case ClaimOutcome held -> {
+                    runs.requeue(fence, AgentRuns.Charge.FREE, BUDGET_HOLD_INTERVAL, AgentRunHold.BUDGET);
+                    yield Optional.empty();
+                }
+            };
+        } finally {
+            logScope.close();
         }
-        return switch (claimed) {
-            case ClaimResult started -> Optional.of(started);
-            case TerminalClaim ended -> {
-                runs.end(fence);
-                yield Optional.empty();
-            }
-            case PoolWait waiting -> {
-                runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY, null);
-                yield Optional.empty();
-            }
-            case ClaimOutcome held -> {
-                runs.requeue(fence, AgentRuns.Charge.FREE, BUDGET_HOLD_INTERVAL, AgentRunHold.BUDGET);
-                yield Optional.empty();
-            }
-        };
     }
 
     /** Fails a job whose inputs could not be prepared, and ends its run, in the caller's transaction. */

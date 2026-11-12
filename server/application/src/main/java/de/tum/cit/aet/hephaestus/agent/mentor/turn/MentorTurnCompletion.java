@@ -53,6 +53,8 @@ public class MentorTurnCompletion {
 
     public static final String COULD_NOT_START = "Hephaestus could not start. Try again in a moment.";
 
+    public static final String TOOK_TOO_LONG = "Hephaestus took too long to reply and stopped. Try again.";
+
     static final String NOT_SHOWN = "Hephaestus's answer did not show the feedback.";
     static final String CUT_OFF = "Hephaestus's answer stopped or failed after it showed the feedback.";
     static final String LEASE_LOST = "Hephaestus's answer was lost while it showed the feedback.";
@@ -76,11 +78,11 @@ public class MentorTurnCompletion {
     public boolean progress(
             long workspaceId,
             UUID turnId,
-            int attempt,
-            UUID leaseId,
+            int epoch,
+            UUID runId,
             MentorTurnProgress.Update update,
             @Nullable Instant startedAt) {
-        boolean sent = turns.updatePartial(workspaceId, turnId, attempt, leaseId, update);
+        boolean sent = turns.updatePartial(workspaceId, turnId, epoch, runId, update);
         if (sent && startedAt != null) {
             firstToken(meters).record(Duration.between(startedAt, clock.instant()));
         }
@@ -114,14 +116,36 @@ public class MentorTurnCompletion {
      * shows settles that one.
      */
     @Transactional
-    public MentorTurn end(long workspaceId, UUID turnId, int attempt, UUID leaseId, Ending ending) {
-        MentorTurnService.EndedTurn ended = turns.end(
-                workspaceId,
-                turnId,
+    public MentorTurn end(long workspaceId, UUID turnId, int epoch, UUID runId, Ending ending) {
+        return finished(
+                turns.end(
+                        workspaceId,
+                        turnId,
+                        epoch,
+                        runId,
+                        new MentorTurnService.Ending(
+                                ending.outcome(), ending.entries(), ending.lastPartial(), ending.error())),
+                epoch,
+                ending);
+    }
+
+    /**
+     * Ends, for the server, the attempt of a locked turn whose run's holder did not end it, as {@link #end} does for the
+     * holder; nothing the holder wrote is stored ({@link MentorTurnService#endWithoutHolder}). The caller ends the run.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public MentorTurn endWithoutHolder(MentorTurn locked, Ending ending) {
+        int attempt = locked.getAttempt();
+        return finished(
+                turns.endWithoutHolder(locked, ending.outcome(), ending.error(), ending.lastPartial()),
                 attempt,
-                leaseId,
-                new MentorTurnService.Ending(ending.outcome(), ending.entries(), ending.lastPartial(), ending.error()));
+                ending);
+    }
+
+    private MentorTurn finished(MentorTurnService.EndedTurn ended, int attempt, Ending ending) {
         MentorTurn turn = ended.turn();
+        long workspaceId = turn.getWorkspaceId();
+        UUID turnId = turn.getId();
         String status = turn.getStatus().name().toLowerCase(Locale.ROOT);
         TransactionCallbacks.afterCommit(() -> log.atInfo()
                 .addKeyValue("event.name", "mentor.turn.ended")
@@ -217,11 +241,12 @@ public class MentorTurnCompletion {
     }
 
     /**
-     * Bills an attempt whose lease expired ({@link MentorTurnService#expireLease}) or that was taken back. With it, the
+     * Bills an attempt whose run lost its holder ({@link MentorTurnService#takeBack(MentorTurn, boolean)}) or that was
+     * taken back. With it, the
      * feedback it claimed is due an unconfirmed receipt: its host may have shown the words, and the next attempt's
      * brief does not list it.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public void billLostAttempt(MentorTurnService.LostAttempt lost) {
         billLost(lost);
     }

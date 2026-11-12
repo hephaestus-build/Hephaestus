@@ -20,7 +20,8 @@ class MentorIdsTest {
         List<UUID> ids = new ArrayList<>();
         for (int round = 0; round < 50; round++) {
             MentorConversation main = MentorConversation.main(7, 11, NOW);
-            MentorTurn turn = new MentorTurn(main, "request-" + round, MentorTurn.Surface.APP, null, NOW);
+            MentorTurn turn =
+                    new MentorTurn(main, "request-" + round, MentorTurn.Surface.APP, null, UUID.randomUUID(), NOW);
             MentorEntry entry = new MentorEntry(
                     main, round, MentorEntryDraft.digest("Digest", JsonNodeFactory.instance.objectNode(), "r"), NOW);
             MentorConversation thread = MentorConversation.thread(main, entry.getId(), NOW);

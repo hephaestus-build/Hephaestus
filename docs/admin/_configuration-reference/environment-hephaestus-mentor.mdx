@@ -1,5 +1,0 @@
-### `hephaestus.mentor`
-
-| Variable | Setting | Application default | Containers | Description |
-| --- | --- | --- | --- | --- |
-| `HEPHAESTUS_MENTOR_TURN_CAPACITY` | `hephaestus.mentor.turn.capacity` | `default: (empty)` | `server`, `worker` | The conversation turns that the installation runs at once. Every worker's claim keeps to it, and each conversation loop replica runs at most this many. While that many turns run, a question that could start next says that Hephaestus is answering other questions. Unset, no question says why it waits and no claim has a cap. The Helm chart sets it from the turn count of the conversation loop. Must be at least 1 when set. |

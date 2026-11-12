@@ -45,8 +45,12 @@ public class AgentRuns {
     /** Queues a new run of a subject. Claimers hear of it after the transaction commits. */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef enqueue(
-            long workspaceId, AgentRunKind kind, AgentRunBand band, String concurrencyKey, @Nullable Instant deadline) {
-        return insert(workspaceId, kind, band, concurrencyKey, 0, 0, deadline);
+            long workspaceId,
+            AgentRunKind kind,
+            AgentRunBand band,
+            String concurrencyKey,
+            @Nullable Duration startWithin) {
+        return insert(workspaceId, kind, band, concurrencyKey, 0, 0, startWithin);
     }
 
     /**
@@ -64,7 +68,7 @@ public class AgentRuns {
                 previous.getConcurrencyKey(),
                 Math.max(lastEpoch, previous.getLeaseEpoch()),
                 previous.getAttempt() + 1,
-                null);
+                previous.getStartWithinSeconds() == null ? null : Duration.ofSeconds(previous.getStartWithinSeconds()));
     }
 
     /**
@@ -101,7 +105,7 @@ public class AgentRuns {
             String concurrencyKey,
             int epoch,
             int spent,
-            @Nullable Instant deadline) {
+            @Nullable Duration startWithin) {
         AgentRun run = new AgentRun(
                 UUID.randomUUID(),
                 workspaceId,
@@ -111,7 +115,7 @@ public class AgentRuns {
                 epoch,
                 spent,
                 runs.databaseClock(),
-                deadline);
+                startWithin);
         runs.save(run);
         wake(kind);
         return run.ref();
@@ -124,6 +128,10 @@ public class AgentRuns {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<AgentRunLease> claim(Set<AgentRunKind> kinds, Collection<UUID> excluded) {
+        return claimNext(kinds, excluded);
+    }
+
+    private Optional<AgentRunLease> claimNext(Set<AgentRunKind> kinds, Collection<UUID> excluded) {
         if (kinds.isEmpty()) return Optional.empty();
         // Only the oldest queued run of a subject is offered, and a claim skips a locked one, so two claims never lease
         // two runs of one subject; the partial unique index on the leased subject refuses it if they did.
@@ -131,8 +139,20 @@ public class AgentRuns {
                         kinds.stream().map(Enum::name).toList(),
                         excluded,
                         capacity.leaseTtl().toSeconds(),
+                        capacity.turnLeaseTtl().toSeconds(),
                         capacity.bandAging().toSeconds())
                 .map(AgentRuns::lease);
+    }
+
+    /**
+     * Leases the next run of one kind that the claim order offers, unless {@code cap} runs of the kind are leased
+     * already. Concurrent claims of the kind take one lock in turn, so the cap holds across workers.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<AgentRunLease> claimCapped(AgentRunKind kind, int cap) {
+        runs.lockKindClaims(kind.name());
+        if (runs.countLeased(kind.name()) >= cap) return Optional.empty();
+        return claimNext(Set.of(kind), List.of());
     }
 
     /**
@@ -147,6 +167,7 @@ public class AgentRuns {
                         concurrencyKey,
                         kinds.stream().map(Enum::name).toList(),
                         capacity.leaseTtl().toSeconds(),
+                        capacity.turnLeaseTtl().toSeconds(),
                         capacity.bandAging().toSeconds())
                 .map(AgentRuns::lease);
     }
@@ -187,7 +208,8 @@ public class AgentRuns {
                 fence.runId(),
                 fence.workspaceId(),
                 fence.epoch(),
-                capacity.leaseTtl().toSeconds());
+                capacity.leaseTtl().toSeconds(),
+                capacity.turnLeaseTtl().toSeconds());
     }
 
     /**
@@ -211,10 +233,60 @@ public class AgentRuns {
         return requeued;
     }
 
-    /** Ends the run for its holder; whether the holder still held it. */
+    /**
+     * Ends the run for its holder. A holder whose domain end already ended the run under the same claim, as a turn's end
+     * does, reads {@link EndOutcome#ALREADY_ENDED}: its end arrived twice, not late.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean end(AgentRunFence fence) {
-        return runs.end(fence.runId(), fence.workspaceId(), fence.epoch(), AgentRunStopReason.COMPLETED.name()) == 1;
+    public EndOutcome end(AgentRunFence fence) {
+        if (runs.end(fence.runId(), fence.workspaceId(), fence.epoch(), AgentRunStopReason.COMPLETED.name()) == 1)
+            return EndOutcome.ENDED;
+        return runs.endedBy(fence.runId(), fence.workspaceId(), fence.epoch())
+                ? EndOutcome.ALREADY_ENDED
+                : EndOutcome.STALE;
+    }
+
+    /** How a holder's end came out. */
+    public enum EndOutcome {
+        /** This call ended the run. */
+        ENDED,
+        /** The holder's claim had already ended the run: the call repeats an end. */
+        ALREADY_ENDED,
+        /** The holder no longer held the run; it must not write. */
+        STALE
+    }
+
+    /**
+     * Brings the run's deadline forward to {@code by}, or sets it when it had none. A deadline never moves later, so a
+     * holder cannot outlive what bounded it. A leased run is renewed only until then, and the reaper ends it there.
+     *
+     * @return whether the run was still open
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean endBy(AgentRunRef run, Instant by) {
+        return runs.endBy(run.id(), run.workspaceId(), by) == 1;
+    }
+
+    /**
+     * {@link #endBy} for the claim that still holds the run. A claim that lost its run moves no deadline: a requeued
+     * run starts its next claim without one.
+     *
+     * @return whether the claim still holds the run
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean limit(AgentRunFence claim, Instant by) {
+        return runs.limit(claim.runId(), claim.workspaceId(), claim.epoch(), by) == 1;
+    }
+
+    /**
+     * Moves the workspace's queued runs of a kind from one subject to another, as when two subjects merge. A leased run
+     * keeps its subject until it ends.
+     *
+     * @return how many runs moved
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int moveQueued(long workspaceId, AgentRunKind kind, String from, String to) {
+        return runs.moveQueued(workspaceId, kind.name(), from, to);
     }
 
     /**

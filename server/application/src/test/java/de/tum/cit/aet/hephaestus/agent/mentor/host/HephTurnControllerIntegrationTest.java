@@ -46,6 +46,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
@@ -62,6 +63,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -90,6 +92,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter;
 import org.springframework.test.web.servlet.MockMvc;
@@ -108,6 +111,12 @@ import tools.jackson.databind.json.JsonMapper;
  * would, to reach the controller after the lease is lost.
  */
 class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Autowired
+    private MentorTurnClaims claims;
 
     @Autowired
     private EntityManager entityManager;
@@ -175,14 +184,14 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 createWorkspace("heph-turn-" + suffix, "Hephaestus Turn", "heph-turn-org", AccountType.ORG, developer);
         developerAccount = accountId(developer);
         conversation = conversations.findOrCreateMain(workspace.getId(), developerAccount);
-        turn = MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), conversation.getId(), QUESTION);
+        turn = MentorTurnStarts.askAndStart(beans, metrics, workspace.getId(), conversation.getId(), QUESTION);
         attempt = new TurnAttempt(
                 turn.getId(),
                 workspace.getId(),
                 developerAccount,
                 conversation.getId(),
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()));
+                Objects.requireNonNull(turn.getRunId()));
         authentication = HephTurnFixtures.authenticated(attempt);
         hephTurns = HephTurnFixtures.turns(
                 beans,
@@ -260,7 +269,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turn.getId(),
                 workspace.getId(),
                 attempt,
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 deadline,
                 deadline.plus(Duration.ofMinutes(1)));
     }
@@ -323,19 +332,20 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .findFirst();
     }
 
+    /** When the lease of the turn's run ends. */
+    private Instant runLeasedUntil() {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                        "SELECT leased_until FROM agent_run WHERE id = ?", Timestamp.class, turn.getRunId()))
+                .toInstant();
+    }
+
     private MentorTurn reloaded() {
         return turnRepository.findById(turn.getId()).orElseThrow();
     }
 
     /** Takes the lease back from this attempt as the lease reaper does once it expires; the turn is queued again. */
     private void loseTheLease() {
-        turns.renewLease(
-                turn.getWorkspaceId(),
-                turn.getId(),
-                turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
-                Duration.ofSeconds(-1));
-        assertThat(turns.expireLease(turn.getId())).isPresent();
+        claims.takeBack(turn);
     }
 
     @Test
@@ -381,12 +391,12 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
-    void shouldRenewTheLeaseOnTheTurnRowWhenTheLoopRenewsIt() throws Exception {
-        Instant claimedUntil = Objects.requireNonNull(reloaded().getLeasedUntil());
+    void shouldRenewTheLeaseOfTheTurnsRunWhenTheLoopRenewsIt() throws Exception {
+        Instant claimedUntil = runLeasedUntil();
 
         call("POST", "lease", turn.getAttempt(), "").andExpect(status().isNoContent());
 
-        assertThat(reloaded().getLeasedUntil()).isNotNull().isNotEqualTo(claimedUntil);
+        assertThat(runLeasedUntil()).isAfter(claimedUntil);
         assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
     }
 
@@ -410,7 +420,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         MentorTurn stopped = reloaded();
         assertThat(stopped.getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
-        assertThat(stopped.isLeased()).isFalse();
+        assertThat(turns.isHeld(stopped)).isFalse();
         assertThat(stored("s0a1b2c3").getText()).isEqualTo("First, tag the");
     }
 
@@ -596,7 +606,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turn.getId(),
                 workspace.getId() + 1,
                 turn.getAttempt(),
-                Objects.requireNonNull(turn.getLeaseId()),
+                Objects.requireNonNull(turn.getRunId()),
                 deadline,
                 deadline.plus(Duration.ofMinutes(1)));
         int entries = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
@@ -646,7 +656,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(ended.getError()).isEqualTo(HephTurns.TOOK_TOO_LONG);
+        assertThat(ended.getError()).isEqualTo(MentorTurnCompletion.TOOK_TOO_LONG);
         assertThat(ended.getFailureCause()).isEqualTo("its conversation loop reported DEADLINE: deadline");
         assertThat(ended.getFailedCall())
                 .as("no model call of the attempt failed")
@@ -657,7 +667,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Test
     void shouldRecordTheLastFailedModelCallOnTheTurnWhenTheHostEndsItFailed() throws Exception {
         var attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getRunId());
         try (var call = callsInFlight.begin(attempt)) {
             call.failed(new MentorTurn.FailedCall("WebClientRequestException", null));
         }
@@ -681,7 +691,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Test
     void shouldStillRecordTheFailedModelCallWhenTheEndRollsBackAndTheHostRepeatsIt() throws Exception {
         var attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getRunId());
         try (var call = callsInFlight.begin(attempt)) {
             call.failed(new MentorTurn.FailedCall("upstream_status", 503));
         }

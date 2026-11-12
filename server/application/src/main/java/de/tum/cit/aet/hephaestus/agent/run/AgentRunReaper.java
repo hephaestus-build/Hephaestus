@@ -59,8 +59,8 @@ public class AgentRunReaper {
         meters.counter(AgentMetrics.AGENT_RUN_REAPER_FAILURE);
         for (AgentRunKind kind : AgentRunKind.values()) {
             count(kind, "requeued", 0);
-            for (AgentRunStopReason reason :
-                    List.of(AgentRunStopReason.ATTEMPTS_EXHAUSTED, AgentRunStopReason.DEADLINE))
+            for (AgentRunStopReason reason : List.of(
+                    AgentRunStopReason.ATTEMPTS_EXHAUSTED, AgentRunStopReason.NOT_STARTED, AgentRunStopReason.DEADLINE))
                 count(kind, reason.name().toLowerCase(Locale.ROOT), 0);
         }
     }
@@ -108,7 +108,7 @@ public class AgentRunReaper {
             // The domain moves first, while the run still reads as its lost holder left it.
             if (reason == null) {
                 if (handler.lost(lost)) {
-                    long backoff = AgentRuns.backoff(row.getAttempt() + 1).toSeconds();
+                    long backoff = handler.retryAfter(row.getAttempt() + 1).toSeconds();
                     if (!taken(status, runs.requeueExpired(lost.runId(), lost.workspaceId(), lost.epoch(), backoff)))
                         return;
                     runs.notifyQueued(AgentRunNotifications.CHANNEL, kind.name());
@@ -133,13 +133,18 @@ public class AgentRunReaper {
         transactions.executeWithoutResult(status -> {
             var run = new AgentRunRef(row.getId(), row.getWorkspaceId());
             handler.lock(run);
-            handler.ended(run, row.getLeaseEpoch(), AgentRunStopReason.DEADLINE);
-            if (!taken(status, runs.endExpired(row.getId(), row.getWorkspaceId(), row.getLeaseEpoch(), "DEADLINE")))
-                return;
-            count(kind, AgentRunStopReason.DEADLINE.name().toLowerCase(Locale.ROOT));
+            handler.ended(run, row.getLeaseEpoch(), AgentRunStopReason.NOT_STARTED);
+            if (!taken(
+                    status,
+                    runs.endExpired(
+                            row.getId(),
+                            row.getWorkspaceId(),
+                            row.getLeaseEpoch(),
+                            AgentRunStopReason.NOT_STARTED.name()))) return;
+            count(kind, AgentRunStopReason.NOT_STARTED.name().toLowerCase(Locale.ROOT));
             event(log.atInfo(), "agent.run.ended", row)
-                    .addKeyValue("run.stop_reason", AgentRunStopReason.DEADLINE.name())
-                    .log("Queued run passed its deadline; the run ended");
+                    .addKeyValue("run.stop_reason", AgentRunStopReason.NOT_STARTED.name())
+                    .log("Queued run waited past its start window; the run ended");
         });
     }
 

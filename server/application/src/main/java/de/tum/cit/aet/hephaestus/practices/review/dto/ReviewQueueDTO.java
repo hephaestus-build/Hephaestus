@@ -10,7 +10,6 @@ import org.jspecify.annotations.Nullable;
 public record ReviewQueueDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant asOf,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) long running,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) long activeWorkers,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) long waiting,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable

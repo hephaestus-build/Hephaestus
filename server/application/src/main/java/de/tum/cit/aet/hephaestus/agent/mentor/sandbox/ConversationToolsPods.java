@@ -138,7 +138,7 @@ public class ConversationToolsPods implements AutoCloseable {
                     continue;
                 }
                 Optional<String> pooled = transactions.execute(status -> rows.bindPooled(
-                        turn.workspaceId(), turn.turnId(), turn.attempt(), turn.leaseId(), POOL_LIFE.toSeconds()));
+                        turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId(), POOL_LIFE.toSeconds()));
                 if (pooled != null && pooled.isPresent()) {
                     refill();
                     continue;
@@ -171,7 +171,7 @@ public class ConversationToolsPods implements AutoCloseable {
         String name = ToolsPods.name(sandboxId);
         UUID nonce = UUID.randomUUID();
         Integer inserted = transactions.execute(status ->
-                rows.insertBound(name, nonce, turn.workspaceId(), turn.turnId(), turn.attempt(), turn.leaseId()));
+                rows.insertBound(name, nonce, turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId()));
         if (inserted == null || inserted == 0) {
             if (rows.findBound(turn.turnId(), turn.attempt()).isPresent()) {
                 // A parallel call of the attempt was first.

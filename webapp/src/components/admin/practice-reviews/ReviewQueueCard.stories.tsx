@@ -82,7 +82,6 @@ export const TestWorkspace: Story = {
 			queue: {
 				...idleReviewQueue,
 				running: 2,
-				activeWorkers: 1,
 				heldForBudget: 1,
 				finishedLastDay: 30,
 				finishedPerHourLastDay: 1.25,

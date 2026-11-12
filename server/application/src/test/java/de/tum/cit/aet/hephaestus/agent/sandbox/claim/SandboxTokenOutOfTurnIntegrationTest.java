@@ -331,7 +331,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
                     ProxyAttempt.Caller.REVIEW,
                     run.fence().runId(),
                     run.fence().workspaceId(),
-                    run.attempt(),
+                    run.fence().epoch(),
                     run.fence().runId(),
                     Instant.now().plus(Duration.ofMinutes(10))));
         }
@@ -344,7 +344,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         @Override
         public boolean end(SandboxRun run, Outcome outcome) {
             return switch (outcome) {
-                case COMPLETED -> runs.end(run.fence());
+                case COMPLETED -> runs.end(run.fence()) == AgentRuns.EndOutcome.ENDED;
                 case HANDED_ON -> runs.requeue(run.fence(), AgentRuns.Charge.SPEND, Duration.ZERO, null);
             };
         }
