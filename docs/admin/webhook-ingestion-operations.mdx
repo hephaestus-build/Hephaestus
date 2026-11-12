@@ -1,5 +1,4 @@
 ---
-id: webhook-ingestion-operations
 title: Webhook ingestion operations
 description: Metrics, retention, and recovery for the webhook receiver and its provider event inbox.
 page_type: reference
@@ -96,6 +95,7 @@ The server exports these Micrometer meters on its private management listener.
 | `integration.consumer.backlog.sampler.failures` | counter | Passes that could not read the backlog. The gauges keep their last values. |
 | `integration.consumer.retry` | counter | Attempts that failed and wait for a retry, by `kind`. |
 | `integration.consumer.poison` | counter | Events that became dead letters, by `kind`. |
+| `integration.message.dropped` | counter | Attempts stopped by the write fence, by provider kind and reason: `erased-during-processing` or `lease-lost`. Erased events do not retry. |
 | `integration.consumer.inbox.retention.failures` | counter | Retention passes that failed. |
 | `github.webhook.redelivery` | counter | Redelivery requests that GitHub accepted (`requested`) or refused (`refused`). Runs that could not read the deliveries (`unavailable`), only probed a failing receiver (`paused`), or stopped listing at a bound (`truncated`). |
 | `github.webhook.unrecovered` | gauge | GitHub events of the past two hours that failed all six attempts. Above zero means events that Hephaestus did not receive. |
@@ -105,6 +105,10 @@ The server exports these Micrometer meters on its private management listener.
    The events of a suspended workspace are not claimed but count here, so a long suspension also shows.
 2. Alert when `webhook.publish` counts failures. The database refuses deliveries.
 3. Read the `DEAD` backlog after a `HephaestusConsumerPoison` alert, and replay the dead letters after the fix.
+
+An `erased-during-processing` drop is the expected result of erasing an event while its handler runs.
+Do not replay it. The payload and its steps are gone.
+For repeated `lease-lost` drops without a restart, inspect lease renewal failures and database latency.
 
 ## How long the inbox keeps an event
 

@@ -10,6 +10,7 @@ public final class IntegrationCoreMetrics {
     public static final String INTEGRATION_CONSUMER_RETRY = "integration.consumer.retry";
     public static final String INTEGRATION_CONSUMER_POISON = "integration.consumer.poison";
     public static final String INBOX_RETENTION_FAILURES = "integration.consumer.inbox.retention.failures";
+    public static final String INTEGRATION_MESSAGE_DROPPED = "integration.message.dropped";
     public static final String INTEGRATION_MESSAGE_LAG = "integration.message.lag";
     public static final String INTEGRATION_MESSAGE_PROCESS_DURATION = "integration.message.process.duration";
     public static final String INTEGRATION_PROVIDER_TEARDOWN = "integration.provider.teardown";

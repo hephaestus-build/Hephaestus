@@ -167,10 +167,10 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                 .applyEdit(workspaceId, CHANNEL, "200.1", "edited body", editedAt);
         var interrupted = service(faultingMessages);
         var edit = new SlackIngestService.Edit("200.1", null, ALLOWED_USER, "edited body", "201.0");
-        long delivery = StoredEventHandling.stored(eventStore, jdbcTemplate, workspaceId, "slack.T1.C1.message");
+        long delivery = StoredEventHandling.leased(eventStore, jdbcTemplate, workspaceId, "slack.T1.C1.message");
 
         assertThatThrownBy(() ->
-                        inbox.dispatch(delivery, Instant.now(), () -> interrupted.editMessage(TEAM, CHANNEL, edit)))
+                        inbox.dispatch(delivery, 1, Instant.now(), () -> interrupted.editMessage(TEAM, CHANNEL, edit)))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "200.1"))
                 .isTrue();
@@ -182,7 +182,7 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                         "200.1"))
                 .isNull();
 
-        inbox.dispatch(delivery, Instant.now(), () -> ingestService.editMessage(TEAM, CHANNEL, edit));
+        inbox.dispatch(delivery, 1, Instant.now(), () -> ingestService.editMessage(TEAM, CHANNEL, edit));
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT edited_at FROM slack_message WHERE workspace_id = ? AND slack_channel_id = ? AND slack_ts = ?",
                         Timestamp.class,

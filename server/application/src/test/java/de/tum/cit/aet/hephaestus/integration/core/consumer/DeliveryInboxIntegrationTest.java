@@ -58,7 +58,7 @@ class DeliveryInboxIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldKeepCommittedItemsAndRetryOnlyTheRolledBackItemAfterPartialFailure() {
         long event = event(workspace.getId());
-        assertThatThrownBy(() -> inbox.dispatch(event, NOW, () -> {
+        assertThatThrownBy(() -> inbox.dispatch(event, 1, NOW, () -> {
                     append(workspace, "item.41", "1");
                     transactions.executeWithoutResult(status -> {
                         append(workspace, "item.82", "2");
@@ -71,7 +71,7 @@ class DeliveryInboxIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(store.hasStep(event, "item.82")).isFalse();
 
         // Enumeration order can change: the stable item identity, rather than its position, is the key.
-        inbox.dispatch(event, NOW, () -> {
+        inbox.dispatch(event, 1, NOW, () -> {
             append(workspace, "item.82", "2");
             append(workspace, "item.41", "1");
         });
@@ -87,7 +87,7 @@ class DeliveryInboxIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Runnable work = () -> {
                 ready.countDown();
                 await(start);
-                inbox.dispatch(event, NOW, () -> append(workspace, "persist", "!"));
+                inbox.dispatch(event, 1, NOW, () -> append(workspace, "persist", "!"));
             };
             var first = workers.submit(work);
             var second = workers.submit(work);
@@ -103,8 +103,8 @@ class DeliveryInboxIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldKeepTheStepsOfEachEventApart() {
         long first = event(workspace.getId());
         long second = event(workspace.getId());
-        inbox.dispatch(first, NOW, () -> append(workspace, "persist", "!"));
-        inbox.dispatch(second, NOW, () -> append(workspace, "persist", "?"));
+        inbox.dispatch(first, 1, NOW, () -> append(workspace, "persist", "!"));
+        inbox.dispatch(second, 1, NOW, () -> append(workspace, "persist", "?"));
         assertThat(name(workspace)).isEqualTo("A!?");
     }
 
@@ -113,7 +113,7 @@ class DeliveryInboxIntegrationTest extends AbstractWorkspaceIntegrationTest {
         long purged = event(workspace.getId());
         long kept = event(other.getId());
         long installation = event(null);
-        inbox.dispatch(purged, NOW, () -> append(workspace, "persist", "!"));
+        inbox.dispatch(purged, 1, NOW, () -> append(workspace, "persist", "!"));
 
         purge.deleteWorkspaceData(workspace.getId());
 
@@ -128,7 +128,7 @@ class DeliveryInboxIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldRefuseClaimsOutsideTheBusinessTransactionAndClearTheScopeAfterFailure() {
         long event = event(workspace.getId());
-        assertThatThrownBy(() -> inbox.dispatch(event, NOW, () -> DeliveryInbox.claim("persist")))
+        assertThatThrownBy(() -> inbox.dispatch(event, 1, NOW, () -> DeliveryInbox.claim("persist")))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(DeliveryInbox.claim("ordinary-sync")).isTrue();
         assertThat(store.hasStep(event, "persist")).isFalse();
@@ -139,12 +139,16 @@ class DeliveryInboxIntegrationTest extends AbstractWorkspaceIntegrationTest {
         store.store(List.of(new ProviderEventStore.Arrival(
                 workspaceId,
                 "github",
-                "github.acme.repo.issues",
+                "github.acme.repo-" + delivery + ".issues",
                 delivery,
                 Map.of(),
                 "{}".getBytes(StandardCharsets.UTF_8))));
-        return Objects.requireNonNull(
+        long id = Objects.requireNonNull(
                 jdbc.queryForObject("SELECT id FROM provider_event WHERE delivery_key = ?", Long.class, delivery));
+        jdbc.update(
+                "UPDATE provider_event SET state='LEASED', lease_epoch=1, leased_until=clock_timestamp()+interval '5 minutes' WHERE id=?",
+                id);
+        return id;
     }
 
     private boolean exists(long event) {

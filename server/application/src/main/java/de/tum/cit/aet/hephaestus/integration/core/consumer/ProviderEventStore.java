@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import java.time.Duration;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -29,12 +31,17 @@ public class ProviderEventStore {
     private final ProviderEventRepository events;
     private final ObjectMapper mapper;
     private final ProviderEventNotifications notifications;
+    private final PersonDataCopyFence copyFence;
 
     public ProviderEventStore(
-            ProviderEventRepository events, ObjectMapper mapper, ProviderEventNotifications notifications) {
+            ProviderEventRepository events,
+            ObjectMapper mapper,
+            ProviderEventNotifications notifications,
+            PersonDataCopyFence copyFence) {
         this.events = events;
         this.mapper = mapper;
         this.notifications = notifications;
+        this.copyFence = copyFence;
     }
 
     /** A delivery for one workspace, or for the installation when {@code workspaceId} is null. */
@@ -75,6 +82,9 @@ public class ProviderEventStore {
     @WorkspaceAgnostic(
             "The receiver stores one row for each workspace that the delivery reaches, and installation rows")
     public int store(List<Arrival> arrivals) {
+        if (!arrivals.isEmpty() && !copyFence.tryHoldForCapture()) {
+            throw new TransientDataAccessResourceException("Person erasure is in progress");
+        }
         int stored = 0;
         for (Arrival arrival : arrivals) {
             stored += events.store(new ProviderEventRepository.NewEvent(
@@ -142,7 +152,7 @@ public class ProviderEventStore {
         return events.dead(id, leaseEpoch, errorClass.length() <= 255 ? errorClass : errorClass.substring(0, 255)) == 1;
     }
 
-    /** Extends a lease that its holder still has; false when it was taken back. */
+    /** Extends a matching lease without waiting on a write fence; false when the row is locked or the lease changed. */
     @Transactional
     @WorkspaceAgnostic("The event id and its lease epoch identify the claimed row")
     public boolean renew(long id, int leaseEpoch, Duration lease) {
@@ -171,8 +181,40 @@ public class ProviderEventStore {
     /** Records a handler step in the caller's transaction; false when an earlier attempt committed it. */
     @Transactional
     @WorkspaceAgnostic("The event id identifies the claimed row")
-    public boolean claimStep(long eventId, String step) {
+    public boolean claimStep(long eventId, int leaseEpoch, String step) {
+        holdWriteFence(eventId, leaseEpoch);
         return events.claimStep(eventId, step) == 1;
+    }
+
+    /** Fences writes that use natural keys rather than a named delivery step, in the same transaction. */
+    @Transactional
+    @WorkspaceAgnostic("The event id and its lease epoch identify the claimed row")
+    public void fenceStep(long eventId, int leaseEpoch) {
+        holdWriteFence(eventId, leaseEpoch);
+    }
+
+    private void holdWriteFence(long eventId, int leaseEpoch) {
+        // A caller can already hold a domain lock. Never wait on erasure while holding that lock: roll back,
+        // then the consumer checks the lease in a fresh transaction after erasure releases its copy fence.
+        if (!copyFence.tryHoldForCapture()) {
+            throw new TransientDataAccessResourceException("Person erasure is in progress");
+        }
+        checkLease(events.lockLease(eventId), leaseEpoch);
+    }
+
+    /** Checks an outcome after the handler transaction ended, before retrying or recording a drop. */
+    @Transactional
+    @WorkspaceAgnostic("The event id and its lease epoch identify the claimed row")
+    public void assertLease(long eventId, int leaseEpoch) {
+        checkLease(events.awaitLease(eventId), leaseEpoch);
+    }
+
+    private static void checkLease(Optional<ProviderEventRepository.LeaseRow> candidate, int leaseEpoch) {
+        var row = candidate.orElseThrow(
+                () -> new ProviderEventFenceException(ProviderEventFenceException.Reason.ERASED_DURING_PROCESSING));
+        if (!"LEASED".equals(row.getState()) || row.getLeaseEpoch() != leaseEpoch) {
+            throw new ProviderEventFenceException(ProviderEventFenceException.Reason.LEASE_LOST);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -191,17 +233,20 @@ public class ProviderEventStore {
     /** Deletes the events of one workspace, in the caller's transaction; their steps go with them. */
     @Transactional
     public int deleteWorkspace(long workspaceId) {
-        return events.deleteWorkspace(workspaceId);
+        List<Long> erased = events.deleteWorkspace(workspaceId);
+        DeliveryInbox.erasedByHandler(erased);
+        return erased.size();
     }
 
     /**
-     * Deletes the waiting and ended events of one resource of a provider, such as a Slack channel, in the caller's
-     * transaction. A leased one stays: it is the event whose handler erases the resource, or one whose handler checks
-     * the resource's consent before it stores.
+     * Deletes every event of one provider resource, including leased events, in the caller's transaction.
+     * Later write steps and completion are fenced by the event row and its lease epoch.
      */
     @Transactional
     public int deleteResource(long workspaceId, String provider, String resource) {
-        return events.deleteResource(workspaceId, provider, resource);
+        List<Long> erased = events.deleteResource(workspaceId, provider, resource);
+        DeliveryInbox.erasedByHandler(erased);
+        return erased.size();
     }
 
     /** The dead letters of one workspace, or of the installation when {@code workspaceId} is null, after {@code idAfter}. */

@@ -263,13 +263,13 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
         var deliveries = new GitLabRouteTestFixtures.Deliveries(
                 connections, connectionService, admission, objectMapper, transactions, "https://gitlab.lrz.de");
         long delivery =
-                StoredEventHandling.stored(eventStore, eventJdbc, workspace.getId(), "gitlab.?connection.1.push");
+                StoredEventHandling.leased(eventStore, eventJdbc, workspace.getId(), "gitlab.?connection.1.push");
         Workspace target = workspace;
         Repository project = repository;
         Runnable handling = () -> deliveries.handle(target, project, push, () -> handler.handleEvent(push));
         ReflectionTestUtils.setField(handler, "commitRepository", interrupted);
         try {
-            assertThatThrownBy(() -> inbox.dispatch(delivery, Instant.now(), handling))
+            assertThatThrownBy(() -> inbox.dispatch(delivery, 1, Instant.now(), handling))
                     .isInstanceOf(IllegalStateException.class);
             assertThat(commits.findByShaAndRepositoryId(first.id(), repository.getId()))
                     .isPresent();
@@ -277,7 +277,7 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     .isEmpty();
             assertThat(commits.findByShaAndRepositoryId(thirdSha, repository.getId()))
                     .isPresent();
-            inbox.dispatch(delivery, Instant.now(), handling);
+            inbox.dispatch(delivery, 1, Instant.now(), handling);
             for (var commit : commitsInPush) {
                 assertThat(commits.findByShaAndRepositoryId(commit.id(), repository.getId()))
                         .isPresent();

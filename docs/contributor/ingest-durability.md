@@ -115,6 +115,23 @@ A process can stop after an HTTP or SMTP side effect and before its database com
 Such an external effect can repeat unless its adapter has a provider idempotency key or a durable claim-and-reconcile protocol.
 The inbox guarantees database steps; it does not make a remote service part of a PostgreSQL transaction.
 
+Person erasure deletes matching events in every state, including LEASED, and cascades their step records.
+The inbox is a live-predicate erasure store: its preview counts can change without invalidating the frozen identity scope.
+Each erasure pass deletes current matches as well as the frozen keys, and resume repeats the pass even after an earlier receipt.
+Inbox admission takes shared copy admission until commit and fails without storing a payload while erasure owns that fence.
+Each named write step holds the copy fence and a shared event-row lock until its business transaction commits.
+The lock checks LEASED and the claim's lease epoch; it blocks erasure and lease replacement during that write.
+Spring also installs the same check before commit in every write transaction on the dispatch thread.
+This covers independent natural-key upserts that have no named step.
+A write that finds erasure in progress rolls back before waiting on its outcome, so domain locks cannot deadlock erasure.
+After erasure, a missing event stops further writes and completion.
+The consumer records `erased-during-processing` in `integration.message.dropped` and does not retry the event.
+A replaced lease records `lease-lost` and cannot write under the new lease.
+Renewal and reaping use SKIP LOCKED. They do not wait on a fenced write, and reaping leaves that write's lease alone.
+Renewal continues until the outcome is recorded. Outcome checks hold no domain or global copy lock.
+A committed handler step that deliberately erases its own event is successful handling.
+A caught write-fence failure still reaches the consumer, which can retry the unfinished work.
+
 Retention runs every hour on one server.
 It deletes DONE rows after the replay window and DEAD rows after the dead retention.
 A failure leaves the rows in place and increments `integration_consumer_inbox_retention_failures_total`.
@@ -141,6 +158,10 @@ A listener that writes inside the publisher's transaction joins its inbox step.
 An `AFTER_COMMIT` listener cannot roll back that step.
 An asynchronous listener or durable job is separate work; it does not inherit the dispatch thread's inbox identity.
 Its existing natural keys, state transitions or delivery protocol own its idempotency.
+The inbox fence covers Spring write transactions on the dispatch thread. It does not cover autocommit writes or another thread.
+Provider handlers must delegate database writes to transactional services and must not send raw inbox envelopes to async jobs.
+Architecture guards both boundaries. `CommitEnrichmentEventListener`, `SyncPushService` and Modulith jobs are separate work.
+Their person-data contracts are recorded in the [personal-data map](../admin/dsms/personal-data-map.md).
 Do not carry an inbox step into a later job by thread-local context.
 
 ## Other ingestion listeners

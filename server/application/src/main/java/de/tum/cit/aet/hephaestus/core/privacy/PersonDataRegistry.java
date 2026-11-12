@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Component;
 
@@ -52,6 +53,16 @@ public class PersonDataRegistry {
         Map<String, PersonDataSelection> selected = new TreeMap<>();
         for (var store : stores) selected.put(store.store(), store.select(scope));
         return Collections.unmodifiableMap(selected);
+    }
+
+    public boolean unchanged(PersonScope scope, Map<String, PersonDataSelection> frozen) {
+        return frozen.keySet()
+                        .equals(stores.stream()
+                                .map(PersonDataContributor::store)
+                                .collect(Collectors.toSet()))
+                && stores.stream()
+                        .filter(PersonDataContributor::selectionMustStayUnchanged)
+                        .allMatch(store -> store.select(scope).equals(frozen.get(store.store())));
     }
 
     public Map<String, Long> counts(Map<String, PersonDataSelection> selected) {

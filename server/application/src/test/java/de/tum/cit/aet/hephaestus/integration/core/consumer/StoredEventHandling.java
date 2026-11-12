@@ -23,6 +23,15 @@ public final class StoredEventHandling {
         return id;
     }
 
+    /** A synthetic lease for tests that invoke the dispatch boundary directly. */
+    public static long leased(ProviderEventStore store, JdbcTemplate jdbc, @Nullable Long workspaceId, String subject) {
+        long id = stored(store, jdbc, workspaceId, subject);
+        jdbc.update(
+                "UPDATE provider_event SET state='LEASED', lease_epoch=1, leased_until=clock_timestamp()+interval '5 minutes' WHERE id=?",
+                id);
+        return id;
+    }
+
     /** @return the state the event ended in: DONE, or QUEUED for a retry, or DEAD */
     public static String handle(
             ProviderEventStore store,

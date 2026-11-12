@@ -639,16 +639,16 @@ final class PersonErasureAllStoresFixture {
                 "headers",
                 "{\"Hephaestus-Source-Server-Url\":\"https://github.com\"}",
                 "scope_key",
-                workspace + ":github.acme.app",
+                workspace + ":github.acme.app-" + githubUserId,
                 "payload",
                 ("{\"sender\":{\"login\":\"" + login + "\",\"id\":" + githubUserId + "}}")
                         .getBytes(StandardCharsets.UTF_8),
                 "state",
-                "DEAD",
-                "ended_at",
-                Timestamp.from(Instant.now()),
-                "error_class",
-                "Failure");
+                "LEASED",
+                "lease_epoch",
+                1,
+                "leased_until",
+                Timestamp.from(Instant.now().plusSeconds(300)));
     }
 
     void seedOutline(long workspace, long connection, String subject) {

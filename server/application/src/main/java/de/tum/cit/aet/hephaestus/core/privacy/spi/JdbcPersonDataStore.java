@@ -133,12 +133,20 @@ public class JdbcPersonDataStore implements PersonDataContributor {
     @Override
     public long erase(PersonDataSelection selection, PersonScope frozenScope) {
         if (selection.rows().isEmpty()) return 0;
+        return eraseWhere(selection, frozenScope, selected());
+    }
+
+    protected long eraseIncludingCurrentMatches(PersonDataSelection selection, PersonScope frozenScope) {
+        return eraseWhere(selection, frozenScope, "(" + selected() + ") OR (" + predicate + ")");
+    }
+
+    private long eraseWhere(PersonDataSelection selection, PersonScope frozenScope, String where) {
         String command = redaction.isEmpty()
                 ? "DELETE FROM " + quotedTable() + " t"
                 : "UPDATE " + quotedTable() + " t SET " + redaction;
         var bindings = new LinkedHashMap<>(parameters(frozenScope, mapper));
         bindings.putAll(selectionParameters(selection));
-        return jdbc.update(command + " WHERE " + selected(), bindings);
+        return jdbc.update(command + " WHERE " + where, bindings);
     }
 
     protected List<JsonNode> querySelected(String projection, String from, PersonDataSelection selection) {

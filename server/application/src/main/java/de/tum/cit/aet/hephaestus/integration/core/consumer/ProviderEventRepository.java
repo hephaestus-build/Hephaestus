@@ -168,8 +168,11 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
     @WorkspaceAgnostic("The event id and its lease epoch identify the claimed row")
     @Modifying
     @Query(value = """
-            UPDATE provider_event SET leased_until = clock_timestamp() + make_interval(secs => :leaseSeconds)
-            WHERE id = :id AND state = 'LEASED' AND lease_epoch = :epoch AND leased_until > clock_timestamp()
+            WITH held AS (
+              SELECT id FROM provider_event WHERE id = :id AND state = 'LEASED' AND lease_epoch = :epoch
+              FOR NO KEY UPDATE SKIP LOCKED)
+            UPDATE provider_event e SET leased_until = clock_timestamp() + make_interval(secs => :leaseSeconds)
+            FROM held WHERE e.id = held.id
             """, nativeQuery = true)
     int renew(@Param("id") long id, @Param("epoch") int epoch, @Param("leaseSeconds") long leaseSeconds);
 
@@ -185,14 +188,35 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
     @WorkspaceAgnostic("The reaper takes back the expired leases of every workspace")
     @Modifying
     @Query(value = """
-            UPDATE provider_event SET leased_until = NULL, failures = failures + 1,
+            WITH expired AS (
+              SELECT id FROM provider_event WHERE state = 'LEASED' AND leased_until < clock_timestamp()
+              FOR NO KEY UPDATE SKIP LOCKED)
+            UPDATE provider_event e SET leased_until = NULL, failures = failures + 1,
                    state = CASE WHEN failures + 1 >= :maxAttempts THEN 'DEAD' ELSE 'QUEUED' END,
                    ended_at = CASE WHEN failures + 1 >= :maxAttempts THEN clock_timestamp() END,
                    error_class = CASE WHEN failures + 1 >= :maxAttempts THEN 'LeaseExpired' END,
                    available_at = clock_timestamp()
-            WHERE state = 'LEASED' AND leased_until < clock_timestamp()
+            FROM expired WHERE e.id = expired.id
             """, nativeQuery = true)
     int reapExpired(@Param("maxAttempts") int maxAttempts);
+
+    interface LeaseRow {
+        String getState();
+
+        int getLeaseEpoch();
+    }
+
+    String LEASE_LOCK = "SELECT state, lease_epoch AS \"leaseEpoch\" FROM provider_event WHERE id = :id FOR SHARE";
+
+    /** SHARE permits independent nested writers, but blocks erasure and lease replacement until commit. */
+    @WorkspaceAgnostic("The event id and epoch come from the trusted claim, never from a request")
+    @Query(value = LEASE_LOCK + " NOWAIT", nativeQuery = true)
+    Optional<LeaseRow> lockLease(@Param("id") long id);
+
+    /** Outcome recording holds no domain locks and can wait for a concurrent erasure to commit. */
+    @WorkspaceAgnostic("The event id and epoch come from the trusted claim, never from a request")
+    @Query(value = LEASE_LOCK, nativeQuery = true)
+    Optional<LeaseRow> awaitLease(@Param("id") long id);
 
     @WorkspaceAgnostic("The event id identifies the claimed row")
     @Modifying
@@ -217,17 +241,15 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
             """, nativeQuery = true)
     int deleteEnded(@Param("doneBefore") Instant doneBefore, @Param("deadBefore") Instant deadBefore);
 
-    @Modifying
-    @Query(value = "DELETE FROM provider_event WHERE workspace_id = :workspaceId", nativeQuery = true)
-    int deleteWorkspace(@Param("workspaceId") long workspaceId);
+    @Query(value = "DELETE FROM provider_event WHERE workspace_id = :workspaceId RETURNING id", nativeQuery = true)
+    List<Long> deleteWorkspace(@Param("workspaceId") long workspaceId);
 
-    @Modifying
     @Query(value = """
             DELETE FROM provider_event
-            WHERE workspace_id = :workspaceId AND provider = :provider AND state <> 'LEASED'
-              AND split_part(subject, '.', 3) = :resource
+            WHERE workspace_id = :workspaceId AND provider = :provider
+              AND split_part(subject, '.', 3) = :resource RETURNING id
             """, nativeQuery = true)
-    int deleteResource(
+    List<Long> deleteResource(
             @Param("workspaceId") long workspaceId,
             @Param("provider") String provider,
             @Param("resource") String resource);

@@ -178,7 +178,8 @@ class ProviderEventStoreIntegrationTest extends BaseIntegrationTest {
     void shouldReplayADeadLetterWithItsPayloadAndKeepItsCommittedSteps() {
         store.store(List.of(arrival("github.?.?.installation", "p-1")));
         Claimed claimed = store.claim(LEASE).orElseThrow();
-        assertThat(store.claimStep(claimed.id(), "handler.github.installation")).isTrue();
+        assertThat(store.claimStep(claimed.id(), claimed.leaseEpoch(), "handler.github.installation"))
+                .isTrue();
         assertThat(store.dead(claimed.id(), claimed.leaseEpoch(), "java.lang.IllegalStateException"))
                 .isTrue();
 
@@ -194,7 +195,8 @@ class ProviderEventStoreIntegrationTest extends BaseIntegrationTest {
         assertThat(again.attempt()).isEqualTo(1);
         assertThat(delivery(again)).isEqualTo("p-1");
         assertThat(store.hasStep(again.id(), "handler.github.installation")).isTrue();
-        assertThat(store.claimStep(again.id(), "handler.github.installation")).isFalse();
+        assertThat(store.claimStep(again.id(), again.leaseEpoch(), "handler.github.installation"))
+                .isFalse();
     }
 
     @Test

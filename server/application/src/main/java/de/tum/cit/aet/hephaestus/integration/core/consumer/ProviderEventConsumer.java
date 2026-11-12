@@ -259,14 +259,23 @@ public class ProviderEventConsumer implements SmartLifecycle {
     void handle(ProviderEventStore.Claimed claimed) {
         ProviderEvent event = claimed.event();
         meters.received(event, claimed.attempt());
-        long start = System.nanoTime();
-        AtomicReference<@Nullable Throwable> failure = new AtomicReference<>();
-        AtomicReference<@Nullable IntegrationMessageHandler> handled = new AtomicReference<>();
         ScheduledFuture<?> renewal = renewals.scheduleAtFixedRate(
                 () -> renew(claimed), RENEWAL.toMillis(), RENEWAL.toMillis(), TimeUnit.MILLISECONDS);
+        try {
+            handleAttempt(claimed, System.nanoTime());
+        } finally {
+            renewal.cancel(false);
+        }
+    }
+
+    private void handleAttempt(ProviderEventStore.Claimed claimed, long start) {
+        ProviderEvent event = claimed.event();
+        AtomicReference<@Nullable Throwable> failure = new AtomicReference<>();
+        AtomicReference<@Nullable IntegrationMessageHandler> handled = new AtomicReference<>();
+        AtomicBoolean erasedByHandler = new AtomicBoolean();
         BoundedRun run = new BoundedRun(() -> traceContext.process(event, () -> {
             try {
-                handled.set(dispatch(claimed));
+                handled.set(dispatch(claimed, erasedByHandler));
             } catch (Throwable thrown) {
                 if (thrown instanceof VirtualMachineError && !(thrown instanceof StackOverflowError)) throw thrown;
                 failure.set(thrown);
@@ -279,7 +288,7 @@ public class ProviderEventConsumer implements SmartLifecycle {
             timedOut(claimed, stopped);
             // A handler that would not stop keeps its lease, so no server handles the event beside the stuck thread.
             if (!stopped) run.awaitEnd();
-            renewal.cancel(false);
+            if (dropIfFenced(claimed, start)) return;
             meters.handled(event, IntegrationMessageMeters.Outcome.TIMED_OUT, System.nanoTime() - start);
             lastFailedAt = clock.instant();
             failures.handleFailure(claimed, new HandlerTimeoutException(properties.handlerTimeout()));
@@ -290,25 +299,23 @@ public class ProviderEventConsumer implements SmartLifecycle {
                 breakLiveness();
                 run.awaitEnd();
             }
-            renewal.cancel(false);
-            store.release(claimed.id(), claimed.leaseEpoch());
+            if (!store.release(claimed.id(), claimed.leaseEpoch())) dropIfFenced(claimed, start);
             Thread.currentThread().interrupt();
             return;
         } catch (ExecutionException crashed) {
-            renewal.cancel(false);
             rethrowError(crashed);
             failure.set(crashed);
         }
-        renewal.cancel(false);
         Throwable thrown = failure.get();
         if (thrown != null) {
             failed(claimed, thrown, start);
             return;
         }
-        meters.handled(event, IntegrationMessageMeters.Outcome.COMPLETED, System.nanoTime() - start);
-        if (!store.complete(claimed.id(), claimed.leaseEpoch())) {
-            log.warn("Provider event lease was taken back before it ended: eventId={}", claimed.id());
+        if (!erasedByHandler.get() && !store.complete(claimed.id(), claimed.leaseEpoch())) {
+            dropIfFenced(claimed, start);
+            return;
         }
+        meters.handled(event, IntegrationMessageMeters.Outcome.COMPLETED, System.nanoTime() - start);
         lastHandledAt = clock.instant();
         IntegrationMessageHandler handler = handled.get();
         Long workspaceId = claimed.workspaceId();
@@ -320,7 +327,7 @@ public class ProviderEventConsumer implements SmartLifecycle {
     }
 
     @Nullable
-    private IntegrationMessageHandler dispatch(ProviderEventStore.Claimed claimed) {
+    private IntegrationMessageHandler dispatch(ProviderEventStore.Claimed claimed, AtomicBoolean erasedByHandler) {
         ProviderEvent event = claimed.event();
         return new IntegrationDispatchScope(claimed.workspaceId()).call(() -> {
             Optional<IntegrationMessageHandler> handler = dispatcher.dispatch(event.subject());
@@ -330,10 +337,10 @@ public class ProviderEventConsumer implements SmartLifecycle {
                     .filter(candidate -> candidate.owns(event.subject()))
                     .findFirst();
             boolean[] admitted = {true};
-            inbox.dispatch(claimed.id(), event.receivedAt(), () -> {
+            erasedByHandler.set(inbox.dispatch(claimed.id(), claimed.leaseEpoch(), event.receivedAt(), () -> {
                 if (admission.isEmpty()) resolved.onMessage(event);
                 else admitted[0] = admission.get().admit(claimed.workspaceId(), event, () -> resolved.onMessage(event));
-            });
+            }));
             if (!admitted[0]) {
                 log.info(
                         "Skipped event: reason=routeNotAdmitted, scopeId={}, route={}",
@@ -346,6 +353,7 @@ public class ProviderEventConsumer implements SmartLifecycle {
     }
 
     private void failed(ProviderEventStore.Claimed claimed, Throwable thrown, long start) {
+        if (dropIfFenced(claimed, start)) return;
         ProviderEvent event = claimed.event();
         // Exception messages can contain raw provider payloads. Log only the failure type.
         var logged = log.atError()
@@ -370,10 +378,26 @@ public class ProviderEventConsumer implements SmartLifecycle {
         failures.handleFailure(claimed, thrown);
     }
 
+    private boolean dropIfFenced(ProviderEventStore.Claimed claimed, long start) {
+        try {
+            store.assertLease(claimed.id(), claimed.leaseEpoch());
+            return false;
+        } catch (ProviderEventFenceException fenced) {
+            meters.dropped(claimed.event(), fenced.reason(), System.nanoTime() - start);
+            log.atInfo()
+                    .addKeyValue("event.name", "integration.message.dropped")
+                    .addKeyValue("reason", fenced.reason().tag)
+                    .addKeyValue("integration.scope.id", claimed.workspaceId())
+                    .addKeyValue("integration.event.id", claimed.id())
+                    .log("Provider event work dropped");
+            return true;
+        }
+    }
+
     private void renew(ProviderEventStore.Claimed claimed) {
         try {
             if (!store.renew(claimed.id(), claimed.leaseEpoch(), LEASE)) {
-                log.warn("Provider event lease could not be renewed: eventId={}", claimed.id());
+                log.debug("Provider event renewal skipped a locked or replaced lease: eventId={}", claimed.id());
             }
         } catch (RuntimeException failure) {
             log.warn(

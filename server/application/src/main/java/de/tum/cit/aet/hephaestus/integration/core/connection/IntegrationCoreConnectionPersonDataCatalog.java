@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.LiveJdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
@@ -56,15 +57,15 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                 // one whose payload names one of the person's identities of that provider: a GitHub or GitLab user
                 // object with the person's id, a GitLab sender or item participant id, or a Slack or Outline id as a
                 // whole token.
-                // Names and email addresses do not prove an identity (PersonScope). A leased event stays: its
-                // handler stores what the delivery says under the same erasure, and its retention removes it. The
-                // export lists the deliveries, not their payloads.
-                new JdbcPersonDataStore(
+                // Names and email addresses do not prove an identity (PersonScope). Erasure includes leased events;
+                // their write steps lock the event and check its lease in the business transaction. The export
+                // lists the deliveries, not their payloads.
+                new LiveJdbcPersonDataStore(
                         jdbc,
                         mapper,
                         "provider_event",
                         "provider_event",
-                        "t.state <> 'LEASED' AND EXISTS (SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb))"
+                        "EXISTS (SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb))"
                                 + " AS i(\"providerId\" bigint, subject text, \"teamId\" text)"
                                 + " JOIN identity_provider p ON p.id = i.\"providerId\""
                                 + " WHERE lower(p.type) = t.provider AND p.server_url = t.headers->>'"

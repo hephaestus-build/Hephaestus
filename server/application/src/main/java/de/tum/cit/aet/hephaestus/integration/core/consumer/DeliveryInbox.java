@@ -1,8 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Instant;
+import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -18,7 +22,13 @@ public class DeliveryInbox {
     // The scope spans several transactions and provider calls on the dispatch thread, then is removed in finally.
     private static final ThreadLocal<Context> CURRENT = new ThreadLocal<>();
 
-    private record Context(DeliveryInbox inbox, long eventId, Instant receivedAt) {}
+    private record Context(
+            DeliveryInbox inbox, long eventId, int leaseEpoch, Instant receivedAt, DispatchStatus status) {}
+
+    private static final class DispatchStatus {
+        private @Nullable RuntimeException rejectedWrite;
+        private boolean erasedByHandler;
+    }
 
     private final ProviderEventStore store;
     private final TransactionTemplate transactions;
@@ -38,7 +48,53 @@ public class DeliveryInbox {
         if (step.isBlank() || step.length() > MAX_STEP_LENGTH) {
             throw new IllegalArgumentException("An inbox step needs a name of at most 200 characters");
         }
-        return context.inbox().store.claimStep(context.eventId(), step);
+        boolean claimed;
+        try {
+            claimed = context.inbox().store.claimStep(context.eventId(), context.leaseEpoch(), step);
+        } catch (RuntimeException failure) {
+            context.status().rejectedWrite = failure;
+            throw failure;
+        }
+        for (var synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+            if (synchronization instanceof WriteFence fence) fence.fenced = true;
+        }
+        return claimed;
+    }
+
+    // Installed for every write transaction on the dispatch thread, including REQUIRES_NEW natural-key upserts.
+    // A named step fences early. Its row lock lasts until commit, even if that step erases its own event.
+    static void fenceTransaction() {
+        Context context = CURRENT.get();
+        if (context != null) TransactionSynchronizationManager.registerSynchronization(new WriteFence(context));
+    }
+
+    private static final class WriteFence implements TransactionSynchronization {
+        private final Context context;
+        private boolean fenced;
+
+        private WriteFence(Context context) {
+            this.context = context;
+        }
+
+        @Override
+        public void beforeCommit(boolean readOnly) {
+            if (!readOnly && !fenced) {
+                try {
+                    context.inbox().store.fenceStep(context.eventId(), context.leaseEpoch());
+                } catch (RuntimeException failure) {
+                    context.status().rejectedWrite = failure;
+                    throw failure;
+                }
+            }
+        }
+    }
+
+    static void erasedByHandler(List<Long> erased) {
+        Context context = CURRENT.get();
+        if (context == null || !erased.contains(context.eventId())) return;
+        if (TransactionSynchronizationManager.getSynchronizations().stream()
+                .noneMatch(synchronization -> synchronization instanceof WriteFence fence && fence.fenced)) return;
+        TransactionCallbacks.afterCommit(() -> context.status().erasedByHandler = true);
     }
 
     /** Whether the current thread handles a stored event, which a failure returns for a retry. */
@@ -61,15 +117,19 @@ public class DeliveryInbox {
         return context == null ? fallback : context.receivedAt();
     }
 
-    /** Runs the handling of one claimed event; its steps are recorded against the event. */
-    public void dispatch(long eventId, Instant receivedAt, Runnable work) {
+    /** Runs one claimed event and returns whether its handler committed the deletion of its own event row. */
+    public boolean dispatch(long eventId, int leaseEpoch, Instant receivedAt, Runnable work) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("An event cannot hold a transaction across handler preparation");
         }
         Context previous = CURRENT.get();
-        CURRENT.set(new Context(this, eventId, receivedAt));
+        Context context = new Context(this, eventId, leaseEpoch, receivedAt, new DispatchStatus());
+        CURRENT.set(context);
         try {
             work.run();
+            RuntimeException rejected = context.status().rejectedWrite;
+            if (rejected != null) throw rejected;
+            return context.status().erasedByHandler;
         } finally {
             if (previous == null) CURRENT.remove();
             else CURRENT.set(previous);

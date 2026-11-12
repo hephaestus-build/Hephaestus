@@ -94,6 +94,7 @@ public class IntegrationMessageMeters {
     enum Outcome {
         COMPLETED("completed"),
         FAILED("failed"),
+        DROPPED("dropped"),
         /** The handler outlived the handler timeout, and its event returned to the inbox. */
         TIMED_OUT("timed_out");
 
@@ -112,6 +113,16 @@ public class IntegrationMessageMeters {
             log.debug(
                     "Skipped a handling time: error.type={}", failure.getClass().getName());
         }
+    }
+
+    void dropped(ProviderEvent event, ProviderEventFenceException.Reason reason, long nanos) {
+        Counter.builder(IntegrationCoreMetrics.INTEGRATION_MESSAGE_DROPPED)
+                .description("Provider event attempts dropped by the erasure or lease fence")
+                .tag("kind", IntegrationPoisonHandler.kindTag(event.subject()))
+                .tag("reason", reason.tag)
+                .register(registry)
+                .increment();
+        handled(event, Outcome.DROPPED, nanos);
     }
 
     private Timer processTimer(String kind, Outcome outcome) {

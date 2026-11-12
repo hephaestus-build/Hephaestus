@@ -256,3 +256,8 @@ Then follow the cutover above.
 Check [Sizing and scaling](./sizing) before increasing capacity.
 Its measurements state their workload and limits.
 A successful upgrade does not qualify throughput or recovery time.
+
+## Drain the webhook streams before the upgrade
+
+Follow the [provider event inbox cutover](./webhook-ingestion-operations.mdx) before you start 1.0.
+Drain the provider event streams and resolve their dead letters before you remove JetStream.

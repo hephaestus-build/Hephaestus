@@ -277,7 +277,7 @@ public class PersonDataService {
                             var completed = completed(r);
                             if (!inventory.containsAll(completed.keySet()))
                                 throw new IllegalStateException("Erasure contributor inventory changed");
-                            if (!completed.containsKey(store.store())) {
+                            if (!completed.containsKey(store.store()) || !store.selectionMustStayUnchanged()) {
                                 long count = store.erase(Objects.requireNonNull(frozen.get(store.store())), scope(r));
                                 // The database clock, which every runtime shares: PersonDataCopyFence.erasedSince
                                 // compares
@@ -285,9 +285,11 @@ public class PersonDataService {
                                 Instant erasedAt = Objects.requireNonNull(
                                                 jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
                                         .toInstant();
+                                var previous = completed.get(store.store());
+                                long total = count + (previous == null ? 0 : previous.count());
                                 completed.put(
                                         store.store(),
-                                        new PersonDataStoreReceipt(count, erasedAt, r.getAdministratorAccountId()));
+                                        new PersonDataStoreReceipt(total, erasedAt, r.getAdministratorAccountId()));
                                 r.setCompletedJson(mapper.writeValueAsString(completed));
                                 requests.saveAndFlush(r);
                             }
@@ -390,7 +392,7 @@ public class PersonDataService {
     private void requireUnchanged(PersonDataRequest r, Map<String, PersonDataSelection> selected) {
         PersonScope scope = scope(r);
         if (!scope.equals(withEvidenceJobs(resolver.resolve(scope.accountId(), scope.identities())))
-                || !selected.equals(registry.select(scope)))
+                || !registry.unchanged(scope, selected))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The preview scope changed. Create a new preview.");
     }
 

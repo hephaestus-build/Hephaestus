@@ -177,8 +177,8 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldFinishTheEventAfterTheMirrorCommittedWithTheTimeTheEventWasReceived() {
-        long delivery = StoredEventHandling.stored(eventStore, eventJdbc, workspaceId, "outline.sub.documents~update");
-        assertThatThrownBy(() -> inbox.dispatch(delivery, RECEIVED_AT, () -> {
+        long delivery = StoredEventHandling.leased(eventStore, eventJdbc, workspaceId, "outline.sub.documents~update");
+        assertThatThrownBy(() -> inbox.dispatch(delivery, 1, RECEIVED_AT, () -> {
                     mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, T2, document -> {
                         document.setCollectionId(COLLECTION_ID);
                         document.setTitle("Accepted title");
@@ -210,6 +210,7 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
                 null);
         inbox.dispatch(
                 delivery,
+                1,
                 RECEIVED_AT,
                 () -> scheduler.refreshDocumentNow(workspaceId, "documents.update", DOC_ONE, metadata));
         var item = items.findSource(workspaceId, DocumentEvents.DOCUMENT.value(), committed.getId())
@@ -235,9 +236,10 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
             document.setContentHash("archive-hash");
             document.setOutlineUpdatedAt(T1);
         });
-        long delivery = StoredEventHandling.stored(eventStore, eventJdbc, workspaceId, "outline.sub.documents~update");
+        long delivery = StoredEventHandling.leased(eventStore, eventJdbc, workspaceId, "outline.sub.documents~update");
         assertThatThrownBy(() -> inbox.dispatch(
                         delivery,
+                        1,
                         Instant.now(),
                         () -> mirrorWriter.updateDocument(workspaceId, connectionId, DOC_ONE, document -> {
                             throw new ObjectOptimisticLockingFailureException(OutlineDocument.class, document.getId());
@@ -249,6 +251,7 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
                 DOC_ONE, "/doc/one", "Archive me", T0, T2, DOC_ONE, null, COLLECTION_ID, null, null, List.of(), T2);
         inbox.dispatch(
                 delivery,
+                1,
                 Instant.now(),
                 () -> scheduler.refreshDocumentNow(workspaceId, "documents.archive", DOC_ONE, metadata));
         var archived = documentById(DOC_ONE);
@@ -263,8 +266,8 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotRecreateADocumentErasedAfterItsInboxStepCommitted() {
-        long delivery = StoredEventHandling.stored(eventStore, eventJdbc, workspaceId, "outline.sub.documents~update");
-        assertThatThrownBy(() -> inbox.dispatch(delivery, Instant.now(), () -> {
+        long delivery = StoredEventHandling.leased(eventStore, eventJdbc, workspaceId, "outline.sub.documents~update");
+        assertThatThrownBy(() -> inbox.dispatch(delivery, 1, Instant.now(), () -> {
                     mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, null, document -> {
                         document.setCollectionId(COLLECTION_ID);
                         document.setTitle("A document later erased");
@@ -278,6 +281,7 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
 
         inbox.dispatch(
                 delivery,
+                1,
                 Instant.now(),
                 () -> assertThat(mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, null, document -> {
                             throw new AssertionError("The committed step must not apply its mutation again");
