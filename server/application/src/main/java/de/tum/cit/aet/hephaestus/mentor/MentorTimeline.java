@@ -26,7 +26,10 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,17 +62,24 @@ public class MentorTimeline {
     private final MentorTurnRepository turns;
     private final MentorTurnWaits waits;
     private final MentorTurnProgress progress;
-    private final MentorLedgerNotifications notifications;
     private final WeeklyDigestFacts weeklyDigests;
     private final ResultHistoryQuery results;
     private final FeedbackHistoryQuery feedback;
     private final ObjectMapper objectMapper;
     private final AgentActions actions;
 
-    /** The partial answers of running turns reach this process only while it listens to the ledger. */
-    @EventListener(ApplicationReadyEvent.class)
-    public void listenForPartialAnswers() {
-        notifications.startListening();
+    /**
+     * The partial answers of running turns reach this process only while it listens to the ledger, from the moment the
+     * application is ready. The build profiles serve no turn, and their database cannot {@code LISTEN}.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnServerRole
+    @Profile("!specs & !cds-training")
+    static class PartialAnswersConfiguration {
+        @Bean
+        ApplicationListener<ApplicationReadyEvent> mentorPartialAnswers(MentorLedgerNotifications notifications) {
+            return event -> notifications.startListening();
+        }
     }
 
     /** A value the live stream sends, and the developer whose conversation it belongs to. */

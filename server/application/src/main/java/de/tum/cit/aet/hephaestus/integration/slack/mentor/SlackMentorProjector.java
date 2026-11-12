@@ -270,12 +270,13 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
     /**
      * Subscribes the projector to the ledger once the application is ready. The test profile drives a projector of its
-     * own and subscribes none, since a subscribed projector reads every later test's Slack turns on its own threads.
+     * own and subscribes none, since a subscribed projector reads every later test's Slack turns on its own threads. The
+     * build profiles serve no turn, and their database cannot {@code LISTEN}.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnServerRole
     @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
-    @Profile("!test")
+    @Profile("!test & !specs & !cds-training")
     static class SubscriptionConfiguration {
         @Bean
         ApplicationListener<ApplicationReadyEvent> slackMentorProjectorSubscription(SlackMentorProjector projector) {

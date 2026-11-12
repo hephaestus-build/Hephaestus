@@ -26,10 +26,12 @@ class SlackMentorProjectorSubscriptionTest extends BaseUnitTest {
     @ValueSource(
             strings = {
                 "spring.profiles.active=test",
+                "spring.profiles.active=specs",
+                "spring.profiles.active=cds-training",
                 "hephaestus.integration.slack.enabled=false",
                 "hephaestus.runtime.server.enabled=false"
             })
-    void shouldSubscribeNoProjectorInTestsWithoutSlackOrWithoutTheServerRole(String setting) {
+    void shouldSubscribeNoProjectorInTestAndBuildProfilesWithoutSlackOrWithoutTheServerRole(String setting) {
         runner.withPropertyValues("spring.profiles.active=default", setting)
                 .run(context -> assertThat(context).doesNotHaveBean("slackMentorProjectorSubscription"));
     }
