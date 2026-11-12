@@ -25,7 +25,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.SandboxReviewClaims;
-import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxModelProxy;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -176,8 +175,6 @@ public final class ComposeRunGateway implements AutoCloseable {
                     "attemptTokenVerifier",
                     new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry()));
             factory.registerSingleton("sandboxGatewaySessions", new SandboxGatewaySessions());
-            factory.registerSingleton(
-                    "conversationLoopProperties", new ConversationLoopProperties("0123456789abcdef".repeat(4)));
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
             // The server's shared buckets, which the gateway's rate limit draws from.
             factory.registerSingleton("bucketResolver", context.getBean(BucketResolver.class));

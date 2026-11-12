@@ -1,73 +1,44 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
-import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
-import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
-import de.tum.cit.aet.hephaestus.agent.gateway.AgentShutdownConfiguration;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.ConversationToolsPods;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
-import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
-import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
-import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
-import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
-import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.context.SmartLifecycle;
-import tools.jackson.databind.JsonNode;
+import java.util.function.Function;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
-/**
- * The conversation turns of the installation, as every worker serves them to the conversation loop. A loop pulls each
- * assignment ({@link #assign}) from whichever worker its gateway Service picks, and every later call of the attempt may
- * reach another worker. So nothing here is held per worker: each call reads its attempt's row ({@link #held}), and the
- * turn's run is the only claim on a turn ({@link TurnRunsAdapter}).
- *
- * <p>Control has no channel. A stop, a lost lease and an erasure seal the attempt's model calls in flight on every
- * worker ({@link #turnChanged}), and the attempt's next call answers {@code 409}. The loop renews the run's lease
- * ({@link #lease}) until the run's deadline: {@link TurnRunsAdapter#GRACE} after a stop or after the work deadline. Then
- * the run reaper ends a turn its loop did not end, and it takes back the turn of a loop that is gone
- * ({@code TurnRunKind}).
- * {@code docs/contributor/unified-pi-runtime.mdx} § Turn lifecycle has the protocol.
- */
-public final class HephTurns implements MentorLedgerNotifications.Listener, SmartLifecycle {
-
-    private static final Logger log = LoggerFactory.getLogger(HephTurns.class);
-
+/** Reads the turn held by a sandbox's current run. No turn state lives in the gateway replica. */
+@RequiredArgsConstructor
+public class HephTurns {
     static final String COULD_NOT_FINISH = "Hephaestus could not finish this reply. Try again.";
     static final String MODEL_STOPPED_ANSWERING =
             "Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.";
 
-    /** Stops handing out turns before the gateway closes. */
-    static final int PHASE = AgentShutdownConfiguration.DRAIN_PHASE;
-
-    /** How long an assignment pull waits for a turn before it answers that none waits. */
-    static final Duration PULL_WAIT = Duration.ofSeconds(20);
-
-    /** Why an attempt must stop: the developer stopped it, or its deadline passed. */
     public enum Stop {
         DEVELOPER,
         DEADLINE
     }
 
-    /** An attempt that must stop: its next call answers {@code 409} with the reason. */
     public static final class StopException extends RuntimeException {
         @Serial
         private static final long serialVersionUID = 1L;
@@ -84,407 +55,91 @@ public final class HephTurns implements MentorLedgerNotifications.Listener, Smar
         }
     }
 
-    /** This worker stops and hands out no more turns; the loop pulls from another worker. */
-    public static final class DrainingException extends RuntimeException {
-        @Serial
-        private static final long serialVersionUID = 1L;
-
-        DrainingException() {
-            super("This worker stops", null, false, false);
-        }
-    }
-
-    /** One turn attempt for the loop: its credential, and when its work ends. */
-    public record Assignment(UUID turnId, int attempt, String token, Instant deadline) {}
-
-    private final MentorTurnStarter starter;
-    private final MentorTurnService turns;
     private final MentorTurnRepository rows;
-    private final MentorRedaction redaction;
-    private final MentorTurnCompletion completion;
-    private final MentorTurnProgress progress;
-    private final ProxyCallsInFlight callsInFlight;
-    private final ConversationToolsPods toolsPods;
-    private final AttemptTokenIssuer issuer;
-    private final TurnRunsAdapter turnRuns;
+    private final MentorConversationRepository conversations;
+    private final PersonDataWriteFence writeFence;
+    private final PersonDataCopyFence copyFence;
     private final Clock clock;
-    private final Duration pullWait;
-    private final Counter claimFailures;
+    private final AgentRuns runs;
+    private final MentorTurnService turns;
+    private final AgentSandboxes sandboxes;
+    private final TransactionTemplate transactions;
 
-    /** Pulls wait on it; every change of a turn counts {@link #changes} and wakes them. */
-    private final Object turnChanges = new Object();
-
-    private long changes;
-    private volatile boolean active;
-
-    public HephTurns(
-            MentorTurnStarter starter,
-            MentorTurnService turns,
-            MentorTurnRepository rows,
-            MentorRedaction redaction,
-            MentorTurnCompletion completion,
-            MentorTurnProgress progress,
-            MentorLedgerNotifications notifications,
-            ProxyCallsInFlight callsInFlight,
-            ConversationToolsPods toolsPods,
-            AttemptTokenIssuer issuer,
-            TurnRunsAdapter turnRuns,
-            Clock clock,
-            MeterRegistry meters) {
-        this(
-                starter,
-                turns,
-                rows,
-                redaction,
-                completion,
-                progress,
-                notifications,
-                callsInFlight,
-                toolsPods,
-                issuer,
-                turnRuns,
-                clock,
-                meters,
-                PULL_WAIT);
+    /** An erasure holds this fence exclusively while it changes the account and revokes the sandbox. */
+    public void beforeWrite(AgentSandboxes.LiveSandbox sandbox) {
+        if (!copyFence.tryHoldForCapture())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Conversation context is being erased");
+        if (sandbox.kind() != AgentSandboxKind.CONVERSATION
+                || !sandbox.subjectKey().startsWith("conversation:"))
+            throw new IllegalArgumentException("A turn belongs to a conversation sandbox");
+        UUID conversationId = UUID.fromString(sandbox.subjectKey().substring("conversation:".length()));
+        var account = conversations.findAccountIdByIdAndWorkspaceId(conversationId, sandbox.workspaceId());
+        // A suppressed or erased account can still end its run. The domain end omits its person data.
+        account.ifPresent(accountId -> {
+            var unused = writeFence.holdForAccountWrite(accountId);
+        });
     }
 
-    /** @param pullWait how long {@link #assign} waits for a turn; tests shorten it */
-    HephTurns(
-            MentorTurnStarter starter,
-            MentorTurnService turns,
-            MentorTurnRepository rows,
-            MentorRedaction redaction,
-            MentorTurnCompletion completion,
-            MentorTurnProgress progress,
-            MentorLedgerNotifications notifications,
-            ProxyCallsInFlight callsInFlight,
-            ConversationToolsPods toolsPods,
-            AttemptTokenIssuer issuer,
-            TurnRunsAdapter turnRuns,
-            Clock clock,
-            MeterRegistry meters,
-            Duration pullWait) {
-        this.starter = starter;
-        this.turns = turns;
-        this.rows = rows;
-        this.redaction = redaction;
-        this.completion = completion;
-        this.progress = progress;
-        this.callsInFlight = callsInFlight;
-        this.toolsPods = toolsPods;
-        this.issuer = issuer;
-        this.turnRuns = turnRuns;
-        this.clock = clock;
-        this.pullWait = pullWait;
-        this.claimFailures = Counter.builder(AgentMetrics.MENTOR_TURN_CLAIM_FAILURE)
-                .description("conversation turns this worker could not claim or start because of an error")
-                .register(meters);
-        notifications.subscribe(this);
-    }
-
-    @Override
-    public void start() {
-        active = true;
-    }
-
-    /** Stops handing out turns. The turns that run go on: their calls reach the other workers. */
-    @Override
-    public void stop() {
-        active = false;
-        changed();
-    }
-
-    private void changed() {
-        synchronized (turnChanges) {
-            changes++;
-            turnChanges.notifyAll();
-        }
-    }
-
-    @Override
-    public boolean isRunning() {
-        return active;
-    }
-
-    @Override
-    public int getPhase() {
-        return PHASE;
+    /** Checks the subject and current lease in the transaction that writes a tool's proposal. */
+    public <T> T write(SandboxRun run, boolean ending, Function<TurnAttempt, T> proposal) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            if (run.kind() != AgentRunKind.TURN || run.sandbox().kind() != AgentSandboxKind.CONVERSATION)
+                throw new StaleRunException(run.fence());
+            beforeWrite(run.sandbox());
+            if (!sandboxes.hold(run.sandbox())) throw new StaleRunException(run.fence());
+            if (turns.lockByRun(run.fence().workspaceId(), run.fence().runId()).isEmpty())
+                throw new StaleRunException(run.fence());
+            runs.requireCurrent(run.fence());
+            return proposal.apply(held(run, ending));
+        }));
     }
 
     /**
-     * The next turn attempt for a loop that has room for one. Waits up to {@link #PULL_WAIT} for one, woken by every
-     * change of a turn.
+     * The attempt that a sandbox's run drives, while the run's claim holds it: what its tools act for.
      *
-     * @return empty when no turn may start now
-     * @throws DrainingException when this worker stops
-     * @throws RuntimeException when the claim failed
-     */
-    public Optional<Assignment> assign() {
-        long until = System.nanoTime() + pullWait.toNanos();
-        while (true) {
-            if (!active) throw new DrainingException();
-            long seen;
-            synchronized (turnChanges) {
-                seen = changes;
-            }
-            Optional<MentorTurnStarter.StartedTurn> started;
-            try {
-                started = starter.startNext();
-            } catch (RuntimeException e) {
-                claimFailures.increment();
-                log.warn("Could not claim a conversation turn: {}", e.getClass().getSimpleName(), e);
-                // The pull fails, so the loop waits before it pulls again.
-                throw e;
-            }
-            if (started.isPresent()) {
-                Optional<Assignment> assigned = begin(started.get());
-                if (assigned.isPresent()) return assigned;
-                continue;
-            }
-            synchronized (turnChanges) {
-                while (changes == seen && active) {
-                    long left = until - System.nanoTime();
-                    if (left <= 0) return Optional.empty();
-                    try {
-                        turnChanges.wait(Math.max(1, left / 1_000_000));
-                    } catch (InterruptedException interrupted) {
-                        Thread.currentThread().interrupt();
-                        return Optional.empty();
-                    }
-                }
-            }
-        }
-    }
-
-    private Optional<Assignment> begin(MentorTurnStarter.StartedTurn started) {
-        MentorTurn turn = started.turn();
-        UUID runId = turn.getRunId();
-        try {
-            // A stop before the claim committed sent no notification that this pull heard.
-            if (turns.require(turn.getWorkspaceId(), turn.getId()).getStatus() == MentorTurn.Status.STOPPED) {
-                finish(
-                        turn.getWorkspaceId(),
-                        turn.getId(),
-                        turn.getAttempt(),
-                        runId,
-                        MentorTurn.Status.STOPPED,
-                        null,
-                        null);
-                return Optional.empty();
-            }
-            Instant deadline = clock.instant().plusSeconds(started.llm().timeoutSeconds());
-            turnRuns.limit(turn.getWorkspaceId(), turn.getId(), runId, turn.getAttempt(), deadline);
-            String token = issuer.issueForTurn(
-                    turn.getId(),
-                    turn.getWorkspaceId(),
-                    turn.getAttempt(),
-                    runId,
-                    deadline,
-                    deadline.plus(TurnRunsAdapter.GRACE).plus(TurnRunsAdapter.GRACE));
-            return Optional.of(new Assignment(turn.getId(), turn.getAttempt(), token, deadline));
-        } catch (RuntimeException e) {
-            claimFailures.increment();
-            log.warn(
-                    "Could not start conversation turn {}: {}",
-                    turn.getId(),
-                    e.getClass().getSimpleName(),
-                    e);
-            finishQuietly(
-                    turn.getWorkspaceId(),
-                    turn.getId(),
-                    turn.getAttempt(),
-                    runId,
-                    MentorTurn.Status.FAILED,
-                    MentorTurnCompletion.COULD_NOT_START,
-                    "starting it failed: " + e.getClass().getSimpleName());
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * The attempt of a turn credential, while it holds its live lease: what its tools act for.
-     *
-     * @param ending whether the call ends the attempt or renews it, which a stop still allows
-     * @throws MentorLeaseLostException when the attempt lost its lease or ended
+     * @param ending whether the call ends the attempt, which a stop or a passed work deadline still allows
+     * @throws StaleRunException when the claim no longer holds the run, or its turn ended
      * @throws StopException when the attempt must stop, for a call that does not end it
      */
-    public TurnAttempt held(AttemptJwt token, boolean ending) {
-        MentorTurnRepository.HeldAttempt held = read(token);
+    public TurnAttempt held(SandboxRun run, boolean ending) {
+        MentorTurnRepository.RunAttempt held = read(run);
         if (!ending) {
             if (stopped(held)) throw new StopException(Stop.DEVELOPER);
-            if (clock.instant().isAfter(token.workDeadline())) throw new StopException(Stop.DEADLINE);
+            Instant deadline = held.getDeadline();
+            if (deadline == null) throw new IllegalStateException("A started turn's run has a deadline");
+            // The run ends a grace after the work deadline, so its holder can still end what it wrote.
+            if (!clock.instant().isBefore(deadline.minus(TurnRunsAdapter.GRACE)))
+                throw new StopException(Stop.DEADLINE);
         }
-        return attempt(token, held);
-    }
-
-    private MentorTurnRepository.HeldAttempt read(AttemptJwt token) {
-        return rows.findHeldAttempt(token.workspaceId(), token.id(), token.epoch(), token.runId())
-                .orElseThrow(() -> new MentorLeaseLostException(token.id(), token.epoch()));
-    }
-
-    private static boolean stopped(MentorTurnRepository.HeldAttempt held) {
-        return MentorTurn.Status.STOPPED.name().equals(held.getStatus());
-    }
-
-    private static TurnAttempt attempt(AttemptJwt token, MentorTurnRepository.HeldAttempt held) {
+        AgentRunFence fence = run.fence();
         return new TurnAttempt(
-                token.id(),
-                token.workspaceId(),
+                held.getId(),
+                fence.workspaceId(),
                 held.getAccountId(),
                 held.getConversationId(),
-                token.epoch(),
-                token.runId());
+                fence.epoch(),
+                fence.runId());
     }
 
-    /**
-     * Renews the attempt's claim of its turn's run, until the run's deadline: {@link TurnRunsAdapter#GRACE} after a stop
-     * or after the work deadline. Then the run reaper ends the turn, if the loop did not.
-     *
-     * @throws MentorLeaseLostException when the attempt lost its run, ended, or passed its run's deadline
-     * @throws StopException when the attempt must stop; its claim is renewed, so that its loop can end it
-     */
-    public void lease(AttemptJwt token) {
-        MentorTurnRepository.HeldAttempt held = read(token);
-        TurnAttempt turn = attempt(token, held);
-        Instant startedAt = held.getStartedAt();
-        // Every worker ends such an attempt when it hears of the erasure; this is the end if none of them could.
-        if (startedAt != null && redaction.personErasedSince(startedAt)) {
-            callsInFlight.seal(turn.turnId(), turn.attempt(), true);
-            finish(turn, MentorTurn.Status.FAILED, COULD_NOT_FINISH, "context_changed");
-            throw new MentorLeaseLostException(token.id(), token.epoch());
-        }
-        if (!turnRuns.renew(turn.workspaceId(), turn.runId(), turn.attempt()))
-            throw new MentorLeaseLostException(token.id(), token.epoch());
-        if (stopped(held)) throw new StopException(Stop.DEVELOPER);
-        if (clock.instant().isAfter(token.workDeadline())) throw new StopException(Stop.DEADLINE);
+    /** When the run's attempt must have done its work: its run's deadline, less the grace to end what it wrote. */
+    public Instant workDeadline(SandboxRun run) {
+        Instant deadline = read(run).getDeadline();
+        if (deadline == null) throw new IllegalStateException("A started turn's run has a deadline");
+        return deadline.minus(TurnRunsAdapter.GRACE);
     }
 
-    /** The partial answer of the attempt that this process last heard, for its end: readers may have seen it. */
-    @Nullable
-    JsonNode lastPartial(TurnAttempt turn) {
-        return progress.snapshot(turn.workspaceId(), turn.turnId(), turn.attempt());
+    /** The run start and physical sandbox reuse, for the first-token metric. */
+    public AgentSandboxes.RunStart start(SandboxRun run) {
+        return sandboxes.start(run.sandbox(), run.fence()).orElseThrow(() -> new StaleRunException(run.fence()));
     }
 
-    /** The attempt ended: its tools Pod goes with every file in it. */
-    void ended(TurnAttempt turn) {
-        toolsPods.ended(turn.turnId(), turn.attempt());
+    private MentorTurnRepository.RunAttempt read(SandboxRun run) {
+        AgentRunFence fence = run.fence();
+        return rows.findRunAttempt(fence.workspaceId(), fence.runId(), fence.epoch())
+                .orElseThrow(() -> new StaleRunException(fence));
     }
 
-    @Override
-    public void turnChanged(MentorLedgerEvents.TurnChanged change) {
-        // A stop, a requeue after a lost lease, and an end: the attempt's model calls through this worker end now, and
-        // its next call learns why.
-        if (change.status() != MentorTurn.Status.RUNNING && change.attempt() > 0) {
-            callsInFlight.seal(change.turnId(), change.attempt(), true);
-        }
-        // A new question, or an ended turn that unblocks the next one of its conversation. A running turn's update,
-        // such as each partial answer, frees no room.
-        if (change.status() != MentorTurn.Status.RUNNING) {
-            changed();
-        }
-    }
-
-    /** The ledger's listener thread delivers every notification; an end can wait on the model calls it settles. */
-    @Override
-    public void contextChanged(MentorLedgerEvents.ContextChanged change) {
-        Thread.ofVirtual().name("heph-turn-erasure").start(() -> endErased(change.workspaceId()));
-    }
-
-    @Override
-    public void resync() {
-        changed();
-        Thread.ofVirtual().name("heph-turn-erasure").start(() -> endErased(null));
-    }
-
-    /**
-     * Ends each leased attempt that runs on words a person took back since it started. Every worker hears the change;
-     * the end is fenced on the lease, so one of them ends each attempt.
-     */
-    private void endErased(@Nullable Long workspaceId) {
-        List<MentorTurnRepository.LeasedAttempt> leased;
-        try {
-            leased = rows.findLeasedAttempts(workspaceId);
-        } catch (RuntimeException e) {
-            log.warn(
-                    "Could not read the leased conversation turns: {}",
-                    e.getClass().getSimpleName());
-            return;
-        }
-        for (MentorTurnRepository.LeasedAttempt attempt : leased) {
-            Instant startedAt = attempt.getStartedAt();
-            if (startedAt == null || !redaction.personErasedSince(startedAt)) continue;
-            callsInFlight.seal(attempt.getId(), attempt.getAttempt(), true);
-            finishQuietly(
-                    attempt.getWorkspaceId(),
-                    attempt.getId(),
-                    attempt.getAttempt(),
-                    attempt.getRunId(),
-                    MentorTurn.Status.FAILED,
-                    COULD_NOT_FINISH,
-                    "context_changed");
-        }
-    }
-
-    private void finish(TurnAttempt turn, MentorTurn.Status outcome, @Nullable String error, @Nullable String cause) {
-        finish(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId(), outcome, error, cause);
-    }
-
-    /**
-     * Ends an attempt that its loop will not end, by the same path as the loop's own end: the attempt's model calls are
-     * cancelled, later ones refused, and the usage each call received is recorded before the turn is billed.
-     *
-     * @param cause why a failed turn failed, for the operator
-     */
-    private void finish(
-            long workspaceId,
-            UUID turnId,
-            int attempt,
-            UUID runId,
-            MentorTurn.Status outcome,
-            @Nullable String error,
-            @Nullable String cause) {
-        if (!callsInFlight.settle(turnId, attempt, true)) {
-            log.warn(
-                    "conversation turn {} attempt {} ended with a model call still in flight; that call may go unbilled",
-                    turnId,
-                    attempt);
-        }
-        try {
-            completion.end(
-                    workspaceId,
-                    turnId,
-                    attempt,
-                    runId,
-                    new MentorTurnCompletion.Ending(
-                            outcome,
-                            List.of(),
-                            error,
-                            cause,
-                            callsInFlight.lastFailed(turnId, attempt),
-                            progress.snapshot(workspaceId, turnId, attempt)));
-        } catch (MentorLeaseLostException alreadyEnded) {
-            log.debug("conversation turn {} ended before this worker ended it", turnId);
-        } finally {
-            callsInFlight.forgetFailed(turnId, attempt);
-            toolsPods.ended(turnId, attempt);
-        }
-    }
-
-    private void finishQuietly(
-            long workspaceId,
-            UUID turnId,
-            int attempt,
-            UUID runId,
-            MentorTurn.Status outcome,
-            @Nullable String error,
-            @Nullable String cause) {
-        try {
-            finish(workspaceId, turnId, attempt, runId, outcome, error, cause);
-        } catch (RuntimeException e) {
-            log.warn(
-                    "Could not end conversation turn {}; the run reaper ends it: {}",
-                    turnId,
-                    e.getClass().getSimpleName());
-        }
+    private static boolean stopped(MentorTurnRepository.RunAttempt held) {
+        return MentorTurn.Status.STOPPED.name().equals(held.getStatus());
     }
 }

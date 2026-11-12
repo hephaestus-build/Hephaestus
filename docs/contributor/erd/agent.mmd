@@ -47,17 +47,6 @@ erDiagram
         BYTEA public_key "NOT NULL"
     }
 
-    ConversationToolsPod {
-        VARCHAR(63) name PK
-        VARCHAR(45) address
-        INTEGER attempt UK
-        TIMESTAMPTZ created_at "NOT NULL"
-        UUID nonce "NOT NULL"
-        BOOLEAN revoked "NOT NULL"
-        UUID turn_id UK
-        BIGINT workspace_id
-    }
-
     FxRate {
         BIGINT id PK
         DATE rate_date UK "NOT NULL"

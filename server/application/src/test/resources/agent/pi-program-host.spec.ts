@@ -242,19 +242,6 @@ void test("a partial run retains diagnostics and staged results without sealing 
 	});
 });
 
-void test("a tools side that stops ends the review as a failure to capture, and names the side", async () => {
-	const lost = await run(
-		[{ slug: "a-hangs" }],
-		{ "a-hangs": "hang" },
-		{ PI_HARNESS_LOSE_TOOLS: "1" },
-	);
-	assert.match(lost.stderr, /review\.side_lost side=(?:tools|programs) error=ToolProtocolError/u);
-	assert.equal(lost.status, 79, lost.stderr);
-	assert.partialDeepStrictEqual(readJsonFile(lost.cwd, "out/review-state.json"), {
-		nonResults: [{ practiceSlug: "a-hangs", reason: "EXECUTION_INCOMPLETE" }],
-	});
-});
-
 void test("a practice that the run's safety line stops before it starts is reported not reached", async () => {
 	// Leave the program return buffer outside the safety deadline so the first review can finish.
 	const stopped = await run(

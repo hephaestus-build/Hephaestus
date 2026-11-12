@@ -23,7 +23,7 @@ Hephaestus supports the chart on a cluster with these items:
   Upgrade a cluster at an older minor, for example 1.30 or 1.33, before Hephaestus runs on it.
   [ADR 0060](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0060-the-kubernetes-floor-follows-upstream-support.md) gives the reason.
 - A network plugin that enforces NetworkPolicy for egress and for ingress, also on traffic to a Service address.
-  The server's isolation probe stops the server on a plugin that does not ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)).
+  Run the platform isolation gate before enabling work ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)).
 - A Gateway API controller for `HTTPRoute` `v1` with the two features in [Gateway routes](#gateway-routes).
 - A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL and NATS.
 - With the server enabled, the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller with its extensions, at the version that the release pins ([Sandbox templates](./sandboxes#sandbox-templates)).
@@ -36,7 +36,7 @@ A nightly run repeats them on `main`, and it also runs 1.35 on `arm64`.
 
 One more run uses Kubernetes 1.35, three nodes, Calico for network policy, and an external PostgreSQL.
 The merge queue and the nightly run include it.
-Each run starts two servers with the `dev.yaml` profile, and each server passes its isolation probe on that cluster.
+Each run starts two servers with the `dev.yaml` profile and runs the platform isolation gate on that cluster.
 In the merge queue, the 1.35 run on `amd64` uses `small.yaml` instead, with one server, on a runner of 16 GiB.
 
 Each upgrade must keep the PostgreSQL and NATS Pods: only a change to their own image or settings restarts them.
@@ -99,79 +99,76 @@ If a change of profile changes a volume size, read [Change a volume size](./upgr
 | `small.yaml` | One small cluster, for example one k3s node | Bundled, bounded streams |
 | `cluster.yaml` | A managed cluster of several nodes, without cluster-admin: [Install on a managed cluster without cluster-admin](./managed-cluster) | Bundled, or external |
 
-`small.yaml` supports a node of 4 vCPU, at least 16 GiB of memory, and 150 GiB of disk.
-A node of 32 GiB gives more headroom.
-Its one server runs five reviews at a time. Its one conversation loop runs up to 27 resident conversation turns, and 25 with backups on.
+`small.yaml` supports a node of 4 vCPU, at least 16GiB of memory, and 150GiB of disk.
+It runs one server with bundled PostgreSQL and NATS. Its sandbox quotas follow the template requests, RuntimeClass overhead, review memory budget and admitted conversation turns.
+Check the complete request totals against the node's allocatable resources before installation.
+[Sizing and scaling](./sizing) owns the resource planning rules and the limits of the available measurements.
 
 The server uses `Recreate` in the `small` profile.
-The old server drains before its replacement starts, so reviews and conversations pause during each upgrade.
+The old server drains before its replacement starts. Its gateway stays available during that drain.
+[Upgrade](./upgrade) gives the procedure, including the stopped cutover to 1.0.
 Measure the deployment outage against the 99.5% availability budget.
 
-`conversationLoop.turns: auto` uses the CPU declaration in the chart's `turn-admission.json`.
-It subtracts these requests from 3500m of allocatable CPU:
+`sandbox.conversationTurns: auto` uses the declared CPU and memory budget.
+[Sandbox capacity budget](#sandbox-capacity-budget) owns the inputs, formula and validation rules.
 
-- The resident roles, and the backup when backups are on.
-- The conversation loop, with one more replica for its rollout.
-- The ten tools Pods.
-- The review-tier reservation and the template isolation gate's two conversation sandboxes.
+Each admitted turn has room for one conversation template Pod.
+Tools run in that Pod. There is no separate tools pool or loop Deployment.
+Model calls still need their own provider grants.
+[Sandbox sizes](./sandboxes#sandbox-sizes) owns the template resource contract.
 
-Each resident turn budgets 50m, with a ceiling of 32 for the installation. An explicit turn count remains the operator's override.
-The declaration also supplies the fit test, which checks it against the kubelet reservation policy.
-
-The conversation quota has ten tools-Pod slots for the installation, including a warm pool of up to two.
-A turn needs a tools Pod only when it calls a tool.
-When the quota is full, the tool call waits for room.
-The metric `mentor_turn_tools_wait_seconds` records that wait from quota refusal through tools readiness, including Pod start.
-Its `outcome` is `ready` or `abandoned`. Model calls still wait for their own provider grants.
-
-The table counts schedulable Pod requests. The resident-turn CPU planning cost is checked separately in steady state.
-
-The server requests its full memory limit of 3 GiB, because the buildpack sizes its heap from that limit.
-PostgreSQL and its backup containers also request their full memory limits.
-CPU remains burstable, so these Pods keep the Burstable quality-of-service class.
-NATS also requests its full memory limit. The chart sets its `GOMEMLIMIT` to 80 % of that limit ([NATS memory](#nats-memory)).
-
-The `small` profile bounds the server's Git cache at 20 GiB and its ephemeral-storage limit at 22 GiB.
-Include those limits and the sandbox disk requests in the node's disk budget ([Sandbox sizes](./sandboxes#sandbox-sizes)).
-Use `small.yaml` on a node of 16 GiB too.
-Its server uses `Recreate`, so the old server stops before its replacement starts.
-The server runs five reviews at a time, and the conversation loop the same resident turns as on a larger node.
-
-A second server does not fit in 16 GiB beside the first.
-Thus, the upgrade stops reviews and conversation turns for the drain, the new server's start and its isolation probe.
-
-A chart test adds up what one node of 16 GiB holds, with backups on:
-
-| State | Memory | CPU requests |
-| --- | --- | --- |
-| Steady: every role, the conversation loop, one backup, five reviews, eight active tools Pods and two pooled tools Pods | 12.4 GiB of 13.9 GiB | 2.15 of 3.5 |
-| The same, with the isolation probe | 13.0 GiB | — |
-| An upgrade. The old server is gone. The webapp and conversation loop surge, with the migration and stanza Jobs, the new server's probe, and the pooled tools Pods | 10.6 GiB of 13.9 GiB | 2.10 of 3.5 |
-
-The table counts requests.
-Its node budget uses the recorded Node capacity of 16 372 036 KiB, less the current platform reservations and hard eviction floor.
-It does not qualify the peak memory of running work.
-Sandbox Pods may use more than they request, up to their limits.
-If every sandbox Pod used its limit at the same time, the node would be full.
-
-The single-node `small` profile sets `conversationLoop.turns: auto` and `conversationLoop.replicas: 1`.
-With its default values, the chart derives 27 resident conversation turns for the installation, and 25 with backups on.
-
-An earlier staging capture recorded these values on one node of 16 GiB with k3s 1.37.
-Its request figures precede the PostgreSQL memory-request change:
-
-- At rest, the release requests 10.3 GiB of 15.6 GiB.
-  It uses about 5.9 GiB on the host.
-  The server uses 2.0 GiB and the server 1.3 GiB.
-  The webhook role, a separate Pod then, used 0.8 GiB. PostgreSQL used 0.7 GiB and NATS 60 MiB.
-- An upgrade that recreated the server and restarted PostgreSQL stopped reviews for about 4 minutes, with the isolation probe. The webhook role kept receiving.
-- A point-in-time restore of a database of 1.8 GB took 152 s. The release served again 5 minutes 41 seconds after the restore started.
-- The peak during a review and a conversation turn is not measured yet.
+The chart's fit tests count schedulable requests, including rollout and backup resources.
+Those totals do not qualify workload memory or CPU peaks.
+The current review and conversation template requests have no workload peak measurement yet.
+Idle Pi SDK measurements do not qualify those requests.
+Qualification must measure each sandbox during reviews and conversation turns before changing the requests.
 
 For a cluster with several nodes, start from `cluster.yaml`, and set the servers, their reviews, their quota and the external services in your own values file.
 
 [ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md) owns what a preview can run.
 The preview profile sets only capacity.
+
+### Sandbox capacity budget
+
+`sandbox.budget.cpu` and `sandbox.budget.memory` state the allocatable CPU and memory assigned to this release in its sandbox node pool.
+Use the capacity left after the kubelet reservations and eviction floor, and after workloads outside this release.
+These are aggregate limits. They do not prove that each Pod fits an eligible node or that node selectors permit its placement.
+Allow for the image-hold DaemonSet on each additional sandbox node when assigning the aggregate budget.
+
+When `sandbox.conversationTurns` is `auto`, both budget values are required.
+The chart fails with a message that points to this section if either value is absent.
+With an explicit turn count, the budget is optional. When supplied, it checks that count against both operating phases.
+A count above the budget fails validation. The chart does not silently overcommit.
+
+The `small` profile declares 3500m CPU and 14196Mi memory.
+The memory is the recorded 16GiB node's allocatable capacity, rounded down after its kubelet reservations and eviction floor.
+The managed-cluster profile has no default budget. Its operator must supply the aggregate fact before selecting `auto`.
+
+For CPU and memory separately, the chart computes:
+
+```text
+steady slots  = floor((budget - resident requests - one backup - review requests) / conversation Pod request)
+upgrade slots = floor((budget - resident requests - rollout surge - migration/stanza Jobs - one backup) / conversation Pod request)
+auto turns    = min(steady CPU slots, steady memory slots, upgrade CPU slots, upgrade memory slots)
+```
+
+Resident requests include the server, webapp, bundled PostgreSQL and its backup sidecar, bundled NATS, and enabled controllers or monitoring workloads.
+The chart reads the rendered workload requests, including the largest init container.
+
+One image-hold Pod is included. The operator reserves the other nodes' image-hold Pods in the assigned budget.
+The review count follows `sandbox.reviewMemory` divided by the review template's memory request and RuntimeClass overhead.
+Each admitted conversation needs one conversation template Pod, including its RuntimeClass overhead.
+Requests round up to millicores and MiB. Budget values round down to those units.
+
+The upgrade model requires reviews to finish before its transient peak. Conversation sandboxes can remain warm.
+[Upgrade](./upgrade#sandbox-capacity-during-upgrade) gives that operating requirement.
+The chart counts one concurrent backup and the migration and stanza Jobs beside rolling replacement Pods.
+It reads the workload templates directly, so adding a sidecar or changing a request also changes admission.
+The old loop's 50m estimate, fixed turn ceiling and JSON budget table no longer size sandbox turns.
+
+With the current templates, `small` admits fourteen turns without backups and eleven with backups, while retaining five review slots.
+These are request totals. Review and conversation workload peaks have not been measured.
+Qualification must measure their memory and CPU before proposing smaller requests.
 
 ### NATS memory
 
@@ -319,9 +316,7 @@ The chart then opens only these paths:
 | `server` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
 | `server`, if `networkPolicy.workerGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.workerGatewayPorts` |
 | `server`, for each item of `networkPolicy.modelEndpoints` | Its `cidr` | Its `ports` |
-| Review sandboxes | `server` | 8081, the sandbox gateway |
-| `conversation-loop` | `server` | 8081, the sandbox gateway |
-| `conversation-loop` | Tools Pods | 7100, the tools port |
+| Review and conversation sandboxes | `server` | 8081, the sandbox gateway |
 | PostgreSQL and the backup Jobs, with backups on | `postgresql.backup.s3`, or `networkPolicy.externalEgress` | `postgresql.backup.s3.port` |
 | The backup Jobs, with backups on | PostgreSQL | 8432, the pgBackRest TLS server |
 | All pods | `networkPolicy.dns` pods | 53 |
@@ -329,7 +324,6 @@ The chart then opens only these paths:
 | `server`, if `config.tracing.otlpEnabled` and `networkPolicy.traceCollector` are set | `networkPolicy.traceCollector` pods | The port of `config.tracing.otlpEndpoint` |
 
 Sandboxes are in the sandbox namespace, where every pod also starts with no ingress and no egress.
-A tools Pod admits only the ingress from the conversation loop, and gets no egress.
 
 A model endpoint that this cluster's own Gateway serves resolves to a public address, but the connection ends at a Gateway Pod.
 That private address is outside `networkPolicy.externalEgress`, so the server cannot reach the endpoint.
@@ -510,37 +504,16 @@ No other role can run it.
 If a key is missing from the Secret, `helm upgrade` stops and names it.
 It also stops if the Secret holds `DATABASE_USERNAME` or `DATABASE_PASSWORD`, the single login before 1.0.
 
-## Conversation loop
+## Conversation capacity
 
-The chart runs the conversation loop as the Deployment `<release>-conversation-loop` in the release namespace.
-It runs every conversation turn of the installation.
-The chart renders it only with `sandbox.enabled=true`, and only when `conversationLoop.turns` resolves to more than 0.
-[Runtime roles § The conversation loop](./runtime-roles#the-conversation-loop) tells how it gets its turns.
+`sandbox.conversationTurns` is the installation's turn capacity. `0` stops new turns.
+The chart passes the resolved count to `hephaestus.agent.capacity.turns` on each server.
+[Sandbox capacity budget](#sandbox-capacity-budget) defines automatic admission and checks explicit counts.
+No conversation-loop Deployment or loop credential remains.
 
-| Value | Default | Effect |
-| --- | --- | --- |
-| `conversationLoop.replicas` | `2`, and `1` in the single-node profile | The loop replicas. Each replica can run all the turns of the installation. |
-| `conversationLoop.turns` | `8`, and `auto` in the single-node profile | The conversation turns that the whole installation runs at once ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). `0` turns conversations off. |
-| `conversationLoop.resources` | Requests: 100m, 512 MiB and 256 MiB of disk. Limits: 2 CPU, 1 GiB and 512 MiB of disk. | The resources of the loop's container. |
-
-The chart gives the loop Pod these settings:
-
-- The loop program of the release's agent image, under Node's permission model.
-- The PriorityClass of the roles.
-- No service account token, the Restricted security settings and a read-only root file system.
-- One `emptyDir` of 256 MiB at `/tmp/heph-loop`.
-- The Secret key `HEPHAESTUS_CONVERSATION_LOOP_SECRET`. Only the server and the loop read it.
-- A rolling update with one surge replica and none unavailable, and a grace period of 960 seconds.
-- Preferred anti-affinity across nodes. On one node, the replicas share the node.
-- A PodDisruptionBudget, as for the server: above one replica, at most one is unavailable.
-
-The policy `<release>-conversation-loop` gives the loop no ingress.
-It permits egress only to the gateway port of the server Pods and to TCP port 7100 of tools Pods in the sandbox namespace.
-
-When a loop Pod fails, its turns stop renewing their leases.
-Each turn starts again as a retry about 95 seconds after its last renewal, when a loop pulls it.
-With one replica, as in the single-node profile, the restarted Pod pulls the retries.
-The developer sees the answer start again.
+Each conversation uses one sandbox, with one run at a time.
+Its tools execute in that sandbox's container.
+The conversation template owns its resources. the quota counts those requests and the RuntimeClass overhead.
 
 ## Known limits
 
@@ -556,6 +529,6 @@ The developer sees the answer start again.
 ## What CI does not show
 
 A successful install in CI does not show that your cluster isolates sandboxes.
-The server's isolation probe checks that on your cluster, at each start and on its schedule.
+Run the platform isolation gate on your cluster before enabling sandbox work.
 CI does not qualify your Gateway controller.
 Check its two `HTTPRoute` features, its body limit and its idle timeout yourself, and rehearse a [restore](./backup-restore#restore) on your own cluster.

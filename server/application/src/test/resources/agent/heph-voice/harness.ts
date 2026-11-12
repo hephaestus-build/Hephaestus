@@ -3,25 +3,103 @@
 // docs/contributor/testing.mdx § Hephaestus voice eval says how to run it and why `vp run test:agents` does not.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import nodePath from "node:path";
+import { mock } from "node:test";
+
+import * as sdk from "@earendil-works/pi-coding-agent";
 
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 import {
 	isRecord,
 	type LinkToolName,
-	type SandboxExecAnswer,
-	type SandboxExecRequest,
 	type SandboxLoadAnswer,
-	type SandboxReadAnswer,
-	type SandboxReadRequest,
 	type TurnContext,
 } from "../../../../main/resources/agent/heph-host-protocol.ts";
-import {
-	type LinkAnswer,
-	type ModelFactory,
-	proxyModels,
-} from "../../../../main/resources/agent/heph-host.ts";
-import { AGENT_DIR, contextOf, fakeWorker, ran, runTurn } from "../heph-host-worker.ts";
+import type { LinkAnswer, ModelFactory } from "../../../../main/resources/agent/turn.ts";
+
+export interface SandboxExecRequest {
+	command: string;
+}
+export type SandboxExecAnswer =
+	| {
+			ok: true;
+			exitCode: number | null;
+			output: string;
+			truncated: boolean;
+			timedOut: boolean;
+			fullOutputPath: string | null;
+	  }
+	| { ok: false; error: string; detail: string };
+
+export function ran(
+	output: string,
+	exitCode: number | null = 0,
+): Extract<SandboxExecAnswer, { ok: true }> {
+	return { ok: true, exitCode, output, truncated: false, timedOut: false, fullOutputPath: null };
+}
+
+interface FixtureTools {
+	folder: Folder;
+	answer?: (command: string) => SandboxExecAnswer | undefined;
+}
+const fixtureTools = new Map<string, FixtureTools>();
+
+/** A live model can select text in the fixture; it cannot run a command or read another host file. */
+mock.module("@earendil-works/pi-coding-agent", {
+	exports: {
+		...sdk,
+		createReadToolDefinition: (
+			cwd: string,
+			options: Parameters<typeof sdk.createReadToolDefinition>[1],
+		) => {
+			const file = (absolute: string) => {
+				const fixture = fixtureTools.get(cwd);
+				assert.ok(fixture, "the eval owns this context folder");
+				const text = staged(fixture.folder, nodePath.relative(cwd, absolute));
+				if (text === undefined) {
+					throw Object.assign(new Error("The requested file is absent from this eval fixture."), {
+						code: "ENOENT",
+					});
+				}
+				return Buffer.from(text);
+			};
+			return sdk.createReadToolDefinition(cwd, {
+				...options,
+				operations: {
+					readFile: async (absolute) => file(absolute),
+					access: async (absolute) => {
+						file(absolute);
+					},
+					detectImageMimeType: async () => null,
+				},
+			});
+		},
+		createBashToolDefinition: (
+			cwd: string,
+			options: Parameters<typeof sdk.createBashToolDefinition>[1],
+		) =>
+			sdk.createBashToolDefinition(cwd, {
+				...options,
+				operations: {
+					exec: async (command, _cwd, { onData }) => {
+						const fixture = fixtureTools.get(cwd);
+						assert.ok(fixture, "the eval owns this context folder");
+						const answer =
+							fixture.answer?.(command.trim()) ?? commandAnswer(fixture.folder, { command });
+						if (!answer.ok) {
+							throw new Error(answer.detail);
+						}
+						onData(Buffer.from(answer.output));
+						return { exitCode: answer.exitCode };
+					},
+				},
+			}),
+	},
+});
+const { proxyModels } = await import("../../../../main/resources/agent/turn.ts");
+const { AGENT_DIR, contextOf, fakeWorker, startTurn, toolRuns, archiveOf, tarOf } =
+	await import("../turn-worker.ts");
 
 const { env } = process;
 const baseUrl = env.HEPHAESTUS_LIVE_LLM_BASE_URL ?? "";
@@ -257,15 +335,6 @@ function staged(folder: Folder, path: string): string | undefined {
 	return folder[path.replace(/^(?:\/workspace\/|\.\/)/u, "")];
 }
 
-function reader(folder: Folder) {
-	return async (request: SandboxReadRequest): Promise<SandboxReadAnswer> => {
-		const text = staged(folder, request.path);
-		return text === undefined
-			? { ok: false, error: "NOT_FOUND", detail: `${request.path} is not in the context folder.` }
-			: { ok: true, text };
-	};
-}
-
 /** A `sed` address with its escaped slashes read as slashes. */
 function address(pattern: string): string {
 	return pattern.replaceAll(String.raw`\/`, "/");
@@ -275,11 +344,6 @@ function address(pattern: string): string {
  * The commands that INDEX.md and FIELDS.md suggest, answered from the staged files: `cat` of one file and FIELDS.md's
  * `sed -n '/^## <heading>/,/^## <next>/p'` range. The eval never runs a model's command on this machine.
  */
-function executor(folder: Folder) {
-	return async (request: SandboxExecRequest): Promise<SandboxExecAnswer> =>
-		commandAnswer(folder, request);
-}
-
 function commandAnswer(folder: Folder, request: SandboxExecRequest): SandboxExecAnswer {
 	const command = request.command.trim();
 	const cat = /^cat\s+(?<path>\S+)$/u.exec(command)?.groups?.path;
@@ -389,43 +453,49 @@ export async function ask(
 		appended?: (stored: readonly SessionEntry[]) => void;
 	},
 ): Promise<Reply & { looked: string[]; linked: [LinkToolName, string][] }> {
-	const worker = fakeWorker(
-		{ ...context, systemPrompt: systemPrompt() },
-		reader(folder),
-		undefined,
-		link,
-	);
+	const worker = fakeWorker({ ...context, systemPrompt: systemPrompt() }, folder, undefined, link);
 	const api = worker.api();
-	const exec = executor(folder);
-	const end = await runTurn(
-		{
-			...worker,
-			api: () => ({
-				...api,
-				exec: async (request) => {
-					worker.execs.push(request);
-					return repository?.answer(request.command.trim()) ?? exec(request);
+	const running = startTurn(
+		repository === undefined
+			? api
+			: {
+					...api,
+					folder: {
+						...api.folder,
+						load: async () =>
+							repository.loaded.ok
+								? {
+										...repository.loaded,
+										summary: [],
+										archive: archiveOf(tarOf({})),
+										cancel: async () => undefined,
+									}
+								: repository.loaded,
+					},
 				},
-				...(repository === undefined
-					? {}
-					: {
-							load: async (request) => {
-								worker.loads.push(request);
-								return repository.loaded;
-							},
-						}),
-			}),
-		},
 		models,
 		250,
 	);
+	fixtureTools.set(running.folder, { folder, answer: repository?.answer });
+	let end;
+	try {
+		end = await worker.waitForEnd();
+		await running.done;
+	} finally {
+		fixtureTools.delete(running.folder);
+	}
 	assert.equal(end.outcome, "DONE", `the turn ended ${end.outcome}: ${end.detail ?? ""}`);
 	repository?.appended?.(worker.appended);
 	const reply = replyOf(worker.appended);
-	const looked = [
-		...worker.reads.map((request) => request.path),
-		...worker.execs.map((request) => request.command),
-	];
+	const looked = toolRuns(worker.appended).flatMap((tool) => {
+		let value: unknown;
+		if (tool.name === "read") {
+			value = tool.arguments.path;
+		} else if (tool.name === "bash") {
+			value = tool.arguments.command;
+		}
+		return typeof value === "string" ? [value] : [];
+	});
 	const fieldsRead = looked.some((entry) => entry.includes("FIELDS.md"));
 	console.log(
 		`eval ${name} outputTokens=${reply.outputTokens} words=${reply.words} fieldsRead=${fieldsRead}`,

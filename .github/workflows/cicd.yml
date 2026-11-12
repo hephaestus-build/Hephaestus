@@ -576,8 +576,6 @@ jobs:
               - 'scripts/prepare-kubernetes-runner.ts'
               - 'scripts/lib/runner-disk.ts'
               - 'server/application/build.gradle.kts'
-              - 'server/application/src/test/java/**/kubernetes/KubernetesSandboxLiveTest.java'
-              - 'server/application/src/test/java/**/kubernetes/KubernetesLiveSuite.java'
               - 'server/application/src/test/java/**/gateway/LiveSandboxGateway.java'
               - 'server/application/src/test/java/**/sandbox/TurnSandboxFixtures.java'
               - 'scripts/resolve-release-images.ts'
@@ -1175,7 +1173,6 @@ jobs:
       # those legs on a PR too. Only the nightly run adds arm64.
       queue: ${{ needs.detect-changes.outputs.queue-tier == 'true' }}
       eviction-drill: ${{ github.event_name == 'workflow_dispatch' && inputs.eviction-drill }}
-      application-artifact: ${{ github.event_name != 'merge_group' && format('server-build-{0}', github.run_id) || '' }}
       backup-drill: ${{ needs.detect-changes.outputs.kubernetes-recovery == 'true' }}
 
   Database-upgrade:

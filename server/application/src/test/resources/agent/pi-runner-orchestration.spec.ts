@@ -36,7 +36,6 @@ import { GOLDEN_INPUTS, PRACTICES_DIR } from "./golden-review-workspace.ts";
 
 // Each child process mocks the SDK and drives one isolated review through runReviewJob.
 
-import { startHarnessSides } from "./harness-tool-side.ts";
 import { mockChange, mockPiCodingAgent, practiceIndexOf } from "./program-host-runner.ts";
 
 const LIB = nodePath.resolve(
@@ -1987,7 +1986,8 @@ if (scenario !== undefined && scenario !== "") {
 			}
 		},
 	);
-	await startHarnessSides(cwd);
+	const { deriveChangeView } = await import("../../../main/resources/agent/pi-change-view.ts");
+	deriveChangeView(cwd);
 	const { runReviewJob } = await import("../../../main/resources/agent/pi-runner.ts");
 	await runReviewJob();
 } else {

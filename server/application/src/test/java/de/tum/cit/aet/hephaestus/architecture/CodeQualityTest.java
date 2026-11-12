@@ -461,7 +461,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // optional-bean break as the GitLab provider
                     "SecurityConfig", // InstalledClientRegistry is server-role only; the CORS configuration
                     // it contributes origins to is built on every runtime role
-                    "TurnContextFolder", // Context loaders are optional beans of each integration; a server
+                    "TurnContextLoads", // Context loaders are optional beans of each integration; a server
                     // without one, or with Git mirrors off, still serves the folder's documents
                     "InstanceLlmSettingsService", // LlmSettingsAudit's sole impl is @ConditionalOnServerRole, but this
                     // service is also consumed by the ungated Workspace{Llm}Service pair

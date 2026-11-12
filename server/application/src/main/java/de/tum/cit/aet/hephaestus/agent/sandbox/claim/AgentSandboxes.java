@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -191,6 +192,25 @@ public class AgentSandboxes {
                 .map(AgentSandboxes::live);
     }
 
+    /** The run's first start, and whether its current physical sandbox served a claim before this one. */
+    public record RunStart(Instant startedAt, boolean cold) {}
+
+    public Optional<RunStart> start(LiveSandbox sandbox, AgentRunFence run) {
+        if (sandbox.workspaceId() != run.workspaceId()) return Optional.empty();
+        return sandboxes
+                .findRunStart(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey(), run.runId(), run.epoch())
+                .map(start -> new RunStart(start.getStartedAt(), start.getCold()));
+    }
+
+    /** Holds a live sandbox until the current transaction commits. */
+    public boolean hold(LiveSandbox sandbox) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("Holding a sandbox requires a transaction");
+        return sandboxes
+                .lockLive(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey())
+                .isPresent();
+    }
+
     /**
      * Leases the subject's next run of these kinds to its sandbox, while the sandbox is live: one transaction holds the
      * sandbox, so the reaper cannot take it back between the check and the claim. {@code claimed} moves the run's
@@ -199,8 +219,15 @@ public class AgentSandboxes {
      */
     public Optional<AgentRunLease> lease(
             LiveSandbox sandbox, Set<AgentRunKind> kinds, Predicate<AgentRunLease> claimed) {
+        return lease(sandbox, kinds, () -> {}, claimed);
+    }
+
+    /** The domain fence precedes the sandbox, run and domain row locks. */
+    public Optional<AgentRunLease> lease(
+            LiveSandbox sandbox, Set<AgentRunKind> kinds, Runnable beforeWrite, Predicate<AgentRunLease> claimed) {
         if (kinds.isEmpty()) return Optional.empty();
         return Objects.requireNonNull(transactions.execute(status -> {
+            beforeWrite.run();
             if (sandboxes
                     .lockLive(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey())
                     .isEmpty()) return Optional.<AgentRunLease>empty();

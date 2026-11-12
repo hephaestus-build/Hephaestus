@@ -4,12 +4,12 @@ import test from "node:test";
 
 import {
 	isRecord,
-	type SandboxExecAnswer,
 	type SandboxLoadAnswer,
 } from "../../../../main/resources/agent/heph-host-protocol.ts";
-import { ran } from "../heph-host-worker.ts";
 import {
 	ask,
+	ran,
+	type SandboxExecAnswer,
 	assertNoInternalTerm,
 	FIELDS,
 	type Folder,

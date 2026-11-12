@@ -1089,29 +1089,6 @@ tests:
         alertname: HephaestusAgentQueueStalled
         exp_alerts: []
 
-  - name: a failed isolation probe fires, a server whose probe passes does not
-    interval: 1m
-    input_series:
-      - series: 'sandbox_isolation_passed{job="hephaestus",instance="server-a:9090",runtime_role="server"}'
-        values: "1 1 0x8"
-      - series: 'sandbox_isolation_passed{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
-        values: "0 1x9"
-    alert_rule_test:
-      - eval_time: 5m
-        alertname: HephaestusSandboxIsolationFailed
-        exp_alerts: []
-      - eval_time: 8m
-        alertname: HephaestusSandboxIsolationFailed
-        exp_alerts:
-          - exp_labels:
-              severity: warning
-              job: hephaestus
-              instance: server-a:9090
-              runtime_role: server
-            exp_annotations:
-              summary: A server's sandbox isolation probe failed, so the server starts no sandbox
-              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-
   - name: an archive that keeps failing fires, a recovered or unread archive does not
     interval: 1m
     input_series:
@@ -2435,14 +2412,18 @@ tests:
               summary: Activity reads take longer than 1 second often enough to spend the monthly budget in five days
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  # One turn a minute, each with its first token after 10 s.
+  # One turn a minute across cold and warm sandboxes, each with its first token after 10 s.
   - name: slow first tokens of conversation turns burn the budget fast and slow
     interval: 1m
     input_series:
-      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="server-b:9090",runtime_role="server",le="10.0"}'
+      - series: 'agent_run_first_token_seconds_bucket{job="hephaestus",kind="turn",start="cold",instance="server-b:9090",runtime_role="server",le="10.0"}'
         values: "0x420"
-      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
-        values: "0+1x420"
+      - series: 'agent_run_first_token_seconds_count{job="hephaestus",kind="turn",start="cold",instance="server-b:9090",runtime_role="server"}'
+        values: "0+0.5x420"
+      - series: 'agent_run_first_token_seconds_bucket{job="hephaestus",kind="turn",start="warm",instance="server-b:9090",runtime_role="server",le="10.0"}'
+        values: "0x420"
+      - series: 'agent_run_first_token_seconds_count{job="hephaestus",kind="turn",start="warm",instance="server-b:9090",runtime_role="server"}'
+        values: "0+0.5x420"
     alert_rule_test:
       - eval_time: 3m
         alertname: HephaestusConversationFirstTokenBudgetBurnFast
@@ -2470,9 +2451,24 @@ tests:
   - name: fast first tokens do not burn the conversation budget
     interval: 1m
     input_series:
-      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="server-b:9090",runtime_role="server",le="10.0"}'
+      - series: 'agent_run_first_token_seconds_bucket{job="hephaestus",kind="turn",start="warm",instance="server-b:9090",runtime_role="server",le="10.0"}'
         values: "0+1x420"
-      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
+      - series: 'agent_run_first_token_seconds_count{job="hephaestus",kind="turn",start="warm",instance="server-b:9090",runtime_role="server"}'
+        values: "0+1x420"
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: HephaestusConversationFirstTokenBudgetBurnFast
+        exp_alerts: []
+      - eval_time: 400m
+        alertname: HephaestusConversationFirstTokenBudgetBurnSlow
+        exp_alerts: []
+
+  - name: slow review first tokens do not burn the conversation budget
+    interval: 1m
+    input_series:
+      - series: 'agent_run_first_token_seconds_bucket{job="hephaestus",kind="review",start="cold",instance="server-b:9090",runtime_role="server",le="10.0"}'
+        values: "0x420"
+      - series: 'agent_run_first_token_seconds_count{job="hephaestus",kind="review",start="cold",instance="server-b:9090",runtime_role="server"}'
         values: "0+1x420"
     alert_rule_test:
       - eval_time: 60m
@@ -2486,9 +2482,9 @@ tests:
   - name: one slow turn in a quiet hour does not burn the conversation budget
     interval: 1m
     input_series:
-      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="server-b:9090",runtime_role="server",le="10.0"}'
+      - series: 'agent_run_first_token_seconds_bucket{job="hephaestus",kind="turn",start="cold",instance="server-b:9090",runtime_role="server",le="10.0"}'
         values: "0x420"
-      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
+      - series: 'agent_run_first_token_seconds_count{job="hephaestus",kind="turn",start="cold",instance="server-b:9090",runtime_role="server"}'
         values: "0x30 1x390"
     alert_rule_test:
       - eval_time: 60m

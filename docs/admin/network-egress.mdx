@@ -9,9 +9,7 @@ Use it to build a firewall allowlist.
 The [architecture diagram](./overview#architecture-and-network) shows where the main connections start and which ports the stack publishes.
 
 Sandboxes have no internet access.
-A review sandbox reaches only the sandbox gateway of its server.
-The conversation loop, in the release namespace, reaches the servers' gateway and the conversation's tools Pods on TCP port 7100.
-A tools Pod has no egress.
+Review and conversation sandboxes reach only the sandbox gateway of the servers.
 The [threat model](./threat-model#boundary-3-outbound-egress) gives the controls that limit the destinations below.
 
 ## Host

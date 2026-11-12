@@ -15,7 +15,6 @@ const context = {
 	env: { AGENT_BUDGET_MS: "60000", GIT_CONFIG_NOSYSTEM: "1" },
 	workDeadline: 1000,
 	uploadDeadline: 2000,
-	programs: false,
 };
 
 void test("a measurement context that names a runner, its environment and its deadlines is read whole", () => {
@@ -28,7 +27,6 @@ void test("a measurement context that names a runner, its environment and its de
 		{ ...context, env: { AGENT_BUDGET_MS: 60_000 } },
 		{ ...context, uploadDeadline: context.workDeadline },
 		{ ...context, workDeadline: "soon" },
-		{ ...context, programs: "yes" },
 	]) {
 		assert.throws(() => parseMeasureContext(broken), /measurement context/u);
 	}

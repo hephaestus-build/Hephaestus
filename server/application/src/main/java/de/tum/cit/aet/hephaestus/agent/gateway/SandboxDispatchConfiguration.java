@@ -38,13 +38,18 @@ class SandboxDispatchConfiguration {
             AgentRuns runs,
             List<SandboxRunKind> kinds,
             SandboxProperties sandbox,
+            AgentCapacityProperties capacity,
             ReviewAttemptCustody custody,
             MeterRegistry meters) {
         return new SandboxDispatcher(
                 sandboxes,
                 runs,
                 kinds,
-                Map.of(AgentSandboxKind.REVIEW, sandbox.maxConcurrentContainers()),
+                Map.of(
+                        AgentSandboxKind.REVIEW,
+                        sandbox.maxConcurrentContainers(),
+                        AgentSandboxKind.CONVERSATION,
+                        capacity.turns() == null ? Integer.MAX_VALUE : capacity.turns()),
                 custody,
                 meters);
     }

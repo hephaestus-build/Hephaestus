@@ -141,7 +141,7 @@ export function sensitivityGrid() {
 /**
  * The most `bash` calls of one turn-roll turn. At 30 s each, they fill about the 900 s that a turn
  * may run, and they stay below the 40 model calls of a turn (`MAX_TURN_MODEL_CALLS` in
- * `heph-host.ts`), with room for retries.
+ * `turn.ts`), with room for retries.
  */
 export const ROLL_CALL_LIMIT = 28;
 

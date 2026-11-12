@@ -54,17 +54,17 @@ Thus, the controller must exist before the chart.
    The migration entry *Install the agent-sandbox controller before the chart* gives the commands.
    Without it, `helm upgrade` stops because it cannot find the kind `SandboxTemplate`.
 2. **Sandbox runtime.**
-   Review and probe Pods run on `sandbox.runtime.runtimeClassName`, or on the cluster's default runtime.
-   They always need [user namespace support](./sandboxes#sandbox-prerequisites): a RuntimeClass does not replace it.
+   Review and conversation Pods use `sandbox.templates.runtimeClassName`, or the cluster's default runtime.
+   [Sandbox prerequisites](./sandboxes#sandbox-prerequisites) states the requirements for each runtime.
    The one-host platform installs [gVisor](./k3s#the-platform-files) for the chart's sandbox templates (`sandbox.templates.runtimeClassName`).
-   No component claims a sandbox from those templates in this release.
+   Both practice reviews and conversation turns claim these templates.
    The installer downloads the pinned gVisor release from `storage.googleapis.com`, so the host must reach that address.
    The first run with gVisor restarts k3s once, which stops the running Pods for a short time.
    Do this during the window, as the cutover steps below describe.
 3. **NetworkPolicy enforcement.**
    The network plugin must enforce NetworkPolicy for egress and ingress.
-   Each server proves it with its isolation probe, and it starts no sandbox while the probe fails.
-   [Sandbox prerequisites](./sandboxes#sandbox-prerequisites) lists the probe's checks.
+   The platform isolation gate qualifies that boundary before work starts.
+   [Sandbox prerequisites](./sandboxes#sandbox-prerequisites) lists its checks.
    The [sandbox isolation gate](./sandboxes#sandbox-templates) is a script of the repository.
    Run it from a checkout of the release tag.
    It starts two sandboxes from a template, and it fails when a sandbox reaches more than the gateway.
@@ -93,16 +93,16 @@ The migration guide owns each change. This table gives the names.
 | --- | --- | --- | --- |
 | Site file | `config.monitoring` | `config.sync`, with the same four child settings | *Rename scheduled sync settings* |
 | Site file | `config.auth.bootstrapAdmins`, `config.auth.browserExtensionIds`, `config.auth.passkeys.allowedOrigins`, `config.outline.allowedOrigins` as strings | The same keys as YAML arrays | *Convert chart list values to arrays* |
-| Site file | `server.conversationTurns` | `conversationLoop.turns`, a count for the whole installation | *Stop every role for the conversation loop* |
+| Site file | `conversationLoop.turns` | `sandbox.conversationTurns`, a count for the whole installation | *Stop every role before moving conversation turns to sandboxes* |
 | Site file | `worker.enabled`, `worker.sandbox.*`, `worker.runtime`, `worker.sandboxGateway.maxConnections`, `networkPolicy.workerGatewayPorts`, and the worker's drain, pool, git cache and resources | `sandbox.enabled`, `sandbox.*`, `sandbox.runtime`, `sandbox.gateway.maxConnections`, `networkPolicy.modelGatewayPorts`, and the same settings under `server` | *Move the worker values to the server and the sandboxes* |
 | Site file | `worker.replicas`, `worker.rolloutStrategy` | No key. `server.replicas` counts the servers. | *Move the worker values to the server and the sandboxes* |
 | Site file | `webhook.replicas`, `webhook.resources` | None: the server receives provider webhooks | *Route provider webhooks to the server* |
 | Profile | `small-16gib` in `HEPHAESTUS_CHART_PROFILE` and `profiles/small-16gib.yaml` | `small` and `profiles/small.yaml` | *Use the small profile on every single-node install* |
 | Server settings | `hephaestus.agent.max-retries` | `hephaestus.agent.capacity.review-retries`. `AGENT_MAX_RETRIES` still works. | *Stop every role before moving review leases to agent runs* |
 | Secret | `DATABASE_USERNAME`, `DATABASE_PASSWORD` | `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD` for the bundled PostgreSQL, and the new `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` | *Give each database purpose its own login* |
-| Secret | No key | `HEPHAESTUS_CONVERSATION_LOOP_SECRET`, added by the release's `hephaestus-keys.sh` | *Stop every role for the conversation loop* |
-| Image outside the chart | `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` | `HEPHAESTUS_CONVERSATION_LOOP_SECRET` and `HEPHAESTUS_MENTOR_TURN_CAPACITY` on the server | *Stop every role for the conversation loop* |
-| Image outside the chart | `HEPHAESTUS_RUNTIME_WORKER_ENABLED`, the `worker` Spring profile and `HEPHAESTUS_WORKER_DRAIN_TIMEOUT` | `AGENT_ENABLED=true`, `HEPHAESTUS_CONVERSATION_LOOP_SECRET`, `HEPHAESTUS_AGENT_DRAIN_TIMEOUT` and the sandbox settings on the server | *Move the worker values to the server and the sandboxes* |
+| Secret | `HEPHAESTUS_CONVERSATION_LOOP_SECRET` | Remove the key. Each sandbox receives its own credential. | *Stop every role before moving conversation turns to sandboxes* |
+| Image outside the chart | `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` | `HEPHAESTUS_MENTOR_TURN_CAPACITY` on the server | *Stop every role before moving conversation turns to sandboxes* |
+| Image outside the chart | `HEPHAESTUS_RUNTIME_WORKER_ENABLED`, the `worker` Spring profile and `HEPHAESTUS_WORKER_DRAIN_TIMEOUT` | `AGENT_ENABLED=true`, `HEPHAESTUS_AGENT_DRAIN_TIMEOUT` and the sandbox settings on the server | *Move the worker values to the server and the sandboxes* |
 | Custom agent image | An image from an earlier release | An image that you rebuilt from this release | *Rebuild custom agent images* and *Rebuild a custom agent image* |
 
 The table covers the changes after the release candidate `1.0.0-rc.5`.
@@ -139,6 +139,8 @@ These migration entries also apply to a host that upgrades to 1.0:
 - *Remove the review poll settings and the review Job metrics*. Remove `AGENT_POLL_INTERVAL` and `AGENT_CLAIM_BATCH_SIZE`. Remove your own alerts on these metrics.
 - *Stop every role before moving conversation turn leases to agent runs*. The previous release cannot read the new turn leases.
 - *Product feedback drafts use server egress*: allow the selected instance model's provider through the server firewall. Keep a verified pre-upgrade database backup.
+- *Stop every role for the conversation loop*. This earlier entry introduced the loop. The sandbox cutover below replaces it.
+- *Stop every role before moving conversation turns to sandboxes*. Stop the old loop before migration, remove the old workloads, and run the template isolation gate.
 
 ## Cut over to 1.0.0
 
@@ -158,11 +160,12 @@ Each step names the page that owns it.
 2. Pause [pull-based deployment](./pull-based-deployment#operating-it), if enabled.
    Wait for an active run to finish.
 3. Verify the target's [signed release assets](./release-image-lock#independent-verification) and [chart](./kubernetes#verify-the-release-chart).
-   Record the current chart, profile, site values and the three replica counts.
+   Record the current chart, profile, site values and replica counts.
 4. Stop every role.
-   Do phase 1 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the current release: `server.replicas`, `server.replicas` and `webhook.replicas` are 0.
+   Stop the old conversation loop first, if present.
+   Do phase 1 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the current release: `server.replicas` and `webhook.replicas` are 0.
    Wait until every role Pod, sandbox Pod and Job is gone.
-   Then delete the conversation's tools Pods as that page describes.
+   Foreground-delete the old claims and legacy Jobs, as *Stop every role before moving conversation turns to sandboxes* describes.
 5. Back up the database and the JetStream data.
    Verify that the backup restores, as [Backup and restore](./backup-restore#back-up-the-database) describes.
    Export the keys and keep them with the backup and the current signed release lock.
@@ -208,7 +211,7 @@ Each step names the page that owns it.
 
 What happens to a review that a server still held when it stopped is in *Stop every role before moving review leases to agent runs*.
 
-The webhook role is stopped during the window, so provider deliveries in that time reach no receiver.
+The server is stopped during the window, so provider deliveries in that time reach no receiver.
 GitHub redelivers the failed deliveries of the last two hours.
 For the other providers, the reconciliation sync recovers the effect.
 [Webhook ingestion operations](./webhook-ingestion-operations) gives the details.
@@ -242,13 +245,13 @@ Then follow the cutover above.
 2. Open **Instance administration → Overview** and read **Configuration readiness**.
 3. Resolve each item under **Action required**.
 4. Verify an authenticated read through the public gateway.
-5. Check `sandbox_isolation_passed` of each server and that `HephaestusSandboxIsolationFailed` does not fire.
+5. Run the sandbox isolation gate against each template and require every check to pass.
 6. Run one practice review in **Approve first** mode, as [First steps § 6](./first-steps#6-run-the-first-practice-review) describes.
    Watch it end with a result.
 7. Ask one question in Hephaestus and verify that the answer completes.
 8. Read the dashboards **Overview** and **Reviews and feedback**, as [Dashboards](./monitoring#open-the-dashboards) describes.
    Reviews leave the queue, and no role is missing from the scrape.
-9. Check these alerts for the first hours: `HephaestusAgentQueueStalled`, `HephaestusAgentRunReaperFailing`, `HephaestusAgentSandboxReaperFailing`, `HephaestusReviewSandboxFailing`, `HephaestusSandboxGatewayRefusing` and `HephaestusSandboxIsolationFailed`.
+9. Check these alerts for the first hours: `HephaestusAgentQueueStalled`, `HephaestusAgentRunReaperFailing`, `HephaestusAgentSandboxReaperFailing`, `HephaestusReviewSandboxFailing`, `HephaestusSandboxGatewayRefusing`.
    [Alert response](./production-operations-runbook#alert-response) gives the action for each.
 10. Did the upgrade cross *Stop every role before correcting unknown issue comment counts*?
     Then ask the administrators of each affected workspace to run its backfill.

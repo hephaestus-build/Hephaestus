@@ -73,13 +73,6 @@ spec:
       ports:
         - port: {{ include "hephaestus.gatewayPort" . }}
           protocol: TCP
-    - from:
-        - podSelector:
-            matchLabels:
-              {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 14 }}
-      ports:
-        - port: {{ include "hephaestus.gatewayPort" . }}
-          protocol: TCP
     {{- end }}
     {{- include "hephaestus.policy.metricsIngress" (dict "root" . "port" "management") | nindent 4 }}
   egress:

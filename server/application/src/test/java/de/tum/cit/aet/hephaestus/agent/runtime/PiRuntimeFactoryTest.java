@@ -7,9 +7,6 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticeRunnerProfile;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,24 +19,6 @@ import tools.jackson.databind.ObjectMapper;
 class PiRuntimeFactoryTest extends BaseUnitTest {
 
     private static final PracticeRunnerProfile PRACTICE = new PracticeRunnerProfile();
-
-    /** The practice runner's files under the default flags, which run Node under the permission model. */
-    private static final PiRunnerProfile PERMISSIONED = new PiRunnerProfile() {
-        @Override
-        public String runnerScript() {
-            return PRACTICE.runnerScript();
-        }
-
-        @Override
-        public List<String> sidecarScripts() {
-            return PRACTICE.sidecarScripts();
-        }
-
-        @Override
-        public Map<String, String> additionalEnv() {
-            return Map.of();
-        }
-    };
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private PiRuntimeFactory factory;
@@ -272,7 +251,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
     class CommandAssembly {
 
         @Test
-        @DisplayName("Practice profile runs the loop under the permission model, with no child process")
+        @DisplayName("Practice profile permits native tools inside the sandbox container")
         void runtimeFlagsForPractice() {
             String body =
                     factory.build(spec("openai-completions", "gpt-x")).command().get(2);
@@ -280,39 +259,24 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
             int scriptIdx = body.indexOf(SandboxLayout.RUNNER_SCRIPT_FILENAME);
 
             assertThat(body.substring(nodeIdx, scriptIdx))
-                    .contains("--max-old-space-size=256", "--permission", "--allow-worker")
-                    .contains("--allow-fs-read=/opt/practice-scripts", "--allow-fs-write=/workspace/work/review-input")
-                    .doesNotContain("--allow-child-process", "--allow-addons");
+                    .contains("--max-old-space-size=256")
+                    .doesNotContain("--permission", "--allow-fs", "--allow-worker");
             int lastAmp = body.lastIndexOf("&&", nodeIdx);
             int sliceStart = lastAmp >= 0 ? lastAmp + 2 : 0;
             assertThat(body.substring(sliceStart, nodeIdx)).isBlank();
         }
 
-        /**
-         * A write grant is resolved when Node starts, so a directory the command grants but does not
-         * create first accepts its own {@code mkdir} and denies every write inside it.
-         */
         @Test
-        void shouldCreateEveryGrantedDirectoryWhenTheCommandStartsNode() {
-            PiRunnerProfile profile = PERMISSIONED;
-            String body = factory.build(spec(profile)).command().get(2);
+        void shouldPrepareWritableDirectoriesBeforeTheRunnerStarts() {
+            String body = factory.build(spec(PRACTICE)).command().get(2);
             int runner = body.lastIndexOf("node ");
-            int mkdir = body.indexOf("mkdir -p ");
-            assertThat(mkdir).isNotNegative();
-            assertThat(runner).isGreaterThan(mkdir);
-
-            String staging = body.substring(mkdir, runner);
-            List<String> granted = Pattern.compile("--allow-fs-write=(\\S+)")
-                    .matcher(body.substring(runner))
-                    .results()
-                    .map(match -> match.group(1))
-                    .toList();
-            assertThat(granted).isNotEmpty();
-            for (String directory : granted) {
-                assertThat(staging)
-                        .as("%s creates %s before node starts", profile.runnerScript(), directory)
-                        .contains(" " + directory + " ");
-            }
+            String staging = body.substring(0, runner);
+            assertThat(staging)
+                    .contains(
+                            "mkdir -p ",
+                            "/workspace/.pi",
+                            "/workspace/" + SandboxLayout.SESSIONS_DIR,
+                            "/tmp/home/.local/tmp");
         }
 
         @Test

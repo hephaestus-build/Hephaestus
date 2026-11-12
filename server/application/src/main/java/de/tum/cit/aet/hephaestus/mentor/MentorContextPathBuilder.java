@@ -24,7 +24,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Builds the Pi session path that a Heph host seeds a session with ({@code SessionManager.inMemory}). It is rebuilt
+ * Builds the Pi session path that the turn driver seeds a session with ({@code SessionManager.inMemory}). It is rebuilt
  * from rows for every turn and is the provider's cached prompt prefix, so identical rows must give identical bytes.
  * Entries are grouped by turn, so a follow-up asked while a turn ran follows that turn's answer, and an entry written
  * outside a turn never splits a tool call from its result. {@code docs/contributor/unified-pi-runtime.mdx} § The path

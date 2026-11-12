@@ -2,40 +2,43 @@ package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.gateway.AgentGatewayErrorFixtures;
+import de.tum.cit.aet.hephaestus.agent.gateway.AgentRunController;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
-import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeToolsPods;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
-import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
-import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxOwnerFixtures;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
-import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -44,10 +47,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
@@ -72,6 +73,10 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Every endpoint that the conversation loop calls, over real HTTP through the agent runtime's real gateway connector and
@@ -107,10 +112,8 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private final AttemptTokenVerifier verifier =
             new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry());
 
-    /** The loop's credential, as the test profile sets it. */
-    private static final String LOOP_SECRET = "0123456789abcdef".repeat(4);
-
-    private final MentorTurnRepository gatewayTurnReads = mock(MentorTurnRepository.class);
+    private AgentSandboxes sandboxes;
+    private AgentSandboxes.LiveSandbox sandbox;
     private final HttpClient http = HttpClient.newHttpClient();
     private ConfigurableApplicationContext gateway;
     private int gatewayPort;
@@ -130,27 +133,28 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         turn = MentorTurnStarts.askAndStart(
                 beans, metrics, workspace.getId(), conversation.getId(), "How should I pin the image?");
 
-        var callsInFlight = new ProxyCallsInFlight(12);
-        var toolsPods = HephTurnFixtures.toolsPods(beans, new FakeToolsPods());
-        HephTurns served = HephTurnFixtures.turns(
-                beans,
-                mock(MentorLedgerNotifications.class),
-                callsInFlight,
-                toolsPods,
-                issuer,
-                Clock.systemUTC(),
-                new SimpleMeterRegistry(),
-                Integer.MAX_VALUE,
-                Duration.ofMillis(100));
+        var usage = beans.getBean(LlmUsageRecorder.class);
+        sandboxes = SandboxOwnerFixtures.owner(beans, issuer);
+        HephTurns served = HephTurnFixtures.turns(beans, sandboxes);
         HephTurnContexts contexts = HephTurnFixtures.contexts(beans);
-        var controller = new HephTurnController(contexts, completion, served, callsInFlight);
-        var sandboxController =
-                new HephTurnSandboxController(contexts, served, HephTurnFixtures.folder(beans, toolsPods));
-        // No turn waits for this loop; which other tests left queued is not this test's to claim.
-        HephTurns idle = mock(HephTurns.class);
-        when(idle.assign()).thenReturn(Optional.empty());
-        var drain = AgentReviewDrainFixtures.started(beans);
-        var assignments = new HephTurnAssignmentController(idle, drain);
+        var controller = new HephTurnController(contexts, completion, served, usage);
+        var sandboxController = new TurnContextController(contexts, served, HephTurnFixtures.folder(beans));
+        var transactions = beans.getBean(TransactionTemplate.class);
+        sandbox = sandboxes.ensure(
+                workspace.getId(), TurnRunsAdapter.subject(conversation.getId()), AgentSandboxKind.CONVERSATION);
+        var kind = new TurnSandboxRunKind(
+                MentorTurnStarts.admitting(beans, metrics),
+                beans.getBean(TurnRunsAdapter.class),
+                agentRuns,
+                served,
+                contexts,
+                beans.getBean(MentorTurnRepository.class),
+                beans.getBean(MentorTurnService.class),
+                completion,
+                beans.getBean(Clock.class),
+                beans.getBean(ObjectMapper.class),
+                metrics);
+        var runController = new AgentRunController(agentRuns, sandboxes, transactions, List.of(kind));
         var application = new SpringApplication(
                 GatewayApplication.class,
                 Class.forName("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"));
@@ -158,18 +162,19 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
             var factory = context.getBeanFactory();
             factory.registerSingleton("hephTurnController", controller);
             factory.registerSingleton("hephTurnSandboxController", sandboxController);
-            factory.registerSingleton("hephTurnAssignmentController", assignments);
+            factory.registerSingleton("agentRunController", runController);
+            factory.registerSingleton("turnSandboxRunKind", kind);
+            factory.registerSingleton("agentSandboxes", sandboxes);
+            factory.registerSingleton("tracer", beans.getBean(Tracer.class));
+            factory.registerSingleton("agentGatewayErrors", AgentGatewayErrorFixtures.errors());
             factory.registerSingleton("reviewJobRepository", jobRepository);
             factory.registerSingleton("agentRuns", agentRuns);
             // The turn endpoints read no turn row on the gateway; a model call would.
-            factory.registerSingleton("mentorTurnRepository", gatewayTurnReads);
             factory.registerSingleton("attemptTokenVerifier", verifier);
-            factory.registerSingleton("sandboxGatewaySessions", new SandboxGatewaySessions());
-            factory.registerSingleton("conversationLoopProperties", new ConversationLoopProperties(LOOP_SECRET));
+
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
             // The server's shared buckets, which the gateway's rate limit draws from.
             factory.registerSingleton("bucketResolver", beans.getBean(BucketResolver.class));
-            factory.registerSingleton("agentReviewDrain", drain);
             factory.registerSingleton("agentControllerAdvice", new AgentControllerAdvice());
             factory.registerSingleton("globalControllerAdvice", new GlobalControllerAdvice());
         });
@@ -192,19 +197,15 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
     static Stream<Arguments> hostEndpoints() {
         return Stream.of(
                 Arguments.of("GET", "context", null, 200),
-                Arguments.of("PUT", "partial", "partial.request.json", 204),
+                Arguments.of("POST", "partial", "partial.request.json", 204),
                 Arguments.of("POST", "search", "search.request.json", 200),
                 // The controller answers: the result, problem or feedback is unknown, so Hephaestus may not show it.
                 Arguments.of("POST", "link-result", "{\"resultId\":\"" + UUID.randomUUID() + "\"}", 422),
                 Arguments.of("POST", "link-problem", "link-problem.request.json", 422),
                 Arguments.of("POST", "show-feedback", "show-feedback.request.json", 422),
                 // A refusal of the context folder is an answer the model reads, not an HTTP error.
-                Arguments.of("POST", "sandbox/document", "sandbox-document.request.json", 200),
-                Arguments.of("GET", "sandbox/documents", null, 200),
-                Arguments.of("POST", "sandbox/bind", "{}", 200),
-                Arguments.of("POST", "sandbox/discard", "sandbox-discard.request.json", 204),
                 Arguments.of("POST", "sandbox/load", "sandbox-load.request.json", 200),
-                Arguments.of("POST", "lease", "{}", 204),
+                Arguments.of("POST", "lease", "{}", 200),
                 Arguments.of("POST", "end", "end.request.json", 204));
     }
 
@@ -226,16 +227,102 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(response.statusCode()).as(response.body()).isEqualTo(status);
     }
 
-    @Test
-    void shouldReadNoTurnRowOnTheGatewayWhenTheHostReportsItsPartialAnswer() throws Exception {
-        HttpRequest request = turnRequest("partial")
-                .header("Content-Type", "application/json")
-                .PUT(HttpRequest.BodyPublishers.ofString(contract("partial.request.json")))
-                .build();
+    static Stream<Arguments> turnWriteEndpoints() {
+        return hostEndpoints().filter(arguments -> arguments.get()[2] != null).map(arguments -> {
+            var endpoint = arguments.get();
+            return Arguments.of(endpoint[0], endpoint[1], endpoint[2]);
+        });
+    }
 
+    @ParameterizedTest(name = "refuses stale epoch: {0} {1}")
+    @MethodSource("turnWriteEndpoints")
+    void shouldRefuseEveryTurnWriteOfAnEarlierEpoch(String method, String endpoint, String body) throws Exception {
+        var request = turnRequest(endpoint)
+                .setHeader(SandboxRunArgumentResolver.EPOCH_HEADER, Integer.toString(turn.getAttempt() + 1))
+                .header("Content-Type", "application/json")
+                .method(method, HttpRequest.BodyPublishers.ofString(body.startsWith("{") ? body : contract(body)))
+                .build();
         assertThat(http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode())
+                .isEqualTo(409);
+        assertThat(beans.getBean(MentorTurnRepository.class)
+                        .findById(turn.getId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(MentorTurn.Status.RUNNING);
+    }
+
+    @Test
+    void shouldRefuseAnotherSubjectsTokenAndLeaveTheTurnRunning() throws Exception {
+        var other =
+                sandboxes.ensure(workspace.getId(), "conversation:" + UUID.randomUUID(), AgentSandboxKind.CONVERSATION);
+        String token = issuer.issueForSandbox(
+                other.id(),
+                other.workspaceId(),
+                other.subjectKey(),
+                Instant.now().plusSeconds(300));
+        var request = turnRequest("partial")
+                .setHeader("Authorization", "Bearer " + token)
+                .POST(HttpRequest.BodyPublishers.ofString(contract("partial.request.json")))
+                .build();
+        assertThat(http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode())
+                .isEqualTo(404);
+        assertThat(beans.getBean(MentorTurnRepository.class)
+                        .findById(turn.getId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(MentorTurn.Status.RUNNING);
+    }
+
+    @Test
+    void shouldRefuseTurnWritesAfterTheirSandboxWasRevoked() throws Exception {
+        String token = credential();
+        sandboxes.release(workspace.getId(), sandbox.subjectKey());
+        var request = turnRequest("partial")
+                .setHeader("Authorization", "Bearer " + token)
+                .POST(HttpRequest.BodyPublishers.ofString(contract("partial.request.json")))
+                .build();
+        assertThat(http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode())
+                .isEqualTo(401);
+        assertThat(sandboxes.hasLive(workspace.getId(), sandbox.subjectKey())).isFalse();
+        assertThat(beans.getBean(MentorTurnRepository.class)
+                        .findById(turn.getId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(MentorTurn.Status.RUNNING);
+    }
+
+    @Test
+    void shouldRefusePartialWritesAfterTheTurnEnded() throws Exception {
+        var end = turnRequest("end")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "{\"outcome\":\"FAILED\",\"entries\":[],\"reason\":\"ERROR\",\"detail\":\"host_error\"}"))
+                .build();
+        assertThat(http.send(end, HttpResponse.BodyHandlers.discarding()).statusCode())
                 .isEqualTo(204);
-        verifyNoInteractions(gatewayTurnReads);
+        var request = turnRequest("partial")
+                .POST(HttpRequest.BodyPublishers.ofString(contract("partial.request.json")))
+                .build();
+        assertThat(http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode())
+                .isEqualTo(409);
+        assertThat(beans.getBean(MentorTurnRepository.class)
+                        .findById(turn.getId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(MentorTurn.Status.FAILED);
+    }
+
+    @Test
+    void shouldBoundThePartialBodyBeforeReadingItsJson() throws Exception {
+        var request = turnRequest("partial")
+                .POST(HttpRequest.BodyPublishers.ofString("x".repeat(MentorTurnProgress.MAX_UPDATE_BYTES + 1)))
+                .build();
+        assertThat(http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode())
+                .isEqualTo(413);
+        assertThat(beans.getBean(MentorTurnRepository.class)
+                        .findById(turn.getId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(MentorTurn.Status.RUNNING);
     }
 
     @Test
@@ -266,22 +353,45 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
     }
 
-    private HttpRequest.Builder turnRequest(String endpoint) {
-        return HttpRequest.newBuilder(URI.create(
-                        "http://localhost:" + gatewayPort + "/internal/llm/turn/" + turn.getId() + "/" + endpoint))
-                .header("Authorization", "Bearer " + credential());
+    @Test
+    void shouldReadAnItemThroughItsOwningSourceAndRefusePathsOutsideTheContext() throws Exception {
+        String resource = "inputs/context/delivered_feedback/" + UUID.randomUUID() + ".json";
+        var item = http.send(
+                turnRequest("sandbox/document")
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"path\":\"" + resource + "\"}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(item.statusCode()).isEqualTo(200);
+        assertThat(beans.getBean(ObjectMapper.class)
+                        .readTree(item.body())
+                        .path("status")
+                        .asString())
+                .isEqualTo("NOT_FOUND");
+
+        var outside = http.send(
+                turnRequest("sandbox/document")
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"path\":\"/etc/passwd\"}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(outside.statusCode()).isEqualTo(404);
     }
 
-    /** The signed credential the agent runtime issues for this attempt of the turn, with five minutes of work left. */
+    private HttpRequest.Builder turnRequest(String endpoint) {
+        String path = endpoint.equals("context") || endpoint.equals("lease") ? endpoint : "turn/" + endpoint;
+        return HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + gatewayPort + "/internal/agent/runs/" + turn.getRunId() + "/" + path))
+                .header("Authorization", "Bearer " + credential())
+                .header("Content-Type", "application/json")
+                .header(SandboxRunArgumentResolver.RUN_HEADER, turn.getRunId().toString())
+                .header(SandboxRunArgumentResolver.EPOCH_HEADER, Integer.toString(turn.getAttempt()));
+    }
+
     private String credential() {
-        Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
-        return issuer.issueForTurn(
-                turn.getId(),
-                workspace.getId(),
-                turn.getAttempt(),
-                Objects.requireNonNull(turn.getRunId()),
-                deadline,
-                deadline.plus(Duration.ofMinutes(1)));
+        return issuer.issueForSandbox(
+                sandbox.id(),
+                sandbox.workspaceId(),
+                sandbox.subjectKey(),
+                Instant.now().plusSeconds(300));
     }
 
     private HttpResponse<String> pullAssignment(String credential) throws Exception {
@@ -294,12 +404,9 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldAnswerTheLoopsAssignmentPullOnlyWithTheLoopsCredential() throws Exception {
-        assertThat(pullAssignment(LOOP_SECRET).statusCode()).isEqualTo(204);
-        assertThat(pullAssignment(credential()).statusCode())
-                .as("a turn credential pulls no turn")
-                .isEqualTo(401);
-        assertThat(pullAssignment("f".repeat(64)).statusCode()).isEqualTo(401);
+    void shouldHideTheRetiredAssignmentPullForEveryCredential() throws Exception {
+        assertThat(pullAssignment("retired-loop-secret").statusCode()).isEqualTo(404);
+        assertThat(pullAssignment(credential()).statusCode()).isEqualTo(404);
     }
 
     private static String contract(String name) throws IOException {
@@ -319,5 +426,18 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         SecurityFilterAutoConfiguration.class
     })
     @Import(SandboxGatewayConfiguration.class)
-    static class GatewayApplication {}
+    static class GatewayApplication implements WebMvcConfigurer {
+        private final AgentRuns runs;
+        private final Tracer tracer;
+
+        GatewayApplication(AgentRuns runs, Tracer tracer) {
+            this.runs = runs;
+            this.tracer = tracer;
+        }
+
+        @Override
+        public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+            resolvers.add(new SandboxRunArgumentResolver(runs, tracer));
+        }
+    }
 }

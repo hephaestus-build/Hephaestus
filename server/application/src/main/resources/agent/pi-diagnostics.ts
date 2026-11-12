@@ -2,11 +2,8 @@
  * The review runtime's diagnostics on stderr. Each line names one event of `pi-diagnostics.json`, with
  * fields of that vocabulary only: counts, flags and closed codes. A text that a tool, a
  * model, a provider or reviewed code wrote has no field to go in, and neither has a label, a slug, a
- * path or an id: such text can hold reviewed code, a credential or a person's words, and the server
- * copies these lines into its own log. A practice and a turn are named by their positions.
- *
- * The server keeps only lines that this vocabulary allows (`SandboxExits.java`), so a line that
- * breaks it is dropped there too.
+ * path or an id: such text can hold reviewed code, a credential or a person's words. A practice and
+ * a turn are named by their positions.
  */
 
 import vocabulary from "./pi-diagnostics.json" with { type: "json" };
@@ -31,8 +28,8 @@ const FIELDS: ReadonlyMap<string, FieldType> = new Map(
 );
 const ERRORS: ReadonlySet<string> = new Set(vocabulary.fields.error);
 
-/** The text each scalar type allows. `DiagnosticVocabulary.java` holds the same three patterns. */
-export const SCALAR_TEXT = {
+/** The text each scalar type allows. */
+const SCALAR_TEXT = {
 	count: /^\d{1,16}$/u,
 	ratio: /^\d{1,6}(?:\.\d{1,6})?$/u,
 	flag: /^(?:true|false)$/u,
@@ -60,8 +57,8 @@ function valueOf(type: FieldType, value: DiagnosticValue): string | undefined {
 }
 
 /**
- * Whether the server keeps `line`: one event of the vocabulary, then fields of the vocabulary, each
- * once, each with a value its type allows. `SandboxExits.keeps` decides the same way.
+ * Whether `line` names one event of the vocabulary, then fields of the vocabulary, each once, each
+ * with a value its type allows.
  */
 export function isDiagnosticLine(line: string): boolean {
 	const rest = /^\[pi-(?:runner|provider)\] (?<rest>\S.*)$/u.exec(line)?.groups?.rest;

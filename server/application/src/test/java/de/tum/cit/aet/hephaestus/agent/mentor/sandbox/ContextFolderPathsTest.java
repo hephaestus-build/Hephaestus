@@ -15,7 +15,7 @@ class ContextFolderPathsTest extends BaseUnitTest {
     @ParameterizedTest(name = "{0} -> {1}")
     @CsvSource({
         "inputs/context/user.json, inputs/context/user.json",
-        "/tmp/tools/workspace/INDEX.md, INDEX.md",
+        "/workspace/work/INDEX.md, INDEX.md",
         "./repos//github.com/acme/api/./README.md, repos/github.com/acme/api/README.md",
         "repos/github.com/acme/../acme/api, repos/github.com/acme/api",
     })
@@ -29,8 +29,8 @@ class ContextFolderPathsTest extends BaseUnitTest {
                 "../etc/passwd",
                 "inputs/../../etc/passwd",
                 "/etc/passwd",
-                "/tmp/tools/workspace/../etc/passwd",
-                "/tmp/tools/workspacex/INDEX.md",
+                "/workspace/work/../etc/passwd",
+                "/workspace/workx/INDEX.md",
                 "/workspace/INDEX.md",
                 "~/.ssh/id_rsa",
                 "/proc/1/environ",
@@ -48,7 +48,7 @@ class ContextFolderPathsTest extends BaseUnitTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"repos/github.com/acme/api/README.md", "inputs/other.json", "notes.txt", ""})
-    void shouldLeaveEveryOtherPathToTheToolsPod(String relative) {
+    void shouldExcludePathsOutsideTheContextDocuments(String relative) {
         assertThat(ContextFolderPaths.document(relative)).isFalse();
     }
 

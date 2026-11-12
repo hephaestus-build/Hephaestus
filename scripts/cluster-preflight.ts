@@ -31,7 +31,6 @@ import { parseArgs } from "node:util";
 
 import { parseAllDocuments } from "yaml";
 
-import { PROBE_PASSED } from "./kubernetes-cluster.ts";
 import { asArray, asRecord, isRecord } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 
@@ -665,7 +664,7 @@ function kubectlCluster(context: string | undefined): Cluster {
 	};
 }
 
-/** After the install: the workers are ready only once their isolation probe passed. */
+/** After the install: the server rollout must reach readiness. The platform owns the isolation gate. */
 async function probeChecks(
 	namespace: string,
 	release: string,
@@ -686,14 +685,11 @@ async function probeChecks(
 	} catch {
 		return [
 			missing(
-				`The workers of ${namespace}/${release} are not ready. Their log names the isolation probe gate that failed: kubectl -n ${namespace} logs ${deployment}.`,
+				`The server ${namespace}/${release} is not ready: kubectl -n ${namespace} logs ${deployment}.`,
 			),
 		];
 	}
-	const log = await output("kubectl", [...base, "-n", namespace, "logs", deployment]);
-	return log.includes(PROBE_PASSED)
-		? []
-		: [missing(`The server ${namespace}/${release} reports no passed isolation probe.`)];
+	return [];
 }
 
 /** Helm's merge of values files: later maps override earlier keys, everything else replaces. */

@@ -1,6 +1,6 @@
 /**
- * Heph's context folder and tools Pods: the read-only file tree that one turn attempt reads with {@code read},
- * {@code bash} and {@code load_context}, in a sandbox of its own on this server.
+ * The context archives that the shared turn driver reads with {@code read}, {@code bash} and {@code load_context}
+ * inside its conversation sandbox.
  * {@code docs/contributor/unified-pi-runtime.mdx} has the model.
  */
 @org.jspecify.annotations.NullMarked

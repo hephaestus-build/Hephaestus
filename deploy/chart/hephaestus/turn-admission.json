@@ -1,5 +1,0 @@
-{
-	"allocatableCpuMillis": 3500,
-	"cpuMillisPerTurn": 50,
-	"maximumTurns": 32
-}

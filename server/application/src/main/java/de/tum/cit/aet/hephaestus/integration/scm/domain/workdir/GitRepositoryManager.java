@@ -1109,7 +1109,11 @@ public class GitRepositoryManager {
 
         @Override
         public void close() {
-            deleteTreeQuietly(stagingDir);
+            try {
+                EvidenceSpool.close(stagingDir);
+            } catch (IOException failed) {
+                throw new GitOperationException("Could not remove the captured Git snapshot", failed);
+            }
         }
     }
 

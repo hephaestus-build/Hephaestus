@@ -153,6 +153,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         lenient().when(requestPolicy.allows(any())).thenReturn(true);
+        lenient().when(routingService.ownsAttempt(any())).thenReturn(true);
         lenient().when(callLedger.open(any(), any())).thenReturn(CALL);
         meterRegistry = new SimpleMeterRegistry();
         controller = new LlmProxyService(
@@ -168,6 +169,20 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 admittingPermits(),
                 new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
+    }
+
+    @Test
+    void shouldRefuseAnEndedAttemptBeforeCredentialsOrNetworkAccess() {
+        var routing = routing("openai-completions");
+        authenticate(routing);
+        when(routingService.ownsAttempt(routing)).thenReturn(false);
+        var result = controller.proxy(
+                request("POST", "/internal/llm/chat/completions"),
+                new MockHttpServletResponse(),
+                new HttpHeaders(),
+                jsonBody());
+        assertThat(Objects.requireNonNull(result).getStatusCode().value()).isEqualTo(409);
+        verifyNoInteractions(resolver, budgetGate, callLedger);
     }
 
     @Test
@@ -1212,15 +1227,17 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             .asString())
                     .isEqualTo("upstream_stalled");
             assertThat(String.valueOf(result.getBody())).contains("no first byte within 1 seconds");
-            assertThat(streamingCalls.lastFailed(
-                            routing.sourceId(), routing.attempt().number()))
-                    .isEqualTo(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STALLED, null));
+            verify(callLedger)
+                    .complete(
+                            any(),
+                            eq(CALL),
+                            any(),
+                            eq(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STALLED, null)));
         }
 
         @Test
-        @DisplayName(
-                "a conversation turn attempt remembers its last failed model call by kind and status until its end forgets it")
-        void aHephAttemptRemembersItsLastFailedModelCall() throws Exception {
+        @DisplayName("a conversation turn records each failed model call by kind and status")
+        void aHephAttemptRecordsEachFailedModelCall() throws Exception {
             ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
             authenticate(routing);
             stubCredential(
@@ -1238,11 +1255,6 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .body("{\"error\":{\"message\":\"overloaded\"}}")
                     .build());
             controllerProxy(new MockHttpServletResponse());
-            UUID turnId = routing.sourceId();
-            int attempt = routing.attempt().number();
-            assertThat(streamingCalls.lastFailed(turnId, attempt))
-                    .isEqualTo(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503));
-
             upstream.enqueue(new MockResponse.Builder()
                     .code(503)
                     .addHeader("Content-Type", "application/json")
@@ -1257,16 +1269,13 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .build());
             controllerProxy(new MockHttpServletResponse());
 
-            assertThat(streamingCalls.lastFailed(turnId, attempt))
-                    .as("the stream that went silent is the last failed call")
-                    .isEqualTo(new MentorTurn.FailedCall("upstream_idle", 200));
-            assertThat(streamingCalls.lastFailed(turnId, attempt))
-                    .as("an end that rolled back reads it again")
-                    .isEqualTo(new MentorTurn.FailedCall("upstream_idle", 200));
-            streamingCalls.forgetFailed(turnId, attempt);
-            assertThat(streamingCalls.lastFailed(turnId, attempt))
-                    .as("the committed end forgot it")
-                    .isNull();
+            ArgumentCaptor<MentorTurn.FailedCall> failures = ArgumentCaptor.forClass(MentorTurn.FailedCall.class);
+            verify(callLedger, times(3)).complete(any(), eq(CALL), any(), failures.capture());
+            assertThat(failures.getAllValues())
+                    .containsExactly(
+                            new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503),
+                            new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503),
+                            new MentorTurn.FailedCall("upstream_idle", 200));
         }
 
         @Test
@@ -1285,49 +1294,33 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8)))
                     .isInstanceOf(IllegalStateException.class);
 
-            assertThat(streamingCalls.settle(
-                            routing.sourceId(), routing.attempt().number(), false))
-                    .as("the turn's end does not wait for a call that never ran")
-                    .isTrue();
+            assertThat(IntStream.range(0, ProxyCallsInFlight.TURN_CALLS)
+                            .mapToObj(index -> streamingCalls.begin(routing.attempt()))
+                            .toList())
+                    .noneMatch(ProxyCallsInFlight.Call::isOverCap);
         }
 
         @Test
-        @DisplayName("a call that the turn's end cancelled does not replace the failure the turn ended on")
-        void aCancelledCallDoesNotReplaceTheFailure() {
-            var attempt = new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, LEASE);
-            try (var call = streamingCalls.begin(attempt)) {
-                call.failed(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503));
-                call.failed(new MentorTurn.FailedCall("upstream_idle", 503));
-            }
-            assertThat(streamingCalls.settle(attempt.sourceId(), attempt.number(), true))
-                    .isTrue();
-            try (var late = streamingCalls.begin(attempt)) {
-                assertThat(late.isCancelled()).isTrue();
-                late.failed(new MentorTurn.FailedCall("IOException", null));
-            }
-
-            assertThat(streamingCalls.lastFailed(attempt.sourceId(), attempt.number()))
-                    .as("the call's first failure, not what followed from it or the end's cancel")
-                    .isEqualTo(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503));
-        }
-
-        @Test
-        @DisplayName("a conversation turn's call that the proxy refuses is remembered by its rule and status")
-        void aRefusedHephCallIsRememberedByItsRule() {
+        @DisplayName("AI choice refuses a conversation before an upstream or billed call opens")
+        void shouldRefuseAiChoiceBeforeOpeningAnUpstreamOrBilledCall() {
             ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
             authenticate(routing);
             when(requestPolicy.allows(any())).thenReturn(false);
 
-            controllerProxy(new MockHttpServletResponse());
+            var answer = Objects.requireNonNull(streamingController.proxy(
+                    request("POST", "/internal/llm/chat/completions"),
+                    new MockHttpServletResponse(),
+                    new HttpHeaders(),
+                    "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8)));
 
-            assertThat(streamingCalls.lastFailed(
-                            routing.sourceId(), routing.attempt().number()))
-                    .isEqualTo(new MentorTurn.FailedCall("refused_ai_choice", 403));
+            assertThat(answer.getStatusCode().value()).isEqualTo(403);
+            assertThat(upstream.getRequestCount()).isZero();
+            verifyNoInteractions(resolver, budgetGate, callLedger);
         }
 
         @Test
-        @DisplayName("a review's failed model call is not remembered")
-        void aReviewsFailedModelCallIsNotRemembered() throws Exception {
+        @DisplayName("a review's failed model call is recorded in the same ledger")
+        void aReviewsFailedModelCallIsRecorded() throws Exception {
             ProxyRouting routing = streamingRouting();
             authenticate(routing);
             stubCredential(
@@ -1347,9 +1340,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
             controllerProxy(new MockHttpServletResponse());
 
-            assertThat(streamingCalls.lastFailed(
-                            routing.sourceId(), routing.attempt().number()))
-                    .isNull();
+            verify(callLedger)
+                    .complete(
+                            any(),
+                            eq(CALL),
+                            any(),
+                            eq(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503)));
         }
 
         @Test
@@ -1473,8 +1469,6 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
             controllerProxy(new MockHttpServletResponse());
 
-            assertThat(streamingCalls.awaitNone(ATTEMPT.sourceId(), ATTEMPT.number(), Duration.ZERO))
-                    .isTrue();
             assertThat(IntStream.range(0, REVIEW_CALLS_AT_THREE)
                             .mapToObj(index -> streamingCalls.begin(ATTEMPT))
                             .toList())
@@ -1495,100 +1489,22 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             closed, "openai-completions", LlmAuthMode.BEARER, "catalog-model", "secret", 42L));
 
             controllerProxy(new MockHttpServletResponse());
-
-            assertThat(streamingCalls.awaitNone(ATTEMPT.sourceId(), ATTEMPT.number(), Duration.ZERO))
-                    .isTrue();
         }
 
         @Test
-        @DisplayName("cancelling an attempt's calls ends a call whose provider sends nothing at once")
-        void cancellingTheAttemptsCallsEndsASilentCallAtOnce() throws Exception {
-            upstream.enqueue(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "text/event-stream")
-                    .body("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n")
-                    .bodyDelay(30, TimeUnit.SECONDS)
-                    .build());
-            ProxyRouting routing = streamingRouting();
-            authenticate(routing);
-            stubCredential(
-                    routing,
-                    new LlmModelResolver.ProxyCredential(
-                            upstream.url("/v1").toString(),
-                            "openai-completions",
-                            LlmAuthMode.BEARER,
-                            "catalog-model",
-                            "secret",
-                            42L));
-            MockHttpServletResponse response = new MockHttpServletResponse();
-            var security = SecurityContextHolder.getContext();
-            CompletableFuture<Void> call = CompletableFuture.runAsync(() -> {
-                SecurityContextHolder.setContext(security);
-                controllerProxy(response);
-            });
-            upstream.takeRequest(5, TimeUnit.SECONDS);
-            Thread.sleep(200);
-            long cancelledAt = System.nanoTime();
-
-            streamingCalls.seal(ATTEMPT.sourceId(), ATTEMPT.number(), true);
-
-            call.get(5, TimeUnit.SECONDS);
-            assertThat(Duration.ofNanos(System.nanoTime() - cancelledAt)).isLessThan(Duration.ofSeconds(2));
-            assertThat(streamingCalls.awaitNone(ATTEMPT.sourceId(), ATTEMPT.number(), Duration.ZERO))
-                    .isTrue();
-        }
-
-        @Test
-        @DisplayName("an attempt's end waits for a call in flight to record its usage")
-        void anAttemptsEndWaitsForTheCallInFlightToRecordItsUsage() throws Exception {
-            // The test is about the settle, not a silence bound.
-            streamingController = controllerWith(WebClient.builder().build(), Tracer.NOOP, SILENCE_NEVER_REACHED);
-            upstream.enqueue(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "text/event-stream")
-                    .bodyDelay(500, TimeUnit.MILLISECONDS)
-                    .body("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n"
-                            + "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":40}}\n\n"
-                            + "data: [DONE]\n\n")
-                    .build());
-            ProxyRouting routing = streamingRouting();
-            authenticate(routing);
-            stubCredential(
-                    routing,
-                    new LlmModelResolver.ProxyCredential(
-                            upstream.url("/v1").toString(),
-                            "openai-completions",
-                            LlmAuthMode.BEARER,
-                            "catalog-model",
-                            "secret",
-                            42L));
-            var security = SecurityContextHolder.getContext();
-            CompletableFuture<Void> call = CompletableFuture.runAsync(() -> {
-                SecurityContextHolder.setContext(security);
-                controllerProxy(new MockHttpServletResponse());
-            });
-            upstream.takeRequest(5, TimeUnit.SECONDS);
-
-            // The answer's end, without cancelling: the call finishes and records what it received.
-            assertThat(streamingCalls.settle(ATTEMPT.sourceId(), ATTEMPT.number(), false))
-                    .isTrue();
-
-            verify(callLedger).complete(any(), eq(CALL), any(), any());
-            call.get(5, TimeUnit.SECONDS);
-        }
-
-        @Test
-        @DisplayName("a call that begins after its attempt's end sealed it never reaches the provider")
-        void aCallThatBeginsAfterTheSealNeverReachesTheProvider() throws Exception {
+        @DisplayName("a call that begins after its attempt ended never reaches the provider")
+        void aCallThatBeginsAfterItsAttemptEndedNeverReachesTheProvider() throws Exception {
             CountDownLatch authenticated = new CountDownLatch(1);
-            CountDownLatch sealed = new CountDownLatch(1);
+            CountDownLatch ended = new CountDownLatch(1);
+            AtomicBoolean held = new AtomicBoolean(true);
+            when(routingService.ownsAttempt(any())).thenAnswer(ignored -> held.get());
             // The pause between authentication and registration, where a stop can end the attempt.
             ProxyCallsInFlight calls = new ProxyCallsInFlight(12) {
                 @Override
                 public Call begin(ProxyRouting.BilledAttempt billed) {
                     authenticated.countDown();
                     try {
-                        sealed.await(5, TimeUnit.SECONDS);
+                        ended.await(5, TimeUnit.SECONDS);
                     } catch (InterruptedException interrupted) {
                         Thread.currentThread().interrupt();
                     }
@@ -1639,10 +1555,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
             });
             assertThat(authenticated.await(5, TimeUnit.SECONDS)).isTrue();
 
-            calls.seal(ATTEMPT.sourceId(), ATTEMPT.number(), true);
-            assertThat(calls.awaitNone(ATTEMPT.sourceId(), ATTEMPT.number(), Duration.ZERO))
-                    .isTrue();
-            sealed.countDown();
+            held.set(false);
+            ended.countDown();
 
             ResponseEntity<?> result = Objects.requireNonNull(call.get(5, TimeUnit.SECONDS));
             assertThat(result.getStatusCode().value()).isEqualTo(409);
@@ -2492,7 +2406,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 now.plusSeconds(60));
         var identity = ProxyIdentity.of(job);
         lenient().when(routingService.resolve(eq(identity))).thenReturn(routing);
-        SecurityContextHolder.getContext().setAuthentication(new JobTokenAuthentication(identity, Set.of(), null));
+        SecurityContextHolder.getContext().setAuthentication(new JobTokenAuthentication(identity, Set.of()));
     }
 
     private void stubCredential(ProxyRouting routing, LlmModelResolver.ProxyCredential credential) {

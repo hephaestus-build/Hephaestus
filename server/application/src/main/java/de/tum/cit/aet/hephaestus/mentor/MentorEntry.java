@@ -30,7 +30,7 @@ import tools.jackson.databind.JsonNode;
  * {@code seq} orders the entries of one conversation in append order; {@link MentorContextPathBuilder} owns the order
  * of the context path.
  *
- * <p>{@code payload} holds the Pi session entry for every entry that the Heph host appended ({@code HEPH},
+ * <p>{@code payload} holds the Pi session entry for every entry that the turn driver appended ({@code HEPH},
  * {@code TOOL_RESULT}, {@code SYSTEM}, {@code SUMMARY}), and for a {@code USER} entry once the end of its turn stored
  * Pi's entry for it ({@link MentorTurnService#end}). A {@code DIGEST} payload holds the weekly digest membership.
  */

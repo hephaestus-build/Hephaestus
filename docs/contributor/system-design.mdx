@@ -10,21 +10,19 @@ description: Runtime roles, module boundaries, and the paths from connected work
 ```mermaid
 flowchart TB
     accTitle: Hephaestus runtime topology
-    accDescr: The webapp calls the server. The server's receiver verifies provider events and publishes them to NATS. The server consumes events and writes jobs and conversation turns to PostgreSQL. With sandboxes enabled, the server claims them from PostgreSQL and runs reviews in sandboxes. The conversation loop pulls conversation turns from the servers and runs their tools in tools Pods.
+    accDescr: The server claims review and conversation runs from PostgreSQL. Their sandbox drivers renew run leases and call any server replica through the sandbox gateway. The gateway streams conversation deltas through PostgreSQL to each live hub.
     Providers[GitHub, GitLab, Slack, Outline] --> Server[Server role]
     Server <--> NATS[NATS JetStream]
     SPA[React webapp] --> Server
     Server --> DB[(PostgreSQL)]
-    Server --> Sandbox[Review sandboxes and tools Pods]
-    Loop[Conversation loop] --> Proxy
-    Loop --> Sandbox
-    Sandbox --> Proxy[Server LLM proxy]
+    Server --> Sandbox[Review and conversation sandboxes]
+    Sandbox --> Proxy[Sandbox gateway and LLM proxy]
     Proxy --> Models[Configured model services]
     Server -->|Feedback and Hephaestus replies| Providers
 ```
 
 One JAR boots in the server role, which also receives provider webhooks. Only a server with `AGENT_ENABLED` creates sandbox Pods and runs conversation turns.
-The conversation loop runs beside the servers as its own Deployment.
+Each conversation sandbox uses the same driver, run claim and gateway as review sandboxes.
 
 [Runtime roles](/admin/runtime-roles) owns role configuration, capacity, and drain behavior.
 [Set up monitoring](/admin/monitoring#scrape-metrics) owns the private management listener on port 9090.
@@ -132,30 +130,32 @@ Missing required capture produces no result.
 ```mermaid
 sequenceDiagram
     accTitle: One conversation turn
-    accDescr: The server stores the question and a queued turn. The conversation loop pulls an assignment from a server, which claims the turn. The loop reads the context, renews the lease, reports partial answers, and sends all entries with the end of the turn, each call to any server. The server streams changes to the app and posts Slack answers.
+    accDescr: The server stores the question, queued turn and TURN run. The conversation sandbox driver claims the run, renews its lease and sends deltas through any server gateway. PostgreSQL notifies each live hub for app SSE. The end stores the final entries and ends the turn and run together.
     participant C as App or Slack
     participant S as Server role
     participant DB as PostgreSQL
-    participant W as Any server
-    participant L as Conversation loop
+    participant W as Any server gateway
+    participant L as Conversation sandbox driver
     C->>S: Question
-    S->>DB: Question entry and queued turn
-    L->>W: Pull a turn assignment
-    DB-->>W: NOTIFY mentor_ledger
-    W->>DB: Claim turn, admit, lease
-    W-->>L: Assignment (AttemptJwt)
-    L->>W: Read context, renew the lease, call tools and the model
-    L->>W: Partial answers, then the end with all entries
-    W->>DB: Entries, usage, feedback receipts
+    S->>DB: Question entry, queued turn and TURN run
+    L->>W: Next run with sandbox token
+    W->>DB: Claim run and turn, admit, lease
+    W-->>L: Assignment and epoch
+    L->>W: Context, lease renewal, tools and model calls
+    L->>W: Answer deltas
+    W->>DB: Progress events
     DB-->>S: NOTIFY mentor_ledger
-    S-->>C: SSE events, or the Slack answer
+    S-->>C: App SSE events
+    L->>W: End with final entries and last partial
+    W->>DB: Store entries, end turn and run together
+    DB-->>S: End-run event
 ```
 
 PostgreSQL holds the whole conversation in three workspace-scoped tables.
 The server role owns the HTTP API, the live stream, Slack ingress and posts, submission, and the weekly digest.
-A server with `AGENT_ENABLED` owns the claim, admission, the tools Pods, and the turn endpoints that the conversation loop calls.
+A server with `AGENT_ENABLED` owns run admission, sandbox claims and the turn gateway endpoints.
 No conversation state lives in a process, so any such server serves any call of any turn.
-[Conversation runtime](./unified-pi-runtime) owns the turn lifecycle, the loop, and the context of a turn.
+[Conversation runtime](./unified-pi-runtime) owns the turn lifecycle, its runner and the context of a turn.
 
 The UI uses shadcn components over Base UI.
 It renders the stored messages and the partial answer from the generated client, with no assistant runtime.

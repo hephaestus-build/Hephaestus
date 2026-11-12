@@ -1117,9 +1117,47 @@ async function checkStoppedUpgrade(
 	) {
 		throw new Error("installed chart has no valid sandbox namespace");
 	}
-	// Tools Pods hold nothing that outlives their turn, and with the server stopped no turn goes on. No server
-	// reaps them now, so the stop removes them instead of waiting for their Job deadline.
+	// A replica count of zero does not mean that a terminating server finished its drain.
+	await output(
+		"kubectl",
+		[
+			"wait",
+			"--for=delete",
+			"pods",
+			"--namespace",
+			settings.namespace,
+			"--selector",
+			`app.kubernetes.io/instance=${settings.release},app.kubernetes.io/component=server`,
+			"--timeout=100s",
+		],
+		{ signal: AbortSignal.timeout(120_000) },
+	);
 	if (sandboxNamespace !== "") {
+		// A source release from before agent-sandbox can have Jobs but no SandboxClaim API yet.
+		const resources = await output(
+			"kubectl",
+			["api-resources", "--api-group=extensions.agents.x-k8s.io", "--output=name"],
+			{ signal: AbortSignal.timeout(120_000) },
+		);
+		if (resources.split(/\s+/u).includes("sandboxclaims.extensions.agents.x-k8s.io")) {
+			await output(
+				"kubectl",
+				[
+					"delete",
+					"sandboxclaims.extensions.agents.x-k8s.io",
+					"--namespace",
+					sandboxNamespace,
+					"--selector",
+					"hephaestus.build/sandbox-id",
+					"--cascade=foreground",
+					"--wait=true",
+					"--ignore-not-found",
+					"--timeout=100s",
+				],
+				{ signal: AbortSignal.timeout(120_000) },
+			);
+		}
+		// The source release can leave legacy review or conversation Jobs after its servers stop.
 		await output(
 			"kubectl",
 			[
@@ -1128,11 +1166,17 @@ async function checkStoppedUpgrade(
 				"--namespace",
 				sandboxNamespace,
 				"--selector",
-				"hephaestus.build/sandbox-kind=tools",
+				"app.kubernetes.io/part-of=hephaestus",
 				"--cascade=foreground",
+				"--wait=true",
 				"--ignore-not-found",
 				"--timeout=100s",
 			],
+			{ signal: AbortSignal.timeout(120_000) },
+		);
+		await output(
+			"kubectl",
+			["wait", "--for=delete", "pods", "--namespace", sandboxNamespace, "--all", "--timeout=100s"],
 			{ signal: AbortSignal.timeout(120_000) },
 		);
 	}

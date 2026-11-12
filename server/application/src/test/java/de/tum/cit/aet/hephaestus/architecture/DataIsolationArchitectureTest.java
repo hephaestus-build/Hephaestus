@@ -149,8 +149,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "InstallationInboxStep", // Installation deliveries have no workspace until their handler creates one
             // Fleet-wide public keys that verify attempt tokens; a token's workspace is a signed claim
             "AttemptPublicKey",
-            // Installation-wide tools Pods; a bound row names its turn's workspace and is fenced on the turn's lease
-            "ConversationToolsPod",
             "InstanceSettings", // Singleton instance-wide operator settings (silent-mode brake)
             "ReleaseStart" // The releases this instance started
             );

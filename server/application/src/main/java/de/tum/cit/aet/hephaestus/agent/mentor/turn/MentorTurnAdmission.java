@@ -18,8 +18,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The {@code mentor_turn.admission} document: the model, rates and route of a turn attempt, and the model shape that
- * the Heph host configures the session with. {@link MentorTurnCompletion} bills from it, also an attempt whose host
- * died. Rates are JSON strings, so a per-1M rate never passes through a binary64. {@link #read} never throws: billing
+ * the turn driver configures the session with. {@link MentorTurnCompletion} bills from it, also an attempt whose sandbox
+ * stopped. Rates are JSON strings, so a per-1M rate never passes through a binary64. {@link #read} never throws: billing
  * runs inside the per-turn transaction, and a throw would leave the attempt unbilled.
  */
 public record MentorTurnAdmission(

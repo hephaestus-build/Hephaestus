@@ -220,10 +220,10 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     private static final List<String> EXPECTED_AGENT_RUNTIME = List.of(
             "de.tum.cit.aet.hephaestus.agent.gateway.SandboxDispatchConfiguration",
             "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxConfiguration",
-            "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxMaintenanceConfiguration",
             "de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration",
             "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnConfiguration",
-            "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnAssignmentController",
+            "de.tum.cit.aet.hephaestus.agent.mentor.host.TurnSandboxRunKind",
+            "de.tum.cit.aet.hephaestus.agent.mentor.host.TurnContextController",
             "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnController",
             "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnContexts",
             "de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenConfiguration",

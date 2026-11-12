@@ -48,13 +48,9 @@ server:
   resources:
     limits: { ephemeral-storage: 22Gi }
 sandbox:
+  conversationTurns: auto
+  # Recorded node capacity less kubelet reservations and the hard eviction floor, rounded down.
+  budget: { cpu: 3500m, memory: 14196Mi }
   enabled: true
-  # Five reviews of 512 MiB. Each review beyond them takes 100m of CPU from the resident turns
-  # while a backup runs.
+  # Review capacity follows the template requests and RuntimeClass overhead.
   reviewMemory: 2560Mi
-# One node: one loop, and a second one only while it rolls out.
-conversationLoop:
-  replicas: 1
-  # The CPU budget admits conversation turns from the remaining CPU budget. The tools quota stays at
-  # eight plus two warm Pods.
-  turns: auto

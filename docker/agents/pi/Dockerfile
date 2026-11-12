@@ -17,15 +17,13 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 FROM dependencies AS gateway
 WORKDIR /opt/pi-sdk
 RUN pnpm install --frozen-lockfile --ignore-scripts
-COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts pi/tools-seccomp.ts ./
-COPY --from=agent-runtime tool-protocol.ts tool-client.ts tools-server.ts ./
-# The conversation loop: its Deployment runs it from the image, so no worker stages it.
-COPY --from=agent-runtime heph-host.ts heph-host-protocol.ts heph-tools.ts pi-agent-sandbox.ts pi-diagnostics.ts \
-    pi-diagnostics.json pi-error-text.ts pi-provider.ts pi-text.ts ./
+COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts ./
 # The entrypoint of a sandbox from a SandboxTemplate: its driver, and the run kinds that it drives.
 COPY --from=agent-runtime driver.ts driver-kinds.ts driver-isolation.ts sandbox-paths.ts review-measure.ts \
     review-composer.ts review-composer-gateway.ts review-composer-model.ts ./
-RUN pnpm exec tsc -p tsconfig.build.json && pnpm exec node dist/tools-seccomp.js dist
+COPY --from=agent-runtime turn.ts heph-host-protocol.ts context-folder.ts pi-agent-sandbox.ts pi-diagnostics.ts \
+    pi-diagnostics.json pi-error-text.ts pi-provider.ts pi-text.ts ./
+RUN pnpm exec tsc -p tsconfig.build.json
 
 COPY practice-scripts/package.json practice-scripts/child.ts practice-scripts/build.ts practice-scripts/tsconfig.build.json /opt/practice-scripts/
 COPY practice-scripts/lib/ /opt/practice-scripts/lib/
@@ -54,7 +52,7 @@ RUN test -d /opt/pi-sdk/node_modules/@earendil-works/pi-coding-agent \
 
 RUN mkdir -p /tmp/abi-check && ln -sf /opt/pi-sdk/node_modules /tmp/abi-check/node_modules && \
     printf 'const sdk = await import("@earendil-works/pi-coding-agent");\nif (!sdk || typeof sdk !== "object") { throw new Error("Pi SDK import yielded no module namespace"); }\nconsole.log("pi sdk exports:", Object.keys(sdk).length);\n' > /tmp/abi-check/check.ts && \
-    node --permission --allow-fs-read=/tmp/abi-check --allow-fs-read=/opt/pi-sdk /tmp/abi-check/check.ts && \
+    node /tmp/abi-check/check.ts && \
     mkdir -p /tmp/abi-check/work/nested /tmp/abi-check/agent /tmp/abi-check/home && \
     printf 'SENTINEL-ORCHESTRATOR\n' > /tmp/abi-check/agent/AGENTS.md && \
     printf '{}\n' > /tmp/abi-check/agent/settings.json && \
@@ -64,10 +62,10 @@ RUN mkdir -p /tmp/abi-check && ln -sf /opt/pi-sdk/node_modules /tmp/abi-check/no
       'import { DefaultResourceLoader, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";' \
       'const cwd = "/tmp/abi-check/work/nested";' \
       'const agentDir = "/tmp/abi-check/agent";' \
-      '// Resolves resources exactly the way the runner does, under the same permissions: an untrusted' \
+      '// Resolves resources exactly the way the runner does: an untrusted' \
       '// project so the SDK never walks the ancestors of the working directory for skills, discovery of' \
       '// context files off, and the staged orchestrator handed over by name. The working directory sits' \
-      '// below ancestors outside the allowlist and beside a decoy AGENTS.md: an SDK that reaches out fails' \
+      '// below ancestors beside a decoy AGENTS.md: discovery must stay off.' \
       '// the build, so does one that discovers the decoy, and so does a loader that carries anything but' \
       '// the staged orchestrator.' \
       'const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });' \
@@ -88,23 +86,7 @@ RUN mkdir -p /tmp/abi-check && ln -sf /opt/pi-sdk/node_modules /tmp/abi-check/no
       'modelRuntime.registerProvider("gate", { name: "gate", baseUrl: "http://127.0.0.1:9/v1", apiKey: "$GATE_TOKEN", authHeader: true, api: "openai-responses", models: [{ id: "model", name: "model", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 1000, maxTokens: 100 }] });' \
       'if (!(await modelRuntime.checkAuth("gate"))) { throw new Error("the credential of the gate provider did not resolve"); }' \
       > /tmp/abi-check/runner-path-check.ts && \
-    HOME=/tmp/abi-check/home GATE_TOKEN=gate node --permission --allow-fs-read=/tmp/abi-check --allow-fs-read=/opt/pi-sdk --allow-fs-write=/tmp/abi-check/agent /tmp/abi-check/runner-path-check.ts && \
-    ! node --permission --allow-fs-read=/tmp/abi-check --allow-fs-read=/opt/pi-sdk \
-      -e 'require("node:fs").readFileSync("/etc/passwd")' 2>/dev/null && \
-    # A write grant on a directory absent at startup covers its mkdir but nothing inside it; the
-    # server therefore creates every writable directory before Node starts, and this build fails
-    # the day Node changes that, so the pre-creation can be revisited rather than cargo-culted.
-    printf '%s\n' \
-      'const fs = require("node:fs");' \
-      'const dir = process.argv[2];' \
-      'fs.mkdirSync(dir);' \
-      'let denied = false;' \
-      'try { fs.writeFileSync(`${dir}/x`, "1"); } catch (error) { denied = error.code === "ERR_ACCESS_DENIED"; }' \
-      'if (!denied) { throw new Error("a write inside a directory granted before it existed was allowed; revisit the pre-creation in PiRuntimeFactory"); }' \
-      > /tmp/abi-check/absent-grant-check.cjs && \
-    node --permission --allow-fs-read=/tmp/abi-check --allow-fs-write=/tmp/abi-check/absent /tmp/abi-check/absent-grant-check.cjs /tmp/abi-check/absent && \
-    ! node --permission --allow-fs-read=/tmp/abi-check --allow-fs-read=/opt/pi-sdk \
-      -e 'require("node:child_process").spawnSync("true")' 2>/dev/null && \
+    HOME=/tmp/abi-check/home GATE_TOKEN=gate node /tmp/abi-check/runner-path-check.ts && \
     rm -rf /tmp/abi-check
 
 COPY --from=dependencies /opt/practice-scripts/node_modules /opt/practice-scripts/node_modules
@@ -158,11 +140,6 @@ RUN mkdir -p /workspace/inputs/sources/scm/repo/.hidden && \
     chown -R 1000:1000 /home/agent/.local /workspace/work && \
     setpriv --reuid=1000 --regid=1000 --init-groups node --max-old-space-size=256 \
       /opt/pi-sdk/native-tools-check.ts && \
-    # Under the loop's grants (PracticeRunnerProfile), codemode still runs and a process does not start.
-    setpriv --reuid=1000 --regid=1000 --init-groups node --max-old-space-size=256 --permission \
-      --allow-fs-read=/workspace --allow-fs-read=/opt/pi-sdk --allow-fs-read=/home/agent \
-      --allow-fs-write=/workspace/work --allow-fs-write=/home/agent/.local/tmp --allow-worker \
-      /opt/pi-sdk/native-tools-check.ts && \
     rm -rf /workspace/inputs /workspace/work /opt/pi-sdk/native-tools-check.ts /home/agent/.local
 
 # The base image installs Yarn as a tree under /opt that /usr/local/bin only links to, so removing
@@ -182,53 +159,12 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
     fi
 
 COPY --from=gateway /opt/pi-sdk/dist/ /opt/pi-sdk/
-COPY pi/tools-launch.sh /opt/pi-sdk/tools-launch.sh
-# The tools program starts with no privilege on each transport, and its client gets the Pod's nonce from `hello`.
-# Both start through the launcher: a conversation's tools Pod on TCP, a review's sides under their socket filter.
-RUN install -d -m 1777 /tmp/tools-check && node --input-type=module <<'CHECK' && rm -rf /tmp/tools /tmp/tools-check
-import { spawn } from "node:child_process";
-import { once } from "node:events";
-import { setTimeout as sleep } from "node:timers/promises";
-import { ToolClient } from "/opt/pi-sdk/tool-client.js";
-
-const nonce = "image-check";
-const privilege = ["--reuid=1001", "--regid=1001", "--clear-groups", "--no-new-privs", "--bounding-set=-all", "--inh-caps=-all"];
-async function hello(address, env, program, use = async () => {}) {
-  const tools = spawn(
-    "setpriv",
-    [...privilege, ...program],
-    { env: { PATH: process.env.PATH, TOOLS_NONCE: nonce, ...env }, stdio: "inherit" },
-  );
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      const client = await ToolClient.open(address, nonce);
-      await use(client);
-      client.close();
-      break;
-    } catch (error) {
-      if (attempt === 100 || tools.exitCode !== null) {
-        throw error;
-      }
-      await sleep(100);
-    }
-  }
-  tools.kill();
-  await once(tools, "exit");
-}
-await hello({ host: "127.0.0.1", port: 7100 }, { TOOLS_PORT: "7100", TOOLS_ROLE: "conversation" }, ["sh", "/opt/pi-sdk/tools-launch.sh"], async (client) => {
-  // The tools program listens on TCP, and a command it runs still opens no socket but a Unix one.
-  let out = "";
-  await client.exec({ command: "(exec 3<>/dev/tcp/127.0.0.1/7100) 2>/dev/null && echo OPEN || echo REFUSED", cwd: "/tmp/tools/workspace", timeoutMs: 10000 }, (chunk) => { out += chunk; });
-  if (out.trim() !== "REFUSED") throw new Error(`a conversation command opened a TCP socket: ${out}`);
-});
-await hello({ path: "/tmp/tools-check/tools.sock" }, { TOOLS_SOCKET: "/tmp/tools-check/tools.sock" }, ["sh", "/opt/pi-sdk/tools-launch.sh"]);
-CHECK
 
 # A SandboxTemplate's container runs the image's entrypoint; every other user of the image names its own command.
 RUN node --input-type=module -e 'await import("/opt/pi-sdk/driver.js")'
 ENTRYPOINT ["node", "/opt/pi-sdk/driver.js"]
 
-LABEL hephaestus.agent.runtime-contract=17
+LABEL hephaestus.agent.runtime-contract=18
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 

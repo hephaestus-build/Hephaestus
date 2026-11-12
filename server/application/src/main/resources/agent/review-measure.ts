@@ -1,26 +1,22 @@
 // review-measure.ts — a review's measurement in its own sandbox: the driver's REVIEW kind.
 //
 // The image keeps the programs that a review Job's Pod ran, and the kind runs them in the same order, in one
-// container: the initializer downloads and extracts the captured workspace, the tools side serves the runner's
-// commands on a Unix socket, and the run program starts the runner under its work deadline and uploads what it wrote.
+// container: the initializer downloads and extracts the captured workspace, then the run program starts the runner
+// under its work deadline and uploads what it wrote. The runner starts tools and programs in this same container.
 // The server measures the result when it arrives, so the run is done when its upload is confirmed.
 
 import { type ChildProcess, spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, symlinkSync } from "node:fs";
-import { setTimeout as sleep } from "node:timers/promises";
+import { existsSync, symlinkSync } from "node:fs";
 
 import type { KindRunner, RunContext, RunOutcome } from "./driver.ts";
 
 /** Where the image keeps the review programs (docker/agents/pi). */
 const SDK = "/opt/pi-sdk";
-const SOCKETS = "/tmp/review-sides";
 /**
  * The runner at /workspace/.run-pi.js resolves the Pi SDK through this link. /workspace is an empty volume over the
  * image's read-only root, so the kind makes the link before the workspace fills.
  */
 const SDK_LINK = "/workspace/node_modules";
-const SIDE_START_MS = 10_000;
 /** gateway-run.ts's exit after it could not upload the result. */
 const EXIT_UPLOAD_FAILED = 43;
 
@@ -31,8 +27,6 @@ export interface MeasureContext {
 	/** In epoch milliseconds. */
 	workDeadline: number;
 	uploadDeadline: number;
-	/** Whether a custom practice program runs, on a side of its own. */
-	programs: boolean;
 }
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
@@ -61,7 +55,7 @@ export function parseMeasureContext(value: unknown): MeasureContext {
 	if (!isJsonObject(value)) {
 		throw new Error("the measurement context is not an object");
 	}
-	const { command, env, workDeadline, uploadDeadline, programs } = value;
+	const { command, env, workDeadline, uploadDeadline } = value;
 	if (
 		!isCommand(command) ||
 		!isStringRecord(env) ||
@@ -69,14 +63,13 @@ export function parseMeasureContext(value: unknown): MeasureContext {
 		typeof uploadDeadline !== "number" ||
 		!Number.isSafeInteger(workDeadline) ||
 		!Number.isSafeInteger(uploadDeadline) ||
-		uploadDeadline <= workDeadline ||
-		typeof programs !== "boolean"
+		uploadDeadline <= workDeadline
 	) {
 		throw new Error(
 			"the measurement context does not name a runner, its environment and its deadlines",
 		);
 	}
-	return { command, env, workDeadline, uploadDeadline, programs };
+	return { command, env, workDeadline, uploadDeadline };
 }
 
 /** The environment that each program of the measurement gets: the server's, the gateway's routes and the claim. */
@@ -125,33 +118,6 @@ async function runToEnd(
 	}
 }
 
-/** A side that serves the runner on a Unix socket of its own, as the review Pod's sidecar did. */
-async function startSide(role: "tools" | "programs", nonce: string, env: Record<string, string>) {
-	const socket = `${SOCKETS}/${role}.sock`;
-	const gitSettings = Object.fromEntries(
-		Object.entries(env).filter(([name]) => name.startsWith("GIT_")),
-	);
-	const side = spawn("sh", [`${SDK}/tools-launch.sh`], {
-		env: {
-			PATH: env.PATH ?? "",
-			...gitSettings,
-			TOOLS_NONCE: nonce,
-			TOOLS_SOCKET: socket,
-			TOOLS_ROLE: role,
-		},
-		stdio: "inherit",
-	});
-	const until = Date.now() + SIDE_START_MS;
-	while (!existsSync(socket)) {
-		if (side.exitCode !== null || Date.now() > until) {
-			side.kill("SIGKILL");
-			throw new Error(`the ${role} side did not start`);
-		}
-		await sleep(50);
-	}
-	return { socket, side };
-}
-
 /** The REVIEW kind: it measures the review, and the server admits what the upload brings. */
 export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	const { signal } = run;
@@ -169,37 +135,12 @@ export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	if ((await runToEnd("node", [`${SDK}/gateway-init.js`], env, signal)) !== 0) {
 		throw new Error("the workspace could not be prepared");
 	}
-	mkdirSync(SOCKETS, { recursive: true, mode: 0o700 });
-	const nonce = randomBytes(32).toString("hex");
-	const tools = await startSide("tools", nonce, env);
-	const sides = [tools];
-	try {
-		const loopEnv: Record<string, string> = {
-			...env,
-			TOOLS_SOCKET: tools.socket,
-			TOOLS_NONCE: nonce,
-		};
-		if (context.programs) {
-			const programs = await startSide("programs", nonce, env);
-			sides.push(programs);
-			loopEnv.PROGRAMS_SOCKET = programs.socket;
-		}
-		const exit = await runToEnd(
-			"node",
-			[`${SDK}/gateway-run.js`, ...context.command],
-			loopEnv,
-			signal,
-		);
-		if (signal.aborted) {
-			return { leaseLost: true };
-		}
-		// The run program uploads whatever the runner wrote, however it ended; the server measures it.
-		return exit === EXIT_UPLOAD_FAILED
-			? { leaseLost: false, outcome: "handed_on" }
-			: { leaseLost: false, outcome: "completed" };
-	} finally {
-		for (const { side } of sides) {
-			side.kill("SIGTERM");
-		}
+	const exit = await runToEnd("node", [`${SDK}/gateway-run.js`, ...context.command], env, signal);
+	if (signal.aborted) {
+		return { leaseLost: true };
 	}
+	// The run program uploads whatever the runner wrote. The server admits it against its own evidence.
+	return exit === EXIT_UPLOAD_FAILED
+		? { leaseLost: false, outcome: "handed_on" }
+		: { leaseLost: false, outcome: "completed" };
 };

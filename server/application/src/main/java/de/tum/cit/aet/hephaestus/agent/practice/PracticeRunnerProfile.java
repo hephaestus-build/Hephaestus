@@ -23,11 +23,8 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-glob-worker.js",
             "pi-pinned-object.js",
             "pi-search-worker.js",
-            "pi-tool-side.js",
+            "pi-find.js",
             "pi-verified-search.js",
-            "tool-client.js",
-            "tool-program.js",
-            "tool-protocol.js",
             "pi-declared-sources.js",
             "pi-diagnostics.js",
             "pi-diagnostics.json",
@@ -72,19 +69,6 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
     public static final int HEAP_MIB = 256;
 
     @Override
-    public List<String> runtimeFlags() {
-        // The loop starts no process: its tools run on the other sides of the Pod (ADR 0068). A server runs codemode,
-        // and the loop's own proof of a search.
-        return Stream.concat(
-                        BASE_RUNTIME_FLAGS.stream(),
-                        Stream.of(
-                                "--allow-fs-read=" + SandboxLayout.PRACTICE_SCRIPT_IMAGE_ROOT,
-                                "--allow-fs-write=" + REVIEW_INPUT_DIRECTORY,
-                                "--allow-worker"))
-                .toList();
-    }
-
-    @Override
     public Map<String, String> additionalEnv() {
         return Map.of();
     }
@@ -96,7 +80,6 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
                         Stream.of(
                                 "ln -sfn " + SandboxLayout.PRACTICE_SCRIPT_KITS_TARGET + " "
                                         + SandboxLayout.WORKSPACE_ROOT + "/" + SandboxLayout.PRACTICE_SCRIPT_KITS_LINK,
-                                // A write grant holds only for a directory that exists when Node starts.
                                 "mkdir -p " + REVIEW_INPUT_DIRECTORY))
                 .toList();
     }

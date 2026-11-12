@@ -1,0 +1,2 @@
+{{- /* Validate auto budgets even when no server or sandbox resources render. */ -}}
+{{- $_ := include "hephaestus.conversationTurns" . -}}

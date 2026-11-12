@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -29,6 +30,9 @@ import tools.jackson.databind.node.JsonNodeFactory;
 
 @RecordApplicationEvents
 class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private AgentCapacityProperties capacity;
 
     @Autowired
     private TurnRunsAdapter turnRuns;
@@ -235,10 +239,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(stored(followUp.turn()).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
     }
 
-    /**
-     * The reasons that a deployment of {@code capacity} Hephaestus slots gives. Turns of earlier tests can still hold slots,
-     * so a test sets the capacity from the slots held before it.
-     */
+    /** The waiting reasons for a deployment with {@code capacity} Hephaestus slots. */
     private MentorTurnWaits waits(@Nullable Integer capacity) {
         return new MentorTurnWaits(turnRepository, events, capacity);
     }
@@ -257,22 +258,21 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
     @Test
     void shouldSayAQuestionWaitsForAFreeHephOnlyWhenEveryHephSlotIsTaken() {
-        long held = turnRepository.countHeld();
         MentorTurnService.Submission first = ask(main, "First");
-        MentorTurnService.Submission second =
-                ask(conversations.openThread(workspace.getId(), first.question().getId()), "Second");
         MentorTurnService.Submission waiting = askElsewhere("heph-slots", "Elsewhere");
         MentorTurn shown = stored(waiting.turn());
-        int twoSlots = Math.toIntExact(held + 2);
+        int slots = Objects.requireNonNull(capacity.turns());
 
-        claims.claim(first.turn());
-        assertThat(waits(twoSlots).waits(shown.getWorkspaceId(), List.of(shown)))
-                .as("one of two slots is free, so the question may start at once")
+        assertThat(waits(slots).waits(shown.getWorkspaceId(), List.of(shown)))
+                .as("the slot is free, so the question may start at once")
                 .isEmpty();
 
-        claims.claim(second.turn());
-        assertThat(waits(twoSlots).waits(shown.getWorkspaceId(), List.of(stored(waiting.turn()))))
-                .as("every workspace shares the slots, and both are taken")
+        claims.claim(first.turn());
+        assertThat(waits(slots + 1).waits(shown.getWorkspaceId(), List.of(stored(waiting.turn()))))
+                .as("an additional slot would let this question start")
+                .isEmpty();
+        assertThat(waits(slots).waits(shown.getWorkspaceId(), List.of(stored(waiting.turn()))))
+                .as("every workspace shares the configured slot, which is taken")
                 .containsExactly(entry(waiting.turn().getId(), MentorTurn.WaitingFor.FREE_HEPH));
         assertThat(waits(null).waits(shown.getWorkspaceId(), List.of(stored(waiting.turn()))))
                 .as("without a capacity, the server does not know that every slot is taken")

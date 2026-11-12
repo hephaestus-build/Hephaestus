@@ -45,7 +45,6 @@ import {
 	PRACTICES_DIR,
 	stageGoldenWorkspace,
 } from "./golden-review-workspace.ts";
-import { startHarnessSides } from "./harness-tool-side.ts";
 
 const LIB = nodePath.resolve(
 	import.meta.dirname,
@@ -919,7 +918,8 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 			};
 		},
 	});
-	await startHarnessSides(cwd);
+	const { deriveChangeView } = await import("../../../main/resources/agent/pi-change-view.ts");
+	deriveChangeView(cwd);
 	const { runReviewJob } = await import("../../../main/resources/agent/pi-runner.ts");
 	await runReviewJob();
 }

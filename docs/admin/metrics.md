@@ -215,12 +215,11 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 
 | Prometheus name                            | Type      | Labels    | Meaning                                                                 |
 | ------------------------------------------ | --------- | --------- | ----------------------------------------------------------------------- |
-| `mentor_turn_started_total`                | Counter   | none      | Attempts that a server handed to the conversation loop                  |
+| `mentor_turn_started_total`                | Counter   | none      | Attempts that a server handed to the sandbox driver                  |
 | `mentor_turn_completed_total`              | Counter   | `outcome` | Attempts that ended                                                     |
 | `mentor_turn_retried_total`                | Counter   | none      | Turns that went back to the queue after a lease expiry                  |
 | `mentor_turn_queued`                       | Gauge     | none      | Turns that wait for a server, sampled by the server every 30 seconds    |
 | `mentor_turn_queue_wait_seconds`           | Histogram | none      | From a question to the start of its first attempt, also while an earlier question of its conversation runs |
-| `mentor_turn_tools_wait_seconds` | Histogram | `outcome` | From a tools-quota refusal until tools are ready or the attempt ends, including Pod start |
 | `llm_proxy_upstream_stalled_total`         | Counter   | `apiProtocol` | conversation model calls and streamed review model calls that the server's LLM proxy cut after the first-byte or the idle bound |
 | `resilience4j_circuitbreaker_state`        | Gauge     | `name`, `state` | The provider breaker of each connection, named `llm-connection-<scope>-<connection id>`. `state="open"` is 1 while it refuses calls |
 | `resilience4j_circuitbreaker_not_permitted_calls_total` | Counter | `name`, `kind` | Model calls that a provider breaker refused |
@@ -231,7 +230,7 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 | `agent_sandbox_reaper_failure_total`       | Counter   | none      | Sandbox reaper passes or claim deletes that failed. It tries each again next pass |
 | `agent_sandbox_revoked_total`            | Counter   | `reason`  | Live sandboxes that the server took back before the reaper would: `unisolated` for a sandbox whose network policy did not hold |
 | `mentor_turn_duration_seconds`             | Histogram | none      | An attempt, from its claim to its end                                   |
-| `mentor_turn_first_token_seconds`          | Histogram | none      | From the start of an attempt to the first part of Hephaestus's answer         |
+| `agent_run_first_token_seconds`          | Histogram | `kind`, `start` | From the run start to the first part of the answer. `kind="turn"`, `start="cold"` or `"warm"`         |
 | `mentor_turn_cost_usd`                     | Summary   | none      | The cost of the calls of one attempt that ended by its end, in US dollars                            |
 | `mentor_turn_claim_failure_total`          | Counter   | none      | Claims and starts of a turn that failed with an error                   |
 | `mentor_slack_reply_total`                 | Counter   | `state`   | Replies to questions asked in Slack, by the state they were left in     |
@@ -267,7 +266,7 @@ sum(increase(mentor_turn_completed_total{outcome=~"failed|lease_expired"}[1h]))
   / sum(increase(mentor_turn_completed_total[1h]))
 ```
 
-A high `lease_expired` share shows conversation loops that stop during turns, or turns whose calls reach no server.
+A high `lease_expired` share shows sandbox drivers that stop during turns, or turns whose calls reach no server.
 A high `failed` share with no lease expiries shows one of these causes:
 
 - Admission declines turns.
@@ -277,7 +276,7 @@ A high `failed` share with no lease expiries shows one of these causes:
 
 The server logs each failed attempt at `WARN` as `conversation turn <id> attempt <n> failed: <reason>; last failed model call: <kind> <status>`, or `none`.
 The reason tells which of these happened, for example `its conversation loop reported ERROR: model_error`.
-The conversation loop reports a kind of failure from a closed set, for example `model_error`, `context_overflow` or `upstream_stalled`.
+The sandbox driver reports a kind of failure from a closed set, for example `model_error`, `context_overflow` or `upstream_stalled`.
 It does not report the error text of the model provider, a tool or the server, or the messages of the conversation.
 A server that ends an attempt itself names the class of the failure, for example `starting it failed: IllegalStateException`.
 A lease call that ends an attempt after its deadline names `its conversation loop did not end it within PT30S after its deadline`.
@@ -302,7 +301,7 @@ These fields survive a server restart and do not contain a provider response bod
 Late usage reports and repricing do not change them.
 The existing model-call warning and `llm.proxy.usage.accumulate.failure` meter remain the signals for a failed call and a failed ledger write.
 
-The conversation loop's end, the server's own end and a lease that expires write the first three columns.
+The sandbox driver's end, the server's own end and a lease that expires write the first three columns.
 A lease that expires writes no `failed_call`, because the run reaper ends the turn.
 The columns are empty for a turn that did not fail, and for a turn that admission declines.
 
@@ -313,7 +312,7 @@ Its `failure_cause` is `its lease expired on its last attempt`.
 An increase in `mentor_turn_claim_failure_total` shows a server that claims turns but cannot start them.
 The server fails each turn that it cannot start, and claims the next one.
 A claim that fails answers the loop's pull with `503`. The loop then pulls again, maybe from another server.
-[Runtime roles](./runtime-roles.mdx#the-conversation-loop) tells what the conversation loop does when it stops, and what happens to its turns.
+[Runtime roles](./runtime-roles.mdx#conversation-sandboxes) tells what the sandbox driver does when it stops, and what happens to its turns.
 
 ## Call pool metrics
 
@@ -499,7 +498,7 @@ histogram_quantile(0.95, sum by (uri, le) (rate(http_server_requests_seconds_buc
 
 `hikaricp_connections_acquire_seconds` has buckets at 1, 5, 10, 50, 100 and 500 milliseconds, and at 1, 5, 10 and 30 seconds.
 `agent_job_duration_seconds` has buckets from 1 second to 4 hours, so a review of many minutes has a percentile.
-`mentor_turn_first_token_seconds` has buckets from 0.5 to 60 seconds, with one at the conversation objective's 10 seconds.
+`agent_run_first_token_seconds` has buckets from 0.5 to 60 seconds, with one at the conversation objective's 10 seconds.
 `mentor_turn_duration_seconds` has buckets from 1 second to 10 minutes.
 The roles register both turn timers at zero when they start.
 

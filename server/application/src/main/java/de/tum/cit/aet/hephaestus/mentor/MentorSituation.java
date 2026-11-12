@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The situation a turn runs in, as text for the transient message the Heph host appends after the path on every
+ * The situation a turn runs in, as text for the transient message the turn driver appends after the path on every
  * model request. It is never stored: it changes with every turn, so it sits after the cached prefix. It tells Heph
  * the time, where the question was asked, how long the conversation was quiet, and what it cannot see in its own
  * path: for a thread, the parent and what the main conversation said since; for the main conversation, its open

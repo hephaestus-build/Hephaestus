@@ -1,13 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.turn;
 
-import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetExhaustedException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUnpricedUsageBlockedException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -29,13 +27,13 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.modulith.NamedInterface;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Starts the next queued turn for a worker: claims its run, then admits it. Admission runs at the start, not at
+ * Admits the turn whose run a conversation sandbox just claimed. Admission runs at the start, not at
  * submission, because a follow-up can wait while the member's AI choice or the budget changes. A turn admission
- * declines ends {@code FAILED} with the reason the developer reads. The claim keeps the installation's turn cap
- * ({@code hephaestus.agent.capacity.turns}).
+ * declines ends {@code FAILED} with the reason the developer reads. The sandbox owner holds the run claim.
  */
 @Service
 @RequiredArgsConstructor
@@ -59,52 +57,39 @@ public class MentorTurnStarter {
     private final PersonDataWriteFence writeFence;
     private final MeterRegistry meters;
     private final LlmConnectionHealth connections;
-    private final AgentRuns runs;
-    private final AgentCapacityProperties capacity;
-    private final TransactionTemplate transactions;
 
     /** A claimed and admitted turn attempt: what its host runs, for whom, with which model. */
     public record StartedTurn(MentorTurn turn, long accountId, MentorLlmConfig llm) {}
 
     /**
-     * Claims and admits the next turn. Each step commits on its own, so a declined admission is recorded even
-     * though the claim already committed.
+     * Starts and admits the turn of a run that a sandbox's pull claimed, in the pull's transaction.
      *
-     * @return empty when no turn is waiting, the installation runs its cap of turns, or admission declined the claimed
-     *     one
+     * @return empty when the turn no longer waits, or admission declined it and ended it with its run
      */
-    public Optional<StartedTurn> startNext() {
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<StartedTurn> startClaimed(AgentRunFence claim) {
+        return turns.start(claim.workspaceId(), claim.runId(), claim.epoch()).flatMap(this::admitted);
+    }
+
+    /** Admits a turn whose attempt just started; a declined one ends {@code FAILED} with its run. */
+    private Optional<StartedTurn> admitted(MentorTurn turn) {
         var previous = MDC.getCopyOfContextMap();
         try {
-            return startInContext();
+            MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(turn.getWorkspaceId()));
+            MDC.put(StructuredLogKeys.RUN_ID, turn.getRunId().toString());
+            MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(turn.getAttempt()));
+            MDC.put(StructuredLogKeys.SUBJECT_KEY, "conversation:" + turn.getConversationId());
+            MDC.remove(StructuredLogKeys.REVIEW_ID);
+            MDC.remove(StructuredLogKeys.JOB_ATTEMPT);
+            MDC.remove(StructuredLogKeys.JOB_ID);
+            return admitInContext(turn);
         } finally {
             if (previous == null) MDC.clear();
             else MDC.setContextMap(previous);
         }
     }
 
-    private Optional<StartedTurn> startInContext() {
-        Integer turnCap = capacity.turns();
-        int cap = turnCap == null ? Integer.MAX_VALUE : turnCap;
-        Optional<MentorTurn> claimed = Objects.requireNonNull(transactions.execute(status -> runs.claimCapped(
-                        AgentRunKind.TURN, cap)
-                .flatMap(lease -> {
-                    Optional<MentorTurn> started = turns.start(lease.workspaceId(), lease.runId(), lease.epoch());
-                    // A stop holds the turn: the claim rolls back, and the stop ends the run.
-                    if (started.isEmpty()) status.setRollbackOnly();
-                    return started;
-                })));
-        if (claimed.isEmpty()) {
-            return Optional.empty();
-        }
-        MentorTurn turn = claimed.get();
-        MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(turn.getWorkspaceId()));
-        MDC.put(StructuredLogKeys.RUN_ID, turn.getRunId().toString());
-        MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(turn.getAttempt()));
-        MDC.put(StructuredLogKeys.SUBJECT_KEY, "conversation:" + turn.getConversationId());
-        MDC.remove(StructuredLogKeys.REVIEW_ID);
-        MDC.remove(StructuredLogKeys.JOB_ATTEMPT);
-        MDC.remove(StructuredLogKeys.JOB_ID);
+    private Optional<StartedTurn> admitInContext(MentorTurn turn) {
         long accountId = turns.accountId(turn);
         meters.counter(AgentMetrics.MENTOR_TURN_STARTED).increment();
         Instant startedAt = turn.getStartedAt();
@@ -150,24 +135,20 @@ public class MentorTurnStarter {
     }
 
     /**
-     * Freezes the model and rates the attempt runs with. Throws when this worker no longer holds the attempt. Takes the
-     * person-data write fence of the turn's account first, before any row lock. An erasure holds that fence exclusively
-     * while it suppresses the account, so an admission either commits before the suppression, and the erasure detaches
-     * the attempt's calls, or it starts after it and is refused here.
+     * Freezes the model and rates in the claim's transaction. The gateway took the account's person-data fence before
+     * the sandbox, turn and run locks. Rechecking it here refuses an account whose processing is suppressed.
      *
      * @return false when the account's person data may not be written, because an erasure suppressed it
      */
     private boolean admit(MentorTurn turn, MentorTurnAdmission admitted) {
-        return Boolean.TRUE.equals(transactions.execute(status -> {
-            if (turnRows.findByIdAndWorkspaceId(turn.getId(), turn.getWorkspaceId())
-                    .isEmpty()) throw new MentorLeaseLostException(turn.getId(), turn.getAttempt());
-            boolean writable = turnRows.findAccountIdByIdAndWorkspaceId(turn.getId(), turn.getWorkspaceId())
-                    .map(writeFence::holdForAccountWrite)
-                    .orElse(false);
-            if (!writable) return false;
-            turns.admit(turn.getWorkspaceId(), turn.getId(), turn.getAttempt(), turn.getRunId(), admitted.toJson());
-            return true;
-        }));
+        if (turnRows.findByIdAndWorkspaceId(turn.getId(), turn.getWorkspaceId()).isEmpty())
+            throw new MentorLeaseLostException(turn.getId(), turn.getAttempt());
+        boolean writable = turnRows.findAccountIdByIdAndWorkspaceId(turn.getId(), turn.getWorkspaceId())
+                .map(writeFence::holdForAccountWrite)
+                .orElse(false);
+        if (!writable) return false;
+        turns.admit(turn.getWorkspaceId(), turn.getId(), turn.getAttempt(), turn.getRunId(), admitted.toJson());
+        return true;
     }
 
     private Optional<StartedTurn> decline(MentorTurn turn, String reason) {
