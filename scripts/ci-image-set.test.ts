@@ -152,6 +152,7 @@ function changes(): string[][] {
 const ALL_IMAGES = JSON.stringify(Object.keys(IMAGES));
 
 interface Case {
+	eviction?: boolean;
 	event: string;
 	paths: string[];
 	filters: Record<string, string>;
@@ -321,7 +322,10 @@ function needed(entry: Case): Record<string, boolean | undefined> {
 		// merge-group run runs them all.
 		Kubernetes:
 			builtAtAll &&
-			(entry.event === "push" ? entry.queueImages === "[]" : entry.filters.kubernetes === "true"),
+			(entry.event === "push"
+				? entry.queueImages === "[]"
+				: entry.filters.kubernetes === "true" ||
+					(entry.event === "workflow_dispatch" && entry.eviction === true)),
 		"Release-preflight": !fails && evidence,
 	};
 }
@@ -365,11 +369,11 @@ function run(entry: Case) {
 	};
 	const declared = cicd.getIn(["jobs", "detect-changes", "outputs"]);
 	assert.ok(isMap(declared));
-	const detection = dictionary({
-		github,
-		steps,
-		inputs: { "release-preflight": entry.preflight === "true" },
-	});
+	const eventInputs = {
+		"release-preflight": entry.preflight === "true",
+		"eviction-drill": entry.eviction === true,
+	};
+	const detection = dictionary({ github, steps, inputs: eventInputs });
 	const outputs = Object.fromEntries(
 		declared.items
 			.filter((item) => READ.has(String(item.key)))
@@ -397,7 +401,11 @@ function run(entry: Case) {
 		});
 		return (
 			(/\b(?:always|cancelled|failure|success)\(/u.test(condition) || succeeded) &&
-			evaluate(condition, ["needs", "github"], dictionary({ needs, github })) === "true"
+			evaluate(
+				condition,
+				["needs", "github", "inputs"],
+				dictionary({ needs, github, inputs: eventInputs }),
+			) === "true"
 		);
 	};
 	// A merge group's heavy legs wait for its Security scan, which passes in this model.
@@ -569,4 +577,26 @@ void test("a job that installs every image runs exactly when its event needs it 
 		"Release-preflight on pull_request",
 		"Release-preflight on workflow_dispatch",
 	]);
+});
+
+void test("a docs-only eviction dispatch still has every image and its packaged server", () => {
+	const paths = ["docs/user/index.mdx"];
+	const entry: Case = {
+		event: "workflow_dispatch",
+		paths,
+		filters: filterOutputs(paths),
+		aliasBase: "",
+		preview: "",
+		releaseCandidate: "false",
+		queueImages: "[]",
+		versionBump: "false",
+		preflight: "false",
+		skip: "",
+		eviction: true,
+	};
+	assert.equal(entry.filters.kubernetes, "false");
+	const result = run(entry);
+	assert.equal(result.consumers.Kubernetes, true);
+	assert.equal(result.packaged, true);
+	assert.ok(Object.values(result.present).every(Boolean));
 });

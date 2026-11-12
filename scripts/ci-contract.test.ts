@@ -6358,7 +6358,14 @@ void test("the queue runs roll, while nightly and dispatch add eviction and PR a
 	assert.ok(isMap(rootEnv));
 	const jobs = kubernetes.get("jobs");
 	assert.ok(isMap(jobs));
-	for (const event of ["pull_request", "merge_group", "workflow_dispatch", "schedule"]) {
+	for (const event of [
+		"pull_request",
+		"merge_group",
+		"workflow_dispatch",
+		"schedule",
+		"workflow_run",
+		"push",
+	]) {
 		for (const queue of [false, true]) {
 			assert.equal(jobRuns(kubernetes, "k3d-drills", event, {}, false, { queue }), queue);
 			for (const key of ["k3d", "k3d-drills", "k3d-1-35-amd64", "k3d-1-35-arm64"]) {
@@ -6407,7 +6414,7 @@ void test("the queue runs roll, while nightly and dispatch add eviction and PR a
 				);
 				assert.equal(
 					selected("Verify kubelet memory eviction order on a disposable node"),
-					drills && (event === "schedule" || event === "workflow_dispatch"),
+					drills && event !== "pull_request" && event !== "merge_group",
 				);
 				assert.equal(
 					selected("Qualify the sandbox adapters in the chart server Pod"),
@@ -7378,7 +7385,61 @@ void test("a nightly eviction failure opens or updates the existing Kubernetes t
 		assert.equal(result.status, 0, result.stderr);
 		const calls = await readFile(log, "utf8");
 		assert.match(calls, existing ? /issue comment 7/u : /issue create/u);
-		assert.match(calls, /The nightly Kubernetes run failed|tested-commit/u);
+		assert.match(calls, /The nightly Kubernetes run failed/u);
+		assert.match(calls, /tested-commit/u);
 		assert.match(calls, /https:\/\/example.invalid\/run/u);
 	}
+});
+
+void test("an explicit eviction dispatch selects Kubernetes without a Kubernetes path change", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const completions: Record<string, Completion> = Object.fromEntries(
+		[...needsClosure(workflow, "Kubernetes")].map((name) => [name, { result: "success" }]),
+	);
+	completions["detect-changes"] = {
+		result: "success",
+		outputs: {
+			kubernetes: "false",
+			publishable: "true",
+			should_skip: "false",
+			"queue-run": "",
+		},
+	};
+	completions.Docker = {
+		result: "success",
+		outputs: { "application-server-digest": "sha256:published" },
+	};
+	for (const eviction of [false, true]) {
+		assert.equal(
+			jobRuns(workflow, "Kubernetes", "workflow_dispatch", completions, false, {
+				"eviction-drill": eviction,
+			}),
+			eviction,
+		);
+	}
+	completions.Docker = { result: "failure" };
+	assert.equal(
+		jobRuns(workflow, "Kubernetes", "workflow_dispatch", completions, false, {
+			"eviction-drill": true,
+		}),
+		false,
+		"requesting eviction cannot bypass failed image producers",
+	);
+});
+
+void test("an old candidate lacks the release drill verifier and stops before any release write", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/release.yml", "utf8"));
+	const steps = workflow.getIn(["jobs", "tag-images", "steps"]);
+	assert.ok(isSeq(steps));
+	const verifier = namedStep(
+		workflow,
+		["jobs", "tag-images"],
+		"Require the release drill verifier",
+	);
+	assert.equal(verifier.get("run"), "test -f scripts/resolve-captured-release-images.ts");
+	assert.equal(verifier.has("continue-on-error"), false);
+	const checkout = steps.items[0];
+	assert.ok(isMap(checkout));
+	assert.match(String(checkout.get("uses")), /^actions\/checkout@/u);
+	assert.equal(steps.items[1], verifier);
 });

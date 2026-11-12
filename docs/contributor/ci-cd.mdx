@@ -782,7 +782,7 @@ It starts alongside the install/qualification job after the images are ready.
 The caller needs only the image producer and change metadata. The image producer already waits for the packaged server.
 
 The merge group runs the conversation roll, which installs the release and rolls the server and loop.
-Eviction runs nightly, on release and on an explicit CI dispatch. It runs no eviction on a PR or merge group.
+Eviction runs nightly, on release and on a CI dispatch with `eviction-drill=true`. It runs no eviction on a PR or merge group.
 The nightly and dispatch clusters run roll and eviction as native background steps, and `wait-all` requires both results.
 Eviction fixtures use their own namespace and a tainted disposable node.
 The qualification cluster owns chart lint, upgrade checks, adapter probes, recovery and new-node image prepull checks, so the drill cluster does not repeat them.
@@ -795,10 +795,8 @@ The nightly run adds arm64 and eviction. A failed nightly eviction fails the Kub
 Its existing `Report a failure` job opens or updates the issue "The nightly Kubernetes run failed" and links the run.
 The release evidence preflight also requires that the newest nightly run on `main` passed its cluster legs within 48 hours (`scripts/check-nightly-kubernetes.ts`).
 
-Before final release publication, `Kubernetes eviction` runs the drill cluster on the exact image digests that the release captured and verified.
-It uses the candidate source, packages no server or images, and runs no extra compatibility clusters.
-A failed or cancelled release drill blocks `publish-release` through its native dependency.
-A candidate source that predates the captured-image verifier fails closed and needs a new qualified candidate.
+The release also runs eviction against its captured candidate images before final publication.
+[Release qualification and recovery](release-management.mdx#release-qualification-and-recovery) defines its gate and failure recovery.
 
 The `review` shard holds `ReviewEndToEndIntegrationTest`: one review of a real pull request, from its request to its admitted results.
 Only the sandbox container and the model provider are stubbed.

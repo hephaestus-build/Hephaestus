@@ -1143,7 +1143,8 @@ jobs:
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.publishable == 'true' &&
       (github.event_name == 'push' && needs.detect-changes.outputs.queue-run == '' ||
-        github.event_name != 'push' && needs.detect-changes.outputs.kubernetes == 'true')
+        github.event_name != 'push' && (needs.detect-changes.outputs.kubernetes == 'true' ||
+          github.event_name == 'workflow_dispatch' && inputs.eviction-drill))
     uses: ./.github/workflows/ci-kubernetes.yml
     permissions:
       actions: write
