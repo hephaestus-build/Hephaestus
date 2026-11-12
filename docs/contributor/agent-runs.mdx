@@ -47,6 +47,7 @@ The order is: band (`INTERACTIVE`, then `BATCH`, then `BACKGROUND`), then the wo
 A run that waited `hephaestus.agent.capacity.band-aging` (10 minutes) since it was due orders one band higher, and one more for each further wait.
 It never rises into `INTERACTIVE`. Thus scheduled work waits a bounded time behind steady requested work, and no review overtakes a person.
 A run of a workspace that is not active is not offered.
+
 A queued run sends a PostgreSQL notification on the channel `agent_run`, which wakes an idle claimer.
 
 `AgentRuns.claimCapped` leases no run of a kind beyond a cap, such as the installation's turns (`hephaestus.agent.capacity.turns`).
@@ -60,7 +61,8 @@ A person waits for a turn, so a lost turn is taken back sooner.
 A run has two clocks, and the reaper enforces both:
 
 - **Start window** (`start_within_seconds`): how long a run may wait for room once it is due.
-  A queued run past it ends as `NOT_STARTED`, unless it waits behind a leased or older run of its subject: then it waits for its subject, not for room.
+  If no run of its subject is leased or queued earlier, a queued run past this window ends as `NOT_STARTED`.
+  Otherwise it waits for its subject.
   A requeue makes the run due again, so a retry gets the same window.
 - **Deadline** (`deadline`): it bounds the current claim.
   A leased run is not renewed past it, and the reaper ends it there, even while its lease is live.
@@ -96,15 +98,45 @@ A run whose take-back fails is skipped until the next tick, so it cannot hold ba
 Each take-back writes one event that names `run.id`, `run.epoch` and `subject.key` ([Log records](/admin/log-records#agent-run-and-outbox-events)).
 The holder of a review run puts the same three fields in its thread-scoped log context, and on its execution span.
 
+## Model calls
+
+Each model call of a run has one row in `llm_usage_event`. The row names the run and the epoch of the claim that made the call.
+
+- **Open.** The proxy writes the row `OPEN` before the call leaves. It records the model, frozen rates for the model kind, and upper bound (`cost_bound_usd`). The same transaction calls `AgentRuns.requireCurrent`, so a claim that ended cannot open a call. The transaction commits before the provider works.
+- **Complete.** The end of the call measures the row (`LlmUsageRecorder.complete`). A call without reported usage ends `UNVERIFIABLE` and `UNPRICED`, never at zero cost.
+- **Settle.** A claim's end settles its open rows in the transaction that writes the run. `AgentRuns.end`, `cancel`, `cancelAll`, `requeue` and the reaper's take-back perform this settlement. A settled row is `SETTLED`, `UNVERIFIABLE` and `UNPRICED`. `llm.usage.unverifiable` counts it.
+- **Late completion.** A call that returns after its claim ended measures its settled row again. The row keeps its date, initial price mode and frozen rates. A known price applies at once, including a free call. Only a price that was unknown needs the repricing pass.
+- **Deleted run.** The trigger `agent_run_settles_calls` settles a run's open rows before deletion. A turn deletion also deletes its run. The foreign key then clears `run_id` (`ON DELETE SET NULL (run_id)`), and the rows keep their accounting.
+
+An open or unpriced row counts at its upper bound. Thus neither settlement nor missing reported usage makes a cap or a review unverifiable.
+
+The check `ck_llm_usage_event_open_call` refuses an open row without its run and its epoch.
+The trigger `llm_usage_event_guards_call_transition` permits only these transitions and keeps `initial_pricing_state` immutable:
+
+```mermaid
+stateDiagram-v2
+    accTitle: Model call usage states
+    accDescr: A proxy call opens its usage row, then ends with a measurement or settles when its claim ends. A late measurement can end a settled row.
+    [*] --> OPEN: proxy opens call
+    OPEN --> ENDED: call completes
+    OPEN --> SETTLED: claim ends first
+    SETTLED --> ENDED: late call completes
+    ENDED --> [*]
+```
+
+Anthropic opening and intermediate usage counts do not measure the whole call. Its terminal usage does.
+A received final usage block remains valid when the connection fails after it.
+[LLM cost vocabulary](llm-cost-vocabulary#rule-10--each-model-call-is-one-ledger-row) owns the pricing and reporting rules of the rows, and [Rule 11](llm-cost-vocabulary#rule-11--an-unmeasured-call-counts-at-its-upper-bound) the upper bound.
+
 ## Reviews
 
-`ReviewRunKind` is the handler of review jobs. A job's attempt number is its run's epoch less one (`ReviewRunKind.attempt`), and the number its next claim takes while it waits.
+`ReviewRunKind` is the handler of review jobs. A job's attempt number is its run's epoch less one (`ReviewRunKind.attempt`). For a waiting job, it is the number of its next claim.
 The constraint trigger `review_job_run_agrees` refuses a commit where a job and its run disagree:
-a queued job needs a queued run, a running job a leased run, and an ended job an ended run.
+a queued job needs a queued run. A running job needs a leased run. An ended job needs an ended run.
 
-A claim that a budget holds runs nothing, so it takes no attempt: the claim rolls back, and the queued run waits until the budget hold ends.
+A claim that a budget holds runs nothing and spends no attempt. The claim rolls back. The queued run waits until the budget hold ends.
 A composition that resumes after its run ended continues on a new run (`AgentRuns.continueAfter`).
-The new run goes on with the epochs of the ended one and spends one more attempt, so the retry limit bounds how often a composition resumes.
+The new run goes on with the epochs of the ended one and spends one more attempt. The retry limit thus bounds how often a composition resumes.
 
 ### A review in its sandbox
 
@@ -118,14 +150,15 @@ A review's `REVIEW` run is measured in the review's own sandbox (`ReviewSandboxR
 
 ## Turns
 
-`TurnRunKind` is the handler of conversation turns. The subject of a turn's run is its conversation, `conversation:<id>`, which is also the subject of the conversation's sandbox.
+`TurnRunKind` is the handler of conversation turns. A turn's run uses its conversation as its subject: `conversation:<id>`. The conversation's sandbox uses the same subject.
 So one turn of a conversation runs at a time, and the conversation's questions start in order.
 A turn's attempt number is its run's epoch.
+
 The constraint trigger `mentor_turn_run_agrees` refuses a commit where a turn and its run disagree:
-a queued turn needs a queued run, a running turn a leased run, a stopped turn a leased or an ended run, and an ended turn an ended run.
+a queued turn needs a queued run. A running turn needs a leased run. A stopped turn needs a leased or an ended run. An ended turn needs an ended run.
 
 - **End.** The holder's end ends the turn and its run in one transaction. A repeated end reads `EndOutcome.ALREADY_ENDED`.
-- **Stop.** A queued turn's run ends at once. A running turn's run stays leased, and its deadline moves to 30 seconds later, so the holder can still end the turn with what it wrote.
+- **Stop.** A queued turn's run ends at once. A running turn's run stays leased. Its deadline moves to 30 seconds later. The holder can still end the turn with what it wrote.
 - **Deadline.** A claim's deadline is the turn's work deadline plus the same 30 seconds. Past it, the reaper ends the turn: stopped, or failed for taking too long.
 - **Lost holder.** A running turn returns to the queue for one retry, then fails.
 - **Start window.** A turn waits at most 3 minutes for a free Hephaestus.
@@ -150,7 +183,7 @@ The claim names the zero-replica warm pool of its kind, and it carries two varia
 - `HEPHAESTUS_SANDBOX_TOKEN`: the sandbox token. It names the sandbox, its workspace and its subject, and it expires at the sandbox's shutdown time.
 - `HEPHAESTUS_GATEWAY_URL`: the gateway address. The server resolves the gateway Service to its address, because a sandbox has no DNS.
 
-The gateway accepts a sandbox token only on `/internal/agent/**` on the gateway port. It checks the signature, and then it checks that the token's sandbox is live before its shutdown, so a token stops at once when its sandbox is taken back.
+The gateway accepts a sandbox token only on `/internal/agent/**` on the gateway port. It checks the signature, then checks that the sandbox is live and before its shutdown. A token stops at once when its sandbox is taken back.
 The first call makes the sandbox `READY`. A later call that leases no run is no use of the sandbox, so a sandbox that only polls still goes idle.
 A sandbox token expires at the sandbox's shutdown time, which is at most the life of the key that signs it.
 
@@ -160,7 +193,7 @@ It offers only the run kinds that the sandbox's kind drives.
 Each run kind that a sandbox drives has one `SandboxRunKind` bean in `agent.gateway`:
 
 - `sandbox()` names the sandbox kind that drives it. The pull of a sandbox of that kind offers its runs, and no other pull does.
-- `claimed(run)` runs in the transaction of the lease. The kind moves its domain row with the run, so the two always agree. When the kind ends or requeues the run instead, for example because the work was erased, the sandbox gets no run from that pull.
+- `claimed(run)` runs in the transaction of the lease. The kind moves its domain row with the run, so the two always agree. The kind can instead end or requeue the run, for example after erasure. That pull gives the sandbox no run.
 - `context(run)` answers `GET …/runs/{runId}/context`, and `end(run, outcome)` ends the run with its domain row.
 - `attempt(run)` names the attempt that the model gateway bills the run's model calls to. The gateway takes the sandbox token with the run's `X-Agent-Run` and `X-Agent-Epoch` headers. It answers `409` when the claim no longer holds the run, and `401` for a run of another subject.
 
@@ -169,11 +202,13 @@ A `REVIEW_COMPOSE` run continues the `REVIEW` run of its review (`AgentRuns.cont
 
 ### Sandbox dispatch
 
-`SandboxDispatcher` starts the sandboxes that queued runs need. It runs where the sandbox owner is, when a run is queued and every `hephaestus.agent.capacity.lease-renewal`.
+`SandboxDispatcher` starts the sandboxes that queued runs need. It runs where the sandbox owner is. It runs when a run is queued and every `hephaestus.agent.capacity.lease-renewal`.
 It reads the runs that the claim would offer next, in the claim's order (`AgentRuns.due`), for each run kind that a `SandboxRunKind` registers.
 For each run whose subject has no live sandbox, it requests one (`AgentSandboxes.ensure`), while the live sandboxes of that kind stay within their limit.
 It leases nothing: the sandbox claims its own run when it pulls.
-Two replicas that read the same run both ask for the subject's sandbox, and the partial unique index on a subject's live sandbox gives both the same one.
+
+Two replicas that read the same run both ask for the subject's sandbox. The partial unique index on a subject's live sandbox gives both the same one.
+
 The limit of review sandboxes is `hephaestus.sandbox.max-concurrent-containers` for now, the count that the chart gives each worker.
 A failed pass counts `agent_sandbox_dispatch_failure_total` and tries again at the next pass.
 Each pass also releases the inputs of review attempts whose run no longer holds them (`ReviewAttemptCustody.releaseEnded`).
@@ -182,13 +217,15 @@ Each pass also releases the inputs of review attempts whose run no longer holds 
 
 The agent image's entrypoint is the driver, `agent/driver.ts`. A sandbox's container runs it, and the kind of each run is its parameter (`agent/driver-kinds.ts`).
 The driver pulls the subject's next run, keeps its lease, and ends it with `POST …/runs/{runId}/end`. A kind runner never renews the lease and never ends the run.
-Every tool in the sandbox can hold the sandbox token, so each gateway write enforces its own guardrails on the server ([ADR 0079 § Update — a tool may hold the sandbox token](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md#update--2026-11-09-a-tool-may-hold-the-sandbox-token)).
+Every tool in the sandbox can hold the sandbox token. Each gateway write therefore enforces its own guardrails on the server ([ADR 0079 § Update — a tool may hold the sandbox token](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md#update--2026-11-09-a-tool-may-hold-the-sandbox-token)).
 
 The driver starts no kind before the sandbox's network policy holds (isolation gate G6).
 A new Pod can reach the Kubernetes API before its node applies the namespace's NetworkPolicy, and the template has no init container that could wait.
-At its start, the driver connects to the API Service again and again (`agent/driver-isolation.ts`). A connection that is refused, or that does not open in 300 ms, shows that the policy holds.
+At its start, the driver connects to the API Service again and again (`agent/driver-isolation.ts`). A refused connection shows that the policy holds. So does a connection that does not open in 300 ms.
+
 If the API still answers after 10 seconds, the driver ends its run as `unisolated` and pulls no more.
-The server then hands the run on and takes the sandbox back in one transaction (`AgentSandboxes.revoke`): its token stops at the commit, and the reaper deletes its claim.
+The server then hands the run on and takes the sandbox back in one transaction (`AgentSandboxes.revoke`).
+Its token stops at the commit, and the reaper deletes its claim.
 The alert `HephaestusAgentSandboxUnisolated` fires on each such sandbox.
 
 ### Sandbox reaper

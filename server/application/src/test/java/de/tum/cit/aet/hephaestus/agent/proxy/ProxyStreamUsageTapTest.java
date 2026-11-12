@@ -29,6 +29,22 @@ class ProxyStreamUsageTapTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRequireTheFinalAnthropicUsageBeforeMeasuringTheWholeCall() {
+        var tap = new ProxyStreamUsageTap(MAPPER, LlmApiProtocol.ANTHROPIC_MESSAGES);
+        feed(
+                tap,
+                "data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":13,\"output_tokens\":1}}}\n\n");
+        assertThat(tap.observed()).isNotNull();
+        assertThat(tap.finalUsage()).isNull();
+        feed(tap, "data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":4}}\n\n");
+        assertThat(tap.finalUsage()).isNull();
+        feed(
+                tap,
+                "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":9}}\n\n");
+        assertThat(tap.finalUsage()).isEqualTo(new ProxyTokenUsage(13, 9, 0, 0, 0));
+    }
+
+    @Test
     void shouldKeepTheStopReasonThatTheStreamReported() {
         var anthropic = new ProxyStreamUsageTap(MAPPER, LlmApiProtocol.ANTHROPIC_MESSAGES);
         feed(

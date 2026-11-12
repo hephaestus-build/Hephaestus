@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEvent;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
+import de.tum.cit.aet.hephaestus.agent.usage.MeasurementVerification;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
@@ -167,8 +168,10 @@ class ReviewUsageBulkQueryIntegrationTest extends AbstractWorkspaceIntegrationTe
                                 30,
                                 5,
                                 new BigDecimal("0.750000"),
-                                UsagePricingState.PRICED),
-                        new ReviewUsageAttempt(source, 1, 4, 400, 90, 40, 40, 4, null, UsagePricingState.UNPRICED));
+                                UsagePricingState.PRICED,
+                                false),
+                        new ReviewUsageAttempt(
+                                source, 1, 4, 400, 90, 40, 40, 4, null, UsagePricingState.UNPRICED, false));
         assertThat(runtime.usage(workspace.getId(), review)).isEqualTo(measured);
         var free = Objects.requireNonNull(result.get(freeReview));
         assertThat(free.priced()).isTrue();
@@ -247,8 +250,96 @@ class ReviewUsageBulkQueryIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(measured.attempts())
                 .containsExactly(
                         new ReviewUsageAttempt(
-                                source, 0, 2, 100, 50, 20, 0, 0, new BigDecimal("0.250000"), UsagePricingState.PRICED),
-                        new ReviewUsageAttempt(source, 1, 3, 200, 60, 30, 0, 0, null, UsagePricingState.UNPRICED));
+                                source,
+                                0,
+                                2,
+                                100,
+                                50,
+                                20,
+                                0,
+                                0,
+                                new BigDecimal("0.250000"),
+                                UsagePricingState.PRICED,
+                                false),
+                        new ReviewUsageAttempt(
+                                source, 1, 3, 200, 60, 30, 0, 0, null, UsagePricingState.UNPRICED, false));
+    }
+
+    @Test
+    void shouldCountACallWhoseUsageWasNotMeasuredAtItsUpperBoundAndMarkTheCost() {
+        var workspace = workspace("bulk-usage-bound");
+        var review = UUID.randomUUID();
+        var blind = UUID.randomUUID();
+        review(workspace, review);
+        review(workspace, blind);
+        var source = UUID.randomUUID();
+        var measured = event(
+                workspace,
+                review,
+                source,
+                UsageSourceType.REVIEW_JOB,
+                0,
+                1,
+                100,
+                50,
+                0,
+                new BigDecimal("0.25"),
+                UsagePricingState.PRICED);
+        measured.setCostBoundUsd(new BigDecimal("0.90"));
+        var unmeasured = event(
+                workspace, review, source, UsageSourceType.REVIEW_JOB, 0, 1, 0, 0, 0, null, UsagePricingState.UNPRICED);
+        unmeasured.setMeasurementVerification(MeasurementVerification.UNVERIFIABLE);
+        unmeasured.setUnreportedCalls(1);
+        unmeasured.setCostBoundUsd(new BigDecimal("0.10"));
+        var settled = event(
+                workspace, review, source, UsageSourceType.REVIEW_JOB, 1, 1, 0, 0, 0, null, UsagePricingState.UNPRICED);
+        settled.setMeasurementVerification(MeasurementVerification.UNVERIFIABLE);
+        settled.setUnreportedCalls(1);
+        settled.setCostBoundUsd(new BigDecimal("0.05"));
+        var unbounded = event(
+                workspace, blind, source, UsageSourceType.REVIEW_JOB, 0, 1, 0, 0, 0, null, UsagePricingState.UNPRICED);
+        unbounded.setMeasurementVerification(MeasurementVerification.UNVERIFIABLE);
+        ledger.saveAllAndFlush(List.of(measured, unmeasured, settled, unbounded));
+
+        var usage = runtime.usage(workspace.getId(), review);
+
+        assertThat(usage.priced()).as("a bound keeps the review's cost known").isTrue();
+        assertThat(usage.includesUpperBound()).isTrue();
+        assertThat(usage.costUsd()).isEqualByComparingTo("0.40");
+        assertThat(usage.attempts())
+                .containsExactly(
+                        new ReviewUsageAttempt(
+                                source,
+                                0,
+                                2,
+                                100,
+                                50,
+                                0,
+                                0,
+                                0,
+                                new BigDecimal("0.350000"),
+                                UsagePricingState.PRICED,
+                                true),
+                        new ReviewUsageAttempt(
+                                source,
+                                1,
+                                1,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                new BigDecimal("0.050000"),
+                                UsagePricingState.PRICED,
+                                true));
+        var spent = repository.spent(workspace.getId(), review);
+        assertThat(spent.priced()).isTrue();
+        assertThat(spent.cost()).as("the scan budget counts the bounds").isEqualByComparingTo("0.40");
+        var unknown = repository.spent(workspace.getId(), blind);
+        assertThat(unknown.priced())
+                .as("a call with neither a price nor a bound stays unknown")
+                .isFalse();
+        assertThat(runtime.usage(workspace.getId(), blind).costUsd()).isNull();
     }
 
     @Test
@@ -305,6 +396,7 @@ class ReviewUsageBulkQueryIntegrationTest extends AbstractWorkspaceIntegrationTe
         event.setCostUsd(cost);
         event.setPricingState(pricing);
         event.setOccurredAt(Instant.parse("2026-10-20T00:00:00Z"));
+        event.setStartedAt(event.getOccurredAt());
         return event;
     }
 }

@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -32,6 +33,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
@@ -131,10 +133,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
     private ProxyBudgetGate budgetGate;
 
     @Mock
-    private ProxyUsageAccumulator usageAccumulator;
+    private ProxyCallLedger callLedger;
 
-    @Mock
-    private MentorTurnUsageAccumulator mentorTurnUsageAccumulator;
+    /** The ledger row of the call under test. */
+    private static final UUID CALL = UUID.fromString("0f6b9e3a-6c2d-4f43-9b7d-2f5d1a4c8e01");
 
     @Mock
     private ProxyRoutingService routingService;
@@ -155,14 +157,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         lenient().when(requestPolicy.allows(any())).thenReturn(true);
+        lenient().when(callLedger.open(any(), any(), any())).thenReturn(CALL);
         meterRegistry = new SimpleMeterRegistry();
         controller = new LlmProxyService(
                 Tracer.NOOP,
                 WebClient.create(),
                 resolver,
                 OBJECT_MAPPER,
-                new ProxyAccounting(
-                        budgetGate, usageAccumulator, mentorTurnUsageAccumulator, meterRegistry, OBJECT_MAPPER),
+                new ProxyAccounting(budgetGate, callLedger, meterRegistry, OBJECT_MAPPER),
                 requestPolicy,
                 mock(ScanCallGuard.class),
                 routingService,
@@ -249,6 +251,62 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     new MockHttpServletResponse(),
                     new HttpHeaders(),
                     jsonBody());
+
+            assertThat(result).isNotNull();
+            assertThat(result.getStatusCode().value()).isEqualTo(502);
+        }
+    }
+
+    @Nested
+    class OutputLimits {
+
+        @ParameterizedTest
+        @ValueSource(strings = {"{\"max_completion_tokens\":0}", "{\"max_tokens\":\"x\"}", "{\"max_tokens\":1.5}"})
+        void shouldRefuseACallWhenItsOutputLimitIsNotAPositiveWholeNumberBeforeCredentialsOrNetwork(String body) {
+            authenticate(routing("openai-completions"));
+
+            var result = controller.proxy(
+                    request("POST", "/internal/llm/chat/completions"),
+                    new MockHttpServletResponse(),
+                    new HttpHeaders(),
+                    body.getBytes(StandardCharsets.UTF_8));
+
+            assertThat(result).isNotNull();
+            assertThat(result.getStatusCode().value()).isEqualTo(400);
+            assertThat(String.valueOf(result.getBody())).contains("must be a positive whole number");
+            verifyNoInteractions(resolver);
+            verify(callLedger, never()).open(any(), any(), any());
+        }
+
+        @Test
+        void shouldRefuseAGenerativeCallWhenItsModelHasNoOutputLimit() {
+            authenticate(withOutputLimit(routing("anthropic-messages"), null));
+
+            var result = controller.proxy(
+                    request("POST", "/internal/llm/v1/messages"),
+                    new MockHttpServletResponse(),
+                    new HttpHeaders(),
+                    jsonBody());
+
+            assertThat(result).isNotNull();
+            assertThat(result.getStatusCode().value()).isEqualTo(400);
+            assertThat(String.valueOf(result.getBody())).contains("no output limit");
+            verifyNoInteractions(resolver);
+        }
+
+        /** 502, not 400: the credential resolves to nothing, so anything but 400 proves the call got through. */
+        @Test
+        void shouldForwardAnEmbeddingCallWhenItsModelHasNoOutputLimit() {
+            var routing = withOutputLimit(practiceScriptRouting(ModelKind.EMBEDDING, "openai-embeddings"), null);
+            authenticate(routing);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PRACTICE_HEADER, "comment-quality");
+
+            var result = controller.proxyPracticeScript(
+                    request("POST", "/internal/llm/practice-script/embedding/embeddings"),
+                    new MockHttpServletResponse(),
+                    headers,
+                    "{\"input\":[\"a\"]}".getBytes(StandardCharsets.UTF_8));
 
             assertThat(result).isNotNull();
             assertThat(result.getStatusCode().value()).isEqualTo(502);
@@ -413,7 +471,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             .counter("llm.proxy.practice_script.unattributed")
                             .count())
                     .isEqualTo(1.0);
-            verifyNoInteractions(resolver, usageAccumulator);
+            verifyNoInteractions(resolver, callLedger);
         }
 
         @Test
@@ -644,12 +702,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     client,
                     resolver,
                     OBJECT_MAPPER,
-                    new ProxyAccounting(
-                            budgetGate,
-                            usageAccumulator,
-                            mentorTurnUsageAccumulator,
-                            new SimpleMeterRegistry(),
-                            OBJECT_MAPPER),
+                    new ProxyAccounting(budgetGate, callLedger, new SimpleMeterRegistry(), OBJECT_MAPPER),
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
@@ -740,12 +793,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             .build(),
                     resolver,
                     OBJECT_MAPPER,
-                    new ProxyAccounting(
-                            budgetGate,
-                            usageAccumulator,
-                            mentorTurnUsageAccumulator,
-                            new SimpleMeterRegistry(),
-                            OBJECT_MAPPER),
+                    new ProxyAccounting(budgetGate, callLedger, new SimpleMeterRegistry(), OBJECT_MAPPER),
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
@@ -817,12 +865,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     client,
                     resolver,
                     OBJECT_MAPPER,
-                    new ProxyAccounting(
-                            budgetGate,
-                            usageAccumulator,
-                            mentorTurnUsageAccumulator,
-                            streamingMeterRegistry,
-                            OBJECT_MAPPER),
+                    new ProxyAccounting(budgetGate, callLedger, streamingMeterRegistry, OBJECT_MAPPER),
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
@@ -853,7 +896,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     ATTEMPT,
                     null,
                     null,
-                    workDeadline);
+                    workDeadline,
+                    4096L);
         }
 
         private MockHttpServletResponse proxyStream(String... sseFrames) {
@@ -905,7 +949,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, LEASE),
                     null,
                     null,
-                    null);
+                    null,
+                    4096L);
         }
 
         /** A conversation turn's call to {@code baseUrl}, which the proxy cuts after {@link #HEPH_IDLE} without a byte. */
@@ -1100,6 +1145,21 @@ class LlmProxyServiceTest extends BaseUnitTest {
             return new Answer(answer.getStatusCode().value(), text);
         }
 
+        /** The hold: the ledger refuses to open a call whose upper bound does not fit under its purse's cap. */
+        @Test
+        void shouldRefuseACallWhoseUpperBoundDoesNotFitUnderTheCapBeforeItReachesItsProvider() throws Exception {
+            var permit = mock(LlmCallPermits.Permit.class);
+            when(permit.revoked()).thenReturn(Mono.never());
+            when(callLedger.open(any(), any(), any())).thenThrow(new ProxyCallLedger.BudgetHeld());
+
+            var answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
+
+            assertThat(answer.status()).isEqualTo(429);
+            assertThat(answer.body()).contains("Shared-model budget reached");
+            assertThat(upstream.getRequestCount()).isZero();
+            verify(callLedger, never()).complete(any(), any(), any());
+        }
+
         @Test
         void shouldBillACompletedJsonAnswerWhenItsPermitIsRevokedBeforeSettlement() throws Exception {
             var routing = streamingRouting();
@@ -1110,8 +1170,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
             breaker.transitionToHalfOpenState();
             var permit = mock(LlmCallPermits.Permit.class);
             when(permit.revoked()).thenReturn(Mono.never());
-            // The first read precedes the HTTP call; the second follows its fully buffered answer.
-            when(permit.isRevoked()).thenReturn(false, true);
+            AtomicBoolean revoked = new AtomicBoolean();
+            when(permit.isRevoked()).thenAnswer(unused -> revoked.get());
+            doAnswer(unused -> {
+                        revoked.set(true);
+                        return null;
+                    })
+                    .when(streamingPermits)
+                    .served(eq(permit), any(), anyBoolean());
             upstream.enqueue(new MockResponse.Builder()
                     .code(200)
                     .addHeader("Content-Type", "application/json")
@@ -1123,9 +1189,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
             assertThat(answer.status()).isEqualTo(200);
             assertThat(answer.body()).contains("complete");
-            ArgumentCaptor<ProxyTokenUsage> usage = ArgumentCaptor.forClass(ProxyTokenUsage.class);
-            verify(usageAccumulator).accumulate(eq(ATTEMPT), isNull(), usage.capture());
-            assertThat(usage.getValue().billableInputTokens()).isEqualTo(12);
+            ArgumentCaptor<LlmUsageRecorder.CallUsage> usage =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.CallUsage.class);
+            verify(callLedger).complete(any(), eq(CALL), usage.capture());
+            assertThat(usage.getValue().inputTokens()).isEqualTo(12);
             assertThat(usage.getValue().outputTokens()).isEqualTo(3);
             assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
             verify(permit).close();
@@ -1833,7 +1900,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(streamingCalls.settle(ATTEMPT.sourceId(), ATTEMPT.number(), false))
                     .isTrue();
 
-            verify(usageAccumulator).accumulate(eq(ATTEMPT), isNull(), any());
+            verify(callLedger).complete(any(), eq(CALL), any());
             call.get(5, TimeUnit.SECONDS);
         }
 
@@ -1860,12 +1927,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     WebClient.builder().build(),
                     resolver,
                     OBJECT_MAPPER,
-                    new ProxyAccounting(
-                            budgetGate,
-                            usageAccumulator,
-                            mentorTurnUsageAccumulator,
-                            streamingMeterRegistry,
-                            OBJECT_MAPPER),
+                    new ProxyAccounting(budgetGate, callLedger, streamingMeterRegistry, OBJECT_MAPPER),
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
@@ -1926,9 +1988,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(response.getContentAsString())
                     .contains("\"content\":\"hi\"")
                     .contains("[DONE]");
-            ArgumentCaptor<ProxyTokenUsage> usage = ArgumentCaptor.forClass(ProxyTokenUsage.class);
-            verify(usageAccumulator).accumulate(eq(ATTEMPT), isNull(), usage.capture());
-            assertThat(usage.getValue().billableInputTokens()).isEqualTo(75);
+            ArgumentCaptor<LlmUsageRecorder.CallUsage> usage =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.CallUsage.class);
+            verify(callLedger).complete(any(), eq(CALL), usage.capture());
+            assertThat(usage.getValue().inputTokens()).isEqualTo(75);
             assertThat(usage.getValue().outputTokens()).isEqualTo(40);
             assertThat(usage.getValue().cacheReadTokens()).isEqualTo(25);
             assertThat(missingUsage()).isZero();
@@ -1941,7 +2004,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     proxyStream("{\"choices\":[{\"delta\":{\"content\":\"cut off here\"}}],\"usage\":null}");
 
             assertThat(response.getContentAsString()).contains("cut off here");
-            verifyNoInteractions(usageAccumulator);
+            verify(callLedger).complete(any(), eq(CALL), isNull());
             assertThat(missingUsage()).isEqualTo(1.0);
         }
 
@@ -1956,7 +2019,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(missingUsage())
                     .as("malformed usage is not also counted as absent")
                     .isZero();
-            verifyNoInteractions(usageAccumulator);
+            verify(callLedger).complete(any(), eq(CALL), isNull());
         }
 
         private double missingUsage() {
@@ -2044,7 +2107,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     ATTEMPT,
                     null,
                     null,
-                    laterThanAnyTest());
+                    laterThanAnyTest(),
+                    4096L);
             authenticate(routing);
             stubCredential(
                     routing,
@@ -2069,9 +2133,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(sent.getUrl().encodedPath()).isEqualTo("/v1/responses");
             String sentBody = Objects.requireNonNull(sent.getBody()).utf8();
             assertThat(sentBody).contains("reasoning.encrypted_content").doesNotContain("stream_options");
-            ArgumentCaptor<ProxyTokenUsage> usage = ArgumentCaptor.forClass(ProxyTokenUsage.class);
-            verify(usageAccumulator).accumulate(eq(ATTEMPT), isNull(), usage.capture());
-            assertThat(usage.getValue().billableInputTokens()).isEqualTo(75);
+            ArgumentCaptor<LlmUsageRecorder.CallUsage> usage =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.CallUsage.class);
+            verify(callLedger).complete(any(), eq(CALL), usage.capture());
+            assertThat(usage.getValue().inputTokens()).isEqualTo(75);
             assertThat(usage.getValue().outputTokens()).isEqualTo(40);
             assertThat(usage.getValue().reasoningTokens()).isEqualTo(30);
             assertThat(usage.getValue().cacheReadTokens()).isEqualTo(25);
@@ -2103,9 +2168,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         private void assertBilledOnceForTheUsageFrame() {
-            ArgumentCaptor<ProxyTokenUsage> usage = ArgumentCaptor.forClass(ProxyTokenUsage.class);
-            verify(usageAccumulator).accumulate(eq(ATTEMPT), isNull(), usage.capture());
-            assertThat(usage.getValue().billableInputTokens()).isEqualTo(100);
+            ArgumentCaptor<LlmUsageRecorder.CallUsage> usage =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.CallUsage.class);
+            verify(callLedger).complete(any(), eq(CALL), usage.capture());
+            assertThat(usage.getValue().inputTokens()).isEqualTo(100);
             assertThat(usage.getValue().outputTokens()).isEqualTo(40);
             assertThat(missingUsage()).isZero();
         }
@@ -2132,7 +2198,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .doesNotContain("timeout", "timed out", "overload", "rate limit", "try again");
             assertThat(upstream.getRequestCount()).isZero();
             verify(resolver, never()).resolveProxyCredential(any());
-            verifyNoInteractions(usageAccumulator);
+            verifyNoInteractions(callLedger);
             assertThat(response.isCommitted()).isFalse();
         }
 
@@ -2158,7 +2224,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(response.isCommitted()).isFalse();
             assertThat(response.getContentAsByteArray()).isEmpty();
             assertThat(response.getHeader("X-Accel-Buffering")).isNull();
-            verifyNoInteractions(usageAccumulator);
+            verify(callLedger).complete(any(), eq(CALL), isNull());
             assertThat(missingUsage()).isZero();
             assertThat(upstream.getRequestCount()).isEqualTo(1);
         }
@@ -2191,7 +2257,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(Instant.now()).isBefore(deadline.plusSeconds(2));
             assertThat(upstream.getRequestCount()).isEqualTo(2);
             assertThat(response.isCommitted()).isFalse();
-            verifyNoInteractions(usageAccumulator);
+            verify(callLedger).complete(any(), eq(CALL), isNull());
         }
 
         /** One SSE answer to every request, counting them; its body is the given one. */
@@ -2206,6 +2272,33 @@ class LlmProxyServiceTest extends BaseUnitTest {
                         return Mono.just(answer);
                     })
                     .build();
+        }
+
+        @ParameterizedTest
+        @ValueSource(booleans = {false, true})
+        void shouldKeepAnthropicOpeningUsageUnmeasuredWhenTheStreamEndsBeforeFinalUsage(boolean fails)
+                throws Exception {
+            String opening =
+                    "data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":100,\"output_tokens\":1}}}\n\n";
+            Flux<DataBuffer> body =
+                    Flux.just(DefaultDataBufferFactory.sharedInstance.wrap(opening.getBytes(StandardCharsets.UTF_8)));
+            if (fails) body = body.concatWith(Flux.error(new IOException("connection reset")));
+            var service = controllerWith(answering(new AtomicInteger(), body));
+            ProxyRouting route = routing("anthropic-messages");
+            stubCredential(
+                    route,
+                    new LlmModelResolver.ProxyCredential(
+                            upstream.url("/v1").toString(),
+                            "anthropic-messages",
+                            LlmAuthMode.API_KEY,
+                            "catalog-model",
+                            "secret",
+                            42L));
+            authenticate(route);
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            service.proxy(request("POST", "/internal/llm/v1/messages"), response, new HttpHeaders(), STREAM_REQUEST);
+            assertThat(response.getContentAsString()).isEqualTo(opening);
+            verify(callLedger).complete(any(), eq(CALL), isNull());
         }
 
         private static DataBuffer usageFrame() {
@@ -2422,7 +2515,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     billed,
                     null,
                     null,
-                    mentor ? null : Instant.now().plus(Duration.ofHours(3)));
+                    mentor ? null : Instant.now().plus(Duration.ofHours(3)),
+                    4096L);
             stubStreamCredential(routing);
             try {
                 StepVerifier.withVirtualTime(() -> Mono.fromCallable(() -> {
@@ -2491,15 +2585,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 assertThat(requests).hasValue(1);
                 assertThat(errors()).isEqualTo(mentor ? 1.0 : 0.0);
                 verify(span).tag("hephaestus.stream.outcome", mentor ? "UPSTREAM_IDLE" : "COMPLETED");
-                ArgumentCaptor<ProxyTokenUsage> usage = ArgumentCaptor.forClass(ProxyTokenUsage.class);
-                if (mentor) {
-                    verify(mentorTurnUsageAccumulator).accumulate(eq(billed), usage.capture());
-                    verifyNoInteractions(usageAccumulator);
-                } else {
-                    verify(usageAccumulator).accumulate(eq(billed), isNull(), usage.capture());
-                    verifyNoInteractions(mentorTurnUsageAccumulator);
-                }
-                assertThat(usage.getValue().billableInputTokens()).isEqualTo(100);
+                ArgumentCaptor<LlmUsageRecorder.CallUsage> usage =
+                        ArgumentCaptor.forClass(LlmUsageRecorder.CallUsage.class);
+                verify(callLedger).complete(any(), eq(CALL), usage.capture());
+                assertThat(usage.getValue().inputTokens()).isEqualTo(100);
                 assertThat(usage.getValue().outputTokens()).isEqualTo(40);
                 assertThat(streamingMeterRegistry
                                 .counter(
@@ -2660,7 +2749,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 ATTEMPT,
                 null,
                 null,
-                laterThanAnyTest());
+                laterThanAnyTest(),
+                4096L);
     }
 
     private static ProxyRouting practiceScriptRouting(ModelKind slot, String protocol) {
@@ -2679,7 +2769,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 ATTEMPT,
                 slot,
                 DataHandlingTier.CLOUD,
-                workDeadline);
+                workDeadline,
+                4096L);
     }
 
     private static ProxyRouting workspaceFundedRouting() {
@@ -2694,7 +2785,24 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 ATTEMPT,
                 null,
                 null,
-                laterThanAnyTest());
+                laterThanAnyTest(),
+                4096L);
+    }
+
+    private static ProxyRouting withOutputLimit(ProxyRouting routing, @Nullable Long outputLimit) {
+        return new ProxyRouting(
+                routing.principalDescription(),
+                routing.apiProtocol(),
+                routing.baseUrl(),
+                routing.connectionScope(),
+                routing.connectionId(),
+                routing.modelId(),
+                routing.workspaceId(),
+                routing.attempt(),
+                routing.practiceScriptSlot(),
+                routing.practiceScriptTier(),
+                routing.workDeadline(),
+                outputLimit);
     }
 
     private static LlmModelResolver.ProxyCredential credential(String protocol, LlmAuthMode authMode) {

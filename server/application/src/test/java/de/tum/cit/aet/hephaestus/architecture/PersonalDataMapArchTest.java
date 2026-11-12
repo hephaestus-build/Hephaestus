@@ -58,12 +58,6 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "product_feedback_cleanup",
             // What each practice script of a job did: a status, counts and model slots, no content or person.
             "review_job_script_run",
-            // A job's token counters, like the token columns review_job keeps after a person's erasure.
-            "review_job_script_usage",
-            // Each attempt's token counts and frozen rates, keyed by job and attempt only; removed with the job and
-            // when an erasure selects the job.
-            "review_job_attempt_usage",
-            "review_job_attempt_charge",
             // A run's queue state: its kind, band, subject key, epoch and times, no content or person; an erasure
             // deletes the runs of the jobs it deletes.
             "agent_run",

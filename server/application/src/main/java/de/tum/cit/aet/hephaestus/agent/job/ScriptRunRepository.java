@@ -25,12 +25,38 @@ public interface ScriptRunRepository extends JpaRepository<ScriptRun, ScriptRun.
     List<ScriptRun> findByWorkspaceIdAndJobIdAndAttempt(
             @Param("workspaceId") long workspaceId, @Param("jobId") UUID jobId, @Param("attempt") int attempt);
 
-    @Query("""
-        SELECT u FROM ScriptUsage u
-        WHERE u.workspaceId = :workspaceId AND u.id.jobId = :jobId AND u.id.attempt = :attempt
-        """)
-    List<ScriptUsage> findUsageByWorkspaceIdAndJobIdAndAttempt(
-            @Param("workspaceId") long workspaceId, @Param("jobId") UUID jobId, @Param("attempt") int attempt);
+    /** The practice script calls of these jobs, by attempt, practice and model kind, from their ledger rows. */
+    @Query(value = """
+        SELECT e.source_id AS "jobId", e.source_attempt AS attempt, e.practice_id AS "practiceId",
+            e.model_kind AS "modelKind", SUM(e.total_calls) AS calls, SUM(e.input_tokens) AS "inputTokens",
+            SUM(e.output_tokens) AS "outputTokens", SUM(e.cache_read_tokens) AS "cacheReadTokens",
+            SUM(e.cache_write_tokens) AS "cacheWriteTokens"
+        FROM llm_usage_event e
+        WHERE e.workspace_id = :workspaceId AND e.source_id IN (:jobIds) AND e.practice_id IS NOT NULL
+        GROUP BY e.source_id, e.source_attempt, e.practice_id, e.model_kind
+        """, nativeQuery = true)
+    List<ScriptCalls> sumScriptCalls(@Param("workspaceId") long workspaceId, @Param("jobIds") Collection<UUID> jobIds);
+
+    /** The calls that one practice's script made on one model kind in one attempt. */
+    interface ScriptCalls {
+        UUID getJobId();
+
+        int getAttempt();
+
+        long getPracticeId();
+
+        String getModelKind();
+
+        long getCalls();
+
+        long getInputTokens();
+
+        long getOutputTokens();
+
+        long getCacheReadTokens();
+
+        long getCacheWriteTokens();
+    }
 
     @Query(value = """
         SELECT p.id AS "id", p.slug AS "slug", v.name AS "name"

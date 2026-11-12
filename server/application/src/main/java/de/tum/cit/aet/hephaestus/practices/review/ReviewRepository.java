@@ -100,8 +100,13 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQue
         """, nativeQuery = true)
     List<UUID> expiredScanIds(long workspaceId, Instant cutoff);
 
+    // A call counts its measured cost, or its upper bound while it has no price (agent.usage
+    // LlmUsageEventRepository.SPEND); a review with a call of neither has no known cost.
     @Query(value = """
-        WITH costs AS (SELECT q.id,sum(u.cost_usd) AS cost,bool_or(u.pricing_state='UNPRICED') AS unpriced
+        WITH costs AS (SELECT q.id,
+            sum(CASE WHEN u.cost_bound_usd IS NOT NULL AND (u.call_state='OPEN' OR u.pricing_state='UNPRICED')
+              THEN u.cost_bound_usd WHEN u.pricing_state<>'UNPRICED' THEN u.cost_usd END) AS cost,
+            bool_or(u.pricing_state='UNPRICED' AND u.cost_bound_usd IS NULL) AS unpriced
           FROM review q JOIN item i ON i.id=q.item_id AND i.workspace_id=q.workspace_id
           JOIN llm_usage_event u ON u.review_id=q.id AND u.workspace_id=q.workspace_id
           WHERE q.workspace_id=:workspaceId AND i.kind=:itemKind AND q.status IN ('COMPLETE','PARTIAL')

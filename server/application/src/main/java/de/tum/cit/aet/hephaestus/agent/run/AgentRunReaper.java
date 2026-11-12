@@ -111,6 +111,7 @@ public class AgentRunReaper {
                     long backoff = handler.retryAfter(row.getAttempt() + 1).toSeconds();
                     if (!taken(status, runs.requeueExpired(lost.runId(), lost.workspaceId(), lost.epoch(), backoff)))
                         return;
+                    settle(lost);
                     runs.notifyQueued(AgentRunNotifications.CHANNEL, kind.name());
                     count(kind, "requeued");
                     event(log.atInfo(), "agent.run.requeued", row).log("Run lease expired; the run is queued again");
@@ -121,6 +122,7 @@ public class AgentRunReaper {
                 handler.ended(lost.run(), lost.epoch(), reason);
             }
             if (!taken(status, runs.endExpired(lost.runId(), lost.workspaceId(), lost.epoch(), reason.name()))) return;
+            settle(lost);
             count(kind, reason.name().toLowerCase(Locale.ROOT));
             event(log.atInfo(), "agent.run.ended", row)
                     .addKeyValue("run.stop_reason", reason.name())
@@ -146,6 +148,12 @@ public class AgentRunReaper {
                     .addKeyValue("run.stop_reason", AgentRunStopReason.NOT_STARTED.name())
                     .log("Queued run waited past its start window; the run ended");
         });
+    }
+
+    /** Settles the model calls that the lost claim left open, in the transaction that takes its run back. */
+    private void settle(AgentRunFence lost) {
+        int calls = runs.settleOpenCalls(lost.runId(), lost.workspaceId(), lost.epoch());
+        if (calls > 0) meters.counter(AgentMetrics.LLM_USAGE_UNVERIFIABLE).increment(calls);
     }
 
     /** A reaper event names the run as every record of its holder does. */

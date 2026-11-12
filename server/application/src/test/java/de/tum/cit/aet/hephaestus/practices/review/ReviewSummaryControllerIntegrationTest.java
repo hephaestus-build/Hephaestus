@@ -266,8 +266,10 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .param("version", result.getPracticeVersionId())
                 .update();
         jdbc.sql("""
-            INSERT INTO review_job_script_usage(job_id,attempt,model_kind,practice_id,workspace_id,calls)
-            VALUES(:job,1,'DECISION',:practice,:ws,1)
+            INSERT INTO llm_usage_event(id,workspace_id,job_type,source_type,source_id,source_attempt,model_kind,
+                practice_id,total_calls,pricing_state,usage_provenance,measurement_verification,started_at,occurred_at)
+            VALUES(gen_random_uuid(),:ws,'PRACTICE_REVIEW','PRACTICE_SCRIPT_DECISION',:job,1,'DECISION',:practice,1,
+                'UNPRICED','PROXY','VERIFIED',now(),now())
             """)
                 .param("job", job)
                 .param("practice", result.getPracticeId())

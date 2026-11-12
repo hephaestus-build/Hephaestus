@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.adapter;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRun;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRunRepository;
-import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
-import de.tum.cit.aet.hephaestus.agent.job.ScriptUsageRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
@@ -16,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptNoResultCause;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptStopReason;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -37,7 +36,6 @@ import tools.jackson.databind.JsonNode;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ReviewPracticeScriptService implements ReviewScriptQuery {
-    private final ScriptUsageRepository usage;
     private final ScriptRunRepository runs;
     private final ReviewService reviews;
     private final ReviewRuntimeRepository runtime;
@@ -50,11 +48,9 @@ public class ReviewPracticeScriptService implements ReviewScriptQuery {
                 .collect(Collectors.toMap(
                         ReviewRuntimeRepository.JobOfReview::jobId, ReviewRuntimeRepository.JobOfReview::reviewId));
         if (reviewOfJob.isEmpty()) return Map.of();
-        var byRun = usage.findByWorkspaceIdAndJobIdIn(workspaceId, reviewOfJob.keySet()).stream()
-                .collect(Collectors.groupingBy(row -> new ScriptRun.Id(
-                        row.getId().getJobId(),
-                        row.getId().getAttempt(),
-                        row.getId().getPracticeId())));
+        var byRun = runs.sumScriptCalls(workspaceId, reviewOfJob.keySet()).stream()
+                .collect(Collectors.groupingBy(
+                        row -> new ScriptRun.Id(row.getJobId(), row.getAttempt(), row.getPracticeId())));
         Map<UUID, List<PracticeScriptRunDTO>> byReview = new HashMap<>();
         runs.findByWorkspaceIdAndJobIdIn(workspaceId, reviewOfJob.keySet()).stream()
                 .sorted(Comparator.comparing(ScriptRun::getFinishedAt)
@@ -70,16 +66,19 @@ public class ReviewPracticeScriptService implements ReviewScriptQuery {
     }
 
     private PracticeScriptRunDTO present(
-            ScriptRun run, List<PinnedPractice> practices, Map<ScriptRun.Id, List<ScriptUsage>> byRun) {
+            ScriptRun run,
+            List<PinnedPractice> practices,
+            Map<ScriptRun.Id, List<ScriptRunRepository.ScriptCalls>> byRun) {
         var practice = practices.stream()
                 .filter(pinned -> pinned.practiceId() == run.getId().getPracticeId()
                         && pinned.practiceVersionId() == run.getPracticeVersionId())
                 .findFirst();
         List<PracticeScriptModelDTO> models = byRun.getOrDefault(run.getId(), List.of()).stream()
+                .sorted(Comparator.comparing(ScriptRunRepository.ScriptCalls::getModelKind))
                 .map(usage -> new PracticeScriptModelDTO(
-                        usage.modelKind(),
-                        modelId(practice.orElse(null), usage.modelKind()),
-                        usage.getDataHandlingTier(),
+                        ModelKind.valueOf(usage.getModelKind()),
+                        modelId(practice.orElse(null), ModelKind.valueOf(usage.getModelKind())),
+                        tier(run, usage.getModelKind()),
                         usage.getCalls(),
                         usage.getInputTokens(),
                         usage.getOutputTokens(),
@@ -101,6 +100,18 @@ public class ReviewPracticeScriptService implements ReviewScriptQuery {
                 run.getError(),
                 models,
                 sessions == null ? null : sessions.path("modelCalls").asInt(0));
+    }
+
+    /** The data handling tier that the run recorded for its model of this kind; null when it recorded none. */
+    private static @Nullable DataHandlingTier tier(ScriptRun run, String kind) {
+        JsonNode models = run.getModels();
+        if (models == null) return null;
+        for (JsonNode model : models) {
+            JsonNode tier = model.path("tier");
+            if (kind.equals(model.path("slot").asString("")) && tier.isString())
+                return DataHandlingTier.valueOf(tier.asString());
+        }
+        return null;
     }
 
     /** The runner's review-session counts, as the recorder stored them; null for a run recorded without them. */

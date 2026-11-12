@@ -424,6 +424,43 @@ The ledger does not charge only the priced buckets.
 A partial charge would falsely present a confirmed total below the real amount.
 If your provider reports cache tokens, price them.
 
+### Output limit
+
+Every chat call that Hephaestus sends to a provider has an output limit.
+The limit of a model is its **Max output tokens**. If the model has none, the limit is its **Context window**.
+Set one of the two on each chat model and on each model that a practice script uses for decisions.
+A call to a chat model without either is refused with status 400.
+
+The proxy clamps the output limit of each chat request to the model's limit before the request goes to the provider:
+
+- Each output-limit field of the request's own API keeps its value, but never more than the model's limit.
+  The Messages API uses `max_tokens`.
+  The Chat Completions API uses `max_tokens` and `max_completion_tokens`.
+  The Responses API uses `max_output_tokens`.
+- A request that names no limit in a field of its own API gets the model's limit in one field.
+  The Messages API and the Chat Completions API get `max_tokens`, and the Responses API gets `max_output_tokens`.
+  A field of another API does not count, and a field with the value `null` counts as absent.
+- A limit field of the request's own API must be a positive whole number.
+  If it is not, the proxy refuses the request with status 400, and the request does not reach the provider.
+- Embedding and reranking calls write no output and need no limit.
+
+Most OpenAI-compatible servers accept `max_tokens`.
+Some OpenAI models accept only `max_completion_tokens` on the Chat Completions API.
+For such a model, use a client that sends `max_completion_tokens`, or use the Responses API.
+
+The output limit and the size of the request give the most that a call can cost at the frozen rates: its upper bound.
+A chat-completion request for more than one choice multiplies the output bound by its choice count.
+
+The proxy accepts text input and client-run tools. It refuses images, audio, files and provider-stored inputs because the request size cannot bound their token counts.
+
+The upper bound does not include tokens that a provider adds on its own side, such as a hidden system prompt.
+An OpenAI-compatible server that ignores the output-limit field can write more output than the limit.
+A call to such a server can cost more than its upper bound.
+
+A call counts toward a cap at its upper bound until its usage is measured.
+A call whose usage Hephaestus cannot measure keeps its upper bound, so it does not pause a capped purse.
+[Workspace budgets and alerting](./production-setup#workspace-budgets-and-alerting) owns the cap rules.
+
 ### Missing prices and unverified measurements
 
 A usage record needs both an accepted measurement and usable rates to have a confirmed cost.
@@ -926,6 +963,10 @@ The table of workspaces on **Instance administration → AI usage** shows the sp
 [Usage](./instance-admin.mdx#usage) describes its columns.
 On a narrow screen, the token and call columns are hidden.
 
+A tile also shows the calls of its purse whose usage was not measured, when there are any: `Up to $0.42 more from 3 calls whose usage was not measured`.
+The cap counts this upper bound, but the spend on the tile does not include it.
+The table of workspaces shows the same line below the spend of each purse.
+
 **No price set** appears only when a row has usage without a price.
 In **By use** and **By day**, it counts the uses that have usage without a price.
 A use is one review attempt or one conversation answer, with all of its usage rows.
@@ -958,28 +999,23 @@ A review can count for several practices.
 Thus, the **Reviews** and **No price set** of the rows can add up to more than the total.
 
 A **Not attributed** row shows the cost that no practice can carry.
-An example is the usage of a review whose job was deleted.
+An example is a usage row from before Hephaestus recorded each call on its own row.
+Such a row holds the calls of all practices of a review attempt together.
+The usage of a practice that was deleted is also not attributed.
 The row stays last, above **Total**, whatever the sort.
 
-Hephaestus bills one usage row for each model kind and review attempt.
-It splits the cost of that row between the practices whose scripts made its calls:
+Hephaestus records one usage row for each model call, and each call of a practice script names its practice.
+Thus, each practice gets the cost of its own calls.
 
-1. Each practice gets a weight: its input tokens × the input rate, plus its output tokens × the output rate.
-   The rates are those that the usage row applied.
-2. Each practice gets the cost × its weight ÷ the sum of the weights, truncated to six decimals.
-3. The practice with the largest weight also gets the remainder.
-   Thus, the shares of one usage row add up to its cost exactly.
-4. If no practice has a weight, each share is $0, and the table still shows the tokens.
-
-A usage row without a price adds no cost to any practice.
-Its review counts one time in **No price set** for each practice that had a share in it.
+A call without a price adds no cost to its practice.
+Its review counts one time in **No price set** for each practice whose call has no price.
 A model with **No metered API cost** adds a confirmed $0.
 
-The table shows the usage of finished reviews, to date in the current month.
+The table shows the calls that ended to date in the current month, also those of reviews that still run.
 These costs are already part of the uses above it.
 Chat calls from a script are not in this table, because they are part of each review's own cost.
-On **By use** and **By day**, **Uses** counts review attempts and conversation answers only.
-A usage row of a model for practice scripts adds its calls and cost to its review, but it is not a use.
+On **By use** and **By day**, **Uses** counts review attempts and conversation answers.
+A call of a model for practice scripts adds its cost to the attempt of its review, but it is not a use.
 
 :::caution[CAUTION: A priced reranking model that bills search units or reports no tokens]
 

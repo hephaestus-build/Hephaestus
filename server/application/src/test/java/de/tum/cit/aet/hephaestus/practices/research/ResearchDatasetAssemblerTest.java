@@ -307,7 +307,17 @@ class ResearchDatasetAssemblerTest extends BaseUnitTest {
                 400,
                 List.of(
                         new ReviewUsageAttempt(
-                                job, 0, 3, 600, 250, 90, 100, 0, new BigDecimal("0.0000"), UsagePricingState.NO_CHARGE),
+                                job,
+                                0,
+                                3,
+                                600,
+                                250,
+                                90,
+                                100,
+                                0,
+                                new BigDecimal("0.0000"),
+                                UsagePricingState.NO_CHARGE,
+                                false),
                         new ReviewUsageAttempt(
                                 job,
                                 1,
@@ -318,7 +328,8 @@ class ResearchDatasetAssemblerTest extends BaseUnitTest {
                                 0,
                                 10,
                                 new BigDecimal("0.0000"),
-                                UsagePricingState.NO_CHARGE)));
+                                UsagePricingState.NO_CHARGE,
+                                false)));
         var dataset =
                 assemble(key(1), Map.of(review, usage, mixedReview, usage)).dataset();
 
@@ -362,8 +373,8 @@ class ResearchDatasetAssemblerTest extends BaseUnitTest {
                 120,
                 List.of(
                         new ReviewUsageAttempt(
-                                job, 0, 1, 100, 60, 0, 0, 0, new BigDecimal("0.0100"), UsagePricingState.PRICED),
-                        new ReviewUsageAttempt(job, 1, 1, 200, 60, 0, 0, 0, null, UsagePricingState.UNPRICED)));
+                                job, 0, 1, 100, 60, 0, 0, 0, new BigDecimal("0.0100"), UsagePricingState.PRICED, false),
+                        new ReviewUsageAttempt(job, 1, 1, 200, 60, 0, 0, 0, null, UsagePricingState.UNPRICED, false)));
 
         var priced = reviewWithScope(
                         assemble(key(1), Map.of(review, unpriced)).dataset(),
@@ -544,7 +555,8 @@ class ResearchDatasetAssemblerTest extends BaseUnitTest {
                                         0,
                                         0,
                                         new BigDecimal("0.0100"),
-                                        UsagePricingState.PRICED)))),
+                                        UsagePricingState.PRICED,
+                                        false)))),
                 List.of(new ItemRow(21L, "scm.pull_request")),
                 List.of(new PracticeRow(11L, null)),
                 List.of(new PracticeVersionRow(31L, 11L, 1, CUSTOM_DIGEST)),

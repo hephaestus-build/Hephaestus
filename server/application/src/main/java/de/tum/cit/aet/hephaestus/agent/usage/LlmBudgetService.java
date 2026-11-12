@@ -1,9 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
-import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.YearMonth;
@@ -11,8 +9,6 @@ import java.time.ZoneOffset;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,66 +17,23 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>There are two purses, each judged against its own cap and never summed: the host's shared models
  * and the workspace's own provider. A capped purse whose month is UNVERIFIABLE — some event funded from
- * it has no confirmed cost — is blocked exactly like an exhausted one, because a cap you cannot
- * verify is not a cap.
+ * it has neither a confirmed cost nor an upper bound — is blocked exactly like an exhausted one, because a cap you
+ * cannot verify is not a cap.
  *
- * <p>The ledger only gains a row when an agent job or mentor turn ENDS, so {@link #decide} is blind to
- * work running right now. A gate that must also bound a run already in progress reads {@link #headroom}
- * and adds the running spend itself.
+ * <p>The ledger has one row for each model call. A call counts its upper bound from the moment it opens, and its
+ * measured cost once it ends; a call whose usage was not measured keeps its bound ({@link
+ * LlmUsageEventRepository#SPEND}). So {@link #decide} counts the calls of work that still runs, those at their
+ * provider included.
  */
 @Service
 public class LlmBudgetService {
 
-    private static final Logger log = LoggerFactory.getLogger(LlmBudgetService.class);
-
     private final LlmUsageEventRepository usageRepository;
     private final WorkspaceRepository workspaceRepository;
-    private final MeterRegistry meterRegistry;
 
-    public LlmBudgetService(
-            LlmUsageEventRepository usageRepository,
-            WorkspaceRepository workspaceRepository,
-            MeterRegistry meterRegistry) {
+    public LlmBudgetService(LlmUsageEventRepository usageRepository, WorkspaceRepository workspaceRepository) {
         this.usageRepository = usageRepository;
         this.workspaceRepository = workspaceRepository;
-        this.meterRegistry = meterRegistry;
-    }
-
-    /**
-     * The submission gate: logs and counts the refusal itself, so a caller that gets {@code true} back
-     * simply skips the submission.
-     */
-    @Transactional(readOnly = true)
-    public boolean blockSubmission(Workspace workspace, String jobType, @Nullable UsageFundingSource fundingSource) {
-        LlmBudgetDecision.Block block = headroom(workspace).decide().decideFor(fundingSource);
-        if (!block.blocked()) {
-            return false;
-        }
-        log.info(
-                "Skipping agent job submission — {} monthly LLM budget {}: workspaceId={}, jobType={}",
-                purseLabel(block.purse()),
-                reasonLabel(block.reason()),
-                workspace.getId(),
-                jobType);
-        meterRegistry
-                .counter(
-                        AgentMetrics.LLM_BUDGET_BLOCKED,
-                        "surface",
-                        "review_job",
-                        "cap",
-                        UsageFundingSource.capTag(block.purse()))
-                .increment();
-        return true;
-    }
-
-    private static String purseLabel(@Nullable UsageFundingSource purse) {
-        return purse == UsageFundingSource.WORKSPACE ? "own-provider" : "shared-model";
-    }
-
-    private static String reasonLabel(LlmBudgetBlockReason reason) {
-        return reason == LlmBudgetBlockReason.EXHAUSTED
-                ? "exhausted"
-                : "unverifiable (some spend has no confirmed cost)";
     }
 
     @Transactional(readOnly = true)
@@ -88,14 +41,31 @@ public class LlmBudgetService {
         return loadHeadroom(workspaceId).decide();
     }
 
-    /**
-     * The same month-window reads as {@link #decide}, handed back as numbers, so a caller that can see
-     * spend the ledger cannot yet — the LLM proxy — can add it before the cap comparison.
-     */
+    /** The same month-window reads as {@link #decide}, handed back as numbers. */
     @Transactional(readOnly = true)
     public LlmBudgetHeadroom headroom(Long workspaceId) {
         return loadHeadroom(workspaceId);
     }
+
+    /**
+     * The instance cap and the measured spend of the month against it ({@link LlmUsageEventRepository#CONFIRMED}),
+     * without the upper bound of any open or unmeasured call.
+     *
+     * @return {@code null} when the instance purse has no cap
+     */
+    @Transactional(readOnly = true)
+    public @Nullable MeasuredSpend measuredInstanceSpend(Long workspaceId) {
+        BigDecimal budgetUsd = workspaceRepository
+                .findById(workspaceId)
+                .map(Workspace::getMonthlyLlmBudgetUsd)
+                .orElse(null);
+        if (budgetUsd == null) return null;
+        MonthWindow window = MonthWindow.of(YearMonth.now(ZoneOffset.UTC));
+        return new MeasuredSpend(usageRepository.sumConfirmedCost(workspaceId, window.from(), window.to()), budgetUsd);
+    }
+
+    /** What a purse's measured calls cost this month, and its cap. */
+    public record MeasuredSpend(BigDecimal spentUsd, BigDecimal budgetUsd) {}
 
     private LlmBudgetHeadroom loadHeadroom(Long workspaceId) {
         return workspaceRepository.findById(workspaceId).map(this::headroom).orElse(LlmBudgetHeadroom.UNCAPPED);
@@ -134,7 +104,7 @@ public class LlmBudgetService {
 
     /**
      * A purse already exhausted on recorded spend alone skips the probe: EXHAUSTED outranks
-     * UNVERIFIABLE, and adding running spend can only keep it exhausted.
+     * UNVERIFIABLE, and unknown spend can only keep it exhausted.
      */
     private static boolean probeUnpriced(
             @Nullable BigDecimal spentUsd, @Nullable BigDecimal budgetUsd, BooleanSupplier hasUnpriced) {

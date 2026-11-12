@@ -11,6 +11,11 @@ public record ReviewUsageSnapshot(
         long inputTokens,
         long outputTokens,
         List<ReviewUsageAttempt> attempts) {
+    /** Whether {@link #costUsd} counts the upper bound of a call whose usage was not measured. */
+    public boolean includesUpperBound() {
+        return attempts.stream().anyMatch(ReviewUsageAttempt::includesUpperBound);
+    }
+
     public ReviewUsageSnapshot {
         attempts = List.copyOf(attempts);
     }

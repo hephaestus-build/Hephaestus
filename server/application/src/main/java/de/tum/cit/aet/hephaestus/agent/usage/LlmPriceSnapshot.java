@@ -87,6 +87,29 @@ public record LlmPriceSnapshot(
         return Cost.exact(rounded);
     }
 
+    /**
+     * The most that one call can cost: its whole input at the highest input rate (plain, cache read or cache write),
+     * and its output limit at the output rate. A token covers at least one byte, so the request's bytes bound its input
+     * tokens. Rounded up to the ledger's scale. Tokens that a provider adds on its own side, such as a hidden system
+     * prompt, and output that a server writes past a limit that it ignores are not in it.
+     *
+     * @param inputBytes the bytes of the request body
+     * @param outputTokens the call's output limit; 0 for a call that writes no output
+     * @return {@code null} when no bound is known: an unpriced model, or a priced model without the rate the bound
+     *     needs
+     */
+    public @Nullable BigDecimal upperBound(long inputBytes, long outputTokens) {
+        if (pricingState == UsagePricingState.UNPRICED) return null;
+        if (pricingState == UsagePricingState.NO_CHARGE) return BigDecimal.ZERO.setScale(LEDGER_SCALE);
+        if (per1mInputUsd == null || (outputTokens > 0 && per1mOutputUsd == null)) return null;
+        BigDecimal inputRate = per1mInputUsd;
+        if (per1mCacheReadUsd != null) inputRate = inputRate.max(per1mCacheReadUsd);
+        if (per1mCacheWriteUsd != null) inputRate = inputRate.max(per1mCacheWriteUsd);
+        BigDecimal raw = bucket(inputBytes, inputRate, CALC).add(bucket(outputTokens, per1mOutputUsd, CALC), CALC);
+        BigDecimal bound = raw.setScale(LEDGER_SCALE, RoundingMode.CEILING);
+        return bound.compareTo(MAX_COST) > 0 ? MAX_COST : bound;
+    }
+
     private static BigDecimal bucket(long tokens, @Nullable BigDecimal rate, MathContext mc) {
         if (tokens <= 0 || rate == null) return BigDecimal.ZERO;
         return BigDecimal.valueOf(tokens).divide(PER_1M, mc).multiply(rate, mc);

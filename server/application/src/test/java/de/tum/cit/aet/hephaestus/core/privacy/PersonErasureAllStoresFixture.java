@@ -342,6 +342,8 @@ final class PersonErasureAllStoresFixture {
                 person.review(),
                 "model",
                 "test-model",
+                "model_kind",
+                "CHAT",
                 "funding_source",
                 "INSTANCE",
                 "pricing_state",

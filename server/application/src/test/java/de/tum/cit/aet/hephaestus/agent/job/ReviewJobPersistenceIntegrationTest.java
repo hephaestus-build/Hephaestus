@@ -12,16 +12,8 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEvent;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
-import de.tum.cit.aet.hephaestus.agent.usage.UsageProvenance;
-import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
-import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
-import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
-import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -31,12 +23,10 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -73,9 +63,6 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
     private ReviewRuntimeRepository runtime;
 
     @Autowired
-    private LlmUsageEventRepository usageEventRepository;
-
-    @Autowired
     private WorkspaceRepository workspaceRepository;
 
     @Autowired
@@ -86,9 +73,6 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Autowired
-    private PracticeVersionService versions;
 
     private Workspace workspace;
     private LlmModel instanceModel;
@@ -105,7 +89,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
     @Test
     void runtimeReadsKeepReviewWorkspaceAndPricingBoundaries() {
         // Every retry is spent, so losing this attempt ends the job and leaves it to settle.
-        UUID id = staleRunningJob(readableSnapshot(), withProxyUsage(), capacity.reviewRetries());
+        UUID id = staleRunningJob(readableSnapshot(), capacity.reviewRetries());
         var job = jobRepository.findById(id).orElseThrow();
         var other = workspaceRepository.save(TestEntities.activeWorkspace("other-runtime-ws"));
         var now = Instant.now();
@@ -122,6 +106,11 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
         assertThat(runtime.spent(workspace.getId(), job.getReviewId()))
                 .isEqualTo(new ReviewRuntimeRepository.Spend(BigDecimal.ZERO, true));
+        UUID call = openCall(id, epochOf(id));
+        jdbc.update(
+                "UPDATE llm_usage_event SET call_state='ENDED', input_tokens=900, output_tokens=400,"
+                        + " usage_provenance='PROXY', measurement_verification='VERIFIED' WHERE id=?",
+                call);
         reapLost(id);
         assertThat(runtime.unsettledJobIds(workspace.getId(), job.getReviewId()))
                 .containsExactly(id);
@@ -130,7 +119,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                 .singleElement()
                 .satisfies(usage -> {
                     assertThat(usage.jobId()).isEqualTo(id);
-                    assertThat(usage.calls()).isEqualTo(3);
+                    assertThat(usage.calls()).isEqualTo(1);
                     assertThat(usage.inputTokens()).isEqualTo(900);
                     assertThat(usage.outputTokens()).isEqualTo(400);
                     assertThat(usage.costUsd()).isEqualByComparingTo(BigDecimal.ZERO);
@@ -141,7 +130,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void captureWritesRequireTheWorkspaceWorkerAndCurrentRunningAttempt() {
-        UUID id = staleRunningJob(readableSnapshot(), withProxyUsage());
+        UUID id = staleRunningJob(readableSnapshot());
         var job = jobRepository.findById(id).orElseThrow();
         var stamp = objectMapper.createObjectNode().put("inputsDigest", "a".repeat(64));
         var other = workspaceRepository.save(TestEntities.activeWorkspace("other-capture-ws"));
@@ -159,31 +148,27 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("an attempt whose lease expired is queued again, and its measured spend is billed with it")
-    void shouldBillALostAttemptWhenTheReaperTakesItBack() {
-        UUID jobId = staleRunningJob(readableSnapshot(), withProxyUsage());
+    @DisplayName("the reaper's take-back settles the calls that the lost claim left open, and no other claim's")
+    void shouldSettleTheOpenCallsOfTheLostClaimOnlyWhenTheReaperTakesItBack() {
+        UUID jobId = staleRunningJob(readableSnapshot());
+        int lostEpoch = epochOf(jobId);
+        UUID lost = openCall(jobId, lostEpoch);
+        // A row of another claim of the same run, which this take-back must leave alone.
+        UUID other = openCall(jobId, lostEpoch + 1);
 
         reapLost(jobId);
 
         ReviewJob reaped = jobRepository.findById(jobId).orElseThrow();
         assertThat(reaped.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(reaped.spentAttempts()).isEqualTo(1);
-
-        LlmUsageEvent event = onlyUsageEvent(jobId);
-        assertThat(event.getSourceId()).isEqualTo(jobId);
-        assertThat(event.getSourceType()).isEqualTo(UsageSourceType.REVIEW_JOB);
-        assertThat(event.getWorkspaceId()).isEqualTo(workspace.getId());
-        assertThat(event.getInputTokens()).isEqualTo(900L);
-        assertThat(event.getOutputTokens()).isEqualTo(400L);
-        assertThat(event.getTotalCalls()).isEqualTo(3);
-        // NO_CHARGE is a declared price, so this is confirmed $0 — not unpriced.
-        assertThat(event.getPricingState()).isEqualTo(UsagePricingState.NO_CHARGE);
+        assertThat(callState(lost)).isEqualTo("SETTLED:UNVERIFIABLE:UNPRICED");
+        assertThat(callState(other)).isEqualTo("OPEN:UNKNOWN:NO_CHARGE");
     }
 
     @Test
-    @DisplayName("an attempt whose snapshot this server cannot read is still taken back, billed UNPRICED")
+    @DisplayName("an attempt whose snapshot this server cannot read is still taken back")
     void unreadableSnapshotStillTerminalisesAndDoesNotWedge() {
-        UUID jobId = staleRunningJob(snapshotFromTheFuture(), withProxyUsage());
+        UUID jobId = staleRunningJob(snapshotFromTheFuture());
 
         reapLost(jobId);
 
@@ -192,52 +177,60 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                 .as("an unreadable price must not keep the attempt holding its job")
                 .isEqualTo(ReviewJobStatus.QUEUED);
 
-        LlmUsageEvent event = onlyUsageEvent(jobId);
-        assertThat(event.getSourceId()).isEqualTo(jobId);
-        assertThat(event.getPricingState()).isEqualTo(UsagePricingState.UNPRICED);
-        assertThat(event.getCostUsd()).isNull();
-        assertThat(event.getModel()).isNull();
-        assertThat(event.getInputTokens()).isEqualTo(900L);
-
         // And the lease is genuinely released: a second pass finds nothing left to take back, which is the
         // difference between "recovered" and "wedged in a retry loop forever".
         reaper.reap();
-        assertThat(usageEventRepository.findByWorkspaceIdAndSourceTypeAndSourceIdOrderBySourceAttemptAsc(
-                        workspace.getId(), UsageSourceType.REVIEW_JOB, jobId))
-                .hasSize(1);
         assertThat(jobRepository.findById(jobId).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(jobRepository.findById(jobId).orElseThrow().spentAttempts()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("a reaped attempt bills each model for practice scripts at its slot's frozen price and purse")
-    void shouldAppendAPracticeScriptLedgerRowPerKindWhenALostAttemptIsTakenBack() {
-        UUID jobId = staleRunningJob(practiceScriptSnapshot().toJson(objectMapper), withProxyUsage());
-        practiceScriptCalls(jobId);
-
-        reapLost(jobId);
-
-        assertPracticeScriptLedgerRows(jobId);
-    }
-
-    @Test
-    @DisplayName(
-            "a cancelled attempt bills each model for practice scripts once over its practices, at its slot's price")
-    void shouldAppendAPracticeScriptLedgerRowPerKindWhenARunningJobIsCancelled() {
-        UUID jobId = staleRunningJob(practiceScriptSnapshot().toJson(objectMapper), withProxyUsage());
-        practiceScriptCalls(jobId);
+    @DisplayName("cancelling a running job settles every call its run left open")
+    void shouldSettleTheOpenCallsWhenARunningJobIsCancelled() {
+        UUID jobId = staleRunningJob(readableSnapshot());
+        UUID open = openCall(jobId, epochOf(jobId));
 
         lifecycleService.cancel(workspace.getId(), jobId);
 
-        assertPracticeScriptLedgerRows(jobId);
+        assertThat(callState(open)).isEqualTo("SETTLED:UNVERIFIABLE:UNPRICED");
         assertThat(jobRepository.findById(jobId))
                 .get()
                 .extracting(ReviewJob::getStatus, ReviewJob::getCancellationReason)
                 .containsExactly(ReviewJobStatus.CANCELLED, ReviewJobCancellationReason.CANCELLED_BY_REQUESTER);
     }
 
+    private int epochOf(UUID jobId) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT r.lease_epoch FROM agent_run r JOIN review_job j ON j.run_id = r.id WHERE j.id = ?",
+                Integer.class,
+                jobId));
+    }
+
+    /** A model call of the job that is still at its provider, under claim {@code epoch} of the job's run. */
+    private UUID openCall(UUID jobId, int epoch) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO llm_usage_event (id, workspace_id, run_id, lease_epoch, call_state, job_type, source_type,
+                    source_id, source_attempt, review_id, model_kind, pricing_state, funding_source, cost_usd,
+                    started_at, occurred_at)
+                SELECT ?, j.workspace_id, j.run_id, ?, 'OPEN', 'PRACTICE_REVIEW', 'REVIEW_JOB', j.id, ? - 1,
+                    j.review_id, 'CHAT', 'NO_CHARGE', 'INSTANCE', 0, now(), now()
+                FROM review_job j WHERE j.id = ?
+                """, id, epoch, epoch, jobId);
+        return id;
+    }
+
+    private String callState(UUID call) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT call_state || ':' || measurement_verification || ':' || pricing_state FROM llm_usage_event"
+                        + " WHERE id = ?",
+                String.class,
+                call));
+    }
+
     @Test
     void shouldCancelAQueuedJob() {
-        UUID queuedId = staleRunningJob(snapshot().toJson(objectMapper), withProxyUsage());
+        UUID queuedId = staleRunningJob(snapshot().toJson(objectMapper));
         transactionTemplate.executeWithoutResult(transaction -> {
             var queued = jobRepository.findById(queuedId).orElseThrow();
             queued.setStatus(ReviewJobStatus.QUEUED);
@@ -255,7 +248,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepACompletedJobWhenCancellationLosesTheTransition() {
-        UUID completedId = staleRunningJob(snapshot().toJson(objectMapper), withProxyUsage());
+        UUID completedId = staleRunningJob(snapshot().toJson(objectMapper));
         transactionTemplate.executeWithoutResult(transaction -> {
             var completed = jobRepository.findById(completedId).orElseThrow();
             completed.setStatus(ReviewJobStatus.COMPLETED);
@@ -281,153 +274,6 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
         RuntimeJobTestData.leaseUntil(
                 jdbc, jobRepository.findById(jobId).orElseThrow(), Instant.now().minusSeconds(1));
         reaper.reap();
-    }
-
-    private void practiceScriptCalls(UUID jobId) {
-        for (String slug : List.of("comment-quality", "test-coverage")) {
-            var kind = new ItemKind("scm.pull_request");
-            versions.create(new PracticeVersionService.NewPractice(
-                    workspace,
-                    slug,
-                    kind,
-                    DefinitionTestFixtures.definition(kind, slug, "Review the work.", null),
-                    null,
-                    0,
-                    null));
-        }
-        transactionTemplate.executeWithoutResult(tx -> {
-            practiceScriptCall(jobId, ModelKind.DECISION, "comment-quality", 300_000, 50_000);
-            practiceScriptCall(jobId, ModelKind.DECISION, "test-coverage", 200_000, 50_000);
-            practiceScriptCall(jobId, ModelKind.EMBEDDING, "comment-quality", 1_000, 0);
-            practiceScriptCall(jobId, ModelKind.RERANKING, "comment-quality", 0, 0);
-            practiceScriptCall(jobId, ModelKind.CHAT, "comment-quality", 70, 20);
-        });
-    }
-
-    private void practiceScriptCall(UUID jobId, ModelKind kind, String practice, long input, long output) {
-        jobRepository.accumulatePracticeScriptUsage(
-                jobId, 0, new PracticeScriptCallUsage(kind, practice, null, input, output, 0, 0, 0));
-    }
-
-    private void assertPracticeScriptLedgerRows(UUID jobId) {
-        List<LlmUsageEvent> rows =
-                usageEventRepository.findByWorkspaceIdAndSourceTypeInAndSourceIdOrderBySourceAttemptAsc(
-                        workspace.getId(),
-                        List.of(
-                                UsageSourceType.REVIEW_JOB,
-                                UsageSourceType.PRACTICE_SCRIPT_DECISION,
-                                UsageSourceType.PRACTICE_SCRIPT_EMBEDDING,
-                                UsageSourceType.PRACTICE_SCRIPT_RERANKING),
-                        jobId);
-        assertThat(rows)
-                .extracting(LlmUsageEvent::getSourceType)
-                .containsExactlyInAnyOrder(
-                        UsageSourceType.REVIEW_JOB,
-                        UsageSourceType.PRACTICE_SCRIPT_DECISION,
-                        UsageSourceType.PRACTICE_SCRIPT_EMBEDDING,
-                        UsageSourceType.PRACTICE_SCRIPT_RERANKING);
-
-        LlmUsageEvent decision = row(rows, UsageSourceType.PRACTICE_SCRIPT_DECISION);
-        assertThat(decision.getSourceAttempt()).isZero();
-        assertThat(decision.getModel()).isEqualTo("decision-upstream");
-        assertThat(decision.getInputTokens()).isEqualTo(500_000L);
-        assertThat(decision.getOutputTokens()).isEqualTo(100_000L);
-        assertThat(decision.getTotalCalls()).isEqualTo(2);
-        assertThat(decision.getFundingSource()).isEqualTo(UsageFundingSource.WORKSPACE);
-        assertThat(decision.getPricingState()).isEqualTo(UsagePricingState.PRICED);
-        // 0.5M input at $2 plus 0.1M output at $8.
-        assertThat(decision.getCostUsd()).isEqualByComparingTo("1.8");
-        assertThat(decision.getUsageProvenance()).isEqualTo(UsageProvenance.PROXY);
-
-        LlmUsageEvent embedding = row(rows, UsageSourceType.PRACTICE_SCRIPT_EMBEDDING);
-        assertThat(embedding.getModel()).isEqualTo("embedding-upstream");
-        assertThat(embedding.getInputTokens()).isEqualTo(1_000L);
-        assertThat(embedding.getPricingState())
-                .as("a slot admitted without a price is billed UNPRICED, never at an invented rate")
-                .isEqualTo(UsagePricingState.UNPRICED);
-        assertThat(embedding.getCostUsd()).isNull();
-
-        LlmUsageEvent reranking = row(rows, UsageSourceType.PRACTICE_SCRIPT_RERANKING);
-        assertThat(reranking.getTotalCalls()).isEqualTo(1);
-        assertThat(reranking.getPricingState())
-                .as("a model without metered cost is a confirmed zero, even when the provider reports no tokens")
-                .isEqualTo(UsagePricingState.NO_CHARGE);
-        assertThat(reranking.getCostUsd()).isEqualByComparingTo("0");
-    }
-
-    private static LlmUsageEvent row(List<LlmUsageEvent> rows, UsageSourceType sourceType) {
-        return rows.stream()
-                .filter(event -> event.getSourceType() == sourceType)
-                .findFirst()
-                .orElseThrow();
-    }
-
-    private ConfigSnapshot practiceScriptSnapshot() {
-        Map<ModelKind, FrozenModel> slots = new EnumMap<>(ModelKind.class);
-        slots.put(
-                ModelKind.DECISION,
-                slot(
-                        "openai-decisions",
-                        "decision-upstream",
-                        new LlmPriceSnapshot(
-                                UsageFundingSource.WORKSPACE,
-                                UsagePricingState.PRICED,
-                                null,
-                                null,
-                                new BigDecimal("2"),
-                                new BigDecimal("8"),
-                                null,
-                                null)));
-        slots.put(ModelKind.EMBEDDING, slot("openai-embeddings", "embedding-upstream", null));
-        slots.put(
-                ModelKind.RERANKING,
-                slot(
-                        "cohere-rerank",
-                        "reranking-upstream",
-                        new LlmPriceSnapshot(
-                                UsageFundingSource.INSTANCE,
-                                UsagePricingState.NO_CHARGE,
-                                null,
-                                null,
-                                null,
-                                null,
-                                null,
-                                null)));
-        return snapshot().withPracticeScript(slots);
-    }
-
-    private FrozenModel slot(String protocol, String upstreamModelId, @Nullable LlmPriceSnapshot price) {
-        return new FrozenModel(
-                LlmApiProtocol.parse(protocol).orElseThrow(),
-                "https://models.example.com/v1",
-                upstreamModelId,
-                price == null ? UsageFundingSource.INSTANCE : price.fundingSource(),
-                instanceModel.getConnection().getId(),
-                instanceModel.getId(),
-                workspace.getId(),
-                null,
-                null,
-                price,
-                false);
-    }
-
-    private LlmUsageEvent onlyUsageEvent(UUID jobId) {
-        List<LlmUsageEvent> events =
-                usageEventRepository.findByWorkspaceIdAndSourceTypeAndSourceIdOrderBySourceAttemptAsc(
-                        workspace.getId(), UsageSourceType.REVIEW_JOB, jobId);
-        assertThat(events).as("the reap must append exactly one ledger event").hasSize(1);
-        return events.getFirst();
-    }
-
-    private static ReviewJob withProxyUsage() {
-        ReviewJob job = new ReviewJob();
-        job.setLlmCalls(3);
-        job.setLlmInputTokens(900);
-        job.setLlmOutputTokens(400);
-        job.setLlmReasoningTokens(0);
-        job.setLlmCacheReadTokens(0);
-        job.setLlmCacheWriteTokens(0);
-        return job;
     }
 
     private JsonNode readableSnapshot() {
@@ -462,12 +308,12 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                         UsageFundingSource.INSTANCE, UsagePricingState.NO_CHARGE, null, null, null, null, null, null));
     }
 
-    private UUID staleRunningJob(JsonNode configSnapshot, ReviewJob usage) {
-        return staleRunningJob(configSnapshot, usage, 0);
+    private UUID staleRunningJob(JsonNode configSnapshot) {
+        return staleRunningJob(configSnapshot, 0);
     }
 
     /** A running job whose run has spent {@code spent} retries, on its attempt of that number. */
-    private UUID staleRunningJob(JsonNode configSnapshot, ReviewJob usage, int spent) {
+    private UUID staleRunningJob(JsonNode configSnapshot, int spent) {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
         RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, spent), spent);
@@ -478,12 +324,6 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
         // Non-null executionStartedAt is what makes this attempt billable: it got past preparation and
         // actually ran, so its spend has to be accounted for.
         job.setExecutionStartedAt(Instant.now().minus(Duration.ofMinutes(29)));
-        job.setLlmCalls(usage.getLlmCalls());
-        job.setLlmInputTokens(usage.getLlmInputTokens());
-        job.setLlmOutputTokens(usage.getLlmOutputTokens());
-        job.setLlmReasoningTokens(usage.getLlmReasoningTokens());
-        job.setLlmCacheReadTokens(usage.getLlmCacheReadTokens());
-        job.setLlmCacheWriteTokens(usage.getLlmCacheWriteTokens());
         return jobRepository
                 .saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job))
                 .getId();

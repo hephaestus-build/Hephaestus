@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -102,12 +103,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     private ProxyBudgetGate budgetGate;
 
     @Mock
-    private ProxyUsageAccumulator usageAccumulator;
-
-    @Mock
-    private MentorTurnUsageAccumulator mentorTurnUsageAccumulator;
-
-    @Mock
     private MentorTurnRepository turnRepository;
 
     /** The loop's credential, as the test profile sets it. */
@@ -133,8 +128,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         var context = new GenericApplicationContext();
         context.refresh();
         var config = new LlmProxySecurityConfig();
-        var accounting = new ProxyAccounting(
-                budgetGate, usageAccumulator, mentorTurnUsageAccumulator, meterRegistry, OBJECT_MAPPER);
+        var accounting = new ProxyAccounting(budgetGate, mock(ProxyCallLedger.class), meterRegistry, OBJECT_MAPPER);
         BucketResolver resolver = (key, configuration) -> buckets.computeIfAbsent(
                 key,
                 ignored -> Bucket.builder()

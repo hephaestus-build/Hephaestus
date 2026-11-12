@@ -2523,6 +2523,7 @@ function usageOf(jobs: readonly ReviewJob[]): ReviewUsage {
 			attempt: job.attempt,
 			jobId: job.id,
 			pricingState: "PRICED" as const,
+			includesUpperBound: false,
 			costUsd: "0.0125",
 			calls: 3,
 			inputTokens: 11_000,
@@ -2538,6 +2539,7 @@ function usageOf(jobs: readonly ReviewJob[]): ReviewUsage {
 		outputTokens: attempts.length * 300,
 		costUsd: (attempts.length * 0.0125).toFixed(4),
 		priced: true,
+		includesUpperBound: false,
 	};
 }
 
@@ -2670,6 +2672,7 @@ export const reviewUsageTwoAttempts: ReviewUsage = {
 			attempt: 0,
 			jobId: "11111111-1111-1111-1111-111111111000",
 			pricingState: "PRICED",
+			includesUpperBound: false,
 			costUsd: "0.0125",
 			calls: 3,
 			inputTokens: 11_000,
@@ -2682,6 +2685,7 @@ export const reviewUsageTwoAttempts: ReviewUsage = {
 			attempt: 1,
 			jobId: "11111111-1111-1111-1111-111111111001",
 			pricingState: "PRICED",
+			includesUpperBound: false,
 			costUsd: "0.0300",
 			calls: 4,
 			inputTokens: 13_000,
@@ -2696,6 +2700,7 @@ export const reviewUsageTwoAttempts: ReviewUsage = {
 	outputTokens: 914,
 	costUsd: "0.0425",
 	priced: true,
+	includesUpperBound: false,
 };
 
 export const reviewUsageUnpriced: ReviewUsage = {
@@ -2704,6 +2709,7 @@ export const reviewUsageUnpriced: ReviewUsage = {
 			attempt: 0,
 			jobId: "11111111-1111-1111-1111-111111111000",
 			pricingState: "UNPRICED",
+			includesUpperBound: false,
 			costUsd: null,
 			calls: 7,
 			inputTokens: 24_000,
@@ -2718,6 +2724,7 @@ export const reviewUsageUnpriced: ReviewUsage = {
 	outputTokens: 914,
 	costUsd: null,
 	priced: false,
+	includesUpperBound: false,
 };
 
 function cycled<T>(specs: readonly T[], index: number): T {

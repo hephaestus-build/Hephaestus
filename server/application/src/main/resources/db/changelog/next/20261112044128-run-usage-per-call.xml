@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794319333068-1" author="hephaestus">
+        <comment>Each model call gets one ledger row: the run and claim that made it, whether it still waits for its end, the model kind, the practice of a practice script call, and when it started. A row from before keeps its run empty, ends, and starts at its own date. One attempt can now have many rows, so the key of one row per attempt goes before any row moves.</comment>
+        <addColumn tableName="llm_usage_event">
+            <column name="run_id" type="UUID"/>
+            <column name="lease_epoch" type="INTEGER"/>
+            <column defaultValue="UNPRICED" name="initial_pricing_state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValue="ENDED" name="call_state" type="VARCHAR(8)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_kind" type="VARCHAR(16)"/>
+            <column name="practice_id" type="BIGINT"/>
+            <column name="started_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+        <sql>
+UPDATE llm_usage_event
+   SET model_kind = CASE source_type WHEN 'PRACTICE_SCRIPT_DECISION' THEN 'DECISION'
+                                     WHEN 'PRACTICE_SCRIPT_EMBEDDING' THEN 'EMBEDDING'
+                                     WHEN 'PRACTICE_SCRIPT_RERANKING' THEN 'RERANKING'
+                                     ELSE 'CHAT' END,
+       started_at = occurred_at, initial_pricing_state = pricing_state;
+        </sql>
+        <addNotNullConstraint tableName="llm_usage_event" columnName="model_kind" columnDataType="VARCHAR(16)"/>
+        <addNotNullConstraint tableName="llm_usage_event" columnName="started_at" columnDataType="TIMESTAMP(6) WITH TIME ZONE"/>
+        <dropUniqueConstraint constraintName="ux_llm_usage_event_source_attempt" tableName="llm_usage_event"/>
+        <rollback><stop>Restore the verified pre-upgrade database backup.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794319333068-2" author="hephaestus">
+        <comment>The measurements that the previous release had not written to the ledger yet, because their attempts still ran, become ledger rows: one for the review's own model, one for each practice and model kind of its practice scripts, and one for each turn attempt. Each row keeps the frozen model and rates, and waits UNPRICED for the repricing pass, which prices it from them. The chat calls of practice scripts are already in the review's own total.</comment>
+        <sql>
+INSERT INTO llm_usage_event (id, workspace_id, job_type, source_type, source_id, source_attempt, review_id, model_kind,
+                             practice_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+                             reasoning_tokens, search_units, total_calls, unreported_calls, cost_usd, pricing_state,
+                             funding_source, initial_pricing_state, applied_price_id, applied_workspace_model_id, applied_per_1m_input_usd,
+                             applied_per_1m_output_usd, applied_per_1m_cache_read_usd, applied_per_1m_cache_write_usd,
+                             usage_provenance, measurement_verification, started_at, occurred_at)
+SELECT gen_random_uuid(), m.workspace_id, 'PRACTICE_REVIEW', m.source_type, m.job_id, m.attempt, j.review_id,
+       m.model_kind, m.practice_id, c.model, m.input_tokens, m.output_tokens, m.cache_read_tokens, m.cache_write_tokens,
+       m.reasoning_tokens, m.search_units, m.calls, m.unreported,
+       CASE WHEN c.pricing_state = 'NO_CHARGE' AND m.unreported = 0 THEN 0 END,
+       CASE WHEN c.pricing_state = 'NO_CHARGE' AND m.unreported = 0 THEN 'NO_CHARGE' ELSE 'UNPRICED' END,
+       COALESCE(c.funding_source, 'INSTANCE'), COALESCE(c.pricing_state, 'UNPRICED'), c.applied_price_id, c.applied_workspace_model_id,
+       c.applied_per_1m_input_usd, c.applied_per_1m_output_usd, c.applied_per_1m_cache_read_usd,
+       c.applied_per_1m_cache_write_usd, 'PROXY', CASE WHEN m.unreported = 0 THEN 'VERIFIED' ELSE 'UNVERIFIABLE' END,
+       COALESCE(u.occurred_at, j.execution_started_at, j.started_at, now()),
+       COALESCE(u.occurred_at, j.execution_started_at, j.started_at, now())
+  FROM (SELECT u.workspace_id, u.job_id, u.attempt, 'REVIEW_JOB' AS source_type, 'CHAT' AS model_kind,
+               NULL::bigint AS practice_id, u.proxy_input_tokens AS input_tokens, u.proxy_output_tokens AS output_tokens,
+               u.proxy_cache_read_tokens AS cache_read_tokens, u.proxy_cache_write_tokens AS cache_write_tokens,
+               u.proxy_reasoning_tokens AS reasoning_tokens, 0::bigint AS search_units,
+               u.proxy_calls + COALESCE(s.unreported, 0) AS calls, COALESCE(s.unreported, 0) AS unreported
+          FROM review_job_attempt_usage u
+          LEFT JOIN (SELECT job_id, attempt, workspace_id, SUM(calls - reported_calls) AS unreported
+                       FROM review_job_script_usage WHERE model_kind = 'CHAT' GROUP BY job_id, attempt, workspace_id) s
+            ON s.job_id = u.job_id AND s.attempt = u.attempt AND s.workspace_id = u.workspace_id
+         WHERE u.proxy_calls + COALESCE(s.unreported, 0) &gt; 0
+        UNION ALL
+        SELECT x.workspace_id, x.job_id, x.attempt, 'PRACTICE_SCRIPT_' || x.model_kind, x.model_kind, x.practice_id,
+               x.input_tokens, x.output_tokens, x.cache_read_tokens, x.cache_write_tokens, 0, x.search_units, x.calls,
+               x.calls - x.reported_calls
+          FROM review_job_script_usage x
+         WHERE x.model_kind &lt;&gt; 'CHAT' AND x.calls &gt; 0) m
+  JOIN review_job j ON j.id = m.job_id AND j.workspace_id = m.workspace_id
+  LEFT JOIN review_job_attempt_usage u ON u.job_id = m.job_id AND u.attempt = m.attempt AND u.workspace_id = m.workspace_id
+  LEFT JOIN review_job_attempt_charge c
+    ON c.job_id = m.job_id AND c.attempt = m.attempt AND c.workspace_id = m.workspace_id AND c.model_kind = m.model_kind
+ WHERE NOT EXISTS (SELECT 1 FROM llm_usage_event e
+                    WHERE e.workspace_id = m.workspace_id AND e.source_id = m.job_id AND e.source_attempt = m.attempt
+                      AND e.source_type &lt;&gt; 'MENTOR_TURN');
+INSERT INTO llm_usage_event (id, workspace_id, job_type, source_type, source_id, source_attempt, model_kind, model,
+                             input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
+                             total_calls, cost_usd, pricing_state, funding_source, initial_pricing_state, applied_price_id,
+                             applied_workspace_model_id, applied_per_1m_input_usd, applied_per_1m_output_usd,
+                             applied_per_1m_cache_read_usd, applied_per_1m_cache_write_usd, usage_provenance,
+                             measurement_verification, started_at, occurred_at)
+SELECT gen_random_uuid(), m.workspace_id, 'MENTOR_TURN', 'MENTOR_TURN', m.turn_id, m.attempt, 'CHAT', m.model,
+       m.input_tokens, m.output_tokens, m.cache_read_tokens, m.cache_write_tokens, m.reasoning_tokens,
+       GREATEST(1, m.calls), CASE WHEN m.pricing_state = 'NO_CHARGE' THEN 0 END,
+       CASE WHEN m.pricing_state = 'NO_CHARGE' THEN 'NO_CHARGE' ELSE 'UNPRICED' END, m.funding_source, m.pricing_state, m.applied_price_id, m.applied_workspace_model_id,
+       m.applied_per_1m_input_usd, m.applied_per_1m_output_usd, m.applied_per_1m_cache_read_usd,
+       m.applied_per_1m_cache_write_usd, 'PROXY', 'VERIFIED',
+       COALESCE(m.occurred_at, t.started_at, now()), COALESCE(m.occurred_at, t.started_at, now())
+  FROM mentor_turn_attempt_usage m
+  LEFT JOIN mentor_turn t ON t.id = m.turn_id AND t.workspace_id = m.workspace_id
+ WHERE m.input_tokens + m.output_tokens + m.cache_read_tokens + m.cache_write_tokens &gt; 0
+   AND NOT EXISTS (SELECT 1 FROM llm_usage_event e
+                    WHERE e.workspace_id = m.workspace_id AND e.source_type = 'MENTOR_TURN'
+                      AND e.source_id = m.turn_id AND e.source_attempt = m.attempt);
+        </sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794319333068-3" author="hephaestus">
+        <comment>An open call always has the live claim that made it. A row keeps its accounting when its run is deleted, as when a turn is deleted, so the run reference is cleared then; the run's deletion settles the calls it left open first. The repricing pass reads every month, oldest first, through a partial index of exactly its work list.</comment>
+        <createIndex indexName="idx_llm_usage_run" tableName="llm_usage_event">
+            <column name="run_id"/>
+            <column name="workspace_id"/>
+            <column name="lease_epoch"/>
+        </createIndex>
+        <sql splitStatements="false">
+ALTER TABLE llm_usage_event ADD CONSTRAINT ck_llm_usage_event_call_state CHECK (call_state IN ('OPEN', 'SETTLED', 'ENDED'));
+ALTER TABLE llm_usage_event ADD CONSTRAINT ck_llm_usage_event_open_call
+    CHECK (call_state &lt;&gt; 'OPEN' OR (run_id IS NOT NULL AND lease_epoch IS NOT NULL));
+ALTER TABLE llm_usage_event ADD CONSTRAINT ck_llm_usage_event_model_kind
+    CHECK (model_kind IN ('CHAT', 'DECISION', 'EMBEDDING', 'RERANKING'));
+ALTER TABLE llm_usage_event ADD CONSTRAINT sfk_llm_usage_event_run FOREIGN KEY (run_id, workspace_id)
+    REFERENCES agent_run (id, workspace_id) ON DELETE SET NULL (run_id);
+CREATE INDEX idx_llm_usage_unpriced ON llm_usage_event (occurred_at, id)
+    WHERE pricing_state = 'UNPRICED' AND measurement_verification = 'VERIFIED' AND unreported_calls = 0;
+ALTER TABLE llm_usage_event ADD CONSTRAINT ck_llm_usage_event_initial_price
+    CHECK (initial_pricing_state IN ('PRICED', 'NO_CHARGE', 'UNPRICED'));
+CREATE FUNCTION guard_usage_call_transition() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.initial_pricing_state IS DISTINCT FROM OLD.initial_pricing_state THEN
+   RAISE EXCEPTION 'A model call keeps its initial pricing state' USING ERRCODE = '23514';
+ END IF;
+ IF NEW.call_state = OLD.call_state
+    OR (OLD.call_state = 'OPEN' AND NEW.call_state IN ('SETTLED', 'ENDED'))
+    OR (OLD.call_state = 'SETTLED' AND NEW.call_state = 'ENDED') THEN
+   RETURN NEW;
+ END IF;
+ RAISE EXCEPTION 'Illegal usage call transition: % -> %', OLD.call_state, NEW.call_state USING ERRCODE = '23514';
+END $$;
+CREATE TRIGGER llm_usage_event_guards_call_transition BEFORE UPDATE ON llm_usage_event
+ FOR EACH ROW EXECUTE FUNCTION guard_usage_call_transition();
+CREATE FUNCTION settle_agent_run_calls() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ UPDATE llm_usage_event
+    SET call_state = 'SETTLED', measurement_verification = 'UNVERIFIABLE', pricing_state = 'UNPRICED',
+        cost_usd = NULL, unreported_calls = 1
+  WHERE run_id = OLD.id AND workspace_id = OLD.workspace_id AND call_state = 'OPEN';
+ RETURN OLD;
+END $$;
+CREATE TRIGGER agent_run_settles_calls BEFORE DELETE ON agent_run
+ FOR EACH ROW EXECUTE FUNCTION settle_agent_run_calls();
+        </sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794319333068-4" author="hephaestus">
+        <comment>The measurements of each attempt and the running counters of jobs and turns go: the ledger's call rows hold them now.</comment>
+        <dropTable tableName="review_job_attempt_charge" cascadeConstraints="true"/>
+        <dropTable tableName="review_job_attempt_usage" cascadeConstraints="true"/>
+        <dropTable tableName="review_job_script_usage" cascadeConstraints="true"/>
+        <dropTable tableName="mentor_turn_attempt_usage" cascadeConstraints="true"/>
+        <dropColumn tableName="review_job">
+            <column name="llm_calls"/>
+            <column name="llm_input_tokens"/>
+            <column name="llm_output_tokens"/>
+            <column name="llm_reasoning_tokens"/>
+            <column name="llm_cache_read_tokens"/>
+            <column name="llm_cache_write_tokens"/>
+        </dropColumn>
+        <dropColumn tableName="mentor_turn">
+            <column name="input_tokens"/>
+            <column name="output_tokens"/>
+            <column name="cached_tokens"/>
+            <column name="cache_write_tokens"/>
+            <column name="reasoning_tokens"/>
+            <column name="llm_calls"/>
+            <column name="cost_usd"/>
+        </dropColumn>
+        <rollback><stop>Restore the verified pre-upgrade database backup.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794319333068-5" author="hephaestus">
+        <comment>Each call holds the most it can cost at its frozen rates: its request bytes and its output limit. Spend reads count this upper bound while the call is open or was not measured. Rows from before keep no bound.</comment>
+        <addColumn tableName="llm_usage_event">
+            <column name="cost_bound_usd" type="numeric(18, 6)"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="llm_usage_event" columnName="cost_bound_usd"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

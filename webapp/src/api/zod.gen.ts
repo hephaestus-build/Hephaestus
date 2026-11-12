@@ -138,32 +138,6 @@ export const zAdminAccountView = z.object({
 });
 
 /**
- * One workspace's month of spend, as an instance admin sees it
- */
-export const zAdminWorkspaceLlmUsage = z.object({
-    displayName: z.string(),
-    events: z.int(),
-    instanceBudgetVerdict: z.enum([
-        'WITHIN',
-        'EXHAUSTED',
-        'UNVERIFIABLE'
-    ]),
-    instanceMonthlyBudgetUsd: z.number().optional(),
-    instancePaused: z.boolean(),
-    instanceTotalCostUsd: z.number(),
-    ownProviderBudgetVerdict: z.enum([
-        'WITHIN',
-        'EXHAUSTED',
-        'UNVERIFIABLE'
-    ]),
-    ownProviderInUse: z.boolean(),
-    ownProviderMonthlyBudgetUsd: z.number().optional(),
-    ownProviderPaused: z.boolean(),
-    ownProviderTotalCostUsd: z.number(),
-    workspaceSlug: z.string()
-});
-
-/**
  * Metadata-only workspace summary for the instance-admin overview
  */
 export const zAdminWorkspaceView = z.object({
@@ -1494,15 +1468,6 @@ export const zFxRateInfo = z.object({
     source: z.enum(['ECB'])
 });
 
-/**
- * Instance-admin per-workspace month rollup (metadata only, no tenant content)
- */
-export const zAdminLlmUsageReport = z.object({
-    fx: zFxRateInfo.optional(),
-    month: z.string(),
-    workspaces: z.array(zAdminWorkspaceLlmUsage)
-});
-
 export const zGeneratedPathReview = z.object({
     excludedPaths: z.array(z.string()),
     patterns: z.array(z.string()),
@@ -2157,6 +2122,51 @@ export const zLlmProbeResult = z.object({
 });
 
 /**
+ * Calls of one purse whose usage was not measured, and the most they can cost
+ */
+export const zLlmUnmeasuredUsage = z.object({
+    calls: z.int(),
+    upperBoundUsd: z.number()
+});
+
+/**
+ * One workspace's month of spend, as an instance admin sees it
+ */
+export const zAdminWorkspaceLlmUsage = z.object({
+    displayName: z.string(),
+    events: z.int(),
+    instanceBudgetVerdict: z.enum([
+        'WITHIN',
+        'EXHAUSTED',
+        'UNVERIFIABLE'
+    ]),
+    instanceMonthlyBudgetUsd: z.number().optional(),
+    instancePaused: z.boolean(),
+    instanceTotalCostUsd: z.number(),
+    instanceUnmeasured: zLlmUnmeasuredUsage,
+    ownProviderBudgetVerdict: z.enum([
+        'WITHIN',
+        'EXHAUSTED',
+        'UNVERIFIABLE'
+    ]),
+    ownProviderInUse: z.boolean(),
+    ownProviderMonthlyBudgetUsd: z.number().optional(),
+    ownProviderPaused: z.boolean(),
+    ownProviderTotalCostUsd: z.number(),
+    ownProviderUnmeasured: zLlmUnmeasuredUsage,
+    workspaceSlug: z.string()
+});
+
+/**
+ * Instance-admin per-workspace month rollup (metadata only, no tenant content)
+ */
+export const zAdminLlmUsageReport = z.object({
+    fx: zFxRateInfo.optional(),
+    month: z.string(),
+    workspaces: z.array(zAdminWorkspaceLlmUsage)
+});
+
+/**
  * Spend for one UTC day
  */
 export const zLlmUsageByDay = z.object({
@@ -2184,7 +2194,7 @@ export const zLlmUsageByJobType = z.object({
 });
 
 /**
- * The decision, embedding and reranking calls that one practice's script made in finished reviews this month. The cost of each review's calls is split between its practices by the priced tokens that each used.
+ * The decision, embedding and reranking calls that one practice's script made this month. Each call names the practice that made it.
  */
 export const zLlmUsageByPractice = z.object({
     calls: z.int(),
@@ -2206,7 +2216,7 @@ export const zLlmUsageByPractice = z.object({
 });
 
 /**
- * The decision, embedding and reranking calls of finished reviews this month, in total. calls, inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and unpricedEventCount do not: one review can count for several practices there.
+ * The decision, embedding and reranking calls of this month, in total. calls, inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and unpricedEventCount do not: one review can count for several practices there.
  */
 export const zLlmUsagePracticeScriptTotal = z.object({
     calls: z.int(),
@@ -4474,6 +4484,7 @@ export const zReviewUsageAttempt = z.object({
     cacheWriteTokens: z.int(),
     calls: z.int(),
     costUsd: z.string().nullable(),
+    includesUpperBound: z.boolean(),
     inputTokens: z.int(),
     jobId: z.uuid(),
     outputTokens: z.int(),
@@ -4489,6 +4500,7 @@ export const zReviewUsage = z.object({
     attempts: z.array(zReviewUsageAttempt),
     calls: z.int(),
     costUsd: z.string().nullable(),
+    includesUpperBound: z.boolean(),
     inputTokens: z.int(),
     outputTokens: z.int(),
     priced: z.boolean()
@@ -6389,6 +6401,7 @@ export const zWorkspaceLlmUsageReport = z.object({
     instanceMonthlyBudgetUsd: z.number().optional(),
     instancePaused: z.boolean(),
     instanceTotalCostUsd: z.number(),
+    instanceUnmeasured: zLlmUnmeasuredUsage,
     month: z.string(),
     ownProviderBudgetVerdict: z.enum([
         'WITHIN',
@@ -6399,6 +6412,7 @@ export const zWorkspaceLlmUsageReport = z.object({
     ownProviderMonthlyBudgetUsd: z.number().optional(),
     ownProviderPaused: z.boolean(),
     ownProviderTotalCostUsd: z.number(),
+    ownProviderUnmeasured: zLlmUnmeasuredUsage,
     practiceScriptTotal: zLlmUsagePracticeScriptTotal,
     unpricedEventCount: z.int()
 });

@@ -503,7 +503,7 @@ tests:
   - name: refusals that continue for 15 minutes fire, a single refusal does not
     interval: 1m
     input_series:
-      - series: 'llm_budget_blocked_total{job="hephaestus",instance="server:9090",surface="review_job",cap="instance"}'
+      - series: 'llm_budget_blocked_total{job="hephaestus",instance="server:9090",surface="model_call",cap="instance"}'
         values: "0+1x30"
       - series: 'llm_budget_blocked_total{job="hephaestus",instance="server:9090",surface="mentor"}'
         values: "0 0 1x30"
@@ -516,7 +516,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
-              surface: review_job
+              surface: model_call
               cap: instance
             exp_annotations:
               summary: LLM budget admission kept refusing work for 15 minutes

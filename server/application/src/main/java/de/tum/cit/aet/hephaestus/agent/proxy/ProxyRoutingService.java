@@ -3,27 +3,25 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
-import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
-import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptKindTotal;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
-import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,6 +29,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -39,7 +38,7 @@ class ProxyRoutingService {
     private final ReviewJobRepository agentJobRepository;
     private final MentorTurnRepository mentorTurns;
     private final ObjectMapper objectMapper;
-    private final ReviewAttemptUsageService attemptUsage;
+    private final LlmUsageEventRepository usage;
     private final ReviewSnapshotQuery reviews;
     private final AgentRuns runs;
 
@@ -47,14 +46,14 @@ class ProxyRoutingService {
             ReviewJobRepository jobs,
             MentorTurnRepository mentorTurns,
             ObjectMapper mapper,
-            ReviewAttemptUsageService attemptUsage,
+            LlmUsageEventRepository usage,
             ReviewSnapshotQuery reviews,
             AgentRuns runs) {
         this.agentJobRepository = jobs;
         this.runs = runs;
         this.mentorTurns = mentorTurns;
         this.objectMapper = mapper;
-        this.attemptUsage = attemptUsage;
+        this.usage = usage;
         this.reviews = reviews;
     }
 
@@ -103,50 +102,13 @@ class ProxyRoutingService {
         // The live checks above decide whether this attempt may call at all; its work deadline decides until when.
         Instant workDeadline = Objects.requireNonNull(caller.workDeadline(), "a review attempt has a work deadline");
         if (!request.getRequestURI().startsWith(JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PATH)) {
-            register(job, caller.runId(), ModelKind.CHAT, snapshot.model());
             return reviewRouting(job, caller.runId(), snapshot, workDeadline);
         }
         var slot = practiceScriptSlot(request.getRequestURI());
         if (slot == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        ProxyRouting routing = practiceScriptRouting(job, caller.runId(), snapshot, slot, workDeadline)
+        String practice = request.getHeader(JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PRACTICE_HEADER);
+        return practiceScriptRouting(job, caller.runId(), snapshot, slot, practice, workDeadline)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        FrozenModel model = slot == ModelKind.CHAT ? snapshot.model() : snapshot.practiceScriptSlot(slot);
-        register(job, caller.runId(), slot, model);
-        return routing;
-    }
-
-    /**
-     * The routing of a chat call that the worker makes for a review attempt it runs: the same live checks as a
-     * sandbox's credential, with the worker's own deadline. Anything else, and the call does not start.
-     *
-     * @throws ResponseStatusException 401 when the attempt no longer holds this lease
-     */
-    ProxyRouting attemptRouting(UUID jobId, long workspaceId, int attempt, UUID runId, Instant workDeadline) {
-        var job = agentJobRepository
-                .findById(jobId)
-                .filter(found -> found.getWorkspaceId() == workspaceId
-                        && found.getRunId().equals(runId)
-                        && runs.isCurrent(new AgentRunRef(runId, workspaceId), ReviewRunKind.epoch(attempt)))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
-        var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-        register(job, runId, ModelKind.CHAT, snapshot.model());
-        return reviewRouting(job, runId, snapshot, workDeadline);
-    }
-
-    /**
-     * Registers the call on its attempt before anything is forwarded, and freezes what the call's model costs. A
-     * later claim freezes a new configuration onto the row, so a call that returns after a hand-off is priced from
-     * this registration. The attempt must still run on this worker; otherwise the call does not start.
-     */
-    private void register(ReviewJob job, UUID runId, ModelKind kind, @Nullable FrozenModel model) {
-        boolean running = attemptUsage.registerCall(
-                job.getId(),
-                job.getWorkspaceId(),
-                job.getAttempt(),
-                runId,
-                kind,
-                model == null ? FrozenCharge.UNKNOWN : FrozenCharge.of(model));
-        if (!running) throw attemptEnded();
     }
 
     /** The refusal that the authentication filter also gives an attempt that no longer runs, so its runner stops. */
@@ -180,7 +142,8 @@ class ProxyRoutingService {
                         UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), caller.runId()),
                 null,
                 null,
-                null);
+                null,
+                ProxyRouting.outputLimitOf(admitted.contextWindow(), admitted.maxOutputTokens()));
     }
 
     private ProxyRouting reviewRouting(ReviewJob job, UUID runId, ConfigSnapshot snapshot, Instant workDeadline) {
@@ -193,27 +156,73 @@ class ProxyRoutingService {
                 0L,
                 0L,
                 null,
-                workDeadline);
+                workDeadline,
+                ProxyRouting.outputLimitOf(snapshot.contextWindow(), snapshot.maxOutputTokens()));
     }
 
     private Optional<ProxyRouting> practiceScriptRouting(
-            ReviewJob job, UUID runId, ConfigSnapshot snapshot, ModelKind slot, Instant workDeadline) {
+            ReviewJob job,
+            UUID runId,
+            ConfigSnapshot snapshot,
+            ModelKind slot,
+            @Nullable String practiceSlug,
+            Instant workDeadline) {
         FrozenModel model = slot == ModelKind.CHAT ? snapshot.model() : snapshot.practiceScriptSlot(slot);
         if (model == null) {
             return Optional.empty();
         }
-        List<PracticeScriptKindTotal> used =
-                agentJobRepository.sumPracticeScriptUsageByKind(job.getWorkspaceId(), job.getId(), job.getAttempt());
+        var used = usage.sumDirectModelUsage(job.getWorkspaceId(), runId, ReviewRunKind.epoch(job.getAttempt()));
+        Long outputLimit = switch (slot) {
+            case CHAT -> ProxyRouting.outputLimitOf(snapshot.contextWindow(), snapshot.maxOutputTokens());
+            case DECISION -> pinnedOutputLimit(job, slot, practiceSlug);
+            case EMBEDDING, RERANKING -> null;
+        };
         return Optional.of(routing(
                 "job:" + job.getId() + ":practice-script",
                 job,
                 runId,
                 model,
-                ScriptUsage.ledgerSourceType(slot),
-                used.stream().mapToLong(PracticeScriptKindTotal::tokens).sum(),
-                used.stream().mapToLong(PracticeScriptKindTotal::searchUnits).sum(),
+                UsageSourceType.ofReviewCall(slot),
+                used.getTokens(),
+                used.getSearchUnits(),
                 slot,
-                workDeadline));
+                workDeadline,
+                outputLimit));
+    }
+
+    /**
+     * The output limit of a practice script model that the config snapshot does not describe, as the method of the
+     * calling practice pinned it with the model's options. Claim admits the job only while the pinned options equal the
+     * model's.
+     *
+     * @param practiceSlug the practice that the call names; when it names none, the first assigned practice
+     */
+    private @Nullable Long pinnedOutputLimit(ReviewJob job, ModelKind slot, @Nullable String practiceSlug) {
+        var assigned = job.getInput().assignments();
+        Long calling = practiceSlug == null
+                ? null
+                : agentJobRepository
+                        .findPracticeId(job.getWorkspaceId(), practiceSlug)
+                        .orElse(null);
+        String name = slot.name().toLowerCase(Locale.ROOT);
+        Map<String, JsonNode> options = reviews.find(job.getWorkspaceId(), job.getReviewId()).stream()
+                .flatMap(review -> review.practices().stream())
+                .filter(practice -> calling == null
+                        ? assigned.stream().anyMatch(id -> id.practiceId() == practice.practiceId())
+                        : practice.practiceId() == calling)
+                .findFirst()
+                .flatMap(practice -> practice.method().models().stream()
+                        .filter(bound -> bound.slot().equals(name))
+                        .map(BoundModelSlot::model)
+                        .filter(Objects::nonNull)
+                        .findFirst())
+                .map(model -> model.options())
+                .orElse(Map.of());
+        return ProxyRouting.outputLimitOf(tokens(options.get("contextWindow")), tokens(options.get("maxOutputTokens")));
+    }
+
+    private static @Nullable Integer tokens(@Nullable JsonNode option) {
+        return option != null && option.isIntegralNumber() && option.canConvertToInt() ? option.asInt() : null;
     }
 
     private static ProxyRouting routing(
@@ -225,7 +234,8 @@ class ProxyRoutingService {
             long directModelTokens,
             long directModelSearchUnits,
             @Nullable ModelKind slot,
-            Instant workDeadline) {
+            Instant workDeadline,
+            @Nullable Long outputLimit) {
         return new ProxyRouting(
                 principal,
                 model.apiProtocol().wire(),
@@ -244,7 +254,8 @@ class ProxyRoutingService {
                         job.getWorkspaceId()),
                 slot,
                 slot == null ? null : model.dataHandlingTier(),
-                workDeadline);
+                workDeadline,
+                outputLimit);
     }
 
     static @Nullable ModelKind practiceScriptSlot(String path) {

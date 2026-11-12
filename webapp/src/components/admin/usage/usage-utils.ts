@@ -1,6 +1,11 @@
-import type { LlmUsageByJobType, WorkspaceLlmUsageReport } from "@/api/types.gen";
+import type {
+	LlmUnmeasuredUsage,
+	LlmUsageByJobType,
+	WorkspaceLlmUsageReport,
+} from "@/api/types.gen";
 import { PURSES, type Purse } from "@/components/practice-vocabulary/purse-defs";
 import { DATE_LOCALE, asDate, type DateLike } from "@/lib/dates";
+import { formatCostUsd } from "@/lib/money";
 import { formatNumber } from "@/lib/numbers";
 
 export type LlmJobType = LlmUsageByJobType["jobType"];
@@ -21,6 +26,27 @@ export interface PurseSpend {
 
 export function spendOf(row: PurseSpend, purse: Purse): number {
 	return purse === "SHARED" ? row.instanceTotalCostUsd : row.ownProviderTotalCostUsd;
+}
+
+export type PurseUnmeasured = Pick<
+	WorkspaceLlmUsageReport,
+	"instanceUnmeasured" | "ownProviderUnmeasured"
+>;
+
+export function unmeasuredOf(usage: PurseUnmeasured, purse: Purse): LlmUnmeasuredUsage {
+	return purse === "SHARED" ? usage.instanceUnmeasured : usage.ownProviderUnmeasured;
+}
+
+/**
+ * The most that a purse's unmeasured calls can cost. The cap counts it, but it is never an exact cost, so
+ * it is never part of the spend figure. `undefined` when every call was measured.
+ */
+export function unmeasuredSpendText(unmeasured: LlmUnmeasuredUsage): string | undefined {
+	if (unmeasured.calls === 0) {
+		return undefined;
+	}
+	const calls = unmeasured.calls === 1 ? "1 call" : `${formatNumber(unmeasured.calls)} calls`;
+	return `Up to ${formatCostUsd(unmeasured.upperBoundUsd)} more from ${calls} whose usage was not measured`;
 }
 
 export type PurseCaps = Pick<

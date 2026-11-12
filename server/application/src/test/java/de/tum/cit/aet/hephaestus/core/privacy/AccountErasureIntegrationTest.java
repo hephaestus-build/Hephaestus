@@ -12,26 +12,16 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
-import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
-import de.tum.cit.aet.hephaestus.agent.proxy.MentorTurnUsageAccumulator;
-import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
-import de.tum.cit.aet.hephaestus.agent.proxy.ProxyTokenUsage;
-import de.tum.cit.aet.hephaestus.agent.proxy.ProxyUsageAccumulator;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
-import de.tum.cit.aet.hephaestus.agent.usage.MeasurementVerification;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
-import de.tum.cit.aet.hephaestus.agent.usage.UsageProvenance;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -103,12 +93,9 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceNamespaceReservation;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -121,7 +108,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -137,7 +123,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
@@ -243,12 +228,6 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     private MentorTurnService mentorTurns;
 
     @Autowired
-    private MentorAttemptUsageService mentorAttemptUsage;
-
-    @Autowired
-    private MentorTurnCompletion completion;
-
-    @Autowired
     private ReviewJobRepository agentJobRepository;
 
     @Autowired
@@ -261,13 +240,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     private FeedbackCopyRepository feedbackCopyRepository;
 
     @Autowired
-    private ReviewAttemptUsageService attemptUsage;
-
-    @Autowired
     private LlmUsageRecorder usageRecorder;
-
-    @Autowired
-    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private TransactionTemplate transactions;
@@ -674,116 +647,116 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         long otherWorkspaceId = Objects.requireNonNull(otherWorkspace.getId());
         var otherWork = modelFixtures.work(otherWorkspace, "running-usage-other", "scm.pull_request", 77L);
         UUID otherJobId = otherWork.job().getId();
-        transactions.executeWithoutResult(tx -> usageRecorder.record(
+        UUID otherRun = Objects.requireNonNull(otherWork.job().getRunId());
+        UUID otherCall = openCall(
                 otherWorkspaceId,
-                new LlmUsageRecorder.LlmUsageSample(
-                        otherWork.review().getId(),
-                        "PRACTICE_REVIEW",
-                        UsageSourceType.REVIEW_JOB,
-                        otherJobId,
-                        0,
-                        "gpt-5",
-                        77,
-                        7,
-                        0,
-                        0,
-                        0,
-                        0,
-                        1,
-                        price,
-                        UsageProvenance.PROXY,
-                        MeasurementVerification.VERIFIED,
-                        Instant.now())));
+                otherRun,
+                UsageSourceType.REVIEW_JOB,
+                otherJobId,
+                otherWork.review().getId(),
+                price);
+        completeCall(otherWorkspaceId, otherCall, 77, 7);
         String otherRowQuery = "SELECT * FROM llm_usage_event WHERE workspace_id=? AND source_id=?";
         var otherRow = jdbc.queryForMap(otherRowQuery, otherWorkspaceId, otherJobId);
 
-        // One provider-reported call settled while the attempt runs, and one more registered and still out.
-        var meters = new SimpleMeterRegistry();
-        ProxyUsageAccumulator accumulator = accumulator(meters);
-        var charge = new FrozenCharge("gpt-5", price);
-        var attempt = new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, jobId, 0, runId, 0L, 0L, workspaceId);
-        assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, runId, ModelKind.CHAT, charge))
-                .isTrue();
-        accumulator.accumulate(attempt, null, new ProxyTokenUsage(1000, 100, 0, 0, 0));
-        assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, runId, ModelKind.CHAT, charge))
-                .isTrue();
+        // One call of the running attempt ended with reported usage, and one more is still at its provider.
+        UUID ended = openCall(
+                workspaceId,
+                runId,
+                UsageSourceType.REVIEW_JOB,
+                jobId,
+                work.review().getId(),
+                price);
+        completeCall(workspaceId, ended, 1000, 100);
+        UUID stillOut = openCall(
+                workspaceId,
+                runId,
+                UsageSourceType.REVIEW_JOB,
+                jobId,
+                work.review().getId(),
+                price);
+
+        long providerId = Objects.requireNonNull(provider.getId());
+        var preview = personData.preview(administratorId, null, List.of(new PersonIdentity(providerId, "42", null)));
+        UUID requestId = preview.request().getId();
+        personData.requestErasure(requestId, administratorId, false);
+        personData.run(requestId);
+        assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+
+        // The cancellation settled the call still out; both rows keep their spend, not the job.
+        String workspaceRows = "SELECT id, source_id, review_id, source_type, input_tokens, output_tokens,"
+                + " total_calls, cost_usd, pricing_state, measurement_verification, funding_source FROM"
+                + " llm_usage_event WHERE workspace_id=? ORDER BY input_tokens DESC";
+        var settled = jdbc.queryForList(workspaceRows, workspaceId);
+        assertThat(settled).hasSize(2);
+        var measured = settled.getFirst();
+        var unverifiable = settled.get(1);
+        assertThat(measured.get("id")).isEqualTo(ended);
+        assertThat(measured.get("source_id")).isNotNull().isNotEqualTo(jobId);
+        assertThat(unverifiable.get("source_id"))
+                .as("the calls of one attempt stay together")
+                .isEqualTo(measured.get("source_id"));
+        assertThat(measured.get("review_id")).isNull();
+        assertThat(unverifiable.get("review_id")).isNull();
+        assertThat(measured.get("source_type")).isEqualTo(UsageSourceType.REVIEW_JOB.name());
+        assertThat(measured.get("input_tokens")).isEqualTo(1000L);
+        assertThat(measured.get("output_tokens")).isEqualTo(100L);
+        assertThat(measured.get("total_calls")).isEqualTo(1);
+        assertThat(measured.get("cost_usd")).isEqualTo(new BigDecimal("0.001200"));
+        assertThat(measured.get("pricing_state")).isEqualTo(UsagePricingState.PRICED.name());
+        assertThat(measured.get("funding_source")).isEqualTo(UsageFundingSource.INSTANCE.name());
+        assertThat(unverifiable.get("id")).isEqualTo(stillOut);
+        assertThat(unverifiable.get("measurement_verification")).isEqualTo("UNVERIFIABLE");
+        assertThat(unverifiable.get("pricing_state")).isEqualTo(UsagePricingState.UNPRICED.name());
+        assertThat(unverifiable.get("cost_usd")).isNull();
+
+        // The call still out returns only now: it measures its detached row and never names the job again.
+        completeCall(workspaceId, stillOut, 500, 50);
+        assertThat(jdbc.queryForMap(
+                        "SELECT source_id, input_tokens, measurement_verification FROM llm_usage_event WHERE id=?",
+                        stillOut))
+                .containsEntry("source_id", measured.get("source_id"))
+                .containsEntry("input_tokens", 500L)
+                .containsEntry("measurement_verification", "VERIFIED");
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM llm_usage_event WHERE workspace_id=?", Long.class, workspaceId))
+                        "SELECT count(*) FROM llm_usage_event WHERE source_id=? OR review_id=?",
+                        Long.class,
+                        jobId,
+                        work.review().getId()))
                 .isZero();
-
-        var held = new CountDownLatch(1);
-        var callbacks = Executors.newSingleThreadExecutor();
-        try {
-            var late = callbacks.submit(() -> {
-                assertThat(held.await(60, TimeUnit.SECONDS)).isTrue();
-                accumulator.accumulate(attempt, null, new ProxyTokenUsage(500, 50, 0, 0, 0));
-                return null;
-            });
-
-            long providerId = Objects.requireNonNull(provider.getId());
-            var preview =
-                    personData.preview(administratorId, null, List.of(new PersonIdentity(providerId, "42", null)));
-            UUID requestId = preview.request().getId();
-            personData.requestErasure(requestId, administratorId, false);
-            Instant started = Instant.now().minusSeconds(1);
-            personData.run(requestId);
-            Instant finished = Instant.now().plusSeconds(1);
-            assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
-
-            // The cancellation settled the attempt during preparation; the row keeps its spend, not the job.
-            String workspaceRows = "SELECT id, source_id, review_id, source_type, input_tokens, output_tokens,"
-                    + " total_calls, cost_usd, pricing_state, funding_source, occurred_at FROM llm_usage_event"
-                    + " WHERE workspace_id=?";
-            var settled = jdbc.queryForList(workspaceRows, workspaceId);
-            assertThat(settled).hasSize(1);
-            var row = settled.getFirst();
-            assertThat(row.get("source_type")).isEqualTo(UsageSourceType.REVIEW_JOB.name());
-            assertThat(row.get("source_id")).isNotNull().isNotEqualTo(jobId);
-            assertThat(row.get("review_id")).isNull();
-            assertThat(row.get("input_tokens")).isEqualTo(1000L);
-            assertThat(row.get("output_tokens")).isEqualTo(100L);
-            assertThat(row.get("total_calls")).isEqualTo(1);
-            assertThat(row.get("cost_usd")).isEqualTo(new BigDecimal("0.001200"));
-            assertThat(row.get("pricing_state")).isEqualTo(UsagePricingState.PRICED.name());
-            assertThat(row.get("funding_source")).isEqualTo(UsageFundingSource.INSTANCE.name());
-            Instant occurredAt = ((Timestamp) Objects.requireNonNull(row.get("occurred_at"))).toInstant();
-            assertThat(occurredAt).isBetween(started, finished);
-            assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM review_job_attempt_usage WHERE job_id=?", Long.class, jobId))
-                    .isZero();
-            assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM review_job_attempt_charge WHERE job_id=?", Long.class, jobId))
-                    .isZero();
-
-            // The call still out returns only now; it finds no attempt and writes nothing back.
-            held.countDown();
-            late.get(60, TimeUnit.SECONDS);
-            assertThat(jdbc.queryForList(workspaceRows, workspaceId)).isEqualTo(settled);
-            assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM llm_usage_event WHERE source_id=? OR review_id=?",
-                            Long.class,
-                            jobId,
-                            work.review().getId()))
-                    .isZero();
-            assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM review_job_attempt_usage WHERE job_id=?", Long.class, jobId))
-                    .isZero();
-            assertThat(meters.counter("llm.proxy.usage.accumulate.superseded").count())
-                    .isEqualTo(1.0);
-            assertThat(jdbc.queryForMap(otherRowQuery, otherWorkspaceId, otherJobId))
-                    .isEqualTo(otherRow);
-        } finally {
-            held.countDown();
-            callbacks.shutdownNow();
-        }
+        assertThat(jdbc.queryForMap(otherRowQuery, otherWorkspaceId, otherJobId))
+                .isEqualTo(otherRow);
     }
 
-    /** The worker-only accumulator bean is absent from this server context; the production class is built directly. */
-    private ProxyUsageAccumulator accumulator(SimpleMeterRegistry meters) throws ReflectiveOperationException {
-        var constructor = ProxyUsageAccumulator.class.getDeclaredConstructor(
-                ReviewAttemptUsageService.class, PlatformTransactionManager.class, MeterRegistry.class);
-        constructor.setAccessible(true);
-        return constructor.newInstance(attemptUsage, transactionManager, meters);
+    /** Opens one call row under the run's current claim, as the proxy does before the call leaves. */
+    private UUID openCall(
+            long workspaceId,
+            UUID runId,
+            UsageSourceType sourceType,
+            UUID sourceId,
+            @Nullable UUID reviewId,
+            LlmPriceSnapshot price) {
+        int epoch = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT lease_epoch FROM agent_run WHERE id=?", Integer.class, runId));
+        return Objects.requireNonNull(transactions.execute(tx -> usageRecorder.open(new LlmUsageRecorder.OpenCall(
+                workspaceId,
+                runId,
+                Math.max(1, epoch),
+                sourceType == UsageSourceType.MENTOR_TURN ? "MENTOR_TURN" : "PRACTICE_REVIEW",
+                sourceType,
+                sourceId,
+                Math.max(0, sourceType == UsageSourceType.MENTOR_TURN ? epoch : epoch - 1),
+                reviewId,
+                ModelKind.CHAT,
+                null,
+                "gpt-5",
+                price,
+                null))));
+    }
+
+    private void completeCall(long workspaceId, UUID call, long input, long output) {
+        transactions.executeWithoutResult(tx ->
+                usageRecorder.complete(call, workspaceId, new LlmUsageRecorder.CallUsage(input, output, 0, 0, 0, 0)));
     }
 
     private void keepCompositionInputs(DerivedConversation derived) {
@@ -1048,13 +1021,13 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         null));
         var ownedTurn = claims.claimNext().orElseThrow();
         var model = LlmCatalogTestFixtures.admittedMentorConfig();
-        assertThat(mentorAttemptUsage.admit(
-                        firstWorkspace,
-                        ownedTurn.getId(),
-                        ownedTurn.getAttempt(),
-                        Objects.requireNonNull(ownedTurn.getRunId()),
-                        MentorTurnAdmission.of(model, Objects.requireNonNull(model.priceSnapshot()))))
-                .isTrue();
+        transactions.executeWithoutResult(tx -> mentorTurns.admit(
+                firstWorkspace,
+                ownedTurn.getId(),
+                ownedTurn.getAttempt(),
+                Objects.requireNonNull(ownedTurn.getRunId()),
+                MentorTurnAdmission.of(model, Objects.requireNonNull(model.priceSnapshot()))
+                        .toJson()));
 
         // A pending email to each person: the outbox holds it until it is sent or erased.
         for (Account addressed : List.of(targetAccount, otherAccount)) {
@@ -1622,7 +1595,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldForgetAHephAttemptRegisteredAfterThePreviewAndRefuseARegistrationAfterTheSuppression() throws Exception {
+    void shouldDetachTheCallsOfATurnThatOpenedAfterThePreviewWhenTheErasureRuns() {
         var provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://heph-usage-erasure.example.test"));
         var target = users.saveAndFlush(TestUserFactory.createUser(42L, "heph-usage-erasure", provider));
@@ -1647,169 +1620,56 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         MentorTurn turn = claims.claimNext().orElseThrow();
         var llm = LlmCatalogTestFixtures.admittedMentorConfig();
         var admitted = MentorTurnAdmission.of(llm, Objects.requireNonNull(llm.priceSnapshot()));
-        String measurements = "SELECT count(*) FROM mentor_turn_attempt_usage WHERE turn_id=?";
 
-        // The preview freezes the claimed turn while its registration is still pending, so no measurement exists yet.
+        // The preview freezes the claimed turn before any call of it has a row.
         long providerId = Objects.requireNonNull(provider.getId());
         var preview = personData.preview(administratorId, null, List.of(new PersonIdentity(providerId, "42", null)));
         UUID requestId = preview.request().getId();
-        assertThat(jdbc.queryForObject(measurements, Long.class, turn.getId())).isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM llm_usage_event WHERE source_id=?", Long.class, turn.getId()))
+                .isZero();
 
-        // The registration commits before the erasure suppresses the account, and one call is measured.
-        assertThat(mentorAttemptUsage.admit(
-                        turn.getWorkspaceId(),
-                        turn.getId(),
-                        turn.getAttempt(),
-                        Objects.requireNonNull(turn.getRunId()),
-                        admitted))
-                .isTrue();
-        var meters = new SimpleMeterRegistry();
-        MentorTurnUsageAccumulator accumulator = mentorAccumulator(meters);
-        var call = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getRunId());
-        accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
+        // The admission commits before the erasure suppresses the account; one call ends and one is still out.
+        transactions.executeWithoutResult(tx -> mentorTurns.admit(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getRunId()),
+                admitted.toJson()));
+        UUID ended = openCall(
+                workspaceId, turn.getRunId(), UsageSourceType.MENTOR_TURN, turn.getId(), null, admitted.price());
+        completeCall(workspaceId, ended, 100_000, 0);
+        UUID stillOut = openCall(
+                workspaceId, turn.getRunId(), UsageSourceType.MENTOR_TURN, turn.getId(), null, admitted.price());
 
-        personData.requestErasure(requestId, administratorId, false);
-        // A registration that starts after the suppression is refused under the person-data write fence.
-        assertThat(mentorAttemptUsage.admit(
-                        turn.getWorkspaceId(),
-                        turn.getId(),
-                        turn.getAttempt(),
-                        Objects.requireNonNull(turn.getRunId()),
-                        admitted))
-                .isFalse();
-
-        var held = new CountDownLatch(1);
-        var callbacks = Executors.newSingleThreadExecutor();
-        try {
-            // A call already dispatched returns only after the erasure completed.
-            var late = callbacks.submit(() -> {
-                assertThat(held.await(60, TimeUnit.SECONDS)).isTrue();
-                transactions.executeWithoutResult(
-                        tx -> accumulator.accumulate(call, new ProxyTokenUsage(50_000, 0, 0, 0, 0)));
-                return null;
-            });
-
-            personData.run(requestId);
-            assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
-
-            String financial = "SELECT source_id, review_id, input_tokens, total_calls, cost_usd, occurred_at"
-                    + " FROM llm_usage_event WHERE workspace_id=? AND source_type='MENTOR_TURN'";
-            var kept = jdbc.queryForList(financial, workspaceId);
-            assertThat(kept).singleElement().satisfies(row -> {
-                assertThat(row.get("source_id")).isNotNull().isNotEqualTo(turn.getId());
-                assertThat(row.get("review_id")).isNull();
-                assertThat(row.get("input_tokens")).isEqualTo(100_000L);
-                assertThat(row.get("total_calls")).isEqualTo(1);
-                assertThat((BigDecimal) row.get("cost_usd")).isEqualByComparingTo("1.00");
-            });
-            assertThat(jdbc.queryForObject(measurements, Long.class, turn.getId()))
-                    .isZero();
-
-            held.countDown();
-            late.get(60, TimeUnit.SECONDS);
-            assertThat(jdbc.queryForList(financial, workspaceId)).isEqualTo(kept);
-            assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM llm_usage_event WHERE source_id=?", Long.class, turn.getId()))
-                    .isZero();
-            assertThat(jdbc.queryForObject(measurements, Long.class, turn.getId()))
-                    .isZero();
-            assertThat(meters.counter("llm.proxy.usage.mentor.superseded").count())
-                    .isEqualTo(1.0);
-        } finally {
-            held.countDown();
-            callbacks.shutdownNow();
-        }
-    }
-
-    @Test
-    void shouldKeepTheTakeBackDateAndSpendOfAnAttemptWhoseBillingHadNotRunWhenAnErasureForgetsIt() throws Exception {
-        var provider = providers.saveAndFlush(
-                new IdentityProvider(IdentityProviderType.GITLAB, "https://heph-taken-back.example.test"));
-        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "heph-taken-back", provider));
-        long accountId = Objects.requireNonNull(accountFor(target).getId());
-        var administrator = new Account("Administrator");
-        administrator.setAppRole(Account.AppRole.APP_ADMIN);
-        administrator = accounts.saveAndFlush(administrator);
-        long administratorId = Objects.requireNonNull(administrator.getId());
-        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("heph-taken-back"));
-        long workspaceId = Objects.requireNonNull(workspace.getId());
-        membership(workspace, target);
-        var conversation = mentorConversations.findOrCreateMain(workspaceId, accountId);
-        mentorTurns.submit(
-                workspaceId,
-                conversation.getId(),
-                new MentorTurnService.Question(
-                        MentorTurn.Surface.APP,
-                        "How did my review go?",
-                        UUID.randomUUID().toString(),
-                        null,
-                        null));
-        MentorTurn turn = claims.claimNext().orElseThrow();
-        var llm = LlmCatalogTestFixtures.admittedMentorConfig();
-        assertThat(mentorAttemptUsage.admit(
-                        turn.getWorkspaceId(),
-                        turn.getId(),
-                        turn.getAttempt(),
-                        Objects.requireNonNull(turn.getRunId()),
-                        MentorTurnAdmission.of(llm, Objects.requireNonNull(llm.priceSnapshot()))))
-                .isTrue();
-        var meters = new SimpleMeterRegistry();
-        MentorTurnUsageAccumulator accumulator = mentorAccumulator(meters);
-        var call = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getRunId());
-        accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
-
-        // The take-back commits and dates the attempt; the billing of the lost attempt has not run yet.
-        MentorTurnService.LostAttempt lost = Objects.requireNonNull(claims.takeBackUnbilled(turn));
-        String financial = "SELECT source_id, review_id, input_tokens, total_calls, cost_usd, occurred_at"
-                + " FROM llm_usage_event WHERE workspace_id=? AND source_type='MENTOR_TURN'";
-        assertThat(jdbc.queryForList(financial, workspaceId))
-                .as("not billed yet")
-                .isEmpty();
-
-        long providerId = Objects.requireNonNull(provider.getId());
-        var preview = personData.preview(administratorId, null, List.of(new PersonIdentity(providerId, "42", null)));
-        UUID requestId = preview.request().getId();
         personData.requestErasure(requestId, administratorId, false);
         personData.run(requestId);
         assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
 
+        // The turn's deletion settled the call still out; both rows keep their spend, detached together.
+        String financial = "SELECT id, source_id, review_id, run_id, input_tokens, cost_usd, measurement_verification"
+                + " FROM llm_usage_event WHERE workspace_id=? AND source_type='MENTOR_TURN' ORDER BY input_tokens DESC";
         var kept = jdbc.queryForList(financial, workspaceId);
-        assertThat(kept).singleElement().satisfies(row -> {
-            assertThat(row.get("source_id")).isNotNull().isNotEqualTo(turn.getId());
-            assertThat(row.get("review_id")).isNull();
-            assertThat(row.get("input_tokens")).isEqualTo(100_000L);
-            assertThat(row.get("total_calls")).isEqualTo(1);
-            assertThat((BigDecimal) row.get("cost_usd")).isEqualByComparingTo("1.00");
-            assertThat(((Timestamp) Objects.requireNonNull(row.get("occurred_at"))).toInstant())
-                    .as("the take-back's date, not the erasure's")
-                    .isEqualTo(lost.lostAt());
-        });
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM mentor_turn_attempt_usage WHERE turn_id=?", Long.class, turn.getId()))
-                .isZero();
+        assertThat(kept).hasSize(2);
+        assertThat(kept.getFirst().get("id")).isEqualTo(ended);
+        assertThat(kept.getFirst().get("source_id")).isNotNull().isNotEqualTo(turn.getId());
+        assertThat(kept.get(1).get("source_id")).isEqualTo(kept.getFirst().get("source_id"));
+        assertThat(kept.getFirst().get("review_id")).isNull();
+        assertThat(kept.getFirst().get("run_id"))
+                .as("a deleted turn's run is gone")
+                .isNull();
+        assertThat(kept.getFirst().get("input_tokens")).isEqualTo(100_000L);
+        assertThat((BigDecimal) kept.getFirst().get("cost_usd")).isEqualByComparingTo("1.00");
+        assertThat(kept.get(1).get("id")).isEqualTo(stillOut);
+        assertThat(kept.get(1).get("measurement_verification")).isEqualTo("UNVERIFIABLE");
 
-        // The billing that had not run and the call still out both arrive after the erasure.
-        transactions.executeWithoutResult(tx -> completion.billLostAttempt(lost));
-        transactions.executeWithoutResult(tx -> accumulator.accumulate(call, new ProxyTokenUsage(50_000, 0, 0, 0, 0)));
-
-        assertThat(jdbc.queryForList(financial, workspaceId)).isEqualTo(kept);
+        // The call still out returns after the erasure; it measures its detached row and names no turn.
+        completeCall(workspaceId, stillOut, 50_000, 0);
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM llm_usage_event WHERE source_id=?", Long.class, turn.getId()))
                 .isZero();
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM mentor_turn_attempt_usage WHERE turn_id=?", Long.class, turn.getId()))
-                .isZero();
-    }
-
-    /** The worker-only accumulator bean is absent from this server context; the production class is built directly. */
-    private MentorTurnUsageAccumulator mentorAccumulator(SimpleMeterRegistry meters)
-            throws ReflectiveOperationException {
-        var constructor = MentorTurnUsageAccumulator.class.getDeclaredConstructor(
-                MentorAttemptUsageService.class, PlatformTransactionManager.class, MeterRegistry.class);
-        constructor.setAccessible(true);
-        return constructor.newInstance(mentorAttemptUsage, transactionManager, meters);
+        assertThat(jdbc.queryForObject("SELECT input_tokens FROM llm_usage_event WHERE id=?", Long.class, stillOut))
+                .isEqualTo(50_000L);
     }
 
     private void link(Account account, IdentityProvider provider, String subject, @Nullable String team) {

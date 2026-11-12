@@ -42,6 +42,8 @@ export function usageReport(month: string = STORY_MONTH): WorkspaceLlmUsageRepor
 		instanceMonthlyBudgetUsd: 25,
 		ownProviderMonthlyBudgetUsd: undefined,
 		instanceTotalCostUsd: 13.48,
+		instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+		ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 		ownProviderTotalCostUsd: 0,
 		instanceBudgetVerdict: "WITHIN",
 		ownProviderBudgetVerdict: "WITHIN",

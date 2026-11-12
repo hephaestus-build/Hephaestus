@@ -266,127 +266,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("reason") ReviewJobCancellationReason reason,
             @Param("fromStatuses") Collection<ReviewJobStatus> fromStatuses);
 
-    /** The state of a job row that a usage settlement holds: whether the call's attempt is still the running one. */
-    interface UsageOwner {
-        String getStatus();
-
-        int getAttempt();
-
-        UUID getReviewId();
-    }
-
-    /**
-     * Takes the job row for a usage settlement. Every settlement takes the job row before the attempt's
-     * {@link ReviewAttemptUsage} row, whether it settles a call or the end of an attempt, so the two never wait on
-     * each other in opposite orders. Empty when the job no longer exists in that workspace.
-     */
-    @Query(
-            value = "SELECT j.status AS status, " + ReviewRunKind.ATTEMPT_OF_RUN
-                    + " AS attempt, j.review_id AS \"reviewId\""
-                    + " FROM review_job j"
-                    + " JOIN agent_run r ON r.id = j.run_id"
-                    + " WHERE j.id = :id AND j.workspace_id = :workspaceId FOR UPDATE OF j",
-            nativeQuery = true)
-    Optional<UsageOwner> lockUsageOwner(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
-
-    /**
-     * Holds the job row while the proxy registers a call of the attempt that runs it. A terminal transition waits for
-     * the registration, and the registration waits for the transition. The caller then holds the run's lease through
-     * {@code AgentRuns.requireCurrent}: the job row first, then the run, as every writer of both takes them.
-     */
-    @Query(
-            value = "SELECT 1 FROM review_job j WHERE j.id = :id AND j.workspace_id = :workspaceId AND"
-                    + " j.status = 'RUNNING' AND j.run_id = :runId FOR SHARE",
-            nativeQuery = true)
-    Optional<Integer> lockRunningForCall(
-            @Param("id") UUID id, @Param("workspaceId") long workspaceId, @Param("runId") UUID runId);
-
-    /**
-     * Adds one proxied call's tokens to the running totals of the attempt that runs now. These counters are what
-     * the proxy's in-flight budget reads while the attempt runs. A clean finish overwrites them with the totals the
-     * ledger selected. The attempt's own measurement is its {@link ReviewAttemptUsage} row, which the requeue does
-     * not zero.
-     *
-     * <p>Fenced on {@code attempt} and {@code RUNNING}: {@link #requeueRunning} may hand the row to a new attempt
-     * (zeroing these columns) while the proxy is still waiting on the provider, and the new attempt's in-flight
-     * spend must not include an earlier attempt's call.
-     *
-     * @param attempt the {@code attempt} the caller observed when it authenticated the call
-     * @return 1 if the attempt still owns the row, 0 if it has been superseded (a safe no-op)
-     */
-    @WorkspaceAgnostic("ID-based per-call usage accumulation from the worker-local proxy")
-    @Modifying(flushAutomatically = true)
-    @Query("UPDATE ReviewJob j SET " + "j.llmCalls = COALESCE(j.llmCalls, 0) + 1, "
-            + "j.llmInputTokens = COALESCE(j.llmInputTokens, 0) + :#{#usage.inputTokens()}, "
-            + "j.llmOutputTokens = COALESCE(j.llmOutputTokens, 0) + :#{#usage.outputTokens()}, "
-            + "j.llmReasoningTokens = COALESCE(j.llmReasoningTokens, 0) + :#{#usage.reasoningTokens()}, "
-            + "j.llmCacheReadTokens = COALESCE(j.llmCacheReadTokens, 0) + :#{#usage.cacheReadTokens()}, "
-            + "j.llmCacheWriteTokens = COALESCE(j.llmCacheWriteTokens, 0) + :#{#usage.cacheWriteTokens()} "
-            + "WHERE j.id = :id AND j.attempt = :attempt AND j.status = 'RUNNING'")
-    int accumulateLlmUsage(
-            @Param("id") UUID id, @Param("attempt") int attempt, @Param("usage") ReviewJobLlmUsageDelta usage);
-
-    /**
-     * Adds one proxied practice script call to the row of its attempt, kind, and practice, creating the row on
-     * the first call. The attempt froze one model per kind, so the first call's tier is the tier of every
-     * call. The workspace comes from the job row, never from the caller.
-     *
-     * <p>The attempt is part of the key, so a call of an earlier attempt adds to that attempt's row and never to the
-     * current one. A call that returns after its attempt ended still lands here: {@link ReviewAttemptUsageService}
-     * holds the job row and then projects the attempt's ledger rows again. The job must not be on an earlier attempt
-     * than the call, and the practice must exist in the job's workspace.
-     *
-     * @return 1 when the call was added, 0 when the job or the practice does not exist
-     */
-    @WorkspaceAgnostic("ID-based per-call usage accumulation from the worker-local proxy; the job row supplies it")
-    @Modifying(flushAutomatically = true)
-    @Query(value = """
-        INSERT INTO review_job_script_usage
-            (job_id, attempt, model_kind, practice_id, workspace_id, data_handling_tier, calls, reported_calls,
-             input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, search_units)
-        SELECT j.id, :attempt, :#{#call.modelKindName()}, p.id, j.workspace_id,
-            CAST(:#{#call.dataHandlingTierName()} AS varchar), 1, :#{#call.usageReported() ? 1 : 0}, :#{#call.inputTokens()},
-            :#{#call.outputTokens()}, :#{#call.cacheReadTokens()}, :#{#call.cacheWriteTokens()},
-            :#{#call.searchUnits()}
-        FROM review_job j
-        JOIN agent_run r ON r.id = j.run_id
-        JOIN practice p ON p.workspace_id = j.workspace_id AND p.slug = :#{#call.practiceSlug()}
-        WHERE j.id = :jobId AND (CASE WHEN r.state = 'QUEUED' THEN r.lease_epoch ELSE r.lease_epoch - 1 END) >= :attempt
-        ON CONFLICT (job_id, attempt, model_kind, practice_id) DO UPDATE SET
-            calls = review_job_script_usage.calls + 1,
-            reported_calls = review_job_script_usage.reported_calls + EXCLUDED.reported_calls,
-            input_tokens = review_job_script_usage.input_tokens + EXCLUDED.input_tokens,
-            output_tokens = review_job_script_usage.output_tokens + EXCLUDED.output_tokens,
-            cache_read_tokens = review_job_script_usage.cache_read_tokens
-                + EXCLUDED.cache_read_tokens,
-            cache_write_tokens = review_job_script_usage.cache_write_tokens
-                + EXCLUDED.cache_write_tokens,
-            search_units = review_job_script_usage.search_units + EXCLUDED.search_units
-        """, nativeQuery = true)
-    int accumulatePracticeScriptUsage(
-            @Param("jobId") UUID jobId, @Param("attempt") int attempt, @Param("call") PracticeScriptCallUsage call);
-
-    @Query("SELECT new de.tum.cit.aet.hephaestus.agent.job.PracticeScriptKindTotal("
-            + "u.id.modelKind, SUM(u.calls), SUM(u.inputTokens), SUM(u.outputTokens), SUM(u.cacheReadTokens), "
-            + "SUM(u.cacheWriteTokens), SUM(u.searchUnits), SUM(u.reportedCalls)) "
-            + "FROM ScriptUsage u "
-            + "WHERE u.workspaceId = :workspaceId AND u.id.jobId = :jobId AND u.id.attempt = :attempt "
-            + "GROUP BY u.id.modelKind ORDER BY u.id.modelKind")
-    List<PracticeScriptKindTotal> sumPracticeScriptUsageByKind(
-            @Param("workspaceId") Long workspaceId, @Param("jobId") UUID jobId, @Param("attempt") int attempt);
-
-    /**
-     * Reads the totals straight from the row rather than from a possibly stale in-memory entity, so
-     * committed proxy accumulations are included.
-     */
-    @WorkspaceAgnostic("ID-based usage read; job ID from worker-local terminal accounting")
-    @Query("SELECT new de.tum.cit.aet.hephaestus.agent.job.ReviewJobLlmUsage("
-            + "COALESCE(j.llmCalls, 0), COALESCE(j.llmInputTokens, 0), "
-            + "COALESCE(j.llmOutputTokens, 0), COALESCE(j.llmReasoningTokens, 0), "
-            + "COALESCE(j.llmCacheReadTokens, 0), COALESCE(j.llmCacheWriteTokens, 0)) "
-            + "FROM ReviewJob j WHERE j.id = :id")
-    Optional<ReviewJobLlmUsage> findLlmUsageById(@Param("id") UUID id);
-
     @WorkspaceAgnostic("ID-based execution-start fence; job ID + owner from worker-local execution context")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE ReviewJob j SET j.executionStartedAt = :now "
@@ -415,6 +294,12 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("attempt") int attempt,
             @Param("now") Instant now,
             @Param("output") JsonNode output);
+
+    /** The practice of the workspace that a practice script call names by its slug. */
+    @Query(
+            value = "SELECT p.id FROM practice p WHERE p.workspace_id = :workspaceId AND p.slug = :slug",
+            nativeQuery = true)
+    Optional<Long> findPracticeId(@Param("workspaceId") long workspaceId, @Param("slug") String slug);
 
     /** The current database time, including time spent waiting for a row lock in this transaction. */
     @WorkspaceAgnostic("Reads the database clock for attempt leases")
@@ -458,8 +343,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
         UPDATE review_job SET status='QUEUED', run_id=:runId, started_at=NULL, completed_at=NULL,
-          execution_started_at=NULL, llm_calls=0, llm_input_tokens=0, llm_output_tokens=0, llm_reasoning_tokens=0,
-          llm_cache_read_tokens=0, llm_cache_write_tokens=0
+          execution_started_at=NULL
         WHERE id=:id AND workspace_id=:workspaceId AND status='COMPLETED'
         """, nativeQuery = true)
     int queueOnRun(@Param("id") UUID id, @Param("workspaceId") long workspaceId, @Param("runId") UUID runId);
@@ -472,9 +356,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      */
     @WorkspaceAgnostic("ID-based fenced requeue; the caller holds the attempt's run")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.startedAt = null, j.executionStartedAt = null,"
-            + " j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0,"
-            + " j.llmReasoningTokens = 0, j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0"
+    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.startedAt = null, j.executionStartedAt = null"
             + " WHERE j.id = :id AND j.status = 'RUNNING' AND j.runId = :runId AND j.attempt = :attempt")
     int requeueRunning(@Param("id") UUID id, @Param("runId") UUID runId, @Param("attempt") int attempt);
 
@@ -487,8 +369,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @WorkspaceAgnostic("ID-based fenced hand-on; the caller holds the attempt's run")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.runId = :nextRunId, j.startedAt = null,"
-            + " j.executionStartedAt = null, j.llmCalls = 0, j.llmInputTokens = 0,"
-            + " j.llmOutputTokens = 0, j.llmReasoningTokens = 0, j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0"
+            + " j.executionStartedAt = null"
             + " WHERE j.id = :id AND j.status = 'RUNNING' AND j.runId = :runId AND j.attempt = :attempt")
     int queueOnNextRun(
             @Param("id") UUID id,

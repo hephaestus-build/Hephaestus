@@ -104,6 +104,6 @@ class ReviewUsageBulkReadTest extends BaseUnitTest {
             long reasoning,
             @Nullable BigDecimal cost,
             UsagePricingState pricing) {
-        return new ReviewUsageAttempt(source, index, calls, input, output, reasoning, 0, 0, cost, pricing);
+        return new ReviewUsageAttempt(source, index, calls, input, output, reasoning, 0, 0, cost, pricing, false);
     }
 }

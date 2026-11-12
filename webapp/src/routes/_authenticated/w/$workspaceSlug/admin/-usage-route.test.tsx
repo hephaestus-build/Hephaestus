@@ -16,6 +16,8 @@ const REPORT: Wire<WorkspaceLlmUsageReport> = {
 	month: "2026-07",
 	ownProviderMonthlyBudgetUsd: 10,
 	instanceTotalCostUsd: 0,
+	instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+	ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 	ownProviderTotalCostUsd: 1.5,
 	instanceBudgetVerdict: "WITHIN",
 	ownProviderBudgetVerdict: "WITHIN",

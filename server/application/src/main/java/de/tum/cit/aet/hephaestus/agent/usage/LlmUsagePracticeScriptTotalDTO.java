@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 import org.jspecify.annotations.NonNull;
 
 @Schema(
-        description = "The decision, embedding and reranking calls of finished reviews this month, in total. calls, "
+        description = "The decision, embedding and reranking calls of this month, in total. calls, "
                 + "inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and "
                 + "unpricedEventCount do not: one review can count for several practices there.")
 public record LlmUsagePracticeScriptTotalDTO(
@@ -25,6 +25,6 @@ public record LlmUsagePracticeScriptTotalDTO(
 
         @NonNull
         @Schema(
-                description = "Distinct reviews with a practice script ledger row whose price is not yet known. Those "
+                description = "Distinct reviews with a practice script call whose price is not yet known. Those "
                         + "rows are excluded from both totals above.")
         Long unpricedEventCount) {}

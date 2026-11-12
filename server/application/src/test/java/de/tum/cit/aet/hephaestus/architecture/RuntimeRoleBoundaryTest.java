@@ -188,7 +188,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxyController", RuntimeRole.WORKER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig", RuntimeRole.WORKER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting", RuntimeRole.WORKER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.ProxyUsageAccumulator", RuntimeRole.WORKER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallLedger", RuntimeRole.WORKER_PROPERTY),
             // The config-audit viewer and retention sweep are server-only; the recorder deliberately is
             // not, because every role writes to the trail.
             Map.entry("de.tum.cit.aet.hephaestus.core.audit.ConfigAuditRetentionJob", RuntimeRole.SERVER_PROPERTY),

@@ -12,7 +12,6 @@ import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -132,37 +131,6 @@ public class MentorTurn implements Persistable<UUID> {
     @Column(name = "run_id", nullable = false, updatable = false)
     private UUID runId;
 
-    /** Prompt tokens that were neither cache reads nor cache writes; those have their own columns. */
-    @Column(name = "input_tokens", nullable = false)
-    @ColumnDefault("0")
-    private long inputTokens;
-
-    @Column(name = "output_tokens", nullable = false)
-    @ColumnDefault("0")
-    private long outputTokens;
-
-    @Column(name = "cached_tokens", nullable = false)
-    @ColumnDefault("0")
-    private long cachedTokens;
-
-    @Column(name = "cache_write_tokens", nullable = false)
-    @ColumnDefault("0")
-    private long cacheWriteTokens;
-
-    /** Already inside {@link #outputTokens}; reported, never priced twice. */
-    @Column(name = "reasoning_tokens", nullable = false)
-    @ColumnDefault("0")
-    private long reasoningTokens;
-
-    @Column(name = "llm_calls", nullable = false)
-    @ColumnDefault("0")
-    private int llmCalls;
-
-    /** {@code null} while running and when the admitted model has no price. */
-    @Nullable
-    @Column(name = "cost_usd", precision = 19, scale = 9)
-    private BigDecimal costUsd;
-
     @Nullable
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "admission", columnDefinition = "jsonb")
@@ -251,7 +219,6 @@ public class MentorTurn implements Persistable<UUID> {
         this.failureCause = null;
         this.failedCall = null;
         this.failedCallStatus = null;
-        resetUsage();
     }
 
     void admit(JsonNode admittedWith) {
@@ -310,21 +277,6 @@ public class MentorTurn implements Persistable<UUID> {
         this.queuedAt = now;
         this.startedAt = null;
         this.admission = null;
-        resetUsage();
-    }
-
-    void recordCost(@Nullable BigDecimal cost) {
-        this.costUsd = cost;
-    }
-
-    private void resetUsage() {
-        this.inputTokens = 0;
-        this.outputTokens = 0;
-        this.cachedTokens = 0;
-        this.cacheWriteTokens = 0;
-        this.reasoningTokens = 0;
-        this.llmCalls = 0;
-        this.costUsd = null;
     }
 
     @Override

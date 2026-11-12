@@ -80,7 +80,12 @@ class LlmUsageRepricerTest extends BaseUnitTest {
                 0L,
                 appliedPriceId,
                 appliedWorkspaceModelId,
-                MeasurementVerification.VERIFIED);
+                MeasurementVerification.VERIFIED,
+                UsagePricingState.UNPRICED,
+                null,
+                null,
+                null,
+                null);
     }
 
     private static LlmModelPrice price(PricingMode mode, @Nullable BigDecimal input) {
@@ -100,6 +105,62 @@ class LlmUsageRepricerTest extends BaseUnitTest {
         ArgumentCaptor<LlmPriceSnapshot> price = ArgumentCaptor.forClass(LlmPriceSnapshot.class);
         verify(usageRepository).applyResolvedPrice(eq(EVENT_ID), any(), price.capture(), any());
         return price.getValue();
+    }
+
+    @Test
+    void shouldFillAMissingRateWithoutReplacingAKnownFrozenRate() {
+        var incomplete = new UnpricedLedgerRow(
+                EVENT_ID,
+                WORKSPACE_ID,
+                "model",
+                UsageFundingSource.INSTANCE,
+                1_000_000L,
+                100_000L,
+                0,
+                0,
+                0,
+                11L,
+                null,
+                MeasurementVerification.VERIFIED,
+                UsagePricingState.PRICED,
+                new BigDecimal("2.00"),
+                null,
+                null,
+                null);
+        var changed = price(PricingMode.PRICED, new BigDecimal("20.00"));
+        changed.setPer1mOutputUsd(new BigDecimal("8.00"));
+        when(priceRepository.findById(11L)).thenReturn(Optional.of(changed));
+        repriceSucceeds();
+        assertThat(repricer.reprice(incomplete)).isEqualTo(LlmUsageRepricer.ResultOutcome.REPRICED);
+        var applied = appliedPrice();
+        assertThat(applied.per1mInputUsd()).isEqualByComparingTo("2.00");
+        assertThat(applied.per1mOutputUsd()).isEqualByComparingTo("8.00");
+    }
+
+    @Test
+    void shouldUseFrozenRatesWhenTheInitialPriceWasKnown() {
+        var known = new UnpricedLedgerRow(
+                EVENT_ID,
+                WORKSPACE_ID,
+                "byo-model",
+                UsageFundingSource.WORKSPACE,
+                1_000_000L,
+                0,
+                0,
+                0,
+                0,
+                null,
+                42L,
+                MeasurementVerification.VERIFIED,
+                UsagePricingState.PRICED,
+                new BigDecimal("2.00"),
+                new BigDecimal("8.00"),
+                null,
+                null);
+        repriceSucceeds();
+        assertThat(repricer.reprice(known)).isEqualTo(LlmUsageRepricer.ResultOutcome.REPRICED);
+        assertThat(appliedPrice().per1mInputUsd()).isEqualByComparingTo("2.00");
+        verifyNoInteractions(workspaceModelRepository, modelRepository, priceRepository);
     }
 
     @Test
@@ -139,7 +200,12 @@ class LlmUsageRepricerTest extends BaseUnitTest {
                 3L,
                 11L,
                 null,
-                MeasurementVerification.VERIFIED));
+                MeasurementVerification.VERIFIED,
+                UsagePricingState.UNPRICED,
+                null,
+                null,
+                null,
+                null));
 
         assertThat(outcome).isEqualTo(LlmUsageRepricer.ResultOutcome.NO_TOKEN_EVIDENCE);
         verify(usageRepository, never()).applyResolvedPrice(any(), any(), any(), any());
@@ -163,7 +229,12 @@ class LlmUsageRepricerTest extends BaseUnitTest {
                 3L,
                 11L,
                 null,
-                MeasurementVerification.VERIFIED));
+                MeasurementVerification.VERIFIED,
+                UsagePricingState.UNPRICED,
+                null,
+                null,
+                null,
+                null));
 
         assertThat(outcome).isEqualTo(LlmUsageRepricer.ResultOutcome.STILL_UNPRICEABLE);
         verify(usageRepository, never()).applyResolvedPrice(any(), any(), any(), any());
@@ -257,7 +328,12 @@ class LlmUsageRepricerTest extends BaseUnitTest {
                 0L,
                 11L,
                 null,
-                MeasurementVerification.VERIFIED);
+                MeasurementVerification.VERIFIED,
+                UsagePricingState.UNPRICED,
+                null,
+                null,
+                null,
+                null);
 
         assertThat(repricer.reprice(unmeasured)).isEqualTo(LlmUsageRepricer.ResultOutcome.NO_TOKEN_EVIDENCE);
         verifyNoInteractions(usageRepository, priceRepository, modelRepository, workspaceModelRepository);
@@ -280,7 +356,12 @@ class LlmUsageRepricerTest extends BaseUnitTest {
                 0L,
                 11L,
                 null,
-                verification);
+                verification,
+                UsagePricingState.UNPRICED,
+                null,
+                null,
+                null,
+                null);
 
         assertThat(repricer.reprice(row)).isEqualTo(LlmUsageRepricer.ResultOutcome.UNVERIFIED_MEASUREMENT);
         verifyNoInteractions(usageRepository, priceRepository, modelRepository, workspaceModelRepository);

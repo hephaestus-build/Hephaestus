@@ -10,7 +10,10 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetExhaustedException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUnpricedUsageBlockedException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -52,7 +55,8 @@ public class MentorTurnStarter {
 
     private final MentorTurnService turns;
     private final MentorAdmission admission;
-    private final MentorAttemptUsageService attemptUsage;
+    private final MentorTurnRepository turnRows;
+    private final PersonDataWriteFence writeFence;
     private final MeterRegistry meters;
     private final LlmConnectionHealth connections;
     private final AgentRuns runs;
@@ -131,13 +135,11 @@ public class MentorTurnStarter {
             log.warn("conversation turn {} cannot run on its model: {}", turn.getId(), tooSmall.get());
             return decline(turn, MODEL_TOO_SMALL);
         }
-        // With the admission, the attempt's usage measurement: no call of the attempt is routed before both exist. An
-        // erasure that suppressed the account after the eligibility read above refuses both.
-        boolean admitted = attemptUsage.admit(
-                turn.getWorkspaceId(),
-                turn.getId(),
-                turn.getAttempt(),
-                turn.getRunId(),
+        // No call of the attempt is routed before its admission exists. An erasure that suppressed the account after
+        // the
+        // eligibility read above refuses it.
+        boolean admitted = admit(
+                turn,
                 MentorTurnAdmission.of(
                         llm,
                         Objects.requireNonNull(llm.priceSnapshot(), "A conversation turn needs an admitted price")));
@@ -145,6 +147,27 @@ public class MentorTurnStarter {
             return decline(turn, PERSON_DATA_HELD);
         }
         return Optional.of(new StartedTurn(turn, accountId, llm));
+    }
+
+    /**
+     * Freezes the model and rates the attempt runs with. Throws when this worker no longer holds the attempt. Takes the
+     * person-data write fence of the turn's account first, before any row lock. An erasure holds that fence exclusively
+     * while it suppresses the account, so an admission either commits before the suppression, and the erasure detaches
+     * the attempt's calls, or it starts after it and is refused here.
+     *
+     * @return false when the account's person data may not be written, because an erasure suppressed it
+     */
+    private boolean admit(MentorTurn turn, MentorTurnAdmission admitted) {
+        return Boolean.TRUE.equals(transactions.execute(status -> {
+            if (turnRows.findByIdAndWorkspaceId(turn.getId(), turn.getWorkspaceId())
+                    .isEmpty()) throw new MentorLeaseLostException(turn.getId(), turn.getAttempt());
+            boolean writable = turnRows.findAccountIdByIdAndWorkspaceId(turn.getId(), turn.getWorkspaceId())
+                    .map(writeFence::holdForAccountWrite)
+                    .orElse(false);
+            if (!writable) return false;
+            turns.admit(turn.getWorkspaceId(), turn.getId(), turn.getAttempt(), turn.getRunId(), admitted.toJson());
+            return true;
+        }));
     }
 
     private Optional<StartedTurn> decline(MentorTurn turn, String reason) {

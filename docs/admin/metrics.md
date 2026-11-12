@@ -232,7 +232,7 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 | `agent_sandbox_revoked_total`            | Counter   | `reason`  | Live sandboxes that the server took back before the reaper would: `unisolated` for a sandbox whose network policy did not hold |
 | `mentor_turn_duration_seconds`             | Histogram | none      | An attempt, from its claim to its end                                   |
 | `mentor_turn_first_token_seconds`          | Histogram | none      | From the start of an attempt to the first part of Hephaestus's answer         |
-| `mentor_turn_cost_usd`                     | Summary   | none      | The cost of one billed attempt in US dollars                            |
+| `mentor_turn_cost_usd`                     | Summary   | none      | The cost of the calls of one attempt that ended by its end, in US dollars                            |
 | `mentor_turn_claim_failure_total`          | Counter   | none      | Claims and starts of a turn that failed with an error                   |
 | `mentor_slack_reply_total`                 | Counter   | `state`   | Replies to questions asked in Slack, by the state they were left in     |
 | `mentor_live_streams`                      | Gauge     | none      | Live Hephaestus streams that the app holds open on this server                |
@@ -253,7 +253,7 @@ Web and Slack turns both count.
 An attempt that ends before any part of an answer records no first-token time.
 
 `mentor_turn_cost_usd` has `_count`, `_sum` and `_max` series.
-An attempt records a cost only when it made a model call and its model has a price.
+An attempt records a cost only when it made a model call and each of its ended calls has a price.
 
 Workers record most of these series.
 The server role records `lease_expired` outcomes, the run reaper's counters, the cost of an attempt that lost its lease, the Slack replies and the live streams.
@@ -295,7 +295,8 @@ The turn row keeps the cause, so the cause stays after the worker stops:
 | `failure_cause` | The reason of the log line |
 | `failed_call` | The kind of the last failed model call of the attempt. From the provider: an exception class, `upstream_status`, `upstream_stalled`, `upstream_paused` or a stream outcome such as `upstream_idle`. From the proxy: a refusal such as `refused_budget`, or `gateway_error`. |
 | `failed_call_status` | The HTTP status that the provider or the proxy sent for that call, if one was sent |
-| `llm_calls` | The model calls of the attempt that completed |
+
+The model calls of an attempt are rows of `llm_usage_event`: `source_type` is `MENTOR_TURN`, `source_id` is the turn and `source_attempt` is the attempt.
 
 The conversation loop's end, the worker's own end and a lease that expires write the first three columns.
 A lease that expires writes no `failed_call`, because the server role, not the worker, ends the turn.

@@ -24,6 +24,8 @@ function row(budgetUsd: number | undefined): AdminWorkspaceLlmUsage {
 		displayName: "Acme",
 		events: 12,
 		instanceTotalCostUsd: SPENT_USD,
+		instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+		ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 		instanceMonthlyBudgetUsd: budgetUsd,
 		instanceBudgetVerdict: "WITHIN",
 		instancePaused: false,
@@ -38,6 +40,8 @@ function detail(budgetUsd: number | undefined): WorkspaceLlmUsageReport {
 	return {
 		month: MONTH,
 		instanceTotalCostUsd: SPENT_USD,
+		instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+		ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 		instanceMonthlyBudgetUsd: budgetUsd,
 		instanceBudgetVerdict: "WITHIN",
 		instancePaused: false,

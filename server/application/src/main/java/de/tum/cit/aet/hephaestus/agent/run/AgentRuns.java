@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -31,10 +33,12 @@ public class AgentRuns {
 
     private final AgentRunRepository runs;
     private final AgentCapacityProperties capacity;
+    private final MeterRegistry meters;
 
-    AgentRuns(AgentRunRepository runs, AgentCapacityProperties capacity) {
+    AgentRuns(AgentRunRepository runs, AgentCapacityProperties capacity, MeterRegistry meters) {
         this.runs = runs;
         this.capacity = capacity;
+        this.meters = meters;
     }
 
     /** The capacity numbers that leases and their kinds' attempt budgets follow. */
@@ -214,6 +218,7 @@ public class AgentRuns {
 
     /**
      * Puts the run back in the queue. A charged requeue spends one attempt and waits the backoff of the attempts spent.
+     * The model calls that the claim left open are settled with it.
      *
      * @param hold why it waits beyond a retry's backoff, or {@code null}
      * @return whether the holder still held the run
@@ -229,18 +234,24 @@ public class AgentRuns {
                         seconds(delay),
                         hold == null ? null : hold.name())
                 == 1;
-        if (requeued) wake(fence);
+        if (requeued) {
+            settled(runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch()));
+            wake(fence);
+        }
         return requeued;
     }
 
     /**
-     * Ends the run for its holder. A holder whose domain end already ended the run under the same claim, as a turn's end
-     * does, reads {@link EndOutcome#ALREADY_ENDED}: its end arrived twice, not late.
+     * Ends the run for its holder, and settles the model calls that the claim left open. A holder whose domain end
+     * already ended the run under the same claim, as a turn's end does, reads {@link EndOutcome#ALREADY_ENDED}: its end
+     * arrived twice, not late.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public EndOutcome end(AgentRunFence fence) {
-        if (runs.end(fence.runId(), fence.workspaceId(), fence.epoch(), AgentRunStopReason.COMPLETED.name()) == 1)
+        if (runs.end(fence.runId(), fence.workspaceId(), fence.epoch(), AgentRunStopReason.COMPLETED.name()) == 1) {
+            settled(runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch()));
             return EndOutcome.ENDED;
+        }
         return runs.endedBy(fence.runId(), fence.workspaceId(), fence.epoch())
                 ? EndOutcome.ALREADY_ENDED
                 : EndOutcome.STALE;
@@ -290,20 +301,34 @@ public class AgentRuns {
     }
 
     /**
-     * Ends the run for someone other than its holder. A holder's next fenced write then changes nothing.
+     * Ends the run for someone other than its holder, and settles the model calls it left open. A holder's next fenced
+     * write then changes nothing.
      *
      * @return whether the run was still open
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean cancel(AgentRunRef run) {
-        return runs.cancel(run.id(), run.workspaceId()) == 1;
+        if (runs.cancel(run.id(), run.workspaceId()) != 1) return false;
+        settled(runs.settleOpenCallsOfRun(run.id(), run.workspaceId()));
+        return true;
     }
 
-    /** Ends these runs for someone other than their holders, as a fleet-wide capacity verdict does; how many ended. */
+    /**
+     * Ends these runs for someone other than their holders, as a fleet-wide capacity verdict does, and settles the model
+     * calls they left open; how many ended.
+     */
     @WorkspaceAgnostic("A fleet-wide verdict ends the runs it selected in every workspace")
     @Transactional(propagation = Propagation.MANDATORY)
     public int cancelAll(Collection<UUID> runIds) {
-        return runIds.isEmpty() ? 0 : runs.cancelAll(runIds);
+        if (runIds.isEmpty()) return 0;
+        int cancelled = runs.cancelAll(runIds);
+        settled(runs.settleOpenCallsOfRuns(runIds));
+        return cancelled;
+    }
+
+    /** Counts the calls that a claim's end settled without a measurement. */
+    private void settled(int calls) {
+        if (calls > 0) meters.counter(AgentMetrics.LLM_USAGE_UNVERIFIABLE).increment(calls);
     }
 
     /** Holds a queued run for {@code reason}, and offers it again no earlier than {@code delay} from now. */

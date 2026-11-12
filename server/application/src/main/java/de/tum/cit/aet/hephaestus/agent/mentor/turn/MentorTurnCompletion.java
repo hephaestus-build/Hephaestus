@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.turn;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
@@ -16,6 +18,7 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,8 +42,8 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Ends a turn's attempts: bills each attempt when it ends or its lease expires, from the attempt's usage measurement
- * ({@link MentorAttemptUsageService}), and settles the conversational feedback Hephaestus's answer showed
+ * Ends a turn's attempts: records the cost of each attempt's ended model calls when it ends or its lease expires, and
+ * settles the conversational feedback Hephaestus's answer showed
  * ({@code docs/contributor/unified-pi-runtime.mdx} § Delivery of shown feedback).
  */
 @Service
@@ -64,7 +67,7 @@ public class MentorTurnCompletion {
 
     private final MentorTurnService turns;
     private final ConversationClaims conversationClaims;
-    private final MentorAttemptUsageService attemptUsage;
+    private final LlmUsageEventRepository usage;
     private final MeterRegistry meters;
     private final Clock clock;
     private final ApplicationEventPublisher events;
@@ -167,7 +170,7 @@ public class MentorTurnCompletion {
                     cause,
                     lastFailedCall == null ? "none" : lastFailedCall.describe()));
         }
-        bill(turn, attempt, true);
+        bill(turn, attempt);
         if (turn.getSurface() == MentorTurn.Surface.APP || turn.getStatus() != MentorTurn.Status.DONE) {
             // The app shows what a DONE answer showed; a stopped or failed answer may have shown what it called.
             receiptsDue(
@@ -265,7 +268,7 @@ public class MentorTurnCompletion {
                 ConversationCopyOutcome.UNCONFIRMED,
                 LEASE_LOST,
                 NOT_SHOWN));
-        bill(turn, lost.attempt(), turn.getStatus().isTerminal());
+        bill(turn, lost.attempt());
         if (turn.getStatus() == MentorTurn.Status.QUEUED) {
             meters.counter(AgentMetrics.MENTOR_TURN_RETRIED).increment();
         }
@@ -279,7 +282,6 @@ public class MentorTurnCompletion {
                 turns.require(taken.workspaceId(), taken.turnId()),
                 taken.attempt(),
                 taken.admission(),
-                taken.proxyUsage(),
                 taken.startedAt(),
                 taken.lostAt()));
     }
@@ -370,17 +372,17 @@ public class MentorTurnCompletion {
     }
 
     /**
-     * Settles the attempt's spend from its usage measurement ({@link MentorAttemptUsageService#settle}), which every
-     * proxied call of the attempt reached, also one that returned after this. An attempt that made no call is not
-     * billed.
+     * Records what the attempt's calls cost, from their ledger rows: the calls that ended by now. An attempt that made no
+     * call, or a call without a price, records nothing.
      */
-    private void bill(MentorTurn turn, int attempt, boolean recordOnTurn) {
-        attemptUsage
-                .settle(turn.getId(), attempt, recordOnTurn)
-                .ifPresent(cost -> DistributionSummary.builder(AgentMetrics.MENTOR_TURN_COST)
-                        .baseUnit("usd")
-                        .register(meters)
-                        .record(cost.doubleValue()));
+    private void bill(MentorTurn turn, int attempt) {
+        BigDecimal cost =
+                usage.sumAttemptCost(turn.getWorkspaceId(), UsageSourceType.MENTOR_TURN.name(), turn.getId(), attempt);
+        if (cost == null) return;
+        DistributionSummary.builder(AgentMetrics.MENTOR_TURN_COST)
+                .baseUnit("usd")
+                .register(meters)
+                .record(cost.doubleValue());
     }
 
     /** Registers both timers at zero, so {@code increase()} also counts the first turn after a start. */

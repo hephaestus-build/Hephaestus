@@ -8,14 +8,13 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 @Schema(
-        description = "The decision, embedding and reranking calls that one practice's script made in "
-                + "finished reviews this month. The cost of each review's calls is split between its practices by "
-                + "the priced tokens that each used.")
+        description = "The decision, embedding and reranking calls that one practice's script made this month. "
+                + "Each call names the practice that made it.")
 public record LlmUsageByPracticeDTO(
         @Nullable
         @Schema(
-                description = "The practice slug. Null for calls that cannot be split by practice any more, such as "
-                        + "those of a deleted review.")
+                description = "The practice slug. Null for calls that name no practice: calls recorded before each "
+                        + "call had its own row, and calls of a deleted practice.")
         String practiceSlug,
 
         @Nullable @Schema(description = "The practice name. Null when the slug names no current practice.")
@@ -34,16 +33,15 @@ public record LlmUsageByPracticeDTO(
         @NonNull Long inputTokens,
         @NonNull Long outputTokens,
 
-        @NonNull @Schema(description = "This practice's share of the spend on shared (instance) models, in USD.")
+        @NonNull @Schema(description = "This practice's spend on shared (instance) models, in USD.")
         BigDecimal instanceTotalCostUsd,
 
-        @NonNull
-        @Schema(description = "This practice's share of the spend on this workspace's own provider(s), in USD.")
+        @NonNull @Schema(description = "This practice's spend on this workspace's own provider(s), in USD.")
         BigDecimal ownProviderTotalCostUsd,
 
         @NonNull
         @Schema(
-                description = "Reviews with a practice script ledger row whose price is not yet known and that holds "
-                        + "this practice's calls, each review counted once. Those rows are excluded from both "
-                        + "totals above. A review with several practices counts for each of them.")
+                description = "Reviews with a call of this practice whose price is not yet known, each review "
+                        + "counted once. Those calls are excluded from both totals above. A review with several "
+                        + "practices counts for each of them.")
         Long unpricedEventCount) {}

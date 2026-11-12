@@ -40,6 +40,8 @@ function dayReport(
 		byJobType: [],
 		instanceTotalCostUsd,
 		ownProviderTotalCostUsd,
+		instanceUnmeasured: { calls: 0, upperBoundUsd: 0 },
+		ownProviderUnmeasured: { calls: 0, upperBoundUsd: 0 },
 		unpricedEventCount: 0,
 		instanceBudgetVerdict: "WITHIN",
 		instancePaused: false,

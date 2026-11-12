@@ -8,11 +8,10 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.usage.RunningSpend;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
@@ -20,7 +19,6 @@ import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnUsage;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -38,17 +36,13 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -68,7 +62,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     private AgentRuns agentRuns;
 
     @Autowired
-    private ReviewAttemptUsageService reviewAttemptUsage;
+    private LlmUsageEventRepository usageEvents;
 
     @Autowired
     private MentorTurnRepository turnRepository;
@@ -92,12 +86,6 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Autowired
-    private TransactionTemplate transactions;
-
-    @Autowired
-    private JdbcTemplate jdbc;
 
     private Workspace workspace;
     private User developer;
@@ -160,10 +148,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    void shouldRouteAModelCallToTheAttemptAndItsSpendWhenTheWorkerHoldsTheLease() throws Exception {
-        transactions.executeWithoutResult(tx -> turnRepository.accumulateUsage(
-                turn.getId(), turn.getAttempt(), new MentorTurnUsage(100_000, 0, 0, 0, 0, 1)));
-
+    void shouldRouteAModelCallToTheAttemptWhenTheWorkerHoldsTheLease() throws Exception {
         Result result = call("POST", "/internal/llm/responses", token());
 
         assertThat(result.status()).isEqualTo(200);
@@ -173,7 +158,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
                         jobRepository,
                         turnRepository,
                         objectMapper,
-                        reviewAttemptUsage,
+                        usageEvents,
                         mock(ReviewSnapshotQuery.class),
                         agentRuns)
                 .resolve(identity, new MockHttpServletRequest("POST", "/internal/llm/responses"));
@@ -183,67 +168,8 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(attempt.sourceType()).isEqualTo(UsageSourceType.MENTOR_TURN);
         assertThat(attempt.sourceId()).isEqualTo(turn.getId());
         assertThat(attempt.number()).isEqualTo(turn.getAttempt());
-        // $10 per million input tokens, frozen at admission.
-        assertThat(new ProxyRunningSpend(reviewAttemptUsage, turnRepository)
-                        .of(workspace.getId())
-                        .instanceUsd())
-                .isEqualByComparingTo("1.00");
+        assertThat(attempt.epoch()).as("a turn attempt is its claim").isEqualTo(turn.getAttempt());
         assertThat(authentication.getDetails()).isInstanceOf(AttemptJwt.class);
-    }
-
-    /** A turn at $10 per million input tokens that has used a dollar. */
-    private RunningSpend spendOfATurnThatStandsAt(String status, boolean leased) {
-        transactions.executeWithoutResult(tx -> turnRepository.accumulateUsage(
-                turn.getId(), turn.getAttempt(), new MentorTurnUsage(100_000, 0, 0, 0, 0, 1)));
-        // A turn that its host no longer holds has a queued or an ended run; the database checks that they agree.
-        String state = leased ? "LEASED" : status.equals("QUEUED") ? "QUEUED" : "ENDED";
-        jdbc.update(
-                "WITH moved AS (UPDATE agent_run SET state = ?, leased_until = CASE WHEN ? = 'LEASED' THEN leased_until END,"
-                        + " stop_reason = CASE WHEN ? = 'ENDED' THEN 'COMPLETED' END,"
-                        + " ended_at = CASE WHEN ? = 'ENDED' THEN now() END WHERE id = ?)"
-                        + " UPDATE mentor_turn SET status = ? WHERE id = ?",
-                state,
-                state,
-                state,
-                state,
-                turn.getRunId(),
-                status,
-                turn.getId());
-        return new ProxyRunningSpend(reviewAttemptUsage, turnRepository).of(workspace.getId());
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-        "RUNNING, true, 1",
-        "STOPPED, true, 1",
-        "STOPPED, false, 0",
-        "QUEUED, false, 0",
-        "DONE, false, 0",
-        "FAILED, false, 0"
-    })
-    void shouldCountATurnOnlyUntilTheLedgerShowsIt(String status, boolean leased, String usd) {
-        assertThat(spendOfATurnThatStandsAt(status, leased).instanceUsd()).isEqualByComparingTo(usd);
-    }
-
-    @Test
-    void shouldChargeATurnToThePurseThatPaysIt() {
-        jdbc.update(
-                "UPDATE mentor_turn SET admission=jsonb_set(admission,'{price,fundingSource}','\"WORKSPACE\"') WHERE id=?",
-                turn.getId());
-
-        var spend = spendOfATurnThatStandsAt("RUNNING", true);
-
-        assertThat(spend.workspaceUsd()).isEqualByComparingTo("1");
-        assertThat(spend.instanceUsd()).isEqualByComparingTo("0");
-    }
-
-    @Test
-    void shouldCountAnUnpricedTurnAsNothingUntilItEnds() {
-        jdbc.update(
-                "UPDATE mentor_turn SET admission=jsonb_set(admission,'{price,pricingState}','\"UNPRICED\"') WHERE id=?",
-                turn.getId());
-
-        assertThat(spendOfATurnThatStandsAt("RUNNING", true).instanceUsd()).isEqualByComparingTo("0");
     }
 
     @Test

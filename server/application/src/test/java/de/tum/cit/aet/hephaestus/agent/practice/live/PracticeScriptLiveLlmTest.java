@@ -50,7 +50,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxCache
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEvent;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
-import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
@@ -119,8 +118,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -444,16 +441,15 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                     .isZero();
         }
         assertThat(Objects.requireNonNull(run.getModels()).isEmpty()).isTrue();
-        assertThat(jobRepository.sumPracticeScriptUsageByKind(context.id(), job.getId(), job.getAttempt()))
-                .isEmpty();
 
         lifecycle.cancel(context.id(), job.getId());
 
-        Map<UsageSourceType, LlmUsageEvent> ledger = usageEvents.findAll().stream()
+        // One ended, measured row for each call of a practice script, at its frozen model and price.
+        List<LlmUsageEvent> rows = usageEvents.findAll().stream()
                 .filter(event -> event.getSourceId().equals(job.getId()))
-                .filter(event -> event.getSourceType() != UsageSourceType.REVIEW_JOB)
-                .collect(Collectors.toMap(LlmUsageEvent::getSourceType, Function.identity()));
-        assertThat(ledger).isEmpty();
+                .filter(event -> event.getPracticeId() != null)
+                .toList();
+        assertThat(rows).as("a practice script calls no direct model").isEmpty();
     }
 
     private Workspace workspace(User developer) {

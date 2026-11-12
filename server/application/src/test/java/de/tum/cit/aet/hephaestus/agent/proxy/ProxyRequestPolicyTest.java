@@ -64,7 +64,8 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 new ProxyRouting.BilledAttempt(source, id, 0, LEASE),
                 null,
                 null,
-                source == UsageSourceType.MENTOR_TURN ? null : Instant.now().plusSeconds(60));
+                source == UsageSourceType.MENTOR_TURN ? null : Instant.now().plusSeconds(60),
+                null);
     }
 
     @Test
@@ -115,6 +116,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 8L,
                 null,
                 new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, id, 0, LEASE),
+                null,
                 null,
                 null,
                 null);

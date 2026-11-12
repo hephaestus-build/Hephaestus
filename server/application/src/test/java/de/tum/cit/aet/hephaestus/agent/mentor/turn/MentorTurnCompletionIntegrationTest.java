@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.tuple;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -15,10 +17,10 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnUsage;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
+import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
@@ -74,7 +76,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
     private MentorTurnCompletion completion;
 
     @Autowired
-    private MentorAttemptUsageService attemptUsage;
+    private LlmUsageRecorder recorder;
 
     @Autowired
     private MeterRegistry metrics;
@@ -345,30 +347,45 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         claims.expireLease(turn);
     }
 
-    /** Admits the attempt as the worker does, which also creates its usage measurement. */
+    /** Admits the attempt as the worker does. */
     private void admit(MentorTurn turn) {
-        assertThat(attemptUsage.admit(
-                        turn.getWorkspaceId(),
-                        turn.getId(),
-                        turn.getAttempt(),
-                        Objects.requireNonNull(turn.getRunId()),
-                        MentorTurnAdmission.of(ADMITTED, Objects.requireNonNull(ADMITTED.priceSnapshot()))))
-                .isTrue();
+        transactionTemplate.executeWithoutResult(tx -> turns.admit(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getRunId()),
+                MentorTurnAdmission.of(ADMITTED, Objects.requireNonNull(ADMITTED.priceSnapshot()))
+                        .toJson()));
     }
 
-    /** One proxied call, settled on its attempt as the proxy's accumulator settles it. */
+    /** One proxied call of the attempt at its admitted rates, opened and measured as the proxy does. */
     private void proxyCall(MentorTurn turn, long input) {
-        transactionTemplate.executeWithoutResult(tx ->
-                attemptUsage.settleCall(turn.getId(), turn.getAttempt(), new MentorTurnUsage(input, 10, 0, 0, 0, 1)));
+        transactionTemplate.executeWithoutResult(tx -> {
+            UUID call = recorder.open(new LlmUsageRecorder.OpenCall(
+                    turn.getWorkspaceId(),
+                    turn.getRunId(),
+                    turn.getAttempt(),
+                    UsageSourceType.MENTOR_TURN.name(),
+                    UsageSourceType.MENTOR_TURN,
+                    turn.getId(),
+                    turn.getAttempt(),
+                    null,
+                    ModelKind.CHAT,
+                    null,
+                    ADMITTED.upstreamModelId(),
+                    Objects.requireNonNull(ADMITTED.priceSnapshot()),
+                    null));
+            recorder.complete(call, turn.getWorkspaceId(), new LlmUsageRecorder.CallUsage(input, 10, 0, 0, 0, 0));
+        });
     }
 
-    /** One row of the usage ledger, as billed. */
+    /** The call rows of one attempt in the usage ledger, summed. */
     private record Billed(int attempt, long inputTokens, int calls, String provenance, BigDecimal costUsd) {}
 
     private List<Billed> ledger(MentorTurn turn) {
         return jdbc.query(
-                "SELECT source_attempt, input_tokens, total_calls, usage_provenance, cost_usd FROM llm_usage_event "
-                        + "WHERE source_id = ? ORDER BY source_attempt",
+                "SELECT source_attempt, SUM(input_tokens), SUM(total_calls), MIN(usage_provenance), SUM(cost_usd)"
+                        + " FROM llm_usage_event WHERE source_id = ? GROUP BY source_attempt ORDER BY source_attempt",
                 (rs, row) -> new Billed(
                         rs.getInt(1),
                         rs.getLong(2),
@@ -379,7 +396,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    void shouldKeepTheCostOfTheLaterAttemptWhenATakenBackAttemptIsBilledAfterItEnded() {
+    void shouldKeepEachAttemptsCallsWhenATakenBackAttemptIsBilledAfterTheNextOneEnded() {
         MentorTurn first = admittedTurn(Duration.ofMinutes(5));
         proxyCall(first, 30_000);
         MentorTurnService.LostAttempt lost = Objects.requireNonNull(
@@ -393,25 +410,17 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         // The billing of the taken-back attempt runs again after the turn's next attempt ended.
         completion.billTakenBack(new MentorLedgerEvents.AttemptTakenBack(
-                workspace.getId(),
-                first.getId(),
-                lost.attempt(),
-                lost.admission(),
-                lost.proxyUsage(),
-                lost.startedAt(),
-                lost.lostAt()));
+                workspace.getId(), first.getId(), lost.attempt(), lost.admission(), lost.startedAt(), lost.lostAt()));
 
         MentorTurn row = turnRepository.findById(first.getId()).orElseThrow();
         assertThat(row.getAttempt()).isEqualTo(2);
-        assertThat(row.getInputTokens()).isEqualTo(70_000);
-        assertThat(row.getCostUsd()).as("the cost of the attempt the row holds").isEqualByComparingTo("0.70");
         assertThat(ledger(first))
                 .extracting(Billed::attempt, Billed::inputTokens)
                 .containsExactly(tuple(1, 30_000L), tuple(2, 70_000L));
     }
 
     @Test
-    void shouldBillTheProxysRecordAndRecordItOnTheTurnWhenTheAttemptEnds() {
+    void shouldBillEveryProxiedCallOfTheAttemptWhenItEnds() {
         MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
         proxyCall(turn, 50_000);
         proxyCall(turn, 50_000);
@@ -425,16 +434,11 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         assertThat(ledger(turn)).singleElement().satisfies(row -> {
             assertThat(row.attempt()).isEqualTo(1);
-            assertThat(row.inputTokens())
-                    .as("the sum of the proxy's calls, the only view of them")
-                    .isEqualTo(100_000);
+            assertThat(row.inputTokens()).as("the sum of the proxy's calls").isEqualTo(100_000);
             assertThat(row.provenance()).isEqualTo("PROXY");
             assertThat(row.calls()).isEqualTo(2);
             assertThat(row.costUsd()).isEqualByComparingTo("1.00");
         });
-        MentorTurn row = turnRepository.findById(turn.getId()).orElseThrow();
-        assertThat(row.getInputTokens()).isEqualTo(100_000);
-        assertThat(row.getCostUsd()).isEqualByComparingTo("1.00");
     }
 
     @Test
@@ -474,8 +478,10 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(row.getFailureCause()).isEqualTo("its Hephaestus host reported ERROR: provider_unavailable");
         assertThat(row.getFailedCall()).isEqualTo("upstream_status");
         assertThat(row.getFailedCallStatus()).isEqualTo(503);
-        assertThat(row.getLlmCalls())
-                .as("the model calls that completed before it failed")
+        assertThat(ledger(turn))
+                .as("the model call that completed before it failed")
+                .singleElement()
+                .extracting(Billed::calls)
                 .isEqualTo(1);
     }
 
@@ -540,7 +546,6 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         MentorTurn requeued = turnRepository.findById(first.getId()).orElseThrow();
         assertThat(requeued.getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
-        assertThat(requeued.getInputTokens()).isZero();
         assertThat(requeued.getQueuedAt()).isAfter(queuedBeforeLoss);
         MentorTurn second = claims.claimNext().orElseThrow();
         admit(second);

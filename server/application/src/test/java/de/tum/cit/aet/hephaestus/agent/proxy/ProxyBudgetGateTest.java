@@ -3,12 +3,10 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
-import de.tum.cit.aet.hephaestus.agent.usage.RunningSpend;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
@@ -27,9 +25,8 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 
 /**
- * A ledger row is only appended when an agent job or mentor turn ends, so for the whole length of a run
- * the ledger says the workspace has spent nothing. Most fixtures below therefore fix a zero-spend
- * ledger, and what refuses a call is the spend of the running work counted on top of it.
+ * The ledger has a row for each model call, and a call's cost lands when the call ends. The gate refuses a call once the
+ * month's ended calls reach the cap of the purse that pays it.
  */
 class ProxyBudgetGateTest extends BaseUnitTest {
     private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
@@ -41,30 +38,21 @@ class ProxyBudgetGateTest extends BaseUnitTest {
     @Mock
     private LlmBudgetService budgetService;
 
-    @Mock
-    private ProxyRunningSpend runningSpend;
-
     private ProxyBudgetGate gate;
 
     @BeforeEach
     void setUp() {
         gate = new ProxyBudgetGate(
                 budgetService,
-                runningSpend,
                 new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000, 1000, Duration.ofMinutes(10)));
     }
 
-    private static LlmBudgetHeadroom instanceCapOfOneDollar() {
-        return new LlmBudgetHeadroom(BigDecimal.ZERO, ONE_DOLLAR, false, null, null, false);
+    private static LlmBudgetHeadroom instanceCapOfOneDollar(String spentUsd) {
+        return new LlmBudgetHeadroom(new BigDecimal(spentUsd), ONE_DOLLAR, false, null, null, false);
     }
 
-    private static LlmBudgetHeadroom workspaceCapOfOneDollar() {
-        return new LlmBudgetHeadroom(null, null, false, BigDecimal.ZERO, ONE_DOLLAR, false);
-    }
-
-    private void running(String instanceUsd, String workspaceUsd) {
-        when(runningSpend.of(WORKSPACE_ID))
-                .thenReturn(new RunningSpend(new BigDecimal(instanceUsd), new BigDecimal(workspaceUsd)));
+    private static LlmBudgetHeadroom workspaceCapOfOneDollar(String spentUsd) {
+        return new LlmBudgetHeadroom(null, null, false, new BigDecimal(spentUsd), ONE_DOLLAR, false);
     }
 
     private static ProxyRouting.BilledAttempt attempt() {
@@ -83,47 +71,36 @@ class ProxyBudgetGateTest extends BaseUnitTest {
                 attempt(),
                 null,
                 null,
-                Instant.now().plusSeconds(60));
+                Instant.now().plusSeconds(60),
+                null);
     }
 
     @Nested
-    @DisplayName("the bound: running work cannot outspend the cap by more than the calls in flight")
+    @DisplayName("the bound: the month's ended calls cannot outspend the cap by more than the calls in flight")
     class TheBound {
 
-        @ParameterizedTest(name = "running work that has spent ${0} of a $1.00 cap is blocked={1}")
+        @ParameterizedTest(name = "ended calls that spent ${0} of a $1.00 cap block={1}")
         @CsvSource({"0.99, false", "1.00, true"})
-        void aCallIsJudgedOnTheSpendOfTheRunningWork(String runningUsd, boolean blocked) {
-            LlmBudgetHeadroom headroom = instanceCapOfOneDollar();
-            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(headroom);
-            running(runningUsd, "0");
+        void aCallIsJudgedOnTheEndedCallsOfTheMonth(String spentUsd, boolean blocked) {
+            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(instanceCapOfOneDollar(spentUsd));
 
-            assertThat(headroom.decide().blocks(UsageFundingSource.INSTANCE))
-                    .as("the ledger alone allows both of these calls")
-                    .isFalse();
             assertThat(gate.isBlocked(routing(UsageFundingSource.INSTANCE))).isEqualTo(blocked);
         }
 
         @Test
-        @DisplayName("a second call is judged on fresh running spend even though the ledger read is cached")
-        void theRunningSpendIsFreshEvenWhenTheLedgerVerdictIsCached() {
-            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(instanceCapOfOneDollar());
+        @DisplayName("a call that ended on this replica counts against the cap at once, though the verdict is cached")
+        void aCompletedCallCountsAtOnce() {
+            when(budgetService.headroom(WORKSPACE_ID))
+                    .thenReturn(instanceCapOfOneDollar("0.60"), instanceCapOfOneDollar("1.20"));
 
-            running("0.60", "0");
             assertThat(gate.isBlocked(routing(UsageFundingSource.INSTANCE))).isFalse();
-            running("1.20", "0");
+            assertThat(gate.isBlocked(routing(UsageFundingSource.INSTANCE)))
+                    .as("the cached verdict")
+                    .isFalse();
+            gate.spent(WORKSPACE_ID);
             assertThat(gate.isBlocked(routing(UsageFundingSource.INSTANCE))).isTrue();
 
-            verify(budgetService, times(1)).headroom(WORKSPACE_ID);
-        }
-
-        @Test
-        @DisplayName("a workspace without a cap reads no running spend")
-        void anUncappedWorkspaceReadsNoRunningSpend() {
-            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(LlmBudgetHeadroom.UNCAPPED);
-
-            assertThat(gate.isBlocked(routing(UsageFundingSource.INSTANCE))).isFalse();
-
-            verifyNoInteractions(runningSpend);
+            verify(budgetService, times(2)).headroom(WORKSPACE_ID);
         }
     }
 
@@ -136,8 +113,12 @@ class ProxyBudgetGateTest extends BaseUnitTest {
         void anExhaustedInstancePurseDoesNotBlockAWorkspaceFundedAttempt() {
             when(budgetService.headroom(WORKSPACE_ID))
                     .thenReturn(new LlmBudgetHeadroom(
-                            new BigDecimal("500.00"), ONE_DOLLAR, false, BigDecimal.ZERO, BigDecimal.TEN, false));
-            running("0", "9.99");
+                            new BigDecimal("500.00"),
+                            ONE_DOLLAR,
+                            false,
+                            new BigDecimal("9.99"),
+                            BigDecimal.TEN,
+                            false));
 
             assertThat(gate.isBlocked(routing(UsageFundingSource.WORKSPACE))).isFalse();
         }
@@ -145,36 +126,23 @@ class ProxyBudgetGateTest extends BaseUnitTest {
         @Test
         @DisplayName("spend on the workspace's own provider counts against the workspace's own cap")
         void workspaceFundedSpendIsJudgedAgainstItsOwnCap() {
-            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(workspaceCapOfOneDollar());
-            running("0", "1.00");
+            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(workspaceCapOfOneDollar("1.00"));
 
             assertThat(gate.isBlocked(routing(UsageFundingSource.WORKSPACE))).isTrue();
         }
 
         @Test
-        @DisplayName("a call that a purse without a cap pays reads no running spend")
-        void aCallOfAnUncappedPurseReadsNoRunningSpend() {
-            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(workspaceCapOfOneDollar());
+        @DisplayName("a call that a purse without a cap pays is never blocked")
+        void aCallOfAnUncappedPurseIsNotBlocked() {
+            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(workspaceCapOfOneDollar("1.00"));
 
             assertThat(gate.isBlocked(routing(UsageFundingSource.INSTANCE))).isFalse();
-
-            verifyNoInteractions(runningSpend);
-        }
-
-        @Test
-        @DisplayName("spend on the host's models does not count against the workspace's own cap")
-        void instanceFundedSpendLeavesTheOwnCapAlone() {
-            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(workspaceCapOfOneDollar());
-            running("9.99", "0");
-
-            assertThat(gate.isBlocked(routing(UsageFundingSource.WORKSPACE))).isFalse();
         }
 
         @Test
         @DisplayName("an attempt with no known funding source is judged against both purses")
         void anUnattributableAttemptIsJudgedAgainstBothPurses() {
-            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(instanceCapOfOneDollar());
-            running("1.00", "0");
+            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(instanceCapOfOneDollar("1.00"));
 
             assertThat(gate.isBlocked(routing(null))).isTrue();
         }
@@ -198,9 +166,60 @@ class ProxyBudgetGateTest extends BaseUnitTest {
                     attempt(),
                     null,
                     null,
-                    Instant.now().plusSeconds(60));
+                    Instant.now().plusSeconds(60),
+                    null);
 
             assertThat(gate.isBlocked(noWorkspace)).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("the hold: a call opens only while its own upper bound fits under its purse's cap")
+    class TheHold {
+
+        @ParameterizedTest
+        @CsvSource({
+            "0.90, 0.10, false",
+            "0.90, 0.100001, true",
+            "0.99, 0.00, false",
+            "1.00, 0.00, true",
+            "0.00, 1.00, false",
+            "0.00, 1.01, true"
+        })
+        void shouldRefuseACallWhoseBoundTakesTheSpendPastTheCap(String spentUsd, String boundUsd, boolean refused) {
+            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(instanceCapOfOneDollar(spentUsd));
+
+            assertThat(gate.refusesHold(routing(UsageFundingSource.INSTANCE), new BigDecimal(boundUsd)))
+                    .isEqualTo(refused);
+        }
+
+        /** The cached verdict can be five seconds old; the hold reads the spend again, with every call opened since. */
+        @Test
+        void shouldReadTheSpendAgainForTheHold() {
+            when(budgetService.headroom(WORKSPACE_ID))
+                    .thenReturn(instanceCapOfOneDollar("0.10"), instanceCapOfOneDollar("0.95"));
+            assertThat(gate.isBlocked(routing(UsageFundingSource.INSTANCE))).isFalse();
+
+            assertThat(gate.refusesHold(routing(UsageFundingSource.INSTANCE), new BigDecimal("0.10")))
+                    .isTrue();
+        }
+
+        @Test
+        void shouldHoldOnlyThePursePayingForTheCall() {
+            when(budgetService.headroom(WORKSPACE_ID)).thenReturn(workspaceCapOfOneDollar("0.99"));
+
+            assertThat(gate.refusesHold(routing(UsageFundingSource.INSTANCE), new BigDecimal("0.50")))
+                    .isFalse();
+            assertThat(gate.refusesHold(routing(UsageFundingSource.WORKSPACE), new BigDecimal("0.50")))
+                    .isTrue();
+        }
+
+        /** A call without a bound keeps the verdict's rule: its row makes the purse unverifiable once it is open. */
+        @Test
+        void shouldPassACallWithoutABound() {
+            assertThat(gate.refusesHold(routing(UsageFundingSource.INSTANCE), null))
+                    .isFalse();
+            verify(budgetService, times(0)).headroom(WORKSPACE_ID);
         }
     }
 

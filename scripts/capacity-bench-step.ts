@@ -426,7 +426,7 @@ const runStart = typeof run.startedAt === "string" ? Date.parse(run.startedAt) :
 const startTimestamp = new Date(
 	Number.isFinite(runStart) ? runStart : Date.parse(before.checkedAt),
 ).toISOString();
-const sql = `SELECT json_build_object('requestId',request_id,'turnId',id,'createdAt',created_at,'startedAt',started_at,'finishedAt',finished_at,'status',status,'calls',llm_calls,'attempt',attempt) FROM mentor_turn WHERE workspace_id=986600 AND created_at >= '${startTimestamp}'::timestamptz ORDER BY created_at;`;
+const sql = `SELECT json_build_object('requestId',request_id,'turnId',id,'createdAt',created_at,'startedAt',started_at,'finishedAt',finished_at,'status',status,'calls',(SELECT count(*) FROM llm_usage_event u WHERE u.workspace_id=t.workspace_id AND u.source_type='MENTOR_TURN' AND u.source_id=t.id),'attempt',attempt) FROM mentor_turn t WHERE workspace_id=986600 AND created_at >= '${startTimestamp}'::timestamptz ORDER BY created_at;`;
 await Promise.all([
 	collect(
 		"turns.jsonl",

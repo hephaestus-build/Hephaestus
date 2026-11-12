@@ -373,7 +373,8 @@ final class ResearchDatasetAssembler {
                     attempt.cacheReadTokens(),
                     attempt.cacheWriteTokens(),
                     amount(attempt.costUsd()),
-                    attempt.pricingState().name()));
+                    attempt.pricingState().name(),
+                    attempt.includesUpperBound()));
         }
         return new ResearchDataset.Usage(
                 "RETAINED",

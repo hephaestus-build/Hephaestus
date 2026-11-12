@@ -733,14 +733,28 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    /** One model call of the job's current attempt that ended with this measured usage. */
+    private void measuredCall(ReviewJob job, long input, long output, long cacheRead, long cacheWrite) {
+        jdbc.update("""
+                INSERT INTO llm_usage_event (id, workspace_id, run_id, lease_epoch, call_state, job_type, source_type,
+                    source_id, source_attempt, review_id, model_kind, input_tokens, output_tokens, cache_read_tokens,
+                    cache_write_tokens, pricing_state, funding_source, cost_usd, usage_provenance,
+                    measurement_verification, started_at, occurred_at)
+                SELECT gen_random_uuid(), j.workspace_id, j.run_id, r.lease_epoch, 'ENDED', 'PRACTICE_REVIEW',
+                    'REVIEW_JOB', j.id, r.lease_epoch - 1, j.review_id, 'CHAT', ?, ?, ?, ?, 'NO_CHARGE', 'INSTANCE', 0,
+                    'PROXY', 'VERIFIED', now(), now()
+                FROM review_job j JOIN agent_run r ON r.id = j.run_id WHERE j.id = ?
+                """, input, output, cacheRead, cacheWrite, job.getId());
+    }
+
     @Test
     void shouldBoundTheFinalStagedHandoffAndKeepItsMeasuredUsage() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             admission.stage(review.identity(), request(review));
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
             job.setExecutionStartedAt(Instant.now());
-            job.setLlmCalls(1);
             jobs.saveAndFlush(job);
+            measuredCall(job, 1, 0, 0, 0);
             int limit = agentRuns.capacity().reviewRetries();
             // Every retry is lost: losing the attempt after them leaves only the handoff that seals what it staged.
             for (int lost = 0; lost < limit; lost++) {
@@ -756,7 +770,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .as("the handoff was lost too: the retry limit fails the review")
                     .isEqualTo(ReviewJobStatus.FAILED);
             assertThat(jdbc.queryForObject(
-                            "SELECT proxy_calls FROM review_job_attempt_usage WHERE workspace_id=? AND job_id=? AND attempt=?",
+                            "SELECT count(*) FROM llm_usage_event WHERE workspace_id=? AND source_id=? AND source_attempt=?",
                             Integer.class,
                             review.workspaceId(),
                             job.getId(),
@@ -855,12 +869,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             admission.stage(review.identity(), request(review));
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
             job.setExecutionStartedAt(Instant.now());
-            job.setLlmCalls(3);
-            job.setLlmInputTokens(13);
-            job.setLlmOutputTokens(7);
-            job.setLlmCacheReadTokens(1200);
-            job.setLlmCacheWriteTokens(300);
             jobs.saveAndFlush(job);
+            measuredCall(job, 13, 7, 1200, 300);
             reapLost(job);
             var retry = jobs.findById(job.getId()).orElseThrow();
             assertThat(retry.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
@@ -869,16 +879,15 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .singleElement()
                     .satisfies(staged -> assertThat(staged.attempt()).isZero());
             assertThat(jdbc.queryForMap(
-                            "SELECT proxy_calls,proxy_input_tokens,proxy_output_tokens,"
-                                    + "proxy_cache_read_tokens,proxy_cache_write_tokens FROM review_job_attempt_usage"
-                                    + " WHERE workspace_id=? AND job_id=? AND attempt=0",
+                            "SELECT call_state,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens"
+                                    + " FROM llm_usage_event WHERE workspace_id=? AND source_id=? AND source_attempt=0",
                             review.workspaceId(),
                             job.getId()))
-                    .containsEntry("proxy_calls", 3)
-                    .containsEntry("proxy_input_tokens", 13L)
-                    .containsEntry("proxy_output_tokens", 7L)
-                    .containsEntry("proxy_cache_read_tokens", 1200L)
-                    .containsEntry("proxy_cache_write_tokens", 300L);
+                    .containsEntry("call_state", "ENDED")
+                    .containsEntry("input_tokens", 13L)
+                    .containsEntry("output_tokens", 7L)
+                    .containsEntry("cache_read_tokens", 1200L)
+                    .containsEntry("cache_write_tokens", 300L);
             assertThat(resultIds(review)).isEmpty();
         }
     }

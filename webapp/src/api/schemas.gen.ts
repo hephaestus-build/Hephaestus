@@ -665,7 +665,7 @@ export const AdminWorkspaceLlmUsageSchema = {
         events: {
             type: 'integer',
             format: 'int64',
-            description: 'Runs this month, either purse: job attempts and mentor turns. Rows of models for practice scripts are not runs.'
+            description: 'Runs this month, either purse: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.'
         },
         instanceBudgetVerdict: {
             type: 'string',
@@ -688,7 +688,11 @@ export const AdminWorkspaceLlmUsageSchema = {
         instanceTotalCostUsd: {
             type: 'number',
             format: 'decimal',
-            description: 'This month\'s confirmed spend on shared (instance) models, in USD — compared against instanceMonthlyBudgetUsd.'
+            description: 'This month\'s confirmed spend on shared (instance) models, in USD. instanceMonthlyBudgetUsd compares against it plus instanceUnmeasured.upperBoundUsd.'
+        },
+        instanceUnmeasured: {
+            $ref: '#/components/schemas/LlmUnmeasuredUsage',
+            description: 'Shared-model calls whose usage was not measured, and the most they can cost.'
         },
         ownProviderBudgetVerdict: {
             type: 'string',
@@ -715,7 +719,11 @@ export const AdminWorkspaceLlmUsageSchema = {
         ownProviderTotalCostUsd: {
             type: 'number',
             format: 'decimal',
-            description: 'This month\'s confirmed spend on the workspace\'s own connected provider(s), in USD — compared against ownProviderMonthlyBudgetUsd.'
+            description: 'This month\'s confirmed spend on the workspace\'s own connected provider(s), in USD. ownProviderMonthlyBudgetUsd compares against it plus ownProviderUnmeasured.upperBoundUsd.'
+        },
+        ownProviderUnmeasured: {
+            $ref: '#/components/schemas/LlmUnmeasuredUsage',
+            description: 'Own-provider calls whose usage was not measured, and the most they can cost.'
         },
         workspaceSlug: {
             type: 'string',
@@ -728,10 +736,12 @@ export const AdminWorkspaceLlmUsageSchema = {
         'instanceBudgetVerdict',
         'instancePaused',
         'instanceTotalCostUsd',
+        'instanceUnmeasured',
         'ownProviderBudgetVerdict',
         'ownProviderInUse',
         'ownProviderPaused',
         'ownProviderTotalCostUsd',
+        'ownProviderUnmeasured',
         'workspaceSlug'
     ]
 } as const;
@@ -6879,6 +6889,27 @@ export const LlmProbeResultSchema = {
     ]
 } as const;
 
+export const LlmUnmeasuredUsageSchema = {
+    type: 'object',
+    description: 'Calls of one purse whose usage was not measured, and the most they can cost',
+    properties: {
+        calls: {
+            type: 'integer',
+            format: 'int64',
+            description: 'Calls this month that are still running or whose provider reported no usage.'
+        },
+        upperBoundUsd: {
+            type: 'number',
+            format: 'decimal',
+            description: 'The most these calls can cost, in USD: each call\'s request size and output limit at its frozen rates. The cap counts it on top of the confirmed spend. Not an exact cost.'
+        }
+    },
+    required: [
+        'calls',
+        'upperBoundUsd'
+    ]
+} as const;
+
 export const LlmUsageByDaySchema = {
     type: 'object',
     description: 'Spend for one UTC day',
@@ -6890,7 +6921,7 @@ export const LlmUsageByDaySchema = {
         events: {
             type: 'integer',
             format: 'int64',
-            description: 'Runs: job attempts and mentor turns. Rows of models for practice scripts are not runs.'
+            description: 'Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.'
         },
         instanceTotalCostUsd: {
             type: 'number',
@@ -6905,7 +6936,7 @@ export const LlmUsageByDaySchema = {
         unpricedEventCount: {
             type: 'integer',
             format: 'int64',
-            description: 'Runs this day with at least one ledger row whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script row counts toward the run of its review. Those rows are excluded from both totals above.'
+            description: 'Runs this day with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script call counts toward the run of its review. Those calls are excluded from both totals above.'
         }
     },
     required: [
@@ -6932,7 +6963,7 @@ export const LlmUsageByJobTypeSchema = {
         events: {
             type: 'integer',
             format: 'int64',
-            description: 'Runs: job attempts and mentor turns. Rows of models for practice scripts are not runs.'
+            description: 'Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.'
         },
         inputTokens: {
             type: 'integer',
@@ -6958,12 +6989,12 @@ export const LlmUsageByJobTypeSchema = {
         totalCalls: {
             type: 'integer',
             format: 'int64',
-            description: 'LLM API calls, as reported by the runtime. Practice reviews and mentor turns both include every assistant call in an internal tool loop.'
+            description: 'LLM API calls that the proxy served. Practice reviews and mentor turns both include every assistant call in an internal tool loop.'
         },
         unpricedEventCount: {
             type: 'integer',
             format: 'int64',
-            description: 'Runs of this job type with at least one ledger row whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script row counts toward the run of its review. Those rows are excluded from both totals above.'
+            description: 'Runs of this job type with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A practice script call counts toward the run of its review. Those calls are excluded from both totals above.'
         }
     },
     required: [
@@ -6982,7 +7013,7 @@ export const LlmUsageByJobTypeSchema = {
 
 export const LlmUsageByPracticeSchema = {
     type: 'object',
-    description: 'The decision, embedding and reranking calls that one practice\'s script made in finished reviews this month. The cost of each review\'s calls is split between its practices by the priced tokens that each used.',
+    description: 'The decision, embedding and reranking calls that one practice\'s script made this month. Each call names the practice that made it.',
     properties: {
         calls: {
             type: 'integer',
@@ -6995,7 +7026,7 @@ export const LlmUsageByPracticeSchema = {
         instanceTotalCostUsd: {
             type: 'number',
             format: 'decimal',
-            description: 'This practice\'s share of the spend on shared (instance) models, in USD.'
+            description: 'This practice\'s spend on shared (instance) models, in USD.'
         },
         outputTokens: {
             type: 'integer',
@@ -7004,7 +7035,7 @@ export const LlmUsageByPracticeSchema = {
         ownProviderTotalCostUsd: {
             type: 'number',
             format: 'decimal',
-            description: 'This practice\'s share of the spend on this workspace\'s own provider(s), in USD.'
+            description: 'This practice\'s spend on this workspace\'s own provider(s), in USD.'
         },
         practiceName: {
             type: 'string',
@@ -7012,7 +7043,7 @@ export const LlmUsageByPracticeSchema = {
         },
         practiceSlug: {
             type: 'string',
-            description: 'The practice slug. Null for calls that cannot be split by practice any more, such as those of a deleted review.'
+            description: 'The practice slug. Null for calls that name no practice: calls recorded before each call had its own row, and calls of a deleted practice.'
         },
         purposes: {
             type: 'array',
@@ -7036,7 +7067,7 @@ export const LlmUsageByPracticeSchema = {
         unpricedEventCount: {
             type: 'integer',
             format: 'int64',
-            description: 'Reviews with a practice script ledger row whose price is not yet known and that holds this practice\'s calls, each review counted once. Those rows are excluded from both totals above. A review with several practices counts for each of them.'
+            description: 'Reviews with a call of this practice whose price is not yet known, each review counted once. Those calls are excluded from both totals above. A review with several practices counts for each of them.'
         }
     },
     required: [
@@ -7053,7 +7084,7 @@ export const LlmUsageByPracticeSchema = {
 
 export const LlmUsagePracticeScriptTotalSchema = {
     type: 'object',
-    description: 'The decision, embedding and reranking calls of finished reviews this month, in total. calls, inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and unpricedEventCount do not: one review can count for several practices there.',
+    description: 'The decision, embedding and reranking calls of this month, in total. calls, inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and unpricedEventCount do not: one review can count for several practices there.',
     properties: {
         calls: {
             type: 'integer',
@@ -7085,7 +7116,7 @@ export const LlmUsagePracticeScriptTotalSchema = {
         unpricedEventCount: {
             type: 'integer',
             format: 'int64',
-            description: 'Distinct reviews with a practice script ledger row whose price is not yet known. Those rows are excluded from both totals above.'
+            description: 'Distinct reviews with a practice script call whose price is not yet known. Those rows are excluded from both totals above.'
         }
     },
     required: [
@@ -16749,6 +16780,10 @@ export const ReviewUsageSchema = {
                 'null'
             ]
         },
+        includesUpperBound: {
+            type: 'boolean',
+            description: 'Whether costUsd counts the upper bound of a call whose usage was not measured, so the review cost at most costUsd'
+        },
         inputTokens: {
             type: 'integer',
             format: 'int64'
@@ -16765,6 +16800,7 @@ export const ReviewUsageSchema = {
         'attempts',
         'calls',
         'costUsd',
+        'includesUpperBound',
         'inputTokens',
         'outputTokens',
         'priced'
@@ -16795,6 +16831,10 @@ export const ReviewUsageAttemptSchema = {
                 'string',
                 'null'
             ]
+        },
+        includesUpperBound: {
+            type: 'boolean',
+            description: 'Whether costUsd counts the upper bound of a call whose usage was not measured, so the attempt cost at most costUsd'
         },
         inputTokens: {
             type: 'integer',
@@ -16827,6 +16867,7 @@ export const ReviewUsageAttemptSchema = {
         'cacheWriteTokens',
         'calls',
         'costUsd',
+        'includesUpperBound',
         'inputTokens',
         'jobId',
         'outputTokens',
@@ -21071,7 +21112,11 @@ export const WorkspaceLlmUsageReportSchema = {
         instanceTotalCostUsd: {
             type: 'number',
             format: 'decimal',
-            description: 'This month\'s confirmed spend on shared (instance) models, in USD — the figure instanceMonthlyBudgetUsd compares against. A floor, not the full total, while unpricedEventCount is non-zero.'
+            description: 'This month\'s confirmed spend on shared (instance) models, in USD. instanceMonthlyBudgetUsd compares against it plus instanceUnmeasured.upperBoundUsd. A floor, not the full total, while unpricedEventCount is non-zero.'
+        },
+        instanceUnmeasured: {
+            $ref: '#/components/schemas/LlmUnmeasuredUsage',
+            description: 'Shared-model calls this month whose usage was not measured, and the most they can cost. Not part of instanceTotalCostUsd.'
         },
         month: {
             type: 'string',
@@ -21103,7 +21148,11 @@ export const WorkspaceLlmUsageReportSchema = {
         ownProviderTotalCostUsd: {
             type: 'number',
             format: 'decimal',
-            description: 'This month\'s confirmed spend on this workspace\'s own connected provider(s), in USD — the figure ownProviderMonthlyBudgetUsd compares against. Different money from instanceTotalCostUsd: the two are never added together.'
+            description: 'This month\'s confirmed spend on this workspace\'s own connected provider(s), in USD. ownProviderMonthlyBudgetUsd compares against it plus ownProviderUnmeasured.upperBoundUsd. Different money from instanceTotalCostUsd: the two are never added together.'
+        },
+        ownProviderUnmeasured: {
+            $ref: '#/components/schemas/LlmUnmeasuredUsage',
+            description: 'Own-provider calls this month whose usage was not measured, and the most they can cost. Not part of ownProviderTotalCostUsd.'
         },
         practiceScriptTotal: {
             $ref: '#/components/schemas/LlmUsagePracticeScriptTotal',
@@ -21112,7 +21161,7 @@ export const WorkspaceLlmUsageReportSchema = {
         unpricedEventCount: {
             type: 'integer',
             format: 'int64',
-            description: 'Runs this month (job attempts and mentor turns, either purse) with at least one ledger row whose cost is unavailable because a rate is missing or the measurement is unverified, each counted once. A practice script row counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.'
+            description: 'Runs this month (job attempts and mentor turn attempts, either purse) with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified, and that has no upper bound, each counted once. A practice script call counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.'
         }
     },
     required: [
@@ -21122,11 +21171,13 @@ export const WorkspaceLlmUsageReportSchema = {
         'instanceBudgetVerdict',
         'instancePaused',
         'instanceTotalCostUsd',
+        'instanceUnmeasured',
         'month',
         'ownProviderBudgetVerdict',
         'ownProviderInUse',
         'ownProviderPaused',
         'ownProviderTotalCostUsd',
+        'ownProviderUnmeasured',
         'practiceScriptTotal',
         'unpricedEventCount'
     ]

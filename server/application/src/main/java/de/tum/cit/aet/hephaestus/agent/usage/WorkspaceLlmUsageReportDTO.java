@@ -27,17 +27,29 @@ public record WorkspaceLlmUsageReportDTO(
 
         @NonNull
         @Schema(
-                description = "This month's confirmed spend on shared (instance) models, in USD — the figure "
-                        + "instanceMonthlyBudgetUsd compares against. A floor, not the full total, while "
-                        + "unpricedEventCount is non-zero.")
+                description = "This month's confirmed spend on shared (instance) models, in USD. "
+                        + "instanceMonthlyBudgetUsd compares against it plus instanceUnmeasured.upperBoundUsd. A "
+                        + "floor, not the full total, while unpricedEventCount is non-zero.")
         BigDecimal instanceTotalCostUsd,
 
         @NonNull
         @Schema(
-                description = "This month's confirmed spend on this workspace's own connected provider(s), in USD — "
-                        + "the figure ownProviderMonthlyBudgetUsd compares against. Different money from "
-                        + "instanceTotalCostUsd: the two are never added together.")
+                description = "This month's confirmed spend on this workspace's own connected provider(s), in USD. "
+                        + "ownProviderMonthlyBudgetUsd compares against it plus ownProviderUnmeasured.upperBoundUsd. "
+                        + "Different money from instanceTotalCostUsd: the two are never added together.")
         BigDecimal ownProviderTotalCostUsd,
+
+        @NonNull
+        @Schema(
+                description = "Shared-model calls this month whose usage was not measured, and the most they can"
+                        + " cost. Not part of instanceTotalCostUsd.")
+        LlmUnmeasuredUsageDTO instanceUnmeasured,
+
+        @NonNull
+        @Schema(
+                description = "Own-provider calls this month whose usage was not measured, and the most they can"
+                        + " cost. Not part of ownProviderTotalCostUsd.")
+        LlmUnmeasuredUsageDTO ownProviderUnmeasured,
 
         @NonNull
         @Schema(
@@ -50,10 +62,11 @@ public record WorkspaceLlmUsageReportDTO(
 
         @NonNull
         @Schema(
-                description = "Runs this month (job attempts and mentor turns, either purse) with at least one "
-                        + "ledger row whose cost is unavailable because a rate is missing or the measurement is unverified, each counted once. A practice script row counts "
-                        + "toward the run of its review. Those rows are excluded from both totals above, so a "
-                        + "non-zero value means the real spend may be higher than shown.")
+                description = "Runs this month (job attempts and mentor turn attempts, either purse) with at least one "
+                        + "call whose cost is unavailable because a rate is missing or the measurement is unverified, "
+                        + "and that has no upper bound, each counted once. A practice script call counts toward the "
+                        + "run of its review. Those rows are excluded from both totals above, so a non-zero value "
+                        + "means the real spend may be higher than shown.")
         Long unpricedEventCount,
 
         @NonNull

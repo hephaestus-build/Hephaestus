@@ -58,9 +58,7 @@ public class MentorPersonDataCatalog implements PersonDataCatalog {
                         "mentor_turn",
                         "mentor_turn",
                         "t.conversation_id IN (" + OWN_CONVERSATIONS + ")",
-                        "id,conversation_id,surface,status,attempt,page_context,input_tokens,output_tokens,cached_tokens,"
-                                + "cache_write_tokens,reasoning_tokens,llm_calls,cost_usd,created_at,started_at,"
-                                + "finished_at",
+                        "id,conversation_id,surface,status,attempt,page_context,created_at,started_at,finished_at",
                         "id",
                         "",
                         -100),

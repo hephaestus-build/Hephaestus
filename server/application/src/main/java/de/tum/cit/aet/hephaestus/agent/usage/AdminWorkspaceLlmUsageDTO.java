@@ -27,15 +27,21 @@ public record AdminWorkspaceLlmUsageDTO(
 
         @NonNull
         @Schema(
-                description = "This month's confirmed spend on shared (instance) models, in USD — compared against "
-                        + "instanceMonthlyBudgetUsd.")
+                description = "This month's confirmed spend on shared (instance) models, in USD. "
+                        + "instanceMonthlyBudgetUsd compares against it plus instanceUnmeasured.upperBoundUsd.")
         BigDecimal instanceTotalCostUsd,
 
         @NonNull
         @Schema(
-                description = "This month's confirmed spend on the workspace's own connected provider(s), in USD — "
-                        + "compared against ownProviderMonthlyBudgetUsd.")
+                description = "This month's confirmed spend on the workspace's own connected provider(s), in USD. "
+                        + "ownProviderMonthlyBudgetUsd compares against it plus ownProviderUnmeasured.upperBoundUsd.")
         BigDecimal ownProviderTotalCostUsd,
+
+        @NonNull @Schema(description = "Shared-model calls whose usage was not measured, and the most they can cost.")
+        LlmUnmeasuredUsageDTO instanceUnmeasured,
+
+        @NonNull @Schema(description = "Own-provider calls whose usage was not measured, and the most they can cost.")
+        LlmUnmeasuredUsageDTO ownProviderUnmeasured,
 
         @NonNull
         @Schema(
@@ -46,8 +52,8 @@ public record AdminWorkspaceLlmUsageDTO(
         @NonNull
         @Schema(
                 description =
-                        "Runs this month, either purse: job attempts and mentor turns. Rows of models for practice"
-                                + " scripts are not runs.")
+                        "Runs this month, either purse: job attempts and mentor turn attempts. A practice script call"
+                                + " counts toward the run of its review.")
         Long events,
 
         @NonNull

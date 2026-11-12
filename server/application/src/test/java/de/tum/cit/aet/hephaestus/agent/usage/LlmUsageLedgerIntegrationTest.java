@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.within;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
@@ -10,18 +11,15 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPrice;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPriceRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
-import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptCallUsage;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
-import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
-import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
-import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -36,7 +34,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import org.assertj.core.api.SoftAssertions;
@@ -46,7 +43,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -59,6 +55,9 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private LlmUsageRecorder recorder;
+
+    @Autowired
+    private AgentRuns agentRuns;
 
     @Autowired
     private LlmUsageEventRepository usageRepository;
@@ -94,12 +93,6 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private LlmUsageRepricer repricer;
 
     @Autowired
-    private PracticeVersionService practiceVersions;
-
-    @Autowired
-    private PracticeRepository practices;
-
-    @Autowired
     private LlmUsageService llmUsageService;
 
     @Autowired
@@ -110,7 +103,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return createWorkspace(slug, "Usage " + slug, slug + "-org", AccountType.ORG, owner);
     }
 
-    private LlmUsageRecorder.LlmUsageSample sample(
+    private Sample sample(
             String jobType,
             UsageSourceType sourceType,
             UUID sourceId,
@@ -119,7 +112,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             long inputTokens,
             long outputTokens,
             LlmPriceSnapshot price) {
-        return new LlmUsageRecorder.LlmUsageSample(
+        return new Sample(
                 null,
                 jobType,
                 sourceType,
@@ -139,19 +132,18 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 Instant.now());
     }
 
-    private LlmUsageRecorder.LlmUsageSample agentSample(
-            UUID sourceId, int sourceAttempt, long inputTokens, LlmPriceSnapshot price) {
+    private Sample agentSample(UUID sourceId, int sourceAttempt, long inputTokens, LlmPriceSnapshot price) {
         return sample(
                 "PRACTICE_REVIEW", UsageSourceType.REVIEW_JOB, sourceId, sourceAttempt, "gpt-5", inputTokens, 0, price);
     }
 
-    private LlmUsageRecorder.LlmUsageSample agentSample(
+    private Sample agentSample(
             UUID sourceId,
             int sourceAttempt,
             long inputTokens,
             LlmPriceSnapshot price,
             MeasurementVerification verification) {
-        return new LlmUsageRecorder.LlmUsageSample(
+        return new Sample(
                 null,
                 "PRACTICE_REVIEW",
                 UsageSourceType.REVIEW_JOB,
@@ -171,8 +163,69 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 Instant.now());
     }
 
-    private void record(Long workspaceId, LlmUsageRecorder.LlmUsageSample sample) {
-        transactionTemplate.executeWithoutResult(status -> recorder.record(workspaceId, sample));
+    /** What a test asks the ledger to hold for one call. */
+    private record Sample(
+            @Nullable UUID reviewId,
+            String jobType,
+            UsageSourceType sourceType,
+            UUID sourceId,
+            int sourceAttempt,
+            String model,
+            long inputTokens,
+            long outputTokens,
+            long cacheReadTokens,
+            long cacheWriteTokens,
+            long reasoningTokens,
+            long searchUnits,
+            int totalCalls,
+            LlmPriceSnapshot price,
+            UsageProvenance provenance,
+            MeasurementVerification measurementVerification,
+            Instant occurredAt) {}
+
+    /**
+     * Writes the sample as the proxy writes one call: opened under a run's claim, then measured. An unverifiable
+     * sample ends without reported usage; a positive one then keeps the tokens a history row would hold.
+     */
+    private void record(Long workspaceId, Sample sample) {
+        UUID call = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            var run = agentRuns.enqueue(
+                    workspaceId, AgentRunKind.REVIEW, AgentRunBand.BATCH, "ledger:" + UUID.randomUUID(), null);
+            return recorder.open(new LlmUsageRecorder.OpenCall(
+                    workspaceId,
+                    run.id(),
+                    1,
+                    sample.jobType(),
+                    sample.sourceType(),
+                    sample.sourceId(),
+                    sample.sourceAttempt(),
+                    sample.reviewId(),
+                    ModelKind.CHAT,
+                    null,
+                    sample.model(),
+                    sample.price(),
+                    null));
+        }));
+        boolean verified = sample.measurementVerification() == MeasurementVerification.VERIFIED;
+        transactionTemplate.executeWithoutResult(status -> recorder.complete(
+                call,
+                workspaceId,
+                verified
+                        ? new LlmUsageRecorder.CallUsage(
+                                sample.inputTokens(),
+                                sample.outputTokens(),
+                                sample.cacheReadTokens(),
+                                sample.cacheWriteTokens(),
+                                sample.reasoningTokens(),
+                                sample.searchUnits())
+                        : null));
+        if (!verified)
+            jdbc.update(
+                    "UPDATE llm_usage_event SET input_tokens = ?, output_tokens = ?, search_units = ? WHERE id = ?",
+                    sample.inputTokens(),
+                    sample.outputTokens(),
+                    sample.searchUnits(),
+                    call);
     }
 
     /**
@@ -259,7 +312,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(job.getReviewId()).isNotEqualTo(job.getId());
         record(
                 workspace.getId(),
-                new LlmUsageRecorder.LlmUsageSample(
+                new Sample(
                         job.getReviewId(),
                         "PRACTICE_REVIEW",
                         UsageSourceType.REVIEW_JOB,
@@ -288,7 +341,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(event.getReasoningTokens()).isEqualTo(444);
         assertThat(event.getSearchUnits()).isZero();
         assertThat(event.getUnreportedCalls()).isZero();
-        assertThat(event.getTotalCalls()).isEqualTo(2);
+        assertThat(event.getTotalCalls()).isEqualTo(1);
         assertThat(event.getUsageProvenance()).isEqualTo(UsageProvenance.PROXY);
     }
 
@@ -359,8 +412,8 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void sourceAttemptIsTheIdempotencyBoundary() {
-        Workspace workspace = setupWorkspace("ledger-dup");
+    void shouldWriteOneRowForEachCallOfAnAttempt() {
+        Workspace workspace = setupWorkspace("ledger-calls");
         UUID sourceId = UUID.randomUUID();
         LlmPriceSnapshot price = pricedInstance("1.00", "0.00");
 
@@ -369,8 +422,43 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         record(workspace.getId(), agentSample(sourceId, 1, 1000, price));
 
         assertThat(eventsOf(workspace))
-                .extracting(LlmUsageEvent::getSourceAttempt)
-                .containsExactlyInAnyOrder(0, 1);
+                .extracting(LlmUsageEvent::getSourceAttempt, LlmUsageEvent::getTotalCalls)
+                .containsExactlyInAnyOrder(tuple(0, 1), tuple(0, 1), tuple(1, 1));
+    }
+
+    /** An upper bound is not spend: the alert fires when measured cost crosses the cap, not when an open call's bound does. */
+    @Test
+    void crossingTheBudgetOnMeasuredSpendFiresTheExhaustedCounterWhileAnOpenCallHoldsABoundAboveTheCap() {
+        Workspace workspace = setupWorkspace("ledger-cross-bound");
+        workspace.setMonthlyLlmBudgetUsd(new BigDecimal("1.50"));
+        workspaceRepository.save(workspace);
+        LlmPriceSnapshot price = pricedInstance("1000.00", "0.00"); // $1.00 per 1000 input tokens
+        transactionTemplate.executeWithoutResult(status -> {
+            var run = agentRuns.enqueue(
+                    workspace.getId(), AgentRunKind.REVIEW, AgentRunBand.BATCH, "ledger:" + UUID.randomUUID(), null);
+            recorder.open(new LlmUsageRecorder.OpenCall(
+                    workspace.getId(),
+                    run.id(),
+                    1,
+                    "PRACTICE_REVIEW",
+                    UsageSourceType.REVIEW_JOB,
+                    UUID.randomUUID(),
+                    0,
+                    null,
+                    ModelKind.CHAT,
+                    null,
+                    "gpt-5",
+                    price,
+                    new BigDecimal("5.00")));
+        });
+        double before = meterRegistry.counter("llm.budget.exhausted").count();
+
+        record(workspace.getId(), agentSample(UUID.randomUUID(), 0, 1000, price));
+        assertThat(meterRegistry.counter("llm.budget.exhausted").count()).isEqualTo(before);
+        record(workspace.getId(), agentSample(UUID.randomUUID(), 0, 1000, price));
+        record(workspace.getId(), agentSample(UUID.randomUUID(), 0, 1000, price));
+
+        assertThat(meterRegistry.counter("llm.budget.exhausted").count()).isEqualTo(before + 1);
     }
 
     @Test
@@ -600,69 +688,6 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @DisplayName("Applying a resolved price to an unpriced row")
     class ApplyResolvedPrice {
 
-        private void accumulate(ReviewJob job, PracticeScriptCallUsage call) {
-            transactionTemplate.executeWithoutResult(status -> {
-                if (practices
-                        .findByWorkspaceIdAndSlug(job.getWorkspaceId(), call.practiceSlug())
-                        .isEmpty()) {
-                    var workspace =
-                            workspaceRepository.findById(job.getWorkspaceId()).orElseThrow();
-                    var kind = new ItemKind("scm.pull_request");
-                    practiceVersions.create(new PracticeVersionService.NewPractice(
-                            workspace,
-                            call.practiceSlug(),
-                            kind,
-                            DefinitionTestFixtures.definition(call.practiceSlug(), "Explain the change."),
-                            null,
-                            0,
-                            null));
-                }
-                jobRepository.accumulatePracticeScriptUsage(job.getId(), job.getAttempt(), call);
-            });
-        }
-
-        private LlmUsageEvent scriptRow(
-                Workspace workspace, ReviewJob job, ModelKind kind, MeasurementVerification verification) {
-            LlmModelPrice price = new LlmModelPrice();
-            price.setModel(instanceModel(workspace.getWorkspaceSlug()));
-            price.setPricingMode(PricingMode.UNPRICED);
-            price.setEffectiveFrom(Instant.now().minusSeconds(60));
-            price = priceRepository.saveAndFlush(price);
-            record(
-                    workspace.getId(),
-                    new LlmUsageRecorder.LlmUsageSample(
-                            null,
-                            "PRACTICE_REVIEW",
-                            ScriptUsage.ledgerSourceType(kind),
-                            job.getId(),
-                            job.getAttempt(),
-                            "gpt-ledger",
-                            1_000_000,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            2,
-                            new LlmPriceSnapshot(
-                                    UsageFundingSource.INSTANCE,
-                                    UsagePricingState.UNPRICED,
-                                    price.getId(),
-                                    null,
-                                    null,
-                                    null,
-                                    null,
-                                    null),
-                            UsageProvenance.PROXY,
-                            verification,
-                            Instant.now()));
-            price.setPricingMode(PricingMode.PRICED);
-            price.setPer1mInputUsd(new BigDecimal("3.00"));
-            price.setPer1mOutputUsd(new BigDecimal("9.00"));
-            priceRepository.saveAndFlush(price);
-            return eventsOf(workspace).getFirst();
-        }
-
         private UnpricedLedgerRow projection(LlmUsageEvent row) {
             return new UnpricedLedgerRow(
                     row.getId(),
@@ -676,81 +701,12 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     row.getSearchUnits(),
                     row.getAppliedPriceId(),
                     row.getAppliedWorkspaceModelId(),
-                    row.getMeasurementVerification());
-        }
-
-        @ParameterizedTest
-        @EnumSource(ModelKind.class)
-        void shouldKeepPartialUsageUnpricedAfterSourceDeletionWhenSomeCallsHaveNoReceipt(ModelKind kind) {
-            Workspace workspace =
-                    setupWorkspace("reprice-partial-" + kind.name().toLowerCase(Locale.ROOT));
-            ReviewJob job = queuedJob(workspace, Instant.now(), null);
-            job.setStatus(ReviewJobStatus.RUNNING);
-            RuntimeJobTestData.save(transactionTemplate, jdbc, jobRepository, job);
-            accumulate(job, new PracticeScriptCallUsage(kind, "known", null, 1_000_000, 0, 0, 0, 0));
-            accumulate(job, new PracticeScriptCallUsage(kind, "unknown", null, 0, 0, 0, 0, 0, false));
-            LlmUsageEvent row = scriptRow(workspace, job, kind, MeasurementVerification.UNVERIFIABLE);
-
-            assertThat(row.getUnreportedCalls()).isEqualTo(1);
-            assertThat(usageRepository.findUnpricedInWindow(
-                            row.getOccurredAt().minusSeconds(60),
-                            row.getOccurredAt().plusSeconds(60),
-                            PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS)))
-                    .extracting(UnpricedLedgerRow::id)
-                    .doesNotContain(row.getId());
-
-            jobRepository.deleteById(job.getId());
-            jobRepository.flush();
-
-            assertThat(usageRepository.sumUnreportedPracticeScriptCalls(
-                            workspace.getId(),
-                            job.getId(),
-                            job.getAttempt(),
-                            row.getSourceType().name()))
-                    .isZero();
-            assertThat(usageRepository.findUnpricedInWindow(
-                            row.getOccurredAt().minusSeconds(60),
-                            row.getOccurredAt().plusSeconds(60),
-                            PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS)))
-                    .extracting(UnpricedLedgerRow::id)
-                    .doesNotContain(row.getId());
-            assertThat(repricer.reprice(projection(row)))
-                    .isEqualTo(LlmUsageRepricer.ResultOutcome.UNVERIFIED_MEASUREMENT);
-            LlmUsageEvent unchanged = reload(row.getId());
-            assertThat(unchanged.getPricingState()).isEqualTo(UsagePricingState.UNPRICED);
-            assertThat(unchanged.getCostUsd()).isNull();
-            assertThat(unchanged.getInputTokens()).isEqualTo(1_000_000);
-            assertThat(unchanged.getUnreportedCalls()).isEqualTo(1);
-        }
-
-        @ParameterizedTest
-        @EnumSource(ModelKind.class)
-        void shouldRepriceCompleteUsageWhenZeroIsReportedAndUnknownCallsBelongToAnotherKindOrAttempt(ModelKind kind) {
-            Workspace workspace =
-                    setupWorkspace("reprice-complete-" + kind.name().toLowerCase(Locale.ROOT));
-            ReviewJob job = queuedJob(workspace, Instant.now(), null);
-            job.setStatus(ReviewJobStatus.RUNNING);
-            RuntimeJobTestData.save(transactionTemplate, jdbc, jobRepository, job);
-            accumulate(job, new PracticeScriptCallUsage(kind, "earlier", null, 0, 0, 0, 0, 0, false));
-            RuntimeJobTestData.reclaim(jdbc, job);
-            accumulate(job, new PracticeScriptCallUsage(kind, "known", null, 1_000_000, 0, 0, 0, 0));
-            accumulate(job, new PracticeScriptCallUsage(kind, "reported-zero", null, 0, 0, 0, 0, 0));
-            ModelKind other = kind == ModelKind.CHAT ? ModelKind.EMBEDDING : ModelKind.CHAT;
-            accumulate(job, new PracticeScriptCallUsage(other, "unknown", null, 0, 0, 0, 0, 0, false));
-            LlmUsageEvent row = scriptRow(workspace, job, kind, MeasurementVerification.VERIFIED);
-
-            assertThat(row.getUnreportedCalls()).isZero();
-            assertThat(usageRepository.findUnpricedInWindow(
-                            row.getOccurredAt().minusSeconds(60),
-                            row.getOccurredAt().plusSeconds(60),
-                            PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS)))
-                    .extracting(UnpricedLedgerRow::id)
-                    .contains(row.getId());
-            assertThat(repricer.reprice(projection(row))).isEqualTo(LlmUsageRepricer.ResultOutcome.REPRICED);
-            LlmUsageEvent repriced = reload(row.getId());
-            assertThat(repriced.getPricingState()).isEqualTo(UsagePricingState.PRICED);
-            assertThat(repriced.getCostUsd()).isEqualByComparingTo("3.00");
-            assertThat(repriced.getUnreportedCalls()).isZero();
+                    row.getMeasurementVerification(),
+                    UsagePricingState.UNPRICED,
+                    null,
+                    null,
+                    null,
+                    null);
         }
 
         private LlmUsageEvent unpricedRow(String slug) {
@@ -799,7 +755,12 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     row.getSearchUnits(),
                     row.getAppliedPriceId(),
                     row.getAppliedWorkspaceModelId(),
-                    row.getMeasurementVerification());
+                    row.getMeasurementVerification(),
+                    UsagePricingState.UNPRICED,
+                    null,
+                    null,
+                    null,
+                    null);
         }
 
         @Test
@@ -843,9 +804,8 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
 
         /** The attempt's reranking measurement, frozen at the unpriced snapshot it was recorded with. */
-        private LlmUsageRecorder.LlmUsageSample rerankingSample(
-                ReviewJob job, long priceId, long inputTokens, long searchUnits, int calls) {
-            return new LlmUsageRecorder.LlmUsageSample(
+        private Sample rerankingSample(ReviewJob job, long priceId, long inputTokens, long searchUnits, int calls) {
+            return new Sample(
                     null,
                     "PRACTICE_REVIEW",
                     UsageSourceType.PRACTICE_SCRIPT_RERANKING,
@@ -873,48 +833,8 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     Instant.now());
         }
 
-        private List<UnpricedLedgerRow> workList(LlmUsageEvent row) {
-            return usageRepository.findUnpricedInWindow(
-                    row.getOccurredAt().minusSeconds(60),
-                    row.getOccurredAt().plusSeconds(60),
-                    PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS));
-        }
-
-        @Test
-        void shouldRefuseAStalePriceWhenALateRerankingCallAddedSearchUnitsAfterThePassReadTheRow() {
-            Workspace workspace = setupWorkspace("reprice-stale-search-units");
-            ReviewJob job = queuedJob(workspace, Instant.now(), null);
-            LlmUsageEvent row = rerankingRow(workspace, job, 1_000_000, 0);
-            long priceId = Objects.requireNonNull(row.getAppliedPriceId());
-            // The repricing pass reads the row: tokens it can price, no search units.
-            UnpricedLedgerRow read = workList(row).stream()
-                    .filter(candidate -> candidate.id().equals(row.getId()))
-                    .findFirst()
-                    .orElseThrow();
-            assertThat(read.searchUnits()).isZero();
-
-            // A late reranking call adds search units and no tokens; the attempt's row is projected again.
-            transactionTemplate.executeWithoutResult(
-                    status -> recorder.project(workspace.getId(), rerankingSample(job, priceId, 1_000_000, 5, 2)));
-            assertThat(reload(row.getId()).getSearchUnits()).isEqualTo(5);
-
-            // The pass prices what it read; the row it read no longer exists in that form.
-            assertThat(repricer.reprice(read)).isEqualTo(LlmUsageRepricer.ResultOutcome.STILL_UNPRICEABLE);
-            LlmUsageEvent unchanged = reload(row.getId());
-            assertThat(unchanged.getPricingState()).isEqualTo(UsagePricingState.UNPRICED);
-            assertThat(unchanged.getCostUsd()).isNull();
-            assertThat(unchanged.getInputTokens()).isEqualTo(1_000_000);
-            assertThat(unchanged.getSearchUnits()).isEqualTo(5);
-
-            // The next pass reads the new measurement: no price covers search units, so it stays unpriced.
-            UnpricedLedgerRow fresh = workList(row).stream()
-                    .filter(candidate -> candidate.id().equals(row.getId()))
-                    .findFirst()
-                    .orElseThrow();
-            assertThat(fresh.searchUnits()).isEqualTo(5);
-            assertThat(repricer.reprice(fresh)).isEqualTo(LlmUsageRepricer.ResultOutcome.STILL_UNPRICEABLE);
-            assertThat(reload(row.getId()).getPricingState()).isEqualTo(UsagePricingState.UNPRICED);
-            assertThat(reload(row.getId()).getCostUsd()).isNull();
+        private List<UnpricedLedgerRow> workList() {
+            return usageRepository.findUnpriced(PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS));
         }
 
         @Test
@@ -922,7 +842,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Workspace workspace = setupWorkspace("reprice-search-units-control");
             ReviewJob job = queuedJob(workspace, Instant.now(), null);
             LlmUsageEvent row = rerankingRow(workspace, job, 1_000_000, 0);
-            UnpricedLedgerRow read = workList(row).stream()
+            UnpricedLedgerRow read = workList().stream()
                     .filter(candidate -> candidate.id().equals(row.getId()))
                     .findFirst()
                     .orElseThrow();
@@ -942,7 +862,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             LlmUsageEvent row = rerankingRow(workspace, job, 0, 5);
             UnpricedLedgerRow read = projection(row);
 
-            assertThat(workList(row)).extracting(UnpricedLedgerRow::id).doesNotContain(row.getId());
+            assertThat(workList()).extracting(UnpricedLedgerRow::id).doesNotContain(row.getId());
             assertThat(repricer.reprice(read)).isEqualTo(LlmUsageRepricer.ResultOutcome.NO_TOKEN_EVIDENCE);
             assertThat(reprice(
                             row.getId(),
@@ -1049,10 +969,8 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(row.getAppliedPer1mInputUsd()).isEqualByComparingTo("3.00");
             assertThat(row.getAppliedPer1mOutputUsd()).isEqualByComparingTo("9.00");
 
-            List<UnpricedLedgerRow> worklist = usageRepository.findUnpricedInWindow(
-                    sample.occurredAt().minus(Duration.ofHours(1)),
-                    sample.occurredAt().plus(Duration.ofHours(1)),
-                    PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS));
+            List<UnpricedLedgerRow> worklist =
+                    usageRepository.findUnpriced(PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS));
             int updated = reprice(
                     row.getId(),
                     new BigDecimal("1.110000"),
@@ -1105,10 +1023,8 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             LlmUsageEvent historical = reload(original.getId());
             assertThat(historical.getMeasurementVerification()).isEqualTo(MeasurementVerification.UNKNOWN);
 
-            List<UnpricedLedgerRow> worklist = usageRepository.findUnpricedInWindow(
-                    sample.occurredAt().minus(Duration.ofHours(1)),
-                    sample.occurredAt().plus(Duration.ofHours(1)),
-                    PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS));
+            List<UnpricedLedgerRow> worklist =
+                    usageRepository.findUnpriced(PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS));
             int updated = reprice(
                     original.getId(),
                     new BigDecimal("1.110000"),
@@ -1160,7 +1076,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Instant occurredAt = Instant.now();
             record(
                     workspace.getId(),
-                    new LlmUsageRecorder.LlmUsageSample(
+                    new Sample(
                             null,
                             "PRACTICE_REVIEW",
                             UsageSourceType.REVIEW_JOB,
@@ -1199,10 +1115,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(stillUnknown.getPricingState()).isEqualTo(UsagePricingState.UNPRICED);
             assertThat(stillUnknown.getCostUsd()).isNull();
             assertThat(stillUnknown.getAppliedPriceId()).isEqualTo(42L);
-            assertThat(usageRepository.findUnpricedInWindow(
-                            occurredAt.minus(Duration.ofHours(1)),
-                            occurredAt.plus(Duration.ofHours(1)),
-                            PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS)))
+            assertThat(usageRepository.findUnpriced(PageRequest.of(0, LlmUsageRepricingSweeper.MAX_ROWS_PER_PASS)))
                     .extracting(UnpricedLedgerRow::id)
                     .contains(measured.getId())
                     .doesNotContain(unmeasured.getId());

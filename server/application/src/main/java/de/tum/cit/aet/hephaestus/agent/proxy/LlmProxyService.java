@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRequestBody.PreparedBody;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
@@ -25,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
@@ -48,6 +50,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.Connection;
 import reactor.netty.http.client.HttpClientRequest;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -320,6 +323,61 @@ class LlmProxyService {
         }
     }
 
+    /**
+     * The ledger row of one proxied call ({@link ProxyCallLedger}). It opens before the call's first upstream request
+     * and ends once: with the usage of a served answer, with nothing for a provider's error answer, which the provider
+     * does not bill, and unverifiable on every other way out, as a call whose provider may have billed it.
+     */
+    private final class CallRow {
+        private final ProxyRouting routing;
+        private final @Nullable PracticeScriptCall script;
+        private final ProxyCallLedger.Bound bound;
+        private @Nullable UUID id;
+        private LlmUsageRecorder.@Nullable CallUsage unmeasured;
+        private boolean ended;
+
+        /**
+         * @param inputBytes the bytes of the call's request, which bound its input tokens
+         * @param outputTokens the output tokens that bound the call; {@code null} when nothing bounds them
+         */
+        CallRow(
+                ProxyRouting routing,
+                @Nullable PracticeScriptCall script,
+                long inputBytes,
+                @Nullable Long outputTokens) {
+            this.routing = routing;
+            this.script = script;
+            this.bound = new ProxyCallLedger.Bound(inputBytes, outputTokens);
+        }
+
+        /** An upstream request leaves now; the first one opens the row. */
+        void sending() {
+            if (id == null) id = accounting.calls().open(routing, script, bound);
+            unmeasured = null;
+        }
+
+        /** The provider answered the last request with an error status. */
+        void answeredWithError() {
+            unmeasured = LlmUsageRecorder.CallUsage.NONE;
+        }
+
+        /** A served answer, with the usage it reported or {@code null} when it reported none. */
+        void measured(@Nullable ProxyTokenUsage usage) {
+            finish(usage == null ? null : ProxyCallLedger.usage(usage));
+        }
+
+        void end() {
+            finish(unmeasured);
+        }
+
+        private void finish(LlmUsageRecorder.@Nullable CallUsage usage) {
+            UUID call = id;
+            if (call == null || ended) return;
+            ended = true;
+            accounting.calls().complete(routing, call, usage);
+        }
+    }
+
     /** Sent by {@link #forwardWithinScanBudget} instead of an answer, when the call must take its place in line again. */
     private static final class AskAgain extends ResponseEntity<Void> {
         AskAgain() {
@@ -372,7 +430,17 @@ class LlmProxyService {
         }
         // A scan call may wait for its attempt's previous call, at most until the work deadline.
         var lease = scanCalls.acquire(routing, body);
+        CallRow row = null;
         try {
+            Long outputBound;
+            try {
+                outputBound = OutputLimit.bound(protocol, routing.outputLimit(), objectMapper.readTree(body));
+            } catch (OutputLimit.Refused unbounded) {
+                return ResponseEntity.badRequest().body(unbounded.getMessage());
+            } catch (JacksonException unreadable) {
+                return ResponseEntity.badRequest().body("Request body must be valid JSON");
+            }
+            row = new CallRow(routing, practiceScript, body.length, outputBound);
             if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
             // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
             // provider
@@ -381,10 +449,21 @@ class LlmProxyService {
             ResponseEntity<?> answer;
             do {
                 answer = forwardWithinScanBudget(
-                        routing, protocol, practiceScript, response, incomingHeaders, body, span, call, absorbUntil);
+                        routing,
+                        protocol,
+                        practiceScript,
+                        response,
+                        incomingHeaders,
+                        body,
+                        span,
+                        call,
+                        row,
+                        absorbUntil);
             } while (answer instanceof AskAgain);
             return answer;
         } finally {
+            // Before the scan lease: the attempt's next scan call reads this call's spend.
+            if (row != null) row.end();
             lease.ifPresent(ScanCallGuard.Lease::close);
         }
     }
@@ -398,6 +477,7 @@ class LlmProxyService {
             byte[] body,
             Span span,
             ProxyCallsInFlight.Call call,
+            CallRow row,
             Instant absorbUntil) {
         ProxyRouting.BilledAttempt attempt = routing.attempt();
         if (call.isCancelled()) {
@@ -439,7 +519,8 @@ class LlmProxyService {
             return ResponseEntity.status(502).body("Upstream target not permitted");
         }
 
-        PreparedBody prepared = ProxyRequestBody.prepare(objectMapper, body, credential.upstreamModelId(), protocol);
+        PreparedBody prepared = ProxyRequestBody.prepare(
+                objectMapper, body, credential.upstreamModelId(), protocol, routing.outputLimit());
         if (prepared == null) return ResponseEntity.badRequest().body("Request body must be a JSON object");
 
         URI upstreamUri;
@@ -501,6 +582,34 @@ class LlmProxyService {
             tap.onFirstContent(waited -> callPermits.firstToken(poolPermit, waited, instanceCredential));
             // Both requests below share the attempt's one deadline; the second one does not get a new window.
             Instant deadline = routing.workDeadline();
+            if (workTimeOver(routing)) {
+                permit.released();
+                return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
+            }
+            if (poolPermit.isRevoked()) {
+                permit.released();
+                return errors.providerError(
+                        HttpStatus.SERVICE_UNAVAILABLE, UPSTREAM_PAUSED, "The model capacity lease ended.");
+            }
+            try {
+                row.sending();
+            } catch (ProxyCallLedger.ClaimLost lost) {
+                permit.released();
+                return refusal(
+                        HttpStatus.CONFLICT, ProxyRefusal.ATTEMPT_ENDED, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+            } catch (ProxyCallLedger.BudgetHeld held) {
+                permit.released();
+                accounting.budgetHeld(routing);
+                return refusal(spendingRefusal, ProxyRefusal.BUDGET, budgetReachedMessage(routing.connectionScope()));
+            } catch (ProxyCallLedger.UnknownPractice unknown) {
+                permit.released();
+                accounting.recordUnattributedPracticeScript();
+                return ResponseEntity.badRequest().body("A practice script call must name a practice of its workspace");
+            } catch (RuntimeException failure) {
+                // The call never reached its provider, so the provider's health takes no failure from it.
+                permit.released();
+                throw failure;
+            }
             UpstreamResult upstream;
             try {
                 if (workTimeOver(routing)) {
@@ -515,6 +624,7 @@ class LlmProxyService {
                 upstream = callUpstream(exchange, prepared.body(), span, response, tap, deadline, reviewStream);
                 if (rejectedOurUsageRequest(upstream, prepared)) {
                     // Asking for usage is OUR addition, so refusing it must cost the caller nothing.
+                    row.answeredWithError();
                     log.info(
                             "Upstream rejected stream_options.include_usage for principal {}; retrying without it — "
                                     + "this call's tokens will not be metered",
@@ -535,6 +645,7 @@ class LlmProxyService {
                                 ProxyRefusal.CAPACITY,
                                 "Model capacity is unavailable for this retry.");
                     }
+                    row.sending();
                     upstream = callUpstream(
                             exchange,
                             prepared.withoutUsageRequestOrBody(),
@@ -549,7 +660,6 @@ class LlmProxyService {
                 permit.failed(e);
                 Bounds bounds = exchange.bounds();
                 poolPermit.outcome(bounds != null && ProxyStreamingUtils.readTimedOut(e) ? "stalled" : "error");
-                if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
                 if (bounds != null && ProxyStreamingUtils.readTimedOut(e)) {
                     callPermits.unanswered(poolPermit, true, tap.sinceSent(), instanceCredential);
                     accounting.recordError(routing.apiProtocol());
@@ -589,12 +699,12 @@ class LlmProxyService {
                 // The turn's end cancelled the call before the provider answered.
                 poolPermit.outcome("cancelled");
                 permit.released();
-                if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
                 accounting.recordError(routing.apiProtocol());
                 return ResponseEntity.status(502).body("Upstream provider unavailable");
             }
             poolPermit.outcome(outcome(upstream, tap, protocol));
             if (upstream.status() >= 200 && upstream.status() < 300) poolPermit.served(instanceCredential);
+            else row.answeredWithError();
             StreamOutcome ended = upstream.streamOutcome();
             if (ended != null
                     && upstream.status() >= 200
@@ -644,25 +754,17 @@ class LlmProxyService {
             var outcome = upstream.streamOutcome();
             if (outcome != null)
                 return settleStream(
-                        routing,
-                        attempt,
-                        practiceScript,
-                        span,
-                        upstream.status(),
-                        outcome,
-                        tap,
-                        call,
-                        poolPermit,
-                        protocol);
+                        routing, attempt, row, span, upstream.status(), outcome, tap, call, poolPermit, protocol);
             boolean served = upstream.status() >= 200 && upstream.status() < 300;
             if (!served) {
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, upstream.status()));
                 logUnserved(routing, upstream.status());
                 accounting.recordError(routing.apiProtocol());
             }
-            // Attributed now, not at the run's terminal write, so an execution that dies still bills.
+            // Measured now, not at the run's end, so an execution that dies still bills.
             if (upstream.body() != null && served) {
-                ProxyTokenUsage usage = accounting.recordUsage(attempt, practiceScript, protocol, upstream.body());
+                ProxyTokenUsage usage = accounting.readUsage(attempt, protocol, upstream.body());
+                row.measured(usage);
                 tagUsage(span, usage);
                 if (usage != null) {
                     poolPermit.tokens(usage);
@@ -684,7 +786,7 @@ class LlmProxyService {
     private @Nullable ResponseEntity<?> settleStream(
             ProxyRouting routing,
             ProxyRouting.BilledAttempt attempt,
-            @Nullable PracticeScriptCall practiceScript,
+            CallRow row,
             Span span,
             int status,
             ProxyStreamingUtils.StreamOutcome outcome,
@@ -714,9 +816,11 @@ class LlmProxyService {
         if (served) {
             if (tap.hasMalformedUsage()) {
                 accounting.recordMalformedUsage(attempt);
+                row.measured(null);
             } else {
-                ProxyTokenUsage usage = tap.observed();
-                accounting.recordUsage(attempt, practiceScript, usage);
+                ProxyTokenUsage usage = tap.finalUsage();
+                if (usage == null) accounting.recordMissingUsage(attempt);
+                row.measured(usage);
                 tagUsage(span, usage);
                 if (usage != null) {
                     poolPermit.tokens(usage);

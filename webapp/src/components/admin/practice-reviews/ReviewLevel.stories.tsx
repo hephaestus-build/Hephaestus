@@ -301,6 +301,7 @@ export const ActiveUsageNotRecordedYet: Story = {
 				outputTokens: 0,
 				costUsd: "0",
 				priced: true,
+				includesUpperBound: false,
 			},
 		}),
 	},
@@ -742,6 +743,7 @@ export const NoInputUsage: Story = {
 				outputTokens: 0,
 				costUsd: "0",
 				priced: true,
+				includesUpperBound: false,
 			},
 		}),
 	},
@@ -758,6 +760,28 @@ export const CostNotKnown: Story = {
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		panel.getByText("Not known: 1 attempt has no price");
+	},
+};
+
+// A cost that counts an unmeasured call's upper bound is a ceiling, never an exact cost.
+export const CostIncludesUpperBound: Story = {
+	args: {
+		review: ready({
+			...reviewDetailCompleted,
+			usage: {
+				...reviewUsageTwoAttempts,
+				includesUpperBound: true,
+				attempts: reviewUsageTwoAttempts.attempts.map((attempt) => ({
+					...attempt,
+					includesUpperBound: attempt.attempt === 1,
+				})),
+			},
+		}),
+	},
+	play: async () => {
+		const panel = await settledDrawerPanel();
+		await expect(factValue(panel, "Cost")).toHaveTextContent("Up to $0.04 over 2 attempts");
+		within(panel).getByText("up to $0.03, usage of some calls not measured");
 	},
 };
 

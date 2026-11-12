@@ -97,6 +97,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         event.setFundingSource(UsageFundingSource.INSTANCE);
         event.setOccurredAt(
                 month.atDay(day).atStartOfDay(ZoneOffset.UTC).toInstant().plusSeconds(3600));
+        event.setStartedAt(event.getOccurredAt());
         usageRepository.save(event);
     }
 
@@ -113,6 +114,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         event.setFundingSource(UsageFundingSource.WORKSPACE);
         event.setOccurredAt(
                 month.atDay(day).atStartOfDay(ZoneOffset.UTC).toInstant().plusSeconds(3600));
+        event.setStartedAt(event.getOccurredAt());
         usageRepository.save(event);
     }
 
@@ -129,6 +131,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         event.setFundingSource(UsageFundingSource.INSTANCE);
         event.setOccurredAt(
                 month.atDay(day).atStartOfDay(ZoneOffset.UTC).toInstant().plusSeconds(3600));
+        event.setStartedAt(event.getOccurredAt());
         usageRepository.save(event);
     }
 
@@ -145,6 +148,28 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         event.setFundingSource(UsageFundingSource.WORKSPACE);
         event.setOccurredAt(
                 month.atDay(day).atStartOfDay(ZoneOffset.UTC).toInstant().plusSeconds(3600));
+        event.setStartedAt(event.getOccurredAt());
+        usageRepository.save(event);
+    }
+
+    /** A call whose provider reported no usage: unpriced, at its upper bound. */
+    private void seedUnmeasuredEvent(Workspace workspace, UsageFundingSource purse, String bound, YearMonth month) {
+        LlmUsageEvent event = new LlmUsageEvent();
+        event.setId(UUID.randomUUID());
+        event.setWorkspaceId(workspace.getId());
+        event.setJobType("MENTOR_TURN");
+        event.setSourceType(UsageSourceType.MENTOR_TURN);
+        event.setSourceId(UUID.randomUUID());
+        event.setModel("unmeasured-model");
+        event.setCostUsd(null);
+        event.setCostBoundUsd(new BigDecimal(bound));
+        event.setPricingState(UsagePricingState.UNPRICED);
+        event.setMeasurementVerification(MeasurementVerification.UNVERIFIABLE);
+        event.setUnreportedCalls(1);
+        event.setFundingSource(purse);
+        event.setOccurredAt(
+                month.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant().plusSeconds(3600));
+        event.setStartedAt(event.getOccurredAt());
         usageRepository.save(event);
     }
 
@@ -368,6 +393,37 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .isEqualTo("UNVERIFIABLE")
                 .jsonPath("$.instancePaused")
                 .isEqualTo(true);
+    }
+
+    @Test
+    @WithAdminUser
+    void theReportShowsTheUpperBoundOfUnmeasuredCallsApartFromTheConfirmedSpend() {
+        Workspace workspace = setupWorkspaceWithAdmin("usage-unmeasured");
+        workspace.setMonthlyLlmBudgetUsd(new BigDecimal("2.00"));
+        workspace.setMonthlyByoLlmBudgetUsd(new BigDecimal("1.00"));
+        workspaceRepository.save(workspace);
+        seedEvent(workspace, "MENTOR_TURN", "1.00", CURRENT, 1);
+        seedUnmeasuredEvent(workspace, UsageFundingSource.INSTANCE, "0.40", CURRENT);
+        seedUnmeasuredEvent(workspace, UsageFundingSource.INSTANCE, "0.10", CURRENT);
+        seedUnmeasuredEvent(workspace, UsageFundingSource.WORKSPACE, "1.00", CURRENT);
+
+        WorkspaceLlmUsageReportDTO report = reportFor(workspace, CURRENT);
+
+        assertThat(report.instanceTotalCostUsd()).as("never an exact cost").isEqualByComparingTo("1.00");
+        assertThat(report.instanceUnmeasured().calls()).isEqualTo(2);
+        assertThat(report.instanceUnmeasured().upperBoundUsd()).isEqualByComparingTo("0.50");
+        assertThat(report.ownProviderTotalCostUsd()).isEqualByComparingTo("0");
+        assertThat(report.ownProviderUnmeasured().calls()).isEqualTo(1);
+        assertThat(report.ownProviderUnmeasured().upperBoundUsd()).isEqualByComparingTo("1.00");
+        assertThat(report.unpricedEventCount())
+                .as("a bounded call is not an unknown cost")
+                .isZero();
+        assertThat(report.instanceBudgetVerdict())
+                .as("the cap counts the bound, and the bound keeps it verifiable")
+                .isEqualTo(LlmBudgetVerdict.WITHIN);
+        assertThat(report.ownProviderBudgetVerdict()).isEqualTo(LlmBudgetVerdict.EXHAUSTED);
+        assertThat(report.ownProviderPaused()).isTrue();
+        assertThat(report.instancePaused()).isFalse();
     }
 
     @Test

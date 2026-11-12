@@ -180,7 +180,8 @@ record ResearchDataset(
      *   <li>{@code UNAVAILABLE}: withheld for the given reason.</li>
      * </ul>
      * {@code costUsd} is null unless every attempt is priced. {@code "0"} is a measured no-charge
-     * amount, not a missing one.
+     * amount, not a missing one. An attempt whose {@code includesUpperBound} is true adds the upper bound of a call
+     * whose usage was not measured: its cost is at most that amount, not an exact one.
      */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     record Usage(
@@ -206,7 +207,8 @@ record ResearchDataset(
             long cacheReadTokens,
             long cacheWriteTokens,
             @Nullable String costUsd,
-            String pricingState) {}
+            String pricingState,
+            boolean includesUpperBound) {}
 
     /**
      * {@code proof} is one of:

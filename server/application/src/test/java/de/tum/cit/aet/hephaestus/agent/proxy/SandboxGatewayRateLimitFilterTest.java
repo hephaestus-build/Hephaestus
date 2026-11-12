@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -37,12 +38,6 @@ class SandboxGatewayRateLimitFilterTest extends BaseUnitTest {
 
     @Mock
     private ProxyBudgetGate budgetGate;
-
-    @Mock
-    private ProxyUsageAccumulator usageAccumulator;
-
-    @Mock
-    private MentorTurnUsageAccumulator mentorTurnUsageAccumulator;
 
     private final Map<String, Bucket> buckets = new HashMap<>();
     private final AtomicInteger served = new AtomicInteger();
@@ -154,8 +149,7 @@ class SandboxGatewayRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(requestsPerMinute, Duration.ofMinutes(1)),
                 resolver,
                 OBJECT_MAPPER,
-                new ProxyAccounting(
-                        budgetGate, usageAccumulator, mentorTurnUsageAccumulator, meterRegistry, OBJECT_MAPPER),
+                new ProxyAccounting(budgetGate, mock(ProxyCallLedger.class), meterRegistry, OBJECT_MAPPER),
                 request -> TURN_BOOKKEEPING.equals(request.getRequestURI()));
     }
 
