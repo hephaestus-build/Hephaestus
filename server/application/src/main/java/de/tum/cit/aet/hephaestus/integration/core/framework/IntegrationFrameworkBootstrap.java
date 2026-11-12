@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.framework;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApprovalWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
@@ -23,14 +22,12 @@ import java.util.Set;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
  * Startup-time validation that every declared {@link Capability} has its required
  * per-kind SPI beans wired. Throws so misconfigurations surface immediately, not at
- * the first request. Gated to the application-server runtime role since webhook pods
- * intentionally wire only a subset of SPI beans.
+ * the first request.
  *
  * <p>Also the single place the review contract is enforced, via {@link ReviewContractValidator}; violations
  * are collected before anything throws so an operator sees every problem in one message.
@@ -53,7 +50,6 @@ public class IntegrationFrameworkBootstrap {
     private final List<IntegrationLifecycleListener> lifecycleListeners;
     private final ReviewContractValidator reviewContract;
     private final IntegrationKindRouting sharedWebhookRoutes;
-    private final boolean webhookRoleEnabled;
 
     public IntegrationFrameworkBootstrap(
             IntegrationManifestRegistry manifests,
@@ -67,8 +63,7 @@ public class IntegrationFrameworkBootstrap {
             List<ApprovalWriter> approvalChannels,
             List<IntegrationLifecycleListener> lifecycleListeners,
             ReviewContractValidator reviewContract,
-            IntegrationKindRouting sharedWebhookRoutes,
-            @Value("${" + RuntimeRole.WEBHOOK_PROPERTY + ":true}") boolean webhookRoleEnabled) {
+            IntegrationKindRouting sharedWebhookRoutes) {
         this.manifests = manifests;
         this.signatureVerifiers = signatureVerifiers;
         this.subjectKeyDerivers = subjectKeyDerivers;
@@ -81,7 +76,6 @@ public class IntegrationFrameworkBootstrap {
         this.lifecycleListeners = lifecycleListeners;
         this.reviewContract = reviewContract;
         this.sharedWebhookRoutes = sharedWebhookRoutes;
-        this.webhookRoleEnabled = webhookRoleEnabled;
     }
 
     @PostConstruct
@@ -131,7 +125,7 @@ public class IntegrationFrameworkBootstrap {
             // GitHub still self-validates at construction time in its WebhookSignatureVerifier.
             // A kind with its own receiver endpoint (GitLab's and Outline's connection routes)
             // verifies and derives there: its controller injects what it needs.
-            if (webhookRoleEnabled && sharedWebhookRoutes.routes(kind)) {
+            if (sharedWebhookRoutes.routes(kind)) {
                 require(
                         kind,
                         "WebhookSignatureVerifier",

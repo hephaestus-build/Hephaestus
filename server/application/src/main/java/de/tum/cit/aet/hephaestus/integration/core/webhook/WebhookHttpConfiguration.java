@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -10,7 +10,7 @@ import org.springframework.core.Ordered;
 
 /** HTTP guards for the public webhook ingress. Independent of NATS publisher availability. */
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnWebhookRole
+@ConditionalOnServerRole
 public class WebhookHttpConfiguration {
 
     @Bean

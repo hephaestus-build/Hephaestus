@@ -144,7 +144,7 @@ Use [Recover the live installation](#recover-the-live-installation) for a live r
 1. Upgrade the release with `postgresql.backup.restore.enabled=true`.
    Set `postgresql.backup.restore.time` to restore the database as it was at that time, for example `2026-10-24 18:00:00+00`.
    Leave it empty to restore the latest backup and every archived WAL segment.
-   While the setting is on, the server, the webhook role, the workers and PostgreSQL stop, and the backups pause.
+   While the setting is on, the server and PostgreSQL stop, and the backups pause.
 2. Wait for the Job `<release>-postgresql-backup-restore-<revision>` to complete:
 
    ```bash
@@ -154,7 +154,7 @@ Use [Recover the live installation](#recover-the-live-installation) for a live r
 
    The Job retries while PostgreSQL still shuts down.
 3. Keep the clone isolated before any application code starts. Deny provider and model egress independently of silent mode.
-4. Upgrade with `postgresql.backup.restore.enabled=false`, `migration.enabled=false`, and server, webhook and worker replica counts of zero.
+4. Upgrade with `postgresql.backup.restore.enabled=false`, `migration.enabled=false`, and a server replica count of zero.
    PostgreSQL alone replays the WAL up to the target.
    Readiness does not prove that replay finished. Wait until this command prints `f`:
 
@@ -209,7 +209,7 @@ Rehearse a restore on a copy of the instance before you need one.
 
 ### Reapply erasure decisions before processing resumes
 
-Keep the normal server, worker and webhook Deployments stopped while PostgreSQL and JetStream are restored.
+Keep the normal server Deployment stopped while PostgreSQL and JetStream are restored.
 Keep public access and provider egress closed.
 Before replay or normal processing, the server must pass the `erasure-recovery` startup profile.
 This profile runs the existing person-erasure service before lifecycle workers, scheduled tasks or broker consumers start.
@@ -233,7 +233,8 @@ A missing or invalid manifest, an unknown provider instance, or an incomplete er
 4. Complete the broker recovery checks before you start the server.
 5. Start the server with `erasure-recovery` added to its normal active profiles.
    Set `HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST` to the mounted path.
-   Set `AGENT_ENABLED=false` and `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false`.
+   Set `AGENT_ENABLED=false`.
+   Keep public access closed until normal operation resumes.
 6. Wait for server startup to complete.
    If it stops, keep the other Deployments stopped, correct the private input or unfinished erasure, and retry.
    Do not remove the recovery profile to bypass the failure.
@@ -317,8 +318,7 @@ jq -n --arg container "$server_container" --arg secret "$erasure_secret" '
       env: [
         {name: "SPRING_PROFILES_ACTIVE", value: "prod,erasure-recovery"},
         {name: "HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST", value: "/var/run/hephaestus/erasure-recovery/manifest.json"},
-        {name: "AGENT_ENABLED", value: "false"},
-        {name: "HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED", value: "false"}],
+        {name: "AGENT_ENABLED", value: "false"}],
       volumeMounts: [{name: "erasure-recovery", mountPath: "/var/run/hephaestus/erasure-recovery", readOnly: true}]}],
     volumes: [{name: "erasure-recovery", secret: {secretName: $secret, defaultMode: 288}}]
   }}}}' > "$server_recovery_dir/recovery-patch.json"

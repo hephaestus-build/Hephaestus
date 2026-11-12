@@ -14,8 +14,8 @@ import org.springframework.boot.mail.autoconfigure.MailSenderAutoConfiguration;
  * <p>{@link org.springframework.scheduling.annotation.EnableScheduling @EnableScheduling} is
  * intentionally NOT declared here — it lives in
  * {@link de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig} which is gated by
- * {@link de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole#SERVER_PROPERTY}, so the server and
- * webhook containers fire no {@code @Scheduled} method. See ADR 0008.
+ * {@link de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole#SERVER_PROPERTY}, so a context that switches the server
+ * role off fires no {@code @Scheduled} method.
  *
  * <p>With the {@value DatabaseMigration#PROFILE} profile active, the process migrates the database and exits
  * instead ({@link DatabaseMigration}).

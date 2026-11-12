@@ -17,7 +17,7 @@ import org.springframework.validation.annotation.Validated;
  * buffers the body — {@code server.tomcat.max-http-post-size} only enforces on form-encoded
  * payloads, so we don't rely on it for JSON webhooks.
  *
- * @param secret Shared secret that verifies GitHub webhook signatures. The server and webhook roles require at least
+ * @param secret Shared secret that verifies GitHub webhook signatures. The server requires at least
  *     32 printable ASCII characters without spaces, also on an instance without GitHub. Must differ from both routing
  *     secrets.
  */

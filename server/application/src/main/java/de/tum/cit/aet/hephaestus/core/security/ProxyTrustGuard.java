@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.security;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -21,7 +20,6 @@ import org.springframework.stereotype.Component;
  * <p>Throws {@link IllegalStateException} from a non-swallowed {@code @PostConstruct}.
  */
 @Component
-@ReceiverComponent
 public class ProxyTrustGuard {
 
     private final Environment environment;

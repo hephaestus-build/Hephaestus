@@ -119,7 +119,10 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
         if (!runs.isCurrent(run.fence().run(), run.fence().epoch()))
             throw new AttemptLeaseConflict("This sandbox's claim no longer holds its run");
         var attempt = kind.attempt(run).orElseThrow(JobTokenAuthenticationProvider::invalid);
-        return new JobTokenAuthentication(ProxyIdentity.of(attempt), Set.of(AttemptTokenIssuer.LLM_PROXY_SCOPE), null);
+        var authentication =
+                new JobTokenAuthentication(ProxyIdentity.of(attempt), Set.of(AttemptTokenIssuer.LLM_PROXY_SCOPE), null);
+        authentication.setDetails(run);
+        return authentication;
     }
 
     /**

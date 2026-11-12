@@ -107,7 +107,7 @@ class JetStreamPublisherTopologyTest {
     void webhookOn_natsOn_slackOff_webhookConfigOwnsTheSinglePublisher() {
         withNats(baseRunner())
                 .withPropertyValues(
-                        "hephaestus.runtime.webhook.enabled=true", "hephaestus.integration.slack.enabled=false")
+                        "hephaestus.runtime.server.enabled=true", "hephaestus.integration.slack.enabled=false")
                 .run(context -> assertPublisherCount(context, 1));
     }
 
@@ -115,7 +115,7 @@ class JetStreamPublisherTopologyTest {
     void webhookOn_natsOn_slackOn_stillExactlyOnePublisher() {
         withNats(baseRunner())
                 .withPropertyValues(
-                        "hephaestus.runtime.webhook.enabled=true", "hephaestus.integration.slack.enabled=true")
+                        "hephaestus.runtime.server.enabled=true", "hephaestus.integration.slack.enabled=true")
                 .run(context -> assertPublisherCount(context, 1));
     }
 
@@ -123,7 +123,7 @@ class JetStreamPublisherTopologyTest {
     void webhookOff_slackOn_natsOn_noPublisher() {
         withNats(baseRunner())
                 .withPropertyValues(
-                        "hephaestus.runtime.webhook.enabled=false", "hephaestus.integration.slack.enabled=true")
+                        "hephaestus.runtime.server.enabled=false", "hephaestus.integration.slack.enabled=true")
                 .run(context -> assertPublisherCount(context, 0));
     }
 
@@ -131,7 +131,7 @@ class JetStreamPublisherTopologyTest {
     void webhookOff_slackOff_natsOn_noPublisher() {
         withNats(baseRunner())
                 .withPropertyValues(
-                        "hephaestus.runtime.webhook.enabled=false", "hephaestus.integration.slack.enabled=false")
+                        "hephaestus.runtime.server.enabled=false", "hephaestus.integration.slack.enabled=false")
                 .run(context -> assertPublisherCount(context, 0));
     }
 
@@ -141,7 +141,7 @@ class JetStreamPublisherTopologyTest {
         for (String[] combo : combos) {
             baseRunner()
                     .withPropertyValues(
-                            "hephaestus.runtime.webhook.enabled=" + combo[0],
+                            "hephaestus.runtime.server.enabled=" + combo[0],
                             "hephaestus.integration.slack.enabled=" + combo[1])
                     .run(context -> assertPublisherCount(context, 0));
         }

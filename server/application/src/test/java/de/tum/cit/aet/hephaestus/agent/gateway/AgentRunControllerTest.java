@@ -116,7 +116,10 @@ class AgentRunControllerTest extends BaseUnitTest {
         assertThat(logContext.get())
                 .as("the kind's records name the run that the resolver checked")
                 .containsEntry(StructuredLogKeys.RUN_ID, RUN.toString())
-                .containsEntry(StructuredLogKeys.RUN_EPOCH, "3");
+                .containsEntry(StructuredLogKeys.RUN_EPOCH, "3")
+                .containsEntry(StructuredLogKeys.SUBJECT_KEY, SUBJECT)
+                .containsEntry(StructuredLogKeys.WORKSPACE_ID, Long.toString(WORKSPACE))
+                .containsEntry(StructuredLogKeys.REVIEW_ID, "42");
     }
 
     @Test

@@ -58,7 +58,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("core.auth.webauthn.TestInstanceAssuranceIntegrationTest", "test-instance-assurance"),
             assignment("integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest", "slack-signed"),
             assignment("integration.core.sync.api.SyncControllerIntegrationTest", "sync-controller-focused"),
-            assignment("integration.core.webhook.WebhookRoleContextIntegrationTest", "webhook-role"),
             assignment("integration.outline.OutlineFrameworkRegistrationIntegrationTest", "outline-enabled"),
             assignment(
                     "integration.outline.collection.OutlineCollectionAdminControllerIntegrationTest",
@@ -172,7 +171,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "gitlab-token-lifecycle",
                     "real credential storage, lifecycle locks and attention with only"
                             + " irreversible upstream token rotation mocked"),
-            Map.entry("webhook-role", "the webhook role alone, with real JetStream and no database"),
             Map.entry("outline-enabled", "enabled Outline integration wiring"),
             Map.entry(
                     "github-installation-adoption",
@@ -279,7 +277,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> SPRING_BOOT_TESTS = names(
             "StartupBudgetIntegrationTest",
             "AgentRuntimeOffIntegrationTest",
-            "integration.core.webhook.WebhookRoleContextIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
 
@@ -300,7 +297,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "core.auth.clientsession.ClientSessionMigratedSchemaTest",
             "integration.schema.ProductionSchemaContractIntegrationTest",
-            "integration.core.webhook.WebhookRoleContextIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
             "practices.feedback.FeedbackPrivateHistoryIntegrationTest",
             "testconfig.BaseIntegrationTest",

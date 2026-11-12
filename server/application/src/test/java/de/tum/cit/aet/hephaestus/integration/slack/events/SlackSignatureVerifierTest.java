@@ -14,7 +14,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -48,20 +47,16 @@ class SlackSignatureVerifierTest extends BaseUnitTest {
                 .hasMessageContaining("signing-secret is blank");
     }
 
-    private static ApplicationContextRunner slackEnabledWithRoles(boolean server, boolean webhook) {
+    private static ApplicationContextRunner slackEnabled() {
         return new ApplicationContextRunner()
                 .withUserConfiguration(SlackSignatureVerifier.class)
-                .withPropertyValues(
-                        "hephaestus.integration.slack.enabled=true",
-                        RuntimeRole.SERVER_PROPERTY + "=" + server,
-                        RuntimeRole.WEBHOOK_PROPERTY + "=" + webhook);
+                .withPropertyValues("hephaestus.integration.slack.enabled=true", RuntimeRole.SERVER_PROPERTY + "=true");
     }
 
-    @ParameterizedTest(name = "server={0}, webhook={1}")
-    @CsvSource({"true,false", "false,true", "true,true"})
-    @DisplayName("a process that receives Slack verifies it, on either role")
-    void serverOrWebhookRoleCreatesTheVerifier(boolean server, boolean webhook) {
-        slackEnabledWithRoles(server, webhook)
+    @Test
+    @DisplayName("the server receives Slack and verifies it")
+    void serverRoleCreatesTheVerifier() {
+        slackEnabled()
                 .withPropertyValues("hephaestus.integration.slack.signing-secret=" + SECRET)
                 .run(context -> assertThat(context).hasSingleBean(SlackSignatureVerifier.class));
     }
@@ -69,7 +64,7 @@ class SlackSignatureVerifierTest extends BaseUnitTest {
     @Test
     @DisplayName("the server role refuses to boot with Slack enabled and no signing secret")
     void serverRoleWithoutSigningSecretFailsFast() {
-        slackEnabledWithRoles(true, false)
+        slackEnabled()
                 .run(context -> assertThat(context)
                         .getFailure()
                         .rootCause()

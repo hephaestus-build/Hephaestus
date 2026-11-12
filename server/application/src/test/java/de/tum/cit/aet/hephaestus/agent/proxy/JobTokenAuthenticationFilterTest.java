@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import java.time.Instant;
 import java.util.Map;
@@ -145,6 +146,40 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         assertThat(authenticated.getPrincipal().description()).isEqualTo("mentor-turn:" + jwt.id());
         assertThat(authenticated.getDetails()).isEqualTo(jwt);
         verifyNoInteractions(jobs);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldCorrelateATurnAttemptWithoutInheritingReviewFields(boolean fail) throws Exception {
+        var jwt = turnJwt();
+        when(verifier.verify("turn-token")).thenReturn(jwt);
+        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(mock(MentorTurn.class)));
+        when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.epoch(), jwt.runId()))
+                .thenReturn(true);
+        var run = mock(AgentRun.class);
+        when(run.getConcurrencyKey()).thenReturn("conversation:42");
+        when(runs.find(new AgentRunRef(jwt.runId(), jwt.workspaceId()))).thenReturn(Optional.of(run));
+        var previous = Map.of("review.id", "enclosing-review", "job.id", "enclosing-job", "job.attempt", "7");
+        MDC.setContextMap(previous);
+        var response = new MockHttpServletResponse();
+        FilterChain chain = (incoming, outgoing) -> {
+            assertThat(MDC.getCopyOfContextMap())
+                    .containsEntry("workspace.id", Long.toString(jwt.workspaceId()))
+                    .containsEntry("run.id", jwt.runId().toString())
+                    .containsEntry("run.epoch", Integer.toString(jwt.epoch()))
+                    .containsEntry("subject.key", "conversation:42")
+                    .doesNotContainKeys("review.id", "job.id", "job.attempt");
+            if (fail) throw new ServletException("Request failed");
+        };
+        if (fail) {
+            assertThatThrownBy(() ->
+                            filter.doFilter(request("/internal/llm/responses", "Bearer turn-token"), response, chain))
+                    .isInstanceOf(ServletException.class);
+        } else {
+            filter.doFilter(request("/internal/llm/responses", "Bearer turn-token"), response, chain);
+            assertThat(response.getStatus()).isEqualTo(200);
+        }
+        assertThat(MDC.getCopyOfContextMap()).isEqualTo(previous);
     }
 
     @Test

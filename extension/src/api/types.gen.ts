@@ -792,7 +792,7 @@ export type ConfigurationFact = {
 	explanation: string;
 	id: string;
 	requirement: "REQUIRED" | "RECOMMENDED" | "OPTIONAL";
-	roles: Array<"SERVER" | "WEBHOOK">;
+	roles: Array<"SERVER">;
 	status: "SATISFIED" | "ACTION_REQUIRED" | "NOT_CONFIGURED" | "NOT_APPLICABLE";
 	subject: string;
 };
@@ -6016,7 +6016,7 @@ export type RunningRelease = {
 	/**
 	 * the runtime roles this process booted with
 	 */
-	roles: Array<"SERVER" | "WEBHOOK">;
+	roles: Array<"SERVER">;
 	/**
 	 * the version the deployment passed as <code>APP_VERSION</code>
 	 */

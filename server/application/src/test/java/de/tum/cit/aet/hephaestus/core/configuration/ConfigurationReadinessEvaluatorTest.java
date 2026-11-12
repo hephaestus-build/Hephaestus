@@ -86,7 +86,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSatisfyAllChecksForCombinedRole() {
+    void shouldSatisfyAllChecksForTheServer() {
         assertThat(evaluateReadiness(validProperties(), true))
                 .allMatch(fact -> Set.of(ConfigurationStatus.SATISFIED, ConfigurationStatus.NOT_CONFIGURED)
                         .contains(fact.status()));
@@ -94,7 +94,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
 
     @Test
     void shouldRequireAnExplicitApiIssuerOnTheServer() {
-        var properties = role(false, false);
+        var properties = role(false);
         properties.remove("hephaestus.auth.issuer");
 
         assertStatus(evaluateReadiness(properties, true), "external.api-origin", ConfigurationStatus.ACTION_REQUIRED);
@@ -111,7 +111,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
                 "https://api.example.test#api"
             })
     void shouldRejectAnApiIssuerThatIsNotARootHttpsOrigin(String issuer) {
-        var properties = role(false, false);
+        var properties = role(false);
         properties.put("hephaestus.auth.issuer", issuer);
 
         assertStatus(evaluateReadiness(properties, true), "external.api-origin", ConfigurationStatus.ACTION_REQUIRED);
@@ -125,7 +125,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
 
     @Test
     void shouldApplyServerChecksAndExcludeAgentChecksWithoutAgentJobs() {
-        Map<String, Object> properties = role(false, false);
+        Map<String, Object> properties = role(false);
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
         assertStatus(facts, "auth.login-provider", ConfigurationStatus.SATISFIED);
         assertStatus(facts, "llm.proxy-egress", ConfigurationStatus.NOT_APPLICABLE);
@@ -134,44 +134,11 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
 
     @Test
     void shouldApplyAgentChecksOnAServerWithAgentJobs() {
-        List<ConfigurationFactDTO> facts = evaluateReadiness(role(true, false), true);
+        List<ConfigurationFactDTO> facts = evaluateReadiness(role(true), true);
         assertStatus(facts, "llm.proxy-egress", ConfigurationStatus.SATISFIED);
         assertStatus(facts, "agent.image-contract", ConfigurationStatus.SATISFIED);
         assertStatus(facts, "auth.login-provider", ConfigurationStatus.SATISFIED);
         assertStatus(facts, "external.api-origin", ConfigurationStatus.SATISFIED);
-    }
-
-    @Test
-    void shouldApplyWebhookRoleChecksAndExcludeLoginAndAgentChecks() {
-        Map<String, Object> properties = role(false, true);
-        properties.put("hephaestus.runtime.server.enabled", false);
-        properties.put("hephaestus.auth.issuer", "http://localhost:8080/api");
-        List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
-        assertStatus(facts, "webhook.shared-secret", ConfigurationStatus.SATISFIED);
-        assertStatus(facts, "webhook.routing-secret", ConfigurationStatus.SATISFIED);
-        assertStatus(facts, "auth.login-provider", ConfigurationStatus.NOT_APPLICABLE);
-        assertStatus(facts, "agent.image-contract", ConfigurationStatus.NOT_APPLICABLE);
-        assertStatus(facts, "database.url", ConfigurationStatus.NOT_APPLICABLE);
-        assertStatus(facts, "security.credential-encryption", ConfigurationStatus.NOT_APPLICABLE);
-        assertStatus(facts, "security.value-encryption", ConfigurationStatus.NOT_APPLICABLE);
-        assertStatus(facts, "external.api-origin", ConfigurationStatus.NOT_APPLICABLE);
-    }
-
-    @Test
-    void shouldStartAProductionWebhookRoleWithoutDatabaseSettingsOrEncryptionKeys() {
-        Map<String, Object> properties = role(false, true);
-        properties.put("hephaestus.runtime.server.enabled", false);
-        properties.remove("spring.datasource.url");
-        properties.remove("spring.datasource.username");
-        properties.remove("spring.datasource.password");
-        properties.remove("hephaestus.security.encryption-key");
-        properties.remove("hephaestus.security.credential-encryption-key");
-        MockEnvironment environment = environment(properties);
-        environment.setActiveProfiles("prod");
-
-        assertThatCode(() -> new ProductionConfigurationEnvironmentPostProcessor()
-                        .postProcessEnvironment(environment, new SpringApplication(Object.class)))
-                .doesNotThrowAnyException();
     }
 
     @ParameterizedTest
@@ -194,7 +161,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
 
     @Test
     void shouldRejectRoleSpecificNegativeCases() {
-        Map<String, Object> agents = role(true, false);
+        Map<String, Object> agents = role(true);
         agents.put("hephaestus.sync.nats.enabled", false);
         agents.put("hephaestus.llm.egress.allow-loopback", true);
         agents.put("hephaestus.agent.image.reference", "moving-tag");
@@ -346,12 +313,10 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         return anchors;
     }
 
-    /** One role: the server, with or without agent jobs, or the webhook receiver. */
-    private static Map<String, Object> role(boolean agentJobs, boolean webhook) {
+    /** The server, with or without agent jobs. */
+    private static Map<String, Object> role(boolean agentJobs) {
         Map<String, Object> properties = validProperties();
-        properties.put("hephaestus.runtime.server.enabled", !webhook);
         properties.put("hephaestus.agent.enabled", agentJobs);
-        properties.put("hephaestus.runtime.webhook.enabled", webhook);
         return properties;
     }
 
@@ -359,7 +324,6 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         Map<String, Object> properties = new HashMap<>();
         properties.put("hephaestus.runtime.server.enabled", true);
         properties.put("hephaestus.agent.enabled", true);
-        properties.put("hephaestus.runtime.webhook.enabled", true);
         properties.put("spring.datasource.url", "jdbc:postgresql://database/hephaestus");
         properties.put("spring.datasource.username", "hephaestus");
         properties.put("spring.datasource.password", "database-secret");

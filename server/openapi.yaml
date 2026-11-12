@@ -13575,7 +13575,6 @@ components:
             type: string
             enum:
             - SERVER
-            - WEBHOOK
         status:
           type: string
           enum:
@@ -24259,7 +24258,6 @@ components:
             type: string
             enum:
             - SERVER
-            - WEBHOOK
         version:
           type: string
           description: the version the deployment passed as <code>APP_VERSION</code>

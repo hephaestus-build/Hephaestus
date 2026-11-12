@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -68,24 +69,27 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
                 JobTokenAuthenticationFilter::convert);
         setSuccessHandler((request, response, authentication) -> {
             var identity = ((JobTokenAuthentication) authentication).getPrincipal();
-            var caller = identity.job() == null ? identity.turn() : identity.job();
-            if (caller == null) return;
-            MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(caller.workspaceId()));
-            MDC.put(StructuredLogKeys.RUN_ID, caller.runId().toString());
-            MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(caller.epoch()));
-            MDC.remove(StructuredLogKeys.REVIEW_ID);
-            MDC.remove(StructuredLogKeys.SUBJECT_KEY);
-            MDC.remove(StructuredLogKeys.JOB_ATTEMPT);
-            MDC.remove(StructuredLogKeys.JOB_ID);
-            if (caller.caller() == ProxyAttempt.Caller.REVIEW) {
-                MDC.put(StructuredLogKeys.JOB_ID, caller.id().toString());
-                MDC.put(StructuredLogKeys.JOB_ATTEMPT, Integer.toString(ReviewRunKind.attempt(caller.epoch())));
+            if (authentication.getDetails() instanceof SandboxRun run) {
+                SandboxRunArgumentResolver.setLogContext(run);
+            } else {
+                var caller = identity.job() == null ? identity.turn() : identity.job();
+                if (caller != null) {
+                    MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(caller.workspaceId()));
+                    MDC.put(StructuredLogKeys.RUN_ID, caller.runId().toString());
+                    MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(caller.epoch()));
+                    if (caller.caller() == ProxyAttempt.Caller.REVIEW)
+                        MDC.put(StructuredLogKeys.JOB_ATTEMPT, Integer.toString(ReviewRunKind.attempt(caller.epoch())));
+                    runs.find(new AgentRunRef(caller.runId(), caller.workspaceId()))
+                            .ifPresent(run -> {
+                                String subject = run.getConcurrencyKey();
+                                MDC.put(StructuredLogKeys.SUBJECT_KEY, subject);
+                                if (subject.startsWith("review:"))
+                                    MDC.put(StructuredLogKeys.REVIEW_ID, subject.substring(7));
+                            });
+                }
             }
-            runs.find(new AgentRunRef(caller.runId(), caller.workspaceId())).ifPresent(run -> {
-                String subject = run.getConcurrencyKey();
-                MDC.put(StructuredLogKeys.SUBJECT_KEY, subject);
-                if (subject.startsWith("review:")) MDC.put(StructuredLogKeys.REVIEW_ID, subject.substring(7));
-            });
+            if (identity.job() != null)
+                MDC.put(StructuredLogKeys.JOB_ID, identity.job().id().toString());
         });
         setFailureHandler((request, response, failure) -> {
             if (failure instanceof JobTokenAuthenticationProvider.AttemptLeaseConflict) {
@@ -104,6 +108,7 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         var previous = MDC.getCopyOfContextMap();
+        for (String key : SandboxTokenAuthenticationFilter.LOG_CONTEXT_KEYS) MDC.remove(key);
         try {
             super.doFilterInternal(request, response, chain);
         } finally {

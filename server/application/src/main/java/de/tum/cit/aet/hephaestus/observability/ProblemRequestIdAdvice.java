@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.observability;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.MethodParameter;
@@ -15,7 +14,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
 /** Names the request in every problem that a controller or Spring MVC returns ({@link RequestReference}). */
 @RestControllerAdvice
-@ReceiverComponent
 public class ProblemRequestIdAdvice implements ResponseBodyAdvice<Object> {
 
     @Override

@@ -66,9 +66,8 @@ class WebhookProducerWiringTest extends BaseUnitTest {
 
     @Test
     void contributesNoneOfThemWhereTheRoleIsOff() {
-        // The control: application-server runs with this false, so a bound delivered there configures
-        // nothing. scripts/check-env-roles.mjs is the other half of that check.
-        runner.withPropertyValues(RuntimeRole.WEBHOOK_PROPERTY + "=false").run(context -> {
+        // The control: a context without the server role configures none of the receiver's beans.
+        runner.withPropertyValues(RuntimeRole.SERVER_PROPERTY + "=false").run(context -> {
             assertThat(context).hasNotFailed();
             for (String bean : WEBHOOK_ROLE_BEANS) {
                 assertThat(context).doesNotHaveBean(bean);

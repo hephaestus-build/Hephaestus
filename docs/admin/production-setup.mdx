@@ -79,23 +79,11 @@ Slack opens Home when someone selects the app.
 Hephaestus uses Home for account linking and privacy controls.
 Hephaestus uses the Messages tab, which is the DM with the app.
 
-Events and interactivity go to different roles.
-Events are published to the event stream, and the webhook role receives them.
-A button press changes consent or erasure state, and that change is committed before Slack gets its acknowledgement.
-Only the application-server role can commit it, so interactivity goes there.
-The webhook role does not answer `/webhooks/slack/interactivity`.
-
-Route this path to the webhook role:
-
-- `/webhooks/slack`.
-
-Route this exact path to the application-server role, without stripping its prefix:
-
-- `/webhooks/slack/interactivity`.
-
-Its rule must outrank the webhook role's `/webhooks` prefix rule.
-The Helm chart routes it this way on the public host.
-If the webhook receiver has a separate public host, point the **Interactivity request URL** at a host that reaches the application server.
+The server receives both.
+Events are published to the event stream.
+A button press changes consent or erasure state, and the server commits that change before Slack gets its acknowledgement.
+Route `/webhooks/slack` and `/webhooks/slack/interactivity` to the server, without stripping their prefix.
+The Helm chart routes all of `/webhooks` this way on the public host.
 
 Route OAuth and account-linking paths to the application-server role:
 
@@ -196,19 +184,18 @@ A workspace admin cannot approve a new operator by entering its URL.
 | Variable                                         | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED`         | Enables Outline beans for connect, sync, webhook, and content projection. Every bean requires it. Defaults to **off**. Without it, there is no admin surface, sync, or webhook verification.                                                                                                                                                                                                                                                                                                                                          |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | Comma-separated publicly routable HTTPS origins approved by the instance operator, such as `https://wiki.example.com`. Empty by default. No paths, queries, fragments, credentials, or private/site-local addresses are permitted. An invalid entry fails startup. The server and webhook roles need the same value. After a change, restart all roles. An origin removal blocks its connections, API sync, webhook collection, evidence projection, and identity linking. Its mirror remains until workspace disconnection. |
+| `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | Comma-separated publicly routable HTTPS origins approved by the instance operator, such as `https://wiki.example.com`. Empty by default. No paths, queries, fragments, credentials, or private/site-local addresses are permitted. An invalid entry fails startup. After a change, restart the server. An origin removal blocks its connections, API sync, webhook collection, evidence projection, and identity linking. Its mirror remains until workspace disconnection. |
 | `OUTLINE_OAUTH_BASE_URL`                         | Outline instance for account linking, such as `https://wiki.example.com`. **Required whenever `OUTLINE_OAUTH_CLIENT_ID` is set**. Self-hosted Outline has no default origin. If blank or invalid, the provider seed is skipped. The reason appears at `ERROR` with the variable name. The app still boots, but has no linking button.                                                                                                                                                                                                 |
 | `OUTLINE_OAUTH_CLIENT_ID`                        | Outline OAuth app client ID (redirect `https://<host>/api/login/oauth2/code/outline`)                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `OUTLINE_OAUTH_CLIENT_SECRET`                    | Outline OAuth app client secret                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `OUTLINE_OAUTH_DISPLAY_NAME`                     | Label shown on the account-linking button (defaults to `Outline`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
-Set `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` on **both** roles.
-The charts pass the same value to each:
+Set `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` on the server.
+The chart passes it. Without the flag:
 
-- **application-server:** connect/admin API, collection registration, reconcile scheduler, webhook-subscription registrar, and agent context.
-  The Outline content source has no runtime-role gate.
-  Without the flag, reviews that require wiki evidence decline, and conversation turns omit wiki context.
-- **webhook-server:** without the flag, no Outline delivery endpoint registers.
+- The connect and admin API, collection registration, the reconcile scheduler, the webhook-subscription registrar and the agent context are off.
+  Reviews that require wiki evidence decline, and conversation turns omit wiki context.
+- No Outline delivery endpoint registers.
   Every delivery to `POST /webhooks/outline/…` returns `404`.
   Outline counts these as failures and **auto-disables the subscription after 25 failures**.
 
@@ -380,8 +367,8 @@ Two deployment-topology facts belong here.
 `AGENT_ENABLED` on the server role activates Kubernetes sandbox work. The chart sets it from `sandbox.enabled`.
 Only a server with it launches sandbox Pods, for queued reviews and for the tools Pods of conversations.
 
-The server and webhook roles both use NATS.
-Production startup refuses a server or webhook role without NATS, as [Runtime roles](./runtime-roles#boot-log) describes.
+The server uses NATS.
+Production startup refuses a server without NATS, as [Runtime roles](./runtime-roles#boot-log) describes.
 
 One conversation loop runs all conversation turns of the installation, as a Deployment beside the servers.
 [Runtime Roles](./runtime-roles.mdx#the-conversation-loop) gives its lifecycle, and [Helm chart reference § Conversation loop](./helm-chart#conversation-loop) gives its values.
@@ -609,8 +596,7 @@ For authenticated relays, keep authentication and certificate verification enabl
 
 Connection, read, and write timeouts default to 5 s, 10 s, and 10 s respectively.
 A relay that stops answering cannot leave a socket operation waiting indefinitely.
-Only `application-server` reads these variables.
-Webhook roles never send email.
+Only the server reads these variables.
 
 A university or corporate relay usually requires port `587`, STARTTLS, and a service account, with a daily recipient cap.
 The defaults fit that model.

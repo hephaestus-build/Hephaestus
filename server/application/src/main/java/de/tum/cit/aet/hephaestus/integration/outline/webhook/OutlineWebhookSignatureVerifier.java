@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.VerificationResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.WebhookRequest;
 import java.nio.charset.StandardCharsets;
@@ -25,10 +25,10 @@ import org.springframework.stereotype.Component;
  * recomputes the digest over the exact request bytes, compares constant-time, and enforces a
  * ±{@value #MAX_SKEW_SECONDS}s replay window on the timestamp.
  *
- * <p>Webhook-role only: {@link OutlineWebhookController} is its one caller.
+ * <p>{@link OutlineWebhookController} is its one caller.
  */
 @Component
-@ConditionalOnWebhookRole
+@ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.outline.enabled", havingValue = "true", matchIfMissing = false)
 public class OutlineWebhookSignatureVerifier {
 

@@ -106,36 +106,18 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
 
     @Test
     void shouldSupplyFrozenReadsAndTheCommandServiceOnTheServer() {
-        context.withPropertyValues("hephaestus.runtime.server.enabled=true", "hephaestus.runtime.webhook.enabled=false")
-                .run(app -> {
-                    assertThat(app).hasSingleBean(ReviewSnapshotQuery.class);
-                    assertThat(app).hasSingleBean(ReviewStart.class);
-                    assertThat(app).hasSingleBean(ReviewClosure.class);
-                    assertThat(app).hasSingleBean(ReviewOutcomeMeters.class);
-                    assertThat(app).hasSingleBean(ResultViewQuery.class);
-                    assertThat(app).hasSingleBean(ResultPresentation.class);
-                    assertThat(app).hasSingleBean(ResultVisibilityPolicy.class);
-                    assertThat(app).hasSingleBean(ProductReferenceQuery.class);
-                    assertThat(app).hasSingleBean(PracticeReviewCoverageService.class);
-                    assertThat(app).hasSingleBean(ResultAdmissionPolicy.class);
-                    assertThat(app).doesNotHaveBean(ReviewServiceImpl.class);
-                });
-    }
-
-    @Test
-    void shouldExcludeProductPreparationFromTheWebhookOnlyRole() {
-        context.withPropertyValues("hephaestus.runtime.server.enabled=false", "hephaestus.runtime.webhook.enabled=true")
-                .run(app -> {
-                    assertThat(app).doesNotHaveBean(PracticeReviewCoverageService.class);
-                    assertThat(app).doesNotHaveBean(ResultAdmissionPolicy.class);
-                    assertThat(app).doesNotHaveBean(ReviewSnapshotQuery.class);
-                    assertThat(app).doesNotHaveBean(ReviewStart.class);
-                    assertThat(app).doesNotHaveBean(ReviewClosure.class);
-                    assertThat(app).doesNotHaveBean(ReviewOutcomeMeters.class);
-                    assertThat(app).doesNotHaveBean(ResultViewQuery.class);
-                    assertThat(app).doesNotHaveBean(ResultPresentation.class);
-                    assertThat(app).doesNotHaveBean(ResultVisibilityPolicy.class);
-                    assertThat(app).doesNotHaveBean(ProductReferenceQuery.class);
-                });
+        context.withPropertyValues("hephaestus.runtime.server.enabled=true").run(app -> {
+            assertThat(app).hasSingleBean(ReviewSnapshotQuery.class);
+            assertThat(app).hasSingleBean(ReviewStart.class);
+            assertThat(app).hasSingleBean(ReviewClosure.class);
+            assertThat(app).hasSingleBean(ReviewOutcomeMeters.class);
+            assertThat(app).hasSingleBean(ResultViewQuery.class);
+            assertThat(app).hasSingleBean(ResultPresentation.class);
+            assertThat(app).hasSingleBean(ResultVisibilityPolicy.class);
+            assertThat(app).hasSingleBean(ProductReferenceQuery.class);
+            assertThat(app).hasSingleBean(PracticeReviewCoverageService.class);
+            assertThat(app).hasSingleBean(ResultAdmissionPolicy.class);
+            assertThat(app).doesNotHaveBean(ReviewServiceImpl.class);
+        });
     }
 }

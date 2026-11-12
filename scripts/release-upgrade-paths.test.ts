@@ -103,14 +103,10 @@ mock.module("node:child_process", { exports: {
 	}
 }
 
-// Protocol cases go through both receivers, with and without a stopped-upgrade waiver. These stubs prove orchestration;
-// CI runs the PostgreSQL and NATS operations.
-for (const [scenario, expectedError] of [
-	["rolling-protocol-pass", ""],
-	["stopped-protocol-pass", ""],
-	["stopped-protocol-refused", "the body changed"],
-] as const) {
-	const stopped = scenario.startsWith("stopped-");
+// Both upgrade paths, with and without a stopped-upgrade waiver. These stubs prove orchestration; CI runs the
+// PostgreSQL operations.
+for (const scenario of ["rolling", "stopped"] as const) {
+	const stopped = scenario === "stopped";
 	await test(`upgrade qualification: ${scenario}`, () => {
 		const directory = mkdtempSync(path.join(tmpdir(), "upgrade-seed-"));
 		try {
@@ -126,8 +122,6 @@ import * as childProcess from "node:child_process";
 const commands = ${JSON.stringify(commands)};
 const fixtures = ${JSON.stringify(fixtures)};
 const stopped = ${JSON.stringify(stopped)};
-const mismatch = ${JSON.stringify(scenario === "stopped-protocol-refused")};
-const deliveries = new Map();
 if (!stopped) {
   // The previous release's worker mounts the host's Docker socket, which a Windows runner lacks.
   const statSync = fs.statSync;
@@ -138,17 +132,6 @@ if (!stopped) {
   mock.module(${JSON.stringify(new URL("lib/migration-guide.ts", import.meta.url).href)}, {
     exports: { stopEveryRoleEntries: () => (stopped ? ["#### 🔴 Stop every role for the upgrade"] : []) }
   });
-  mock.module(${JSON.stringify(import.meta.resolve("@nats-io/transport-node"))}, { exports: { connect: async () => ({ close: async () => {} }) } });
-  mock.module(${JSON.stringify(import.meta.resolve("@nats-io/jetstream"))}, { exports: {
-    jetstreamManager: async () => ({ streams: { getMessage: async (stream, { seq }) => {
-      const delivery = deliveries.get(stream)[seq - 1];
-      return {
-        subject: stream + ".upgrade.issues",
-        header: { keys: () => Object.keys(delivery.headers), get: key => delivery.headers[key] },
-        string: () => mismatch && seq === 2 ? "changed" : delivery.body
-      };
-    } } })
-  } });
 }
 globalThis.fetch = async (input, init) => {
   const url = String(input);
@@ -161,12 +144,6 @@ globalThis.fetch = async (input, init) => {
   if (url.endsWith("/workspaces")) return Response.json([{ workspaceSlug: "upgrade-fixture" }]);
   if (url.endsWith("/user")) return Response.json({ displayName: "Upgrade alice" });
   if (url.endsWith("/readyz")) return Response.json({ status: "UP" });
-  if (url.includes("/webhooks/")) {
-    const stream = url.split("/").at(-1);
-    deliveries.set(stream, [...(deliveries.get(stream) ?? []), init]);
-    appendFileSync(commands, JSON.stringify(["delivery", stream]) + "\\n");
-    return Response.json({ status: "ok" }, { status: 202 });
-  }
   if (url.endsWith("/admin/practice-catalog")) {
     return Response.json({ practices: [{ slug: "fixture", offered: true }] });
   }
@@ -222,10 +199,7 @@ mock.module("node:child_process", { exports: {
 					},
 				},
 			);
-			assert.equal(result.status, expectedError === "" ? 0 : 1, result.stdout + result.stderr);
-			if (expectedError !== "") {
-				assert.ok(result.stderr.includes(expectedError), result.stderr);
-			}
+			assert.equal(result.status, 0, result.stdout + result.stderr);
 			const invocations = existsSync(commands) ? readFileSync(commands, "utf8") : "";
 			assert.ok(invocations.includes('"target-image"'), invocations);
 			{
@@ -237,37 +211,10 @@ mock.module("node:child_process", { exports: {
 					.trim()
 					.split("\n")
 					.map((line) => asArray(JSON.parse(line), "command"));
-				const receivers = calls.filter(
-					(call) => call[0] === "run" && call.includes("SPRING_PROFILES_ACTIVE=e2e,webhook"),
-				);
-				assert.equal(receivers.length, 2);
-				const [previous = [], candidate = []] = receivers;
-				assert.ok(previous.includes("old-image"));
-				assert.ok(
-					previous.includes(
-						`SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${stopped ? "hephaestus_partial" : "hephaestus"}`,
-					),
-				);
-				assert.ok(candidate.includes("target-image"));
-				assert.ok(
-					candidate.includes("SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hephaestus"),
-				);
-				assert.equal(calls.filter((call) => call[0] === "delivery").length, 2);
 				assert.equal(
 					calls.some((call) => call[0] === "pull" && call.includes("agent-image")),
 					!stopped,
 				);
-				if (expectedError === "") {
-					for (const provider of ["github"]) {
-						assert.ok(
-							result.stdout.includes(
-								`Webhook NATS protocol passed (0.95.1 receiver -> candidate, ${provider})`,
-							),
-						);
-					}
-				} else {
-					assert.doesNotMatch(result.stdout, /Webhook NATS protocol passed/u);
-				}
 			}
 		} finally {
 			rmSync(directory, { recursive: true, force: true });

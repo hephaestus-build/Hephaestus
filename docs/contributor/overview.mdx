@@ -18,14 +18,14 @@ Hephaestus/
 ├── webapp/                    # React + Vite front-end (public UI)
 ├── extension/                 # Browser extension
 ├── server/                    # Gradle multi-project build
-│   ├── application/           # Spring Boot application — server and webhook roles
+│   ├── application/           # Spring Boot application — the server role
 │   └── generated-clients/     # Generated GitHub, GitLab, and Outline transports
 ├── docs/                      # Docusaurus site (this documentation)
 └── scripts/                   # Tooling (ERD generation, migrations, utilities)
 ```
 
 The webhook receiver lives under `integration/core/webhook/` in the application module and runs
-in its own container in production — [Runtime roles](../admin/runtime-roles#monolith-vs-split-pod).
+in the server — [Runtime roles](../admin/runtime-roles#reception-during-a-restart).
 
 [Browser extension architecture](./browser-extension) explains the extension and its connection to the server.
 

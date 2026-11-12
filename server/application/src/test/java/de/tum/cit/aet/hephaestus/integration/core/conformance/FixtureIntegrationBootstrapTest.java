@@ -128,8 +128,7 @@ class FixtureIntegrationBootstrapTest extends BaseUnitTest {
                 List.of(),
                 List.of(FixtureIntegration.lifecycleListener()),
                 validator(),
-                new IntegrationKindRouting(),
-                true);
+                new IntegrationKindRouting());
     }
 
     private static ReviewContractValidator validator() {

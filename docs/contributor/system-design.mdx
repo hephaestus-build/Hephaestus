@@ -10,10 +10,9 @@ description: Runtime roles, module boundaries, and the paths from connected work
 ```mermaid
 flowchart TB
     accTitle: Hephaestus runtime topology
-    accDescr: The webapp calls the server. The webhook role verifies provider events and publishes them to NATS. The server consumes events and writes jobs and conversation turns to PostgreSQL. With sandboxes enabled, the server claims them from PostgreSQL and runs reviews in sandboxes. The conversation loop pulls conversation turns from the servers and runs their tools in tools Pods.
-    Providers[GitHub, GitLab, Slack, Outline] --> Webhook[Webhook role]
-    Webhook --> NATS[NATS JetStream]
-    NATS --> Server[Server role]
+    accDescr: The webapp calls the server. The server's receiver verifies provider events and publishes them to NATS. The server consumes events and writes jobs and conversation turns to PostgreSQL. With sandboxes enabled, the server claims them from PostgreSQL and runs reviews in sandboxes. The conversation loop pulls conversation turns from the servers and runs their tools in tools Pods.
+    Providers[GitHub, GitLab, Slack, Outline] --> Server[Server role]
+    Server <--> NATS[NATS JetStream]
     SPA[React webapp] --> Server
     Server --> DB[(PostgreSQL)]
     Server --> Sandbox[Review sandboxes and tools Pods]
@@ -24,8 +23,7 @@ flowchart TB
     Server -->|Feedback and Hephaestus replies| Providers
 ```
 
-One JAR boots in the server and webhook roles. The supported Helm deployment runs each
-in its own Pod. Only a server with `AGENT_ENABLED` creates sandbox Pods and runs conversation turns.
+One JAR boots in the server role, which also receives provider webhooks. Only a server with `AGENT_ENABLED` creates sandbox Pods and runs conversation turns.
 The conversation loop runs beside the servers as its own Deployment.
 
 [Runtime roles](/admin/runtime-roles) owns role configuration, capacity, and drain behavior.
@@ -116,7 +114,7 @@ records native auth. [Instance administration](./instance-admin) owns recent-sig
 
 ## Practice reviews
 
-The webhook role verifies and durably buffers provider events. Server consumers sync the work and
+The server's receiver verifies and durably buffers provider events. Its consumers sync the work and
 record item events. Eligible reviews create PostgreSQL-backed execution jobs.
 The server claims these jobs and executes them in isolated sandboxes. It admits the results of a review through the shared Java admission service
 before composition and feedback delivery.

@@ -17,7 +17,7 @@ const facts = [
 	{
 		id: "database.url",
 		subject: "spring.datasource.url",
-		roles: ["SERVER", "WEBHOOK"],
+		roles: ["SERVER"],
 		requirement: "REQUIRED",
 		status: "SATISFIED",
 		explanation: "A PostgreSQL JDBC URL is required.",

@@ -10,5 +10,3 @@ hephaestus:
     runtime:
         server:
             enabled: false
-        webhook:
-            enabled: false

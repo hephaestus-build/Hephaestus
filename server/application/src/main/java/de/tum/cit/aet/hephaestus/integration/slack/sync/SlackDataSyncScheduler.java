@@ -39,8 +39,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * per workspace token anyway and the whole run is bounded by per-workspace request budgets.
  *
  * <p>{@link WorkspaceAgnostic} because the workspace enumeration is inherently fleet-wide (unscoped native query);
- * everything after enumeration is workspace-scoped. Locked cross-pod like the retention sweeper; gated to the server
- * role so the webhook container never runs it.
+ * everything after enumeration is workspace-scoped. Locked cross-pod like the retention sweeper.
  */
 @ConditionalOnServerRole
 @Component

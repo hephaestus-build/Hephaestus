@@ -57,14 +57,13 @@ Hephaestus assumes that Slack's clock and the server's clock differ by less than
 
 | Component | Kind | Role or image |
 | --- | --- | --- |
-| `server` | Deployment, 1 replica, or 0 while stopped | Server role. |
+| `server` | Deployment, 1 replica, or 0 while stopped | Server role: the API and provider webhook receiver. |
 | `migration` | Job, one for each Helm revision | The server image in its migrate run mode. It applies the release's database migrations and exits. |
-| `webhook` | Deployment, 1 to 3 replicas, or 0 while stopped | Webhook role, as in [Runtime roles](./runtime-roles). |
 | `webapp` | Deployment | The SPA, from the non-root webapp image. |
 | `postgresql` | StatefulSet, optional | The release PostgreSQL image, with `pg_partman` and pgBackRest. |
 | `postgresql-backup` | CronJobs, optional | Full and differential pgBackRest backups ([Backup and restore](./backup-restore#back-up-the-database)). |
 | `nats` | StatefulSet, optional | One NATS JetStream server. |
-| `route` | HTTPRoute | `/`, `/api`, `/webhooks`, and Slack interactivity. |
+| `route` | HTTPRoute | `/`, `/api` and `/webhooks`. |
 | `priority` | PriorityClasses, cluster-wide | The priorities of the role Pods and of the sandboxes ([Server § Priorities](./sandboxes#priorities)). |
 
 The PriorityClasses are the only cluster-wide objects of the chart.
@@ -83,7 +82,6 @@ A rolling update is refused until the provider-event inbox supplies ordering acr
 Two server versions never serve the schema at the same time.
 
 The server also runs the sandboxes when `sandbox.enabled` is on.
-The webhook role has no database.
 [Database maintenance](./maintenance#database-maintenance) gives the order of the roles for a change of the database or of a schema that needs every role stopped.
 
 ## Profiles
@@ -103,19 +101,10 @@ If a change of profile changes a volume size, read [Change a volume size](./upgr
 
 `small.yaml` supports a node of 4 vCPU, at least 16 GiB of memory, and 150 GiB of disk.
 A node of 32 GiB gives more headroom.
-Its one server runs five reviews at a time. Its one conversation loop runs up to 31 resident conversation turns, and 29 with backups on.
-A chart test adds up what that node holds during an upgrade, with backups on:
-
-| Part | Memory | CPU requests | Disk |
-| --- | --- | --- | --- |
-| Server, webhook role, server, conversation loop, webapp, PostgreSQL with pgBackRest, NATS | 9.2 GiB | 1.35 | The volumes of PostgreSQL and NATS, and bounded caches |
-| An upgrade: the new webhook, webapp and conversation loop Pods, the migration Job, the stanza Job and one backup | 3.7 GiB | 0.85 | The new Pods' caches |
-| The sandbox quotas: five reviews, one isolation probe and ten tools Pods, including up to two warm Pods | 4.0 GiB | 0.60 | The disk requests of the sandbox Pods ([Sandbox sizes](./sandboxes#sandbox-sizes)) |
-| Total, against the node less platform reservations and the hard eviction floor | 16.9 GiB of 30.25 GiB | 2.80 of 3.5 | 69.5 GiB of the 110 GiB left beside images and review workspaces |
+Its one server runs five reviews at a time. Its one conversation loop runs up to 32 resident conversation turns, also with backups on.
 
 The server uses `Recreate` in the `small` profile.
 The old server drains before its replacement starts, so reviews and conversations pause during each upgrade.
-The webhook role keeps its rolling update.
 Measure the deployment outage against the 99.5% availability budget.
 
 `conversationLoop.turns: auto` uses the CPU declaration in the chart's `turn-admission.json`.
@@ -137,38 +126,27 @@ Its `outcome` is `ready` or `abandoned`. Model calls still wait for their own pr
 
 The table counts schedulable Pod requests. The resident-turn CPU planning cost is checked separately in steady state.
 
-The table gives the measured resident memory of each role and the chart's sizes.
-Each JVM role requests all of its memory limit, because the heap is sized from the limit, and the limit is the measurement plus headroom.
+The server requests its full memory limit of 3 GiB, because the buildpack sizes its heap from that limit.
 PostgreSQL and its backup containers also request their full memory limits.
 CPU remains burstable, so these Pods keep the Burstable quality-of-service class.
 NATS also requests its full memory limit. The chart sets its `GOMEMLIMIT` to 80 % of that limit ([NATS memory](#nats-memory)).
 
-| Role | Measured | Request | Limit |
-| --- | --- | --- | --- |
-| Server | 1.5 GiB | 2.5 GiB | 2.5 GiB |
-| Server | 0.8 to 1.4 GiB | 2 GiB | 2 GiB |
-| Webhook role | 0.6 GiB | 640 MiB | 640 MiB |
-| PostgreSQL, at rest in the earlier staging capture | 0.7 GiB | 2 GiB | 2 GiB |
-| pgBackRest | Not measured | 512 MiB | 512 MiB |
-| NATS | About 100 MiB at rest, and up to its soft limit in a catch-up | 1 GiB | 1 GiB |
-
-The server's and the server's caches have a bound of 10 GiB each.
-Thus, the node does not run out of disk and evict a draining server.
+The `small` profile bounds the server's Git cache at 20 GiB and its ephemeral-storage limit at 22 GiB.
+Include those limits and the sandbox disk requests in the node's disk budget ([Sandbox sizes](./sandboxes#sandbox-sizes)).
 Use `small.yaml` on a node of 16 GiB too.
 Its server uses `Recreate`, so the old server stops before its replacement starts.
 The server runs five reviews at a time, and the conversation loop the same resident turns as on a larger node.
 
 A second server does not fit in 16 GiB beside the first.
 Thus, the upgrade stops reviews and conversation turns for the drain, the new server's start and its isolation probe.
-The webhook role keeps its rolling update: it receives provider deliveries during an upgrade.
 
 A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, the conversation loop, one backup, five reviews, eight active tools Pods and two pooled tools Pods | 13.1 GiB of 13.9 GiB | 1.95 of 3.5 |
-| The same, with the isolation probe | 13.8 GiB | — |
-| An upgrade. The old server is gone. The webhook, webapp and conversation loop surge, with the migration and stanza Jobs, the new server's probe, and the pooled tools Pods | 13.3 GiB of 13.9 GiB | 2.60 of 3.5 |
+| Steady: every role, the conversation loop, one backup, five reviews, eight active tools Pods and two pooled tools Pods | 11.0 GiB of 13.9 GiB | 1.70 of 3.5 |
+| The same, with the isolation probe | 11.6 GiB | — |
+| An upgrade. The old server is gone. The webapp and conversation loop surge, with the migration and stanza Jobs, the new server's probe, and the pooled tools Pods | 10.6 GiB of 13.9 GiB | 2.10 of 3.5 |
 
 The table counts requests.
 Its node budget uses the recorded Node capacity of 16 372 036 KiB, less the current platform reservations and hard eviction floor.
@@ -177,7 +155,7 @@ Sandbox Pods may use more than they request, up to their limits.
 If every sandbox Pod used its limit at the same time, the node would be full.
 
 The single-node `small` profile sets `conversationLoop.turns: auto` and `conversationLoop.replicas: 1`.
-With its default values, the chart derives 31 resident conversation turns for the installation, and 29 with backups on.
+With its default values, the chart derives 32 resident conversation turns for the installation, also with backups on.
 
 An earlier staging capture recorded these values on one node of 16 GiB with k3s 1.37.
 Its request figures precede the PostgreSQL memory-request change:
@@ -185,7 +163,7 @@ Its request figures precede the PostgreSQL memory-request change:
 - At rest, the release requests 10.3 GiB of 15.6 GiB.
   It uses about 5.9 GiB on the host.
   The server uses 2.0 GiB and the server 1.3 GiB.
-  The webhook role uses 0.8 GiB, PostgreSQL 0.7 GiB and NATS 60 MiB.
+  The webhook role, a separate Pod then, used 0.8 GiB. PostgreSQL used 0.7 GiB and NATS 60 MiB.
 - An upgrade that recreated the server and restarted PostgreSQL stopped reviews for about 4 minutes, with the isolation probe. The webhook role kept receiving.
 - A point-in-time restore of a database of 1.8 GB took 152 s. The release served again 5 minutes 41 seconds after the restore started.
 - The peak during a review and a conversation turn is not measured yet.
@@ -291,8 +269,7 @@ Each integration takes its settings from `site.yaml` and its secrets from the [S
 
 | Request path | Backend | Path change |
 | --- | --- | --- |
-| `/webhooks/slack/interactivity` | `server` | None |
-| `/webhooks` and below | `webhook` | None |
+| `/webhooks` and below | `server` | None |
 | `/api` and below | `server` | `/api` is removed |
 | All other paths | `webapp` | None. The webapp serves the SPA for an unknown path. |
 
@@ -334,14 +311,14 @@ The chart then opens only these paths:
 
 | From | To | Port |
 | --- | --- | --- |
-| `networkPolicy.gateway` pods | `server`, `webhook`, `webapp` | 8080 |
-| `server`, `server` | PostgreSQL | 5432, or the external port |
-| `server`, `webhook` | NATS | 4222, or the external port |
-| `server`, `server` | `networkPolicy.externalEgress` | 443 |
+| `networkPolicy.gateway` pods | `server`, `webapp` | 8080 |
+| `server` | PostgreSQL | 5432, or the external port |
+| `server` | NATS | 4222, or the external port |
+| `server` | `networkPolicy.externalEgress` | 443 |
 | `server`, if `config.email.host` is set | `networkPolicy.externalEgress` | `config.email.port` |
 | `server` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
 | `server`, if `networkPolicy.workerGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.workerGatewayPorts` |
-| `server`, `server`, for each item of `networkPolicy.modelEndpoints` | Its `cidr` | Its `ports` |
+| `server`, for each item of `networkPolicy.modelEndpoints` | Its `cidr` | Its `ports` |
 | Review sandboxes | `server` | 8081, the sandbox gateway |
 | `conversation-loop` | `server` | 8081, the sandbox gateway |
 | `conversation-loop` | Tools Pods | 7100, the tools port |
@@ -349,7 +326,7 @@ The chart then opens only these paths:
 | The backup Jobs, with backups on | PostgreSQL | 8432, the pgBackRest TLS server |
 | All pods | `networkPolicy.dns` pods | 53 |
 | `networkPolicy.metrics` pods | All application roles | 9090 |
-| `server`, `server`, `webhook`, if `config.tracing.otlpEnabled` and `networkPolicy.traceCollector` are set | `networkPolicy.traceCollector` pods | The port of `config.tracing.otlpEndpoint` |
+| `server`, if `config.tracing.otlpEnabled` and `networkPolicy.traceCollector` are set | `networkPolicy.traceCollector` pods | The port of `config.tracing.otlpEndpoint` |
 
 Sandboxes are in the sandbox namespace, where every pod also starts with no ingress and no egress.
 A tools Pod admits only the ingress from the conversation loop, and gets no egress.
@@ -376,7 +353,7 @@ Network policy controls which pods can connect. It does not encrypt traffic.
 The connections to PostgreSQL use TLS ([PostgreSQL TLS Secret](./kubernetes#postgresql-tls-secret)).
 These internal channels send plain text:
 
-- The connections from the server and the webhook role to the bundled NATS.
+- The connections from the server to the bundled NATS.
 - The connection from the server to the server.
 - The connections from sandboxes to the server gateway.
 
@@ -400,8 +377,8 @@ Use a network plugin that encrypts traffic between nodes, for example WireGuard 
 | Conversations, feedback and practice results | Retention | `config.feedbackRetention` |
 | Temporary files | `emptyDir` size limit | Fixed in the templates |
 
-One value sets both the broker `max_file` and the webhook role's stream storage budget.
-The webhook role refuses to start when the stream bounds add up to more than that budget.
+One value sets both the broker `max_file` and the server's stream storage budget.
+The server refuses to start when the stream bounds add up to more than that budget.
 [Webhook ingestion operations](./webhook-ingestion-operations) gives the durability guarantee.
 
 The `small.yaml` profile sets GitHub to 6 GiB and each GitLab, Slack and Outline stream to 512 MiB.

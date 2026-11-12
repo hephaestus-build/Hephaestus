@@ -11,7 +11,9 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -19,14 +21,18 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -234,6 +240,49 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         reaper(Duration.ofHours(1)).reap();
 
         assertThat(repository.findById(sandbox.id())).isEmpty();
+    }
+
+    @Test
+    void shouldCorrelateAClaimAndRestoreItsCallersContextOnSuccessAndFailure() {
+        var enclosing = MDC.getCopyOfContextMap();
+        try {
+            var previous = Map.of(
+                    StructuredLogKeys.WORKSPACE_ID,
+                    "enclosing-workspace",
+                    StructuredLogKeys.REVIEW_ID,
+                    "enclosing-review");
+            for (boolean fail : List.of(false, true)) {
+                String reviewId = UUID.randomUUID().toString();
+                String subject = "review:" + reviewId;
+                queueRun(subject);
+                var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
+                sandboxes.authenticate(token(sandbox));
+                MDC.setContextMap(previous);
+                Predicate<AgentRunLease> claimed = lease -> {
+                    assertThat(MDC.getCopyOfContextMap())
+                            .containsEntry(StructuredLogKeys.WORKSPACE_ID, Long.toString(workspace))
+                            .containsEntry(StructuredLogKeys.SUBJECT_KEY, subject)
+                            .containsEntry(
+                                    StructuredLogKeys.RUN_ID, lease.runId().toString())
+                            .containsEntry(StructuredLogKeys.RUN_EPOCH, Integer.toString(lease.epoch()))
+                            .containsEntry(StructuredLogKeys.REVIEW_ID, reviewId);
+                    if (fail) throw new IllegalStateException("claim failed");
+                    return true;
+                };
+                if (fail) {
+                    assertThatThrownBy(() -> sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW), claimed))
+                            .isInstanceOf(IllegalStateException.class)
+                            .hasMessage("claim failed");
+                } else {
+                    assertThat(sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW), claimed))
+                            .isPresent();
+                }
+                assertThat(MDC.getCopyOfContextMap()).isEqualTo(previous);
+            }
+        } finally {
+            if (enclosing == null) MDC.clear();
+            else MDC.setContextMap(enclosing);
+        }
     }
 
     @Test

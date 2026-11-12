@@ -299,9 +299,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     private GenericApplicationContext context(
             Path manifest, AtomicBoolean processing, PersonDataService recoveryService) {
         var context = new GenericApplicationContext();
-        var environment = new MockEnvironment()
-                .withProperty(RuntimeRole.SERVER_PROPERTY, "true")
-                .withProperty(RuntimeRole.WEBHOOK_PROPERTY, "false");
+        var environment = new MockEnvironment().withProperty(RuntimeRole.SERVER_PROPERTY, "true");
         context.registerBean(
                 PersonDataRecovery.class,
                 () -> new PersonDataRecovery(

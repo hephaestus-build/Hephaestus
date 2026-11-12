@@ -4,7 +4,7 @@
 {{- $sandbox := .Values.sandbox }}
 {{- $drain := int .Values.server.drainTimeoutSeconds }}
 {{- $recreate := eq .Values.server.rolloutStrategy "Recreate" }}
-{{- $grace := ternary (add $drain 120) 45 $sandbox.enabled }}
+{{- $grace := ternary (add $drain 120) 60 $sandbox.enabled }}
 {{- $startupFailures := 60 }}
 {{- if $sandbox.enabled }}
 {{- $api := .Values.networkPolicy.kubernetesApi }}
@@ -70,8 +70,8 @@ spec:
       enableServiceLinks: false
       securityContext:
         {{- include "hephaestus.podSecurityContext" (dict "user" 1002 "group" 1001) | nindent 8 }}
-      # The preStop pause, the HTTP phase (SHUTDOWN_TIMEOUT, 20 s), the NATS consumers' wait (10 s) and
-      # headroom. ShutdownFitsGraceTest checks the sum. With sandboxes, the review drain comes first, then two
+      # The preStop pause, the HTTP phase (SHUTDOWN_TIMEOUT, 20 s), the receiver's publish drain (15 s), the NATS
+      # consumers' wait (10 s) and headroom. ShutdownFitsGraceTest checks the sum. With sandboxes, the review drain comes first, then two
       # minutes for the shutdown phases and the sandboxes' stop calls.
       terminationGracePeriodSeconds: {{ $grace }}
       {{- if $sandbox.enabled }}
@@ -104,9 +104,6 @@ spec:
             {{- include "hephaestus.env.scm" . | nindent 12 }}
             - name: SPRING_PROFILES_ACTIVE
               value: prod
-            # Webhook reception runs in its own Deployment (ADR 0008).
-            - name: HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED
-              value: "false"
             # The buildpack's 10M direct-memory default sits below this role's NATS and HTTP footprint.
             {{- if $sandbox.enabled }}
             # A blocked socket call pins its carrier on Java 21, so the scheduler needs a carrier for each
@@ -121,6 +118,25 @@ spec:
               value: {{ include "hephaestus.gitCacheBytes" (dict "gitCache" .Values.server.gitCache "role" "server") | quote }}
             - name: NATS_SERVER
               value: {{ include "hephaestus.natsUrl" . | quote }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE
+              value: {{ .Values.webhook.stream.maxAge | quote }}
+            {{- range $provider, $maxAge := .Values.webhook.stream.maxAgeByStream }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_{{ $provider | upper }}
+              value: {{ $maxAge | quote }}
+            {{- end }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES
+              value: {{ .Values.webhook.stream.maxBytes | quote }}
+            {{- range $provider, $maxBytes := .Values.webhook.stream.maxBytesByStream }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_{{ $provider | upper }}
+              value: {{ $maxBytes | quote }}
+            {{- end }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES
+              value: {{ .Values.webhook.stream.allowDestructiveLimitUpdates | quote }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT
+              value: {{ .Values.webhook.stream.limitUpdateTimeout | quote }}
+            # Startup refuses stream bounds that sum above the broker's max_file.
+            - name: HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET
+              value: {{ int64 .Values.nats.jetstream.maxFileBytes | quote }}
             # Practice reviews and conversation turns run only with their sandboxes.
             - name: AGENT_ENABLED
               value: {{ $sandbox.enabled | quote }}

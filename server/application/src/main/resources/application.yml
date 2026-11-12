@@ -238,8 +238,7 @@ management:
             # Readiness answers whether this Pod can serve, never whether a remote dependency is up: a
             # broker outage would take every Pod out of rotation at once, and a receiver out of rotation
             # cannot answer a provider's delivery with the 503 that makes the provider retry. `webhook` and
-            # `integrationConsumer` (NATS) stay in /actuator/health and the metrics, which ADR 0008's
-            # webhook-server-down alert reads.
+            # `integrationConsumer` (NATS) stay in /actuator/health and the metrics.
             #
             # `practiceReview` and `kubernetesSandbox` (the sandbox isolation probe) stay out too: the server
             # serves its API whether or not it may start sandboxes, and no sandbox starts without the proof.
@@ -273,8 +272,9 @@ springdoc:
         enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
     default-produces-media-type: application/json
     writer-with-order-by-keys: true
-    # The sandbox gateway is private to agent containers, not part of the public API.
-    paths-to-exclude: /internal/**
+    # The sandbox gateway is private to agent containers, and providers post to /webhooks; neither is part of the
+    # public API.
+    paths-to-exclude: /internal/**, /webhooks/**
 
 hephaestus:
     commit-identity-resolution:
@@ -406,22 +406,12 @@ hephaestus:
     # ═══════════════════════════════════════════════════════════════════════════
     # RUNTIME ROLES (single JAR, deploy-config-selected mode)
     # ═══════════════════════════════════════════════════════════════════════════
-    # Two property keys (see ADR 0005 baseline + ADR 0008 webhook role):
-    #   server  — WIRED. Gates ServerSchedulingConfig (@EnableScheduling),
-    #     IntegrationNatsConsumer (the unified NATS pull consumer), WorkspaceStartupListener,
-    #     the agent sandboxes, their gateway and the review executor.
-    #     Setting false silences all @Scheduled methods and prevents workspace bootstrap.
-    #   webhook — WIRED. Gates the integration.webhook receiver (controllers, HMAC
-    #     verifier, JetStream publisher, stream bootstrap, health, lifecycle).
-    #     The webhook-server production container deploys with server=false + webhook=true
-    #     so it runs webhook reception in isolation — restart-independent from
-    #     application-server. See ADR 0008.
-    # Both default true → single-JVM monolith (the dev topology; the Helm chart runs the webhook role apart).
+    # One property key (ADR 0005): server gates ServerSchedulingConfig (@EnableScheduling), the webhook receiver,
+    # the event consumer, WorkspaceStartupListener, the agent sandboxes, their gateway and the review executor.
+    # Setting it false silences all @Scheduled methods and prevents workspace bootstrap.
     runtime:
         server:
             enabled: ${HEPHAESTUS_RUNTIME_SERVER_ENABLED:true}
-        webhook:
-            enabled: ${HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED:true}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # TENANCY ENFORCEMENT (WorkspaceStatementInspector)
@@ -720,7 +710,7 @@ hephaestus:
     #     register each connection's group hook.
     #   - integration.webhook.* reads secret (GitHub HMAC verification), routing.* (GitLab and
     #     Outline route credentials) and the nested publish/stream/http blocks for the receiver.
-    # The receiver runs in the `webhook-server` container.
+    # The server receives provider deliveries.
     webhook:
         secret: ${WEBHOOK_SECRET:}
         # Signs each GitLab connection's own hook token; independent of WEBHOOK_SECRET. The previous key stays
@@ -945,9 +935,6 @@ logging:
                 # The container id under Docker, as ReplicaIdentityFilter reports it.
                 node-name: ${HOSTNAME:}
         json:
-            add:
-                # The webhook profile and the all-roles local profile override this.
-                "[runtime.role]": server
             # MDC and key-value pairs share one `context` object of their own, so `runtime.*` or an
             # `error.*` pair cannot collide with these members. LogContextCustomizer writes it: Boot's
             # own context pairs refuse a name that the MDC and the event both carry, and drop the event.
@@ -1008,12 +995,6 @@ spring:
             "[mail.smtp.auth]": false
             "[mail.smtp.starttls.enable]": false
             "[mail.smtp.starttls.required]": false
-
-logging:
-    structured:
-        json:
-            add:
-                "[runtime.role]": all
 
 hephaestus:
     email:

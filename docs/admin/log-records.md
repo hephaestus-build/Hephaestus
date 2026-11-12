@@ -17,12 +17,11 @@ This page lists the fields and the events.
 | `service.name`, `service.version`                 | `Hephaestus` and the release that the deployment names in `APP_VERSION`, the same values that traces carry. The chart sets `APP_VERSION` from `release.version` on every container of the server image, the migration Job included |
 | `service.environment`                             | `DEPLOYMENT_ENVIRONMENT`                                                                         |
 | `service.node.name`                               | The container ID, the same value as the `X-Hephaestus-Replica` response header                   |
-| `runtime.role`                                    | `server` or `webhook`, or `all` for a local process that runs every role               |
 | `context.event.name`                              | Stable name on structured application events. Do not parse the message to identify these events  |
 | `context.traceId`, `context.spanId`               | The active trace scope, when there is one                                                         |
 | `context.job.id`, `context.workspace.id`          | Thread-scoped context, when available                                                            |
 | `context.run.id`, `context.run.epoch`, `context.subject.key` | The [agent run](#agent-run-and-outbox-events) whose holder writes the record, the epoch of its claim, and its subject, such as `review:<id>`. Two records of one run with different epochs come from different claims |
-| `context.sandbox.name`                            | The agent sandbox that made a gateway request: its claim, Sandbox and Pod name. Each gateway request also names its subject and workspace. A request for one run also names `run.id` and `run.epoch`, after the gateway checks that the run is the sandbox's own |
+| `context.sandbox.name`                            | The agent sandbox that made a gateway request: its claim, Sandbox and Pod name. Each gateway request also names its subject, workspace and review when its subject is a review. A request for one run also names `run.id` and `run.epoch`, after the gateway checks that the run is the sandbox's own |
 | `context.installation_id`                         | The GitHub App installation of a sync run, when it has one                                      |
 | `context.integration.route`, `context.integration.delivery` | On `integration.message.failed`: provider and event (`github.push`), and the delivery count |
 | `context.*`                                       | Every other event field and thread-scoped value                                                  |
@@ -74,9 +73,8 @@ Workspaces are identified by `workspace.id`. The workspace slug is not a log fie
 Run production at `INFO`.
 `DEBUG` on framework, client or driver packages can write request content, provider responses and container settings that no guard above covers.
 
-The startup event `runtime.roles.configured` records `runtime.server.enabled`,
-and `runtime.webhook.enabled` as booleans. It is informational when any
-role is enabled and warns when all are disabled. A role configuration log is not a readiness probe.
+The startup event `runtime.roles.configured` records the `runtime.server.enabled` boolean.
+It is informational when the server is enabled and warns when it is disabled. A role configuration log is not a readiness probe.
 
 At the shared HTTP boundary, `integration.request.failed` identifies the request method, upstream
 host, and exception class without recording the full URL, headers, or exception message.

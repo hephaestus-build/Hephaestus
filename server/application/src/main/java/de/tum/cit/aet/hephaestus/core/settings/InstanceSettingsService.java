@@ -21,10 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Boots on every runtime role: the server serves the admin API and consults
- * {@link SilentModeQuery} on every outbound delivery. It therefore must not hard-require a
- * server-only collaborator — {@link AuthEventLogger} is {@code @ConditionalOnServerRole} and is
- * absent on a webhook pod, so it is injected as an {@link java.util.Optional}.
+ * Not gated on the runtime role: the server serves the admin API and consults {@link SilentModeQuery} on every
+ * outbound delivery. {@link AuthEventLogger} is {@code @ConditionalOnServerRole}, so a context without the server role
+ * has none, and it is injected as an {@link java.util.Optional}.
  */
 @Service
 @WorkspaceAgnostic("Singleton instance-wide settings row — no tenant dimension exists")

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
@@ -21,7 +20,6 @@ import org.springframework.stereotype.Component;
  * pass through.
  */
 @Component
-@ReceiverComponent
 public class NatsTraceContext {
 
     private final @Nullable Tracer tracer;

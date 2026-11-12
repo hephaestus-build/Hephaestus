@@ -4,8 +4,8 @@
 | --- | --- | --- | --- | --- |
 | `AGENT_ENABLED` | `hephaestus.agent.enabled` | `default: false` | `server` | Turns on agent jobs, which run practice reviews, on this server. |
 | `HEPHAESTUS_AGENT_DRAIN_TIMEOUT` | `hephaestus.agent.drain-timeout` |  | `server` | How long shutdown waits for leased review runs, with the gateway still available. |
-| `HEPHAESTUS_AGENT_IMAGE_REFERENCE` | `hephaestus.agent.image.reference` |  | `server`, `webhook` | Image reference used by Pi practice sandboxes and the Hephaestus container. Production must be digest-pinned (registry/path@sha256:\<64 lowercase hex\>). |
-| `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` | `hephaestus.agent.image.require-digest` |  | `server`, `webhook` | Refuses startup unless the agent image reference is pinned by digest. |
+| `HEPHAESTUS_AGENT_IMAGE_REFERENCE` | `hephaestus.agent.image.reference` |  | `server` | Image reference used by Pi practice sandboxes and the Hephaestus container. Production must be digest-pinned (registry/path@sha256:\<64 lowercase hex\>). |
+| `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` | `hephaestus.agent.image.require-digest` |  | `server` | Refuses startup unless the agent image reference is pinned by digest. |
 | `HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL` | `hephaestus.agent.sandbox.gateway-url` |  | `server` | The gateway address that a claim passes to its sandbox, such as `http://10.43.0.12:8081`. The server resolves the host to an address when it creates a claim, so the sandbox needs no DNS. Empty where this process creates no claim. |
 | `HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_CONVERSATION` | `hephaestus.agent.sandbox.warm-pools.conversation` |  | `server` | The warm pool that a conversation's sandbox is claimed from. |
 | `HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_REVIEW` | `hephaestus.agent.sandbox.warm-pools.review` |  | `server` | The warm pool that a review's sandbox is claimed from. |

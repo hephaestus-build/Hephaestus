@@ -134,9 +134,9 @@ Never write cleanup that another test depends on having run.
 - **`EntityManager` is injected as a `@PersistenceContext` field**, not through the constructor
   (`WorkspaceMembershipService`, `GitHubUserProcessor`). Everything else is constructor injection through
   `@RequiredArgsConstructor`.
-- **Gate a bean of one runtime role on it** (`@ConditionalOnServerRole`, `@ConditionalOnWebhookRole`, and
-  `@ConditionalOnAgentRuntime` for agent jobs). A consumer that must survive its absence takes `ObjectProvider`
-  (`WorkspaceSyncTargetProvider`), or it crash-loops the webhook role or a server without sandboxes.
+- **Gate a bean of one runtime role on it** (`@ConditionalOnServerRole`, and `@ConditionalOnAgentRuntime` for
+  agent jobs). A consumer that must survive its absence takes `ObjectProvider` (`WorkspaceSyncTargetProvider`),
+  or it crash-loops a server without sandboxes.
 - **A test-tree `package-info.java` shadows the main one.** Test classes sit first on the classpath.
   Thus, a `@NullMarked`-only `package-info` under `src/test` hides a main package's `@NamedInterface` from Modulith.
   The architecture tier reports the package as non-exposed. Main's annotation already
@@ -200,12 +200,8 @@ One `POST /webhooks/{kind}` entry point serves GitHub and the Slack Events API.
 It resolves the kind through `IntegrationKindRouting` and hands it to `WebhookIngestPipeline`.
 The pipeline selects that adapter's `WebhookSignatureVerifier` and `SubjectKeyDeriver`.
 It publishes the verified envelope to JetStream.
-`@ConditionalOnWebhookRole` gates all these operations.
 
-A process that runs only the webhook role scans only `core.runtime.WebhookReceiverScope` and has no database (ADR 0066).
-A receiver component outside an adapter's `webhook` package goes on that list.
-It must not read PostgreSQL.
-`WebhookReceiverScopeArchitectureTest` checks the list, and `WebhookRoleContextIntegrationTest` boots the role without a database.
+The server runs the receiver. There is no separate webhook role.
 
 Configuration binds to
 `hephaestus.webhook.*` through `core.webhook.WebhookProperties`, shared with auto-registration in
@@ -213,8 +209,7 @@ Configuration binds to
 GitLab and Outline each have a connection endpoint in the adapter's `webhook` package.
 That endpoint verifies a route credential and calls `WebhookIngestPipeline#publishAuthenticated`.
 
-- **Production runs it in its own `webhook-server` container** — the same image as `application-server`
-  with `SPRING_PROFILES_ACTIVE=prod,webhook` — so an app-server deploy does not interrupt reception.
+- **Reception stops while no server runs.** The chart uses `Recreate` with one server until provider-event processing has per-item ordering across replicas.
   GitHub never retries a failed delivery itself. `GitHubWebhookRedelivery` asks it to redeliver failed
   GitHub App deliveries of the past two hours. A GitLab webhook missed during a restart is lost. Reconciliation
   recovers its effect.

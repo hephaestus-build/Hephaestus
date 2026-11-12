@@ -302,7 +302,7 @@ fails every pod, so each role is owed the lock's digest. */}}
   value: "true"
 - name: HEPHAESTUS_AGENT_IMAGE_REFERENCE
   value: {{ include "hephaestus.image" (dict "root" . "name" "agent-pi") | quote }}
-{{- /* Outline and Slack load role-agnostic beans; every role gets the same switches. */}}
+{{- /* Outline and Slack switches. */}}
 - name: HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED
   value: {{ .Values.config.outline.enabled | quote }}
 - name: HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS
@@ -311,7 +311,7 @@ fails every pod, so each role is owed the lock's digest. */}}
   value: {{ .Values.config.slack.enabled | quote }}
 {{- end -}}
 
-{{/* The server reads the database and what it seals. The webhook role has neither (ADR 0066). */}}
+{{/* The server reads the database and what it seals. */}}
 {{- define "hephaestus.env.storedData" -}}
 - name: DATABASE_URL
   value: {{ include "hephaestus.databaseUrl" . | quote }}
@@ -323,7 +323,7 @@ fails every pod, so each role is owed the lock's digest. */}}
   value: {{ .Values.config.credentialKey.rotationEnabled | quote }}
 {{- end -}}
 
-{{/* The server and webhook roles both talk to JetStream and verify webhook deliveries. */}}
+{{/* The server talks to JetStream and verifies webhook deliveries. */}}
 {{- define "hephaestus.env.ingestion" -}}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "NATS_USERNAME") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "NATS_PASSWORD") }}
@@ -769,7 +769,7 @@ qualified model-only replay, not provider capacity.
 {{- if eq (toString $loop.turns) "auto" -}}
 {{- $budget := .Files.Get "turn-admission.json" | fromJson -}}
 {{- $roles := 0 -}}
-{{- range $component := list "server" "webhook" "webapp" -}}
+{{- range $component := list "server" "webapp" -}}
 {{- $role := get $.Values $component -}}
 {{- $roles = add $roles (mul (int $role.replicas) (int (include "hephaestus.cpuMillis" $role.resources.requests.cpu))) -}}
 {{- end -}}

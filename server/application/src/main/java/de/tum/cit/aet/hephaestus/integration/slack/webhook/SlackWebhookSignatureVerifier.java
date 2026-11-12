@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackSignatureVerifier;
@@ -15,7 +15,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /** Slack Events API verifier for the unified {@code POST /webhooks/slack} ingress path. */
 @Component
-@ConditionalOnWebhookRole
+@ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
 public class SlackWebhookSignatureVerifier implements WebhookSignatureVerifier {
 

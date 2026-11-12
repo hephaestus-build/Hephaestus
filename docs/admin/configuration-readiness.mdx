@@ -37,7 +37,6 @@ The table names variables inside each application Pod. The chart owns their role
 | `spring.datasource.password`                    | `DATABASE_PASSWORD`                             |
 | `hephaestus.runtime.server.enabled`             | `HEPHAESTUS_RUNTIME_SERVER_ENABLED`             |
 | `hephaestus.agent.enabled`                      | `AGENT_ENABLED`                                 |
-| `hephaestus.runtime.webhook.enabled`            | `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED`            |
 | `hephaestus.host-url`                           | `APPLICATION_HOST_URL`                          |
 | `hephaestus.auth.issuer`                        | `HEPHAESTUS_AUTH_ISSUER`                        |
 | `hephaestus.security.encryption-key`            | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`            |
@@ -57,16 +56,14 @@ The table names variables inside each application Pod. The chart owns their role
 
 ## Runtime roles
 
-1. Enable at least one of `hephaestus.runtime.server.enabled` or `webhook.enabled`.
-2. Use only `true` or `false` for each value.
+1. Enable `hephaestus.runtime.server.enabled`.
+2. Use only `true` or `false` for it.
 
-The supported split topology enables only webhook on the webhook process, and only server on the application process.
 `hephaestus.agent.enabled` lets a server run agent jobs and their sandboxes.
 
 ## Database
 
 The server role uses PostgreSQL.
-The webhook role has no database and needs none of these settings.
 `DATABASE_URL` must be a PostgreSQL URL.
 The production profile adds the `jdbc:` prefix.
 Spring Boot and Liquibase perform separate connection and migration health checks.
@@ -90,7 +87,6 @@ Rotate the credential key with the documented online procedure.
 :::
 
 The server role requires both keys.
-The webhook role stores no secret and needs neither key.
 
 1. Set each encryption key to exactly 32 printable, non-space ASCII characters.
 2. Keep both keys with the backup set, in separate storage with separate credentials.
@@ -108,19 +104,18 @@ Provider webhooks and the Slack callback use it. The chart sets it from the host
 
 ## Webhooks
 
-Server and webhook roles require `hephaestus.webhook.secret` with at least 32 printable, non-space ASCII characters.
+The server requires `hephaestus.webhook.secret` with at least 32 printable, non-space ASCII characters.
 Generate an independent value in the release Secret.
 Never reuse another application key.
 
-The REQUIRED fact `webhook.routing-secret` applies to server and webhook roles on every production deployment, even without GitLab.
+The REQUIRED fact `webhook.routing-secret` applies to the server on every production deployment, even without GitLab.
 
 1. Set `WEBHOOK_ROUTING_SECRET` to at least 32 printable, non-space ASCII characters.
 2. Use a value different from `WEBHOOK_SECRET`.
-3. Use the same value on both roles.
 
 ## NATS
 
-Server and webhook roles require NATS and an explicit `nats://` or `tls://` URI.
+The server requires NATS and an explicit `nats://` or `tls://` URI.
 The URI must have a host and, optionally, a valid port.
 It must have no query, fragment, or non-root path.
 
@@ -133,7 +128,6 @@ The server role requires a Base64-encoded 32-byte `hephaestus.auth.state-cookie-
 It also requires an enabled GitHub or GitLab sign-in provider in the database-backed provider catalogue.
 Environment provider entries are seeds, not the readiness authority.
 Slack and Outline are link-only providers and do not satisfy sign-in readiness.
-The webhook role does not load login providers.
 
 Use the [configuration reference](./configuration-reference) to find the chart-owned values for auth session and user-view rate limits.
 

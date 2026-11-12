@@ -466,7 +466,7 @@ export const zConfigurationFact = z.object({
 	explanation: z.string(),
 	id: z.string(),
 	requirement: z.enum(["REQUIRED", "RECOMMENDED", "OPTIONAL"]),
-	roles: z.array(z.enum(["SERVER", "WEBHOOK"])),
+	roles: z.array(z.enum(["SERVER"])),
 	status: z.enum(["SATISFIED", "ACTION_REQUIRED", "NOT_CONFIGURED", "NOT_APPLICABLE"]),
 	subject: z.string(),
 });
@@ -4516,7 +4516,7 @@ export const zRunningRelease = z.object({
 	commit: z.string().optional(),
 	environment: z.string(),
 	image: z.string().optional(),
-	roles: z.array(z.enum(["SERVER", "WEBHOOK"])),
+	roles: z.array(z.enum(["SERVER"])),
 	version: z.string(),
 });
 

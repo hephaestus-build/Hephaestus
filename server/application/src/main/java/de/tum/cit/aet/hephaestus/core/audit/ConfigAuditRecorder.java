@@ -16,8 +16,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 /**
  * Writes {@link ConfigAuditEvent} rows. Sole implementation of {@link ConfigAuditPort}.
  *
- * <p>Not {@code @ConditionalOnServerRole}: a producer on the webhook role would fail to start
- * on a missing bean, and the trail is meant to accept writes from every role.
+ * <p>Not {@code @ConditionalOnServerRole}: the trail accepts writes from every context, also one without the server
+ * role.
  */
 @Component
 @RequiredArgsConstructor

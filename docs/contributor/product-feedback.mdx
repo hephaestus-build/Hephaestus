@@ -34,7 +34,6 @@ flowchart LR
 ```
 
 The drafting API and the other product feedback services load on every server. Only the model adapter needs the agent runtime.
-The webhook role has no product feedback task.
 The server refreshes issue snapshots, files issues, polls follow-up, processes `/publish`, transfers issues, and performs external cleanup.
 It does not run the model call.
 

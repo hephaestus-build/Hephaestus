@@ -57,7 +57,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 class PrometheusSecurityIntegrationTest {
 
     @ParameterizedTest
-    @CsvSource({"server,true", "server,false", "webhook,true", "webhook,false"})
+    @CsvSource({"server,true", "server,false"})
     void shouldServeMetricsOnlyOnManagementListenerWhenRoleStarts(String role, boolean decoderEnabled)
             throws Exception {
         var application = new SpringApplication(MetricsApplication.class);
@@ -70,7 +70,6 @@ class PrometheusSecurityIntegrationTest {
                         "--test.management.host=::1",
                         "--test.decoder-enabled=" + decoderEnabled,
                         "--hephaestus.runtime.server.enabled=" + role.equals("server"),
-                        "--hephaestus.runtime.webhook.enabled=" + role.equals("webhook"),
                         "--spring.main.banner-mode=off");
                 var client = HttpClient.newBuilder()
                         .connectTimeout(Duration.ofSeconds(3))
