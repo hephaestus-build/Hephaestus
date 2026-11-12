@@ -281,6 +281,7 @@ void test(
 				env: {
 					...process.env,
 					GITHUB_REPOSITORY: "owner/repo",
+					GITHUB_STEP_SUMMARY: undefined,
 					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 				},
 				encoding: "utf8",
@@ -301,6 +302,7 @@ void test(
 				env: {
 					...process.env,
 					GITHUB_REPOSITORY: "owner/repo",
+					GITHUB_STEP_SUMMARY: undefined,
 					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 				},
 				encoding: "utf8",
@@ -377,6 +379,7 @@ esac
 				env: {
 					...process.env,
 					GITHUB_REPOSITORY: "owner/repo",
+					GITHUB_STEP_SUMMARY: undefined,
 					CI_REPORT_API_LOG: calls,
 					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 				},
@@ -394,5 +397,37 @@ esac
 			fastTierFailed: 0,
 			queueTierShare: null,
 		});
+	},
+);
+
+void test(
+	"the CLI refuses a date that reaches GitHub's run cap instead of reporting a partial window",
+	{
+		skip: process.platform === "win32",
+	},
+	async (context) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "ci-run-cap-"));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
+		await writeFile(
+			path.join(directory, "gh"),
+			`#!/bin/sh\nprintf '%s\\n' '[{"total_count":1001,"workflow_runs":[]}]'\n`,
+			{ mode: 0o755 },
+		);
+		const result = spawnSync(
+			process.execPath,
+			[fileURLToPath(new URL("report-ci-latency.ts", import.meta.url))],
+			{
+				cwd: directory,
+				encoding: "utf8",
+				env: {
+					...process.env,
+					GITHUB_REPOSITORY: "owner/repo",
+					GITHUB_STEP_SUMMARY: undefined,
+					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+				},
+			},
+		);
+		assert.notEqual(result.status, 0);
+		assert.match(result.stderr, /1,000-run cap/u);
 	},
 );
