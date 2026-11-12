@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import static de.tum.cit.aet.hephaestus.testconfig.LifecycleTestSupport.assertResumes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
@@ -9,6 +10,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
@@ -65,16 +68,18 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The conversation turns of the installation as every worker serves them: a pull claims a turn, and each later call
  * of the attempt reads its row, on whichever worker it reaches. The worker role is off in the test context, so each
- * test builds its workers' turns from the context's beans. They hear no ledger: a test hands them the change it
- * means. Their clock is the test's, so a test moves it past a stop or a deadline.
+ * test builds its workers' turns from the context's beans. Most tests hand them ledger changes directly; the
+ * notification test owns its PostgreSQL listener. Their clock is the test's, so a test moves it past a stop or a deadline.
  */
 class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -154,6 +159,16 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private HephTurns worker(MentorTurnStarter starter, AttemptTokenIssuer signing, int cap, Duration pullWait) {
+        return worker(starter, signing, cap, pullWait, mock(MentorLedgerNotifications.class), callsInFlight);
+    }
+
+    private HephTurns worker(
+            MentorTurnStarter starter,
+            AttemptTokenIssuer signing,
+            int cap,
+            Duration pullWait,
+            MentorLedgerNotifications notifications,
+            ProxyCallsInFlight calls) {
         var started = new HephTurns(
                 starter,
                 turnService,
@@ -161,8 +176,8 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 beans.getBean(MentorRedaction.class),
                 completion,
                 beans.getBean(MentorTurnProgress.class),
-                mock(MentorLedgerNotifications.class),
-                callsInFlight,
+                notifications,
+                calls,
                 toolsPods,
                 signing,
                 clock,
@@ -445,6 +460,67 @@ class HephTurnsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(call(asked, token.attempt()).isCancelled())
                 .as("a later call of the attempt is refused")
                 .isTrue();
+    }
+
+    @Test
+    void shouldSealTheAttemptExactlyOnceWhenANotificationArrivesAfterPauseAndResume() throws Throwable {
+        var notifications = new MentorLedgerNotifications(
+                turnRepository,
+                beans.getBean(MentorTurnProgress.class),
+                beans.getBean(DataSourceProperties.class),
+                beans.getBean(ObjectMapper.class));
+        var listening = new CompletableFuture<Void>();
+        notifications.subscribe(new MentorLedgerNotifications.Listener() {
+            @Override
+            public void turnChanged(MentorLedgerEvents.TurnChanged change) {}
+
+            @Override
+            public void resync() {
+                listening.complete(null);
+            }
+        });
+        var calls = spy(new ProxyCallsInFlight(12));
+        HephTurns resumed = worker(
+                MentorTurnStarts.admitting(turnService, metrics),
+                issuer,
+                Integer.MAX_VALUE,
+                PULL_WAIT,
+                notifications,
+                calls);
+        try {
+            listening.get(10, TimeUnit.SECONDS);
+            assertResumes(resumed, () -> {
+                MentorTurn asked = ask("Stop this reply after the worker resumes.");
+                AttemptJwt token = token(assigned(resumed, asked));
+                var billed = new ProxyRouting.BilledAttempt(
+                        UsageSourceType.MENTOR_TURN, asked.getId(), token.attempt(), BILLED_LEASE);
+                var delivered = new CompletableFuture<Void>();
+                // This listener runs after every subscription of the resumed worker, so the notification is fully
+                // handled.
+                notifications.subscribe(new MentorLedgerNotifications.Listener() {
+                    @Override
+                    public void turnChanged(MentorLedgerEvents.TurnChanged change) {
+                        if (change.turnId().equals(asked.getId()) && change.status() == MentorTurn.Status.STOPPED) {
+                            delivered.complete(null);
+                        }
+                    }
+                });
+                try (ProxyCallsInFlight.Call inFlight = calls.begin(billed)) {
+                    turnService.stop(workspace.getId(), asked.getId());
+                    delivered.get(10, TimeUnit.SECONDS);
+
+                    assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
+                    assertThat(inFlight.isCancelled()).isTrue();
+                    try (ProxyCallsInFlight.Call late = calls.begin(billed)) {
+                        assertThat(late.isCancelled()).isTrue();
+                    }
+                    verify(calls, times(1)).seal(asked.getId(), token.attempt(), true);
+                }
+            });
+        } finally {
+            resumed.stop();
+            notifications.destroy();
+        }
     }
 
     @Test

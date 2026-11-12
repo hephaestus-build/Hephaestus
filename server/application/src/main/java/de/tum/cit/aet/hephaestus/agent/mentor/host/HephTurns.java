@@ -46,7 +46,7 @@ import tools.jackson.databind.JsonNode;
  * of its deadline. A loop that is gone renews nothing, and the lease reaper takes the turn back.
  * {@code docs/contributor/unified-pi-runtime.mdx} § Turn lifecycle has the protocol.
  */
-public class HephTurns implements MentorLedgerNotifications.Listener, SmartLifecycle {
+public final class HephTurns implements MentorLedgerNotifications.Listener, SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(HephTurns.class);
 
@@ -106,7 +106,6 @@ public class HephTurns implements MentorLedgerNotifications.Listener, SmartLifec
     private final MentorRedaction redaction;
     private final MentorTurnCompletion completion;
     private final MentorTurnProgress progress;
-    private final MentorLedgerNotifications notifications;
     private final ProxyCallsInFlight callsInFlight;
     private final ConversationToolsPods toolsPods;
     private final AttemptTokenIssuer issuer;
@@ -178,7 +177,6 @@ public class HephTurns implements MentorLedgerNotifications.Listener, SmartLifec
         this.redaction = redaction;
         this.completion = completion;
         this.progress = progress;
-        this.notifications = notifications;
         this.callsInFlight = callsInFlight;
         this.toolsPods = toolsPods;
         this.issuer = issuer;
@@ -189,12 +187,12 @@ public class HephTurns implements MentorLedgerNotifications.Listener, SmartLifec
         this.claimFailures = Counter.builder(AgentMetrics.MENTOR_TURN_CLAIM_FAILURE)
                 .description("conversation turns this worker could not claim or start because of an error")
                 .register(meters);
+        notifications.subscribe(this);
     }
 
     @Override
     public void start() {
         active = true;
-        notifications.subscribe(this);
     }
 
     /** Stops handing out turns. The turns that run go on: their calls reach the other workers. */

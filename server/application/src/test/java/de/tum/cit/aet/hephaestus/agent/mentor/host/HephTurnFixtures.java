@@ -81,7 +81,7 @@ final class HephTurnFixtures {
 
     /**
      * A worker's turns, from beans that exist without the worker role. Its starter admits every turn with the test
-     * catalog's model, and it does not hear the ledger until a test starts it.
+     * catalog's model. It subscribes to the supplied ledger notifications when constructed.
      *
      * @param cap the most turns that run at once in the installation
      */
