@@ -46,6 +46,10 @@ jobs:
       application-server: ${{ steps.filter.outputs.application-server }}
       # Whether the server suites run. The package job reads it too, because the suites run its classes.
       server-tests: ${{ steps.opt_in.outputs.light != 'true' && (steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+      migrations-changed: ${{ steps.filter.outputs.migrations }}
+      # Only migrations and their release/schema notes changed. The queue and explicit full runs still
+      # execute Unit and Architecture; generated-artifact drift stays on every selected server PR.
+      migration-only: ${{ github.event_name == 'pull_request' && steps.opt_in.outputs.light != 'true' && steps.opt_in.outputs.full == 'false' && steps.release_candidate.outputs.release-candidate != 'true' && steps.filter.outputs.migrations == 'true' && steps.filter.outputs.non-migration != 'true' }}
       # A layer of a stack runs only format, lint, types, prose and the quality legs' own tests. The
       # merge group, which runs everything, is the verdict on the stack: ci-cd.mdx § Light tier for
       # stacked layers.
@@ -102,11 +106,10 @@ jobs:
       # diff, which paths-filter reads for a group from `merge_group.base_sha..head_sha` without
       # being told.
       unfiltered: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-      # A pull request runs the fast tier unless it carries `ci:full` or changes the queue tier's own
-      # inputs. A merge group, a push and a dispatch also run the queue tier: the integration shards
-      # other than `review`, database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
-      # ci-cd.mdx § Two verification tiers says why.
-      queue-tier: ${{ github.event_name != 'pull_request' || (steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.full != 'false' || (github.event.pull_request.draft != true && (steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true')))) }}
+      # PRs use the fast tier; ci:full reproduces a queue failure. An unreadable label read retains
+      # the full tier. Release evidence selection is separate. Every merge group still runs the
+      # queue tier: ci-cd.mdx § Two verification tiers.
+      queue-tier: ${{ github.event_name != 'pull_request' || (steps.opt_in.outputs.light != 'true' && steps.opt_in.outputs.full != 'false') }}
       # A draft runs the fast tier and builds no image: no cluster jobs, no image scan, unless it
       # carries `preview`. A release candidate always builds its evidence. Marking it
       # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
@@ -590,19 +593,15 @@ jobs:
               - '.github/workflows/kubernetes-nightly.yml'
             docs:
               - 'docs/**'
-            # Changes the queue tier judges best before the queue: migrations, which the database
-            # tests and drills replay, the integration shards and test tasks the build script
-            # defines, and the browser suites' own specs and configuration. The workflows and
-            # actions that define the tier are `test-config` and `build-config`.
-            queue-tier-inputs:
-              - 'server/application/build.gradle.kts'
-              # The partition of the integration shards: a new one runs every shard before it gates others.
-              - 'server/application/integration-test-durations.json'
+            migrations:
               - 'server/application/src/main/resources/db/**'
-              - 'webapp/e2e/**'
-              - 'webapp/playwright.config.ts'
-              - 'extension/e2e/**'
-              - 'extension/playwright.config.ts'
+            # Release notes and generated schema docs accompany a migration without changing Java behavior.
+            non-migration:
+              - '**'
+              - '!server/application/src/main/resources/db/**'
+              - '!.changeset/*.md'
+              - '!.migration/*.md'
+              - '!docs/contributor/erd/**'
             ci-config:
               - '.github/ci-tools/shellcheck.json'
               - '.github/workflows/**'
@@ -1033,6 +1032,7 @@ jobs:
       contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
+      migrations_changed: ${{ needs.detect-changes.outputs.migrations-changed }}
 
   Test:
     name: Server tests
@@ -1055,6 +1055,7 @@ jobs:
       postgres_base_sha: ${{ needs.detect-changes.outputs.alias-base || github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
+      migration_only: ${{ needs.detect-changes.outputs.migration-only }}
 
   Browser-tests:
     name: Browser tests

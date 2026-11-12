@@ -22,6 +22,10 @@ on:
         required: false
         type: string
         default: "false"
+      migration_only:
+        description: "Whether this fast-tier PR changes only migration files and release notes"
+        required: true
+        type: string
       queue_tier:
         description: "Whether integration tests are selected by this run"
         required: true
@@ -38,7 +42,7 @@ env:
 jobs:
   server-verification:
     name: Unit
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.migration_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -88,7 +92,7 @@ jobs:
 
   server-architecture:
     name: Architecture
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.migration_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
