@@ -94,22 +94,26 @@ The migration guide owns each change. This table gives the names.
 | Site file | `config.monitoring` | `config.sync`, with the same four child settings | *Rename scheduled sync settings* |
 | Site file | `config.auth.bootstrapAdmins`, `config.auth.browserExtensionIds`, `config.auth.passkeys.allowedOrigins`, `config.outline.allowedOrigins` as strings | The same keys as YAML arrays | *Convert chart list values to arrays* |
 | Site file | `server.conversationTurns` | `conversationLoop.turns`, a count for the whole installation | *Stop every role for the conversation loop* |
-| Site file | `sandbox.enabled`, `sandbox.*`, `sandbox.runtime.*`, `sandbox.gateway.maxConnections`, `networkPolicy.workerGatewayPorts`, and the server's rollout, drain, pool, git cache and resources | `sandbox.*`, and the same settings under `server` | *Move the server values to the server and the sandboxes* |
+| Site file | `sandbox.enabled`, `sandbox.*`, `sandbox.runtime.*`, `sandbox.gateway.maxConnections`, `networkPolicy.workerGatewayPorts`, and the server's rollout, drain, pool, git cache and resources | `sandbox.*`, and the same settings under `server` | *Move the worker values to the server and the sandboxes* |
 | Profile | `small-16gib` in `HEPHAESTUS_CHART_PROFILE` and `profiles/small-16gib.yaml` | `small` and `profiles/small.yaml` | *Use the small profile on every single-node install* |
 | Server settings | `hephaestus.agent.max-retries` | `hephaestus.agent.capacity.review-retries`. `AGENT_MAX_RETRIES` still works. | *Stop every role before moving review leases to agent runs* |
 | Secret | `DATABASE_USERNAME`, `DATABASE_PASSWORD` | `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD` for the bundled PostgreSQL, and the new `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` | *Give each database purpose its own login* |
 | Secret | No key | `HEPHAESTUS_CONVERSATION_LOOP_SECRET`, added by the release's `hephaestus-keys.sh` | *Stop every role for the conversation loop* |
 | Image outside the chart | `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` | `HEPHAESTUS_CONVERSATION_LOOP_SECRET` and `HEPHAESTUS_MENTOR_TURN_CAPACITY` on the server | *Stop every role for the conversation loop* |
-| Image outside the chart | `HEPHAESTUS_RUNTIME_WORKER_ENABLED` and the `server` profile | `AGENT_ENABLED=true` and the sandbox settings on the server | *Move the server values to the server and the sandboxes* |
+| Image outside the chart | `HEPHAESTUS_RUNTIME_WORKER_ENABLED` and the `server` profile | `AGENT_ENABLED=true` and the sandbox settings on the server | *Move the worker values to the server and the sandboxes* |
 | Custom agent image | An image from an earlier release | An image that you rebuilt from this release | *Rebuild custom agent images* and *Rebuild a custom agent image* |
 
 The table covers the changes after the release candidate `1.0.0-rc.5`.
 A host on an earlier candidate also needs the entries of the later candidates.
 
-Four more checks need a read before the window:
+Eight more checks need a read before the window:
 
 - API callers of the team routes move to the new contract: *Update team API callers*.
 - Custom API clients read error responses in the problem format: *Read problem responses from the top level*.
+- The first daily run erases old feedback and results. See *Choose the feedback retention before you upgrade*.
+- A production server needs a root HTTPS issuer. See *Use a root HTTPS API issuer in production*.
+- Slack connections need the canonical callback on the Slack app: *Use the canonical Slack workspace callback*.
+- Each chat model needs **Max output tokens** or **Context window**. See *Stop every role before moving model usage to one row for each call*.
 - Duplicate repository monitor names stop the migration: run the query of *Stop every role before enforcing unique repository monitor names*.
 - A practice identifier can collide with a reserved route name: run the preflight of *Check practice identifiers before upgrading*.
 
@@ -126,6 +130,12 @@ These migration entries also apply to a host that upgrades to 1.0:
 - *GitHub synchronization is incremental*: remove `HEPHAESTUS_SYNC_INCREMENTAL_ENABLED` from your configuration.
 - *Change the model call queries that read `class` or `queue`*: your own queries and alerts read the `band` label.
 - *Decide whether GitHub App installations need an instance admin's approval*: by default, an instance admin adopts each new installation.
+- *Use the canonical webhook receiver base*: remove `WEBHOOK_EXTERNAL_URL` and `hephaestus.webhook.external-url`.
+- *Remove existing sandbox claims before starting the new workers*. Delete the remaining sandbox workloads before the new release starts.
+- *Public activity pages count contributors without an account instead of naming them*. To keep their names, turn on **Show contributors without an account**.
+- *Stop every role before the models for practice scripts are deleted*. The upgrade deletes the Decisions, Embeddings and Rerank connections.
+- *Remove the review poll settings and the review Job metrics*. Remove `AGENT_POLL_INTERVAL` and `AGENT_CLAIM_BATCH_SIZE`. Remove your own alerts on these metrics.
+- *Stop every role before moving conversation turn leases to agent runs*. The previous release cannot read the new turn leases.
 
 ## Cut over to 1.0.0
 
