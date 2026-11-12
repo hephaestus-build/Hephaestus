@@ -223,6 +223,14 @@ To upgrade the controller:
 5. Run `node scripts/scan-platform-images.ts --check-pins`.
    It downloads the release manifest and checks its SHA-256, and it refuses any other change to it.
    It also checks that the digest is the image index of the release tag.
+6. Set `worker.sandbox.controller.image` in the chart's `values.yaml` to the same image.
+   On a managed cluster, the chart runs this controller in the release namespace (`templates/agent-sandbox-controller.yaml`).
+7. Run `node scripts/cluster-admin-bundle.ts`. It copies the new CRDs into the admin bundle, `hephaestus-cluster-admin.yaml`.
+   The chart render tests compare the bundle with its sources, and the chart's controller image with the pinned one.
+8. Compare the upstream ClusterRoles with the controller's Roles in `templates/agent-sandbox-controller.yaml`.
+   Also compare them with the read-only ClusterRole of the bundle.
+   Add each new kind or verb that the controller writes to the Role of the sandbox namespace.
+   If the controller watches a new kind, add it to the read-only ClusterRole.
 
 `deploy/platform/k3s-containerd.toml.tmpl` holds the pin of gVisor: the release and the SHA-512 of the `x86_64` and `aarch64` archives.
 To upgrade gVisor, download `gvisor.tar.bz2` of the new release for both architectures.

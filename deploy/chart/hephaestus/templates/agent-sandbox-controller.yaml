@@ -1,0 +1,165 @@
+{{- /*
+The agent-sandbox controller in the release namespace, for a managed cluster on which the release has
+no cluster-admin (docs/admin/managed-cluster.mdx). Every write right is in the two Roles below. The
+controller's caches list and watch in all namespaces, because v1.0.10 has no namespace option, so the
+cluster's admins grant one read-only ClusterRole to its ServiceAccount: the admin bundle,
+deploy/platform/hephaestus-cluster-admin.yaml, names it. Elsewhere the cluster runs the controller of
+deploy/platform/k3s-agent-sandbox.yaml, and this stays off.
+*/}}
+{{- if and .Values.worker.enabled .Values.worker.sandbox.controller.enabled }}
+{{- $name := include "hephaestus.name" (dict "root" . "component" "agent-sandbox-controller") }}
+{{- $sandboxes := include "hephaestus.sandboxNamespace" (dict "root" .) }}
+{{- $api := .Values.networkPolicy.kubernetesApi }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "agent-sandbox-controller") | nindent 4 }}
+---
+# The upstream controller's rights, in the sandbox namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $sandboxes }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "agent-sandbox-controller") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, persistentvolumeclaims]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: ["", events.k8s.io]
+    resources: [events]
+    verbs: [create, patch, update]
+  - apiGroups: [agents.x-k8s.io]
+    resources: [sandboxes]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [agents.x-k8s.io]
+    resources: [sandboxes/finalizers, sandboxes/status]
+    verbs: [get, patch, update]
+  - apiGroups: [extensions.agents.x-k8s.io]
+    resources: [sandboxclaims, sandboxtemplates, sandboxwarmpools]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [extensions.agents.x-k8s.io]
+    resources:
+      - sandboxclaims/finalizers
+      - sandboxclaims/status
+      - sandboxtemplates/finalizers
+      - sandboxwarmpools/finalizers
+      - sandboxwarmpools/status
+    verbs: [get, patch, update]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [create, delete, get, list, patch, update, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ $sandboxes }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "agent-sandbox-controller") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+---
+# Leader election and the controller's events, in the release namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}-election
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "agent-sandbox-controller") | nindent 4 }}
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: ["", events.k8s.io]
+    resources: [events]
+    verbs: [create, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}-election
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "agent-sandbox-controller") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}-election
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "agent-sandbox-controller") | nindent 6 }}
+  policyTypes: ["Egress"]
+  egress:
+    # The Kubernetes API, at the address and port that the operator qualified for the network plugin.
+    - to:
+        - ipBlock:
+            cidr: {{ $api.cidr }}
+      ports:
+        - port: {{ $api.port }}
+          protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "agent-sandbox-controller") | nindent 4 }}
+spec:
+  # Leader election keeps one active controller; a second replica would only wait.
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "agent-sandbox-controller") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "agent-sandbox-controller") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      # It is an API client: its token holds the Roles above and the admin bundle's read-only ClusterRole.
+      automountServiceAccountToken: true
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 65532 "group" 65532) | nindent 8 }}
+      containers:
+        - name: agent-sandbox-controller
+          image: {{ .Values.worker.sandbox.controller.image | quote }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - --leader-elect=true
+            - --leader-election-namespace={{ .Release.Namespace }}
+            - --extensions
+          ports:
+            - name: healthz
+              containerPort: 8081
+              protocol: TCP
+          readinessProbe:
+            httpGet: { path: /readyz, port: healthz }
+          livenessProbe:
+            httpGet: { path: /healthz, port: healthz }
+          resources:
+            {{- toYaml .Values.worker.sandbox.controller.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+{{- end }}

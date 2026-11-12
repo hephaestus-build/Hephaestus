@@ -37,7 +37,7 @@ permissions: {}
 
 env:
   # The schema sources of kubeconform, at pinned commits.
-  KUBERNETES_SCHEMAS: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/f7d855e49c34b039c9ef2196444910275e31e09e/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json
+  KUBERNETES_SCHEMAS: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/f7d855e49c34b039c9ef2196444910275e31e09e
   CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/501527ab9c40c827144c8f45945b25a023e344ce/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 
   # One node image per minor, pinned by digest.
@@ -87,11 +87,15 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/kubernetes-cluster.ts render > manifests.yaml
+          # The admin bundle of a managed cluster holds what the release does not render itself.
+          { echo "---"; cat deploy/platform/hephaestus-cluster-admin.yaml; } >> manifests.yaml
           # No public catalog carries the agent-sandbox kinds: their schemas come from the pinned definitions.
           node scripts/crd-schemas.ts deploy/platform/k3s-agent-sandbox.yaml platform-schemas
+          # Recursive CRD schemas are in the local-reference catalog, not the standalone catalog.
           for version in 1.35.0 1.37.0; do
             kubeconform -strict -summary -kubernetes-version "$version" \
-              -schema-location "$KUBERNETES_SCHEMAS" \
+              -schema-location "$KUBERNETES_SCHEMAS/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json" \
+              -schema-location "$KUBERNETES_SCHEMAS/{{.NormalizedKubernetesVersion}}-local/{{.ResourceKind}}{{.KindSuffix}}.json" \
               -schema-location "platform-schemas/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
               -schema-location "$CRD_SCHEMAS" manifests.yaml
           done

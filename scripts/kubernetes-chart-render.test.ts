@@ -25,6 +25,8 @@ import { isDeepStrictEqual } from "node:util";
 
 import { parseAllDocuments, stringify } from "yaml";
 
+import { bundle as generatedBundle, CONTROLLER } from "./cluster-admin-bundle.ts";
+import { grants as ruleGrants } from "./cluster-preflight.ts";
 import { parseInventory } from "./commit-image-lock.ts";
 import { chartValues } from "./kubernetes-chart.ts";
 import { asArray, asRecord, isRecord, parseJson, readJsonFileSync } from "./lib/json.ts";
@@ -342,12 +344,13 @@ function assertReferencesResolve(
 	}
 }
 
-/** The three profiles, and the small one with an operator's external PostgreSQL and NATS. */
-const profiles = ["dev", "preview", "small", "external"] as const;
+/** The four profiles, and the small one with an operator's external PostgreSQL and NATS. */
+const profiles = ["dev", "preview", "small", "cluster", "external"] as const;
 const maxFileBytes = {
 	dev: 4_294_967_296,
 	preview: 2_147_483_648,
 	small: 8_589_934_592,
+	cluster: 17_179_869_184,
 	external: 8_589_934_592,
 };
 const layersFor = (name: (typeof profiles)[number]) => {
@@ -355,8 +358,9 @@ const layersFor = (name: (typeof profiles)[number]) => {
 		case "external": {
 			return [profile("small"), prepared, operator, reviews, external];
 		}
-		case "small": {
-			return [profile("small"), prepared, operator, reviews];
+		case "small":
+		case "cluster": {
+			return [profile(name), prepared, operator, reviews];
 		}
 		case "dev":
 		case "preview": {
@@ -365,13 +369,19 @@ const layersFor = (name: (typeof profiles)[number]) => {
 	}
 };
 const bundled = (name: (typeof profiles)[number]) => name !== "external";
-const runsReviews = (name: (typeof profiles)[number]) => name === "small" || name === "external";
+const runsReviews = (name: (typeof profiles)[number]) =>
+	name === "small" || name === "cluster" || name === "external";
 /** A profile as an operator installs it with reviews: CI turns on the worker of the dev profile this way. */
 const withWorker = (name: (typeof profiles)[number]) =>
 	runsReviews(name) ? layersFor(name) : [...layersFor(name), workerLayer];
 /** The worker and what it writes into the sandbox namespace. */
 const workerOwned = (resource: Resource) =>
 	["worker", "sandbox"].includes(String(componentOf(resource)));
+/** The agent-sandbox controller that a managed cluster runs in the release namespace, with its Roles. */
+const controllerOwned = (resource: Resource) =>
+	componentOf(resource) === "agent-sandbox-controller";
+/** The two API clients of the release: the worker and the agent-sandbox controller. */
+const apiClient = (resource: Resource) => workerOwned(resource) || controllerOwned(resource);
 const imageOf = {
 	"conversation-loop": "agent-pi",
 	server: "application-server",
@@ -388,6 +398,7 @@ for (const name of profiles) {
 			.map((resource) => String(componentOf(resource)))
 			.toSorted(byCodePoint);
 		assert.deepEqual(components, [
+			...(name === "cluster" ? ["agent-sandbox-controller"] : []),
 			...(runsReviews(name) ? ["conversation-loop"] : []),
 			...(bundled(name) ? ["nats", "postgresql"] : []),
 			"server",
@@ -425,12 +436,12 @@ for (const name of profiles) {
 			assert.equal(envValue(role, "HEPHAESTUS_RELEASE_COMMIT"), prepared.release.commit);
 			assert.equal(envValue(role, "APP_VERSION"), "1.2.3");
 		}
-		// One migration owner, the revision's Job; no cluster-wide authority. Only the worker holds a
-		// Role, in the sandbox namespace; its own test checks that authority.
+		// One migration owner, the revision's Job; no cluster-wide authority. Only the worker and the
+		// agent-sandbox controller hold Roles; their own tests check that authority.
 		for (const resource of resources.filter(
 			(candidate) =>
 				!(kindOf(candidate) === "Job" && componentOf(candidate) === "migration") &&
-				!workerOwned(candidate),
+				!apiClient(candidate),
 		)) {
 			assert.ok(
 				![
@@ -454,16 +465,16 @@ for (const name of profiles) {
 
 	await test(`${name}: every pod is restricted, tokenless and bounded, and reads secrets by reference`, () => {
 		const resources = rendered(layersFor(name));
-		// Only the worker calls the Kubernetes API, so only its Pods mount a token.
+		// Only the worker and the agent-sandbox controller call the Kubernetes API, so only their Pods mount a token.
 		for (const account of resources.filter(
-			(resource) => kindOf(resource) === "ServiceAccount" && !workerOwned(resource),
+			(resource) => kindOf(resource) === "ServiceAccount" && !apiClient(resource),
 		)) {
 			assert.equal(get(account, "automountServiceAccountToken"), false, nameOf(account));
 		}
 		for (const resource of workloads(resources)) {
 			const label = nameOf(resource);
 			const spec = podSpec(resource);
-			assert.equal(get(spec, "automountServiceAccountToken"), workerOwned(resource), label);
+			assert.equal(get(spec, "automountServiceAccountToken"), apiClient(resource), label);
 			assert.equal(get(spec, "securityContext", "runAsNonRoot"), true, label);
 			assert.notEqual(get(spec, "securityContext", "runAsUser"), 0, label);
 			assert.equal(get(spec, "securityContext", "seccompProfile", "type"), "RuntimeDefault", label);
@@ -4804,4 +4815,161 @@ await test("each provider's byte override reaches the webhook role through the m
 		env(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"),
 		undefined,
 	);
+});
+
+/** Kinds that have no namespace: a release without cluster-admin cannot create any of them. */
+const clusterScoped = new Set([
+	"PriorityClass",
+	"ClusterRole",
+	"ClusterRoleBinding",
+	"Namespace",
+	"CustomResourceDefinition",
+	"RuntimeClass",
+	"StorageClass",
+	"ValidatingWebhookConfiguration",
+	"MutatingWebhookConfiguration",
+]);
+const adminBundle = parseAllDocuments(
+	readFileSync(
+		new URL("../deploy/platform/hephaestus-cluster-admin.yaml", import.meta.url),
+		"utf8",
+	),
+)
+	.map((document) => document.toJS() as unknown)
+	.filter(isRecord);
+
+await test("the cluster profile renders only namespaced objects, and its PriorityClasses are the admin bundle's", () => {
+	const resources = rendered(layersFor("cluster"));
+	assert.deepEqual(
+		resources.filter((resource) => clusterScoped.has(String(resource.kind))).map(nameOf),
+		[],
+	);
+	const classNames = new Set(
+		adminBundle.filter((resource) => resource.kind === "PriorityClass").map(nameOf),
+	);
+	assert.deepEqual([...classNames].toSorted(), [
+		"hephaestus-conversations",
+		"hephaestus-reviews",
+		"hephaestus-roles",
+	]);
+	// Every Pod that the release runs, and every sandbox template, names one of the bundle's classes.
+	const priorityNames = resources
+		.map((resource) =>
+			get(resource, "kind") === "SandboxTemplate"
+				? get(resource, "spec", "podTemplate", "spec", "priorityClassName")
+				: get(resource, "spec", "template", "spec", "priorityClassName"),
+		)
+		.filter((name) => typeof name === "string");
+	assert.ok(priorityNames.length > 0);
+	for (const name of priorityNames) {
+		assert.ok(classNames.has(name), name);
+	}
+	// The default runtime with user namespaces: no RuntimeClass, no host users.
+	for (const template of resources.filter((resource) => resource.kind === "SandboxTemplate")) {
+		const pod = get(template, "spec", "podTemplate", "spec");
+		assert.equal(get(pod, "runtimeClassName"), undefined, nameOf(template));
+		assert.equal(get(pod, "hostUsers"), false, nameOf(template));
+	}
+});
+
+/** The tier of a PriorityClass name: its last segment. */
+const tierOf = (name: string) => name.slice(name.lastIndexOf("-") + 1);
+/** PriorityClasses by tier, sorted. */
+const byTier = (classList: readonly Resource[]) =>
+	classList
+		.map((resource) => priorityShape(resource))
+		.toSorted((a, b) => a.tier.localeCompare(b.tier));
+/** What a PriorityClass decides, by tier. */
+const priorityShape = (resource: Resource) => ({
+	tier: tierOf(nameOf(resource)),
+	value: resource.value,
+	globalDefault: resource.globalDefault,
+	preemptionPolicy: resource.preemptionPolicy,
+	description: resource.description,
+});
+
+await test("the admin bundle's PriorityClasses are the ones that the chart creates on a cluster of its own", () => {
+	const created = rendered(layersFor("small")).filter(
+		(resource) => resource.kind === "PriorityClass",
+	);
+	const classes = adminBundle.filter((resource) => resource.kind === "PriorityClass");
+	assert.deepEqual(byTier(classes), byTier(created));
+});
+
+await test("the admin bundle is the generator's output, and grants the controller that the cluster profile runs", () => {
+	assert.equal(
+		readFileSync(
+			new URL("../deploy/platform/hephaestus-cluster-admin.yaml", import.meta.url),
+			"utf8",
+		),
+		generatedBundle(),
+		"run node scripts/cluster-admin-bundle.ts",
+	);
+	// The release and namespace that the admin guide installs.
+	const resources = rendered(layersFor("cluster"), {
+		release: "hephaestus",
+		namespace: "hephaestus",
+	});
+	const account = resources.find(
+		(resource) =>
+			resource.kind === "ServiceAccount" && nameOf(resource).endsWith("-agent-sandbox-controller"),
+	);
+	assert.ok(account);
+	assert.equal(nameOf(account), CONTROLLER.name);
+	const binding = adminBundle.find((resource) => resource.kind === "ClusterRoleBinding");
+	assert.deepEqual(get(binding, "subjects"), [
+		{ kind: "ServiceAccount", name: CONTROLLER.name, namespace: CONTROLLER.namespace },
+	]);
+	// The controller runs the image of the pinned platform manifest, the one that scan-platform-images checks.
+	const pinned = parseAllDocuments(
+		readFileSync(new URL("../deploy/platform/k3s-agent-sandbox.yaml", import.meta.url), "utf8"),
+	)
+		.map((document) => document.toJS() as unknown)
+		.find((resource) => isRecord(resource) && resource.kind === "Deployment");
+	const controller = resources.find(
+		(resource) => resource.kind === "Deployment" && nameOf(resource) === CONTROLLER.name,
+	);
+	assert.equal(
+		get(controller, "spec", "template", "spec", "containers", 0, "image"),
+		get(pinned, "spec", "template", "spec", "containers", 0, "image"),
+	);
+	// Its writes stay in Roles: the sandbox namespace for sandboxes, the release namespace for its lease.
+	const roles = resources.filter(
+		(resource) => resource.kind === "Role" && nameOf(resource).startsWith(CONTROLLER.name),
+	);
+	assert.deepEqual(
+		roles
+			.map((role) => {
+				const namespace = get(role, "metadata", "namespace");
+				return `${nameOf(role)} ${typeof namespace === "string" ? namespace : "release"}`;
+			})
+			.toSorted(),
+		[`${CONTROLLER.name} ${sandboxNamespace}`, `${CONTROLLER.name}-election release`],
+	);
+	// Elsewhere the cluster runs the controller: the small profile renders none of it.
+	assert.equal(
+		rendered(layersFor("small")).some((resource) =>
+			nameOf(resource).includes("agent-sandbox-controller"),
+		),
+		false,
+	);
+});
+
+await test("the controller's Roles grant exactly what the pinned controller's upstream ClusterRoles grant", () => {
+	const upstream = parseAllDocuments(
+		readFileSync(new URL("../deploy/platform/k3s-agent-sandbox.yaml", import.meta.url), "utf8"),
+	)
+		.map((document) => {
+			const value: unknown = document.toJS();
+			return value;
+		})
+		.filter((resource) => isRecord(resource) && resource.kind === "ClusterRole")
+		.flatMap((role) => ruleGrants(role));
+	const ours = rendered(layersFor("cluster"))
+		.filter(
+			(resource) =>
+				resource.kind === "Role" && nameOf(resource).startsWith("heph-agent-sandbox-controller"),
+		)
+		.flatMap((role) => ruleGrants(role));
+	assert.deepEqual([...new Set(ours)].toSorted(), [...new Set(upstream)].toSorted());
 });

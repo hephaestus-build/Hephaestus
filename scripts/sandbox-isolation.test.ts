@@ -8,6 +8,7 @@ import {
 	type Inside,
 	insideFailures,
 	namedTarget,
+	namespacedName,
 	parseAddress,
 	specFailures,
 	type Target,
@@ -147,6 +148,16 @@ void test("a target is a host and a port", () => {
 	assert.deepEqual(parseAddress("10.43.0.10:8081"), { host: "10.43.0.10", port: 8081 });
 	assert.throws(() => parseAddress("10.43.0.10"), /not a host:port/u);
 	assert.throws(() => parseAddress("host:99999"), /not a host:port/u);
+});
+
+void test("the DNS Service of a distribution is a namespace and a name", () => {
+	assert.deepEqual(namespacedName("kube-system/rke2-coredns-rke2-coredns"), {
+		namespace: "kube-system",
+		name: "rke2-coredns-rke2-coredns",
+	});
+	for (const refused of ["kube-dns", "/kube-dns", "kube-system/", "a/b/c"]) {
+		assert.throws(() => namespacedName(refused), /not a <namespace>\/<name>/u, refused);
+	}
 });
 
 void test("the gate tries every address behind the API Service, and refuses to run without one", () => {

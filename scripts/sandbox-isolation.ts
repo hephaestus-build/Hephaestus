@@ -15,7 +15,7 @@
  *
  *   node scripts/sandbox-isolation.ts --namespace <sandboxes> --template <name> \
  *     --gateway <host>:<port> [--reach <name>=<host>:<port> ...] [--forbid <name>=<host>:<port> ...] \
- *     [--context <kubectl context>]
+ *     [--dns <namespace>/<service>] [--context <kubectl context>]
  */
 import { parseArgs } from "node:util";
 
@@ -390,6 +390,8 @@ export interface GateOptions {
 	reach?: Target[];
 	/** Further addresses that a sandbox must not reach. */
 	forbid?: Target[];
+	/** The cluster DNS Service, `kube-system/kube-dns` unless the distribution names it otherwise (RKE2). */
+	dns?: { namespace: string; name: string };
 	context?: string;
 }
 
@@ -412,8 +414,9 @@ export async function isolationGate(options: GateOptions): Promise<Inside> {
 			"kubernetes.io/service-name=kubernetes",
 		]),
 	);
+	const dnsRef = options.dns ?? { namespace: "kube-system", name: "kube-dns" };
 	const dnsService = asRecord(
-		await json(["-n", "kube-system", "get", "service", "kube-dns"]),
+		await json(["-n", dnsRef.namespace, "get", "service", dnsRef.name]),
 		"service",
 	);
 	const dns = asString(asRecord(dnsService.spec, "spec").clusterIP, "DNS address");
@@ -547,6 +550,21 @@ export function namedTarget(entry: string, reachable: boolean): Target {
 	return { name: entry.slice(0, at), ...parseAddress(entry.slice(at + 1)), reachable };
 }
 
+/** `<namespace>/<name>`, as `--dns kube-system/rke2-coredns-rke2-coredns`. */
+export function namespacedName(entry: string): { namespace: string; name: string } {
+	const [namespace, name, ...rest] = entry.split("/");
+	if (
+		namespace === undefined ||
+		name === undefined ||
+		namespace === "" ||
+		name === "" ||
+		rest.length > 0
+	) {
+		throw new Error(`not a <namespace>/<name>: ${entry}`);
+	}
+	return { namespace, name };
+}
+
 async function main() {
 	const { values } = parseArgs({
 		options: {
@@ -555,6 +573,7 @@ async function main() {
 			gateway: { type: "string" },
 			reach: { type: "string", multiple: true, default: [] },
 			forbid: { type: "string", multiple: true, default: [] },
+			dns: { type: "string" },
 			context: { type: "string" },
 		},
 	});
@@ -571,6 +590,7 @@ async function main() {
 		gateway: parseAddress(values.gateway),
 		reach: values.reach.map((entry) => namedTarget(entry, true)),
 		forbid: values.forbid.map((entry) => namedTarget(entry, false)),
+		...(values.dns === undefined ? {} : { dns: namespacedName(values.dns) }),
 		...(values.context === undefined ? {} : { context: values.context }),
 	});
 	process.stdout.write(

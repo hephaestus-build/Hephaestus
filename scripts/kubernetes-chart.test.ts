@@ -273,7 +273,7 @@ await test("the chart ships no image, tag or release identity of its own", () =>
 const load = (name: string) => asRecord(parse(read(`profiles/${name}`)), name);
 
 await test("every profile installs from the same templates with only the operator's values", () => {
-	assert.deepEqual(profiles.toSorted(), ["dev.yaml", "preview.yaml", "small.yaml"]);
+	assert.deepEqual(profiles.toSorted(), ["cluster.yaml", "dev.yaml", "preview.yaml", "small.yaml"]);
 	for (const name of profiles) {
 		const profile = load(name);
 		for (const owned of ["release", "images", "secret", "host", "trustedProxies", "route"]) {
@@ -281,8 +281,12 @@ await test("every profile installs from the same templates with only the operato
 		}
 		const values = install(profile, prepared, operator);
 		assert.equal(validate(values), true, `${name}: ${JSON.stringify(validate.errors)}`);
-		// The small profile runs reviews; the operator states the sandbox namespace and API endpoint.
-		assert.equal(at(values, ["worker", "enabled"]), name.startsWith("small"), `${name} worker`);
+		// The small and cluster profiles run reviews; the operator states the sandbox namespace and API endpoint.
+		assert.equal(
+			at(values, ["worker", "enabled"]),
+			name === "small.yaml" || name === "cluster.yaml",
+			`${name} worker`,
+		);
 	}
 });
 
@@ -505,11 +509,15 @@ await test("the webapp runs the non-root image as it is, with only /tmp writable
 });
 
 await test("sandbox identities and other roles do not receive an API token", () => {
-	// Only the worker may hold an API token. Sandbox pods and every other role get none.
+	// Only the worker and the agent-sandbox controller may hold an API token. Sandbox pods and every
+	// other role get none.
 	for (const { name, source: text } of templates) {
 		const accounts = text.split(/^---$/mu).filter((part) => /^kind: ServiceAccount$/mu.test(part));
 		for (const account of accounts) {
-			if (!account.includes(`"component" "worker"`)) {
+			if (
+				!account.includes(`"component" "worker"`) &&
+				!account.includes(`"component" "agent-sandbox-controller"`)
+			) {
 				assert.match(account, /automountServiceAccountToken: false/u, name);
 			}
 		}

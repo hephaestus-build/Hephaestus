@@ -89,8 +89,8 @@ The webhook role has no database.
 
 ## Profiles
 
-Three values files in `profiles/` set capacity for one use.
-All three use the same templates.
+Four values files in `profiles/` set capacity for one use.
+All four use the same templates.
 Each release chart contains them in `chart-$VERSION/hephaestus/profiles/` after you [verify the release chart](./kubernetes#verify-the-release-chart).
 Give the profile as the first `-f` file, before your own values, as [Install](./kubernetes#install) shows.
 If a change of profile changes a volume size, read [Change a volume size](./upgrade#change-a-volume-size) before you upgrade.
@@ -100,6 +100,7 @@ If a change of profile changes a volume size, read [Change a volume size](./upgr
 | `dev.yaml` | One workstation cluster | Bundled, small volumes |
 | `preview.yaml` | One pull request preview | Bundled, small volumes |
 | `small.yaml` | One small cluster, for example one k3s node | Bundled, bounded streams |
+| `cluster.yaml` | A managed cluster of several nodes, without cluster-admin: [Install on a managed cluster without cluster-admin](./managed-cluster) | Bundled, or external |
 
 `small.yaml` supports a node of 4 vCPU, at least 16 GiB of memory, and 150 GiB of disk.
 A node of 32 GiB gives more headroom.
@@ -190,7 +191,7 @@ Its request figures precede the PostgreSQL memory-request change:
 - A point-in-time restore of a database of 1.8 GB took 152 s. The release served again 5 minutes 41 seconds after the restore started.
 - The peak during a review and a conversation turn is not measured yet.
 
-For a cluster with several nodes, start from `small.yaml`, and set the workers, their reviews, their quota and the external services in your own values file.
+For a cluster with several nodes, start from `cluster.yaml`, and set the workers, their reviews, their quota and the external services in your own values file.
 
 [ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md) owns what a preview can run.
 The preview profile sets only capacity.

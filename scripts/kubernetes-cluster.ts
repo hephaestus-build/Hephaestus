@@ -2845,34 +2845,46 @@ export async function render(): Promise<string> {
 		inventory.upstream,
 	);
 	const base = { images, commit: "0".repeat(40), api: { address: "172.18.0.2", port: 6443 } };
-	const variants = [
+	// The dev profile with backups and with an external PostgreSQL, and the managed-cluster profile.
+	const variants: { profile: string; values: Record<string, unknown> }[] = [
 		{
-			...operatorValues(base),
-			postgresql: {
-				tls: { existingSecret: `${RELEASE}-postgresql-tls` },
-				backup: {
-					clientTlsSecret: "hephaestus-postgresql-backup-tls",
-					enabled: true,
-					s3: { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" },
+			profile: "dev",
+			values: {
+				...operatorValues(base),
+				postgresql: {
+					tls: { existingSecret: `${RELEASE}-postgresql-tls` },
+					backup: {
+						clientTlsSecret: "hephaestus-postgresql-backup-tls",
+						enabled: true,
+						s3: {
+							bucket: "hephaestus-backups",
+							endpoint: "s3.example.com",
+							region: "eu-central-1",
+						},
+					},
 				},
 			},
 		},
-		operatorValues({
-			...base,
-			externalPostgresql: { host: "postgresql.external.svc", cidr: "192.168.0.0/16" },
-		}),
+		{
+			profile: "dev",
+			values: operatorValues({
+				...base,
+				externalPostgresql: { host: "postgresql.external.svc", cidr: "192.168.0.0/16" },
+			}),
+		},
+		{ profile: "cluster", values: operatorValues(base) },
 	];
 	const work = await mkdtemp(path.join(tmpdir(), "hephaestus-render-"));
 	try {
 		const manifests = [];
-		for (const [index, values] of variants.entries()) {
+		for (const [index, { profile, values }] of variants.entries()) {
 			const file = path.join(work, `values-${index}.yaml`);
 			await writeFile(file, JSON.stringify(values));
 			const layers = [
 				"--namespace",
 				NAMESPACE,
 				"--values",
-				path.join(CHART, "profiles", "dev.yaml"),
+				path.join(CHART, "profiles", `${profile}.yaml`),
 				"--values",
 				file,
 			];
