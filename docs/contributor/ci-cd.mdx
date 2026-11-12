@@ -267,7 +267,9 @@ Thus, other changes can accept breaks for the same major release.
 
 To accept a break:
 
-1. Add the break's line to `server/openapi-accepted-breaks.txt`.
+1. Add a new `server/openapi-accepted-breaks/<pr-or-slug>.txt` file for each break.
+   Choose a unique name for your pull request and change.
+   Keep each entry in its own file, so separate pull requests can add entries without a shared-file conflict.
    The line is the message of the gate's annotation in CI: `in API <method> <path> <change text>`.
    The local report shows the same parts on two lines.
    Above it, write a `#` comment with the reason and the pull request.
@@ -277,12 +279,17 @@ To accept a break:
    - From 1.0, use `major`.
      The break must obey the [version numbers](/admin/compatibility-policy#version-numbers) and the [deprecation policy](/admin/compatibility-policy#deprecation-policy) of the compatibility policy.
 
-The diff of the file shows each accepted break in review.
+The diff of each new file shows its accepted break in review.
+The gate reads all `.txt` files in the directory as one set.
+It joins them into a temporary ignore file for oasdiff.
+A duplicate entry accepts no additional break.
+The existing `legacy-*` filenames stay fixed.
+New entries do not continue their sequence.
 
 An entry is obsolete when no break against the current base has that line.
 This occurs when the release that contains the break is published, because that release becomes the base.
 The gate then shows one warning that lists them.
-Remove them in your next change to the file.
+Remove their entry files in your next API change.
 They do not fail the gate, so a published release does not stop unrelated pull requests.
 The Version PR cannot remove them, because its own runs still compare with the previous release.
 

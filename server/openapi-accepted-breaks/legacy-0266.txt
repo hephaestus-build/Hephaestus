@@ -1,0 +1,2 @@
+# #3678: a call pool learns its limit, and the limit sets the conversation reserve, so it is no longer a field.
+in API PATCH /workspaces/{workspaceSlug}/llm/models/{id} removed the required property `callPool/interactiveReserve` from the response with the `200` status

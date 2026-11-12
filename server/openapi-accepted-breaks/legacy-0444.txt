@@ -1,0 +1,2 @@
+# Neither client reads these: the resolution counts and connection audit reads, a review's stage timing and the Slack member id.
+in API GET /user/slack/preferences removed the required property `workspaces/items/slackUserId` from the response with the `200` status

@@ -1,0 +1,2 @@
+# FrozenModel.options values are any JSON value, not Jackson's JsonNode bean properties.
+in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId}/report the response property `practices/items/method/models/items/model/anyOf[#/components/schemas/FrozenModel]/options/additionalProperties/` became nullable for the status `200`

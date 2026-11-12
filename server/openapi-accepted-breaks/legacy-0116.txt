@@ -1,0 +1,3 @@
+# Wire leftovers: the sandbox gateway leaves the public description, so its admission schemas no
+# longer collide with CitationProofDTO, which now publishes as CitationProof with the same shape.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/problems/{problemId} added `#/components/schemas/CitationProof` to the `problem/citations/items/verification` response property `anyOf` list for the response status `200`

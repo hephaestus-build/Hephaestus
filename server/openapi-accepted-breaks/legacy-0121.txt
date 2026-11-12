@@ -1,0 +1,2 @@
+# 1.0 is a full cutover: the resolver of the feedback links posted before 0.94.1 goes, and those links show the not-found page.
+in API GET /workspaces/{workspaceSlug}/practices/items/legacy-feedback/{artifactKind}/{artifactId} api path removed without deprecation

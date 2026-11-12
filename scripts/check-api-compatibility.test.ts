@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -6,12 +7,16 @@ import { after, test } from "node:test";
 
 import {
 	breakLines,
+	ACCEPTED_BREAKS,
 	compareSpecs,
 	headsForMajorRelease,
 	installOasdiff,
 	latestStableTag,
+	readAcceptedBreaks,
 	removedFromContract,
 } from "./check-api-compatibility.ts";
+import { environmentForGitFixture } from "./lib/git-environment.ts";
+import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 const oasdiff = await installOasdiff();
 const directory = await mkdtemp(path.join(tmpdir(), "api-compatibility-test-"));
@@ -87,7 +92,10 @@ async function compare(
 	const name = (role: string) => path.join(directory, `${role}-${fixtures}`);
 	await writeFile(name("base"), JSON.stringify(base));
 	await writeFile(name("revision"), JSON.stringify(revision));
-	await writeFile(name("accepted"), acceptedBreaks);
+	await mkdir(name("accepted"));
+	for (const [index, line] of acceptedBreaks.split(/\r?\n/u).entries()) {
+		await writeFile(path.join(name("accepted"), `${index}.txt`), `${line}\n`);
+	}
 	return compareSpecs({
 		oasdiff,
 		base: name("base"),
@@ -101,6 +109,79 @@ async function compare(
 }
 
 const removedDelete = "in API DELETE /items/{id} api path removed without deprecation";
+
+void test("independent accepted-break additions merge and their union accepts both changes", async () => {
+	const cwd = await mkdtemp(path.join(directory, "merge-"));
+	const accepted = path.join(cwd, ACCEPTED_BREAKS);
+	await mkdir(accepted, { recursive: true });
+	await writeFile(path.join(accepted, "README.md"), "Entry files are independent.\n");
+	const original = spec();
+	const base = {
+		...original,
+		paths: { ...original.paths, "/other": { get: original.paths["/items"].get } },
+	};
+	await writeFile(path.join(cwd, "base.json"), JSON.stringify(base));
+	await writeFile(path.join(cwd, "revision.json"), JSON.stringify(spec({ withDelete: false })));
+	const environment = environmentForGitFixture();
+	const git = (...args: string[]) =>
+		execFileSync("git", args, {
+			cwd,
+			env: environment,
+			encoding: "utf8",
+			maxBuffer: CAPTURE_LIMIT_BYTES,
+		}).trim();
+	git("init", "--quiet", "--initial-branch=main");
+	git("config", "user.name", "Fixture");
+	git("config", "user.email", "fixture@example.invalid");
+	git("add", ".");
+	git("commit", "--quiet", "-m", "base");
+	git("checkout", "--quiet", "-b", "remove-delete");
+	await writeFile(path.join(accepted, "remove-delete.txt"), removedDelete);
+	git("add", ACCEPTED_BREAKS);
+	git("commit", "--quiet", "-m", "accept delete removal");
+	git("checkout", "--quiet", "-b", "remove-other", "main");
+	await writeFile(
+		path.join(accepted, "remove-other.txt"),
+		"in API GET /other api path removed without deprecation",
+	);
+	git("add", ACCEPTED_BREAKS);
+	git("commit", "--quiet", "-m", "accept other removal");
+	const options = {
+		oasdiff,
+		base: "base.json",
+		baseTag: "v0.9.0",
+		majorRelease: false,
+		revision: "revision.json",
+		acceptedBreaks: ACCEPTED_BREAKS,
+		format: "text",
+		cwd,
+	} as const;
+	const beforeMerge = await compareSpecs(options);
+	assert.equal(beforeMerge.compatible, false);
+	git("merge", "--quiet", "--no-edit", "remove-delete");
+	assert.equal(git("status", "--porcelain"), "");
+	const result = await compareSpecs(options);
+	assert.equal(result.compatible, true);
+	assert.deepEqual(result.obsolete, []);
+	assert.deepEqual(result.problems, []);
+});
+
+void test("an empty directory accepts nothing, and a file cannot collect several entries", async () => {
+	const accepted = await mkdtemp(path.join(directory, "entries-"));
+	await writeFile(path.join(accepted, "README.md"), "See the contributor guide.\n");
+	assert.equal(await readAcceptedBreaks(accepted), "");
+	await writeFile(
+		path.join(accepted, "several.txt"),
+		`${removedDelete}\nin API GET /other removed\n`,
+	);
+	await assert.rejects(readAcceptedBreaks(accepted), /own file/u);
+});
+
+void test("duplicate entries form one accepted-break set", async () => {
+	const stale = "in API GET /items/{id} api path removed without deprecation";
+	const { obsolete } = await compare(spec(), `${stale}\n${stale}\n`);
+	assert.deepEqual(obsolete, [stale]);
+});
 
 void test("a removed endpoint breaks a client of the base", async () => {
 	const { compatible, report } = await compare(spec({ withDelete: false }));

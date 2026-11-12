@@ -1,0 +1,2 @@
+# Remove surveys at the 1.0 cutover; export results before upgrading.
+in API GET /admin/product-feedback/surveys/{surveyId}/responses api path removed without deprecation

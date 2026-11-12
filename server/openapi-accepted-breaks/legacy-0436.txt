@@ -1,0 +1,2 @@
+# #4155: the public activity page sends no unread logins (ADR 0052), and its setting names contributors without an account (GDPR Art. 25(2)).
+in API GET /public/workspaces/{slug}/activity removed the required property `highlights/mostPeopleHelped` from the response with the `200` status

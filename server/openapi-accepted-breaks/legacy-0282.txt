@@ -1,0 +1,2 @@
+# Teams use a plural resource, PATCH visibility bodies, and label identifiers.
+in API POST /workspaces/{workspaceSlug}/team/{teamId}/repositories/{repositoryId}/visibility api path removed without deprecation

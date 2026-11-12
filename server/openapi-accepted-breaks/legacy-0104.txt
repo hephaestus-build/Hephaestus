@@ -1,0 +1,2 @@
+# #3468: an item event can wait in its quiet window or for an earlier review, or be withheld because its practices are current.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId} added the new `REVIEW_IN_PROGRESS` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`

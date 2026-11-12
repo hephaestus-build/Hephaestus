@@ -1,0 +1,2 @@
+# Neither client reads these: the resolution counts and connection audit reads, a review's stage timing and the Slack member id.
+in API GET /workspaces/{workspaceSlug}/practices/feedback/resolution-counts api path removed without deprecation

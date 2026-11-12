@@ -1,0 +1,3 @@
+# Merged before this gate existed, against v0.94.7.
+# #2749: one Heph conversation per developer replaces the mentor threads.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId} removed the required property `copies/items/chatMessageId` from the response with the `200` status
