@@ -103,14 +103,17 @@ jobs:
       contents: read
     steps:
       - name: Check out the candidate source
+        if: needs.release.outputs.prerelease != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.release.outputs.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
+        if: needs.release.outputs.prerelease != 'true'
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
+        if: needs.release.outputs.prerelease != 'true'
       - name: Check the planned stable version
         if: needs.release.outputs.prerelease != 'true'
         working-directory: server

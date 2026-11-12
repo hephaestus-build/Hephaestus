@@ -2170,16 +2170,20 @@ void describe("CI contract", () => {
 					continue;
 				}
 				let installed = false;
+				const conditionalInstalls = new Set<string>();
 				for (const declaration of steps.items) {
 					if (!isMap(declaration)) {
 						continue;
 					}
-					if (
+					const condition = declaration.get("if");
+					const installsDependencies =
 						declaration.get("uses") === "./.github/actions/setup-toolchain" &&
-						declaration.getIn(["with", "install"]) === "frozen" &&
-						declaration.get("if") === undefined
-					) {
+						declaration.getIn(["with", "install"]) === "frozen";
+					if (installsDependencies && condition === undefined) {
 						installed = true;
+					}
+					if (installsDependencies && typeof condition === "string") {
+						conditionalInstalls.add(condition);
 					}
 					const command = declaration.get("run");
 					if (typeof command !== "string" || !/\.\/gradlew\b/u.test(command)) {
@@ -2192,8 +2196,8 @@ void describe("CI contract", () => {
 						continue;
 					}
 					assert.ok(
-						installed,
-						`${file}:${String(key)} must install frozen dependencies before Gradle`,
+						installed || (typeof condition === "string" && conditionalInstalls.has(condition)),
+						`${file}:${String(key)} must install frozen dependencies before Gradle under the same condition`,
 					);
 				}
 			}
@@ -7060,6 +7064,12 @@ void test("stable publication requires ratchets for the planned version on the c
 	);
 	const workerSteps = ratchets.get("steps");
 	assert.ok(isSeq(workerSteps));
+	for (const item of workerSteps.items) {
+		assert.ok(isMap(item));
+		if (item.get("name") !== "Keep the ratchet results") {
+			assert.equal(item.get("if"), "needs.release.outputs.prerelease != 'true'");
+		}
+	}
 	const toolchain = workerSteps.items.find(
 		(item) => isMap(item) && item.get("uses") === "./.github/actions/setup-toolchain",
 	);
@@ -7141,11 +7151,21 @@ void test("the focused stable task selects every architecture ratchet and requir
 			continue;
 		}
 		clients.push(file);
-		assert.equal(
-			[...source.matchAll(/@Tag\("release-ratchet"\)/gu)].length,
-			[...source.matchAll(/ReleaseRatchet\.assertEmptyForRelease\(/gu)].length,
-			`${file}: each release ratchet must be selected by the stable task`,
-		);
+		for (const call of source.matchAll(/ReleaseRatchet\.assertEmptyForRelease\(/gu)) {
+			const testStart = source.lastIndexOf("\n    @Test", call.index);
+			assert.ok(testStart !== -1, `${file}: a release ratchet must be a test`);
+			const method = source.slice(testStart, call.index);
+			assert.doesNotMatch(
+				method,
+				/\n {4}\}/u,
+				`${file}: the preceding test must contain the ratchet`,
+			);
+			assert.match(
+				method.slice(0, method.indexOf("{")),
+				/\n {4}@Tag\("release-ratchet"\)/u,
+				`${file}: tag the method that invokes the release ratchet`,
+			);
+		}
 	}
 	assert.ok(clients.includes("LifecycleSetterArchTest.java"));
 	assert.ok(clients.includes("AfterCommitRepairArchTest.java"));

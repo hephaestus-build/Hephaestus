@@ -601,6 +601,7 @@ The task requires the explicit version and refuses empty test discovery.
 It compiles verification classes without repackaging the candidate JAR or images. The candidate manifest keeps its prerelease version.
 
 A candidate source tree without this task cannot pass the preflight. Publish and qualify a new candidate that includes it.
+An allowlist failure needs the same remedy: remove the debt and qualify a new candidate.
 
 Run **Release / Publish** manually on `main` with `promote-candidate` set to the complete tag, for example `v1.0.0-rc.2`.
 A repository writer can request this publication. The candidate has already passed the reviewed main merge and every release gate.
