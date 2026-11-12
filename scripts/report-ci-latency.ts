@@ -213,49 +213,23 @@ export function renderLatencyBudget(
 }
 
 async function listRuns(repository: string, event: string, since: number) {
-	const now = Date.now();
-	const runs = new Map<number, Record<string, unknown>>();
-	// A filtered GitHub run listing stops at 1,000 results. Bound each request to a UTC day.
-	for (let day = Math.floor(since / DAY) * DAY; day <= now; day += DAY) {
-		const date = new Date(day).toISOString().slice(0, 10);
-		const pages = asArray(
-			parseJson(
-				await output("gh", [
-					"api",
-					"--paginate",
-					"--slurp",
-					`repos/${repository}/actions/workflows/cicd.yml/runs?event=${event}&status=completed&created=${date}&per_page=100`,
-				]),
-			),
-			"run pages",
-		).map((page) => asRecord(page, "run page"));
-		const rows = pages.flatMap((page) => asArray(page.workflow_runs, "workflow_runs"));
-		if (
-			rows.length >= 1000 ||
-			pages.some((page) => typeof page.total_count === "number" && page.total_count >= 1000)
-		) {
-			throw new Error(
-				`${event} ${date} reaches GitHub's 1,000-run cap; split the date before reporting`,
-			);
-		}
-		for (const row of rows) {
-			const run = asRecord(row, "run");
-			const { id } = run;
-			const created = Date.parse(asString(run.created_at, "created_at"));
-			if (
-				typeof id !== "number" ||
-				!Number.isSafeInteger(id) ||
-				id < 1 ||
-				!Number.isFinite(created)
-			) {
-				throw new Error("Invalid run ID or creation timestamp");
-			}
-			if (created >= since && created <= now) {
-				runs.set(id, run);
-			}
-		}
-	}
-	return { workflow_runs: [...runs.values()] };
+	const created = encodeURIComponent(`>=${new Date(since).toISOString()}`);
+	const pages = asArray(
+		parseJson(
+			await output("gh", [
+				"api",
+				"--paginate",
+				"--slurp",
+				`repos/${repository}/actions/workflows/cicd.yml/runs?event=${event}&status=completed&created=${created}&per_page=100`,
+			]),
+		),
+		"run pages",
+	);
+	return {
+		workflow_runs: pages.flatMap((page) =>
+			asArray(asRecord(page, "run page").workflow_runs, "workflow_runs"),
+		),
+	};
 }
 
 async function jobsOf(repository: string, run: Record<string, unknown>, attempt: unknown) {
