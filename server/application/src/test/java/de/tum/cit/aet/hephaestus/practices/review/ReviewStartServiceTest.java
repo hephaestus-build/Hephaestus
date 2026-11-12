@@ -137,13 +137,12 @@ class ReviewStartServiceTest extends BaseUnitTest {
     private ReviewStartService starts() {
         return new ReviewStartService(
                 reviews,
-                mock(ReviewItemRepository.class),
-                mock(ReviewPracticeRepository.class),
                 mock(ProductItemQuery.class),
                 mock(PracticeItemOptions.class),
                 mock(ItemEventService.class),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 mock(FeedbackRepair.class),
-                mock(ReviewFreshness.class));
+                mock(ReviewFreshness.class),
+                mock(ReviewClosure.class));
     }
 }

@@ -288,9 +288,8 @@ public class PracticeModelTestFixtures {
         work.job().setCompletedAt(Instant.now());
         manager.merge(work.job());
         RuntimeJobTestData.persistRun(jdbc, work.job());
-        work.review().setStatus(ReviewStatus.COMPLETE);
+        work.review().end(ReviewStatus.COMPLETE, null, Instant.now());
         work.review().setAdmittedAt(result.getRecordedAt());
-        work.review().setCompletedAt(Instant.now());
         manager.merge(work.review());
         manager.flush();
         return result;

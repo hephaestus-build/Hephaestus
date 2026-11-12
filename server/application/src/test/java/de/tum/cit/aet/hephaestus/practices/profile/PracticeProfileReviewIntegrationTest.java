@@ -497,11 +497,12 @@ class PracticeProfileReviewIntegrationTest extends BaseIntegrationTest {
         var at = Instant.now();
         var complete = data.result(scenario, ResultOutcome.MET, at);
         data.end(complete, at.plusMillis(500));
-        var partial = data.result(scenario, ResultOutcome.NOT_MET, at.plusSeconds(1));
-        var review = reviews.findById(partial.getReviewId()).orElseThrow();
-        review.setStatus(ReviewStatus.PARTIAL);
-        review.setStopReason(ReviewStopReason.RESULT_WITHHELD);
-        reviews.saveAndFlush(review);
+        var partial = data.result(
+                scenario,
+                ResultOutcome.NOT_MET,
+                at.plusSeconds(1),
+                ReviewStatus.PARTIAL,
+                ReviewStopReason.RESULT_WITHHELD);
 
         get("/practice-profile/reviews?status=PARTIAL&size=1")
                 .expectStatus()
@@ -550,11 +551,8 @@ class PracticeProfileReviewIntegrationTest extends BaseIntegrationTest {
         var at = Instant.now();
         var complete = data.result(scenario, ResultOutcome.MET, at.minus(Duration.ofDays(40)));
         data.end(complete, at.minus(Duration.ofDays(39)));
-        var partial = data.result(scenario, ResultOutcome.NOT_MET, at);
-        var review = reviews.findById(partial.getReviewId()).orElseThrow();
-        review.setStatus(ReviewStatus.PARTIAL);
-        review.setStopReason(ReviewStopReason.RESULT_WITHHELD);
-        reviews.saveAndFlush(review);
+        var partial = data.result(
+                scenario, ResultOutcome.NOT_MET, at, ReviewStatus.PARTIAL, ReviewStopReason.RESULT_WITHHELD);
 
         get("/practice-profile/reviews?status=COMPLETE")
                 .expectStatus()

@@ -481,8 +481,8 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     @ParameterizedTest
     @EnumSource(ReviewStatus.class)
     void shouldExposeEachPersistedStateInReviewDetailListAndCounts(ReviewStatus status) {
-        var result = data.result(scenario, ResultOutcome.MET, Instant.now());
-        data.reviewStatus(result, status);
+        var result = data.result(scenario, ResultOutcome.MET, Instant.now(), status);
+        if (!status.isTerminal()) data.activeJob(result, status.name(), null);
 
         get("/practices/reviews/" + result.getReviewId())
                 .expectStatus()

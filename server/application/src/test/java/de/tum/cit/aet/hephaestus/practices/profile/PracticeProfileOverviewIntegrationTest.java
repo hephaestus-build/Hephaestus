@@ -82,8 +82,8 @@ class PracticeProfileOverviewIntegrationTest extends BaseIntegrationTest {
     @ParameterizedTest
     @EnumSource(ReviewStatus.class)
     void shouldReportEachPersistedStateInTheReadersOverviewListAndDetail(ReviewStatus status) {
-        var review = data.result(scenario, ResultOutcome.MET, Instant.now());
-        data.reviewStatus(review, status);
+        var review = data.result(scenario, ResultOutcome.MET, Instant.now(), status);
+        if (!status.isTerminal()) data.activeJob(review, status.name(), null);
 
         get("/practice-profile/overview")
                 .expectStatus()
@@ -231,10 +231,7 @@ class PracticeProfileOverviewIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotReportAReviewInFlightThatAlreadyRecordedAResultAboutTheReader() {
-        var recorded = data.result(scenario, ResultOutcome.MET, Instant.now());
-        jdbc.sql("UPDATE review SET status='RUNNING',stop_reason=NULL,completed_at=NULL WHERE id=:id")
-                .param("id", recorded.getReviewId())
-                .update();
+        var recorded = data.result(scenario, ResultOutcome.MET, Instant.now(), ReviewStatus.RUNNING);
         // Another practice of the same review still waits: its listed item alone does not make the review new.
         jdbc.sql("UPDATE review_item SET state='LISTED',result_id=NULL WHERE review_id=:id")
                 .param("id", recorded.getReviewId())

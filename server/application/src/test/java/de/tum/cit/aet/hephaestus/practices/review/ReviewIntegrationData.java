@@ -177,6 +177,25 @@ public class ReviewIntegrationData {
     }
 
     @Transactional
+    public Result result(Scenario s, ResultOutcome outcome, Instant at, ReviewStatus status) {
+        return result(s, outcome, at, status, stopReason(status));
+    }
+
+    @Transactional
+    public Result result(
+            Scenario s, ResultOutcome outcome, Instant at, ReviewStatus status, @Nullable ReviewStopReason reason) {
+        return result(
+                s,
+                outcome,
+                at,
+                at,
+                "version-" + UUID.randomUUID(),
+                new HostCoverage(true, List.of(), 1, 0, 0, List.of()),
+                status,
+                reason);
+    }
+
+    @Transactional
     public Result result(
             Scenario s,
             ResultOutcome outcome,
@@ -184,6 +203,18 @@ public class ReviewIntegrationData {
             Instant recordedAt,
             String itemVersion,
             HostCoverage coverage) {
+        return result(s, outcome, orderedAt, recordedAt, itemVersion, coverage, ReviewStatus.COMPLETE, null);
+    }
+
+    private Result result(
+            Scenario s,
+            ResultOutcome outcome,
+            Instant orderedAt,
+            Instant recordedAt,
+            String itemVersion,
+            HostCoverage coverage,
+            ReviewStatus status,
+            @Nullable ReviewStopReason reason) {
         var review = Review.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(s.workspace().getId())
@@ -191,12 +222,13 @@ public class ReviewIntegrationData {
                 .kind(ReviewKind.ITEM)
                 .origin(ReviewOrigin.REQUEST)
                 .requestedById(s.account().getId())
-                .status(ReviewStatus.COMPLETE)
+                .status(status)
                 .itemVersion(itemVersion)
                 .orderedAt(orderedAt)
                 .createdAt(orderedAt)
                 .admittedAt(recordedAt)
-                .completedAt(recordedAt)
+                .completedAt(status.isTerminal() ? recordedAt : null)
+                .stopReason(reason)
                 .build();
         reviews.saveAndFlush(review);
         assignments.saveAndFlush(ReviewPractice.builder()
@@ -475,21 +507,13 @@ public class ReviewIntegrationData {
         return id;
     }
 
-    @Transactional
-    public void reviewStatus(Result result, ReviewStatus status) {
-        var review = reviews.findByIdAndWorkspaceId(result.getReviewId(), result.getWorkspaceId())
-                .orElseThrow();
-        review.setStatus(status);
-        review.setCompletedAt(status.isTerminal() ? result.getRecordedAt() : null);
-        review.setStopReason(
-                switch (status) {
-                    case QUEUED, RUNNING, COMPLETE -> null;
-                    case PARTIAL -> ReviewStopReason.EXECUTION_INCOMPLETE;
-                    case FAILED -> ReviewStopReason.EXECUTION_FAILED;
-                    case CANCELLED -> ReviewStopReason.CANCELLED;
-                });
-        reviews.saveAndFlush(review);
-        if (!status.isTerminal()) activeJob(result, status.name(), null);
+    private static @Nullable ReviewStopReason stopReason(ReviewStatus status) {
+        return switch (status) {
+            case QUEUED, RUNNING, COMPLETE -> null;
+            case PARTIAL -> ReviewStopReason.EXECUTION_INCOMPLETE;
+            case FAILED -> ReviewStopReason.EXECUTION_FAILED;
+            case CANCELLED -> ReviewStopReason.CANCELLED;
+        };
     }
 
     /** An unfinished job of the result's review: QUEUED (waiting, or held by {@code hold}) or RUNNING. */

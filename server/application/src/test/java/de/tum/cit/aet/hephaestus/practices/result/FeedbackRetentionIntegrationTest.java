@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -144,12 +145,9 @@ class FeedbackRetentionIntegrationTest extends BaseIntegrationTest {
 
     /** A newer review of the same item that reused {@code resultId}, still running or completed. */
     private void reuse(Scenario scenario, UUID resultId, Instant now, boolean running) {
-        var review = data.result(scenario, ResultOutcome.NOT_MET, now, now);
+        var review = data.result(
+                scenario, ResultOutcome.NOT_MET, now, running ? ReviewStatus.RUNNING : ReviewStatus.COMPLETE);
         data.end(review, now);
-        if (running)
-            jdbc.update(
-                    "UPDATE review SET status='RUNNING',stop_reason=NULL,completed_at=NULL WHERE id=?",
-                    review.getReviewId());
         jdbc.update(
                 "UPDATE review_item SET state='REUSED',result_id=? WHERE review_id=? AND workspace_id=?",
                 resultId,

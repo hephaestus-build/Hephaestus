@@ -25,7 +25,6 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
-import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
@@ -33,7 +32,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCancellationRequested;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompleted;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompletion;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -108,13 +106,12 @@ public class ReviewServiceImpl implements ReviewService {
     private final JsonMapper json;
     private final Clock clock;
     private final ApplicationEventPublisher events;
-    private final ScanReportService reports;
     private final PracticeItemOptions itemOptions;
     private final ResultRepository results;
     private final ResultFreshness freshness;
     private final List<CapturedApplicability> applicability;
     private final ItemEventService itemEvents;
-    private final ReviewOutcomeMeters outcomes;
+    private final ReviewClosure closure;
 
     @Override
     @Transactional(noRollbackFor = ReviewRequestRejected.class)
@@ -341,11 +338,7 @@ public class ReviewServiceImpl implements ReviewService {
                                 request.workspaceId(), review.getId())
                         .stream()
                         .allMatch(m -> m.getState() == ReviewItemState.WITHHELD)) {
-            review.setStatus(ReviewStatus.PARTIAL);
-            review.setStopReason(ReviewStopReason.READINESS_REFUSED);
-            review.setCompletedAt(now);
-            outcomes.ended(review);
-            ended(review);
+            closure.close(review, ReviewStatus.PARTIAL, ReviewStopReason.READINESS_REFUSED, now);
         } else events.publishEvent(new ReviewRequested(review.getId(), request.workspaceId()));
         return review.getId();
     }
@@ -584,25 +577,15 @@ public class ReviewServiceImpl implements ReviewService {
                 : completion.status() == ReviewStatus.COMPLETE && incomplete
                         ? ReviewStatus.PARTIAL
                         : completion.status();
-        review.setStatus(status);
-        // A cancellation that nobody requested keeps the reason the runtime recorded, such as no sandbox room.
-        review.setStopReason(
-                status == ReviewStatus.COMPLETE
-                        ? null
-                        : status == ReviewStatus.CANCELLED
-                                ? cancellationRequested || completion.reason() == null
-                                        ? ReviewStopReason.CANCELLED
-                                        : completion.reason()
-                                : completion.reason() == null ? unmeasuredReason(review) : completion.reason());
-        review.setCompletedAt(completion.completedAt());
-        closeMembers(review);
-        if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspaceId, reviewId);
-        outcomes.ended(review);
-        if ((status == ReviewStatus.COMPLETE || status == ReviewStatus.PARTIAL)
-                && memberships.existsByWorkspaceIdAndReviewIdAndStateInAndResultIdIsNotNull(
-                        workspaceId, reviewId, List.of(ReviewItemState.JUDGED, ReviewItemState.REUSED)))
-            events.publishEvent(new ReviewCompleted(reviewId, workspaceId));
-        ended(review);
+        // A cancellation that nobody requested keeps the runtime's recorded reason.
+        var reason = status == ReviewStatus.COMPLETE
+                ? null
+                : status == ReviewStatus.CANCELLED
+                        ? cancellationRequested || completion.reason() == null
+                                ? ReviewStopReason.CANCELLED
+                                : completion.reason()
+                        : completion.reason() == null ? unmeasuredReason(review) : completion.reason();
+        closure.close(review, status, reason, completion.completedAt());
     }
 
     @Override
@@ -610,18 +593,10 @@ public class ReviewServiceImpl implements ReviewService {
     public boolean cancel(long workspaceId, UUID reviewId) {
         var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
         if (review.getStatus().isTerminal()) return false;
-        if (review.isCancelRequested()) return true;
-        review.setCancelRequested(true);
+        if (!review.requestCancel()) return true;
         events.publishEvent(new ReviewCancellationRequested(reviewId, workspaceId));
-        if (!hasUnsettledInvocation(workspaceId, reviewId)) {
-            review.setStatus(ReviewStatus.CANCELLED);
-            review.setStopReason(ReviewStopReason.CANCELLED);
-            review.setCompletedAt(clock.instant());
-            closeMembers(review);
-            ended(review);
-            if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspaceId, reviewId);
-            outcomes.ended(review);
-        }
+        if (!hasUnsettledInvocation(workspaceId, reviewId))
+            closure.close(review, ReviewStatus.CANCELLED, ReviewStopReason.CANCELLED, clock.instant());
         return true;
     }
 
@@ -649,40 +624,6 @@ public class ReviewServiceImpl implements ReviewService {
                         || ReviewStopReason.READINESS_REFUSED.name().equals(reason)
                 ? ReviewStopReason.READINESS_REFUSED
                 : ReviewStopReason.EXECUTION_INCOMPLETE;
-    }
-
-    /**
-     * Ends what the closed review still holds open. A practice that nothing measured ends withheld for the reason the
-     * review stopped, however far its capture got, and never done. A scan keeps its listed files: its report counts them
-     * as not reached.
-     */
-    private void closeMembers(Review review) {
-        long workspaceId = review.getWorkspaceId();
-        var reason = Objects.requireNonNullElse(review.getStopReason(), ReviewStopReason.EXECUTION_INCOMPLETE)
-                .name();
-        var unmeasured = new HashSet<Long>();
-        if (review.getKind() == ReviewKind.ITEM)
-            for (var member : memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
-                    workspaceId, review.getId())) {
-                if (member.getState() != ReviewItemState.LISTED) continue;
-                unmeasured.add(member.getPracticeId());
-                member.withhold(reason, "The review ended before this practice was measured.", clock.instant());
-            }
-        for (var assignment : assignments.lockAssignments(workspaceId, review.getId())) {
-            if (assignment.getStatus() == ReviewPracticeStatus.QUEUED
-                    || unmeasured.contains(assignment.getPracticeId())) {
-                assignment.setStatus(ReviewPracticeStatus.WITHHELD);
-                assignment.setReason(reason);
-            } else if (assignment.getStatus() != ReviewPracticeStatus.WITHHELD
-                    && assignment.getStatus() != ReviewPracticeStatus.FAILED) {
-                assignment.setStatus(ReviewPracticeStatus.DONE);
-            }
-        }
-    }
-
-    private void ended(Review review) {
-        if (review.getChecks().has(COMMENT_ANSWER))
-            events.publishEvent(new CommentRequestedReviewEnded(review.getId(), review.getWorkspaceId()));
     }
 
     private boolean hasUnsettledInvocation(long workspaceId, UUID reviewId) {

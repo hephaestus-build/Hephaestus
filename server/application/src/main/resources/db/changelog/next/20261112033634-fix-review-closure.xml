@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794454594341-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <columnExists tableName="review" columnName="status"/>
+        </preConditions>
+        <comment>A terminal review keeps its status, including when a writer uses SQL instead of the aggregate.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION guard_review() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF OLD.status IN ('COMPLETE', 'PARTIAL', 'FAILED', 'CANCELLED')
+    AND NEW.status IS DISTINCT FROM OLD.status THEN
+  RAISE EXCEPTION 'a terminal review keeps its status' USING ERRCODE = '55000';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER review_transition BEFORE UPDATE OF status ON review FOR EACH ROW EXECUTE FUNCTION guard_review();
+        </sql>
+        <rollback>DROP TRIGGER review_transition ON review; DROP FUNCTION guard_review();</rollback>
+    </changeSet>
+</databaseChangeLog>

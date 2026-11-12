@@ -124,7 +124,7 @@ A reason that is not a constant name counts as `other`.
 Other items have the reason `none`.
 The `review.stop_reason` and `review_item.reason` columns keep the same reasons for each review.
 
-The server registers each status and stop reason of `practice_review_ended_total` at zero when it starts.
+The server and the worker register each status and stop reason of `practice_review_ended_total` at zero when it starts.
 Thus, `increase()` also counts the first end after a start.
 An item series starts with its first count, so `increase()` does not count the first items of a new state and reason after a start.
 

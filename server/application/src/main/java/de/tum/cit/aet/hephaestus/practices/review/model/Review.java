@@ -14,6 +14,7 @@ import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Builder.Default;
@@ -26,6 +27,7 @@ import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 @Entity
 @Table(
@@ -84,10 +86,12 @@ public class Review {
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'QUEUED'")
     @Column(name = "status", nullable = false, length = 16)
+    @Setter(AccessLevel.NONE)
     private ReviewStatus status = ReviewStatus.QUEUED;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "stop_reason", length = 48)
+    @Setter(AccessLevel.NONE)
     private @Nullable ReviewStopReason stopReason;
 
     @Column(name = "budget_usd", precision = 18, scale = 6)
@@ -109,6 +113,7 @@ public class Review {
     private @Nullable Instant admittedAt;
 
     @Column(name = "completed_at")
+    @Setter(AccessLevel.NONE)
     private @Nullable Instant completedAt;
 
     @Column(name = "public_review_at")
@@ -132,6 +137,7 @@ public class Review {
     @Default
     @ColumnDefault("false")
     @Column(name = "cancel_requested", nullable = false)
+    @Setter(AccessLevel.NONE)
     private boolean cancelRequested = false;
 
     @Default
@@ -139,4 +145,45 @@ public class Review {
     @ColumnDefault("'{}'")
     @Column(name = "checks", nullable = false, columnDefinition = "jsonb")
     private JsonNode checks = JsonNodeFactory.instance.objectNode();
+
+    /** Starts an admitted review, preserving the first start when a later invocation resumes it. */
+    public boolean start(Instant now) {
+        if (cancelRequested || !status.canTransitionTo(ReviewStatus.RUNNING)) return false;
+        if (status == ReviewStatus.QUEUED) {
+            status = ReviewStatus.RUNNING;
+            if (!checks.has("startedAt")) {
+                var started = (ObjectNode) checks.deepCopy();
+                started.put("startedAt", now.toString());
+                checks = started;
+            }
+        }
+        return true;
+    }
+
+    /** Queues an active review again; a terminal review stays final. */
+    public boolean requeue() {
+        if (!status.canTransitionTo(ReviewStatus.QUEUED)) return false;
+        status = ReviewStatus.QUEUED;
+        return true;
+    }
+
+    /** Records the first cancellation request while an invocation may still have to settle. */
+    public boolean requestCancel() {
+        if (status.isTerminal() || cancelRequested) return false;
+        cancelRequested = true;
+        return true;
+    }
+
+    /** Ends once, with the reason and time implied by the final state. */
+    public void end(ReviewStatus next, @Nullable ReviewStopReason reason, Instant at) {
+        if (!next.isTerminal()) throw new IllegalArgumentException("A review must end in a terminal status.");
+        if (!status.canTransitionTo(next)) throw new IllegalStateException("A terminal review cannot end again.");
+        if (cancelRequested && next != ReviewStatus.CANCELLED)
+            throw new IllegalStateException("A requested cancellation must end cancelled.");
+        if ((next == ReviewStatus.COMPLETE) != (reason == null))
+            throw new IllegalArgumentException("Only a complete review ends without a stop reason.");
+        status = next;
+        stopReason = reason;
+        completedAt = at;
+    }
 }
