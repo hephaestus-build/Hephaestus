@@ -255,14 +255,14 @@ After you run it, the next tick installs the release again.
 
 For 0.95.x → 1.0, read [Upgrade to 1.0](./upgrade-to-1-0).
 Use the four [Database maintenance](./maintenance#database-maintenance) phases.
-Remove `webhook.replicas` and `webhook.resources` from `/etc/hephaestus/chart.yaml` before phase 2: the 1.0 chart refuses them.
+Prepare the target site values before phase 2, as [Values and keys to move](./upgrade-to-1-0#values-and-keys-to-move) describes.
 Pause the timer before phase 1.
 Save `/var/lib/hephaestus/applied.json` as `/var/lib/hephaestus/applied-before-cutover.json` before you change the release.
 Record the stopped phase-1 Helm revision from `helm history <release> --namespace <namespace>`.
 
-Verify the backups, record the server count, and use the verified source chart to stop every role.
-Stop the source release's worker and webhook Deployments with the other roles. 1.0 has neither, so you do not restore their counts.
-Wait until their Pods and every sandbox Pod and Job are removed.
+Verify the backups, record the server count, and stop the source release as [Cut over to 1.0.0](./upgrade-to-1-0#cut-over-to-100) describes.
+Use the verified source chart and its replica settings.
+Wait until every source role Pod and sandbox Pod and Job is removed.
 
 Then promote the target release.
 Restart the timer for phase 2 only after the channel names the target.

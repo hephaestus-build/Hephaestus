@@ -157,16 +157,9 @@ If every sandbox Pod used its limit at the same time, the node would be full.
 The single-node `small` profile sets `conversationLoop.turns: auto` and `conversationLoop.replicas: 1`.
 With its default values, the chart derives 27 resident conversation turns for the installation, and 25 with backups on.
 
-An earlier staging capture recorded these values on one node of 16 GiB with k3s 1.37.
-Its request figures precede the PostgreSQL memory-request change:
-
-- At rest, the release requests 10.3 GiB of 15.6 GiB.
-  It uses about 5.9 GiB on the host.
-  The server uses 2.0 GiB and the server 1.3 GiB.
-  The webhook role, a separate Pod then, used 0.8 GiB. PostgreSQL used 0.7 GiB and NATS 60 MiB.
-- An upgrade that recreated the server and restarted PostgreSQL stopped reviews for about 4 minutes, with the isolation probe. The webhook role kept receiving.
-- A point-in-time restore of a database of 1.8 GB took 152 s. The release served again 5 minutes 41 seconds after the restore started.
-- The peak during a review and a conversation turn is not measured yet.
+A staging capture measured a point-in-time restore of a database of 1.8 GB at 152 s.
+The release served again 5 minutes 41 seconds after the restore started.
+The peak during a review and a conversation turn is not measured yet.
 
 For a cluster with several nodes, start from `cluster.yaml`, and set the servers, their reviews, their quota and the external services in your own values file.
 

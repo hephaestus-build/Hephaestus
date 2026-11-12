@@ -81,7 +81,7 @@ The Gateway does not change a path. The server owns each path that it receives:
 | Path | Owner |
 |---|---|
 | `/api/**` | The API. `servers: [{url: /api}]` in the OpenAPI description, so the paths there and in the generated clients stay relative. |
-| `/webhooks/**` | Provider webhooks. The webhook role serves them while it is its own Deployment. |
+| `/webhooks/**` | Provider webhooks, received by the server. |
 | `/internal/**` | The sandbox gateway, only on its own connector. |
 | `/.well-known/**` | From stage 2: the instance metadata, the signing keys and `security.txt` ([RFC 8615](https://www.rfc-editor.org/rfc/rfc8615)). |
 | Every other path | The SPA: a hashed asset, or `index.html` for a client route. |
