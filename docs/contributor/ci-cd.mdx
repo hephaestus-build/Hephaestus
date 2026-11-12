@@ -827,7 +827,8 @@ Release evidence selection stays separate. A Version PR does not select the full
 
 ### Migration checks on PRs
 
-A pull request that changes `db/**` runs the database tests and PostgreSQL drills before the queue, including on a draft.
+A PR outside the [light tier](#light-tier-for-stacked-layers) that changes `db/**` runs database tests and PostgreSQL drills, including on a draft.
+The light tier defers these checks to the merge group.
 If it changes only `server/application/src/main/resources/db/**` and its release or schema notes,
 it runs `review` without Unit or Architecture. The notes can be changesets, `.migration/*.md` files or generated ERD files.
 Generated-artifact drift, quality and security checks stay selected.

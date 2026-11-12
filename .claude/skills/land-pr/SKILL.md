@@ -41,10 +41,11 @@ Two path groups need attention:
   They do not select the App Server leg.
 - `package.json` or `pnpm-lock.yaml` select every source leg.
 
-A pull request runs only the fast tier, with the `review` integration shard. The merge queue runs the
-other integration shards, the database tests, the drills and the browser suites. Migration changes
-also run the database tests and drills on the pull request. Use the `ci:full` label to reproduce a
-queue-tier failure ([Two verification tiers](../../../docs/contributor/ci-cd.mdx#two-verification-tiers)).
+A PR outside the [light tier](../../../docs/contributor/ci-cd.mdx#light-tier-for-stacked-layers) runs the fast tier, with the `review` integration shard.
+Those PRs also run the database tests and drills when migrations change.
+The merge queue runs the other integration shards, database tests, drills and browser suites for every change.
+Use the `ci:full` label to reproduce a queue-tier failure
+([Two verification tiers](../../../docs/contributor/ci-cd.mdx#two-verification-tiers)).
 
 Reconcile changed dependency inputs before local gates.
 See [Dependency installation](../../../docs/contributor/local-verification.mdx#dependency-installation)
