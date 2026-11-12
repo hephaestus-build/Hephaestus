@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
 import org.springframework.core.annotation.AnnotatedElementUtils;
@@ -232,6 +233,7 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
     }
 
     @Test
+    @Tag("release-ratchet")
     void shouldHaveNoUnrepairedAfterCommitListenersForOnePointZero(TestReporter reporter) {
         ReleaseRatchet.assertEmptyForRelease(
                 "After-commit repair ratchet",

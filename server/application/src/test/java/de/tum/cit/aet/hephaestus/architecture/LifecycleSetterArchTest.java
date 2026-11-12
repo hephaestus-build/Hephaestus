@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.Entity;
 import java.util.List;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 class LifecycleSetterArchTest extends HephaestusArchitectureTest {
@@ -82,6 +83,7 @@ class LifecycleSetterArchTest extends HephaestusArchitectureTest {
     }
 
     @Test
+    @Tag("release-ratchet")
     void shouldHaveNoLifecycleDebtAtRelease() {
         ReleaseRatchet.assertEmptyForRelease("ADR 0099 lifecycle debt", REMAINING);
     }

@@ -28,7 +28,7 @@ import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { committedShards } from "./lib/integration-durations.ts";
-import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
+import { asArray, asRecord, asString, asStringArray, isRecord } from "./lib/json.ts";
 import { exitStatus } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { INSTALL_ARGUMENTS, INSTALL_ENVIRONMENT } from "./maintain-version-pr.ts";
@@ -7033,4 +7033,120 @@ void test("the prepull drill stays on the latest amd64 consumer after flattening
 		);
 		assert.match(String(prepullStep.get("run")), /node scripts\/sandbox-prepull-drill\.ts/u);
 	}
+});
+
+void test("stable publication requires ratchets for the planned version on the candidate source", async () => {
+	const release = parseDocument(await readFile(".github/workflows/release.yml", "utf8"));
+	const ratchets = release.getIn(["jobs", "stable-ratchets"]);
+	assert.ok(isMap(ratchets));
+	const permissions = ratchets.get("permissions");
+	assert.ok(isMap(permissions));
+	assert.deepEqual(permissions.toJSON(), { contents: "read" });
+	assert.equal(ratchets.get("needs"), "release");
+	const selection = asString(ratchets.get("if"), "stable ratchet condition");
+	for (const released of ["true", "false", ""]) {
+		for (const prerelease of ["true", "false", ""]) {
+			assert.equal(
+				expandExpressions(`\${{ ${selection} }}`, {
+					needs: { release: { outputs: { released, prerelease } } },
+				}),
+				String(released === "true"),
+			);
+		}
+	}
+	assert.equal(
+		step(release, ["jobs", "stable-ratchets"], "actions/checkout").get("ref"),
+		`\${{ needs.release.outputs.sha }}`,
+	);
+	const workerSteps = ratchets.get("steps");
+	assert.ok(isSeq(workerSteps));
+	const toolchain = workerSteps.items.find(
+		(item) => isMap(item) && item.get("uses") === "./.github/actions/setup-toolchain",
+	);
+	assert.ok(isMap(toolchain));
+	assert.equal(toolchain.getIn(["with", "install"]), "frozen");
+	const check = workerSteps.items.find(
+		(item) => isMap(item) && item.get("name") === "Check the planned stable version",
+	);
+	assert.ok(isMap(check));
+	assert.equal(check.getIn(["env", "RELEASE_VERSION"]), `\${{ needs.release.outputs.version }}`);
+	assert.equal(check.get("working-directory"), "server");
+	assert.equal(
+		check.get("run"),
+		'./gradlew :application:releaseRatchetTest "-Phephaestus.releaseVersion=$RELEASE_VERSION"',
+	);
+	assert.equal(check.has("continue-on-error"), false);
+	assert.equal(ratchets.has("continue-on-error"), false);
+
+	const publisher = release.getIn(["jobs", "tag-images"]);
+	assert.ok(isMap(publisher));
+	const dependencies = publisher.get("needs");
+	assert.ok(isSeq(dependencies));
+	assert.ok(dependencies.toJSON().includes("stable-ratchets"));
+	assert.equal(publisher.get("if"), "needs.release.outputs.released == 'true'");
+	// No status function bypasses the dependency results: failed, cancelled or skipped ratchets block publication.
+	for (const prerelease of ["true", "false", ""]) {
+		assert.equal(
+			expandExpressions(`\${{ ${asString(check.get("if"), "stable version condition")} }}`, {
+				needs: { release: { outputs: { prerelease } } },
+			}),
+			String(prerelease !== "true"),
+		);
+	}
+	const jobs = release.get("jobs");
+	assert.ok(isMap(jobs));
+	const dependsOnRatchets = (name: string): boolean => {
+		if (name === "stable-ratchets") {
+			return true;
+		}
+		const needs = jobs.getIn([name, "needs"]);
+		if (typeof needs === "string") {
+			return dependsOnRatchets(needs);
+		}
+		if (!isSeq(needs)) {
+			return false;
+		}
+		return asStringArray(needs.toJSON(), `${name} dependencies`).some(dependsOnRatchets);
+	};
+	for (const name of ["tag-images", "publish-release"]) {
+		assert.equal(dependsOnRatchets(name), true, `${name} must wait for the stable preflight`);
+		assert.equal(jobs.getIn([name, "if"]), "needs.release.outputs.released == 'true'");
+	}
+});
+
+void test("the focused stable task selects every architecture ratchet and requires an explicit version", async () => {
+	const build = await readFile("server/application/build.gradle.kts", "utf8");
+	const task = build.slice(
+		build.indexOf('tasks.register<Test>("releaseRatchetTest")'),
+		build.indexOf("tasks.jacocoTestReport"),
+	);
+	assert.match(task, /selectTestTier\("architecture & release-ratchet"\)/u);
+	assert.match(task, /failOnNoDiscoveredTests\.set\(true\)/u);
+	assert.match(task, /require\(!plannedVersion\.isNullOrBlank\(\)\)/u);
+	assert.match(
+		build,
+		/releaseVersion\.orNull\?\.let \{ systemProperty\("hephaestus.releaseVersion", it\) \}/u,
+	);
+	const directory = "server/application/src/test/java/de/tum/cit/aet/hephaestus/architecture";
+	const clients: string[] = [];
+	for (const file of await readdir(directory)) {
+		if (!file.endsWith(".java")) {
+			continue;
+		}
+		const source = await readFile(`${directory}/${file}`, "utf8");
+		if (
+			!source.includes("ReleaseRatchet.assertEmptyForRelease(") ||
+			source.includes("extends BaseUnitTest")
+		) {
+			continue;
+		}
+		clients.push(file);
+		assert.equal(
+			[...source.matchAll(/@Tag\("release-ratchet"\)/gu)].length,
+			[...source.matchAll(/ReleaseRatchet\.assertEmptyForRelease\(/gu)].length,
+			`${file}: each release ratchet must be selected by the stable task`,
+		);
+	}
+	assert.ok(clients.includes("LifecycleSetterArchTest.java"));
+	assert.ok(clients.includes("AfterCommitRepairArchTest.java"));
 });
