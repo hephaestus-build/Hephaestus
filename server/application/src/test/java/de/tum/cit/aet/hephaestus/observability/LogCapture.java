@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.observability;
 
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -31,6 +32,14 @@ public final class LogCapture implements AutoCloseable {
                 .map(event -> event.getKeyValuePairs().stream()
                         .collect(Collectors.toMap(pair -> pair.key, pair -> String.valueOf(pair.value))))
                 .filter(fields -> name.equals(fields.get("event.name")))
+                .toList();
+    }
+
+    /** The messages of the records at {@code level} or above, in their order. */
+    public List<String> messagesAtLeast(Level level) {
+        return List.copyOf(appender.list).stream()
+                .filter(event -> event.getLevel().isGreaterOrEqual(level))
+                .map(ILoggingEvent::getFormattedMessage)
                 .toList();
     }
 
