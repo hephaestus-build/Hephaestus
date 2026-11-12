@@ -460,6 +460,9 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
                 layout.buildDirectory.file("$name-pinned-virtual-threads.jfr").get().asFile
             val pinnedSettings = file("src/test/resources/pinned-virtual-threads.jfc")
             jvmArgs(
+                // The frame that holds the monitor sits far below the park; JFR keeps 64 frames by
+                // default.
+                "-XX:FlightRecorderOptions=stackdepth=256",
                 "-XX:StartFlightRecording=filename=$pinnedParks,settings=${pinnedSettings.absolutePath},dumponexit=true",
                 "-Xlog:jfr+startup=off",
             )
