@@ -248,6 +248,7 @@ require(!providers.gradleProperty("testSelection").isPresent) {
 }
 
 val testJvmArgs = providers.gradleProperty("testJvmArgs").orElse("")
+val releaseVersion = providers.gradleProperty("hephaestus.releaseVersion")
 val integrationShard = providers.environmentVariable("HEPHAESTUS_INTEGRATION_SHARD").orElse("")
 val testPostgresImage = providers.environmentVariable("HEPHAESTUS_TEST_POSTGRES_IMAGE").orElse("")
 val packagedServer = providers.gradleProperty("packagedServer").map(String::toBoolean).orElse(false)
@@ -356,6 +357,7 @@ tasks.withType<Test>().configureEach {
     // test that runs main from changing the zone for later classes.
     systemProperty("user.timezone", "Europe/Berlin")
     systemProperty("hephaestus.test.postgres-image", testPostgresImage.get())
+    releaseVersion.orNull?.let { systemProperty("hephaestus.releaseVersion", it) }
     // PersonalDataLogScan: a record with personal data or a credential fails the run.
     systemProperty("hephaestus.test.personal-data-scan", "fail")
     // The launcher selects Node through PATH. Track it when the test configuration is cached.
