@@ -206,6 +206,8 @@ erDiagram
         BIGINT practice_id
         TIMESTAMPTZ started_at "NOT NULL"
         NUMERIC(18,6) cost_bound_usd
+        JSONB call_failure
+        TIMESTAMPTZ failed_at
     }
 
     PersonEvidenceCopy {

@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -79,6 +80,110 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Test
+    void shouldReadTheNewestFailureOfTheExactClaimByFailureTimeRatherThanCallOpenTime() {
+        AgentRunLease lease = leasedRun("calls-failure-order");
+        UUID older = open(lease, lease.epoch(), PRICED);
+        UUID newer = open(lease, lease.epoch(), PRICED);
+        var first = new MentorTurn.FailedCall("upstream_status", 502);
+        var last = new MentorTurn.FailedCall("upstream_stalled", null);
+        transactions.executeWithoutResult(tx -> recorder.complete(newer, lease.workspaceId(), null, first));
+        Instant firstTime = failedAt(newer);
+        transactions.executeWithoutResult(tx -> recorder.complete(older, lease.workspaceId(), null, last));
+        assertThat(failedAt(older)).isAfter(firstTime);
+        assertThat(occurredAt(older)).isBefore(occurredAt(newer));
+        assertThat(recorder.latestFailure(lease.workspaceId(), lease.runId(), lease.epoch()))
+                .isEqualTo(last);
+
+        transactions.executeWithoutResult(tx -> recorder.complete(
+                newer, lease.workspaceId(), LlmUsageRecorder.CallUsage.NONE, new MentorTurn.FailedCall("later", 503)));
+        assertThat(failedAt(newer))
+                .as("a repeated completion cannot move a call's failure")
+                .isEqualTo(firstTime);
+        assertThat(failure(newer)).isEqualTo(first);
+        assertThat(row(newer)).containsEntry("call_state", "ENDED").containsEntry("unreported_calls", 1);
+        assertThat(recorder.latestFailure(lease.workspaceId(), lease.runId(), lease.epoch()))
+                .isEqualTo(last);
+
+        UUID anotherEpoch = open(lease, lease.epoch() + 1, PRICED);
+        transactions.executeWithoutResult(tx -> recorder.complete(
+                anotherEpoch, lease.workspaceId(), null, new MentorTurn.FailedCall("other_epoch", 500)));
+        assertThat(recorder.latestFailure(lease.workspaceId(), lease.runId(), lease.epoch()))
+                .isEqualTo(last);
+        assertThat(recorder.latestFailure(lease.workspaceId(), UUID.randomUUID(), lease.epoch()))
+                .isNull();
+        AgentRunLease otherWorkspace = leasedRun("calls-failure-other");
+        assertThat(recorder.latestFailure(otherWorkspace.workspaceId(), lease.runId(), lease.epoch()))
+                .isNull();
+        transactions.executeWithoutResult(tx -> recorder.complete(
+                older, otherWorkspace.workspaceId(), null, new MentorTurn.FailedCall("wrong_workspace", 403)));
+        assertThat(failure(older)).isEqualTo(last);
+    }
+
+    @Test
+    void shouldKeepReportedUsageWhenTheProviderReturnsANonStandardStatus() {
+        AgentRunLease lease = leasedRun("calls-nonstandard-status");
+        UUID call = open(lease, lease.epoch(), PRICED);
+
+        transactions.executeWithoutResult(tx -> recorder.complete(
+                call,
+                lease.workspaceId(),
+                new LlmUsageRecorder.CallUsage(10, 2, 0, 0, 0, 0),
+                new MentorTurn.FailedCall("upstream_status", 600)));
+
+        assertThat(row(call))
+                .containsEntry("call_state", "ENDED")
+                .containsEntry("input_tokens", 10L)
+                .containsEntry("output_tokens", 2L)
+                .containsEntry("measurement_verification", "VERIFIED")
+                .containsEntry("pricing_state", "PRICED");
+        assertThat((BigDecimal) row(call).get("cost_usd")).isEqualByComparingTo("0.000036");
+        var failure = new MentorTurn.FailedCall("upstream_status", null);
+        assertThat(failure(call)).isEqualTo(failure);
+        assertThat(recorder.latestFailure(lease.workspaceId(), lease.runId(), lease.epoch()))
+                .isEqualTo(failure);
+    }
+
+    @Test
+    void shouldKeepMeasuredUsageWhenTheFirstFailureArrivesAfterCompletion() {
+        AgentRunLease lease = leasedRun("calls-failure-after-usage");
+        UUID call = open(lease, lease.epoch(), PRICED);
+        complete(lease, call, new LlmUsageRecorder.CallUsage(10, 2, 0, 0, 0, 0));
+        var measured = row(call);
+        var failure = new MentorTurn.FailedCall("stream_failed", 200);
+
+        transactions.executeWithoutResult(tx -> recorder.complete(call, lease.workspaceId(), null, failure));
+        Instant failed = failedAt(call);
+        transactions.executeWithoutResult(tx -> recorder.complete(
+                call, lease.workspaceId(), LlmUsageRecorder.CallUsage.NONE, new MentorTurn.FailedCall("later", 503)));
+
+        assertThat(row(call)).containsAllEntriesOf(measured);
+        assertThat(failure(call)).isEqualTo(failure);
+        assertThat(failedAt(call)).isEqualTo(failed);
+    }
+
+    @Test
+    void shouldKeepTheFirstFailureWhenSettledUsageArrivesLate() {
+        AgentRunLease lease = leasedRun("calls-failure-late");
+        UUID call = open(lease, lease.epoch(), PRICED);
+        transactions.executeWithoutResult(tx -> runs.end(fence(lease)));
+        var failure = new MentorTurn.FailedCall("upstream_stalled", null);
+        transactions.executeWithoutResult(tx -> recorder.complete(call, lease.workspaceId(), null, failure));
+        Instant failed = failedAt(call);
+        assertThat(row(call)).containsEntry("call_state", "SETTLED");
+
+        complete(lease, call, new LlmUsageRecorder.CallUsage(10, 2, 0, 0, 0, 0));
+
+        assertThat(row(call))
+                .containsEntry("call_state", "ENDED")
+                .containsEntry("input_tokens", 10L)
+                .containsEntry("output_tokens", 2L);
+        assertThat(failedAt(call)).isEqualTo(failed);
+        assertThat(failure(call)).isEqualTo(failure);
+        assertThat(recorder.latestFailure(lease.workspaceId(), lease.runId(), lease.epoch()))
+                .isEqualTo(failure);
+    }
 
     @Test
     void shouldWriteOneMeasuredRowWhenACallOpensAndCompletes() {
@@ -244,7 +349,10 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         var unpriced = new LlmPriceSnapshot(
                 UsageFundingSource.INSTANCE, UsagePricingState.UNPRICED, price.getId(), null, null, null, null, null);
         UUID call = open(lease, lease.epoch(), unpriced);
-        complete(lease, call, new LlmUsageRecorder.CallUsage(1_000_000, 0, 0, 0, 0, 0));
+        var failure = new MentorTurn.FailedCall("stream_failed", 200);
+        transactions.executeWithoutResult(tx -> recorder.complete(
+                call, lease.workspaceId(), new LlmUsageRecorder.CallUsage(1_000_000, 0, 0, 0, 0, 0), failure));
+        Instant failed = failedAt(call);
         Instant threeMonthsAgo = Instant.now().minus(92, ChronoUnit.DAYS);
         jdbc.update(
                 "UPDATE llm_usage_event SET started_at = ?, occurred_at = ? WHERE id = ?",
@@ -260,6 +368,8 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         assertThat(row(call)).containsEntry("pricing_state", "PRICED");
         assertThat((BigDecimal) row(call).get("cost_usd")).isEqualByComparingTo("3.00");
+        assertThat(failure(call)).isEqualTo(failure);
+        assertThat(failedAt(call)).isEqualTo(failed);
     }
 
     /**
@@ -410,6 +520,19 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private void complete(AgentRunLease lease, UUID call, LlmUsageRecorder.@Nullable CallUsage usage) {
         transactions.executeWithoutResult(tx -> recorder.complete(call, lease.workspaceId(), usage));
+    }
+
+    private Instant failedAt(UUID call) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                        "SELECT failed_at FROM llm_usage_event WHERE id = ?", Timestamp.class, call))
+                .toInstant();
+    }
+
+    private MentorTurn.FailedCall failure(UUID call) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT call_failure ->> 'kind', (call_failure ->> 'status')::integer FROM llm_usage_event WHERE id = ?",
+                (rs, number) -> new MentorTurn.FailedCall(rs.getString(1), rs.getObject(2, Integer.class)),
+                call));
     }
 
     private Instant occurredAt(UUID call) {

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -13,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -105,6 +107,30 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM LlmUsageEvent e WHERE e.id = :id AND e.workspaceId = :workspaceId")
     Optional<LlmUsageEvent> lockCall(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
+
+    /** Records the first failure only, including on a call whose usage was measured or settled already. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE llm_usage_event
+        SET call_failure = jsonb_build_object('kind', CAST(:kind AS text), 'status', CAST(:status AS integer)),
+            failed_at = clock_timestamp()
+        WHERE id = :id AND workspace_id = :workspaceId AND call_failure IS NULL
+        """, nativeQuery = true)
+    int recordFailure(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("kind") String kind,
+            @Param("status") @Nullable Integer status);
+
+    /** The newest failure of this claim, rather than the call that opened last. */
+    @NativeQuery(value = """
+        SELECT e.call_failure FROM llm_usage_event e
+        WHERE e.workspace_id = :workspaceId AND e.run_id = :runId AND e.lease_epoch = :epoch
+          AND e.call_failure IS NOT NULL
+        ORDER BY e.failed_at DESC, e.id DESC LIMIT 1
+        """)
+    Optional<MentorTurn.FailedCall> latestFailure(
+            @Param("workspaceId") long workspaceId, @Param("runId") UUID runId, @Param("epoch") int epoch);
 
     /**
      * Ends one call with its measurement and nothing else; see {@link LlmUsageRecorder#complete}. A {@code null} cost

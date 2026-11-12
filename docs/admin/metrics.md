@@ -297,6 +297,10 @@ The turn row keeps the cause, so the cause stays after the server stops:
 | `failed_call_status` | The HTTP status that the provider or the proxy sent for that call, if one was sent |
 
 The model calls of an attempt are rows of `llm_usage_event`: `source_type` is `MENTOR_TURN`, `source_id` is the turn and `source_attempt` is the attempt.
+Each row keeps its first failure kind and optional HTTP status in `call_failure`, and its database recording time in `failed_at`.
+These fields survive a server restart and do not contain a provider response body.
+Late usage reports and repricing do not change them.
+The existing model-call warning and `llm.proxy.usage.accumulate.failure` meter remain the signals for a failed call and a failed ledger write.
 
 The conversation loop's end, the server's own end and a lease that expires write the first three columns.
 A lease that expires writes no `failed_call`, because the run reaper ends the turn.

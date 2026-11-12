@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
@@ -124,8 +125,29 @@ public class LlmUsageRecorder {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void complete(UUID callId, long workspaceId, @Nullable CallUsage usage) {
+        completeCall(callId, workspaceId, usage, null);
+    }
+
+    /** Records the first failure independently of late usage or repricing, then measures the call. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void complete(
+            UUID callId, long workspaceId, @Nullable CallUsage usage, MentorTurn.@Nullable FailedCall failure) {
+        completeCall(callId, workspaceId, usage, failure);
+    }
+
+    private void completeCall(
+            UUID callId, long workspaceId, @Nullable CallUsage usage, MentorTurn.@Nullable FailedCall failure) {
         LlmUsageEvent row = usageRepository.lockCall(callId, workspaceId).orElse(null);
         if (row == null) return;
+        if (failure != null) {
+            var status = failure.status();
+            // A non-standard provider status must not discard reported usage.
+            usageRepository.recordFailure(
+                    callId,
+                    workspaceId,
+                    failure.kind(),
+                    status == null || status < 100 || status > 599 ? null : status);
+        }
         boolean open = row.getCallState() == UsageCallState.OPEN;
         boolean settled = row.getCallState() == UsageCallState.SETTLED;
         if (!open && !settled) return;
@@ -174,6 +196,12 @@ public class LlmUsageRecorder {
             meterRegistry.counter(AgentMetrics.LLM_USAGE_UNCOSTED).increment();
         }
         if (open) registerBudgetAlert(workspaceId, price, computed.usd(), row.getOccurredAt());
+    }
+
+    /** Reads the failed call on any replica, scoped to the exact run claim that ends. */
+    @Transactional(readOnly = true)
+    public MentorTurn.@Nullable FailedCall latestFailure(long workspaceId, UUID runId, int epoch) {
+        return usageRepository.latestFailure(workspaceId, runId, epoch).orElse(null);
     }
 
     // Missing rates leave the whole call unpriced; search units require their own rate.

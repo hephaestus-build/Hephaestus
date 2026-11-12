@@ -140,6 +140,12 @@ The holder of a review run puts the same three fields in its thread-scoped log c
 
 Each model call of a run has one row in `llm_usage_event`. The row names the run and the epoch of the claim that made the call.
 
+The row keeps the first call failure in `call_failure`, with only its kind and optional HTTP status.
+`failed_at` uses the database clock when that failure is recorded.
+The failure read selects the newest failure by this time within the exact workspace, run and epoch.
+Late usage and repricing do not change either field.
+No provider response body is stored.
+
 - **Open.** The proxy writes the row `OPEN` before the call leaves. It records the model, frozen rates for the model kind, and upper bound (`cost_bound_usd`). The same transaction calls `AgentRuns.requireCurrent`, so a claim that ended cannot open a call. The transaction commits before the provider works.
 - **Complete.** The end of the call measures the row (`LlmUsageRecorder.complete`). A call without reported usage ends `UNVERIFIABLE` and `UNPRICED`, never at zero cost.
 - **Settle.** A claim's end settles its open rows in the transaction that writes the run. `AgentRuns.end`, `cancel`, `cancelAll`, `requeue` and the reaper's take-back perform this settlement. A settled row is `SETTLED`, `UNVERIFIABLE` and `UNPRICED`. `llm.usage.unverifiable` counts it.
