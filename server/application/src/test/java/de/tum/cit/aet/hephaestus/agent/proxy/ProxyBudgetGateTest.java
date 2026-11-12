@@ -10,15 +10,12 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.PinnedParks;
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import jdk.jfr.consumer.RecordingStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -233,19 +230,9 @@ class ProxyBudgetGateTest extends BaseUnitTest {
                 Thread.sleep(50);
                 return instanceCapOfOneDollar("0.10");
             });
-            List<String> pinned = new CopyOnWriteArrayList<>();
-            try (var events = new RecordingStream()) {
-                events.enable("jdk.VirtualThreadPinned")
-                        .withThreshold(Duration.ZERO)
-                        .withStackTrace();
-                events.onEvent("jdk.VirtualThreadPinned", event -> pinned.add(String.valueOf(event.getStackTrace())));
-                events.startAsync();
-                Thread.ofVirtual()
-                        .start(() -> gate.isBlocked(routing(UsageFundingSource.INSTANCE)))
-                        .join();
-                events.stop();
-            }
-            assertThat(pinned).as("pinned parks while the ledger was read").isEmpty();
+            assertThat(PinnedParks.during(() -> gate.isBlocked(routing(UsageFundingSource.INSTANCE))))
+                    .as("pinned parks while the ledger was read")
+                    .isEmpty();
         }
 
         @Test
